@@ -3,25 +3,41 @@ program tyro;
 {$mode objfpc}{$H+}
 
 uses
+  cmem, math,
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
   Classes, SysUtils, CustApp,
   lua53, l4l_object, sardScripts,
+  raylib,
   mnUtils, mnFields, mnParams;
+
+const
+  cScreenWidth = 640;
+  cScreenHeight = 480;
 
 type
 
-  { TMyApplication }
+
+  TLuaRunObject = class(TLuaObject)
+  private
+  protected
+  public
+    print()
+  published
+  end;
+
+  { TTyro }
 
   TTyro = class(TCustomApplication)
   protected
+    Camera: TCamera2D;
     procedure DoRun; override;
   public
-    Arguments: TmnFields;
+    //Arguments: TmnFields;
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
-    procedure WriteHelp; virtual;
+    procedure Loop;
   end;
 
 procedure ArgumentsCallbackProc(Sender: Pointer; Index:Integer; Name, Value: string; var Resume: Boolean);
@@ -33,24 +49,40 @@ end;
 
 procedure TTyro.DoRun;
 begin
+  BeginDrawing();
+  ClearBackground(RAYWHITE);
+  SetTargetFPS(60);
+
+  while not WindowShouldClose() do
+  begin
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+    Loop;
+    EndDrawing();
+  end;
   Terminate;
 end;
 
 constructor TTyro.Create(TheOwner: TComponent);
 begin
   inherited Create(TheOwner);
-  ParseArgumentsCallback(GetCommandLine, @ArgumentsCallbackProc, Arguments);
+  //ParseArgumentsCallback(, @ArgumentsCallbackProc, Arguments);
   StopOnException :=True;
+  {$IFDEF DARWIN}
+  SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
+  {$IFEND}
+  InitWindow(cScreenWidth, cScreenHeight, 'Tyro');
 end;
 
 destructor TTyro.Destroy;
 begin
+  CloseWindow;
   inherited Destroy;
 end;
 
-procedure TTyro.WriteHelp;
+procedure TTyro.Loop;
 begin
-  writeln('Usage: ', ExeName, ' -h');
+  //DrawText('', 190, 200, 20, BLACK);
 end;
 
 var
