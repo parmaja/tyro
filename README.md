@@ -8,7 +8,7 @@ Use FPC 3.x or Lazarus with it
 
 # Library
 
-[https://github.com/parmaja/ Pascal Sard Objects]
+[https://github.com/parmaja/p-sard Pascal Sard Objects]
 
 [https://github.com/malcome/Lua4Lazarus Lua4Lazarus]
 
@@ -16,5 +16,5 @@ Use FPC 3.x or Lazarus with it
 
 [https://www.raylib.com/ raylib] for raylib.dll
 
-[https://www.lua.org/ lua] for lua dll 5.3
+[https://www.lua.org/ Lua] for lua dll 5.3
 
