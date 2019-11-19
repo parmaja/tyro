@@ -8,6 +8,8 @@ Use FPC 3.x or Lazarus with it
 
 # Library
 
+[https://github.com/parmaja/ Pascal Sard Objects]
+
 [https://github.com/malcome/Lua4Lazarus Lua4Lazarus]
 
 [https://github.com/tazdij/raylib-pas raylib-pas]
