@@ -13,6 +13,11 @@
       <UseAppBundle Value="False"/>
       <ResourceType Value="res"/>
     </General>
+    <VersionInfo>
+      <UseVersionInfo Value="True"/>
+      <MinorVersionNr Value="1"/>
+      <BuildNr Value="1"/>
+    </VersionInfo>
     <BuildModes>
       <Item Name="Default" Default="True"/>
       <Item Name="Debug">
@@ -84,16 +89,19 @@
       <FormatVersion Value="2"/>
       <Modes Count="0"/>
     </RunParams>
-    <RequiredPackages Count="3">
+    <RequiredPackages Count="4">
       <Item1>
-        <PackageName Value="raylib_pas"/>
+        <PackageName Value="MiniCommons"/>
       </Item1>
       <Item2>
-        <PackageName Value="Sard"/>
+        <PackageName Value="raylib_pas"/>
       </Item2>
       <Item3>
-        <PackageName Value="Lua4Lazarus"/>
+        <PackageName Value="Sard"/>
       </Item3>
+      <Item4>
+        <PackageName Value="Lua4Lazarus"/>
+      </Item4>
     </RequiredPackages>
     <Units>
       <Unit>
@@ -110,6 +118,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
+      <OtherUnitFiles Value="..\..\minilib\lib"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
   </CompilerOptions>
