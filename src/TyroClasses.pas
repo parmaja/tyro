@@ -5,7 +5,8 @@ unit TyroClasses;
 interface
 
 uses
-  Classes, SysUtils, FPImage, fgl,
+  Classes, SysUtils, SyncObjs,
+  FPImage, fgl,
   raylib;
 
 type
@@ -21,12 +22,10 @@ type
   private
     FBackgroundColor: TFPColor;
     FFontSize: Integer;
+    FColor: TFPColor;
     procedure SetBackgroundColor(AValue: TFPColor);
   protected
-    FColor: TFPColor;
-    FCanvas: TRenderTexture2D;
     ScriptText: TStringList;
-
     Font: raylib.TFont;
     procedure BeforeRun;
     procedure Run; virtual; abstract;
@@ -43,7 +42,6 @@ type
     property Color: TFPColor read FColor write FColor;
     property FontSize: Integer read FFontSize write FFontSize;
     property BackgroundColor: TFPColor read FBackgroundColor write SetBackgroundColor;
-    property Canvas: TRenderTexture2D read FCanvas;
   end;
 
   TTyroScriptClass = class of TTyroScript;
@@ -62,14 +60,20 @@ type
   TTyroMain = class(TObject)
   protected
     FScript: TTyroScript;
+    FLock: TCriticalSection;
+    FCanvas: TRenderTexture2D;
+
+  protected
+    property Lock: TCriticalSection read FLock;
   public
     Title: string;
     FileName: string;//that to run
     WorkSpace: string;
     constructor Create;
+    destructor Destroy; override;
     procedure Run;
     procedure Loop;
-    destructor Destroy; override;
+    property Canvas: TRenderTexture2D read FCanvas;
   end;
 
 var
@@ -97,6 +101,7 @@ end;
 constructor TTyroMain.Create;
 begin
   inherited Create;
+  FLock := TCriticalSection.Create;
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
@@ -109,7 +114,11 @@ begin
   InitWindow(ScreenWidth, ScreenHeight, PChar(Title));
   SetTargetFPS(60);
 
-  FScript.Clear;
+  FCanvas := LoadRenderTexture(ScreenWidth, ScreenHeight);
+
+  BeginTextureMode(Main.Canvas);
+  ClearBackground(RAYWHITE);
+  EndTextureMode();
 
   if FileName <> '' then
   begin
@@ -120,6 +129,12 @@ begin
   while not WindowShouldClose() do
   begin
     BeginDrawing;
+    Lock.Enter;
+    try
+      DrawTextureRec(Canvas.texture, RectangleCreate(0, 0, Canvas.texture.width, -Canvas.texture.height), Vector2Create(0, 0), WHITE);
+    finally
+      Lock.Leave;
+    end;
     Loop;
     EndDrawing;
   end;
@@ -128,13 +143,14 @@ end;
 procedure TTyroMain.Loop;
 begin
   //DrawTextEx(Font, PChar('Test'), Vector2Create(100, 100), Font.baseSize, -2, Black);
-  DrawTextureRec(FScript.Canvas.texture, RectangleCreate(0, 0, FScript.Canvas.texture.width, -FScript.Canvas.texture.height), Vector2Create(0, 0), WHITE);
 end;
 
 destructor TTyroMain.Destroy;
 begin
+  UnloadRenderTexture(FCanvas);
   FreeAndNil(FScript);
   CloseWindow;
+  FreeAndNil(FLock);
   inherited Destroy;
 end;
 
@@ -142,10 +158,18 @@ end;
 
 procedure TTyroScript.Circle(X, Y, R: Integer; Fill: Boolean);
 begin
-  if Fill then
-    DrawCircle(X, Y, R, RayColorOf(Color))
-  else
-    DrawCircleLines(X, Y, R, RayColorOf(Color));
+  // Clear render texture before entering the game loop
+  Main.Lock.Enter;
+  try
+    BeginTextureMode(Main.Canvas);
+    if Fill then
+      DrawCircle(X, Y, R, RayColorOf(Color))
+    else
+      DrawCircleLines(X, Y, R, RayColorOf(Color));
+    EndTextureMode();
+  finally
+    Main.Lock.Leave;
+  end;
 end;
 
 procedure TTyroScript.SetBackgroundColor(AValue: TFPColor);
@@ -157,16 +181,10 @@ end;
 
 procedure TTyroScript.BeforeRun;
 begin
-  FCanvas := LoadRenderTexture(ScreenWidth, ScreenHeight);
-  // Clear render texture before entering the game loop
-  BeginTextureMode(Canvas);
-  DrawText('Welcome To Tyro', 10, 10);
-  Clear;
 end;
 
 procedure TTyroScript.AfterRun;
 begin
-  EndTextureMode();
 end;
 
 constructor TTyroScript.Create;
@@ -176,13 +194,19 @@ begin
   FFontSize := 8;
   FColor := colBlack;
   FBackgroundColor := colWhite;
-
 //  Font := raylib.LoadFontEx(PChar('terminus.ttf'), 32, nil, 250);
 end;
 
 procedure TTyroScript.Clear;
 begin
-  ClearBackground(RayColorOf(BackgroundColor));
+  Main.Lock.Enter;
+  try
+    BeginTextureMode(Main.Canvas);
+    ClearBackground(RayColorOf(BackgroundColor));
+    EndTextureMode();
+  finally
+    Main.Lock.Leave;
+  end;
 end;
 
 destructor TTyroScript.Destroy;
