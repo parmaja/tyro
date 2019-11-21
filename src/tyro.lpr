@@ -53,9 +53,7 @@ procedure TTyro.CollectArguments;
 var
   i, P: Integer;
   aParam, aName, aValue: string;
-  aLastField: TmnField;
 begin
-  aLastField := nil;
   for i := 1 to ParamCount do
   begin
     aParam := ParamStr(i);
@@ -85,6 +83,9 @@ procedure TTyro.Run;
 begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(ScreenWidth, ScreenHeight, PChar(Title));
+  SetTargetFPS(60);
+
+  FScript.Clear;
 
   if FileName <> '' then
   begin
@@ -92,20 +93,15 @@ begin
       FScript.ExecuteFile(FileName);
   end;
 
-  SetTargetFPS(60);
-
   while not WindowShouldClose() do
   begin
     BeginDrawing;
-    FScript.Clear;
     Loop;
     EndDrawing;
   end;
 end;
 
 constructor TTyro.Create;
-var
-  i: Integer;
 begin
   inherited Create;
   FArguments := TmnFields.Create;

@@ -113,16 +113,9 @@ begin
 end;
 
 procedure TTyroScript.ExecuteFile(FileName: string);
-var
-  s: TStringList;
 begin
-  s := TStringList.Create;
-  s.LoadFromFile(FileName);
-  try
-    Execute;
-  finally
-    s.Free;
-  end;
+  ScriptText.LoadFromFile(FileName);
+  Execute;
 end;
 
 procedure TTyroScript.DrawText(S: string; X, Y: Integer);

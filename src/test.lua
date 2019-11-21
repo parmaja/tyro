@@ -1,2 +1,2 @@
-log('test1')
-log('test2')
+log('test')
+Circle(100, 100, 20)
