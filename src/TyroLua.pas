@@ -71,10 +71,7 @@ begin
 end;
 
 procedure lua_register_method(L: Plua_State; name: String; method: lua_CMethod);
-var
-  f: pointer;
 begin
-  lua_pushstring(L, PChar(name));
   lua_pushlightuserdata(L, TMethod(method).Data);
   lua_pushlightuserdata(L, TMethod(method).Code);
   lua_pushcclosure(L, @lua_callback, 2);
@@ -112,12 +109,18 @@ end;
 
 function TLuaScript.Circle_func(L : Plua_State) : Integer; cdecl;
 var
+  c: integer;
   x, y, r: integer;
+  f: Boolean;
 begin
+  f := false;
+  c := lua_gettop(L);
   x := lua_tointeger(L, 1);
   y := lua_tointeger(L, 2);
   r := lua_tointeger(L, 3);
-  Circle(x, y, r);
+  if c >= 4 then
+    f := lua_toboolean(L, 4);
+  Circle(x, y, r, f);
   Result := 0;
 end;
 

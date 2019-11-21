@@ -5,10 +5,15 @@ unit TyroClasses;
 interface
 
 uses
-  Classes, SysUtils, FPImage,
+  Classes, SysUtils, FPImage, fgl,
   raylib;
 
 type
+
+  TTyroCanvas = class(TObject)
+
+  end;
+
 
   { TTyroScript }
 
@@ -33,7 +38,7 @@ type
     procedure ExecuteFile(FileName: string); overload;
 
     procedure DrawText(S: string; X, Y: Integer);
-    procedure Circle(X, Y, R: Integer);
+    procedure Circle(X, Y, R: Integer; Fill: Boolean = False);
     procedure Clear;
     property Color: TFPColor read FColor write FColor;
     property FontSize: Integer read FFontSize write FFontSize;
@@ -41,11 +46,43 @@ type
     property Canvas: TRenderTexture2D read FCanvas;
   end;
 
+  TTyroScriptClass = class of TTyroScript;
+
+  TScriptType = class(TObject)
+  public
+    Ext: string;
+    ScriptClass: TTyroScriptClass;
+  end;
+
+  TScriptTypes = class(specialize TFPGObjectList<TScriptType>)
+  end;
+
+  { TTyroMain }
+
+  TTyroMain = class(TObject)
+  protected
+    FScript: TTyroScript;
+  public
+    Title: string;
+    FileName: string;//that to run
+    WorkSpace: string;
+    constructor Create;
+    procedure Run;
+    procedure Loop;
+    destructor Destroy; override;
+  end;
+
 var
   ScreenWidth: Integer = 640; //Temporary here, i will move it to Tyro object
   ScreenHeight: Integer = 480;
 
+var
+  Main : TTyroMain = nil;
+
 implementation
+
+uses
+  TyroLua;
 
 function RayColorOf(Color: TFPColor): raylib.TColor;
 begin
@@ -55,11 +92,60 @@ begin
   Result.b := Lo(Color.Blue);
 end;
 
+{ TTyroMain }
+
+constructor TTyroMain.Create;
+begin
+  inherited Create;
+  {$IFDEF DARWIN}
+  SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
+  {$IFEND}
+  FScript := TLuaScript.Create;
+end;
+
+procedure TTyroMain.Run;
+begin
+  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  InitWindow(ScreenWidth, ScreenHeight, PChar(Title));
+  SetTargetFPS(60);
+
+  FScript.Clear;
+
+  if FileName <> '' then
+  begin
+    if SysUtils.FileExists(FileName) then
+      FScript.ExecuteFile(FileName);
+  end;
+
+  while not WindowShouldClose() do
+  begin
+    BeginDrawing;
+    Loop;
+    EndDrawing;
+  end;
+end;
+
+procedure TTyroMain.Loop;
+begin
+  //DrawTextEx(Font, PChar('Test'), Vector2Create(100, 100), Font.baseSize, -2, Black);
+  DrawTextureRec(FScript.Canvas.texture, RectangleCreate(0, 0, FScript.Canvas.texture.width, -FScript.Canvas.texture.height), Vector2Create(0, 0), WHITE);
+end;
+
+destructor TTyroMain.Destroy;
+begin
+  FreeAndNil(FScript);
+  CloseWindow;
+  inherited Destroy;
+end;
+
 { TTyroScript }
 
-procedure TTyroScript.Circle(X, Y, R: Integer);
+procedure TTyroScript.Circle(X, Y, R: Integer; Fill: Boolean);
 begin
-  DrawCircle(X, Y, R, RayColorOf(Color));
+  if Fill then
+    DrawCircle(X, Y, R, RayColorOf(Color))
+  else
+    DrawCircleLines(X, Y, R, RayColorOf(Color));
 end;
 
 procedure TTyroScript.SetBackgroundColor(AValue: TFPColor);

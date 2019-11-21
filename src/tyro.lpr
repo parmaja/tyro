@@ -31,18 +31,14 @@ type
 
   TTyro = class(TPersistent)
   private
-    FScript: TTyroScript;
     FArguments: TmnFields;
     FTitle: string;
     procedure CollectArguments;
   protected
-    FileName: string;//that to run
-    WorkSpace: string;
-    procedure Run;
-    procedure Loop; virtual;
   public
     constructor Create; virtual;
     destructor Destroy; override;
+    procedure Run;
     property Arguments: TmnFields read FArguments;
     property Title: string read FTitle write FTitle;
   end;
@@ -73,32 +69,6 @@ begin
     else
       Arguments.Add('', aParam);
   end;
-
-  if Arguments.Exists[''] then
-    FileName := Arguments[''];
-  WorkSpace := IncludePathSeparator(ExtractFilePath(ParamStr(0)));
-end;
-
-procedure TTyro.Run;
-begin
-  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  InitWindow(ScreenWidth, ScreenHeight, PChar(Title));
-  SetTargetFPS(60);
-
-  FScript.Clear;
-
-  if FileName <> '' then
-  begin
-    if SysUtils.FileExists(FileName) then
-      FScript.ExecuteFile(FileName);
-  end;
-
-  while not WindowShouldClose() do
-  begin
-    BeginDrawing;
-    Loop;
-    EndDrawing;
-  end;
 end;
 
 constructor TTyro.Create;
@@ -106,25 +76,24 @@ begin
   inherited Create;
   FArguments := TmnFields.Create;
   CollectArguments;
-
-  FScript := TLuaScript.Create;
-  {$IFDEF DARWIN}
-  SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
-  {$IFEND}
+  Main := TTyroMain.Create;
 end;
 
 destructor TTyro.Destroy;
 begin
-  CloseWindow;
-  FreeAndNil(FScript);
+  FreeAndNil(Main);
   FreeAndNil(FArguments);
   inherited Destroy;
 end;
 
-procedure TTyro.Loop;
+procedure TTyro.Run;
 begin
-  //DrawTextEx(Font, PChar('Test'), Vector2Create(100, 100), Font.baseSize, -2, Black);
-  DrawTextureRec(FScript.Canvas.texture, RectangleCreate(0, 0, FScript.Canvas.texture.width, -FScript.Canvas.texture.height), Vector2Create(0, 0), WHITE);
+  Main.Title := Title;
+  if Arguments.Exists[''] then
+    Main.FileName := Arguments[''];
+  Main.WorkSpace := IncludePathSeparator(ExtractFilePath(ParamStr(0)));
+
+  Main.Run;
 end;
 
 var
