@@ -34,10 +34,10 @@ type
     procedure CollectArguments;
   protected
     procedure SetTitle(const AValue: string); override;
-    constructor Create(AOwner: TComponent); override;
-    destructor Destroy; override;
     procedure DoRun; override;
   public
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
     property Arguments: TmnFields read FArguments;
   end;
 
@@ -99,11 +99,12 @@ end;
 procedure TTyroApplication.DoRun;
 begin
   inherited;
-  CheckSynchronize();
+  CheckSynchronize(10);
   Main.Run;
   if not Main.Active then
   begin
     Main.Stop;
+    ReadLn;
     Terminate;
   end;
 end;
@@ -115,9 +116,7 @@ var
 
 begin
   Application := TTyroApplication.Create(nil);
-  Application.Title :='Tyro';
+  Application.Title := 'Tyro';
   Application.Run;
   Application.Free;
 end.
-
-

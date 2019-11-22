@@ -116,6 +116,8 @@ var
   r: integer;
   Msg: string;
 begin
+  WriteLn('Run Script');
+  //Sleep(1000);
   r := luaL_loadstring(LuaStatus, PChar(ScriptText.Text));
   if r = 0 then
   begin

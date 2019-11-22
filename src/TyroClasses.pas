@@ -325,6 +325,7 @@ begin
       Lock.Leave;
     end;
     p.Execute;
+    WriteLn('run: ' + p.ClassName);
   end;
   EndTextureMode;
 end;
@@ -377,7 +378,7 @@ begin
   if (FScript <> nil) and FScript.Suspended then
     FScript.Start;
 
-  //RunPool;
+  RunPool;
 
   BeginDrawing;
   ClearBackground(DefaultBackground);
@@ -387,6 +388,7 @@ begin
     t := LoadTextureFromImage(im);
     DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);}
 
+    WriteLn('Copy Board');
     with Canvas.FBoard do
       DrawTextureRec(texture, RectangleCreate(0, 0, texture.width, -texture.height), Vector2Create(0, 0), WHITE);
   finally
@@ -429,7 +431,7 @@ begin
   finally
     Main.Lock.Leave;
   end;
-  Synchronize(@Main.RunPool);
+  Sleep(1); //idk why?!!!!
 end;
 
 constructor TTyroScript.Create;
