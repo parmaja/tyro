@@ -1,4 +1,13 @@
 unit TyroLua;
+{**
+ *  This file is part of the "Tyro"
+ *
+ * @license   MIT
+ *
+ * @author    Zaher Dirkey <zaher at parmaja dot com>
+ *
+ *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
+ *}
 
 {$mode delphi}{$H+}
 
@@ -18,6 +27,7 @@ type
   protected
     LuaStatus: Plua_State;
     procedure Run; override;
+    function Print_func(L: Plua_State): Integer; cdecl;
     function Circle_func(L: Plua_State): Integer; cdecl;
   public
     constructor Create; override;
@@ -34,11 +44,6 @@ begin
   except
     Result:= nil;
   end;
-end;
-
-function print_func(L : Plua_State) : Integer; cdecl;
-begin
-  Result := 0;
 end;
 
 function log_func(L : Plua_State) : Integer; cdecl;
@@ -87,9 +92,9 @@ constructor TLuaScript.Create;
 begin
   inherited;
   LuaStatus := lua_newstate(@LuaAlloc, nil);
-  lua_register(LuaStatus, 'print', @print_func);
   lua_register(LuaStatus, 'log', @log_func);
   lua_register_method(LuaStatus, 'Circle', Circle_func);
+  lua_register_method(LuaStatus, 'print', Print_func);
 end;
 
 destructor TLuaScript.Destroy;
@@ -107,6 +112,22 @@ begin
      r := lua_pcall(LuaStatus, 0, LUA_MULTRET, 0);
 end;
 
+function TLuaScript.Print_func(L: Plua_State): Integer; cdecl;
+var
+//  c: integer;
+  x, y: Integer;
+  s: string;
+  f: Boolean;
+begin
+  f := false;
+//  c := lua_gettop(L);
+  s := lua_tostring(L, 1);
+  x := lua_tointeger(L, 2);
+  y := lua_tointeger(L, 3);
+  Main.Canvas.DrawText(s, x, y);
+  Result := 0;
+end;
+
 function TLuaScript.Circle_func(L : Plua_State) : Integer; cdecl;
 var
   c: integer;
@@ -120,7 +141,8 @@ begin
   r := lua_tointeger(L, 3);
   if c >= 4 then
     f := lua_toboolean(L, 4);
-  Circle(x, y, r, f);
+  Main.Canvas.Circle(x, y, r, f);
+  Queue(Main.Canvas.PrintTest);
   Result := 0;
 end;
 

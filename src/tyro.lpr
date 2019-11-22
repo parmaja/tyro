@@ -9,7 +9,6 @@ program tyro;
  *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
  *}
 
-
 {$mode objfpc}
 {$H+}
 
@@ -20,32 +19,31 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils, Classes, sardScripts,
-  mnFields, mnUtils, mnParams,
+  SysUtils, Classes, CustApp,
+  mnFields, mnUtils, mnParams, //minilib on sf
   raylib,
   TyroClasses, TyroLua;
 
 type
 
-  { TTyro }
+  { TTyroApplication }
 
-  TTyro = class(TPersistent)
+  TTyroApplication = class(TCustomApplication)
   private
     FArguments: TmnFields;
-    FTitle: string;
     procedure CollectArguments;
   protected
-  public
-    constructor Create; virtual;
+    procedure SetTitle(const AValue: string); override;
+    constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    procedure Run;
+    procedure DoRun; override;
+  public
     property Arguments: TmnFields read FArguments;
-    property Title: string read FTitle write FTitle;
   end;
 
-{ TTyro }
+{ TTyroApplication }
 
-procedure TTyro.CollectArguments;
+procedure TTyroApplication.CollectArguments;
 var
   i, P: Integer;
   aParam, aName, aValue: string;
@@ -71,38 +69,52 @@ begin
   end;
 end;
 
-constructor TTyro.Create;
+procedure TTyroApplication.SetTitle(const AValue: string);
 begin
-  inherited Create;
+  inherited SetTitle(AValue);
+  Main.Title := AValue;
+end;
+
+constructor TTyroApplication.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
   FArguments := TmnFields.Create;
   CollectArguments;
   Main := TTyroMain.Create;
-end;
-
-destructor TTyro.Destroy;
-begin
-  FreeAndNil(Main);
-  FreeAndNil(FArguments);
-  inherited Destroy;
-end;
-
-procedure TTyro.Run;
-begin
-  Main.Title := Title;
+  Main.Init;
+  Main.Title := 'Tyro';
   if Arguments.Exists[''] then
     Main.FileName := Arguments[''];
   Main.WorkSpace := IncludePathSeparator(ExtractFilePath(ParamStr(0)));
+  Main.Start;
+end;
 
+destructor TTyroApplication.Destroy;
+begin
+  FreeAndNil(Main);
+  FreeAndNil(FArguments);
+  inherited;
+end;
+
+procedure TTyroApplication.DoRun;
+begin
+  inherited;
+  CheckSynchronize();
   Main.Run;
+  if not Main.Active then
+  begin
+    Main.Stop;
+    Terminate;
+  end;
 end;
 
 var
-  Application: TTyro;
+  Application: TTyroApplication;
 
 {$R *.res}
 
 begin
-  Application := TTyro.Create;
+  Application := TTyroApplication.Create(nil);
   Application.Title :='Tyro';
   Application.Run;
   Application.Free;
