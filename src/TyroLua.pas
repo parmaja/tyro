@@ -9,7 +9,7 @@ unit TyroLua;
  *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
  *}
 
-{$mode delphi}{$H+}
+{$mode objfpc}{$H+}
 
 interface
 
@@ -26,6 +26,7 @@ type
   private
   protected
     LuaStatus: Plua_State;
+    procedure DoError(S: string);
     procedure Run; override;
     function Print_func(L: Plua_State): Integer; cdecl;
     function Circle_func(L: Plua_State): Integer; cdecl;
@@ -92,9 +93,10 @@ constructor TLuaScript.Create;
 begin
   inherited;
   LuaStatus := lua_newstate(@LuaAlloc, nil);
+  lual_openlibs(LuaStatus);
   lua_register(LuaStatus, 'log', @log_func);
-  lua_register_method(LuaStatus, 'Circle', Circle_func);
-  lua_register_method(LuaStatus, 'print', Print_func);
+  lua_register_method(LuaStatus, 'circle', @Circle_func);
+  lua_register_method(LuaStatus, 'print', @Print_func);
 end;
 
 destructor TLuaScript.Destroy;
@@ -103,13 +105,28 @@ begin
   inherited;
 end;
 
+procedure TLuaScript.DoError(S: string);
+begin
+  if IsConsole then
+    WriteLn(S);
+end;
+
 procedure TLuaScript.Run;
 var
   r: integer;
+  Msg: string;
 begin
   r := luaL_loadstring(LuaStatus, PChar(ScriptText.Text));
   if r = 0 then
-     r := lua_pcall(LuaStatus, 0, LUA_MULTRET, 0);
+  begin
+    r := lua_pcall(LuaStatus, 0, LUA_MULTRET, 0);
+  end;
+  if (r <> LUA_OK)  then
+  begin
+    Msg := lua_tostring(LuaStatus, -1);
+    DoError(Msg);
+    lua_pop(LuaStatus, 1);  //* remove message
+  end;
 end;
 
 function TLuaScript.Print_func(L: Plua_State): Integer; cdecl;
@@ -124,7 +141,7 @@ begin
   s := lua_tostring(L, 1);
   x := lua_tointeger(L, 2);
   y := lua_tointeger(L, 3);
-  Main.Canvas.DrawText(s, x, y);
+  AddPoolObject(TTextObject.Create(Main.Canvas, x, y, s));
   Result := 0;
 end;
 
@@ -142,7 +159,6 @@ begin
   if c >= 4 then
     f := lua_toboolean(L, 4);
   AddPoolObject(TCircleObject.Create(Main.Canvas, x, y, r, f));
-  //Main.Canvas.Circle(x, y, r, f);
   Result := 0;
 end;
 

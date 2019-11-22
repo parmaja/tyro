@@ -24,3 +24,4 @@ Use FPC 3.x or Lazarus with it
 
 [https://www.lua.org/ Lua] for lua dll 5.3
 
+[https://sourceforge.net/p/minilib/ minilib]

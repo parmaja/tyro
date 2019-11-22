@@ -72,7 +72,7 @@ type
     destructor Destroy; override;
     property Board: TRenderTexture2D read FBoard;
     procedure Circle(X, Y, R: Integer; Fill: Boolean);
-    procedure PrintTest;
+    //procedure PrintTest;
     procedure DrawText(S: string; X, Y: Integer);
     procedure Clear;
     property Color: TFPColor read FColor write FColor;
@@ -107,6 +107,16 @@ type
     procedure Execute; override;
   end;
 
+  { TTextObject }
+
+  TTextObject = class(TDrawObject)
+  public
+    fX, fY: Integer;
+    fText: String;
+    constructor Create(ACanvas: TTyroCanvas; X, Y: Integer; Text: String);
+    procedure Execute; override;
+  end;
+
   TPoolObjects = class(specialize TFPGObjectList<TPoolObject>)
   public
   end;
@@ -122,8 +132,9 @@ type
     FLock: TCriticalSection;
     FCanvas: TTyroCanvas;
   protected
-
     DefaultBackground: raylib.TColor;
+
+    procedure RunPool;
     property Lock: TCriticalSection read FLock;
     property Pool: TPoolObjects read FPool;
   public
@@ -159,6 +170,22 @@ begin
   Result.r := Lo(Color.Red);
   Result.g := Lo(Color.Green);
   Result.b := Lo(Color.Blue);
+end;
+
+{ TTextObject }
+
+constructor TTextObject.Create(ACanvas: TTyroCanvas; X, Y: Integer; Text: String);
+begin
+  fX := X;
+  fY := Y;
+  fText := Text;
+end;
+
+procedure TTextObject.Execute;
+begin
+  BeginTextureMode(Canvas.Board);
+  raylib.DrawText(PChar(fText), fX, fY, Canvas.FontSize, RayColorOf(Canvas.Color));
+  EndTextureMode();
 end;
 
 { TDrawObject }
@@ -238,12 +265,12 @@ begin
   end;
 end;
 
-procedure TTyroCanvas.PrintTest;
+{procedure TTyroCanvas.PrintTest;
 begin
   BeginTextureMode(Board);
   raylib.DrawText(PChar('Test'), 100, 100, FontSize, RayColorOf(Color));
   EndTextureMode();
-end;
+end;}
 
 procedure TTyroCanvas.DrawText(S: string; X, Y: Integer);
 begin
@@ -284,6 +311,24 @@ begin
   Result := not WindowShouldClose();
 end;
 
+procedure TTyroMain.RunPool;
+var
+  p: TPoolObject;
+begin
+  BeginTextureMode(Canvas.Board);
+  while Pool.Count > 0 do
+  begin
+    Lock.Enter;
+    try
+      p := Pool.Extract(Pool[0]);
+    finally
+      Lock.Leave;
+    end;
+    p.Execute;
+  end;
+  EndTextureMode;
+end;
+
 constructor TTyroMain.Create;
 begin
   inherited Create;
@@ -312,39 +357,30 @@ begin
   InitWindow(ScreenWidth, ScreenHeight, PChar(Title));
   SetTargetFPS(60);
   FCanvas := TTyroCanvas.Create;
-  FScript := TLuaScript.Create;
 end;
 
 procedure TTyroMain.Start;
 begin
   if FileName <> '' then
   begin
+    FScript := TLuaScript.Create;
     if SysUtils.FileExists(FileName) then
       FScript.LoadFile(FileName);
-    FScript.Start;
   end;
 end;
 
 procedure TTyroMain.Run;
-var
+//var
 {  t: TTexture2D;
   im: TImage;}
-  p: TPoolObject;
 begin
+  if (FScript <> nil) and FScript.Suspended then
+    FScript.Start;
+
+  //RunPool;
+
   BeginDrawing;
-
   ClearBackground(DefaultBackground);
-
-  while Pool.Count > 0 do
-  begin
-    Lock.Enter;
-    try
-      p := Pool.Extract(Pool[0]);
-    finally
-      Lock.Leave;
-    end;
-    p.Execute;
-  end;
 
   try
     {im := LoadImageEx(PColor(FScript.FPImage.Data), FScript.FPImage.Width, FScript.FPImage.Height);
@@ -393,6 +429,7 @@ begin
   finally
     Main.Lock.Leave;
   end;
+  Synchronize(@Main.RunPool);
 end;
 
 constructor TTyroScript.Create;
