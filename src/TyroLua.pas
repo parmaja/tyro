@@ -141,8 +141,8 @@ begin
   r := lua_tointeger(L, 3);
   if c >= 4 then
     f := lua_toboolean(L, 4);
-  Main.Canvas.Circle(x, y, r, f);
-  Queue(Main.Canvas.PrintTest);
+  AddPoolObject(TCircleObject.Create(Main.Canvas, x, y, r, f));
+  //Main.Canvas.Circle(x, y, r, f);
   Result := 0;
 end;
 

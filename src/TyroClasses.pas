@@ -25,6 +25,8 @@ type
     property Data: PFPIntegerArray read FData;
   end;
 
+  TPoolObject = class;
+
   { TTyroScript }
 
   TTyroScript = class abstract(TThread)
@@ -34,6 +36,7 @@ type
     procedure BeforeRun; virtual;
     procedure Run; virtual; abstract;
     procedure AfterRun; virtual;
+    procedure AddPoolObject(APoolObject: TPoolObject);
   public
     constructor Create; virtual;
     destructor Destroy; override;
@@ -77,18 +80,52 @@ type
     property BackgroundColor: TFPColor read FBackgroundColor write SetBackgroundColor;
   end;
 
+  TPoolObject = class abstract(TObject)
+  public
+    procedure Execute; virtual; abstract;
+  end;
+
+  { TDrawObject }
+
+  TDrawObject = class abstract(TPoolObject)
+  private
+    FCanvas: TTyroCanvas;
+  protected
+    procedure Created; virtual;
+  public
+    constructor Create(ACanvas: TTyroCanvas);
+    property Canvas: TTyroCanvas read FCanvas;
+  end;
+
+  { TCircleObject }
+
+  TCircleObject = class(TDrawObject)
+  public
+    fX, fY, fR: Integer;
+    fFill: Boolean;
+    constructor Create(ACanvas: TTyroCanvas; X, Y, R: Integer; Fill: Boolean);
+    procedure Execute; override;
+  end;
+
+  TPoolObjects = class(specialize TFPGObjectList<TPoolObject>)
+  public
+  end;
+
   { TTyroMain }
 
   TTyroMain = class(TObject)
   private
     function GetActive: Boolean;
   protected
+    FPool: TPoolObjects;
     FScript: TTyroScript;
     FLock: TCriticalSection;
     FCanvas: TTyroCanvas;
   protected
+
     DefaultBackground: raylib.TColor;
     property Lock: TCriticalSection read FLock;
+    property Pool: TPoolObjects read FPool;
   public
     Title: string;
     FileName: string;//that to run in script
@@ -122,6 +159,39 @@ begin
   Result.r := Lo(Color.Red);
   Result.g := Lo(Color.Green);
   Result.b := Lo(Color.Blue);
+end;
+
+{ TDrawObject }
+
+procedure TDrawObject.Created;
+begin
+end;
+
+constructor TDrawObject.Create(ACanvas: TTyroCanvas);
+begin
+  inherited Create;
+  FCanvas := ACanvas;
+end;
+
+{ TCircleObject }
+
+constructor TCircleObject.Create(ACanvas: TTyroCanvas; X, Y, R: Integer; Fill: Boolean);
+begin
+  inherited Create(ACanvas);
+  fX := X;
+  fY := Y;
+  fR := R;
+  fFill := Fill;
+end;
+
+procedure TCircleObject.Execute;
+begin
+  BeginTextureMode(Canvas.Board);
+  if fFill then
+    DrawCircle(fX, fY, fR, RayColorOf(Canvas.Color))
+  else
+    DrawCircleLines(fX, fY, fR, RayColorOf(Canvas.Color));
+  EndTextureMode();
 end;
 
 { TTyroCanvas }
@@ -218,6 +288,7 @@ constructor TTyroMain.Create;
 begin
   inherited Create;
   FLock := TCriticalSection.Create;
+  FPool := TPoolObjects.Create(True);
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
@@ -229,6 +300,7 @@ begin
   //Stop;
   FreeAndNil(FCanvas);
   CloseWindow;
+  FreeAndNil(FPool);
   FreeAndNil(FLock);
   inherited Destroy;
 end;
@@ -255,12 +327,25 @@ end;
 
 procedure TTyroMain.Run;
 var
-  t: TTexture2D;
-  im: TImage;
+{  t: TTexture2D;
+  im: TImage;}
+  p: TPoolObject;
 begin
   BeginDrawing;
-  Lock.Enter;
+
   ClearBackground(DefaultBackground);
+
+  while Pool.Count > 0 do
+  begin
+    Lock.Enter;
+    try
+      p := Pool.Extract(Pool[0]);
+    finally
+      Lock.Leave;
+    end;
+    p.Execute;
+  end;
+
   try
     {im := LoadImageEx(PColor(FScript.FPImage.Data), FScript.FPImage.Width, FScript.FPImage.Height);
     t := LoadTextureFromImage(im);
@@ -298,6 +383,16 @@ end;
 
 procedure TTyroScript.AfterRun;
 begin
+end;
+
+procedure TTyroScript.AddPoolObject(APoolObject: TPoolObject);
+begin
+  Main.Lock.Enter;
+  try
+    Main.Pool.Add(APoolObject);
+  finally
+    Main.Lock.Leave;
+  end;
 end;
 
 constructor TTyroScript.Create;
