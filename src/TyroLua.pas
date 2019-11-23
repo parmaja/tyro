@@ -47,6 +47,7 @@ type
     procedure DoError(S: string);
     procedure Run; override;
     //canvas functions
+    function Clear_func(L: Plua_State): Integer; cdecl;
     function DrawText_func(L: Plua_State): Integer; cdecl;
     function DrawCircle_func(L: Plua_State): Integer; cdecl;
     function DrawRectangle_func(L: Plua_State): Integer; cdecl;
@@ -182,6 +183,18 @@ begin
   //end metatable
 end;
 
+procedure lua_register_integer(L : Plua_State; name: string; value: integer);
+begin
+  lua_pushinteger(L, value);
+  lua_setfield(L, -2, pchar(name));
+end;
+
+procedure lua_register_fpcolor(L : Plua_State; name: string; value: TFPColor);
+begin
+  lua_pushinteger(L, FPColorToInt(colRed));
+  lua_setfield(L, -2, pchar(name));
+end;
+
 { TLuaCanvas }
 
 function TLuaCanvas.__setter(L: PLua_State): integer; cdecl;
@@ -194,13 +207,13 @@ begin
   case field of
     'color':
     begin
-      i := Round(lua_tonumber(L, 1));
+      i := Round(lua_tonumber(L, -1));
       Main.Canvas.Color := IntToFPColor(i);//thread unsafe
       Result:= 1;
     end;
     'backcolor':
     begin
-      i := Round(lua_tonumber(L, 1));
+      i := Round(lua_tonumber(L, -1));
       Main.Canvas.BackgroundColor := IntToFPColor(i);//thread unsafe
       Result:= 1;
     end;
@@ -250,9 +263,31 @@ begin
   LuaCanvas := TLuaCanvas.Create;
 
   //lua_register_table(LuaState, 'draw', LuaCanvas);
+  lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
   lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
   lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
   lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
+
+  lua_newtable(LuaState);
+  lua_register_fpcolor(LuaState, 'white', colWhite);
+  lua_register_fpcolor(LuaState, 'silver', colSilver);
+  lua_register_fpcolor(LuaState, 'gray' , colGray);
+  lua_register_fpcolor(LuaState, 'black', colBlack);
+  lua_register_fpcolor(LuaState, 'red'  , colRed);
+  lua_register_fpcolor(LuaState, 'maroon', colMaroon);
+  lua_register_fpcolor(LuaState, 'yellow', colYellow);
+  lua_register_fpcolor(LuaState, 'olive', colOlive);
+  lua_register_fpcolor(LuaState, 'lime' , colLime);
+  lua_register_fpcolor(LuaState, 'green', colGreen);
+  lua_register_fpcolor(LuaState, 'aqua' , colAqua);
+  lua_register_fpcolor(LuaState, 'teal' , colTeal);
+  lua_register_fpcolor(LuaState, 'blue' , colBlue);
+  lua_register_fpcolor(LuaState, 'navy' , colNavy);
+  lua_register_fpcolor(LuaState, 'fuchsia', colFuchsia);
+  lua_register_fpcolor(LuaState, 'purple', colPurple);
+  lua_register_integer(LuaState, 'count', 16);
+  lua_setglobal(LuaState, 'colors');
+
   //lua_register_table(LuaState, 'color', LuaCanvas);
   lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
 end;
@@ -287,6 +322,12 @@ begin
     DoError(Msg);
     lua_pop(LuaState, 1);  //* remove message
   end;
+end;
+
+function TLuaScript.Clear_func(L: Plua_State): Integer; cdecl;
+begin
+  AddPoolObject(TClearObject.Create(Main.Canvas));
+  Result := 0;
 end;
 
 function TLuaScript.DrawText_func(L: Plua_State): Integer; cdecl;

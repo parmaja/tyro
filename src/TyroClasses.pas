@@ -137,6 +137,15 @@ type
     constructor Create(ACanvas: TTyroCanvas; Text: String);
     procedure Execute; override;
   end;
+
+  { TClearObject }
+
+  TClearObject = class(TDrawObject)
+  public
+    constructor Create(ACanvas: TTyroCanvas);
+    procedure Execute; override;
+  end;
+
   { TPoolObjects }
 
   TPoolObjects = class(specialize TFPGObjectList<TPoolObject>)
@@ -200,12 +209,17 @@ end;
 function IntToFPColor(I: Integer): TFPColor;
 begin
   Result.Alpha := I and $ff;
+  Result.Alpha := Result.Alpha + (Result.Alpha shl 8);
+
   I := I shr 8;
   Result.Blue := I and $ff;
+  Result.Blue := Result.Blue + (Result.Blue shl 8);
   I := I shr 8;
   Result.Green := I and $ff;
+  Result.Green := Result.Green + (Result.Green shl 8);
   I := I shr 8;
   Result.Red := I and $ff;
+  Result.Red := Result.Red + (Result.Red shl 8);
 end;
 
 function FPColorToInt(C: TFPColor): Integer;
@@ -217,6 +231,18 @@ begin
   Result := Result or hi(C.Blue);
   Result := Result shl 8;
   Result := Result or hi(C.Alpha);
+end;
+
+{ TClearObject }
+
+constructor TClearObject.Create(ACanvas: TTyroCanvas);
+begin
+  inherited Create(ACanvas);
+end;
+
+procedure TClearObject.Execute;
+begin
+  ClearBackground(RayColorOf(Canvas.BackgroundColor));
 end;
 
 { TDrawRectangleObject }

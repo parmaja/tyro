@@ -1,8 +1,8 @@
 log('start')
 
---log(colors.red)
+log(colors.red)
 
---canvas.color := colors.red
+canvas.color = colors.red
 
 canvas.text(20, 20, 'Printing text test')
 
@@ -18,7 +18,7 @@ while i > 0 do
     x = math.random(640)
     y = math.random(480)
 	canvas.rectangle(x, y, r, r)
-    sleep(100)
+    sleep(10)
     i = i - 1
 end
 
