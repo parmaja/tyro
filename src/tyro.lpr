@@ -81,11 +81,11 @@ begin
   FArguments := TmnFields.Create;
   CollectArguments;
   Main := TTyroMain.Create;
-  Main.Init;
+  Main.WorkSpace := Location;
   Main.Title := 'Tyro';
   if Arguments.Exists[''] then
     Main.FileName := Arguments[''];
-  Main.WorkSpace := IncludePathSeparator(ExtractFilePath(ParamStr(0)));
+  Main.Init;
   Main.Start;
 end;
 
@@ -99,7 +99,7 @@ end;
 procedure TTyroApplication.DoRun;
 begin
   inherited;
-  CheckSynchronize(10);
+  //CheckSynchronize();
   Main.Run;
   if not Main.Active then
   begin

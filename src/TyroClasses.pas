@@ -62,8 +62,8 @@ type
     FBackgroundColor: TFPColor;
     FFontSize: Integer;
     FColor: TFPColor;
-    FPImage: TMyFPMemoryImage;
-    FPCanvas: TFPImageCanvas;
+    //FPImage: TMyFPMemoryImage;
+    //FPCanvas: TFPImageCanvas;
     FBoard: TRenderTexture2D;
     Font: raylib.TFont;
     procedure SetBackgroundColor(AValue: TFPColor);
@@ -97,9 +97,9 @@ type
     property Canvas: TTyroCanvas read FCanvas;
   end;
 
-  { TCircleObject }
+  { TDrawCircleObject }
 
-  TCircleObject = class(TDrawObject)
+  TDrawCircleObject = class(TDrawObject)
   public
     fX, fY, fR: Integer;
     fFill: Boolean;
@@ -107,13 +107,13 @@ type
     procedure Execute; override;
   end;
 
-  { TTextObject }
+  { TDrawTextObject }
 
-  TTextObject = class(TDrawObject)
+  TDrawTextObject = class(TDrawObject)
   public
     fX, fY: Integer;
     fText: String;
-    constructor Create(ACanvas: TTyroCanvas; X, Y: Integer; Text: String);
+    constructor Create(ACanvas: TTyroCanvas; Text: String; X, Y: Integer);
     procedure Execute; override;
   end;
 
@@ -152,6 +152,9 @@ type
     property Active: Boolean read GetActive;
   end;
 
+function IntToFPColor(I: Integer): TFPColor;
+function FPColorToInt(C: TFPColor): Integer;
+
 var
   ScreenWidth: Integer = 640; //Temporary here, i will move it to Tyro object
   ScreenHeight: Integer = 480;
@@ -166,26 +169,47 @@ uses
 
 function RayColorOf(Color: TFPColor): raylib.TColor;
 begin
-  Result.a := Lo(Color.Alpha);
-  Result.r := Lo(Color.Red);
-  Result.g := Lo(Color.Green);
-  Result.b := Lo(Color.Blue);
+  Result.a := hi(Color.Alpha);
+  Result.r := hi(Color.Red);
+  Result.g := hi(Color.Green);
+  Result.b := hi(Color.Blue);
 end;
 
-{ TTextObject }
-
-constructor TTextObject.Create(ACanvas: TTyroCanvas; X, Y: Integer; Text: String);
+function IntToFPColor(I: Integer): TFPColor;
 begin
+  Result.Alpha := I and $ff;
+  I := I shr 8;
+  Result.Blue := I and $ff;
+  I := I shr 8;
+  Result.Green := I and $ff;
+  I := I shr 8;
+  Result.Red := I and $ff;
+end;
+
+function FPColorToInt(C: TFPColor): Integer;
+begin
+  Result := hi(C.Red);
+  Result := Result shl 8;
+  Result := Result or hi(C.Green);
+  Result := Result shl 8;
+  Result := Result or hi(C.Blue);
+  Result := Result shl 8;
+  Result := Result or hi(C.Alpha);
+end;
+
+{ TDrawTextObject }
+
+constructor TDrawTextObject.Create(ACanvas: TTyroCanvas; Text: String; X, Y: Integer);
+begin
+  inherited Create(ACanvas);
   fX := X;
   fY := Y;
   fText := Text;
 end;
 
-procedure TTextObject.Execute;
+procedure TDrawTextObject.Execute;
 begin
-  BeginTextureMode(Canvas.Board);
-  raylib.DrawText(PChar(fText), fX, fY, Canvas.FontSize, RayColorOf(Canvas.Color));
-  EndTextureMode();
+  raylib.DrawTextEx(Canvas.Font, PChar(fText), Vector2Create(fX, fY), Canvas.FontSize, 2, RayColorOf(Canvas.Color));
 end;
 
 { TDrawObject }
@@ -200,9 +224,9 @@ begin
   FCanvas := ACanvas;
 end;
 
-{ TCircleObject }
+{ TDrawCircleObject }
 
-constructor TCircleObject.Create(ACanvas: TTyroCanvas; X, Y, R: Integer; Fill: Boolean);
+constructor TDrawCircleObject.Create(ACanvas: TTyroCanvas; X, Y, R: Integer; Fill: Boolean);
 begin
   inherited Create(ACanvas);
   fX := X;
@@ -211,7 +235,7 @@ begin
   fFill := Fill;
 end;
 
-procedure TCircleObject.Execute;
+procedure TDrawCircleObject.Execute;
 begin
   BeginTextureMode(Canvas.Board);
   if fFill then
@@ -225,44 +249,41 @@ end;
 
 constructor TTyroCanvas.Create;
 begin
-  FFontSize := 8;
   FColor := colBlack;
-  FBackgroundColor := colWhite;
-  FPImage := TMyFPMemoryImage.Create(100,100);
-  FPImage.LoadFromFile(Main.WorkSpace + 'richard-say.png');
-  FPImage.UsePalette:=false;
-  FPCanvas := TFPImageCanvas.Create(FPImage);
+  FBackgroundColor := FPColor(0, 110, 160, 0);
+  //FPImage := TMyFPMemoryImage.Create(100,100);
+  //FPImage.LoadFromFile(Main.WorkSpace + 'richard-say.png');
+  //FPImage.UsePalette:=false;
+  //FPCanvas := TFPImageCanvas.Create(FPImage);
   //FPCanvas.Pen.FPColor := colRed;
   //FPCanvas.Rectangle(10, 10, 10 , 10);
-  //  Font := raylib.LoadFontEx(PChar('terminus.ttf'), 32, nil, 250);
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'alpha_beta.png'));
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'terminus.ttf'));
+  Font := raylib.LoadFont(PChar(Main.WorkSpace + 'dejavu.fnt'));
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
+  //Font := raylib.LoadFont(PChar('computer_pixel.fon.ttf'));
+  FFontSize := Font.baseSize;
   FBoard := LoadRenderTexture(ScreenWidth, ScreenHeight);
   BeginTextureMode(FBoard);
-  ClearBackground(RayColorOf(colWhite));
-  raylib.DrawText('Ready!', 3, 3, 8, BLACK);
+  ClearBackground(RayColorOf(BackgroundColor));
+  DrawText('Ready!', 3, 3);
   EndTextureMode();
 end;
 
 destructor TTyroCanvas.Destroy;
 begin
+  UnloadFont(Font);
   UnloadRenderTexture(FBoard);
   Finalize(FBoard);
-  inherited Destroy;
+  inherited;
 end;
 
 procedure TTyroCanvas.Circle(X, Y, R: Integer; Fill: Boolean);
 begin
-  // Clear render texture before entering the game loop
-  Main.Lock.Enter;
-  try
-    BeginTextureMode(Board);
-    if Fill then
-      DrawCircle(X, Y, R, RayColorOf(Color))
-    else
-      DrawCircleLines(X, Y, R, RayColorOf(Color));
-    EndTextureMode();
-  finally
-    Main.Lock.Leave;
-  end;
+  if Fill then
+    DrawCircle(X, Y, R, RayColorOf(Color))
+  else
+    DrawCircleLines(X, Y, R, RayColorOf(Color));
 end;
 
 {procedure TTyroCanvas.PrintTest;
@@ -274,27 +295,14 @@ end;}
 
 procedure TTyroCanvas.DrawText(S: string; X, Y: Integer);
 begin
-  // Clear render texture before entering the game loop
-  Main.Lock.Enter;
-  try
-    BeginTextureMode(Board);
-    raylib.DrawText(PChar(S), X, Y, FontSize, RayColorOf(Color));
-    EndTextureMode();
-  finally
-    Main.Lock.Leave;
-  end;
+  BeginTextureMode(Board);
+  //raylib.DrawText(PChar(S), X, Y, FontSize, RayColorOf(Color));
+  raylib.DrawTextEx(Font, PChar(S), Vector2Create(X, Y), FontSize, 2, RayColorOf(Color));
 end;
 
 procedure TTyroCanvas.Clear;
 begin
-  Main.Lock.Enter;
-  try
-    BeginTextureMode(Board);
-    ClearBackground(RayColorOf(BackgroundColor));
-    EndTextureMode();
-  finally
-    Main.Lock.Leave;
-  end;
+  ClearBackground(RayColorOf(BackgroundColor));
 end;
 
 procedure TTyroCanvas.SetBackgroundColor(AValue: TFPColor);
@@ -338,7 +346,7 @@ begin
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
-  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  DefaultBackground := ColorCreate(200, 210, 220, 0);
 end;
 
 destructor TTyroMain.Destroy;
@@ -353,9 +361,9 @@ end;
 
 procedure TTyroMain.Init;
 begin
-  DefaultBackground := ColorCreate(0, 110, 160, 0);
-
+  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(ScreenWidth, ScreenHeight, PChar(Title));
+  ShowCursor();
   SetTargetFPS(60);
   FCanvas := TTyroCanvas.Create;
 end;
@@ -388,19 +396,20 @@ begin
     t := LoadTextureFromImage(im);
     DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);}
 
-    WriteLn('Copy Board');
+    //WriteLn('Copy Board');
     with Canvas.FBoard do
       DrawTextureRec(texture, RectangleCreate(0, 0, texture.width, -texture.height), Vector2Create(0, 0), WHITE);
+
   finally
     Lock.Leave;
   end;
+
   Loop;
   EndDrawing;
 end;
 
 procedure TTyroMain.Loop;
 begin
-  //DrawTextEx(Font, PChar('Test'), Vector2Create(100, 100), Font.baseSize, -2, Black);
 end;
 
 procedure TTyroMain.Stop;
@@ -432,12 +441,14 @@ begin
     Main.Lock.Leave;
   end;
   Sleep(1); //idk why?!!!!
+  Yield;
 end;
 
 constructor TTyroScript.Create;
 begin
   inherited Create(True);
   FreeOnTerminate := False;
+  Priority := tpLower; //hmmm
   ScriptText := TStringList.Create;
 end;
 

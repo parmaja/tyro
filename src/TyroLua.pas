@@ -15,17 +15,35 @@ interface
 
 uses
   Classes, SysUtils,
-  lua53, l4l_object,
+  lua53, FPImage,
   TyroClasses;
 
 type
+
+  { TLuaObject }
+
+  TLuaObject = class abstract(TObject)
+  protected
+    function __setter(L: PLua_State): integer; cdecl; virtual; abstract;
+    function __getter(L: PLua_State): integer; cdecl; virtual; abstract;
+  end;
+
+  { TLuaCanvas }
+
+  TLuaCanvas = class(TLuaObject)
+  protected
+    function __setter(L: PLua_State): integer; cdecl; override;
+    function __getter(L: PLua_State): integer; cdecl; override;
+  public
+  end;
 
   { TLuaScript }
 
   TLuaScript = class(TTyroScript)
   private
   protected
-    LuaStatus: Plua_State;
+    LuaState: Plua_State;
+    LuaCanvas: TLuaCanvas;
     procedure DoError(S: string);
     procedure Run; override;
     function Print_func(L: Plua_State): Integer; cdecl;
@@ -67,7 +85,7 @@ end;
 type
   lua_CMethod = function(L: Plua_State): Integer of object cdecl; // Lua Function
 
-function lua_callback(L: Plua_State): Integer; cdecl;
+function lua_method_callback(L: Plua_State): Integer; cdecl;
 var
   Method: TMethod;
 begin
@@ -80,7 +98,7 @@ procedure lua_register_method(L: Plua_State; name: String; method: lua_CMethod);
 begin
   lua_pushlightuserdata(L, TMethod(method).Data);
   lua_pushlightuserdata(L, TMethod(method).Code);
-  lua_pushcclosure(L, @lua_callback, 2);
+  lua_pushcclosure(L, @lua_method_callback, 2);
   lua_setglobal(L, PChar(name));
 end;
 
@@ -89,19 +107,112 @@ begin
   lua_register(L, PChar(name), func);
 end;
 
+procedure lua_push_method(L: Plua_State; name: String; method: lua_CMethod);
+begin
+  lua_pushlightuserdata(L, TMethod(method).Data);
+  lua_pushlightuserdata(L, TMethod(method).Code);
+  lua_pushcclosure(L, @lua_method_callback, 2);
+  lua_setfield(L, -2, pchar(name));
+end;
+
+procedure lua_register_table(L : Plua_State; table: string; obj: TLuaObject);
+begin
+  //table
+  lua_newtable(L);
+
+  //metatable
+  lua_newtable(L);
+
+  lua_push_method(L, '__index', @obj.__getter);
+  lua_push_method(L, '__newindex', @obj.__setter);
+
+  lua_setmetatable(L, -2);
+  //end metatable
+
+  lua_setglobal(L, pchar(table)); //set table name
+  //end table
+end;
+
+procedure lua_register_table_method(L : Plua_State; table: string; obj: TObject; name: string; method: lua_CMethod);
+begin
+  //table
+  lua_getglobal(L, pchar(table)); //get table by name
+  if lua_getmetatable(L, -1) = 0 then
+    lua_newtable(L);
+  lua_push_method(L, pchar(Name), method);
+  //lua_setmetatable(L, -2);
+  //end metatable
+end;
+
+
+{ TLuaCanvas }
+
+function TLuaCanvas.__setter(L: PLua_State): integer; cdecl;
+var
+  i: integer;
+  field: string;
+begin
+  Result:= 0;
+  field := lua_tostring(L, 2);
+  case field of
+    'color':
+    begin
+      i := Round(lua_tonumber(L, 1));
+      Main.Canvas.Color := IntToFPColor(i);//thread unsafe
+      Result:= 1;
+    end;
+    'backcolor':
+    begin
+      i := Round(lua_tonumber(L, 1));
+      Main.Canvas.BackgroundColor := IntToFPColor(i);//thread unsafe
+      Result:= 1;
+    end;
+  end;
+end;
+
+function TLuaCanvas.__getter(L: PLua_State): integer; cdecl;
+var
+  i: integer;
+  field: string;
+begin
+  Result:= 0;
+  field := lua_tostring(L, 2);
+  case field of
+    'color':
+    begin
+      i := FPColorToInt(Main.Canvas.Color);
+      lua_pushnumber(L, i);
+      Result := 1;
+    end;
+    'backcolor':
+    begin
+      i := FPColorToInt(Main.Canvas.BackgroundColor);
+      lua_pushnumber(L, i);
+      Result := 1;
+    end;
+  end;
+end;
+
 constructor TLuaScript.Create;
 begin
   inherited;
-  LuaStatus := lua_newstate(@LuaAlloc, nil);
-  lual_openlibs(LuaStatus);
-  lua_register(LuaStatus, 'log', @log_func);
-  lua_register_method(LuaStatus, 'circle', @Circle_func);
-  lua_register_method(LuaStatus, 'print', @Print_func);
+  LuaState := lua_newstate(@LuaAlloc, nil);
+  lual_openlibs(LuaState);
+
+
+  lua_register(LuaState, 'log', @log_func);
+  lua_register_method(LuaState, 'circle', @Circle_func);
+  lua_register_method(LuaState, 'text', @Print_func);
+
+  LuaCanvas := TLuaCanvas.Create;
+  lua_register_table(LuaState, 'canvas', LuaCanvas);
+  lua_register_table_method(LuaState, 'canvas', self, 'circle', @Circle_func);
+  //lua_register_table(LuaState, 'color', LuaCanvas);
 end;
 
 destructor TLuaScript.Destroy;
 begin
-  lua_close(LuaStatus);
+  lua_close(LuaState);
   inherited;
 end;
 
@@ -118,16 +229,16 @@ var
 begin
   WriteLn('Run Script');
   //Sleep(1000);
-  r := luaL_loadstring(LuaStatus, PChar(ScriptText.Text));
+  r := luaL_loadstring(LuaState, PChar(ScriptText.Text));
   if r = 0 then
   begin
-    r := lua_pcall(LuaStatus, 0, LUA_MULTRET, 0);
+    r := lua_pcall(LuaState, 0, LUA_MULTRET, 0);
   end;
   if (r <> LUA_OK)  then
   begin
-    Msg := lua_tostring(LuaStatus, -1);
+    Msg := lua_tostring(LuaState, -1);
     DoError(Msg);
-    lua_pop(LuaStatus, 1);  //* remove message
+    lua_pop(LuaState, 1);  //* remove message
   end;
 end;
 
@@ -136,14 +247,12 @@ var
 //  c: integer;
   x, y: Integer;
   s: string;
-  f: Boolean;
 begin
-  f := false;
 //  c := lua_gettop(L);
   s := lua_tostring(L, 1);
   x := lua_tointeger(L, 2);
   y := lua_tointeger(L, 3);
-  AddPoolObject(TTextObject.Create(Main.Canvas, x, y, s));
+  AddPoolObject(TDrawTextObject.Create(Main.Canvas, s, x, y));
   Result := 0;
 end;
 
@@ -160,7 +269,7 @@ begin
   r := lua_tointeger(L, 3);
   if c >= 4 then
     f := lua_toboolean(L, 4);
-  AddPoolObject(TCircleObject.Create(Main.Canvas, x, y, r, f));
+  AddPoolObject(TDrawCircleObject.Create(Main.Canvas, x, y, r, f));
   Result := 0;
 end;
 
