@@ -46,8 +46,12 @@ type
     LuaCanvas: TLuaCanvas;
     procedure DoError(S: string);
     procedure Run; override;
+    //canvas functions
+    function DrawText_func(L: Plua_State): Integer; cdecl;
+    function DrawCircle_func(L: Plua_State): Integer; cdecl;
+    function DrawRectangle_func(L: Plua_State): Integer; cdecl;
+    //global functions
     function Print_func(L: Plua_State): Integer; cdecl;
-    function Circle_func(L: Plua_State): Integer; cdecl;
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -63,6 +67,16 @@ begin
   except
     Result:= nil;
   end;
+end;
+
+//global functions
+function sleep_func(L : Plua_State) : Integer; cdecl;
+var
+  n: int64;
+begin
+  n := round(lua_tonumber(L, 1));
+  sleep(n);
+  Result := 0;
 end;
 
 function log_func(L : Plua_State) : Integer; cdecl;
@@ -123,9 +137,6 @@ begin
   //metatable
   lua_newtable(L);
 
-  lua_push_method(L, '__index', @obj.__getter);
-  lua_push_method(L, '__newindex', @obj.__setter);
-
   lua_setmetatable(L, -2);
   //end metatable
 
@@ -133,17 +144,43 @@ begin
   //end table
 end;
 
-procedure lua_register_table_method(L : Plua_State; table: string; obj: TObject; name: string; method: lua_CMethod);
+procedure lua_register_table_index(L : Plua_State; table: string; obj: TLuaObject);
+var
+  new: Boolean;
 begin
   //table
-  lua_getglobal(L, pchar(table)); //get table by name
-  if lua_getmetatable(L, -1) = 0 then
+  new := lua_getglobal(L, pchar(table)) = 0; //get table by name
+  if new then
+    lua_newtable(L);
+
+  //metatable
+  lua_newtable(L);
+
+  lua_push_method(L, '__index', @obj.__getter);
+  lua_push_method(L, '__newindex', @obj.__setter);
+
+  lua_setmetatable(L, -2);
+  //end metatable
+
+  if new then
+    lua_setglobal(L, pchar(table)); //set table name
+  //end table
+end;
+
+procedure lua_register_table_method(L : Plua_State; table: string; obj: TObject; name: string; method: lua_CMethod);
+var
+  new: Boolean;
+begin
+  //table
+  new := lua_getglobal(L, pchar(table)) = 0; //get table by name
+  if new then
     lua_newtable(L);
   lua_push_method(L, pchar(Name), method);
   //lua_setmetatable(L, -2);
+  if new then
+    lua_setglobal(L, pchar(table));
   //end metatable
 end;
-
 
 { TLuaCanvas }
 
@@ -152,7 +189,7 @@ var
   i: integer;
   field: string;
 begin
-  Result:= 0;
+  Result := 0;
   field := lua_tostring(L, 2);
   case field of
     'color':
@@ -175,7 +212,7 @@ var
   i: integer;
   field: string;
 begin
-  Result:= 0;
+  Result := 0;
   field := lua_tostring(L, 2);
   case field of
     'color':
@@ -193,21 +230,31 @@ begin
   end;
 end;
 
+procedure HookCount(L: Plua_State; ar: Plua_Debug); cdecl;
+begin
+  if not Main.Active then
+    luaL_error(L, PChar('Terminated!'));
+end;
+
 constructor TLuaScript.Create;
 begin
   inherited;
   LuaState := lua_newstate(@LuaAlloc, nil);
   lual_openlibs(LuaState);
-
+  lua_sethook(LuaState, @HookCount, LUA_MASKCOUNT, 100);
 
   lua_register(LuaState, 'log', @log_func);
-  lua_register_method(LuaState, 'circle', @Circle_func);
-  lua_register_method(LuaState, 'text', @Print_func);
+  lua_register(LuaState, 'sleep', @sleep_func);
+  lua_register_method(LuaState, 'print', @DrawText_func);
 
   LuaCanvas := TLuaCanvas.Create;
-  lua_register_table(LuaState, 'canvas', LuaCanvas);
-  lua_register_table_method(LuaState, 'canvas', self, 'circle', @Circle_func);
+
+  //lua_register_table(LuaState, 'draw', LuaCanvas);
+  lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
+  lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
+  lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
   //lua_register_table(LuaState, 'color', LuaCanvas);
+  lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
 end;
 
 destructor TLuaScript.Destroy;
@@ -242,21 +289,21 @@ begin
   end;
 end;
 
-function TLuaScript.Print_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.DrawText_func(L: Plua_State): Integer; cdecl;
 var
 //  c: integer;
   x, y: Integer;
   s: string;
 begin
 //  c := lua_gettop(L);
-  s := lua_tostring(L, 1);
-  x := lua_tointeger(L, 2);
-  y := lua_tointeger(L, 3);
-  AddPoolObject(TDrawTextObject.Create(Main.Canvas, s, x, y));
+  x := lua_tointeger(L, 1);
+  y := lua_tointeger(L, 2);
+  s := lua_tostring(L, 3);
+  AddPoolObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
   Result := 0;
 end;
 
-function TLuaScript.Circle_func(L : Plua_State) : Integer; cdecl;
+function TLuaScript.DrawCircle_func(L : Plua_State) : Integer; cdecl;
 var
   c: integer;
   x, y, r: integer;
@@ -273,6 +320,37 @@ begin
   Result := 0;
 end;
 
+function TLuaScript.DrawRectangle_func(L: Plua_State): Integer; cdecl;
+var
+  c: integer;
+  x, y, w, h: integer;
+  f: Boolean;
+begin
+  f := false;
+  c := lua_gettop(L);
+  x := lua_tointeger(L, 1);
+  y := lua_tointeger(L, 2);
+  w := lua_tointeger(L, 3);
+  h := lua_tointeger(L, 4);
+  if c >= 4 then
+    f := lua_toboolean(L, 5);
+  AddPoolObject(TDrawRectangleObject.Create(Main.Canvas, x, y, w, h, f));
+  Result := 0;
+end;
+
+function TLuaScript.Print_func(L: Plua_State): Integer; cdecl;
+var
+//  c: integer;
+  x, y: Integer;
+  s: string;
+begin
+//  c := lua_gettop(L);
+  s := lua_tostring(L, 1);
+  x := lua_tointeger(L, 2);
+  y := lua_tointeger(L, 3);
+  AddPoolObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  Result := 0;
+end;
 
 end.
 

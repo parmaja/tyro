@@ -104,7 +104,6 @@ begin
   if not Main.Active then
   begin
     Main.Stop;
-    ReadLn;
     Terminate;
   end;
 end;

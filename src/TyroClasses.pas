@@ -72,8 +72,10 @@ type
     destructor Destroy; override;
     property Board: TRenderTexture2D read FBoard;
     procedure Circle(X, Y, R: Integer; Fill: Boolean);
+    procedure Rectangle(X, Y, W, H: Integer; Fill: Boolean);
     //procedure PrintTest;
-    procedure DrawText(S: string; X, Y: Integer);
+    procedure DrawText(X, Y: Integer; S: string);
+    procedure Print(S: string);
     procedure Clear;
     property Color: TFPColor read FColor write FColor;
     property FontSize: Integer read FFontSize write FFontSize;
@@ -107,15 +109,35 @@ type
     procedure Execute; override;
   end;
 
+  { TDrawRectangleObject }
+
+  TDrawRectangleObject = class(TDrawObject)
+  public
+    fX, fY, fW, fH: Integer;
+    fFill: Boolean;
+    constructor Create(ACanvas: TTyroCanvas; X, Y, W, H: Integer; Fill: Boolean);
+    procedure Execute; override;
+  end;
+
   { TDrawTextObject }
 
   TDrawTextObject = class(TDrawObject)
   public
     fX, fY: Integer;
     fText: String;
-    constructor Create(ACanvas: TTyroCanvas; Text: String; X, Y: Integer);
+    constructor Create(ACanvas: TTyroCanvas; X, Y: Integer; Text: String);
     procedure Execute; override;
   end;
+
+  { TPrintObject }
+
+  TPrintObject = class(TDrawObject)
+  public
+    fText: String;
+    constructor Create(ACanvas: TTyroCanvas; Text: String);
+    procedure Execute; override;
+  end;
+  { TPoolObjects }
 
   TPoolObjects = class(specialize TFPGObjectList<TPoolObject>)
   public
@@ -197,9 +219,42 @@ begin
   Result := Result or hi(C.Alpha);
 end;
 
+{ TDrawRectangleObject }
+
+constructor TDrawRectangleObject.Create(ACanvas: TTyroCanvas; X, Y, W, H: Integer; Fill: Boolean);
+begin
+  inherited Create(ACanvas);
+  fX := X;
+  fY := Y;
+  fW := W;
+  fH := H;
+  fFill := Fill;
+end;
+
+procedure TDrawRectangleObject.Execute;
+begin
+  if fFill then
+    DrawRectangle(fX, fY, fW, fH, RayColorOf(Canvas.Color))
+  else
+    DrawRectangleLines(fX, fY, fW, fH, RayColorOf(Canvas.Color));
+end;
+
+{ TPrintObject }
+
+constructor TPrintObject.Create(ACanvas: TTyroCanvas; Text: String);
+begin
+  inherited Create(ACanvas);
+  fText := Text;
+end;
+
+procedure TPrintObject.Execute;
+begin
+  Canvas.Print(fText);
+end;
+
 { TDrawTextObject }
 
-constructor TDrawTextObject.Create(ACanvas: TTyroCanvas; Text: String; X, Y: Integer);
+constructor TDrawTextObject.Create(ACanvas: TTyroCanvas; X, Y: Integer; Text: String);
 begin
   inherited Create(ACanvas);
   fX := X;
@@ -237,12 +292,10 @@ end;
 
 procedure TDrawCircleObject.Execute;
 begin
-  BeginTextureMode(Canvas.Board);
   if fFill then
     DrawCircle(fX, fY, fR, RayColorOf(Canvas.Color))
   else
     DrawCircleLines(fX, fY, fR, RayColorOf(Canvas.Color));
-  EndTextureMode();
 end;
 
 { TTyroCanvas }
@@ -258,15 +311,18 @@ begin
   //FPCanvas.Pen.FPColor := colRed;
   //FPCanvas.Rectangle(10, 10, 10 , 10);
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'alpha_beta.png'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'terminus.ttf'));
-  Font := raylib.LoadFont(PChar(Main.WorkSpace + 'dejavu.fnt'));
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'Terminess-Bold.ttf'));
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'dejavu.fnt'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'terminus.fon'));
+
   //Font := raylib.LoadFont(PChar('computer_pixel.fon.ttf'));
-  FFontSize := Font.baseSize;
+  Font := GetFontDefault;
+  FFontSize := Font.baseSize * 2;
   FBoard := LoadRenderTexture(ScreenWidth, ScreenHeight);
   BeginTextureMode(FBoard);
   ClearBackground(RayColorOf(BackgroundColor));
-  DrawText('Ready!', 3, 3);
+  DrawText(3, 3, 'Ready!');
   EndTextureMode();
 end;
 
@@ -286,6 +342,14 @@ begin
     DrawCircleLines(X, Y, R, RayColorOf(Color));
 end;
 
+procedure TTyroCanvas.Rectangle(X, Y, W, H: Integer; Fill: Boolean);
+begin
+  if Fill then
+    DrawRectangle(X, Y, W, H, RayColorOf(Color))
+  else
+    DrawRectangleLines(X, Y, W, H, RayColorOf(Color));
+end;
+
 {procedure TTyroCanvas.PrintTest;
 begin
   BeginTextureMode(Board);
@@ -293,11 +357,15 @@ begin
   EndTextureMode();
 end;}
 
-procedure TTyroCanvas.DrawText(S: string; X, Y: Integer);
+procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
 begin
-  BeginTextureMode(Board);
   //raylib.DrawText(PChar(S), X, Y, FontSize, RayColorOf(Color));
   raylib.DrawTextEx(Font, PChar(S), Vector2Create(X, Y), FontSize, 2, RayColorOf(Color));
+end;
+
+procedure TTyroCanvas.Print(S: string);
+begin
+  //TODO
 end;
 
 procedure TTyroCanvas.Clear;
@@ -346,7 +414,7 @@ begin
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
-  DefaultBackground := ColorCreate(200, 210, 220, 0);
+  DefaultBackground := ColorCreate(220, 230, 240, 0);
 end;
 
 destructor TTyroMain.Destroy;
