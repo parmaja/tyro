@@ -1,6 +1,6 @@
 # Tyro
 
-Runing embed programming language in simple graphical environment, for kids and newbies, using [https://www.raylib.com/ raylib] as small game engine to draw.
+Runing embed programming language in simple graphical environment, for kids and newbies, using ![raylib](https://www.raylib.com/ raylib) as small game engine to draw.
 Now I am working on adding Lua, in the future I want to add more simple progamming lanuguages like Basic.
 It also should have editing tool inside that environment, console output and input, work in same graphical window.
 playing sound using mmf code.
@@ -12,7 +12,7 @@ It is More simulating old computer, but with modern languages and graphic.
 
 There is problem in raylib, in fact in OpenGL that cannot/not easy share texture between thread, we need another trick to pass drawing commands to main thread, but now i am sending objects to draw it in main thread, it is work fine until now
 
-[https://github.com/raysan5/raylib/issues/454]
+https://github.com/raysan5/raylib/issues/454
 
 # Compile
 
@@ -20,7 +20,7 @@ Use FPC 3.x or Lazarus with it
 
 # Libraries
 
-[https://github.com/malcome/Lua4Lazarus Lua4Lazarus]
+![Lua4Lazarus](https://github.com/malcome/Lua4Lazarus)
 
 [https://github.com/zaher/raylib-pas raylib-pas]
 
