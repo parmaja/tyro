@@ -39,19 +39,23 @@ https://github.com/raysan5/raylib/issues/454
 
 # Compile
 
-Use FPC 3.x or Lazarus with it
+Use FreePascal 3.x or Lazarus with it
 
 # Libraries
 
-(https://github.com/malcome/Lua4Lazarus "Lua4Lazarus")
+[https://sourceforge.net/p/minilib/ minilib]
 
-[https://github.com/zaher/raylib-pas raylib-pas]
+# Dependencies
 
 [https://www.raylib.com/ raylib] for raylib.dll/so
 
 [https://www.lua.org/ Lua] for lua dll 5.3
 
-[https://sourceforge.net/p/minilib/ minilib]
+# Ported
+
+(https://github.com/malcome/Lua4Lazarus "Lua4Lazarus")
+
+[https://github.com/zaher/raylib-pas raylib-pas]
 
 # TODO
 
