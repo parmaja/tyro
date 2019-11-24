@@ -20,7 +20,7 @@ Use FPC 3.x or Lazarus with it
 
 # Libraries
 
-![Lua4Lazarus](https://github.com/malcome/Lua4Lazarus)
+(https://github.com/malcome/Lua4Lazarus "Lua4Lazarus")
 
 [https://github.com/zaher/raylib-pas raylib-pas]
 
