@@ -89,7 +89,7 @@
       <FormatVersion Value="2"/>
       <Modes Count="0"/>
     </RunParams>
-    <RequiredPackages Count="4">
+    <RequiredPackages Count="3">
       <Item1>
         <PackageName Value="MiniCommons"/>
       </Item1>
@@ -97,11 +97,8 @@
         <PackageName Value="raylib_pas"/>
       </Item2>
       <Item3>
-        <PackageName Value="Sard"/>
-      </Item3>
-      <Item4>
         <PackageName Value="Lua4Lazarus"/>
-      </Item4>
+      </Item3>
     </RequiredPackages>
     <Units>
       <Unit>
