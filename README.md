@@ -7,13 +7,6 @@ playing sound using mmf code.
 
 It is More simulating old computer, but with modern languages and graphic.
 
-
-# Issues
-
-There is problem in raylib, in fact in OpenGL that cannot/not easy share texture between thread, we need another trick to pass drawing commands to main thread, but now i am sending objects to draw it in main thread, it is work fine until now
-
-https://github.com/raysan5/raylib/issues/454
-
 # Lua Example
 
 ```lua
@@ -37,6 +30,12 @@ https://github.com/raysan5/raylib/issues/454
         i = i - 1
     end
 ```
+
+# Issues
+
+There is problem in raylib, in fact in OpenGL that cannot/not easy share texture between thread, we need another trick to pass drawing commands to main thread, but now i am sending objects to draw it in main thread, it is work fine until now
+
+https://github.com/raysan5/raylib/issues/454
 
 # Compile
 

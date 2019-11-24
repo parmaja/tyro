@@ -5,6 +5,7 @@ log(canvas.width)
 canvas.text(10, 30, 'Printing text test')
 canvas.text(10, 100, '110 عربي')
 
+canvas.text(10, 30, 'Printing text test')
 i = 1000000
 canvas.color = colors.black
 canvas.line(0, 100, canvas.width, 100)
