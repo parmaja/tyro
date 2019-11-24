@@ -70,6 +70,7 @@ type
     function DrawText_func(L: Plua_State): Integer; cdecl;
     function DrawCircle_func(L: Plua_State): Integer; cdecl;
     function DrawRectangle_func(L: Plua_State): Integer; cdecl;
+    function DrawLine_func(L: Plua_State): Integer; cdecl;
     //global functions
     function Print_func(L: Plua_State): Integer; cdecl;
   public
@@ -191,12 +192,27 @@ procedure lua_register_table_method(L : Plua_State; table: string; obj: TObject;
 var
   new: Boolean;
 begin
-  //table
   new := lua_getglobal(L, pchar(table)) = 0; //get table by name
   if new then
     lua_newtable(L);
   lua_push_method(L, pchar(Name), method);
-  //lua_setmetatable(L, -2);
+
+  if new then
+    lua_setglobal(L, pchar(table));
+end;
+
+procedure lua_register_table_value(L : Plua_State; table, name: string; value: integer);
+var
+  new: Boolean;
+begin
+  //table
+  new := lua_getglobal(L, pchar(table)) = 0; //get table by name
+  if new then
+    lua_newtable(L);
+
+  lua_pushinteger(L, value);
+  lua_setfield(L, -2, pchar(name));
+
   if new then
     lua_setglobal(L, pchar(table));
   //end metatable
@@ -348,6 +364,9 @@ begin
   lua_register(LuaState, 'sleep', @sleep_func);
   lua_register_method(LuaState, 'print', @DrawText_func);
 
+//  lua_register_integer(LuaState, 'width', ScreenWidth));
+//  lua_register_integer(LuaState, 'heigh', ScreenHeight));
+
   LuaCanvas := TLuaCanvas.Create;
   LuaColors := TLuaColors.Create;
 
@@ -356,8 +375,12 @@ begin
   lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
   lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
   lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
-  lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
+  lua_register_table_method(LuaState, 'canvas', self, 'line', @DrawLine_func);
 
+  lua_register_table_value(LuaState, 'canvas', 'width', ScreenWidth);
+  lua_register_table_value(LuaState, 'canvas', 'height', ScreenHeight);
+
+  lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
 
   lua_newtable(LuaState);
   for i := 0 to Length(LuaColors.Colors) -1 do
@@ -452,6 +475,18 @@ begin
   if c >= 4 then
     f := lua_toboolean(L, 5);
   AddPoolObject(TDrawRectangleObject.Create(Main.Canvas, x, y, w, h, f));
+  Result := 0;
+end;
+
+function TLuaScript.DrawLine_func(L: Plua_State): Integer; cdecl;
+var
+  x1, y1, x2, y2: integer;
+begin
+  x1 := lua_tointeger(L, 1);
+  y1 := lua_tointeger(L, 2);
+  x2 := lua_tointeger(L, 3);
+  y2 := lua_tointeger(L, 4);
+  AddPoolObject(TDrawLineObject.Create(Main.Canvas, x1, y1, x2, y2));
   Result := 0;
 end;
 

@@ -119,6 +119,15 @@ type
     procedure Execute; override;
   end;
 
+  { TDrawLineObject }
+
+  TDrawLineObject = class(TDrawObject)
+  public
+    fX1, fY1, fX2, fY2: Integer;
+    constructor Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer);
+    procedure Execute; override;
+  end;
+
   { TDrawTextObject }
 
   TDrawTextObject = class(TDrawObject)
@@ -231,6 +240,22 @@ begin
   Result := Result or hi(C.Blue);
   Result := Result shl 8;
   Result := Result or hi(C.Alpha);
+end;
+
+{ TDrawLIneObject }
+
+constructor TDrawLIneObject.Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer);
+begin
+  inherited Create(ACanvas);
+  fX1 := X1;
+  fY1 := Y1;
+  fX2 := X2;
+  fY2 := Y2;
+end;
+
+procedure TDrawLIneObject.Execute;
+begin
+  DrawLine(fX1, fY1, fX2, fY2, RayColorOf(Canvas.Color));
 end;
 
 { TClearObject }

@@ -1,10 +1,13 @@
 log('start')
 
+log(canvas.width)
+
 canvas.text(10, 30, 'Printing text test')
 canvas.text(10, 100, '110 عربي')
 
 i = 1000000
 canvas.color = colors.black
+canvas.line(0, 100, canvas.width, 100)
 
 while i > 0 do
     c = math.random(3, colors.count)
