@@ -37,6 +37,24 @@ type
   public
   end;
 
+  { TLuaColors }
+
+  TLuaColors = class(TLuaObject)
+  protected
+    type
+      TLuaColor = record
+        Name: string;
+        Color: TFPColor;
+      end;
+    var
+      Colors: array of TLuaColor;
+    function __setter(L: PLua_State): integer; cdecl; override;
+    function __getter(L: PLua_State): integer; cdecl; override;
+  public
+    procedure AddColor(Name: string; AColor: TFPColor);
+    constructor Create;
+  end;
+
   { TLuaScript }
 
   TLuaScript = class(TTyroScript)
@@ -44,6 +62,7 @@ type
   protected
     LuaState: Plua_State;
     LuaCanvas: TLuaCanvas;
+    LuaColors: TLuaColors;
     procedure DoError(S: string);
     procedure Run; override;
     //canvas functions
@@ -195,6 +214,73 @@ begin
   lua_setfield(L, -2, pchar(name));
 end;
 
+{ TLuaColors }
+
+function TLuaColors.__setter(L: PLua_State): integer; cdecl;
+begin
+  Result := 0;
+end;
+
+function TLuaColors.__getter(L: PLua_State): integer; cdecl;
+var
+  c: integer;
+  index: integer;
+  field: string;
+begin
+  Result := 0;
+  if lua_isnumber(L, 2) then
+  begin
+    index := lua_tointeger(L, 2);
+    if index < Length(Colors) then
+    begin
+      c := FPColorToInt(Colors[index].Color);
+      lua_pushinteger(L, c);
+      Result := 1;
+    end;
+  end
+  else
+  begin
+    field := lua_tostring(L, 2);
+    case field of
+      'count':
+      begin
+        lua_pushinteger(L, Length(Colors));
+        Result := 1;
+      end;
+    end;
+  end;
+end;
+
+procedure TLuaColors.AddColor(Name: string; AColor: TFPColor);
+var
+  aItem: TLuaColor;
+begin
+  aItem.Name := Name;
+  aItem.Color := AColor;
+  SetLength(Colors, Length(Colors) + 1);
+  Colors[Length(Colors) -1] := aItem;
+end;
+
+constructor TLuaColors.Create;
+begin
+  AddColor('white', colWhite);
+  AddColor('silver', colSilver);
+  AddColor('gray' , colGray);
+  AddColor('black', colBlack);
+  AddColor('red'  , colRed);
+  AddColor('maroon', colMaroon);
+  AddColor('yellow', colYellow);
+  AddColor('olive', colOlive);
+  AddColor('lime' , colLime);
+  AddColor('green', colGreen);
+  AddColor('aqua' , colAqua);
+  AddColor('teal' , colTeal);
+  AddColor('blue' , colBlue);
+  AddColor('navy' , colNavy);
+  AddColor('fuchsia', colFuchsia);
+  AddColor('purple', colPurple);
+end;
+
 { TLuaCanvas }
 
 function TLuaCanvas.__setter(L: PLua_State): integer; cdecl;
@@ -250,6 +336,8 @@ begin
 end;
 
 constructor TLuaScript.Create;
+var
+  i: Integer;
 begin
   inherited;
   LuaState := lua_newstate(@LuaAlloc, nil);
@@ -261,35 +349,23 @@ begin
   lua_register_method(LuaState, 'print', @DrawText_func);
 
   LuaCanvas := TLuaCanvas.Create;
+  LuaColors := TLuaColors.Create;
 
   //lua_register_table(LuaState, 'draw', LuaCanvas);
   lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
   lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
   lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
   lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
+  lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
+
 
   lua_newtable(LuaState);
-  lua_register_fpcolor(LuaState, 'white', colWhite);
-  lua_register_fpcolor(LuaState, 'silver', colSilver);
-  lua_register_fpcolor(LuaState, 'gray' , colGray);
-  lua_register_fpcolor(LuaState, 'black', colBlack);
-  lua_register_fpcolor(LuaState, 'red'  , colRed);
-  lua_register_fpcolor(LuaState, 'maroon', colMaroon);
-  lua_register_fpcolor(LuaState, 'yellow', colYellow);
-  lua_register_fpcolor(LuaState, 'olive', colOlive);
-  lua_register_fpcolor(LuaState, 'lime' , colLime);
-  lua_register_fpcolor(LuaState, 'green', colGreen);
-  lua_register_fpcolor(LuaState, 'aqua' , colAqua);
-  lua_register_fpcolor(LuaState, 'teal' , colTeal);
-  lua_register_fpcolor(LuaState, 'blue' , colBlue);
-  lua_register_fpcolor(LuaState, 'navy' , colNavy);
-  lua_register_fpcolor(LuaState, 'fuchsia', colFuchsia);
-  lua_register_fpcolor(LuaState, 'purple', colPurple);
-  lua_register_integer(LuaState, 'count', 16);
+  for i := 0 to Length(LuaColors.Colors) -1 do
+    lua_register_fpcolor(LuaState, LuaColors.Colors[i].Name, LuaColors.Colors[i].Color);
   lua_setglobal(LuaState, 'colors');
+  lua_register_table_index(LuaState, 'colors', LuaColors); //Should be last one
 
   //lua_register_table(LuaState, 'color', LuaCanvas);
-  lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
 end;
 
 destructor TLuaScript.Destroy;

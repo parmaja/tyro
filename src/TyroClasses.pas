@@ -427,7 +427,7 @@ begin
       Lock.Leave;
     end;
     p.Execute;
-    WriteLn('run: ' + p.ClassName);
+    //WriteLn('run: ' + p.ClassName);
   end;
   EndTextureMode;
 end;
