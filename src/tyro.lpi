@@ -25,7 +25,7 @@
           <Version Value="11"/>
           <PathDelim Value="\"/>
           <Target>
-            <Filename Value="tyro"/>
+            <Filename Value="..\bin\tyro"/>
           </Target>
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir)"/>
@@ -89,16 +89,10 @@
       <FormatVersion Value="2"/>
       <Modes Count="0"/>
     </RunParams>
-    <RequiredPackages Count="3">
+    <RequiredPackages Count="1">
       <Item1>
         <PackageName Value="MiniCommons"/>
       </Item1>
-      <Item2>
-        <PackageName Value="raylib_pas"/>
-      </Item2>
-      <Item3>
-        <PackageName Value="Lua4Lazarus"/>
-      </Item3>
     </RequiredPackages>
     <Units>
       <Unit>
@@ -111,6 +105,14 @@
       </Unit>
       <Unit>
         <Filename Value="TyroLua.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="lua53.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="raylib.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>

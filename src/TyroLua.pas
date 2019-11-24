@@ -71,6 +71,7 @@ type
     function DrawCircle_func(L: Plua_State): Integer; cdecl;
     function DrawRectangle_func(L: Plua_State): Integer; cdecl;
     function DrawLine_func(L: Plua_State): Integer; cdecl;
+    function DrawPoint_func(L: Plua_State): Integer; cdecl;
     //global functions
     function Print_func(L: Plua_State): Integer; cdecl;
   public
@@ -376,6 +377,7 @@ begin
   lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
   lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
   lua_register_table_method(LuaState, 'canvas', self, 'line', @DrawLine_func);
+  lua_register_table_method(LuaState, 'canvas', self, 'point', @DrawPoint_func);
 
   lua_register_table_value(LuaState, 'canvas', 'width', ScreenWidth);
   lua_register_table_value(LuaState, 'canvas', 'height', ScreenHeight);
@@ -436,8 +438,8 @@ var
   s: string;
 begin
 //  c := lua_gettop(L);
-  x := lua_tointeger(L, 1);
-  y := lua_tointeger(L, 2);
+  x := round(lua_tonumber(L, 1));
+  y := round(lua_tonumber(L, 2));
   s := lua_tostring(L, 3);
   AddPoolObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
   Result := 0;
@@ -451,9 +453,9 @@ var
 begin
   f := false;
   c := lua_gettop(L);
-  x := lua_tointeger(L, 1);
-  y := lua_tointeger(L, 2);
-  r := lua_tointeger(L, 3);
+  x := round(lua_tonumber(L, 1));
+  y := round(lua_tonumber(L, 2));
+  r := round(lua_tonumber(L, 3));
   if c >= 4 then
     f := lua_toboolean(L, 4);
   AddPoolObject(TDrawCircleObject.Create(Main.Canvas, x, y, r, f));
@@ -468,10 +470,10 @@ var
 begin
   f := false;
   c := lua_gettop(L);
-  x := lua_tointeger(L, 1);
-  y := lua_tointeger(L, 2);
-  w := lua_tointeger(L, 3);
-  h := lua_tointeger(L, 4);
+  x := round(lua_tonumber(L, 1));
+  y := round(lua_tonumber(L, 2));
+  w := round(lua_tonumber(L, 3));
+  h := round(lua_tonumber(L, 4));
   if c >= 4 then
     f := lua_toboolean(L, 5);
   AddPoolObject(TDrawRectangleObject.Create(Main.Canvas, x, y, w, h, f));
@@ -480,13 +482,30 @@ end;
 
 function TLuaScript.DrawLine_func(L: Plua_State): Integer; cdecl;
 var
+  c: integer;
   x1, y1, x2, y2: integer;
 begin
-  x1 := lua_tointeger(L, 1);
-  y1 := lua_tointeger(L, 2);
-  x2 := lua_tointeger(L, 3);
-  y2 := lua_tointeger(L, 4);
-  AddPoolObject(TDrawLineObject.Create(Main.Canvas, x1, y1, x2, y2));
+  c := lua_gettop(L);
+  x1 := round(lua_tonumber(L, 1));
+  y1 := round(lua_tonumber(L, 2));
+  if c = 4 then
+  begin
+    x2 := round(lua_tonumber(L, 3));
+    y2 := round(lua_tonumber(L, 4));
+    AddPoolObject(TDrawLineObject.Create(Main.Canvas, x1, y1, x2, y2));
+  end
+  else
+    AddPoolObject(TDrawLineToObject.Create(Main.Canvas, x1, y1));
+  Result := 0;
+end;
+
+function TLuaScript.DrawPoint_func(L: Plua_State): Integer; cdecl;
+var
+  x, y: integer;
+begin
+  x := round(lua_tonumber(L, 1));
+  y := round(lua_tonumber(L, 2));
+  AddPoolObject(TDrawPointObject.Create(Main.Canvas, x, y));
   Result := 0;
 end;
 
@@ -498,8 +517,8 @@ var
 begin
 //  c := lua_gettop(L);
   s := lua_tostring(L, 1);
-  x := lua_tointeger(L, 2);
-  y := lua_tointeger(L, 3);
+  x := round(lua_tonumber(L, 2));
+  y := round(lua_tonumber(L, 3));
   AddPoolObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
   Result := 0;
 end;

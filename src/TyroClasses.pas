@@ -68,6 +68,7 @@ type
     Font: raylib.TFont;
     procedure SetBackgroundColor(AValue: TFPColor);
   public
+    LastX, LastY: Integer;
     constructor Create;
     destructor Destroy; override;
     property Board: TRenderTexture2D read FBoard;
@@ -125,6 +126,24 @@ type
   public
     fX1, fY1, fX2, fY2: Integer;
     constructor Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer);
+    procedure Execute; override;
+  end;
+
+  { TDrawLineToObject }
+
+  TDrawLineToObject = class(TDrawObject)
+  public
+    fX, fY: Integer;
+    constructor Create(ACanvas: TTyroCanvas; X, Y: Integer);
+    procedure Execute; override;
+  end;
+
+  { TDrawPointObject }
+
+  TDrawPointObject = class(TDrawObject)
+  public
+    fX, fY: Integer;
+    constructor Create(ACanvas: TTyroCanvas; X, Y: Integer);
     procedure Execute; override;
   end;
 
@@ -242,6 +261,38 @@ begin
   Result := Result or hi(C.Alpha);
 end;
 
+{ TDrawPointObject }
+
+constructor TDrawPointObject.Create(ACanvas: TTyroCanvas; X, Y: Integer);
+begin
+  inherited Create(ACanvas);
+  fX := X;
+  fY := Y;
+end;
+
+procedure TDrawPointObject.Execute;
+begin
+  DrawPixel(fX, fY, RayColorOf(Canvas.Color));
+  Canvas.LastX := fX;
+  Canvas.LastY := fY;
+end;
+
+{ TDrawLineToObject }
+
+constructor TDrawLineToObject.Create(ACanvas: TTyroCanvas; X, Y: Integer);
+begin
+  inherited Create(ACanvas);
+  fX := X;
+  fY := Y;
+end;
+
+procedure TDrawLineToObject.Execute;
+begin
+  DrawLine(Canvas.LastX, Canvas.LastY, fX, fY, RayColorOf(Canvas.Color));
+  Canvas.LastX := fX;
+  Canvas.LastY := fY;
+end;
+
 { TDrawLIneObject }
 
 constructor TDrawLIneObject.Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer);
@@ -253,9 +304,11 @@ begin
   fY2 := Y2;
 end;
 
-procedure TDrawLIneObject.Execute;
+procedure TDrawLineObject.Execute;
 begin
   DrawLine(fX1, fY1, fX2, fY2, RayColorOf(Canvas.Color));
+  Canvas.LastX := fX2;
+  Canvas.LastY := fY2;
 end;
 
 { TClearObject }
@@ -559,8 +612,8 @@ begin
   finally
     Main.Lock.Leave;
   end;
-  Sleep(1); //idk why?!!!!
-  Yield;
+  Sleep(1); //idk why?!!!! slow
+  Yield; //ThreadSwitch , not work
 end;
 
 constructor TTyroScript.Create;

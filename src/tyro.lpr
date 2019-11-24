@@ -115,7 +115,7 @@ var
 
 begin
   Application := TTyroApplication.Create(nil);
-  Application.Title := 'Tyro';
+  Application.Title :='Tyro';
   Application.Run;
   Application.Free;
 end.
