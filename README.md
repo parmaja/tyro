@@ -43,21 +43,23 @@ Use FreePascal 3.x or Lazarus with it
 
 # Libraries
 
-[https://sourceforge.net/p/minilib/ minilib]
+[minilib](https://sourceforge.net/p/minilib/)
 
 # Dependencies
 
-[https://www.raylib.com/ raylib] for raylib.dll/so
+[raylib](https://www.raylib.com/) for raylib.dll/so put it in same of tyro exe folder
 
-[https://www.lua.org/ Lua] for lua dll 5.3
+[Lua](https://www.lua.org/) for lua dll 5.3 in same of tyro exe folder
 
 # Ported
 
-(https://github.com/malcome/Lua4Lazarus "Lua4Lazarus")
+You do not need to use it, it is already in the source folder
 
-[https://github.com/zaher/raylib-pas raylib-pas]
+[Lua4Lazarus](https://github.com/malcome/Lua4Lazarus)
+
+[raylib-pas](https://github.com/zaher/raylib-pas)
 
 # TODO
 
-[https://github.com/parmaja/p-sard Pascal Sard Objects]
+[Sard Objects](https://github.com/parmaja/p-sard Pascal)
 
