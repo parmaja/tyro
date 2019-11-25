@@ -202,7 +202,6 @@ type
     WorkSpace: string;
     constructor Create;
     destructor Destroy; override;
-    procedure Init;
     procedure Start;
     procedure Stop;
     procedure Run;
@@ -531,17 +530,14 @@ begin
   inherited Destroy;
 end;
 
-procedure TTyroMain.Init;
+procedure TTyroMain.Start;
 begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(ScreenWidth, ScreenHeight, PChar(Title));
   ShowCursor();
   SetTargetFPS(60);
   FCanvas := TTyroCanvas.Create;
-end;
 
-procedure TTyroMain.Start;
-begin
   if FileName <> '' then
   begin
     FScript := TLuaScript.Create;

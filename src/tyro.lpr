@@ -53,11 +53,14 @@ constructor TTyroApplication.Create(AOwner: TComponent);
 var
   WorkPaths: TStringArray;
   err: string;
+const
+  cShortOptions = 'w:d';
+  cLongOptions = 'workpath: debug';
 begin
   inherited Create(AOwner);
   Files := TStringList.Create;
 
-  err := CheckOptions('w:d', 'workpath: debug');
+  err := CheckOptions(cShortOptions, cLongOptions);
   if err <> '' then
   begin
     if IsConsole then
@@ -66,12 +69,11 @@ begin
     exit;
   end;
 
-
   Main := TTyroMain.Create;
   Main.Title := 'Tyro';
 
-  //w workpath, s socket
-  GetNonOptions('w:d', ['workpath:', 'debug'], Files);
+  //w workpath, d socket
+  GetNonOptions(cShortOptions, ['workpath:', 'debug'], Files);
   if Files.Count > 0 then
     Main.FileName := Files[0];
   WorkPaths := GetOptionValues('w', 'workpath');
@@ -79,7 +81,6 @@ begin
     Main.WorkSpace := WorkPaths[0]
   else
     Main.WorkSpace := Location;
-  Main.Init;
   Main.Start;
 end;
 
