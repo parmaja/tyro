@@ -1,6 +1,6 @@
 # Tyro
 
-Runing embed programming language in simple graphical environment, for kids and newbies, using (https://www.raylib.com/ "raylib") as small game engine to draw.
+Runing embed programming language in simple graphical environment, for kids and newbies, using [raylib](https://www.raylib.com/) as small game engine to draw.
 Now I am working on adding Lua, in the future I want to add more simple progamming lanuguages like Basic.
 It also should have editing tool inside that environment, console output and input, work in same graphical window.
 playing sound using mmf code.
