@@ -61,5 +61,5 @@ You do not need to use it, it is already in the source folder
 
 # TODO
 
-[Sard Objects](https://github.com/parmaja/p-sard Pascal)
+[Sard Objects](https://github.com/parmaja/p-sard)
 

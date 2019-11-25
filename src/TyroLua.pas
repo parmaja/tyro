@@ -247,7 +247,7 @@ begin
   Result := 0;
   if lua_isnumber(L, 2) then
   begin
-    index := lua_tointeger(L, 2);
+    index := round(lua_tonumber(L, 2));
     if index < Length(Colors) then
     begin
       c := FPColorToInt(Colors[index].Color);

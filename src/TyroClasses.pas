@@ -188,13 +188,12 @@ type
   protected
     FPool: TPoolObjects;
     FScript: TTyroScript;
-    FLock: TCriticalSection;
+    //FLock: TCriticalSection;
     FCanvas: TTyroCanvas;
   protected
     DefaultBackground: raylib.TColor;
 
-    procedure RunPool;
-    property Lock: TCriticalSection read FLock;
+    //property Lock: TCriticalSection read FLock;
     property Pool: TPoolObjects read FPool;
   public
     Title: string;
@@ -204,6 +203,7 @@ type
     destructor Destroy; override;
     procedure Start;
     procedure Stop;
+    procedure ProcessPool;
     procedure Run;
     procedure Loop;
     property Canvas: TTyroCanvas read FCanvas;
@@ -218,6 +218,7 @@ var
   ScreenHeight: Integer = 480;
 
 var
+  Lock: TCriticalSection = nil;
   Main : TTyroMain = nil;
 
 implementation
@@ -453,16 +454,8 @@ begin
     DrawRectangleLines(X, Y, W, H, RayColorOf(Color));
 end;
 
-{procedure TTyroCanvas.PrintTest;
-begin
-  BeginTextureMode(Board);
-  raylib.DrawText(PChar('Test'), 100, 100, FontSize, RayColorOf(Color));
-  EndTextureMode();
-end;}
-
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
 begin
-  //raylib.DrawText(PChar(S), X, Y, FontSize, RayColorOf(Color));
   raylib.DrawTextEx(Font, PChar(S), Vector2Create(X, Y), FontSize, 2, RayColorOf(Color));
 end;
 
@@ -490,11 +483,13 @@ begin
   Result := not WindowShouldClose();
 end;
 
-procedure TTyroMain.RunPool;
+procedure TTyroMain.ProcessPool;
 var
   p: TPoolObject;
+  c: Integer;
 begin
   BeginTextureMode(Canvas.Board);
+  c := 0;
   while Pool.Count > 0 do
   begin
     Lock.Enter;
@@ -504,6 +499,10 @@ begin
       Lock.Leave;
     end;
     p.Execute;
+    p.Free;
+    Inc(c);
+    if c > 100 then
+      break;
     //WriteLn('run: ' + p.ClassName);
   end;
   EndTextureMode;
@@ -512,7 +511,7 @@ end;
 constructor TTyroMain.Create;
 begin
   inherited Create;
-  FLock := TCriticalSection.Create;
+  //FLock := TCriticalSection.Create;
   FPool := TPoolObjects.Create(True);
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
@@ -526,7 +525,7 @@ begin
   FreeAndNil(FCanvas);
   CloseWindow;
   FreeAndNil(FPool);
-  FreeAndNil(FLock);
+  //FreeAndNil(FLock);
   inherited Destroy;
 end;
 
@@ -554,7 +553,7 @@ begin
   if (FScript <> nil) and FScript.Suspended then
     FScript.Start;
 
-  RunPool;
+  ProcessPool;
 
   BeginDrawing;
   ClearBackground(DefaultBackground);
@@ -569,7 +568,6 @@ begin
       DrawTextureRec(texture, RectangleCreate(0, 0, texture.width, -texture.height), Vector2Create(0, 0), WHITE);
 
   finally
-    Lock.Leave;
   end;
 
   Loop;
@@ -602,14 +600,15 @@ end;
 
 procedure TTyroScript.AddPoolObject(APoolObject: TPoolObject);
 begin
-  Main.Lock.Enter;
+  Lock.Enter;
   try
     Main.Pool.Add(APoolObject);
   finally
-    Main.Lock.Leave;
+    Lock.Leave;
   end;
-  Sleep(1); //idk why?!!!! slow
-  Yield; //ThreadSwitch , not work
+  Yield;
+  //Synchronize(@Main.ProcessPool); //work but slow as sleep(1)
+  //Queue(@Main.ProcessPool); //not work
 end;
 
 constructor TTyroScript.Create;
@@ -638,5 +637,9 @@ begin
   ScriptText.LoadFromFile(FileName);
 end;
 
+initialization
+  Lock := TCriticalSection.Create;
+finalization
+  FreeAndNil(Lock);
 end.
 
