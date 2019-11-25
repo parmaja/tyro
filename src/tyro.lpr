@@ -20,7 +20,7 @@ uses
   cthreads,
   {$ENDIF}
   SysUtils, Classes, CustApp,
-  mnFields, mnUtils, mnParams, //minilib on sf
+  //mnFields, mnUtils, mnParams, //minilib on sf
   raylib,
   TyroClasses, TyroLua;
 
@@ -30,44 +30,16 @@ type
 
   TTyroApplication = class(TCustomApplication)
   private
-    FArguments: TmnFields;
-    procedure CollectArguments;
+    Files: TStringList;
   protected
     procedure SetTitle(const AValue: string); override;
     procedure DoRun; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    property Arguments: TmnFields read FArguments;
   end;
 
 { TTyroApplication }
-
-procedure TTyroApplication.CollectArguments;
-var
-  i, P: Integer;
-  aParam, aName, aValue: string;
-begin
-  for i := 1 to ParamCount do
-  begin
-    aParam := ParamStr(i);
-    if CharInArray(LeftStr(aParam, 1), ['-', '/']) then
-    begin
-      aName := Copy(aParam, 1, Length(aParam) -1);
-      P := Pos(aName, '=');
-      if p > 0 then
-      begin
-        aValue := Copy(aName, P + 1, MaxInt);
-        aName := Copy(aName, 1, P - 1);
-      end
-      else
-        aValue := '';
-      Arguments.Add(aName, DequoteStr(aValue));
-    end
-    else
-      Arguments.Add('', aParam);
-  end;
-end;
 
 procedure TTyroApplication.SetTitle(const AValue: string);
 begin
@@ -75,16 +47,38 @@ begin
   Main.Title := AValue;
 end;
 
+//-w my_workpath ../demos/sin.lua
+
 constructor TTyroApplication.Create(AOwner: TComponent);
+var
+  WorkPaths: TStringArray;
+  err: string;
 begin
   inherited Create(AOwner);
-  FArguments := TmnFields.Create;
-  CollectArguments;
+  Files := TStringList.Create;
+
+  err := CheckOptions('w:d', 'workpath: debug');
+  if err <> '' then
+  begin
+    if IsConsole then
+      WriteLn(err);
+    Terminate;
+    exit;
+  end;
+
+
   Main := TTyroMain.Create;
-  Main.WorkSpace := Location;
   Main.Title := 'Tyro';
-  if Arguments.Exists[''] then
-    Main.FileName := Arguments[''];
+
+  //w workpath, s socket
+  GetNonOptions('w:d', ['workpath:', 'debug'], Files);
+  if Files.Count > 0 then
+    Main.FileName := Files[0];
+  WorkPaths := GetOptionValues('w', 'workpath');
+  if Length(WorkPaths) > 0  then
+    Main.WorkSpace := WorkPaths[0]
+  else
+    Main.WorkSpace := Location;
   Main.Init;
   Main.Start;
 end;
@@ -92,7 +86,7 @@ end;
 destructor TTyroApplication.Destroy;
 begin
   FreeAndNil(Main);
-  FreeAndNil(FArguments);
+  FreeAndNil(Files);
   inherited;
 end;
 
