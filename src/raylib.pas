@@ -78,7 +78,7 @@
  CHANGELOG
  ----------------------------------------------------------------------------
  Version 2019.10.24
-   - raylib-pas for raylib 2.5.0
+   - raylib-pas for raylib 2.6.0-dev
 
 *******************************************************************************)
 
@@ -251,11 +251,11 @@ type
   PNPatchInfo = ^TNPatchInfo;
   TNPatchInfo = packed record
     sourceRec : TRectangle;
-	  left : Integer;
-	  top : Integer;
-  	right : Integer;
-  	bottom : Integer;
-  	&type : Integer;
+    left : Integer;
+    top : Integer;
+    right : Integer;
+    bottom : Integer;
+    &type : Integer;
   end;
 
 
@@ -263,19 +263,19 @@ type
   PCharInfo = ^TCharInfo;
   TCharInfo = packed record
     value : Integer;
-    Rectangle: TRectangle;
     offsetX : Integer;
     offsetY : Integer;
     advanceX : Integer;
-    data : Pointer;
+    image : TImage;
   end;
 
   // Font type, includes texture and charSet array data
   PFont = ^TFont;
   TFont = packed record
-    texture : TTexture2D;
     baseSize : Integer;
     charsCount : Integer;
+    texture : TTexture2D;
+    recs : PRectangle;
     chars : PCharInfo;
   end;
 

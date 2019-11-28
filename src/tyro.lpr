@@ -7,6 +7,11 @@ program tyro;
  * @author    Zaher Dirkey <zaher at parmaja dot com>
  *
  *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
+ *
+ *  Fonts
+ *   https://opengameart.org/content/the-collection-of-8-bit-fonts-for-grafx2
+     http://www.pentacom.jp/pentacom/bitfontmaker2/gallery/?page=1&order=&
+     http://orangetide.com/OLD/fonts/DOS/
  *}
 
 {$mode objfpc}
@@ -22,7 +27,9 @@ uses
   SysUtils, Classes, CustApp,
   //mnFields, mnUtils, mnParams, //minilib on sf
   raylib,
-  TyroClasses, TyroLua;
+  TyroClasses,
+  TyroLua;  //Add all languages units here
+
 
 type
 
@@ -69,7 +76,6 @@ begin
     exit;
   end;
 
-  Main := TTyroMain.Create;
   Main.Title := 'Tyro';
 
   //w workpath, d socket
@@ -86,7 +92,6 @@ end;
 
 destructor TTyroApplication.Destroy;
 begin
-  FreeAndNil(Main);
   FreeAndNil(Files);
   inherited;
 end;
@@ -94,7 +99,7 @@ end;
 procedure TTyroApplication.DoRun;
 begin
   inherited;
-  //CheckSynchronize();
+  CheckSynchronize();
   Main.Run;
   if not Main.Active then
   begin

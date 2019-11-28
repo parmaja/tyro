@@ -11,7 +11,6 @@ unit TyroClasses;
 
 {$mode objfpc}{$H+}
 
-//TODO to stop lua https://stackoverflow.com/questions/6913999/forcing-a-lua-script-to-exit
 interface
 
 uses
@@ -48,11 +47,16 @@ type
 
   TScriptType = class(TObject)
   public
-    Ext: string;
+    Title: string;
+    Extention: string;
     ScriptClass: TTyroScriptClass;
   end;
 
+  { TScriptTypes }
+
   TScriptTypes = class(specialize TFPGObjectList<TScriptType>)
+  public
+    function FindByExtension(Extension: string): TScriptType;
   end;
 
   { TTyroCanvas }
@@ -72,8 +76,8 @@ type
     constructor Create;
     destructor Destroy; override;
     property Board: TRenderTexture2D read FBoard;
-    procedure Circle(X, Y, R: Integer; Fill: Boolean);
-    procedure Rectangle(X, Y, W, H: Integer; Fill: Boolean);
+    procedure Circle(X, Y, R: Integer; Fill: Boolean = false);
+    procedure Rectangle(X, Y, W, H: Integer; Fill: Boolean = false);
     //procedure PrintTest;
     procedure DrawText(X, Y: Integer; S: string);
     procedure Print(S: string);
@@ -188,6 +192,7 @@ type
   protected
     FPool: TPoolObjects;
     FScript: TTyroScript;
+    FScriptTypes: TScriptTypes;
     //FLock: TCriticalSection;
     FCanvas: TTyroCanvas;
   protected
@@ -195,6 +200,7 @@ type
 
     //property Lock: TCriticalSection read FLock;
     property Pool: TPoolObjects read FPool;
+    property ScriptTypes: TScriptTypes read FScriptTypes;
   public
     Title: string;
     FileName: string;//that to run in script
@@ -208,6 +214,8 @@ type
     procedure Loop;
     property Canvas: TTyroCanvas read FCanvas;
     property Active: Boolean read GetActive;
+
+    procedure RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
   end;
 
 function IntToFPColor(I: Integer): TFPColor;
@@ -221,10 +229,15 @@ var
   Lock: TCriticalSection = nil;
   Main : TTyroMain = nil;
 
+procedure Log(S: string);
+
 implementation
 
-uses
-  TyroLua;
+procedure Log(S: string);
+begin
+  if IsConsole then
+    WriteLn(S);
+end;
 
 function RayColorOf(Color: TFPColor): raylib.TColor;
 begin
@@ -259,6 +272,23 @@ begin
   Result := Result or hi(C.Blue);
   Result := Result shl 8;
   Result := Result or hi(C.Alpha);
+end;
+
+{ TScriptTypes }
+
+function TScriptTypes.FindByExtension(Extension: string): TScriptType;
+var
+  itm: TScriptType;
+begin
+  Result := nil;
+  for itm in Self do
+  begin
+    if SameText(itm.Extention, Extension) then
+    begin
+      Result := itm;
+      break;
+    end;
+  end;
 end;
 
 { TDrawPointObject }
@@ -408,9 +438,12 @@ constructor TTyroCanvas.Create;
 begin
   FColor := colBlack;
   FBackgroundColor := FPColor(0, 110, 160, 0);
+  //Font := GetFontDefault;
+
   //FPImage := TMyFPMemoryImage.Create(100,100);
   //FPImage.LoadFromFile(Main.WorkSpace + 'richard-say.png');
   //FPImage.UsePalette:=false;
+
   //FPCanvas := TFPImageCanvas.Create(FPImage);
   //FPCanvas.Pen.FPColor := colRed;
   //FPCanvas.Rectangle(10, 10, 10 , 10);
@@ -419,11 +452,16 @@ begin
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'dejavu.fnt'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'terminus.fon'));
-
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/Chroma.png'));
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/alpha_beta.png'));
+  Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/font2.png'));
+  SetTextureFilter(Font.texture, FILTER_POINT);
   //Font := raylib.LoadFont(PChar('computer_pixel.fon.ttf'));
-  Font := GetFontDefault;
-  FFontSize := Font.baseSize * 2;
+  FFontSize := Font.baseSize;
+
   FBoard := LoadRenderTexture(ScreenWidth, ScreenHeight);
+
   BeginTextureMode(FBoard);
   ClearBackground(RayColorOf(BackgroundColor));
   DrawText(3, 3, 'Ready!');
@@ -440,10 +478,12 @@ end;
 
 procedure TTyroCanvas.Circle(X, Y, R: Integer; Fill: Boolean);
 begin
+  BeginTextureMode(FBoard);
   if Fill then
     DrawCircle(X, Y, R, RayColorOf(Color))
   else
     DrawCircleLines(X, Y, R, RayColorOf(Color));
+  EndTextureMode();
 end;
 
 procedure TTyroCanvas.Rectangle(X, Y, W, H: Integer; Fill: Boolean);
@@ -513,6 +553,7 @@ begin
   inherited Create;
   //FLock := TCriticalSection.Create;
   FPool := TPoolObjects.Create(True);
+  FScriptTypes := TScriptTypes.Create(true);
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
@@ -526,10 +567,13 @@ begin
   CloseWindow;
   FreeAndNil(FPool);
   //FreeAndNil(FLock);
+  FreeAndNil(FScriptTypes);
   inherited Destroy;
 end;
 
 procedure TTyroMain.Start;
+var
+  ScriptType: TScriptType;
 begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(ScreenWidth, ScreenHeight, PChar(Title));
@@ -539,9 +583,19 @@ begin
 
   if FileName <> '' then
   begin
-    FScript := TLuaScript.Create;
-    if SysUtils.FileExists(FileName) then
-      FScript.LoadFile(FileName);
+    ScriptType := ScriptTypes.FindByExtension(ExtractFileExt(FileName));
+    if ScriptType <> nil then
+    begin
+      FScript := ScriptType.ScriptClass.Create;
+      if SysUtils.FileExists(FileName) then
+      begin
+        if LeftStr(FileName, 1) = '.' then
+          FileName := ExpandFileName(WorkSpace + FileName);
+        FScript.LoadFile(FileName);
+      end;
+    end
+    else
+      Log('Type of file not found: ' + FileName);
   end;
 end;
 
@@ -578,6 +632,17 @@ procedure TTyroMain.Loop;
 begin
 end;
 
+procedure TTyroMain.RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
+var
+  Item: TScriptType;
+begin
+  Item := TScriptType.Create;
+  Item.Title := ATitle;
+  Item.Extention := AExtention;
+  Item.ScriptClass := AScriptClass;
+  FScriptTypes.Add(Item);
+end;
+
 procedure TTyroMain.Stop;
 begin
   if FScript <> nil then
@@ -608,7 +673,7 @@ begin
   end;
   Yield;
   //Synchronize(@Main.ProcessPool); //work but slow as sleep(1)
-  //Queue(@Main.ProcessPool); //not work
+  Queue(@Main.ProcessPool); //not work
 end;
 
 constructor TTyroScript.Create;
@@ -639,7 +704,9 @@ end;
 
 initialization
   Lock := TCriticalSection.Create;
+  Main := TTyroMain.Create;
 finalization
+  FreeAndNil(Main);
   FreeAndNil(Lock);
 end.
 

@@ -6,6 +6,7 @@ unit TyroLua;
  *
  * @author    Zaher Dirkey <zaher at parmaja dot com>
  *
+ *
  *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
  *}
 
@@ -227,7 +228,7 @@ end;
 
 procedure lua_register_fpcolor(L : Plua_State; name: string; value: TFPColor);
 begin
-  lua_pushinteger(L, FPColorToInt(colRed));
+  lua_pushinteger(L, FPColorToInt(value));
   lua_setfield(L, -2, pchar(name));
 end;
 
@@ -247,7 +248,7 @@ begin
   Result := 0;
   if lua_isnumber(L, 2) then
   begin
-    index := round(lua_tonumber(L, 2));
+    index := round(lua_tointeger(L, 2));
     if index < Length(Colors) then
     begin
       c := FPColorToInt(Colors[index].Color);
@@ -310,13 +311,13 @@ begin
   case field of
     'color':
     begin
-      i := Round(lua_tonumber(L, -1));
+      i := lua_tointeger(L, -1);
       Main.Canvas.Color := IntToFPColor(i);//thread unsafe
       Result:= 1;
     end;
     'backcolor':
     begin
-      i := Round(lua_tonumber(L, -1));
+      i := lua_tointeger(L, -1);
       Main.Canvas.BackgroundColor := IntToFPColor(i);//thread unsafe
       Result:= 1;
     end;
@@ -334,13 +335,13 @@ begin
     'color':
     begin
       i := FPColorToInt(Main.Canvas.Color);
-      lua_pushnumber(L, i);
+      lua_pushinteger(L, i);
       Result := 1;
     end;
     'backcolor':
     begin
       i := FPColorToInt(Main.Canvas.BackgroundColor);
-      lua_pushnumber(L, i);
+      lua_pushinteger(L, i);
       Result := 1;
     end;
   end;
@@ -389,7 +390,6 @@ begin
     lua_register_fpcolor(LuaState, LuaColors.Colors[i].Name, LuaColors.Colors[i].Color);
   lua_setglobal(LuaState, 'colors');
   lua_register_table_index(LuaState, 'colors', LuaColors); //Should be last one
-
   //lua_register_table(LuaState, 'color', LuaCanvas);
 end;
 
@@ -442,6 +442,7 @@ begin
   y := round(lua_tonumber(L, 2));
   s := lua_tostring(L, 3);
   AddPoolObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  Main.Canvas.Circle(10, 10 , 100);
   Result := 0;
 end;
 
@@ -523,5 +524,7 @@ begin
   Result := 0;
 end;
 
+initialization
+  Main.RegisterLanguage('Lua', '.lua', TLuaScript);
 end.
 
