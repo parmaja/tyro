@@ -16,7 +16,7 @@ interface
 
 uses
   Classes, SysUtils,
-  lua53, FPImage,
+  lua53, FPImage, raylib,
   TyroClasses;
 
 type
@@ -441,8 +441,10 @@ begin
   x := round(lua_tonumber(L, 1));
   y := round(lua_tonumber(L, 2));
   s := lua_tostring(L, 3);
-  AddPoolObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
-  Main.Canvas.Circle(10, 10 , 100);
+  Canvas.DrawText(x, y, s);
+  //AddPoolObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  //ImageDrawRectangle(@Board, Vector2Create(100, 100), RectangleCreate(100, 100, 200, 200), BLACK);
+  //Main.Canvas.Circle(10, 10 , 100); //testing
   Result := 0;
 end;
 

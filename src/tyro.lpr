@@ -28,7 +28,7 @@ uses
   //mnFields, mnUtils, mnParams, //minilib on sf
   raylib,
   TyroClasses,
-  TyroLua;  //Add all languages units here
+  TyroLua, TyroEditors;  //Add all languages units here
 
 
 type
@@ -99,7 +99,7 @@ end;
 procedure TTyroApplication.DoRun;
 begin
   inherited;
-  CheckSynchronize();
+  CheckSynchronize;
   Main.Run;
   if not Main.Active then
   begin

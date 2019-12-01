@@ -25,12 +25,14 @@ type
   end;
 
   TPoolObject = class;
+  TTyroCanvas = class;
 
   { TTyroScript }
 
   TTyroScript = class abstract(TThread)
   private
   protected
+    Canvas: TTyroCanvas;
     ScriptText: TStringList;
     procedure BeforeRun; virtual;
     procedure Run; virtual; abstract;
@@ -68,14 +70,16 @@ type
     FColor: TFPColor;
     //FPImage: TMyFPMemoryImage;
     //FPCanvas: TFPImageCanvas;
-    FBoard: TRenderTexture2D;
+    //FBoard: TRenderTexture2D;
+    FTexture: TRenderTexture2D;
+    FBoard: raylib.TImage;
     Font: raylib.TFont;
     procedure SetBackgroundColor(AValue: TFPColor);
   public
     LastX, LastY: Integer;
     constructor Create;
     destructor Destroy; override;
-    property Board: TRenderTexture2D read FBoard;
+    property Board: raylib.TImage read FBoard;
     procedure Circle(X, Y, R: Integer; Fill: Boolean = false);
     procedure Rectangle(X, Y, W, H: Integer; Fill: Boolean = false);
     //procedure PrintTest;
@@ -87,9 +91,20 @@ type
     property BackgroundColor: TFPColor read FBackgroundColor write SetBackgroundColor;
   end;
 
+  { TPoolObject }
+
   TPoolObject = class abstract(TObject)
+  private
+    FNeedSynchronize: Boolean;
   public
     procedure Execute; virtual; abstract;
+    property NeedSynchronize: Boolean read FNeedSynchronize; //this will call Synchronize
+  end;
+
+  { TPoolObjects }
+
+  TPoolObjects = class(specialize TFPGObjectList<TPoolObject>)
+  public
   end;
 
   { TDrawObject }
@@ -165,7 +180,7 @@ type
 
   TPrintObject = class(TDrawObject)
   public
-    fText: String;
+    FText: String;
     constructor Create(ACanvas: TTyroCanvas; Text: String);
     procedure Execute; override;
   end;
@@ -176,12 +191,6 @@ type
   public
     constructor Create(ACanvas: TTyroCanvas);
     procedure Execute; override;
-  end;
-
-  { TPoolObjects }
-
-  TPoolObjects = class(specialize TFPGObjectList<TPoolObject>)
-  public
   end;
 
   { TTyroMain }
@@ -460,30 +469,32 @@ begin
   //Font := raylib.LoadFont(PChar('computer_pixel.fon.ttf'));
   FFontSize := Font.baseSize;
 
-  FBoard := LoadRenderTexture(ScreenWidth, ScreenHeight);
+  FTexture := LoadRenderTexture(ScreenWidth, ScreenHeight);
+  FBoard := GetTextureData(FTexture.texture);
 
-  BeginTextureMode(FBoard);
+  //BeginTextureMode(FBoard);
   ClearBackground(RayColorOf(BackgroundColor));
-  DrawText(3, 3, 'Ready!');
-  EndTextureMode();
+  //DrawText(3, 3, 'Ready!');
+  //EndTextureMode();
 end;
 
 destructor TTyroCanvas.Destroy;
 begin
   UnloadFont(Font);
-  UnloadRenderTexture(FBoard);
+  UnloadImage(FBoard);
+  UnloadRenderTexture(FTexture);
   Finalize(FBoard);
   inherited;
 end;
 
 procedure TTyroCanvas.Circle(X, Y, R: Integer; Fill: Boolean);
 begin
-  BeginTextureMode(FBoard);
+//  BeginTextureMode(FBoard);
   if Fill then
     DrawCircle(X, Y, R, RayColorOf(Color))
   else
     DrawCircleLines(X, Y, R, RayColorOf(Color));
-  EndTextureMode();
+//  EndTextureMode();
 end;
 
 procedure TTyroCanvas.Rectangle(X, Y, W, H: Integer; Fill: Boolean);
@@ -496,7 +507,7 @@ end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
 begin
-  raylib.DrawTextEx(Font, PChar(S), Vector2Create(X, Y), FontSize, 2, RayColorOf(Color));
+  ImageDrawTextEx(@FBoard, Vector2Create(0, 0), Font, PChar(S), FontSize, 2, RayColorOf(Color));
 end;
 
 procedure TTyroCanvas.Print(S: string);
@@ -528,7 +539,7 @@ var
   p: TPoolObject;
   c: Integer;
 begin
-  BeginTextureMode(Canvas.Board);
+  {BeginTextureMode(Canvas.Board);
   c := 0;
   while Pool.Count > 0 do
   begin
@@ -545,7 +556,7 @@ begin
       break;
     //WriteLn('run: ' + p.ClassName);
   end;
-  EndTextureMode;
+  EndTextureMode;}
 end;
 
 constructor TTyroMain.Create;
@@ -600,9 +611,10 @@ begin
 end;
 
 procedure TTyroMain.Run;
-//var
-{  t: TTexture2D;
-  im: TImage;}
+var
+  t: TTexture2D;
+  im: TImage;
+
 begin
   if (FScript <> nil) and FScript.Suspended then
     FScript.Start;
@@ -618,8 +630,12 @@ begin
     DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);}
 
     //WriteLn('Copy Board');
-    with Canvas.FBoard do
-      DrawTextureRec(texture, RectangleCreate(0, 0, texture.width, -texture.height), Vector2Create(0, 0), WHITE);
+    t := LoadTextureFromImage(FScript.Canvas.Board);
+    DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);
+    //UnloadTexture(t);
+
+    {with Canvas.FBoard do
+      DrawTextureRec(texture, RectangleCreate(0, 0, texture.width, -texture.height), Vector2Create(0, 0), WHITE);}
 
   finally
   end;
@@ -664,16 +680,21 @@ begin
 end;
 
 procedure TTyroScript.AddPoolObject(APoolObject: TPoolObject);
+var
+  NeedSynchronize: Boolean;
 begin
   Lock.Enter;
   try
+    NeedSynchronize := APoolObject.NeedSynchronize;
     Main.Pool.Add(APoolObject);
   finally
     Lock.Leave;
   end;
   Yield;
-  //Synchronize(@Main.ProcessPool); //work but slow as sleep(1)
-  Queue(@Main.ProcessPool); //not work
+  if NeedSynchronize then
+    Synchronize(@Main.ProcessPool) //work but slow as sleep(1)
+  else
+    Queue(@Main.ProcessPool);
 end;
 
 constructor TTyroScript.Create;
@@ -682,16 +703,19 @@ begin
   FreeOnTerminate := False;
   Priority := tpLower; //hmmm
   ScriptText := TStringList.Create;
+  Canvas:=TTyroCanvas.Create;
 end;
 
 destructor TTyroScript.Destroy;
 begin
   FreeAndNil(ScriptText);
+  FreeAndNil(Canvas);
   inherited Destroy;
 end;
 
 procedure TTyroScript.Execute;
 begin
+  //Board := LoadImage(PChar(Main.WorkSpace + 'richard-say.png'));
   BeforeRun;
   Run;
   AfterRun;
