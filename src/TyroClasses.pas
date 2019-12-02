@@ -32,7 +32,7 @@ type
   TTyroScript = class abstract(TThread)
   private
   protected
-    Canvas: TTyroCanvas;
+    //Canvas: TTyroCanvas;
     ScriptText: TStringList;
     procedure BeforeRun; virtual;
     procedure Run; virtual; abstract;
@@ -72,14 +72,14 @@ type
     //FPCanvas: TFPImageCanvas;
     //FBoard: TRenderTexture2D;
     FTexture: TRenderTexture2D;
-    FBoard: raylib.TImage;
+    //FBoard: raylib.TImage;
     Font: raylib.TFont;
     procedure SetBackgroundColor(AValue: TFPColor);
   public
     LastX, LastY: Integer;
     constructor Create;
     destructor Destroy; override;
-    property Board: raylib.TImage read FBoard;
+    //property Board: raylib.TImage read FBoard;
     procedure Circle(X, Y, R: Integer; Fill: Boolean = false);
     procedure Rectangle(X, Y, W, H: Integer; Fill: Boolean = false);
     //procedure PrintTest;
@@ -463,27 +463,27 @@ begin
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'terminus.fon'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/Chroma.png'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/alpha_beta.png'));
-  Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/font2.png'));
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
+  Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/font.png'));
   SetTextureFilter(Font.texture, FILTER_POINT);
   //Font := raylib.LoadFont(PChar('computer_pixel.fon.ttf'));
-  FFontSize := Font.baseSize;
+  FFontSize := 18;
 
   FTexture := LoadRenderTexture(ScreenWidth, ScreenHeight);
-  FBoard := GetTextureData(FTexture.texture);
+  //FBoard := GetTextureData(FTexture.texture);
 
-  //BeginTextureMode(FBoard);
+  BeginTextureMode(FTexture);
   ClearBackground(RayColorOf(BackgroundColor));
-  //DrawText(3, 3, 'Ready!');
-  //EndTextureMode();
+  DrawText(10, 10, 'Ready!');
+  EndTextureMode();
 end;
 
 destructor TTyroCanvas.Destroy;
 begin
   UnloadFont(Font);
-  UnloadImage(FBoard);
+  //UnloadImage(FBoard);
   UnloadRenderTexture(FTexture);
-  Finalize(FBoard);
+  Finalize(FTexture);
   inherited;
 end;
 
@@ -507,7 +507,8 @@ end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
 begin
-  ImageDrawTextEx(@FBoard, Vector2Create(0, 0), Font, PChar(S), FontSize, 2, RayColorOf(Color));
+  DrawTextEx(Font, PChar(S), Vector2Create(x, y), FontSize, 2, RayColorOf(Color));
+  //ImageDrawTextEx(@FTexture, Vector2Create(x, y), Font, PChar(S), FontSize, 2, RayColorOf(Color));
 end;
 
 procedure TTyroCanvas.Print(S: string);
@@ -611,10 +612,9 @@ begin
 end;
 
 procedure TTyroMain.Run;
-var
-  t: TTexture2D;
-  im: TImage;
-
+//var
+  //t: TTexture2D;
+  //im: TImage;
 begin
   if (FScript <> nil) and FScript.Suspended then
     FScript.Start;
@@ -629,13 +629,11 @@ begin
     t := LoadTextureFromImage(im);
     DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);}
 
-    //WriteLn('Copy Board');
-    t := LoadTextureFromImage(FScript.Canvas.Board);
-    DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);
-    //UnloadTexture(t);
+    //t := LoadTextureFromImage(FScript.Canvas.FTexture);
+    //DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);
 
-    {with Canvas.FBoard do
-      DrawTextureRec(texture, RectangleCreate(0, 0, texture.width, -texture.height), Vector2Create(0, 0), WHITE);}
+    with Canvas.FTexture do
+      DrawTextureRec(texture, RectangleCreate(0, 0, texture.width, -texture.height), Vector2Create(0, 0), WHITE);
 
   finally
   end;
@@ -703,13 +701,13 @@ begin
   FreeOnTerminate := False;
   Priority := tpLower; //hmmm
   ScriptText := TStringList.Create;
-  Canvas:=TTyroCanvas.Create;
+  //Canvas := TTyroCanvas.Create;
 end;
 
 destructor TTyroScript.Destroy;
 begin
   FreeAndNil(ScriptText);
-  FreeAndNil(Canvas);
+  //FreeAndNil(Canvas);
   inherited Destroy;
 end;
 
