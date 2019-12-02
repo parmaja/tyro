@@ -540,7 +540,7 @@ var
   p: TPoolObject;
   c: Integer;
 begin
-  {BeginTextureMode(Canvas.Board);
+  BeginTextureMode(Canvas.FTexture);
   c := 0;
   while Pool.Count > 0 do
   begin
@@ -553,11 +553,10 @@ begin
     p.Execute;
     p.Free;
     Inc(c);
-    if c > 100 then
+    if c > 100 then //we need to optimize it to relate it to fps
       break;
-    //WriteLn('run: ' + p.ClassName);
   end;
-  EndTextureMode;}
+  EndTextureMode;
 end;
 
 constructor TTyroMain.Create;
