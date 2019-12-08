@@ -20,13 +20,19 @@ uses
   TyroClasses;
 
 type
+  TLuaScript = class;
 
   { TLuaObject }
 
   TLuaObject = class abstract(TObject)
+  private
+    FScript: TLuaScript;
+  protected
+    procedure Created; virtual;
   protected
     function __setter(L: PLua_State): integer; cdecl; virtual; abstract;
     function __getter(L: PLua_State): integer; cdecl; virtual; abstract;
+    constructor Create(AScript: TLuaScript); virtual;
   end;
 
   { TLuaCanvas }
@@ -36,6 +42,7 @@ type
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
   public
+    constructor Create(AScript: TLuaScript); override;
   end;
 
   { TLuaColors }
@@ -51,9 +58,9 @@ type
       Colors: array of TLuaColor;
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
+    procedure Created; override;
   public
     procedure AddColor(Name: string; AColor: TFPColor);
-    constructor Create;
   end;
 
   { TLuaScript }
@@ -228,8 +235,21 @@ end;
 
 procedure lua_register_fpcolor(L : Plua_State; name: string; value: TFPColor);
 begin
-  lua_pushinteger(L, FPColorToInt(value));
+  lua_pushinteger(L, ColorToInt(value));
   lua_setfield(L, -2, pchar(name));
+end;
+
+{ TLuaObject }
+
+procedure TLuaObject.Created;
+begin
+end;
+
+constructor TLuaObject.Create(AScript: TLuaScript);
+begin
+  inherited Create;
+  FScript := AScript;
+  Created;
 end;
 
 { TLuaColors }
@@ -251,7 +271,7 @@ begin
     index := round(lua_tointeger(L, 2));
     if index < Length(Colors) then
     begin
-      c := FPColorToInt(Colors[index].Color);
+      c := ColorToInt(Colors[index].Color);
       lua_pushinteger(L, c);
       Result := 1;
     end;
@@ -279,7 +299,7 @@ begin
   Colors[Length(Colors) -1] := aItem;
 end;
 
-constructor TLuaColors.Create;
+procedure TLuaColors.Created;
 begin
   AddColor('white', colWhite);
   AddColor('silver', colSilver);
@@ -312,13 +332,14 @@ begin
     'color':
     begin
       i := lua_tointeger(L, -1);
-      Main.Canvas.Color := IntToFPColor(i);//thread unsafe
+      FScript.AddPoolObject(TDrawSetColorObject.Create(Main.Canvas, ToFPColor(i)));
+      //Main.Canvas.Color := RayColorOf(IntToFPColor(i));//thread unsafe
       Result:= 1;
     end;
     'backcolor':
     begin
       i := lua_tointeger(L, -1);
-      Main.Canvas.BackgroundColor := IntToFPColor(i);//thread unsafe
+      Main.Canvas.BackgroundColor := RayColorOf(IntToFPColor(i));//thread unsafe
       Result:= 1;
     end;
   end;
@@ -334,17 +355,22 @@ begin
   case field of
     'color':
     begin
-      i := FPColorToInt(Main.Canvas.Color);
+      i := ColorToInt(Main.Canvas.Color);
       lua_pushinteger(L, i);
       Result := 1;
     end;
     'backcolor':
     begin
-      i := FPColorToInt(Main.Canvas.BackgroundColor);
+      i := ColorToInt(Main.Canvas.BackgroundColor);
       lua_pushinteger(L, i);
       Result := 1;
     end;
   end;
+end;
+
+constructor TLuaCanvas.Create(AScript: TLuaScript);
+begin
+  inherited;
 end;
 
 procedure HookCount(L: Plua_State; ar: Plua_Debug); cdecl;
@@ -369,8 +395,8 @@ begin
 //  lua_register_integer(LuaState, 'width', ScreenWidth));
 //  lua_register_integer(LuaState, 'heigh', ScreenHeight));
 
-  LuaCanvas := TLuaCanvas.Create;
-  LuaColors := TLuaColors.Create;
+  LuaCanvas := TLuaCanvas.Create(Self);
+  LuaColors := TLuaColors.Create(Self);
 
   //lua_register_table(LuaState, 'draw', LuaCanvas);
   lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
@@ -410,7 +436,7 @@ var
   r: integer;
   Msg: string;
 begin
-  WriteLn('Run Script');
+  //WriteLn('Run Script');
   //Sleep(1000);
   r := luaL_loadstring(LuaState, PChar(ScriptText.Text));
   if r = 0 then

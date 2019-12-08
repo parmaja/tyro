@@ -65,16 +65,16 @@ type
 
   TTyroCanvas = class(TObject)
   private
-    FBackgroundColor: TFPColor;
+    FColor: TColor;
+    FBackgroundColor: TColor;
     FFontSize: Integer;
-    FColor: TFPColor;
     //FPImage: TMyFPMemoryImage;
     //FPCanvas: TFPImageCanvas;
     //FBoard: TRenderTexture2D;
     FTexture: TRenderTexture2D;
     //FBoard: raylib.TImage;
     Font: raylib.TFont;
-    procedure SetBackgroundColor(AValue: TFPColor);
+    procedure SetBackgroundColor(AValue: TColor);
   public
     LastX, LastY: Integer;
     constructor Create;
@@ -86,9 +86,9 @@ type
     procedure DrawText(X, Y: Integer; S: string);
     procedure Print(S: string);
     procedure Clear;
-    property Color: TFPColor read FColor write FColor;
+    property Color: TColor read FColor write FColor;
+    property BackgroundColor: TColor read FBackgroundColor write SetBackgroundColor;
     property FontSize: Integer read FFontSize write FFontSize;
-    property BackgroundColor: TFPColor read FBackgroundColor write SetBackgroundColor;
   end;
 
   { TPoolObject }
@@ -117,6 +117,15 @@ type
   public
     constructor Create(ACanvas: TTyroCanvas);
     property Canvas: TTyroCanvas read FCanvas;
+  end;
+
+  { TDrawSetColorObject }
+
+  TDrawSetColorObject = class(TDrawObject)
+  public
+    fColor: TColor;
+    constructor Create(ACanvas: TTyroCanvas; Color: TColor);
+    procedure Execute; override;
   end;
 
   { TDrawCircleObject }
@@ -227,8 +236,11 @@ type
     procedure RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
   end;
 
-function IntToFPColor(I: Integer): TFPColor;
-function FPColorToInt(C: TFPColor): Integer;
+  function IntToFPColor(I: Integer): TFPColor;
+  function FPColorToInt(C: TFPColor): Integer;
+
+  function IntToColor(I: Integer): TColor;
+  function ColorToInt(C: TColor): Integer;
 
 var
   ScreenWidth: Integer = 640; //Temporary here, i will move it to Tyro object
@@ -239,6 +251,7 @@ var
   Main : TTyroMain = nil;
 
 procedure Log(S: string);
+function RayColorOf(Color: TFPColor): raylib.TColor;
 
 implementation
 
@@ -283,6 +296,35 @@ begin
   Result := Result or hi(C.Alpha);
 end;
 
+function IntToColor(I: Integer): TColor;
+begin
+  Result.a := I and $ff;
+  I := I shr 8;
+  Result.B := I and $ff;
+  I := I shr 8;
+  Result.g := I and $ff;
+  I := I shr 8;
+  Result.R := I and $ff;
+end;
+
+function ColorToInt(C: TColor): Integer;
+begin
+
+end;
+
+{ TDrawSetColorObject }
+
+constructor TDrawSetColorObject.Create(ACanvas: TTyroCanvas; Color: TColor);
+begin
+  inherited Create(ACanvas);
+  fColor := Color;
+end;
+
+procedure TDrawSetColorObject.Execute;
+begin
+  Canvas.Color := fColor;
+end;
+
 { TScriptTypes }
 
 function TScriptTypes.FindByExtension(Extension: string): TScriptType;
@@ -311,7 +353,7 @@ end;
 
 procedure TDrawPointObject.Execute;
 begin
-  DrawPixel(fX, fY, RayColorOf(Canvas.Color));
+  DrawPixel(fX, fY, Canvas.Color);
   Canvas.LastX := fX;
   Canvas.LastY := fY;
 end;
@@ -327,7 +369,7 @@ end;
 
 procedure TDrawLineToObject.Execute;
 begin
-  DrawLine(Canvas.LastX, Canvas.LastY, fX, fY, RayColorOf(Canvas.Color));
+  DrawLine(Canvas.LastX, Canvas.LastY, fX, fY, Canvas.Color);
   Canvas.LastX := fX;
   Canvas.LastY := fY;
 end;
@@ -345,7 +387,7 @@ end;
 
 procedure TDrawLineObject.Execute;
 begin
-  DrawLine(fX1, fY1, fX2, fY2, RayColorOf(Canvas.Color));
+  DrawLine(fX1, fY1, fX2, fY2, Canvas.Color);
   Canvas.LastX := fX2;
   Canvas.LastY := fY2;
 end;
@@ -359,7 +401,7 @@ end;
 
 procedure TClearObject.Execute;
 begin
-  ClearBackground(RayColorOf(Canvas.BackgroundColor));
+  ClearBackground(Canvas.BackgroundColor);
 end;
 
 { TDrawRectangleObject }
@@ -377,9 +419,9 @@ end;
 procedure TDrawRectangleObject.Execute;
 begin
   if fFill then
-    DrawRectangle(fX, fY, fW, fH, RayColorOf(Canvas.Color))
+    DrawRectangle(fX, fY, fW, fH, Canvas.Color)
   else
-    DrawRectangleLines(fX, fY, fW, fH, RayColorOf(Canvas.Color));
+    DrawRectangleLines(fX, fY, fW, fH, Canvas.Color);
 end;
 
 { TPrintObject }
@@ -407,7 +449,7 @@ end;
 
 procedure TDrawTextObject.Execute;
 begin
-  raylib.DrawTextEx(Canvas.Font, PChar(fText), Vector2Create(fX, fY), Canvas.FontSize, 2, RayColorOf(Canvas.Color));
+  raylib.DrawTextEx(Canvas.Font, PChar(fText), Vector2Create(fX, fY), Canvas.FontSize, 2, Canvas.Color);
 end;
 
 { TDrawObject }
@@ -436,17 +478,17 @@ end;
 procedure TDrawCircleObject.Execute;
 begin
   if fFill then
-    DrawCircle(fX, fY, fR, RayColorOf(Canvas.Color))
+    DrawCircle(fX, fY, fR, Canvas.Color)
   else
-    DrawCircleLines(fX, fY, fR, RayColorOf(Canvas.Color));
+    DrawCircleLines(fX, fY, fR, Canvas.Color);
 end;
 
 { TTyroCanvas }
 
 constructor TTyroCanvas.Create;
 begin
-  FColor := colBlack;
-  FBackgroundColor := FPColor(0, 110, 160, 0);
+  FColor := BLACK;
+  FBackgroundColor := RayColorOf(FPColor(0, 110, 160, 0));
   //Font := GetFontDefault;
 
   //FPImage := TMyFPMemoryImage.Create(100,100);
@@ -473,7 +515,7 @@ begin
   //FBoard := GetTextureData(FTexture.texture);
 
   BeginTextureMode(FTexture);
-  ClearBackground(RayColorOf(BackgroundColor));
+  ClearBackground(BackgroundColor);
   DrawText(10, 10, 'Ready!');
   EndTextureMode();
 end;
@@ -491,23 +533,23 @@ procedure TTyroCanvas.Circle(X, Y, R: Integer; Fill: Boolean);
 begin
 //  BeginTextureMode(FBoard);
   if Fill then
-    DrawCircle(X, Y, R, RayColorOf(Color))
+    DrawCircle(X, Y, R, Color)
   else
-    DrawCircleLines(X, Y, R, RayColorOf(Color));
+    DrawCircleLines(X, Y, R, Color);
 //  EndTextureMode();
 end;
 
 procedure TTyroCanvas.Rectangle(X, Y, W, H: Integer; Fill: Boolean);
 begin
   if Fill then
-    DrawRectangle(X, Y, W, H, RayColorOf(Color))
+    DrawRectangle(X, Y, W, H, Color)
   else
-    DrawRectangleLines(X, Y, W, H, RayColorOf(Color));
+    DrawRectangleLines(X, Y, W, H, Color);
 end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
 begin
-  DrawTextEx(Font, PChar(S), Vector2Create(x, y), FontSize, 2, RayColorOf(Color));
+  DrawTextEx(Font, PChar(S), Vector2Create(x, y), FontSize, 2, Color);
   //ImageDrawTextEx(@FTexture, Vector2Create(x, y), Font, PChar(S), FontSize, 2, RayColorOf(Color));
 end;
 
@@ -518,14 +560,12 @@ end;
 
 procedure TTyroCanvas.Clear;
 begin
-  ClearBackground(RayColorOf(BackgroundColor));
+  ClearBackground(BackgroundColor);
 end;
 
-procedure TTyroCanvas.SetBackgroundColor(AValue: TFPColor);
+procedure TTyroCanvas.SetBackgroundColor(AValue: TColor);
 begin
-  if FBackgroundColor =AValue then
-    Exit;
-  FBackgroundColor :=AValue;
+  FBackgroundColor := AValue;
 end;
 
 { TTyroMain }
@@ -562,6 +602,8 @@ end;
 constructor TTyroMain.Create;
 begin
   inherited Create;
+  //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
+  SetTraceLogLevel(LOG_ERROR or LOG_FATAL);
   //FLock := TCriticalSection.Create;
   FPool := TPoolObjects.Create(True);
   FScriptTypes := TScriptTypes.Create(true);
