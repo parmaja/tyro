@@ -31,18 +31,21 @@ type
 
   TTyroScript = class abstract(TThread)
   private
+    FActive: Boolean;
+    function GetActive: Boolean;
   protected
     //Canvas: TTyroCanvas;
     ScriptText: TStringList;
     procedure BeforeRun; virtual;
     procedure Run; virtual; abstract;
     procedure AfterRun; virtual;
-    procedure AddPoolObject(APoolObject: TPoolObject);
+    procedure AddPoolObject(APoolObject: TPoolObject); virtual;
   public
     constructor Create; virtual;
     destructor Destroy; override;
     procedure Execute; override;
     procedure LoadFile(FileName: string); overload;
+    property Active: Boolean read GetActive;
   end;
 
   TTyroScriptClass = class of TTyroScript;
@@ -74,10 +77,15 @@ type
     FTexture: TRenderTexture2D;
     //FBoard: raylib.TImage;
     Font: raylib.TFont;
+    function GetAlpha: Byte;
+    function GetColor: TColor;
+    procedure SetAlpha(AValue: Byte);
     procedure SetBackgroundColor(AValue: TColor);
+    procedure SetColor(AValue: TColor);
   public
+    Width, Height: Integer;
     LastX, LastY: Integer;
-    constructor Create;
+    constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
     //property Board: raylib.TImage read FBoard;
     procedure Circle(X, Y, R: Integer; Fill: Boolean = false);
@@ -86,7 +94,8 @@ type
     procedure DrawText(X, Y: Integer; S: string);
     procedure Print(S: string);
     procedure Clear;
-    property Color: TColor read FColor write FColor;
+    property Color: TColor read GetColor write SetColor;
+    property Alpha: Byte read GetAlpha write SetAlpha;
     property BackgroundColor: TColor read FBackgroundColor write SetBackgroundColor;
     property FontSize: Integer read FFontSize write FFontSize;
   end;
@@ -96,8 +105,11 @@ type
   TPoolObject = class abstract(TObject)
   private
     FNeedSynchronize: Boolean;
+    procedure DoExecute; virtual; abstract;
+  protected
   public
-    procedure Execute; virtual; abstract;
+    LineNo: Integer;
+    procedure Execute; virtual;
     property NeedSynchronize: Boolean read FNeedSynchronize; //this will call Synchronize
   end;
 
@@ -116,7 +128,17 @@ type
     procedure Created; virtual;
   public
     constructor Create(ACanvas: TTyroCanvas);
+    procedure Execute; override;
     property Canvas: TTyroCanvas read FCanvas;
+  end;
+
+  { TWindowObject }
+
+  TWindowObject = class(TPoolObject)
+  public
+    fW, fH: Integer;
+    constructor Create(W, H: Integer);
+    procedure DoExecute; override;
   end;
 
   { TDrawSetColorObject }
@@ -125,7 +147,16 @@ type
   public
     fColor: TColor;
     constructor Create(ACanvas: TTyroCanvas; Color: TColor);
-    procedure Execute; override;
+    procedure DoExecute; override;
+  end;
+
+  { TDrawSetAlphaObject }
+
+  TDrawSetAlphaObject = class(TDrawObject)
+  public
+    fAlpha: Byte;
+    constructor Create(ACanvas: TTyroCanvas; Alpha: Byte);
+    procedure DoExecute; override;
   end;
 
   { TDrawCircleObject }
@@ -135,7 +166,7 @@ type
     fX, fY, fR: Integer;
     fFill: Boolean;
     constructor Create(ACanvas: TTyroCanvas; X, Y, R: Integer; Fill: Boolean);
-    procedure Execute; override;
+    procedure DoExecute; override;
   end;
 
   { TDrawRectangleObject }
@@ -145,7 +176,7 @@ type
     fX, fY, fW, fH: Integer;
     fFill: Boolean;
     constructor Create(ACanvas: TTyroCanvas; X, Y, W, H: Integer; Fill: Boolean);
-    procedure Execute; override;
+    procedure DoExecute; override;
   end;
 
   { TDrawLineObject }
@@ -154,7 +185,7 @@ type
   public
     fX1, fY1, fX2, fY2: Integer;
     constructor Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer);
-    procedure Execute; override;
+    procedure DoExecute; override;
   end;
 
   { TDrawLineToObject }
@@ -163,7 +194,7 @@ type
   public
     fX, fY: Integer;
     constructor Create(ACanvas: TTyroCanvas; X, Y: Integer);
-    procedure Execute; override;
+    procedure DoExecute; override;
   end;
 
   { TDrawPointObject }
@@ -172,7 +203,7 @@ type
   public
     fX, fY: Integer;
     constructor Create(ACanvas: TTyroCanvas; X, Y: Integer);
-    procedure Execute; override;
+    procedure DoExecute; override;
   end;
 
   { TDrawTextObject }
@@ -182,7 +213,7 @@ type
     fX, fY: Integer;
     fText: String;
     constructor Create(ACanvas: TTyroCanvas; X, Y: Integer; Text: String);
-    procedure Execute; override;
+    procedure DoExecute; override;
   end;
 
   { TPrintObject }
@@ -191,7 +222,7 @@ type
   public
     FText: String;
     constructor Create(ACanvas: TTyroCanvas; Text: String);
-    procedure Execute; override;
+    procedure DoExecute; override;
   end;
 
   { TClearObject }
@@ -199,7 +230,7 @@ type
   TClearObject = class(TDrawObject)
   public
     constructor Create(ACanvas: TTyroCanvas);
-    procedure Execute; override;
+    procedure DoExecute; override;
   end;
 
   { TTyroMain }
@@ -219,7 +250,10 @@ type
     //property Lock: TCriticalSection read FLock;
     property Pool: TPoolObjects read FPool;
     property ScriptTypes: TScriptTypes read FScriptTypes;
+    procedure ShowWindow(W, H: Integer);
+    procedure HideWindow;
   public
+    WindowVisible: Boolean;
     Title: string;
     FileName: string;//that to run in script
     WorkSpace: string;
@@ -236,11 +270,11 @@ type
     procedure RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
   end;
 
-  function IntToFPColor(I: Integer): TFPColor;
-  function FPColorToInt(C: TFPColor): Integer;
+  //function IntToFPColor(I: Integer): TFPColor;
+  //function FPColorToInt(C: TFPColor): Integer;
 
-  function IntToColor(I: Integer): TColor;
-  function ColorToInt(C: TColor): Integer;
+  function IntToColor(I: integer): TColor;
+  function ColorToInt(C: TColor): integer;
 
 var
   ScreenWidth: Integer = 640; //Temporary here, i will move it to Tyro object
@@ -296,20 +330,60 @@ begin
   Result := Result or hi(C.Alpha);
 end;
 
-function IntToColor(I: Integer): TColor;
+function IntToColor(I: integer): TColor;
 begin
-  Result.a := I and $ff;
-  I := I shr 8;
-  Result.B := I and $ff;
+  Result.r := I and $ff;
   I := I shr 8;
   Result.g := I and $ff;
   I := I shr 8;
-  Result.R := I and $ff;
+  Result.b := I and $ff;
+  I := I shr 8;
+  Result.a := I and $ff;
 end;
 
-function ColorToInt(C: TColor): Integer;
+function ColorToInt(C: TColor): integer;
 begin
+  Result := C.a;
+  Result := Result shl 8;
+  Result := Result or C.b;
+  Result := Result shl 8;
+  Result := Result or C.g;
+  Result := Result shl 8;
+  Result := Result or C.r;
+end;
 
+{ TDrawSetAlphaObject }
+
+constructor TDrawSetAlphaObject.Create(ACanvas: TTyroCanvas; Alpha: Byte);
+begin
+  inherited Create(ACanvas);
+  fAlpha := Alpha;
+end;
+
+procedure TDrawSetAlphaObject.DoExecute;
+begin
+  Canvas.Alpha := fAlpha;
+end;
+
+{ TPoolObject }
+
+procedure TPoolObject.Execute;
+begin
+  DoExecute;
+end;
+
+{ TWindowObject }
+
+constructor TWindowObject.Create(W, H: Integer);
+begin
+  inherited Create;
+  FW := W;
+  FH := H;
+end;
+
+procedure TWindowObject.DoExecute;
+begin
+  Main.ShowWindow(FW, FH);
 end;
 
 { TDrawSetColorObject }
@@ -320,7 +394,7 @@ begin
   fColor := Color;
 end;
 
-procedure TDrawSetColorObject.Execute;
+procedure TDrawSetColorObject.DoExecute;
 begin
   Canvas.Color := fColor;
 end;
@@ -351,7 +425,7 @@ begin
   fY := Y;
 end;
 
-procedure TDrawPointObject.Execute;
+procedure TDrawPointObject.DoExecute;
 begin
   DrawPixel(fX, fY, Canvas.Color);
   Canvas.LastX := fX;
@@ -367,7 +441,7 @@ begin
   fY := Y;
 end;
 
-procedure TDrawLineToObject.Execute;
+procedure TDrawLineToObject.DoExecute;
 begin
   DrawLine(Canvas.LastX, Canvas.LastY, fX, fY, Canvas.Color);
   Canvas.LastX := fX;
@@ -376,7 +450,7 @@ end;
 
 { TDrawLIneObject }
 
-constructor TDrawLIneObject.Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer);
+constructor TDrawLineObject.Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer);
 begin
   inherited Create(ACanvas);
   fX1 := X1;
@@ -385,7 +459,7 @@ begin
   fY2 := Y2;
 end;
 
-procedure TDrawLineObject.Execute;
+procedure TDrawLineObject.DoExecute;
 begin
   DrawLine(fX1, fY1, fX2, fY2, Canvas.Color);
   Canvas.LastX := fX2;
@@ -399,7 +473,7 @@ begin
   inherited Create(ACanvas);
 end;
 
-procedure TClearObject.Execute;
+procedure TClearObject.DoExecute;
 begin
   ClearBackground(Canvas.BackgroundColor);
 end;
@@ -416,7 +490,7 @@ begin
   fFill := Fill;
 end;
 
-procedure TDrawRectangleObject.Execute;
+procedure TDrawRectangleObject.DoExecute;
 begin
   if fFill then
     DrawRectangle(fX, fY, fW, fH, Canvas.Color)
@@ -432,7 +506,7 @@ begin
   fText := Text;
 end;
 
-procedure TPrintObject.Execute;
+procedure TPrintObject.DoExecute;
 begin
   Canvas.Print(fText);
 end;
@@ -447,7 +521,7 @@ begin
   fText := Text;
 end;
 
-procedure TDrawTextObject.Execute;
+procedure TDrawTextObject.DoExecute;
 begin
   raylib.DrawTextEx(Canvas.Font, PChar(fText), Vector2Create(fX, fY), Canvas.FontSize, 2, Canvas.Color);
 end;
@@ -464,6 +538,14 @@ begin
   FCanvas := ACanvas;
 end;
 
+procedure TDrawObject.Execute;
+begin
+  if (Canvas = nil) then
+    Log('You need to init window to use this command, ' + ClassName + ' line: ' + IntToStr(LineNo))
+  else
+    inherited Execute;
+end;
+
 { TDrawCircleObject }
 
 constructor TDrawCircleObject.Create(ACanvas: TTyroCanvas; X, Y, R: Integer; Fill: Boolean);
@@ -475,7 +557,7 @@ begin
   fFill := Fill;
 end;
 
-procedure TDrawCircleObject.Execute;
+procedure TDrawCircleObject.DoExecute;
 begin
   if fFill then
     DrawCircle(fX, fY, fR, Canvas.Color)
@@ -485,10 +567,12 @@ end;
 
 { TTyroCanvas }
 
-constructor TTyroCanvas.Create;
+constructor TTyroCanvas.Create(AWidth, AHeight: Integer);
 begin
+  Width := AWidth;
+  Height := AHeight;
   FColor := BLACK;
-  FBackgroundColor := RayColorOf(FPColor(0, 110, 160, 0));
+  FBackgroundColor := ColorCreate(0, 110, 160, 255);
   //Font := GetFontDefault;
 
   //FPImage := TMyFPMemoryImage.Create(100,100);
@@ -511,7 +595,7 @@ begin
   //Font := raylib.LoadFont(PChar('computer_pixel.fon.ttf'));
   FFontSize := 18;
 
-  FTexture := LoadRenderTexture(ScreenWidth, ScreenHeight);
+  FTexture := LoadRenderTexture(Width, Height);
   //FBoard := GetTextureData(FTexture.texture);
 
   BeginTextureMode(FTexture);
@@ -568,11 +652,52 @@ begin
   FBackgroundColor := AValue;
 end;
 
+function TTyroCanvas.GetAlpha: Byte;
+begin
+  Result := FColor.a;
+end;
+
+function TTyroCanvas.GetColor: TColor;
+begin
+  Result := FColor;
+end;
+
+procedure TTyroCanvas.SetAlpha(AValue: Byte);
+begin
+  FColor.a := AValue;
+end;
+
+procedure TTyroCanvas.SetColor(AValue: TColor);
+begin
+  FColor.r := AValue.r;
+  FColor.g := AValue.g;
+  FColor.b := AValue.b;
+end;
+
 { TTyroMain }
 
 function TTyroMain.GetActive: Boolean;
 begin
-  Result := not WindowShouldClose();
+  if WindowVisible then
+    Result := not WindowShouldClose
+  else
+    Result := (FScript <> nil) and FScript.Active;
+end;
+
+procedure TTyroMain.ShowWindow(W, H: Integer);
+begin
+  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  InitWindow(W, H, PChar(Title));
+  SetTargetFPS(60);
+  ShowCursor();
+  WindowVisible := True;
+  FCanvas := TTyroCanvas.Create(W, H);
+end;
+
+procedure TTyroMain.HideWindow;
+begin
+  if WindowVisible then
+    CloseWindow;
 end;
 
 procedure TTyroMain.ProcessPool;
@@ -580,23 +705,26 @@ var
   p: TPoolObject;
   c: Integer;
 begin
-  BeginTextureMode(Canvas.FTexture);
-  c := 0;
-  while Pool.Count > 0 do
+  if Canvas <> nil then
   begin
-    Lock.Enter;
-    try
-      p := Pool.Extract(Pool[0]);
-    finally
-      Lock.Leave;
+    BeginTextureMode(Canvas.FTexture);
+    c := 0;
+    while Pool.Count > 0 do
+    begin
+      Lock.Enter;
+      try
+        p := Pool.Extract(Pool[0]);
+      finally
+        Lock.Leave;
+      end;
+      p.Execute;
+      p.Free;
+      Inc(c);
+      if c > 100 then //we need to optimize it to relate it to fps
+        break;
     end;
-    p.Execute;
-    p.Free;
-    Inc(c);
-    if c > 100 then //we need to optimize it to relate it to fps
-      break;
+    EndTextureMode;
   end;
-  EndTextureMode;
 end;
 
 constructor TTyroMain.Create;
@@ -617,7 +745,7 @@ destructor TTyroMain.Destroy;
 begin
   //Stop;
   FreeAndNil(FCanvas);
-  CloseWindow;
+  HideWindow;
   FreeAndNil(FPool);
   //FreeAndNil(FLock);
   FreeAndNil(FScriptTypes);
@@ -628,12 +756,7 @@ procedure TTyroMain.Start;
 var
   ScriptType: TScriptType;
 begin
-  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  InitWindow(ScreenWidth, ScreenHeight, PChar(Title));
-  ShowCursor();
-  SetTargetFPS(60);
-  FCanvas := TTyroCanvas.Create;
-
+  //ShowWindow(ScreenWidth, ScreenHeight); with option to show window /w
   if FileName <> '' then
   begin
     ScriptType := ScriptTypes.FindByExtension(ExtractFileExt(FileName));
@@ -660,27 +783,30 @@ begin
   if (FScript <> nil) and FScript.Suspended then
     FScript.Start;
 
-  ProcessPool;
+  if WindowVisible then
+  begin
+    ProcessPool;
 
-  BeginDrawing;
-  ClearBackground(DefaultBackground);
+    BeginDrawing;
+    ClearBackground(DefaultBackground);
 
-  try
-    {im := LoadImageEx(PColor(FScript.FPImage.Data), FScript.FPImage.Width, FScript.FPImage.Height);
-    t := LoadTextureFromImage(im);
-    DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);}
+    try
+      {im := LoadImageEx(PColor(FScript.FPImage.Data), FScript.FPImage.Width, FScript.FPImage.Height);
+      t := LoadTextureFromImage(im);
+      DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);}
 
-    //t := LoadTextureFromImage(FScript.Canvas.FTexture);
-    //DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);
+      //t := LoadTextureFromImage(FScript.Canvas.FTexture);
+      //DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);
 
-    with Canvas.FTexture do
-      DrawTextureRec(texture, RectangleCreate(0, 0, texture.width, -texture.height), Vector2Create(0, 0), WHITE);
+      with Canvas.FTexture do
+        DrawTextureRec(texture, RectangleCreate(0, 0, texture.width, -texture.height), Vector2Create(0, 0), WHITE);
 
-  finally
+    finally
+    end;
+
+    Loop;
+    EndDrawing;
   end;
-
-  Loop;
-  EndDrawing;
 end;
 
 procedure TTyroMain.Loop;
@@ -709,6 +835,11 @@ begin
 end;
 
 { TTyroScript }
+
+function TTyroScript.GetActive: Boolean;
+begin
+  Result := FActive;
+end;
 
 procedure TTyroScript.BeforeRun;
 begin
@@ -739,6 +870,7 @@ end;
 constructor TTyroScript.Create;
 begin
   inherited Create(True);
+  FActive := True;
   FreeOnTerminate := False;
   Priority := tpLower; //hmmm
   ScriptText := TStringList.Create;
@@ -758,6 +890,7 @@ begin
   BeforeRun;
   Run;
   AfterRun;
+  FActive := False;
 end;
 
 procedure TTyroScript.LoadFile(FileName: string);

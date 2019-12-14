@@ -17,6 +17,7 @@ interface
 uses
   Classes, SysUtils,
   lua53, FPImage,
+  raylib, //remove it
   TyroClasses;
 
 type
@@ -32,6 +33,7 @@ type
   protected
     function __setter(L: PLua_State): integer; cdecl; virtual; abstract;
     function __getter(L: PLua_State): integer; cdecl; virtual; abstract;
+  public
     constructor Create(AScript: TLuaScript); virtual;
   end;
 
@@ -52,7 +54,7 @@ type
     type
       TLuaColor = record
         Name: string;
-        Color: TFPColor;
+        Color: TColor;
       end;
     var
       Colors: array of TLuaColor;
@@ -60,7 +62,7 @@ type
     function __getter(L: PLua_State): integer; cdecl; override;
     procedure Created; override;
   public
-    procedure AddColor(Name: string; AColor: TFPColor);
+    procedure AddColor(Name: string; AColor: TColor);
   end;
 
   { TLuaScript }
@@ -68,13 +70,17 @@ type
   TLuaScript = class(TTyroScript)
   private
   protected
+    FPoolObject: TPoolObject;
     LuaState: Plua_State;
     LuaCanvas: TLuaCanvas;
     LuaColors: TLuaColors;
+    procedure ExecutePoolObject;
     procedure DoError(S: string);
     procedure Run; override;
+    procedure AddPoolObject(APoolObject: TPoolObject); override;
     //canvas functions
     function Clear_func(L: Plua_State): Integer; cdecl;
+    function Window_func(L: Plua_State): Integer; cdecl;
     function DrawText_func(L: Plua_State): Integer; cdecl;
     function DrawCircle_func(L: Plua_State): Integer; cdecl;
     function DrawRectangle_func(L: Plua_State): Integer; cdecl;
@@ -233,7 +239,7 @@ begin
   lua_setfield(L, -2, pchar(name));
 end;
 
-procedure lua_register_fpcolor(L : Plua_State; name: string; value: TFPColor);
+procedure lua_register_color(L : Plua_State; name: string; value: TColor);
 begin
   lua_pushinteger(L, ColorToInt(value));
   lua_setfield(L, -2, pchar(name));
@@ -289,7 +295,7 @@ begin
   end;
 end;
 
-procedure TLuaColors.AddColor(Name: string; AColor: TFPColor);
+procedure TLuaColors.AddColor(Name: string; AColor: TColor);
 var
   aItem: TLuaColor;
 begin
@@ -301,22 +307,22 @@ end;
 
 procedure TLuaColors.Created;
 begin
-  AddColor('white', colWhite);
-  AddColor('silver', colSilver);
-  AddColor('gray' , colGray);
-  AddColor('black', colBlack);
-  AddColor('red'  , colRed);
-  AddColor('maroon', colMaroon);
-  AddColor('yellow', colYellow);
-  AddColor('olive', colOlive);
-  AddColor('lime' , colLime);
-  AddColor('green', colGreen);
-  AddColor('aqua' , colAqua);
-  AddColor('teal' , colTeal);
-  AddColor('blue' , colBlue);
-  AddColor('navy' , colNavy);
-  AddColor('fuchsia', colFuchsia);
-  AddColor('purple', colPurple);
+  AddColor('white', WHITE);
+  AddColor('silver', LIGHTGRAY);
+  AddColor('gray' , Gray);
+  AddColor('black', Black);
+  AddColor('red'  , Red);
+  AddColor('maroon', Maroon);
+  AddColor('yellow', Yellow);
+  AddColor('olive', DARKGREEN);
+  AddColor('lime' , Lime);
+  AddColor('green', Green);
+  AddColor('aqua' , SKYBLUE);
+  AddColor('teal' , BROWN);
+  AddColor('blue' , Blue);
+  AddColor('navy' , VIOLET);
+  AddColor('fuchsia', MAGENTA);
+  AddColor('purple', Purple);
 end;
 
 { TLuaCanvas }
@@ -328,21 +334,27 @@ var
 begin
   Result := 0;
   field := lua_tostring(L, 2);
-  case field of
-    'color':
-    begin
-      i := lua_tointeger(L, -1);
-      FScript.AddPoolObject(TDrawSetColorObject.Create(Main.Canvas, ToFPColor(i)));
-      //Main.Canvas.Color := RayColorOf(IntToFPColor(i));//thread unsafe
-      Result:= 1;
+  if lua_isinteger(L, -1) then
+    case field of
+      'color':
+      begin
+        i := lua_tointeger(L, -1);
+        FScript.AddPoolObject(TDrawSetColorObject.Create(Main.Canvas, IntToColor(i)));
+        Result:= 1;
+      end;
+      'alpha':
+      begin
+        i := lua_tointeger(L, -1);
+        FScript.AddPoolObject(TDrawSetAlphaObject.Create(Main.Canvas, i));
+        Result:= 1;
+      end;
+      'backcolor':
+      begin
+        i := lua_tointeger(L, -1);
+        //Main.Canvas.BackgroundColor := RayColorOf(IntToColor(i));//thread unsafe
+        Result:= 1;
+      end;
     end;
-    'backcolor':
-    begin
-      i := lua_tointeger(L, -1);
-      Main.Canvas.BackgroundColor := RayColorOf(IntToFPColor(i));//thread unsafe
-      Result:= 1;
-    end;
-  end;
 end;
 
 function TLuaCanvas.__getter(L: PLua_State): integer; cdecl;
@@ -376,7 +388,7 @@ end;
 procedure HookCount(L: Plua_State; ar: Plua_Debug); cdecl;
 begin
   if not Main.Active then
-    luaL_error(L, PChar('Terminated!'));
+    luaL_error(L, PChar('Terminated by user!'));
 end;
 
 constructor TLuaScript.Create;
@@ -391,6 +403,7 @@ begin
   lua_register(LuaState, 'log', @log_func);
   lua_register(LuaState, 'sleep', @sleep_func);
   lua_register_method(LuaState, 'print', @DrawText_func);
+  lua_register_method(LuaState, 'window', @Window_func);
 
 //  lua_register_integer(LuaState, 'width', ScreenWidth));
 //  lua_register_integer(LuaState, 'heigh', ScreenHeight));
@@ -413,7 +426,7 @@ begin
 
   lua_newtable(LuaState);
   for i := 0 to Length(LuaColors.Colors) -1 do
-    lua_register_fpcolor(LuaState, LuaColors.Colors[i].Name, LuaColors.Colors[i].Color);
+    lua_register_color(LuaState, LuaColors.Colors[i].Name, LuaColors.Colors[i].Color);
   lua_setglobal(LuaState, 'colors');
   lua_register_table_index(LuaState, 'colors', LuaColors); //Should be last one
   //lua_register_table(LuaState, 'color', LuaCanvas);
@@ -423,6 +436,12 @@ destructor TLuaScript.Destroy;
 begin
   lua_close(LuaState);
   inherited;
+end;
+
+procedure TLuaScript.ExecutePoolObject;
+begin
+  FPoolObject.Execute;
+  FreeAndNil(FPoolObject);
 end;
 
 procedure TLuaScript.DoError(S: string);
@@ -451,9 +470,36 @@ begin
   end;
 end;
 
+procedure TLuaScript.AddPoolObject(APoolObject: TPoolObject);
+var
+  ar: lua_Debug;
+begin
+  lua_getstack(LuaState, 1, @ar);
+  lua_getinfo(LuaState, 'nSl', @ar);
+  APoolObject.LineNo := ar.currentline;
+  inherited AddPoolObject(APoolObject);
+end;
+
 function TLuaScript.Clear_func(L: Plua_State): Integer; cdecl;
 begin
   AddPoolObject(TClearObject.Create(Main.Canvas));
+  Result := 0;
+end;
+
+function TLuaScript.Window_func(L: Plua_State): Integer; cdecl;
+var
+  c: integer;
+  w, h: integer;
+begin
+  c := lua_gettop(L);
+  w := ScreenWidth;
+  h := ScreenHeight;
+  if c > 0 then
+    w := round(lua_tonumber(L, 1));
+  if c > 1 then
+    h := round(lua_tonumber(L, 2));
+  FPoolObject := TWindowObject.Create(w, h);
+  Synchronize(@ExecutePoolObject);
   Result := 0;
 end;
 
