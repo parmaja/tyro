@@ -70,14 +70,14 @@ type
   TLuaScript = class(TTyroScript)
   private
   protected
-    FPoolObject: TPoolObject;
+    FQueueObject: TQueueObject;
     LuaState: Plua_State;
     LuaCanvas: TLuaCanvas;
     LuaColors: TLuaColors;
-    procedure ExecutePoolObject;
+    procedure ExecuteQueueObject;
     procedure DoError(S: string);
     procedure Run; override;
-    procedure AddPoolObject(APoolObject: TPoolObject); override;
+    procedure AddQueueObject(AQueueObject: TQueueObject); override;
     //canvas functions
     function Clear_func(L: Plua_State): Integer; cdecl;
     function Window_func(L: Plua_State): Integer; cdecl;
@@ -339,13 +339,13 @@ begin
       'color':
       begin
         i := lua_tointeger(L, -1);
-        FScript.AddPoolObject(TDrawSetColorObject.Create(Main.Canvas, IntToColor(i)));
+        FScript.AddQueueObject(TDrawSetColorObject.Create(Main.Canvas, IntToColor(i)));
         Result:= 1;
       end;
       'alpha':
       begin
         i := lua_tointeger(L, -1);
-        FScript.AddPoolObject(TDrawSetAlphaObject.Create(Main.Canvas, i));
+        FScript.AddQueueObject(TDrawSetAlphaObject.Create(Main.Canvas, i));
         Result:= 1;
       end;
       'backcolor':
@@ -438,10 +438,10 @@ begin
   inherited;
 end;
 
-procedure TLuaScript.ExecutePoolObject;
+procedure TLuaScript.ExecuteQueueObject;
 begin
-  FPoolObject.Execute;
-  FreeAndNil(FPoolObject);
+  FQueueObject.Execute;
+  FreeAndNil(FQueueObject);
 end;
 
 procedure TLuaScript.DoError(S: string);
@@ -470,19 +470,19 @@ begin
   end;
 end;
 
-procedure TLuaScript.AddPoolObject(APoolObject: TPoolObject);
+procedure TLuaScript.AddQueueObject(AQueueObject: TQueueObject);
 var
   ar: lua_Debug;
 begin
   lua_getstack(LuaState, 1, @ar);
   lua_getinfo(LuaState, 'nSl', @ar);
-  APoolObject.LineNo := ar.currentline;
-  inherited AddPoolObject(APoolObject);
+  AQueueObject.LineNo := ar.currentline;
+  inherited AddQueueObject(AQueueObject);
 end;
 
 function TLuaScript.Clear_func(L: Plua_State): Integer; cdecl;
 begin
-  AddPoolObject(TClearObject.Create(Main.Canvas));
+  AddQueueObject(TClearObject.Create(Main.Canvas));
   Result := 0;
 end;
 
@@ -498,8 +498,8 @@ begin
     w := round(lua_tonumber(L, 1));
   if c > 1 then
     h := round(lua_tonumber(L, 2));
-  FPoolObject := TWindowObject.Create(w, h);
-  Synchronize(@ExecutePoolObject);
+  FQueueObject := TWindowObject.Create(w, h);
+  Synchronize(@ExecuteQueueObject);
   Result := 0;
 end;
 
@@ -511,7 +511,7 @@ begin
   x := round(lua_tonumber(L, 1));
   y := round(lua_tonumber(L, 2));
   s := lua_tostring(L, 3);
-  AddPoolObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  AddQueueObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
   Result := 0;
 end;
 
@@ -528,7 +528,7 @@ begin
   r := round(lua_tonumber(L, 3));
   if c >= 4 then
     f := lua_toboolean(L, 4);
-  AddPoolObject(TDrawCircleObject.Create(Main.Canvas, x, y, r, f));
+  AddQueueObject(TDrawCircleObject.Create(Main.Canvas, x, y, r, f));
   Result := 0;
 end;
 
@@ -546,7 +546,7 @@ begin
   h := round(lua_tonumber(L, 4));
   if c >= 4 then
     f := lua_toboolean(L, 5);
-  AddPoolObject(TDrawRectangleObject.Create(Main.Canvas, x, y, w, h, f));
+  AddQueueObject(TDrawRectangleObject.Create(Main.Canvas, x, y, w, h, f));
   Result := 0;
 end;
 
@@ -562,10 +562,10 @@ begin
   begin
     x2 := round(lua_tonumber(L, 3));
     y2 := round(lua_tonumber(L, 4));
-    AddPoolObject(TDrawLineObject.Create(Main.Canvas, x1, y1, x2, y2));
+    AddQueueObject(TDrawLineObject.Create(Main.Canvas, x1, y1, x2, y2));
   end
   else
-    AddPoolObject(TDrawLineToObject.Create(Main.Canvas, x1, y1));
+    AddQueueObject(TDrawLineToObject.Create(Main.Canvas, x1, y1));
   Result := 0;
 end;
 
@@ -575,7 +575,7 @@ var
 begin
   x := round(lua_tonumber(L, 1));
   y := round(lua_tonumber(L, 2));
-  AddPoolObject(TDrawPointObject.Create(Main.Canvas, x, y));
+  AddQueueObject(TDrawPointObject.Create(Main.Canvas, x, y));
   Result := 0;
 end;
 
@@ -589,7 +589,7 @@ begin
   s := lua_tostring(L, 1);
   x := round(lua_tonumber(L, 2));
   y := round(lua_tonumber(L, 3));
-  AddPoolObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  AddQueueObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
   Result := 0;
 end;
 
