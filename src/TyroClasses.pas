@@ -24,7 +24,7 @@ type
     property Data: PFPIntegerArray read FData;
   end;
 
-  TPoolObject = class;
+  TQueueObject = class;
   TTyroCanvas = class;
 
   { TTyroScript }
@@ -39,7 +39,7 @@ type
     procedure BeforeRun; virtual;
     procedure Run; virtual; abstract;
     procedure AfterRun; virtual;
-    procedure AddPoolObject(APoolObject: TPoolObject); virtual;
+    procedure AddQueueObject(AQueueObject: TQueueObject); virtual;
   public
     constructor Create; virtual;
     destructor Destroy; override;
@@ -100,28 +100,26 @@ type
     property FontSize: Integer read FFontSize write FFontSize;
   end;
 
-  { TPoolObject }
+  { TQueueObject }
 
-  TPoolObject = class abstract(TObject)
+  TQueueObject = class abstract(TObject)
   private
-    FNeedSynchronize: Boolean;
     procedure DoExecute; virtual; abstract;
   protected
   public
     LineNo: Integer;
     procedure Execute; virtual;
-    property NeedSynchronize: Boolean read FNeedSynchronize; //this will call Synchronize
   end;
 
-  { TPoolObjects }
+  { TQueueObjects }
 
-  TPoolObjects = class(specialize TFPGObjectList<TPoolObject>)
+  TQueueObjects = class(specialize TFPGObjectList<TQueueObject>)
   public
   end;
 
   { TDrawObject }
 
-  TDrawObject = class abstract(TPoolObject)
+  TDrawObject = class abstract(TQueueObject)
   private
     FCanvas: TTyroCanvas;
   protected
@@ -134,7 +132,7 @@ type
 
   { TWindowObject }
 
-  TWindowObject = class(TPoolObject)
+  TWindowObject = class(TQueueObject)
   public
     fW, fH: Integer;
     constructor Create(W, H: Integer);
@@ -239,7 +237,7 @@ type
   private
     function GetActive: Boolean;
   protected
-    FPool: TPoolObjects;
+    FQueue: TQueueObjects;
     FScript: TTyroScript;
     FScriptTypes: TScriptTypes;
     //FLock: TCriticalSection;
@@ -248,7 +246,7 @@ type
     DefaultBackground: raylib.TColor;
 
     //property Lock: TCriticalSection read FLock;
-    property Pool: TPoolObjects read FPool;
+    property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
     procedure ShowWindow(W, H: Integer);
     procedure HideWindow;
@@ -261,7 +259,7 @@ type
     destructor Destroy; override;
     procedure Start;
     procedure Stop;
-    procedure ProcessPool;
+    procedure ProcessQueue;
     procedure Run;
     procedure Loop;
     property Canvas: TTyroCanvas read FCanvas;
@@ -270,15 +268,16 @@ type
     procedure RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
   end;
 
-  //function IntToFPColor(I: Integer): TFPColor;
-  //function FPColorToInt(C: TFPColor): Integer;
+  function IntToFPColor(I: Integer): TFPColor;
+  function FPColorToInt(C: TFPColor): Integer;
 
   function IntToColor(I: integer): TColor;
   function ColorToInt(C: TColor): integer;
 
-var
-  ScreenWidth: Integer = 640; //Temporary here, i will move it to Tyro object
+const
+  ScreenWidth: Integer = 640;
   ScreenHeight: Integer = 480;
+  cFramePerSeconds = 60;
 
 var
   Lock: TCriticalSection = nil;
@@ -365,9 +364,9 @@ begin
   Canvas.Alpha := fAlpha;
 end;
 
-{ TPoolObject }
+{ TQueueObject }
 
-procedure TPoolObject.Execute;
+procedure TQueueObject.Execute;
 begin
   DoExecute;
 end;
@@ -586,14 +585,17 @@ begin
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'Terminess-Bold.ttf'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'dejavu.fnt'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'terminus.fon'));
+  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'terminus.ttf'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/Chroma.png'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/alpha_beta.png'));
   //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
+  //Font := raylib.LoadFontEx(PChar(Main.WorkSpace + 'fonts/terminus.ttf'), 12, nil, 255);
+  //Font := raylib.LoadFont(PChar('computer_pixel.fon.ttf'));
+
   Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/font.png'));
   SetTextureFilter(Font.texture, FILTER_POINT);
-  //Font := raylib.LoadFont(PChar('computer_pixel.fon.ttf'));
-  FFontSize := 18;
+
+  FFontSize := Font.baseSize * 2;
 
   FTexture := LoadRenderTexture(Width, Height);
   //FBoard := GetTextureData(FTexture.texture);
@@ -633,7 +635,7 @@ end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
 begin
-  DrawTextEx(Font, PChar(S), Vector2Create(x, y), FontSize, 2, Color);
+  DrawTextEx(Font, PChar(S), Vector2Create(x, y), FontSize, 0, Color);
   //ImageDrawTextEx(@FTexture, Vector2Create(x, y), Font, PChar(S), FontSize, 2, RayColorOf(Color));
 end;
 
@@ -688,7 +690,7 @@ procedure TTyroMain.ShowWindow(W, H: Integer);
 begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(W, H, PChar(Title));
-  SetTargetFPS(60);
+  SetTargetFPS(cFramePerSeconds);
   ShowCursor();
   WindowVisible := True;
   FCanvas := TTyroCanvas.Create(W, H);
@@ -700,28 +702,35 @@ begin
     CloseWindow;
 end;
 
-procedure TTyroMain.ProcessPool;
+procedure TTyroMain.ProcessQueue;
 var
-  p: TPoolObject;
+  p: TQueueObject;
   c: Integer;
+  fpd: Double;
+  ft, ft2: Double;
 begin
   if Canvas <> nil then
   begin
+    ft := GetTime();
+    fpd := (1 / cFramePerSeconds);
     BeginTextureMode(Canvas.FTexture);
     c := 0;
-    while Pool.Count > 0 do
+    while Queue.Count > 0 do
     begin
       Lock.Enter;
       try
-        p := Pool.Extract(Pool[0]);
+        p := Queue.Extract(Queue[0]);
       finally
         Lock.Leave;
       end;
       p.Execute;
       p.Free;
       Inc(c);
-      if c > 100 then //we need to optimize it to relate it to fps
+      ft2 := GetTime() - ft;
+      if ft2 >= fpd then
+      begin
         break;
+      end;
     end;
     EndTextureMode;
   end;
@@ -733,7 +742,7 @@ begin
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel(LOG_ERROR or LOG_FATAL);
   //FLock := TCriticalSection.Create;
-  FPool := TPoolObjects.Create(True);
+  FQueue := TQueueObjects.Create(True);
   FScriptTypes := TScriptTypes.Create(true);
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
@@ -746,7 +755,7 @@ begin
   //Stop;
   FreeAndNil(FCanvas);
   HideWindow;
-  FreeAndNil(FPool);
+  FreeAndNil(FQueue);
   //FreeAndNil(FLock);
   FreeAndNil(FScriptTypes);
   inherited Destroy;
@@ -785,7 +794,7 @@ begin
 
   if WindowVisible then
   begin
-    ProcessPool;
+    ProcessQueue;
 
     BeginDrawing;
     ClearBackground(DefaultBackground);
@@ -849,22 +858,15 @@ procedure TTyroScript.AfterRun;
 begin
 end;
 
-procedure TTyroScript.AddPoolObject(APoolObject: TPoolObject);
-var
-  NeedSynchronize: Boolean;
+procedure TTyroScript.AddQueueObject(AQueueObject: TQueueObject);
 begin
   Lock.Enter;
   try
-    NeedSynchronize := APoolObject.NeedSynchronize;
-    Main.Pool.Add(APoolObject);
+    Main.Queue.Add(AQueueObject);
   finally
     Lock.Leave;
   end;
   Yield;
-  if NeedSynchronize then
-    Synchronize(@Main.ProcessPool) //work but slow as sleep(1)
-  else
-    Queue(@Main.ProcessPool);
 end;
 
 constructor TTyroScript.Create;
