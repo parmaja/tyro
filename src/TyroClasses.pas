@@ -275,8 +275,11 @@ type
   function ColorToInt(C: TColor): integer;
 
 const
-  ScreenWidth: Integer = 640;
-  ScreenHeight: Integer = 480;
+  ScreenCharWidth = 40;
+  ScreenCharHeight = 30;
+  ScreenFontSize = 16;
+  ScreenWidth: Integer = ScreenCharWidth * ScreenFontSize;
+  ScreenHeight: Integer = ScreenCharHeight * ScreenFontSize;
   cFramePerSeconds = 60;
 
 var
