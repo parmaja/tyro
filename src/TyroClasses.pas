@@ -16,7 +16,7 @@ interface
 uses
   Classes, SysUtils, SyncObjs, fgl,
   FPImage, FPCanvas, FPImgCanv, pngcomn, FPReadPNG,
-  raylib;
+  RayLib3;
 
 type
   TMyFPMemoryImage = class(TFPMemoryImage)
@@ -76,7 +76,7 @@ type
     //FBoard: TRenderTexture2D;
     FTexture: TRenderTexture2D;
     //FBoard: raylib.TImage;
-    Font: raylib.TFont;
+    Font: raylib3.TFont;
     function GetAlpha: Byte;
     function GetColor: TColor;
     procedure SetAlpha(AValue: Byte);
@@ -243,7 +243,7 @@ type
     //FLock: TCriticalSection;
     FCanvas: TTyroCanvas;
   protected
-    DefaultBackground: raylib.TColor;
+    DefaultBackground: raylib3.TColor;
 
     //property Lock: TCriticalSection read FLock;
     property Queue: TQueueObjects read FQueue;
@@ -287,7 +287,7 @@ var
   Main : TTyroMain = nil;
 
 procedure Log(S: string);
-function RayColorOf(Color: TFPColor): raylib.TColor;
+function RayColorOf(Color: TFPColor): raylib3.TColor;
 
 implementation
 
@@ -297,7 +297,7 @@ begin
     WriteLn(S);
 end;
 
-function RayColorOf(Color: TFPColor): raylib.TColor;
+function RayColorOf(Color: TFPColor): raylib3.TColor;
 begin
   Result.a := hi(Color.Alpha);
   Result.r := hi(Color.Red);

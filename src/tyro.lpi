@@ -6,6 +6,7 @@
     <General>
       <Flags>
         <MainUnitHasCreateFormStatements Value="False"/>
+        <MainUnitHasTitleStatement Value="False"/>
         <MainUnitHasScaledStatement Value="False"/>
       </Flags>
       <SessionStorage Value="InProjectDir"/>
@@ -30,6 +31,7 @@
           </Target>
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir)"/>
+            <OtherUnitFiles Value="raylib"/>
             <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
@@ -87,8 +89,12 @@
     </PublishOptions>
     <RunParams>
       <FormatVersion Value="2"/>
-      <Modes Count="0"/>
     </RunParams>
+    <RequiredPackages>
+      <Item>
+        <PackageName Value="MiniCommons"/>
+      </Item>
+    </RequiredPackages>
     <Units>
       <Unit>
         <Filename Value="tyro.lpr"/>
@@ -104,10 +110,6 @@
       </Unit>
       <Unit>
         <Filename Value="lua53.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="raylib.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
@@ -129,16 +131,16 @@
     </SearchPaths>
   </CompilerOptions>
   <Debugging>
-    <Exceptions Count="3">
-      <Item1>
+    <Exceptions>
+      <Item>
         <Name Value="EAbort"/>
-      </Item1>
-      <Item2>
+      </Item>
+      <Item>
         <Name Value="ECodetoolError"/>
-      </Item2>
-      <Item3>
+      </Item>
+      <Item>
         <Name Value="EFOpenError"/>
-      </Item3>
+      </Item>
     </Exceptions>
   </Debugging>
 </CONFIG>

@@ -25,8 +25,6 @@ uses
   cthreads,
   {$ENDIF}
   SysUtils, Classes, CustApp,
-  //mnFields, mnUtils, mnParams, //minilib on sf
-  raylib,
   TyroClasses, raylib3,
   TyroLua, TyroEditors;  //Add all languages units here
 
