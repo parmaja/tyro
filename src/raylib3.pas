@@ -1,5 +1,10 @@
 unit RayLib3;
 {$mode Delphi}{$H+}
+{*
+*
+*
+*}
+
 {**********************************************************************************************
 *
 *   raylib - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
@@ -75,9 +80,21 @@ unit RayLib3;
 
 
 interface
-
+{*
+* Tools used to translate
+*       https://github.com/neslib/Chet
+*       http://www.astonshell.com/freeware/c2pas32/
+*
+*
+*}
 uses
   SysUtils;
+
+type
+  PPUTF8Char = ^PUTF8Char;
+
+const
+  cRaylib = 'raylib.dll';
 
 (*
 const
@@ -113,6 +130,7 @@ const
 
 type
   TColor = DWORD;
+  PColor = ^TColor;
 
   // Vector2 type
   TVector2 = packed record
@@ -166,6 +184,7 @@ type
     Height: Single;
   end;
   PRectangle = ^TRectangle;
+  PPRectangle = ^PRectangle;
 
   // Image type, bpp always RGBA (32bit)
   // NOTE: Data stored in CPU memory (RAM)
@@ -252,7 +271,7 @@ type
     Target: TVector3;      // Camera target it looks-at
     Up: TVector3;          // Camera up vector (rotation over its axis)
     Fovy: Single;          // Camera field-of-view apperture in Y (degrees) in perspective, used as near plane width in orthographic
-    AType: Integer;        // Camera type, defines projection type: CAMERA_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
+    AType: Integer;        // Camera type, defines projection type: TCamera_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
   end;
   PCamera3D = ^TCamera3D;
 
@@ -297,8 +316,8 @@ type
 
   // Shader type (generic)
   TShader = packed record
-    id: Cardinal;         // Shader program id
-    locs: PInteger;       // Shader locations array (MAX_SHADER_LOCATIONS)
+    ID: Cardinal;         // Shader program id
+    Locs: PInteger;       // Shader locations array (MAX_SHADER_LOCATIONS)
   end;
   PShader = ^TShader;
 
@@ -477,120 +496,120 @@ type
     LOG_NONE            // Disable logging
   );
 
+const
   // Keyboard keys
-  TKeyboardKey = (
-    // Alphanumeric keys
-    KEY_APOSTROPHE      = 39,
-    KEY_COMMA           = 44,
-    KEY_MINUS           = 45,
-    KEY_PERIOD          = 46,
-    KEY_SLASH           = 47,
-    KEY_ZERO            = 48,
-    KEY_ONE             = 49,
-    KEY_TWO             = 50,
-    KEY_THREE           = 51,
-    KEY_FOUR            = 52,
-    KEY_FIVE            = 53,
-    KEY_SIX             = 54,
-    KEY_SEVEN           = 55,
-    KEY_EIGHT           = 56,
-    KEY_NINE            = 57,
-    KEY_SEMICOLON       = 59,
-    KEY_EQUAL           = 61,
-    KEY_A               = 65,
-    KEY_B               = 66,
-    KEY_C               = 67,
-    KEY_D               = 68,
-    KEY_E               = 69,
-    KEY_F               = 70,
-    KEY_G               = 71,
-    KEY_H               = 72,
-    KEY_I               = 73,
-    KEY_J               = 74,
-    KEY_K               = 75,
-    KEY_L               = 76,
-    KEY_M               = 77,
-    KEY_N               = 78,
-    KEY_O               = 79,
-    KEY_P               = 80,
-    KEY_Q               = 81,
-    KEY_R               = 82,
-    KEY_S               = 83,
-    KEY_T               = 84,
-    KEY_U               = 85,
-    KEY_V               = 86,
-    KEY_W               = 87,
-    KEY_X               = 88,
-    KEY_Y               = 89,
-    KEY_Z               = 90,
+  // Alphanumeric keys
+  KEY_APOSTROPHE      = 39;
+  KEY_COMMA           = 44;
+  KEY_MINUS           = 45;
+  KEY_PERIOD          = 46;
+  KEY_SLASH           = 47;
+  KEY_ZERO            = 48;
+  KEY_ONE             = 49;
+  KEY_TWO             = 50;
+  KEY_THREE           = 51;
+  KEY_FOUR            = 52;
+  KEY_FIVE            = 53;
+  KEY_SIX             = 54;
+  KEY_SEVEN           = 55;
+  KEY_EIGHT           = 56;
+  KEY_NINE            = 57;
+  KEY_SEMICOLON       = 59;
+  KEY_EQUAL           = 61;
+  KEY_A               = 65;
+  KEY_B               = 66;
+  KEY_C               = 67;
+  KEY_D               = 68;
+  KEY_E               = 69;
+  KEY_F               = 70;
+  KEY_G               = 71;
+  KEY_H               = 72;
+  KEY_I               = 73;
+  KEY_J               = 74;
+  KEY_K               = 75;
+  KEY_L               = 76;
+  KEY_M               = 77;
+  KEY_N               = 78;
+  KEY_O               = 79;
+  KEY_P               = 80;
+  KEY_Q               = 81;
+  KEY_R               = 82;
+  KEY_S               = 83;
+  KEY_T               = 84;
+  KEY_U               = 85;
+  KEY_V               = 86;
+  KEY_W               = 87;
+  KEY_X               = 88;
+  KEY_Y               = 89;
+  KEY_Z               = 90;
 
-    // Function keys
-    KEY_SPACE           = 32,
-    KEY_ESCAPE          = 256,
-    KEY_ENTER           = 257,
-    KEY_TAB             = 258,
-    KEY_BACKSPACE       = 259,
-    KEY_INSERT          = 260,
-    KEY_DELETE          = 261,
-    KEY_RIGHT           = 262,
-    KEY_LEFT            = 263,
-    KEY_DOWN            = 264,
-    KEY_UP              = 265,
-    KEY_PAGE_UP         = 266,
-    KEY_PAGE_DOWN       = 267,
-    KEY_HOME            = 268,
-    KEY_END             = 269,
-    KEY_CAPS_LOCK       = 280,
-    KEY_SCROLL_LOCK     = 281,
-    KEY_NUM_LOCK        = 282,
-    KEY_PRINT_SCREEN    = 283,
-    KEY_PAUSE           = 284,
-    KEY_F1              = 290,
-    KEY_F2              = 291,
-    KEY_F3              = 292,
-    KEY_F4              = 293,
-    KEY_F5              = 294,
-    KEY_F6              = 295,
-    KEY_F7              = 296,
-    KEY_F8              = 297,
-    KEY_F9              = 298,
-    KEY_F10             = 299,
-    KEY_F11             = 300,
-    KEY_F12             = 301,
-    KEY_LEFT_SHIFT      = 340,
-    KEY_LEFT_CONTROL    = 341,
-    KEY_LEFT_ALT        = 342,
-    KEY_LEFT_SUPER      = 343,
-    KEY_RIGHT_SHIFT     = 344,
-    KEY_RIGHT_CONTROL   = 345,
-    KEY_RIGHT_ALT       = 346,
-    KEY_RIGHT_SUPER     = 347,
-    KEY_KB_MENU         = 348,
-    KEY_LEFT_BRACKET    = 91,
-    KEY_BACKSLASH       = 92,
-    KEY_RIGHT_BRACKET   = 93,
-    KEY_GRAVE           = 96,
+  // Function keys
+  KEY_SPACE           = 32;
+  KEY_ESCAPE          = 256;
+  KEY_ENTER           = 257;
+  KEY_TAB             = 258;
+  KEY_BACKSPACE       = 259;
+  KEY_INSERT          = 260;
+  KEY_DELETE          = 261;
+  KEY_RIGHT           = 262;
+  KEY_LEFT            = 263;
+  KEY_DOWN            = 264;
+  KEY_UP              = 265;
+  KEY_PAGE_UP         = 266;
+  KEY_PAGE_DOWN       = 267;
+  KEY_HOME            = 268;
+  KEY_END             = 269;
+  KEY_CAPS_LOCK       = 280;
+  KEY_SCROLL_LOCK     = 281;
+  KEY_NUM_LOCK        = 282;
+  KEY_PRINT_SCREEN    = 283;
+  KEY_PAUSE           = 284;
+  KEY_F1              = 290;
+  KEY_F2              = 291;
+  KEY_F3              = 292;
+  KEY_F4              = 293;
+  KEY_F5              = 294;
+  KEY_F6              = 295;
+  KEY_F7              = 296;
+  KEY_F8              = 297;
+  KEY_F9              = 298;
+  KEY_F10             = 299;
+  KEY_F11             = 300;
+  KEY_F12             = 301;
+  KEY_LEFT_SHIFT      = 340;
+  KEY_LEFT_CONTROL    = 341;
+  KEY_LEFT_ALT        = 342;
+  KEY_LEFT_SUPER      = 343;
+  KEY_RIGHT_SHIFT     = 344;
+  KEY_RIGHT_CONTROL   = 345;
+  KEY_RIGHT_ALT       = 346;
+  KEY_RIGHT_SUPER     = 347;
+  KEY_KB_MENU         = 348;
+  KEY_LEFT_BRACKET    = 91;
+  KEY_BACKSLASH       = 92;
+  KEY_RIGHT_BRACKET   = 93;
+  KEY_GRAVE           = 96;
 
-    // Keypad keys
-    KEY_KP_0            = 320,
-    KEY_KP_1            = 321,
-    KEY_KP_2            = 322,
-    KEY_KP_3            = 323,
-    KEY_KP_4            = 324,
-    KEY_KP_5            = 325,
-    KEY_KP_6            = 326,
-    KEY_KP_7            = 327,
-    KEY_KP_8            = 328,
-    KEY_KP_9            = 329,
-    KEY_KP_DECIMAL      = 330,
-    KEY_KP_DIVIDE       = 331,
-    KEY_KP_MULTIPLY     = 332,
-    KEY_KP_SUBTRACT     = 333,
-    KEY_KP_ADD          = 334,
-    KEY_KP_ENTER        = 335,
-    KEY_KP_EQUAL        = 336
-  );
+  // Keypad keys
+  KEY_KP_0            = 320;
+  KEY_KP_1            = 321;
+  KEY_KP_2            = 322;
+  KEY_KP_3            = 323;
+  KEY_KP_4            = 324;
+  KEY_KP_5            = 325;
+  KEY_KP_6            = 326;
+  KEY_KP_7            = 327;
+  KEY_KP_8            = 328;
+  KEY_KP_9            = 329;
+  KEY_KP_DECIMAL      = 330;
+  KEY_KP_DIVIDE       = 331;
+  KEY_KP_MULTIPLY     = 332;
+  KEY_KP_SUBTRACT     = 333;
+  KEY_KP_ADD          = 334;
+  KEY_KP_ENTER        = 335;
+  KEY_KP_EQUAL        = 336;
 
+type
   // Android buttons
   TAndroidButton = (
     KEY_BACK            = 4,
@@ -766,7 +785,7 @@ type
     FILTER_TRILINEAR,               // Trilinear filtering (linear with mipmaps)
     FILTER_ANISOTROPIC_4X,          // Anisotropic filtering 4x
     FILTER_ANISOTROPIC_8X,          // Anisotropic filtering 8x
-    FILTER_ANISOTROPIC_16X,         // Anisotropic filtering 16x
+    FILTER_ANISOTROPIC_16X         // Anisotropic filtering 16x
   );
 
   // Cubemap layout type
@@ -841,19 +860,611 @@ type
 
   // Callbacks to be implemented by users
   type
-    TTraceLogCallback = procedure(aLogType : Integer; Text: PAnsiChar; Args: Pointer); cdecl; //TODO check Args
+    TTraceLogCallback = procedure(LogType : Integer; Text: PAnsiChar; Args: Pointer); cdecl; //TODO check Args
 
-  //------------------------------------------------------------------------------------
-  // Global Variables Definition
-  //------------------------------------------------------------------------------------
-  // It's lonely here...
+//------------------------------------------------------------------------------------
+// Global Variables Definition
+//------------------------------------------------------------------------------------
+// It's lonely here...
 
-  //------------------------------------------------------------------------------------
-  // Window and Graphics Device Functions (Module: core)
-  //------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------
+// Window and Graphics Device Functions (Module: core)
+//------------------------------------------------------------------------------------
 
-  // Window-related functions
+// Window-related functions
+// Initialize window and OpenGL context
+procedure InitWindow(width: Integer; height: Integer; const title: PUTF8Char); cdecl; external cRaylib name 'InitWindow';
+// Check if KEY_ESCAPE pressed or Close icon pressed
+function WindowShouldClose(): boolean; cdecl; external cRaylib name 'WindowShouldClose';
+procedure CloseWindow; cdecl; external cRaylib name 'CloseWindow';
+function IsWindowReady(): boolean; cdecl; external cRaylib name 'IsWindowReady';
+function IsWindowMinimized(): boolean; cdecl; external cRaylib name 'IsWindowMinimized';
+function IsWindowResized(): boolean; cdecl; external cRaylib name 'IsWindowResized';
+function IsWindowHidden(): boolean; cdecl; external cRaylib name 'IsWindowHidden';
+function IsWindowFullscreen(): boolean; cdecl; external cRaylib name 'IsWindowFullscreen';
+procedure ToggleFullscreen; cdecl; external cRaylib name 'ToggleFullscreen';
+procedure UnhideWindow; cdecl; external cRaylib name 'UnhideWindow';
+procedure HideWindow; cdecl; external cRaylib name 'HideWindow';
+procedure SetWindowIcon(image: TImage); cdecl; external cRaylib name 'SetWindowIcon';
+procedure SetWindowTitle(const title: PUTF8Char); cdecl; external cRaylib name 'SetWindowTitle';
+procedure SetWindowPosition(x: Integer; y: Integer); cdecl; external cRaylib name 'SetWindowPosition';
+procedure SetWindowMonitor(monitor: Integer); cdecl; external cRaylib name 'SetWindowMonitor';
+procedure SetWindowMinSize(width: Integer; height: Integer); cdecl; external cRaylib name 'SetWindowMinSize';
+procedure SetWindowSize(width: Integer; height: Integer); cdecl; external cRaylib name 'SetWindowSize';
+function GetWindowHandle(): Pointer; cdecl; external cRaylib name 'GetWindowHandle';
+function GetScreenWidth(): Integer; cdecl; external cRaylib name 'GetScreenWidth';
+function GetScreenHeight(): Integer; cdecl; external cRaylib name 'GetScreenHeight';
+function GetMonitorCount(): Integer; cdecl; external cRaylib name 'GetMonitorCount';
+function GetMonitorWidth(monitor: Integer): Integer; cdecl; external cRaylib name 'GetMonitorWidth';
+function GetMonitorHeight(monitor: Integer): Integer; cdecl; external cRaylib name 'GetMonitorHeight';
+function GetMonitorPhysicalWidth(monitor: Integer): Integer; cdecl; external cRaylib name 'GetMonitorPhysicalWidth';
+function GetMonitorPhysicalHeight(monitor: Integer): Integer; cdecl; external cRaylib name 'GetMonitorPhysicalHeight';
+function GetWindowPosition(): TVector2; cdecl; external cRaylib name 'GetWindowPosition';
+function GetMonitorName(monitor: Integer): PUTF8Char; cdecl; external cRaylib name 'GetMonitorName';
+function GetClipboardText(): PUTF8Char; cdecl; external cRaylib name 'GetClipboardText';
+procedure SetClipboardText(const text: PUTF8Char); cdecl; external cRaylib name 'SetClipboardText';
 
+// Cursor-related functions
+procedure ShowCursor; cdecl; external cRaylib name 'ShowCursor';
+procedure HideCursor; cdecl; external cRaylib name 'HideCursor';
+function IsCursorHidden(): boolean; cdecl; external cRaylib name 'IsCursorHidden';
+procedure EnableCursor; cdecl; external cRaylib name 'EnableCursor';
+procedure DisableCursor; cdecl; external cRaylib name 'DisableCursor';
+
+// Drawing-related functions
+procedure ClearBackground(color: TColor); cdecl; external cRaylib name 'ClearBackground';
+procedure BeginDrawing; cdecl; external cRaylib name 'BeginDrawing';
+procedure EndDrawing; cdecl; external cRaylib name 'EndDrawing';
+procedure BeginMode2D(camera: TCamera2D); cdecl; external cRaylib name 'BeginMode2D';
+procedure EndMode2D; cdecl; external cRaylib name 'EndMode2D';
+procedure BeginMode3D(camera: TCamera3D); cdecl; external cRaylib name 'BeginMode3D';
+procedure EndMode3D; cdecl; external cRaylib name 'EndMode3D';
+procedure BeginTextureMode(target: TRenderTexture2D); cdecl; external cRaylib name 'BeginTextureMode';
+procedure EndTextureMode; cdecl; external cRaylib name 'EndTextureMode';
+procedure BeginScissorMode(x: Integer; y: Integer; width: Integer; height: Integer); cdecl; external cRaylib name 'BeginScissorMode';
+procedure EndScissorMode; cdecl; external cRaylib name 'EndScissorMode';
+
+// Screen-space-related functions
+function GetMouseRay(mousePosition: TVector2; camera: TCamera): TRay; cdecl; external cRaylib name 'GetMouseRay';
+function GetCameraMatrix(camera: TCamera): TMatrix; cdecl; external cRaylib name 'GetCameraMatrix';
+function GetCameraMatrix2D(camera: TCamera2D): TMatrix; cdecl; external cRaylib name 'GetCameraMatrix2D';
+function GetWorldToScreen(position: TVector3; camera: TCamera): TVector2; cdecl; external cRaylib name 'GetWorldToScreen';
+function GetWorldToScreenEx(position: TVector3; camera: TCamera; width: Integer; height: Integer): TVector2; cdecl; external cRaylib name 'GetWorldToScreenEx';
+function GetWorldToScreen2D(position: TVector2; camera: TCamera2D): TVector2; cdecl; external cRaylib name 'GetWorldToScreen2D';
+function GetScreenToWorld2D(position: TVector2; camera: TCamera2D): TVector2; cdecl; external cRaylib name 'GetScreenToWorld2D';
+
+// Timing-related functions
+procedure SetTargetFPS(fps: Integer); cdecl; external cRaylib name 'SetTargetFPS';
+function GetFPS(): Integer; cdecl; external cRaylib name 'GetFPS';
+function GetFrameTime(): Single; cdecl; external cRaylib name 'GetFrameTime';
+function GetTime(): Double; cdecl; external cRaylib name 'GetTime';
+
+// Color-related functions
+function ColorToInt(color: TColor): Integer; cdecl; external cRaylib name 'ColorToInt';
+function ColorNormalize(color: TColor): TVector4; cdecl; external cRaylib name 'ColorNormalize';
+function ColorFromNormalized(normalized: TVector4): TColor; cdecl; external cRaylib name 'ColorFromNormalized';
+function ColorToHSV(color: TColor): TVector3; cdecl; external cRaylib name 'ColorToHSV';
+function ColorFromHSV(hsv: TVector3): TColor; cdecl; external cRaylib name 'ColorFromHSV';
+function GetColor(hexValue: Integer): TColor; cdecl; external cRaylib name 'GetColor';
+function Fade(color: TColor; Alpha: Single): TColor; cdecl; external cRaylib name 'Fade';
+
+// Misc. functions
+procedure SetConfigFlags(flags: Cardinal); cdecl; external cRaylib name 'SetConfigFlags';
+procedure SetTraceLogLevel(logType: Integer); cdecl; external cRaylib name 'SetTraceLogLevel';
+procedure SetTraceLogExit(logType: Integer); cdecl; external cRaylib name 'SetTraceLogExit';
+procedure SetTraceLogCallback(callback: TTraceLogCallback); cdecl; external cRaylib name 'SetTraceLogCallback';
+procedure TraceLog(logType: Integer; const text: PUTF8Char) varargs; cdecl; external cRaylib name 'TraceLog';
+procedure TakeScreenshot(const fileName: PUTF8Char); cdecl; external cRaylib name 'TakeScreenshot';
+function GetRandomValue(min: Integer; max: Integer): Integer; cdecl; external cRaylib name 'GetRandomValue';
+
+// Files management functions
+function LoadFileData(const fileName: PUTF8Char; bytesRead: PCardinal): PByte; cdecl; external cRaylib name 'LoadFileData';
+procedure SaveFileData(const fileName: PUTF8Char; data: Pointer; bytesToWrite: Cardinal); cdecl; external cRaylib name 'SaveFileData';
+function LoadFileText(const fileName: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'LoadFileText';
+procedure SaveFileText(const fileName: PUTF8Char; text: PUTF8Char); cdecl; external cRaylib name 'SaveFileText';
+function FileExists(const fileName: PUTF8Char): boolean; cdecl; external cRaylib name 'FileExists';
+function IsFileExtension(const fileName: PUTF8Char; const ext: PUTF8Char): boolean; cdecl; external cRaylib name 'IsFileExtension';
+function DirectoryExists(const dirPath: PUTF8Char): boolean; cdecl; external cRaylib name 'DirectoryExists';
+function GetExtension(const fileName: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'GetExtension';
+function GetFileName(const filePath: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'GetFileName';
+function GetFileNameWithoutExt(const filePath: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'GetFileNameWithoutExt';
+function GetDirectoryPath(const filePath: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'GetDirectoryPath';
+function GetPrevDirectoryPath(const dirPath: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'GetPrevDirectoryPath';
+function GetWorkingDirectory(): PUTF8Char; cdecl; external cRaylib name 'GetWorkingDirectory';
+function GetDirectoryFiles(const dirPath: PUTF8Char; count: PInteger): PPUTF8Char; cdecl; external cRaylib name 'GetDirectoryFiles';
+procedure ClearDirectoryFiles; cdecl; external cRaylib name 'ClearDirectoryFiles';
+function ChangeDirectory(const dir: PUTF8Char): boolean; cdecl; external cRaylib name 'ChangeDirectory';
+function IsFileDropped(): boolean; cdecl; external cRaylib name 'IsFileDropped';
+function GetDroppedFiles(count: PInteger): PPUTF8Char; cdecl; external cRaylib name 'GetDroppedFiles';
+procedure ClearDroppedFiles; cdecl; external cRaylib name 'ClearDroppedFiles';
+function GetFileModTime(const fileName: PUTF8Char): Integer; cdecl; external cRaylib name 'GetFileModTime';
+
+function CompressData(data: PByte; dataLength: Integer; compDataLength: PInteger): PByte; cdecl; external cRaylib name 'CompressData';
+function DecompressData(compData: PByte; compDataLength: Integer; dataLength: PInteger): PByte; cdecl; external cRaylib name 'DecompressData';
+
+// Persistent storage management
+procedure SaveStorageValue(position: Cardinal; value: Integer); cdecl; external cRaylib name 'SaveStorageValue';
+function LoadStorageValue(position: Cardinal): Integer; cdecl; external cRaylib name 'LoadStorageValue';
+
+procedure OpenURL(const url: PUTF8Char); cdecl; external cRaylib name 'OpenURL';
+
+//------------------------------------------------------------------------------------
+// Input Handling Functions (Module: core)
+//------------------------------------------------------------------------------------
+
+// Input-related functions: keyboard
+function IsKeyPressed(key: Integer): boolean; cdecl; external cRaylib name 'IsKeyPressed';
+function IsKeyDown(key: Integer): boolean; cdecl; external cRaylib name 'IsKeyDown';
+function IsKeyReleased(key: Integer): boolean; cdecl; external cRaylib name 'IsKeyReleased';
+
+// Input-related functions: gamepads
+function IsKeyUp(key: Integer): boolean; cdecl; external cRaylib name 'IsKeyUp';
+procedure SetExitKey(key: Integer); cdecl; external cRaylib name 'SetExitKey';
+function GetKeyPressed(): Integer; cdecl; external cRaylib name 'GetKeyPressed';
+function IsGamepadAvailable(gamepad: Integer): boolean; cdecl; external cRaylib name 'IsGamepadAvailable';
+function IsGamepadName(gamepad: Integer; const name: PUTF8Char): boolean; cdecl; external cRaylib name 'IsGamepadName';
+function GetGamepadName(gamepad: Integer): PUTF8Char; cdecl; external cRaylib name 'GetGamepadName';
+function IsGamepadButtonPressed(gamepad: Integer; button: Integer): boolean; cdecl; external cRaylib name 'IsGamepadButtonPressed';
+function IsGamepadButtonDown(gamepad: Integer; button: Integer): boolean; cdecl; external cRaylib name 'IsGamepadButtonDown';
+function IsGamepadButtonReleased(gamepad: Integer; button: Integer): boolean; cdecl; external cRaylib name 'IsGamepadButtonReleased';
+function IsGamepadButtonUp(gamepad: Integer; button: Integer): boolean; cdecl; external cRaylib name 'IsGamepadButtonUp';
+function GetGamepadButtonPressed(): Integer; cdecl; external cRaylib name 'GetGamepadButtonPressed';
+function GetGamepadAxisCount(gamepad: Integer): Integer; cdecl; external cRaylib name 'GetGamepadAxisCount';
+function GetGamepadAxisMovement(gamepad: Integer; axis: Integer): Single; cdecl; external cRaylib name 'GetGamepadAxisMovement';
+
+// Input-related functions: mouse
+function IsMouseButtonPressed(button: Integer): boolean; cdecl; external cRaylib name 'IsMouseButtonPressed';
+function IsMouseButtonDown(button: Integer): boolean; cdecl; external cRaylib name 'IsMouseButtonDown';
+function IsMouseButtonReleased(button: Integer): boolean; cdecl; external cRaylib name 'IsMouseButtonReleased';
+function IsMouseButtonUp(button: Integer): boolean; cdecl; external cRaylib name 'IsMouseButtonUp';
+function GetMouseX(): Integer; cdecl; external cRaylib name 'GetMouseX';
+function GetMouseY(): Integer; cdecl; external cRaylib name 'GetMouseY';
+function GetMousePosition(): TVector2; cdecl; external cRaylib name 'GetMousePosition';
+procedure SetMousePosition(x: Integer; y: Integer); cdecl; external cRaylib name 'SetMousePosition';
+procedure SetMouseOffset(offsetX: Integer; offsetY: Integer); cdecl; external cRaylib name 'SetMouseOffset';
+procedure SetMouseScale(scaleX: Single; scaleY: Single); cdecl; external cRaylib name 'SetMouseScale';
+function GetMouseWheelMove(): Integer; cdecl; external cRaylib name 'GetMouseWheelMove';
+
+// Input-related functions: touch
+function GetTouchX(): Integer; cdecl; external cRaylib name 'GetTouchX';
+function GetTouchY(): Integer; cdecl; external cRaylib name 'GetTouchY';
+function GetTouchPosition(index: Integer): TVector2; cdecl; external cRaylib name 'GetTouchPosition';
+
+//------------------------------------------------------------------------------------
+// Gestures and Touch Handling Functions (Module: gestures)
+//------------------------------------------------------------------------------------
+procedure SetGesturesEnabled(gestureFlags: Cardinal); cdecl; external cRaylib name 'SetGesturesEnabled';
+function IsGestureDetected(gesture: Integer): boolean; cdecl; external cRaylib name 'IsGestureDetected';
+function GetGestureDetected(): Integer; cdecl; external cRaylib name 'GetGestureDetected';
+function GetTouchPointsCount(): Integer; cdecl; external cRaylib name 'GetTouchPointsCount';
+function GetGestureHoldDuration(): Single; cdecl; external cRaylib name 'GetGestureHoldDuration';
+function GetGestureDragVector(): TVector2; cdecl; external cRaylib name 'GetGestureDragVector';
+function GetGestureDragAngle(): Single; cdecl; external cRaylib name 'GetGestureDragAngle';
+function GetGesturePinchVector(): TVector2; cdecl; external cRaylib name 'GetGesturePinchVector';
+function GetGesturePinchAngle(): Single; cdecl; external cRaylib name 'GetGesturePinchAngle';
+
+//------------------------------------------------------------------------------------
+// Camera System Functions (Module: camera)
+//------------------------------------------------------------------------------------
+procedure SetCameraMode(camera: TCamera; mode: Integer); cdecl; external cRaylib name 'SetCameraMode';
+procedure UpdateCamera(camera: PCamera); cdecl; external cRaylib name 'UpdateCamera';
+
+procedure SetCameraPanControl(panKey: Integer); cdecl; external cRaylib name 'SetCameraPanControl';
+procedure SetCameraAltControl(altKey: Integer); cdecl; external cRaylib name 'SetCameraAltControl';
+procedure SetCameraSmoothZoomControl(szKey: Integer); cdecl; external cRaylib name 'SetCameraSmoothZoomControl';
+procedure SetCameraMoveControls(frontKey: Integer; backKey: Integer; rightKey: Integer; leftKey: Integer; upKey: Integer; downKey: Integer); cdecl; external cRaylib name 'SetCameraMoveControls';
+
+//------------------------------------------------------------------------------------
+// Basic Shapes Drawing Functions (Module: shapes)
+//------------------------------------------------------------------------------------
+
+// Basic shapes drawing functions
+procedure DrawPixel(posX: Integer; posY: Integer; color: TColor); cdecl; external cRaylib name 'DrawPixel';
+procedure DrawPixelV(position: TVector2; color: TColor); cdecl; external cRaylib name 'DrawPixelV';
+procedure DrawLine(startPosX: Integer; startPosY: Integer; endPosX: Integer; endPosY: Integer; color: TColor); cdecl; external cRaylib name 'DrawLine';
+procedure DrawLineV(startPos: TVector2; endPos: TVector2; color: TColor); cdecl; external cRaylib name 'DrawLineV';
+procedure DrawLineEx(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl; external cRaylib name 'DrawLineEx';
+procedure DrawLineBezier(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl; external cRaylib name 'DrawLineBezier';
+procedure DrawLineStrip(points: PVector2; numPoints: Integer; color: TColor); cdecl; external cRaylib name 'DrawLineStrip';
+procedure DrawCircle(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl; external cRaylib name 'DrawCircle';
+procedure DrawCircleSector(center: TVector2; radius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl; external cRaylib name 'DrawCircleSector';
+procedure DrawCircleSectorLines(center: TVector2; radius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl; external cRaylib name 'DrawCircleSectorLines';
+procedure DrawCircleGradient(centerX: Integer; centerY: Integer; radius: Single; color1: TColor; color2: TColor); cdecl; external cRaylib name 'DrawCircleGradient';
+procedure DrawCircleV(center: TVector2; radius: Single; color: TColor); cdecl; external cRaylib name 'DrawCircleV';
+procedure DrawCircleLines(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl; external cRaylib name 'DrawCircleLines';
+procedure DrawEllipse(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl; external cRaylib name 'DrawEllipse';
+procedure DrawEllipseLines(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl; external cRaylib name 'DrawEllipseLines';
+procedure DrawRing(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl; external cRaylib name 'DrawRing';
+procedure DrawRingLines(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl; external cRaylib name 'DrawRingLines';
+procedure DrawRectangle(posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl; external cRaylib name 'DrawRectangle';
+procedure DrawRectangleV(position: TVector2; size: TVector2; color: TColor); cdecl; external cRaylib name 'DrawRectangleV';
+procedure DrawRectangleRec(rec: TRectangle; color: TColor); cdecl; external cRaylib name 'DrawRectangleRec';
+procedure DrawRectanglePro(rec: TRectangle; origin: TVector2; rotation: Single; color: TColor); cdecl; external cRaylib name 'DrawRectanglePro';
+procedure DrawRectangleGradientV(posX: Integer; posY: Integer; width: Integer; height: Integer; color1: TColor; color2: TColor); cdecl; external cRaylib name 'DrawRectangleGradientV';
+procedure DrawRectangleGradientH(posX: Integer; posY: Integer; width: Integer; height: Integer; color1: TColor; color2: TColor); cdecl; external cRaylib name 'DrawRectangleGradientH';
+procedure DrawRectangleGradientEx(rec: TRectangle; col1: TColor; col2: TColor; col3: TColor; col4: TColor); cdecl; external cRaylib name 'DrawRectangleGradientEx';
+procedure DrawRectangleLines(posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl; external cRaylib name 'DrawRectangleLines';
+procedure DrawRectangleLinesEx(rec: TRectangle; lineThick: Integer; color: TColor); cdecl; external cRaylib name 'DrawRectangleLinesEx';
+procedure DrawRectangleRounded(rec: TRectangle; roundness: Single; segments: Integer; color: TColor); cdecl; external cRaylib name 'DrawRectangleRounded';
+procedure DrawRectangleRoundedLines(rec: TRectangle; roundness: Single; segments: Integer; lineThick: Integer; color: TColor); cdecl; external cRaylib name 'DrawRectangleRoundedLines';
+procedure DrawTriangle(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl; external cRaylib name 'DrawTriangle';
+procedure DrawTriangleLines(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl; external cRaylib name 'DrawTriangleLines';
+procedure DrawTriangleFan(points: PVector2; numPoints: Integer; color: TColor); cdecl; external cRaylib name 'DrawTriangleFan';
+procedure DrawTriangleStrip(points: PVector2; pointsCount: Integer; color: TColor); cdecl; external cRaylib name 'DrawTriangleStrip';
+procedure DrawPoly(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl; external cRaylib name 'DrawPoly';
+procedure DrawPolyLines(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl; external cRaylib name 'DrawPolyLines';
+
+// Basic shapes collision detection functions
+function CheckCollisionRecs(rec1: TRectangle; rec2: TRectangle): boolean; cdecl; external cRaylib name 'CheckCollisionRecs';
+function CheckCollisionCircles(center1: TVector2; radius1: Single; center2: TVector2; radius2: Single): boolean; cdecl; external cRaylib name 'CheckCollisionCircles';
+function CheckCollisionCircleRec(center: TVector2; radius: Single; rec: TRectangle): boolean; cdecl; external cRaylib name 'CheckCollisionCircleRec';
+function GetCollisionRec(rec1: TRectangle; rec2: TRectangle): TRectangle; cdecl; external cRaylib name 'GetCollisionRec';
+function CheckCollisionPointRec(point: TVector2; rec: TRectangle): boolean; cdecl; external cRaylib name 'CheckCollisionPointRec';
+function CheckCollisionPointCircle(point: TVector2; center: TVector2; radius: Single): boolean; cdecl; external cRaylib name 'CheckCollisionPointCircle';
+function CheckCollisionPointTriangle(point: TVector2; p1: TVector2; p2: TVector2; p3: TVector2): boolean; cdecl; external cRaylib name 'CheckCollisionPointTriangle';
+
+//------------------------------------------------------------------------------------
+// Texture Loading and Drawing Functions (Module: textures)
+//------------------------------------------------------------------------------------
+
+// Image loading functions
+// NOTE: This functions do not require GPU access
+function LoadImage(const fileName: PUTF8Char): TImage; cdecl; external cRaylib name 'LoadImage';
+function LoadImageEx(pixels: PColor; width: Integer; height: Integer): TImage; cdecl; external cRaylib name 'LoadImageEx';
+function LoadImagePro(data: Pointer; width: Integer; height: Integer; format: Integer): TImage; cdecl; external cRaylib name 'LoadImagePro';
+function LoadImageRaw(const fileName: PUTF8Char; width: Integer; height: Integer; format: Integer; headerSize: Integer): TImage; cdecl; external cRaylib name 'LoadImageRaw';
+procedure UnloadImage(image: TImage); cdecl; external cRaylib name 'UnloadImage';
+procedure ExportImage(image: TImage; const fileName: PUTF8Char); cdecl; external cRaylib name 'ExportImage';
+procedure ExportImageAsCode(image: TImage; const fileName: PUTF8Char); cdecl; external cRaylib name 'ExportImageAsCode';
+function GetImageData(image: TImage): PColor; cdecl; external cRaylib name 'GetImageData';
+function GetImageDataNormalized(image: TImage): PVector4; cdecl; external cRaylib name 'GetImageDataNormalized';
+
+// Image generation functions
+function GenImageColor(width: Integer; height: Integer; color: TColor): TImage; cdecl; external cRaylib name 'GenImageColor';
+function GenImageGradientV(width: Integer; height: Integer; top: TColor; bottom: TColor): TImage; cdecl; external cRaylib name 'GenImageGradientV';
+function GenImageGradientH(width: Integer; height: Integer; left: TColor; right: TColor): TImage; cdecl; external cRaylib name 'GenImageGradientH';
+function GenImageGradientRadial(width: Integer; height: Integer; density: Single; inner: TColor; outer: TColor): TImage; cdecl; external cRaylib name 'GenImageGradientRadial';
+function GenImageChecked(width: Integer; height: Integer; checksX: Integer; checksY: Integer; col1: TColor; col2: TColor): TImage; cdecl; external cRaylib name 'GenImageChecked';
+function GenImageWhiteNoise(width: Integer; height: Integer; factor: Single): TImage; cdecl; external cRaylib name 'GenImageWhiteNoise';
+function GenImagePerlinNoise(width: Integer; height: Integer; offsetX: Integer; offsetY: Integer; scale: Single): TImage; cdecl; external cRaylib name 'GenImagePerlinNoise';
+function GenImageCellular(width: Integer; height: Integer; tileSize: Integer): TImage; cdecl; external cRaylib name 'GenImageCellular';
+
+// Image manipulation functions
+function ImageCopy(image: TImage): TImage; cdecl; external cRaylib name 'ImageCopy';
+function ImageFromImage(image: TImage; rec: TRectangle): TImage; cdecl; external cRaylib name 'ImageFromImage';
+function ImageText(const text: PUTF8Char; fontSize: Integer; color: TColor): TImage; cdecl; external cRaylib name 'ImageText';
+function ImageTextEx(font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single; tint: TColor): TImage; cdecl; external cRaylib name 'ImageTextEx';
+procedure ImageToPOT(image: PImage; fillColor: TColor); cdecl; external cRaylib name 'ImageToPOT';
+procedure ImageFormat(image: PImage; newFormat: Integer); cdecl; external cRaylib name 'ImageFormat';
+procedure ImageAlphaMask(image: PImage; alphaMask: TImage); cdecl; external cRaylib name 'ImageAlphaMask';
+procedure ImageAlphaClear(image: PImage; color: TColor; threshold: Single); cdecl; external cRaylib name 'ImageAlphaClear';
+procedure ImageAlphaCrop(image: PImage; threshold: Single); cdecl; external cRaylib name 'ImageAlphaCrop';
+procedure ImageAlphaPremultiply(image: PImage); cdecl; external cRaylib name 'ImageAlphaPremultiply';
+procedure ImageCrop(image: PImage; crop: TRectangle); cdecl; external cRaylib name 'ImageCrop';
+procedure ImageResize(image: PImage; newWidth: Integer; newHeight: Integer); cdecl; external cRaylib name 'ImageResize';
+procedure ImageResizeNN(image: PImage; newWidth: Integer; newHeight: Integer); cdecl; external cRaylib name 'ImageResizeNN';
+procedure ImageResizeCanvas(image: PImage; newWidth: Integer; newHeight: Integer; offsetX: Integer; offsetY: Integer; color: TColor); cdecl; external cRaylib name 'ImageResizeCanvas';
+procedure ImageMipmaps(image: PImage); cdecl; external cRaylib name 'ImageMipmaps';
+procedure ImageDither(image: PImage; rBpp: Integer; gBpp: Integer; bBpp: Integer; aBpp: Integer); cdecl; external cRaylib name 'ImageDither';
+procedure ImageFlipVertical(image: PImage); cdecl; external cRaylib name 'ImageFlipVertical';
+procedure ImageFlipHorizontal(image: PImage); cdecl; external cRaylib name 'ImageFlipHorizontal';
+procedure ImageRotateCW(image: PImage); cdecl; external cRaylib name 'ImageRotateCW';
+procedure ImageRotateCCW(image: PImage); cdecl; external cRaylib name 'ImageRotateCCW';
+procedure ImageColorTint(image: PImage; color: TColor); cdecl; external cRaylib name 'ImageColorTint';
+procedure ImageColorInvert(image: PImage); cdecl; external cRaylib name 'ImageColorInvert';
+procedure ImageColorGrayscale(image: PImage); cdecl; external cRaylib name 'ImageColorGrayscale';
+procedure ImageColorContrast(image: PImage; contrast: Single); cdecl; external cRaylib name 'ImageColorContrast';
+procedure ImageColorBrightness(image: PImage; brightness: Integer); cdecl; external cRaylib name 'ImageColorBrightness';
+procedure ImageColorReplace(image: PImage; color: TColor; replace: TColor); cdecl; external cRaylib name 'ImageColorReplace';
+function ImageExtractPalette(image: TImage; maxPaletteSize: Integer; extractCount: PInteger): PColor; cdecl; external cRaylib name 'ImageExtractPalette';
+function GetImageAlphaBorder(image: TImage; threshold: Single): TRectangle; cdecl; external cRaylib name 'GetImageAlphaBorder';
+
+// Image drawing functions
+// NOTE: Image software-rendering functions (CPU)
+procedure ImageClearBackground(dst: PImage; color: TColor); cdecl; external cRaylib name 'ImageClearBackground';
+procedure ImageDrawPixel(dst: PImage; posX: Integer; posY: Integer; color: TColor); cdecl; external cRaylib name 'ImageDrawPixel';
+procedure ImageDrawPixelV(dst: PImage; position: TVector2; color: TColor); cdecl; external cRaylib name 'ImageDrawPixelV';
+procedure ImageDrawLine(dst: PImage; startPosX: Integer; startPosY: Integer; endPosX: Integer; endPosY: Integer; color: TColor); cdecl; external cRaylib name 'ImageDrawLine';
+procedure ImageDrawLineV(dst: PImage; start: TVector2; &end: TVector2; color: TColor); cdecl; external cRaylib name 'ImageDrawLineV';
+procedure ImageDrawCircle(dst: PImage; centerX: Integer; centerY: Integer; radius: Integer; color: TColor); cdecl; external cRaylib name 'ImageDrawCircle';
+procedure ImageDrawCircleV(dst: PImage; center: TVector2; radius: Integer; color: TColor); cdecl; external cRaylib name 'ImageDrawCircleV';
+procedure ImageDrawRectangle(dst: PImage; posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl; external cRaylib name 'ImageDrawRectangle';
+procedure ImageDrawRectangleV(dst: PImage; position: TVector2; size: TVector2; color: TColor); cdecl; external cRaylib name 'ImageDrawRectangleV';
+procedure ImageDrawRectangleRec(dst: PImage; rec: TRectangle; color: TColor); cdecl; external cRaylib name 'ImageDrawRectangleRec';
+procedure ImageDrawRectangleLines(dst: PImage; rec: TRectangle; thick: Integer; color: TColor); cdecl; external cRaylib name 'ImageDrawRectangleLines';
+procedure ImageDraw(dst: PImage; src: TImage; srcRec: TRectangle; dstRec: TRectangle; tint: TColor); cdecl; external cRaylib name 'ImageDraw';
+procedure ImageDrawText(dst: PImage; position: TVector2; const text: PUTF8Char; fontSize: Integer; color: TColor); cdecl; external cRaylib name 'ImageDrawText';
+procedure ImageDrawTextEx(dst: PImage; position: TVector2; font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single; color: TColor); cdecl; external cRaylib name 'ImageDrawTextEx';
+
+// Texture loading functions
+// NOTE: These functions require GPU access
+function LoadTexture(const fileName: PUTF8Char): TTexture2D; cdecl; external cRaylib name 'LoadTexture';
+function LoadTextureFromImage(image: TImage): TTexture2D; cdecl; external cRaylib name 'LoadTextureFromImage';
+function LoadTextureCubemap(image: TImage; layoutType: Integer): TTextureCubemap; cdecl; external cRaylib name 'LoadTextureCubemap';
+function LoadRenderTexture(width: Integer; height: Integer): TRenderTexture2D; cdecl; external cRaylib name 'LoadRenderTexture';
+procedure UnloadTexture(texture: TTexture2D); cdecl; external cRaylib name 'UnloadTexture';
+procedure UnloadRenderTexture(target: TRenderTexture2D); cdecl; external cRaylib name 'UnloadRenderTexture';
+procedure UpdateTexture(texture: TTexture2D; const pixels: Pointer); cdecl; external cRaylib name 'UpdateTexture';
+function GetTextureData(texture: TTexture2D): TImage; cdecl; external cRaylib name 'GetTextureData';
+function GetScreenData(): TImage; cdecl; external cRaylib name 'GetScreenData';
+
+// Texture configuration functions
+procedure GenTextureMipmaps(texture: PTexture2D); cdecl; external cRaylib name 'GenTextureMipmaps';
+procedure SetTextureFilter(texture: TTexture2D; filterMode: Integer); cdecl; external cRaylib name 'SetTextureFilter';
+procedure SetTextureWrap(texture: TTexture2D; wrapMode: Integer); cdecl; external cRaylib name 'SetTextureWrap';
+
+// Texture drawing functions
+procedure DrawTexture(texture: TTexture2D; posX: Integer; posY: Integer; tint: TColor); cdecl; external cRaylib name 'DrawTexture';
+procedure DrawTextureV(texture: TTexture2D; position: TVector2; tint: TColor); cdecl; external cRaylib name 'DrawTextureV';
+procedure DrawTextureEx(texture: TTexture2D; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl; external cRaylib name 'DrawTextureEx';
+procedure DrawTextureRec(texture: TTexture2D; sourceRec: TRectangle; position: TVector2; tint: TColor); cdecl; external cRaylib name 'DrawTextureRec';
+procedure DrawTextureQuad(texture: TTexture2D; tiling: TVector2; offset: TVector2; quad: TRectangle; tint: TColor); cdecl; external cRaylib name 'DrawTextureQuad';
+procedure DrawTexturePro(texture: TTexture2D; sourceRec: TRectangle; destRec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl; external cRaylib name 'DrawTexturePro';
+procedure DrawTextureNPatch(texture: TTexture2D; nPatchInfo: TNPatchInfo; destRec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl; external cRaylib name 'DrawTextureNPatch';
+
+// Image/Texture misc functions
+function GetPixelDataSize(width: Integer; height: Integer; format: Integer): Integer; cdecl; external cRaylib name 'GetPixelDataSize';
+
+//------------------------------------------------------------------------------------
+// Font Loading and Text Drawing Functions (Module: text)
+//------------------------------------------------------------------------------------
+
+// Font loading/unloading functions
+function GetFontDefault(): TFont; cdecl; external cRaylib name 'GetFontDefault';
+function LoadFont(const fileName: PUTF8Char): TFont; cdecl; external cRaylib name 'LoadFont';
+function LoadFontEx(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; charsCount: Integer): TFont; cdecl; external cRaylib name 'LoadFontEx';
+function LoadFontFromImage(image: TImage; key: TColor; firstChar: Integer): TFont; cdecl; external cRaylib name 'LoadFontFromImage';
+function LoadFontData(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; charsCount: Integer; &type: Integer): PCharInfo; cdecl; external cRaylib name 'LoadFontData';
+function GenImageFontAtlas(const chars: PCharInfo; recs: PPRectangle; charsCount: Integer; fontSize: Integer; padding: Integer; packMethod: Integer): TImage; cdecl; external cRaylib name 'GenImageFontAtlas';
+procedure UnloadFont(font: TFont); cdecl; external cRaylib name 'UnloadFont';
+
+// Text drawing functions
+procedure DrawFPS(posX: Integer; posY: Integer); cdecl; external cRaylib name 'DrawFPS';
+procedure DrawText(const text: PUTF8Char; posX: Integer; posY: Integer; fontSize: Integer; color: TColor); cdecl; external cRaylib name 'DrawText';
+procedure DrawTextEx(font: TFont; const text: PUTF8Char; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl; external cRaylib name 'DrawTextEx';
+procedure DrawTextRec(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: boolean; tint: TColor); cdecl; external cRaylib name 'DrawTextRec';
+procedure DrawTextRecEx(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: boolean; tint: TColor; selectStart: Integer; selectLength: Integer; selectTint: TColor; selectBackTint: TColor); cdecl; external cRaylib name 'DrawTextRecEx';
+
+procedure DrawTextCodepoint(font: TFont; codepoint: Integer; position: TVector2; scale: Single; tint: TColor); cdecl; external cRaylib name 'DrawTextCodepoint';
+
+// Text misc. functions
+function MeasureText(const text: PUTF8Char; fontSize: Integer): Integer; cdecl; external cRaylib name 'MeasureText';
+function MeasureTextEx(font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single): TVector2; cdecl; external cRaylib name 'MeasureTextEx';
+function GetGlyphIndex(font: TFont; codepoint: Integer): Integer; cdecl; external cRaylib name 'GetGlyphIndex';
+
+// Text strings management functions (no utf8 strings, only byte chars)
+// NOTE: Some strings allocate memory internally for returned strings, just be careful!
+function TextCopy(dst: PUTF8Char; const src: PUTF8Char): Integer; cdecl; external cRaylib name 'TextCopy';
+function TextIsEqual(const text1: PUTF8Char; const text2: PUTF8Char): boolean; cdecl; external cRaylib name 'TextIsEqual';
+function TextLength(const text: PUTF8Char): Cardinal; cdecl; external cRaylib name 'TextLength';
+function TextFormat(const text: PUTF8Char): PUTF8Char varargs; cdecl; external cRaylib name 'TextFormat';
+function TextSubtext(const text: PUTF8Char; position: Integer; length: Integer): PUTF8Char; cdecl; external cRaylib name 'TextSubtext';
+function TextReplace(text: PUTF8Char; const replace: PUTF8Char; const by: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'TextReplace';
+function TextInsert(const text: PUTF8Char; const insert: PUTF8Char; position: Integer): PUTF8Char; cdecl; external cRaylib name 'TextInsert';
+function TextJoin(textList: PPUTF8Char; count: Integer; const delimiter: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'TextJoin';
+function TextSplit(const text: PUTF8Char; delimiter: UTF8Char; count: PInteger): PPUTF8Char; cdecl; external cRaylib name 'TextSplit';
+procedure TextAppend(text: PUTF8Char; const append: PUTF8Char; position: PInteger); cdecl; external cRaylib name 'TextAppend';
+function TextFindIndex(const text: PUTF8Char; const find: PUTF8Char): Integer; cdecl; external cRaylib name 'TextFindIndex';
+function TextToUpper(const text: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'TextToUpper';
+function TextToLower(const text: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'TextToLower';
+function TextToPascal(const text: PUTF8Char): PUTF8Char; cdecl; external cRaylib name 'TextToPascal';
+function TextToInteger(const text: PUTF8Char): Integer; cdecl; external cRaylib name 'TextToInteger';
+function TextToUtf8(codepoints: PInteger; length: Integer): PUTF8Char; cdecl; external cRaylib name 'TextToUtf8';
+
+// UTF8 text strings management functions
+function GetCodepoints(const text: PUTF8Char; count: PInteger): PInteger; cdecl; external cRaylib name 'GetCodepoints';
+function GetCodepointsCount(const text: PUTF8Char): Integer; cdecl; external cRaylib name 'GetCodepointsCount';
+function GetNextCodepoint(const text: PUTF8Char; bytesProcessed: PInteger): Integer; cdecl; external cRaylib name 'GetNextCodepoint';
+function CodepointToUtf8(codepoint: Integer; byteLength: PInteger): PUTF8Char; cdecl; external cRaylib name 'CodepointToUtf8';
+
+//------------------------------------------------------------------------------------
+// Basic 3d Shapes Drawing Functions (Module: models)
+//------------------------------------------------------------------------------------
+
+// Basic geometric 3D shapes drawing functions
+procedure DrawLine3D(startPos: TVector3; endPos: TVector3; color: TColor); cdecl; external cRaylib name 'DrawLine3D';
+procedure DrawPoint3D(position: TVector3; color: TColor); cdecl; external cRaylib name 'DrawPoint3D';
+procedure DrawCircle3D(center: TVector3; radius: Single; rotationAxis: TVector3; rotationAngle: Single; color: TColor); cdecl; external cRaylib name 'DrawCircle3D';
+procedure DrawCube(position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl; external cRaylib name 'DrawCube';
+procedure DrawCubeV(position: TVector3; size: TVector3; color: TColor); cdecl; external cRaylib name 'DrawCubeV';
+procedure DrawCubeWires(position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl; external cRaylib name 'DrawCubeWires';
+procedure DrawCubeWiresV(position: TVector3; size: TVector3; color: TColor); cdecl; external cRaylib name 'DrawCubeWiresV';
+procedure DrawCubeTexture(texture: TTexture2D; position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl; external cRaylib name 'DrawCubeTexture';
+procedure DrawSphere(centerPos: TVector3; radius: Single; color: TColor); cdecl; external cRaylib name 'DrawSphere';
+procedure DrawSphereEx(centerPos: TVector3; radius: Single; rings: Integer; slices: Integer; color: TColor); cdecl; external cRaylib name 'DrawSphereEx';
+procedure DrawSphereWires(centerPos: TVector3; radius: Single; rings: Integer; slices: Integer; color: TColor); cdecl; external cRaylib name 'DrawSphereWires';
+procedure DrawCylinder(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl; external cRaylib name 'DrawCylinder';
+procedure DrawCylinderWires(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl; external cRaylib name 'DrawCylinderWires';
+procedure DrawPlane(centerPos: TVector3; size: TVector2; color: TColor); cdecl; external cRaylib name 'DrawPlane';
+procedure DrawRay(ray: TRay; color: TColor); cdecl; external cRaylib name 'DrawRay';
+procedure DrawGrid(slices: Integer; spacing: Single); cdecl; external cRaylib name 'DrawGrid';
+procedure DrawGizmo(position: TVector3); cdecl; external cRaylib name 'DrawGizmo';
+//DrawTorus(), DrawTeapot() could be useful?
+
+//------------------------------------------------------------------------------------
+// Model 3d Loading and Drawing Functions (Module: models)
+//------------------------------------------------------------------------------------
+
+// Model loading/unloading functions
+function LoadModel(const fileName: PUTF8Char): TModel; cdecl; external cRaylib name 'LoadModel';
+function LoadModelFromMesh(mesh: TMesh): TModel; cdecl; external cRaylib name 'LoadModelFromMesh';
+procedure UnloadModel(model: TModel); cdecl; external cRaylib name 'UnloadModel';
+
+// Mesh loading/unloading functions
+function LoadMeshes(const fileName: PUTF8Char; meshCount: PInteger): PMesh; cdecl; external cRaylib name 'LoadMeshes';
+procedure ExportMesh(mesh: TMesh; const fileName: PUTF8Char); cdecl; external cRaylib name 'ExportMesh';
+procedure UnloadMesh(mesh: TMesh); cdecl; external cRaylib name 'UnloadMesh';
+
+// Material loading/unloading functions
+function LoadMaterials(const fileName: PUTF8Char; materialCount: PInteger): PMaterial; cdecl; external cRaylib name 'LoadMaterials';
+function LoadMaterialDefault(): TMaterial; cdecl; external cRaylib name 'LoadMaterialDefault';
+procedure UnloadMaterial(material: TMaterial); cdecl; external cRaylib name 'UnloadMaterial';
+procedure SetMaterialTexture(material: PMaterial; mapType: Integer; texture: TTexture2D); cdecl; external cRaylib name 'SetMaterialTexture';
+procedure SetModelMeshMaterial(model: PModel; meshId: Integer; materialId: Integer); cdecl; external cRaylib name 'SetModelMeshMaterial';
+
+// Model animations loading/unloading functions
+function LoadModelAnimations(const fileName: PUTF8Char; animsCount: PInteger): PModelAnimation; cdecl; external cRaylib name 'LoadModelAnimations';
+procedure UpdateModelAnimation(model: TModel; anim: TModelAnimation; frame: Integer); cdecl; external cRaylib name 'UpdateModelAnimation';
+procedure UnloadModelAnimation(anim: TModelAnimation); cdecl; external cRaylib name 'UnloadModelAnimation';
+function IsModelAnimationValid(model: TModel; anim: TModelAnimation): boolean; cdecl; external cRaylib name 'IsModelAnimationValid';
+
+// Mesh generation functions
+function GenMeshPoly(sides: Integer; radius: Single): TMesh; cdecl; external cRaylib name 'GenMeshPoly';
+function GenMeshPlane(width: Single; length: Single; resX: Integer; resZ: Integer): TMesh; cdecl; external cRaylib name 'GenMeshPlane';
+function GenMeshCube(width: Single; height: Single; length: Single): TMesh; cdecl; external cRaylib name 'GenMeshCube';
+function GenMeshSphere(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl; external cRaylib name 'GenMeshSphere';
+function GenMeshHemiSphere(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl; external cRaylib name 'GenMeshHemiSphere';
+function GenMeshCylinder(radius: Single; height: Single; slices: Integer): TMesh; cdecl; external cRaylib name 'GenMeshCylinder';
+function GenMeshTorus(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl; external cRaylib name 'GenMeshTorus';
+function GenMeshKnot(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl; external cRaylib name 'GenMeshKnot';
+function GenMeshHeightmap(heightmap: TImage; size: TVector3): TMesh; cdecl; external cRaylib name 'GenMeshHeightmap';
+function GenMeshCubicmap(cubicmap: TImage; cubeSize: TVector3): TMesh; cdecl; external cRaylib name 'GenMeshCubicmap';
+
+// Mesh manipulation functions
+function MeshBoundingBox(mesh: TMesh): TBoundingBox; cdecl; external cRaylib name 'MeshBoundingBox';
+procedure MeshTangents(mesh: PMesh); cdecl; external cRaylib name 'MeshTangents';
+procedure MeshBinormals(mesh: PMesh); cdecl; external cRaylib name 'MeshBinormals';
+
+// Model drawing functions
+procedure DrawModel(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl; external cRaylib name 'DrawModel';
+procedure DrawModelEx(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl; external cRaylib name 'DrawModelEx';
+procedure DrawModelWires(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl; external cRaylib name 'DrawModelWires';
+procedure DrawModelWiresEx(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl; external cRaylib name 'DrawModelWiresEx';
+procedure DrawBoundingBox(box: TBoundingBox; color: TColor); cdecl; external cRaylib name 'DrawBoundingBox';
+procedure DrawBillboard(camera: TCamera; texture: TTexture2D; center: TVector3; size: Single; tint: TColor); cdecl; external cRaylib name 'DrawBillboard';
+procedure DrawBillboardRec(camera: TCamera; texture: TTexture2D; sourceRec: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl; external cRaylib name 'DrawBillboardRec';
+
+// Collision detection functions
+function CheckCollisionSpheres(centerA: TVector3; radiusA: Single; centerB: TVector3; radiusB: Single): boolean; cdecl; external cRaylib name 'CheckCollisionSpheres';
+function CheckCollisionBoxes(box1: TBoundingBox; box2: TBoundingBox): boolean; cdecl; external cRaylib name 'CheckCollisionBoxes';
+function CheckCollisionBoxSphere(box: TBoundingBox; center: TVector3; radius: Single): boolean; cdecl; external cRaylib name 'CheckCollisionBoxSphere';
+function CheckCollisionRaySphere(ray: TRay; center: TVector3; radius: Single): boolean; cdecl; external cRaylib name 'CheckCollisionRaySphere';
+function CheckCollisionRaySphereEx(ray: TRay; center: TVector3; radius: Single; collisionPoint: PVector3): boolean; cdecl; external cRaylib name 'CheckCollisionRaySphereEx';
+function CheckCollisionRayBox(ray: TRay; box: TBoundingBox): boolean; cdecl; external cRaylib name 'CheckCollisionRayBox';
+function GetCollisionRayModel(ray: TRay; model: TModel): TRayHitInfo; cdecl; external cRaylib name 'GetCollisionRayModel';
+function GetCollisionRayTriangle(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3): TRayHitInfo; cdecl; external cRaylib name 'GetCollisionRayTriangle';
+function GetCollisionRayGround(ray: TRay; groundHeight: Single): TRayHitInfo; cdecl; external cRaylib name 'GetCollisionRayGround';
+
+//------------------------------------------------------------------------------------
+// Shaders System Functions (Module: rlgl)
+// NOTE: This functions are useless when using OpenGL 1.1
+//------------------------------------------------------------------------------------
+
+// Shader loading/unloading functions
+function LoadShader(const vsFileName: PUTF8Char; const fsFileName: PUTF8Char): TShader; cdecl; external cRaylib name 'LoadShader';
+function LoadShaderCode(const vsCode: PUTF8Char; const fsCode: PUTF8Char): TShader; cdecl; external cRaylib name 'LoadShaderCode';
+procedure UnloadShader(shader: TShader); cdecl; external cRaylib name 'UnloadShader';
+
+function GetShaderDefault(): TShader; cdecl; external cRaylib name 'GetShaderDefault';
+function GetTextureDefault(): TTexture2D; cdecl; external cRaylib name 'GetTextureDefault';
+function GetShapesTexture(): TTexture2D; cdecl; external cRaylib name 'GetShapesTexture';
+function GetShapesTextureRec(): TRectangle; cdecl; external cRaylib name 'GetShapesTextureRec';
+procedure SetShapesTexture(texture: TTexture2D; source: TRectangle); cdecl; external cRaylib name 'SetShapesTexture';
+
+// Shader configuration functions
+function GetShaderLocation(shader: TShader; const uniformName: PUTF8Char): Integer; cdecl; external cRaylib name 'GetShaderLocation';
+procedure SetShaderValue(shader: TShader; uniformLoc: Integer; const value: Pointer; uniformType: Integer); cdecl; external cRaylib name 'SetShaderValue';
+procedure SetShaderValueV(shader: TShader; uniformLoc: Integer; const value: Pointer; uniformType: Integer; count: Integer); cdecl; external cRaylib name 'SetShaderValueV';
+procedure SetShaderValueMatrix(shader: TShader; uniformLoc: Integer; mat: TMatrix); cdecl; external cRaylib name 'SetShaderValueMatrix';
+procedure SetShaderValueTexture(shader: TShader; uniformLoc: Integer; texture: TTexture2D); cdecl; external cRaylib name 'SetShaderValueTexture';
+procedure SetMatrixProjection(proj: TMatrix); cdecl; external cRaylib name 'SetMatrixProjection';
+procedure SetMatrixModelview(view: TMatrix); cdecl; external cRaylib name 'SetMatrixModelview';
+function GetMatrixModelview(): TMatrix; cdecl; external cRaylib name 'GetMatrixModelview';
+function GetMatrixProjection(): TMatrix; cdecl; external cRaylib name 'GetMatrixProjection';
+
+// Texture maps generation (PBR)
+// NOTE: Required shaders should be provided
+function GenTextureCubemap(shader: TShader; map: TTexture2D; size: Integer): TTexture2D; cdecl; external cRaylib name 'GenTextureCubemap';
+function GenTextureIrradiance(shader: TShader; cubemap: TTexture2D; size: Integer): TTexture2D; cdecl; external cRaylib name 'GenTextureIrradiance';
+function GenTexturePrefilter(shader: TShader; cubemap: TTexture2D; size: Integer): TTexture2D; cdecl; external cRaylib name 'GenTexturePrefilter';
+function GenTextureBRDF(shader: TShader; size: Integer): TTexture2D; cdecl; external cRaylib name 'GenTextureBRDF';
+
+// Shading begin/end functions
+procedure BeginShaderMode(shader: TShader); cdecl; external cRaylib name 'BeginShaderMode';
+procedure EndShaderMode; cdecl; external cRaylib name 'EndShaderMode';
+procedure BeginBlendMode(mode: Integer); cdecl; external cRaylib name 'BeginBlendMode';
+procedure EndBlendMode; cdecl; external cRaylib name 'EndBlendMode';
+
+// VR control functions
+procedure InitVrSimulator; cdecl; external cRaylib name 'InitVrSimulator';
+procedure CloseVrSimulator; cdecl; external cRaylib name 'CloseVrSimulator';
+procedure UpdateVrTracking(camera: PCamera); cdecl; external cRaylib name 'UpdateVrTracking';
+procedure SetVrConfiguration(info: TVrDeviceInfo; distortion: TShader); cdecl; external cRaylib name 'SetVrConfiguration';
+function IsVrSimulatorReady(): boolean; cdecl; external cRaylib name 'IsVrSimulatorReady';
+procedure ToggleVrMode; cdecl; external cRaylib name 'ToggleVrMode';
+procedure BeginVrDrawing; cdecl; external cRaylib name 'BeginVrDrawing';
+procedure EndVrDrawing; cdecl; external cRaylib name 'EndVrDrawing';
+
+//------------------------------------------------------------------------------------
+// Audio Loading and Playing Functions (Module: audio)
+//------------------------------------------------------------------------------------
+
+// Audio device management functions
+procedure InitAudioDevice; cdecl; external cRaylib name 'InitAudioDevice';
+procedure CloseAudioDevice; cdecl; external cRaylib name 'CloseAudioDevice';
+function IsAudioDeviceReady(): boolean; cdecl; external cRaylib name 'IsAudioDeviceReady';
+procedure SetMasterVolume(volume: Single); cdecl; external cRaylib name 'SetMasterVolume';
+
+// Wave/Sound loading/unloading functions
+function LoadWave(const fileName: PUTF8Char): TWave; cdecl; external cRaylib name 'LoadWave';
+function LoadSound(const fileName: PUTF8Char): TSound; cdecl; external cRaylib name 'LoadSound';
+function LoadSoundFromWave(wave: TWave): TSound; cdecl; external cRaylib name 'LoadSoundFromWave';
+procedure UpdateSound(sound: TSound; const data: Pointer; samplesCount: Integer); cdecl; external cRaylib name 'UpdateSound';
+procedure UnloadWave(wave: TWave); cdecl; external cRaylib name 'UnloadWave';
+procedure UnloadSound(sound: TSound); cdecl; external cRaylib name 'UnloadSound';
+procedure ExportWave(wave: TWave; const fileName: PUTF8Char); cdecl; external cRaylib name 'ExportWave';
+procedure ExportWaveAsCode(wave: TWave; const fileName: PUTF8Char); cdecl; external cRaylib name 'ExportWaveAsCode';
+
+// Wave/Sound management functions
+procedure PlaySound(sound: TSound); cdecl; external cRaylib name 'PlaySound';
+procedure StopSound(sound: TSound); cdecl; external cRaylib name 'StopSound';
+procedure PauseSound(sound: TSound); cdecl; external cRaylib name 'PauseSound';
+procedure ResumeSound(sound: TSound); cdecl; external cRaylib name 'ResumeSound';
+procedure PlaySoundMulti(sound: TSound); cdecl; external cRaylib name 'PlaySoundMulti';
+procedure StopSoundMulti; cdecl; external cRaylib name 'StopSoundMulti';
+function GetSoundsPlaying(): Integer; cdecl; external cRaylib name 'GetSoundsPlaying';
+function IsSoundPlaying(sound: TSound): boolean; cdecl; external cRaylib name 'IsSoundPlaying';
+procedure SetSoundVolume(sound: TSound; volume: Single); cdecl; external cRaylib name 'SetSoundVolume';
+procedure SetSoundPitch(sound: TSound; pitch: Single); cdecl; external cRaylib name 'SetSoundPitch';
+procedure WaveFormat(wave: PWave; sampleRate: Integer; sampleSize: Integer; channels: Integer); cdecl; external cRaylib name 'WaveFormat';
+function WaveCopy(wave: TWave): TWave; cdecl; external cRaylib name 'WaveCopy';
+procedure WaveCrop(wave: PWave; initSample: Integer; finalSample: Integer); cdecl; external cRaylib name 'WaveCrop';
+function GetWaveData(wave: TWave): PSingle; cdecl; external cRaylib name 'GetWaveData';
+
+// Music management functions
+function LoadMusicStream(const fileName: PUTF8Char): TMusic; cdecl; external cRaylib name 'LoadMusicStream';
+procedure UnloadMusicStream(music: TMusic); cdecl; external cRaylib name 'UnloadMusicStream';
+procedure PlayMusicStream(music: TMusic); cdecl; external cRaylib name 'PlayMusicStream';
+procedure UpdateMusicStream(music: TMusic); cdecl; external cRaylib name 'UpdateMusicStream';
+procedure StopMusicStream(music: TMusic); cdecl; external cRaylib name 'StopMusicStream';
+procedure PauseMusicStream(music: TMusic); cdecl; external cRaylib name 'PauseMusicStream';
+procedure ResumeMusicStream(music: TMusic); cdecl; external cRaylib name 'ResumeMusicStream';
+function IsMusicPlaying(music: TMusic): boolean; cdecl; external cRaylib name 'IsMusicPlaying';
+procedure SetMusicVolume(music: TMusic; volume: Single); cdecl; external cRaylib name 'SetMusicVolume';
+procedure SetMusicPitch(music: TMusic; pitch: Single); cdecl; external cRaylib name 'SetMusicPitch';
+procedure SetMusicLoopCount(music: TMusic; count: Integer); cdecl; external cRaylib name 'SetMusicLoopCount';
+function GetMusicTimeLength(music: TMusic): Single; cdecl; external cRaylib name 'GetMusicTimeLength';
+function GetMusicTimePlayed(music: TMusic): Single; cdecl; external cRaylib name 'GetMusicTimePlayed';
+
+// AudioStream management functions
+function InitAudioStream(sampleRate: Cardinal; sampleSize: Cardinal; channels: Cardinal): TAudioStream; cdecl; external cRaylib name 'InitAudioStream';
+procedure UpdateAudioStream(stream: TAudioStream; const data: Pointer; samplesCount: Integer); cdecl; external cRaylib name 'UpdateAudioStream';
+procedure CloseAudioStream(stream: TAudioStream); cdecl; external cRaylib name 'CloseAudioStream';
+function IsAudioStreamProcessed(stream: TAudioStream): boolean; cdecl; external cRaylib name 'IsAudioStreamProcessed';
+procedure PlayAudioStream(stream: TAudioStream); cdecl; external cRaylib name 'PlayAudioStream';
+procedure PauseAudioStream(stream: TAudioStream); cdecl; external cRaylib name 'PauseAudioStream';
+procedure ResumeAudioStream(stream: TAudioStream); cdecl; external cRaylib name 'ResumeAudioStream';
+function IsAudioStreamPlaying(stream: TAudioStream): boolean; cdecl; external cRaylib name 'IsAudioStreamPlaying';
+procedure StopAudioStream(stream: TAudioStream); cdecl; external cRaylib name 'StopAudioStream';
+procedure SetAudioStreamVolume(stream: TAudioStream; volume: Single); cdecl; external cRaylib name 'SetAudioStreamVolume';
+procedure SetAudioStreamPitch(stream: TAudioStream; pitch: Single); cdecl; external cRaylib name 'SetAudioStreamPitch';
+procedure SetAudioStreamBufferSizeDefault(size: Integer); cdecl; external cRaylib name 'SetAudioStreamBufferSizeDefault';
+
+//------------------------------------------------------------------------------------
+// Network (Module: network)
+//------------------------------------------------------------------------------------
+
+// IN PROGRESS: Check rnet.h for reference
 
 implementation
 
