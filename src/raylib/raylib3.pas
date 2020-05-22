@@ -5,7 +5,9 @@ unit RayLib3;
 {$M+}{$H+}
 
 {**
- *  This file is part of tyro project, ported from C header raylib.h
+ *  This file is part of Tyro project, ported from C header raylib.h
+ *
+ * @project   https://www.github.com/parmaja/tyro
  *
  * @license   MIT (https://opensource.org/licenses/MIT)
  *
@@ -93,8 +95,10 @@ interface
 *       https://github.com/neslib/Chet
 *       http://www.astonshell.com/freeware/c2pas32/
 *
+* Compitation:
+*       https://github.com/tazdij/raylib-pas
+*       https://github.com/drezgames/raylib-pascal
 *}
-
 uses
   Types, Classes, SysUtils,
   mnLibraries; // take it from github/parmaja/minilib
@@ -391,7 +395,6 @@ type
     FramePoses: PPTransform;   // Poses array by frame
   end;
   PModelAnimation = ^TModelAnimation;
-
 
   // Ray type (useful for raycast)
   TRay = packed record
