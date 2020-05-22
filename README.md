@@ -63,3 +63,7 @@ You do not need to use it, it is already in the source folder
 
 [Sard Objects](https://github.com/parmaja/p-sard)
 
+
+### Competition
+
+[yabasic](http://www.yabasic.de)

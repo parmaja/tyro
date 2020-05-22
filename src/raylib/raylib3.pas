@@ -97,49 +97,60 @@ uses
   Types, Classes, SysUtils,
   mnLibraries; // take it from github/parmaja/minilib
 
+{$MINENUMSIZE 4} //All enum must be sized as Integer
+
 type
   PPUTF8Char = ^PUTF8Char;
 
-(*
-const
-#define LIGHTGRAY  CLITERAL(Color){ 200, 200, 200, 255 }   // Light Gray
-#define GRAY       CLITERAL(Color){ 130, 130, 130, 255 }   // Gray
-#define DARKGRAY   CLITERAL(Color){ 80, 80, 80, 255 }      // Dark Gray
-#define YELLOW     CLITERAL(Color){ 253, 249, 0, 255 }     // Yellow
-#define GOLD       CLITERAL(Color){ 255, 203, 0, 255 }     // Gold
-#define ORANGE     CLITERAL(Color){ 255, 161, 0, 255 }     // Orange
-#define PINK       CLITERAL(Color){ 255, 109, 194, 255 }   // Pink
-#define RED        CLITERAL(Color){ 230, 41, 55, 255 }     // Red
-#define MAROON     CLITERAL(Color){ 190, 33, 55, 255 }     // Maroon
-#define GREEN      CLITERAL(Color){ 0, 228, 48, 255 }      // Green
-#define LIME       CLITERAL(Color){ 0, 158, 47, 255 }      // Lime
-#define DARKGREEN  CLITERAL(Color){ 0, 117, 44, 255 }      // Dark Green
-#define SKYBLUE    CLITERAL(Color){ 102, 191, 255, 255 }   // Sky Blue
-#define BLUE       CLITERAL(Color){ 0, 121, 241, 255 }     // Blue
-#define DARKBLUE   CLITERAL(Color){ 0, 82, 172, 255 }      // Dark Blue
-#define PURPLE     CLITERAL(Color){ 200, 122, 255, 255 }   // Purple
-#define VIOLET     CLITERAL(Color){ 135, 60, 190, 255 }    // Violet
-#define DARKPURPLE CLITERAL(Color){ 112, 31, 126, 255 }    // Dark Purple
-#define BEIGE      CLITERAL(Color){ 211, 176, 131, 255 }   // Beige
-#define BROWN      CLITERAL(Color){ 127, 106, 79, 255 }    // Brown
-#define DARKBROWN  CLITERAL(Color){ 76, 63, 47, 255 }      // Dark Brown
+  { TColor }
 
-#define WHITE      CLITERAL(Color){ 255, 255, 255, 255 }   // White
-#define BLACK      CLITERAL(Color){ 0, 0, 0, 255 }         // Black
-#define BLANK      CLITERAL(Color){ 0, 0, 0, 0 }           // Blank (Transparent)
-#define MAGENTA    CLITERAL(Color){ 255, 0, 255, 255 }     // Magenta
-#define RAYWHITE   CLITERAL(Color){ 245, 245, 245, 255 }   // My own White (raylib logo)
-}
-*)
+  TColor = record
+    constructor Create(ARed, AGreen, ABlue, AAlpha: Byte);
+    case Cardinal of
+      0: (Value: Cardinal);
+      1: (Red, Green, Blue, Alpha: Byte);
+  end;
 
-type
-  TColor = DWORD;
   PColor = ^TColor;
 
+
+const
+  Lightgray: TColor = (Red: 200; Green: 200; Blue: 200; Alpha: 255);   // Light Gray
+  Gray:      TColor = (Red: 130; Green: 130; Blue: 130; Alpha: 255);   // Gray
+  DarkGray:  TColor = (Red: 80; Green: 80; Blue: 80; Alpha: 255);      // Dark Gray
+  Yellow:    TColor = (Red: 253; Green: 249; Blue: 0; Alpha: 255);     // Yellow
+  Gold:      TColor = (Red: 255; Green: 203; Blue: 0; Alpha: 255);     // Gold
+  Orange:    TColor = (Red: 255; Green: 161; Blue: 0; Alpha: 255);     // Orange
+  Pink:      TColor = (Red: 255; Green: 109; Blue: 194; Alpha: 255);   // Pink
+  Red:       TColor = (Red: 230; Green: 41; Blue: 55; Alpha: 255);     // Red
+  Maroon:    TColor = (Red: 190; Green: 33; Blue: 55; Alpha: 255);     // Maroon
+  Green:     TColor = (Red: 0; Green: 228; Blue: 48; Alpha: 255);      // Green
+  Lime:      TColor = (Red: 0; Green: 158; Blue: 47; Alpha: 255);      // Lime
+  Darkgreen: TColor = (Red: 0; Green: 117; Blue: 44; Alpha: 255);      // Dark Green
+  SkyBlue:   TColor = (Red: 102; Green: 191; Blue: 255; Alpha: 255);   // Sky Blue
+  Blue:      TColor = (Red: 0; Green: 121; Blue: 241; Alpha: 255);     // Blue
+  Darkblue:  TColor = (Red: 0; Green: 82; Blue: 172; Alpha: 255);      // Dark Blue
+  Purple:    TColor = (Red: 200; Green: 122; Blue: 255; Alpha: 255);   // Purple
+  Violet:    TColor = (Red: 135; Green: 60; Blue: 190; Alpha: 255);    // Violet
+  Darkpurple:TColor = (Red: 112; Green: 31; Blue: 126; Alpha: 255);    // Dark Purple
+  Beige:     TColor = (Red: 211; Green: 176; Blue: 131; Alpha: 255);   // Beige
+  Brown:     TColor = (Red: 127; Green: 106; Blue: 79; Alpha: 255);    // Brown
+  Darkbrown: TColor = (Red: 76; Green: 63; Blue: 47; Alpha: 255);      // Dark Brown
+  White:     TColor = (Red: 255; Green: 255; Blue: 255; Alpha: 255);   // White
+  Black:     TColor = (Red: 0; Green: 0; Blue: 0; Alpha: 255);         // Black
+  Blank:     TColor = (Red: 0; Green: 0; Blue: 0; Alpha: 0);           // Blank (Transparent)
+  Magenta:   TColor = (Red: 255; Green: 0; Blue: 255; Alpha: 255);     // Magenta
+  RayWhite:  TColor = (Red: 245; Green: 245; Blue: 245; Alpha: 255);   // My own White (raylib logo)
+
+type
   // Vector2 type
+
+  { TVector2 }
+
   TVector2 = packed record
-    x: Single;
-    y: Single;
+    X: Single;
+    Y: Single;
+    constructor Create(AX, AY: Single);
   end;
   PVector2 = ^TVector2;
 
@@ -171,21 +182,16 @@ type
       m3, m7, m11, m15: Single;
   end;
 
-  // Color type, RGBA (32bit)
-  TRayColor = record
-//    Color: DWORD;
-      r: Byte;
-      g: Byte;
-      b: Byte;
-      a: Byte;
-  end;
-
   // Rectangle type
+
+  { TRectangle }
+
   TRectangle = packed record
     X: Single;
     Y: Single;
     Width: Single;
     Height: Single;
+    constructor Create(AX, AY, AWidth, AHeight: Single);
   end;
   PRectangle = ^TRectangle;
   PPRectangle = ^PRectangle;
@@ -489,7 +495,7 @@ type
   );
 
   // Trace log type
-  TTraceLogType = (
+  TTraceLogType = set of (
     LOG_ALL = 0,        // Display all logs
     LOG_TRACE,
     LOG_DEBUG,
@@ -954,7 +960,7 @@ type
 
 // Misc. functions
   TSetConfigFlags = procedure(flags: Cardinal); cdecl;
-  TSetTraceLogLevel = procedure(logType: Integer); cdecl;
+  TSetTraceLogLevel = procedure(logType: TTraceLogType); cdecl;
   TSetTraceLogExit = procedure(logType: Integer); cdecl;
   TSetTraceLogCallback = procedure(callback: TTraceLogCallback); cdecl;
   TTraceLog = procedure(logType: Integer; const text: PUTF8Char) varargs; cdecl;
@@ -1194,7 +1200,7 @@ type
 
 // Texture configuration functions
   TGenTextureMipmaps = procedure(texture: PTexture2D); cdecl;
-  TSetTextureFilter = procedure(texture: TTexture2D; filterMode: Integer); cdecl;
+  TSetTextureFilter = procedure(texture: TTexture2D; FilterMode: TTextureFilterMode); cdecl;
   TSetTextureWrap = procedure(texture: TTexture2D; wrapMode: Integer); cdecl;
 
 // Texture drawing functions
@@ -1925,7 +1931,42 @@ type
 var
   RayLib: TmncRayLib = nil;
 
+function Vector2Of(X, Y: Single): TVector2;
+
 implementation
+
+function Vector2Of(X, Y: Single): TVector2;
+begin
+  Result := TVector2.Create(X, Y);
+end;
+
+{ TRectangle }
+
+constructor TRectangle.Create(AX, AY, AWidth, AHeight: Single);
+begin
+  X:= AX;
+  Y:= AY;
+  Width := AWidth;
+  Height := AHeight;
+end;
+
+{ TColor }
+
+constructor TColor.Create(ARed, AGreen, ABlue, AAlpha: Byte);
+begin
+  Red := ARed;
+  Green := AGreen;
+  Blue := ABlue;
+  Alpha := AAlpha;
+end;
+
+{ TVector2 }
+
+constructor TVector2.Create(AX, AY: Single);
+begin
+  X := AX;
+  Y := AY;
+end;
 
 { TmncRayLib }
 
