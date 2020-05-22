@@ -8,7 +8,7 @@ canvas.point(x, m)
 while x < canvas.width do
      y = math.sin(math.rad(x)) * 100
     canvas.line(x , m + y)
---    sleep(10)
+    sleep(10)
     x = x + 1
 end
 
