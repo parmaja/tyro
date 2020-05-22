@@ -3,7 +3,6 @@ unit RayLibClasses;
 {$MODE delphi}
 {$ENDIF}
 {$M+}{$H+}
-
 {**
  *  This file is part of Tyro project, ported from C header raylib.h
  *
@@ -25,12 +24,19 @@ type
   TRayObject = class(TObject)
   end;
 
+  { Images }
+
+  { TRayImage }
+
   TRayImage = class(TRayObject)
   private
     FImage: RayLib3.TImage;
   protected
   public
   end;
+
+  { Sound }
+
 
 implementation
 
