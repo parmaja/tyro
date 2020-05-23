@@ -110,8 +110,11 @@ type
 
   { TColor }
 
+  //AColor := TColor.Create($010203FF);
+
   TColor = record
-    constructor Create(ARed, AGreen, ABlue, AAlpha: Byte);
+    constructor Create(ARed, AGreen, ABlue, AAlpha: Byte);overload;
+    constructor Create(AValue: Longint); overload;
     case Cardinal of
       0: (Value: Cardinal);
       1: (Red, Green, Blue, Alpha: Byte);
@@ -2007,6 +2010,11 @@ begin
   Green := AGreen;
   Blue := ABlue;
   Alpha := AAlpha;
+end;
+
+constructor TColor.Create(AValue: Longint);
+begin
+  Value := AValue;
 end;
 
 { TVector2 }

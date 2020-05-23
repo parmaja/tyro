@@ -16,7 +16,7 @@ interface
 uses
   Classes, SysUtils, SyncObjs, fgl,
   FPImage, FPCanvas, FPImgCanv, pngcomn, FPReadPNG,
-  RayLib3;
+  RayLibClasses, RayLib3;
 
 type
   TMyFPMemoryImage = class(TFPMemoryImage)
@@ -574,7 +574,8 @@ begin
   Width := AWidth;
   Height := AHeight;
   FColor := BLACK;
-  FBackgroundColor := TColor.Create(0, 110, 160, 255);
+  //FBackgroundColor := TColor.Create(0, 110, 160, 255);
+  FBackgroundColor := TColor.Create($00FF00FF);
   //Font := GetFontDefault;
 
   //FPImage := TMyFPMemoryImage.Create(100,100);
