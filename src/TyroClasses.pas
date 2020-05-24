@@ -16,7 +16,7 @@ interface
 uses
   Classes, SysUtils, SyncObjs, fgl,
   FPImage, FPCanvas, FPImgCanv, pngcomn, FPReadPNG,
-  RayLibClasses, RayLib3;
+  TyroSounds, RayLib3;
 
 type
   TMyFPMemoryImage = class(TFPMemoryImage)
@@ -75,7 +75,7 @@ type
     //FPCanvas: TFPImageCanvas;
     //FBoard: TRenderTexture2D;
     FTexture: TRenderTexture2D;
-    //FBoard: raylib.TImage;
+    //FBoard: TImage;
     Font: raylib3.TFont;
     function GetAlpha: Byte;
     function GetColor: TColor;
@@ -87,7 +87,7 @@ type
     LastX, LastY: Integer;
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
-    //property Board: raylib.TImage read FBoard;
+    //property Board: TImage read FBoard;
     procedure Circle(X, Y, R: Integer; Fill: Boolean = false);
     procedure Rectangle(X, Y, W, H: Integer; Fill: Boolean = false);
     //procedure PrintTest;
@@ -429,7 +429,7 @@ end;
 
 procedure TDrawPointObject.DoExecute;
 begin
-  RayLib.DrawPixel(fX, fY, Canvas.Color);
+  DrawPixel(fX, fY, Canvas.Color);
   Canvas.LastX := fX;
   Canvas.LastY := fY;
 end;
@@ -445,7 +445,7 @@ end;
 
 procedure TDrawLineToObject.DoExecute;
 begin
-  RayLib.DrawLine(Canvas.LastX, Canvas.LastY, fX, fY, Canvas.Color);
+  DrawLine(Canvas.LastX, Canvas.LastY, fX, fY, Canvas.Color);
   Canvas.LastX := fX;
   Canvas.LastY := fY;
 end;
@@ -463,7 +463,7 @@ end;
 
 procedure TDrawLineObject.DoExecute;
 begin
-  RayLib.DrawLine(fX1, fY1, fX2, fY2, Canvas.Color);
+  DrawLine(fX1, fY1, fX2, fY2, Canvas.Color);
   Canvas.LastX := fX2;
   Canvas.LastY := fY2;
 end;
@@ -477,7 +477,7 @@ end;
 
 procedure TClearObject.DoExecute;
 begin
-  RayLib.ClearBackground(Canvas.BackgroundColor);
+  ClearBackground(Canvas.BackgroundColor);
 end;
 
 { TDrawRectangleObject }
@@ -495,9 +495,9 @@ end;
 procedure TDrawRectangleObject.DoExecute;
 begin
   if fFill then
-    RayLib.DrawRectangle(fX, fY, fW, fH, Canvas.Color)
+    DrawRectangle(fX, fY, fW, fH, Canvas.Color)
   else
-    RayLib.DrawRectangleLines(fX, fY, fW, fH, Canvas.Color);
+    DrawRectangleLines(fX, fY, fW, fH, Canvas.Color);
 end;
 
 { TPrintObject }
@@ -525,7 +525,7 @@ end;
 
 procedure TDrawTextObject.DoExecute;
 begin
-  RayLib.DrawTextEx(Canvas.Font, PChar(fText), Vector2Of(fX, fY), Canvas.FontSize, 2, Canvas.Color);
+  DrawTextEx(Canvas.Font, PChar(fText), Vector2Of(fX, fY), Canvas.FontSize, 2, Canvas.Color);
 end;
 
 { TDrawObject }
@@ -562,9 +562,9 @@ end;
 procedure TDrawCircleObject.DoExecute;
 begin
   if fFill then
-    RayLib.DrawCircle(fX, fY, fR, Canvas.Color)
+    DrawCircle(fX, fY, fR, Canvas.Color)
   else
-    RayLib.DrawCircleLines(fX, fY, fR, Canvas.Color);
+    DrawCircleLines(fX, fY, fR, Canvas.Color);
 end;
 
 { TTyroCanvas }
@@ -574,8 +574,9 @@ begin
   Width := AWidth;
   Height := AHeight;
   FColor := BLACK;
-  //FBackgroundColor := TColor.Create(0, 110, 160, 255);
-  FBackgroundColor := TColor.Create($00FF00FF);
+  //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
+  //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
+  FBackgroundColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
   //Font := GetFontDefault;
 
   //FPImage := TMyFPMemoryImage.Create(100,100);
@@ -585,36 +586,36 @@ begin
   //FPCanvas := TFPImageCanvas.Create(FPImage);
   //FPCanvas.Pen.FPColor := colRed;
   //FPCanvas.Rectangle(10, 10, 10 , 10);
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'alpha_beta.png'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'Terminess-Bold.ttf'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'dejavu.fnt'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'terminus.ttf'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/Chroma.png'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/alpha_beta.png'));
-  //Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
-  //Font := raylib.LoadFontEx(PChar(Main.WorkSpace + 'fonts/terminus.ttf'), 12, nil, 255);
-  //Font := raylib.LoadFont(PChar('computer_pixel.fon.ttf'));
+  //Font := LoadFont(PChar(Main.WorkSpace + 'alpha_beta.png'));
+  //Font := LoadFont(PChar(Main.WorkSpace + 'Terminess-Bold.ttf'));
+  //Font := LoadFont(PChar(Main.WorkSpace + 'dejavu.fnt'));
+  //Font := LoadFont(PChar(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
+  //Font := LoadFont(PChar(Main.WorkSpace + 'terminus.ttf'));
+  //Font := LoadFont(PChar(Main.WorkSpace + 'fonts/Chroma.png'));
+  //Font := LoadFont(PChar(Main.WorkSpace + 'fonts/alpha_beta.png'));
+  //Font := LoadFont(PChar(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
+  //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/terminus.ttf'), 12, nil, 255);
+  //Font := LoadFont(PChar('computer_pixel.fon.ttf'));
 
-  Font := raylib.LoadFont(PChar(Main.WorkSpace + 'fonts/font.png'));
-  RayLib.SetTextureFilter(Font.texture, FILTER_POINT);
+  Font := LoadFont(PChar(Main.WorkSpace + 'fonts/font.png'));
+  SetTextureFilter(Font.texture, FILTER_POINT);
 
   FFontSize := Font.baseSize * 2;
 
-  FTexture := RayLib.LoadRenderTexture(Width, Height);
+  FTexture := LoadRenderTexture(Width, Height);
   //FBoard := GetTextureData(FTexture.texture);
 
-  RayLib.BeginTextureMode(FTexture);
-  RayLib.ClearBackground(BackgroundColor);
+  BeginTextureMode(FTexture);
+  ClearBackground(BackgroundColor);
   DrawText(10, 10, 'Ready!');
-  RayLib.EndTextureMode();
+  EndTextureMode();
 end;
 
 destructor TTyroCanvas.Destroy;
 begin
-  RayLib.UnloadFont(Font);
+  UnloadFont(Font);
   //UnloadImage(FBoard);
-  RayLib.UnloadRenderTexture(FTexture);
+  UnloadRenderTexture(FTexture);
   Finalize(FTexture);
   inherited;
 end;
@@ -623,23 +624,23 @@ procedure TTyroCanvas.Circle(X, Y, R: Integer; Fill: Boolean);
 begin
 //  BeginTextureMode(FBoard);
   if Fill then
-    RayLib.DrawCircle(X, Y, R, Color)
+    DrawCircle(X, Y, R, Color)
   else
-    RayLib.DrawCircleLines(X, Y, R, Color);
+    DrawCircleLines(X, Y, R, Color);
 //  EndTextureMode();
 end;
 
 procedure TTyroCanvas.Rectangle(X, Y, W, H: Integer; Fill: Boolean);
 begin
   if Fill then
-    RayLib.DrawRectangle(X, Y, W, H, Color)
+    DrawRectangle(X, Y, W, H, Color)
   else
-    RayLib.DrawRectangleLines(X, Y, W, H, Color);
+    DrawRectangleLines(X, Y, W, H, Color);
 end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
 begin
-  RayLib.DrawTextEx(Font, PChar(S), Vector2Of(x, y), FontSize, 0, Color);
+  DrawTextEx(Font, PChar(S), Vector2Of(x, y), FontSize, 0, Color);
   //ImageDrawTextEx(@FTexture, Vector2Create(x, y), Font, PChar(S), FontSize, 2, RayColorOf(Color));
 end;
 
@@ -650,7 +651,7 @@ end;
 
 procedure TTyroCanvas.Clear;
 begin
-  RayLib.ClearBackground(BackgroundColor);
+  ClearBackground(BackgroundColor);
 end;
 
 procedure TTyroCanvas.SetBackgroundColor(AValue: TColor);
@@ -685,7 +686,7 @@ end;
 function TTyroMain.GetActive: Boolean;
 begin
   if WindowVisible then
-    Result := not RayLib.WindowShouldClose()
+    Result := not WindowShouldClose()
   else
     Result := (FScript <> nil) and FScript.Active;
 end;
@@ -693,9 +694,9 @@ end;
 procedure TTyroMain.ShowWindow(W, H: Integer);
 begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  RayLib.InitWindow(W, H, PChar(Title));
-  RayLib.SetTargetFPS(cFramePerSeconds);
-  RayLib.ShowCursor();
+  InitWindow(W, H, PChar(Title));
+  SetTargetFPS(cFramePerSeconds);
+  ShowCursor();
   WindowVisible := True;
   FCanvas := TTyroCanvas.Create(W, H);
 end;
@@ -703,7 +704,7 @@ end;
 procedure TTyroMain.HideWindow;
 begin
   if WindowVisible then
-    RayLib.CloseWindow;
+    CloseWindow;
 end;
 
 procedure TTyroMain.ProcessQueue;
@@ -715,9 +716,9 @@ var
 begin
   if Canvas <> nil then
   begin
-    ft := RayLib.GetTime();
+    ft := GetTime();
     fpd := (1 / cFramePerSeconds);
-    RayLib.BeginTextureMode(Canvas.FTexture);
+    BeginTextureMode(Canvas.FTexture);
     c := 0;
     while Queue.Count > 0 do
     begin
@@ -730,13 +731,13 @@ begin
       p.Execute;
       p.Free;
       Inc(c);
-      ft2 := RayLib.GetTime() - ft;
+      ft2 := GetTime() - ft;
       if ft2 >= fpd then
       begin
         break;
       end;
     end;
-    RayLib.EndTextureMode;
+    EndTextureMode;
   end;
 end;
 
@@ -745,7 +746,7 @@ begin
   inherited Create;
   RayLib.Load;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
-  RayLib.SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
+  SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   //FLock := TCriticalSection.Create;
   FQueue := TQueueObjects.Create(True);
   FScriptTypes := TScriptTypes.Create(true);
@@ -801,8 +802,10 @@ begin
   begin
     ProcessQueue;
 
-    RayLib.BeginDrawing;
-    RayLib.ClearBackground(DefaultBackground);
+    BeginDrawing;
+    ClearBackground(DefaultBackground);
+
+
 
     try
       {im := LoadImageEx(PColor(FScript.FPImage.Data), FScript.FPImage.Width, FScript.FPImage.Height);
@@ -813,13 +816,13 @@ begin
       //DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);
 
       with Canvas.FTexture do
-        RayLib.DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), WHITE);
+        DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), WHITE);
 
     finally
     end;
 
     Loop;
-    RayLib.EndDrawing;
+    EndDrawing;
   end;
 end;
 

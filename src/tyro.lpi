@@ -31,7 +31,6 @@
           </Target>
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir)"/>
-            <OtherUnitFiles Value="raylib"/>
             <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
@@ -92,6 +91,9 @@
     </RunParams>
     <RequiredPackages>
       <Item>
+        <PackageName Value="RayLib"/>
+      </Item>
+      <Item>
         <PackageName Value="MiniCommons"/>
       </Item>
     </RequiredPackages>
@@ -117,7 +119,7 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="raylib\RayLibClasses.pas"/>
+        <Filename Value="TyroSounds.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>

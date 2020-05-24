@@ -57,7 +57,6 @@ You do not need to use it, it is already in the source folder
 
 [Lua4Lazarus](https://github.com/malcome/Lua4Lazarus)
 
-[raylib-pas](https://github.com/zaher/raylib-pas)
 
 # TODO
 

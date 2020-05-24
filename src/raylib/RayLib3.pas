@@ -91,6 +91,9 @@ unit RayLib3;
 
 interface
 {*
+* TODO:
+*       Change to use enum types inside functions
+*
 * Tools used to translate
 *       https://github.com/neslib/Chet
 *       http://www.astonshell.com/freeware/c2pas32/
@@ -104,6 +107,9 @@ uses
   mnLibraries; // take it from github/parmaja/minilib
 
 {$MINENUMSIZE 4} //All enum must be sized as Integer
+{$Z4}
+{$A8}
+
 
 type
   PPUTF8Char = ^PUTF8Char;
@@ -114,7 +120,8 @@ type
 
   TColor = record
     constructor Create(ARed, AGreen, ABlue, AAlpha: Byte);overload;
-    constructor Create(AValue: Longint); overload;
+    constructor Create(AValue: Cardinal); overload;
+    constructor CreateRGBA(RGBA: Cardinal); overload; //stupid idea, but ok :P
     case Cardinal of
       0: (Value: Cardinal);
       1: (Red, Green, Blue, Alpha: Byte);
@@ -259,7 +266,6 @@ type
   PNPatchInfo = ^TNPatchInfo;
 
 // Font character info
-// Font character info
   TCharInfo = packed record
     Value: Integer;    // Character value (Unicode)
     OffsetX: Integer;  // Character offset X when drawing
@@ -373,26 +379,26 @@ type
 
   // Model type
   TModel = packed record
-    Transform : TMatrix;        // Local transform matrix
+    Transform: TMatrix;        // Local transform matrix
 
-    MeshCount : Integer;        // Number of meshes
-    Meshes : PMesh;             // Meshes array
+    MeshCount: Integer;        // Number of meshes
+    Meshes: PMesh;             // Meshes array
 
-    MaterialCount : Integer;    // Number of materials
-    Materials : PMaterial;      // Materials array
-    MeshMaterial : PInteger;    // Mesh material number
+    MaterialCount: Integer;    // Number of materials
+    Materials: PMaterial;      // Materials array
+    MeshMaterial: PInteger;    // Mesh material number
 
     // Animation data
-    BoneCount : Integer;        // Number of bones
-    Bones : PBoneInfo;          // Bones information (skeleton)
-    BindPose : PTransform;      // Bones base transformation (pose)
+    BoneCount: Integer;        // Number of bones
+    Bones: PBoneInfo;          // Bones information (skeleton)
+    BindPose: PTransform;      // Bones base transformation (pose)
   end;
   PModel = ^TModel;
 
   // Model animation
   TModelAnimation = packed record
-    BoneCount : Integer;        // Number of bones
-    BoneInfo : PBoneInfo;       // Bones information (skeleton)
+    BoneCount: Integer;        // Number of bones
+    BoneInfo: PBoneInfo;       // Bones information (skeleton)
 
     FrameCount: Integer;       // Number of animation frames
     FramePoses: PPTransform;   // Poses array by frame
@@ -401,39 +407,39 @@ type
 
   // Ray type (useful for raycast)
   TRay = packed record
-    Position : TVector3;        // Ray position (origin)
-    Direction : TVector3;       // Ray direction
+    Position: TVector3;        // Ray position (origin)
+    Direction: TVector3;       // Ray direction
   end;
   PRay = ^TRay;
 
   // Raycast hit information
   TRayHitInfo = packed record
-    Hit : Boolean;              // Did the ray hit something?
-    Distance : Single;          // Distance to nearest hit
-    position : TVector3;        // Position of nearest hit
-    normal : TVector3;          // Surface normal of hit
+    Hit: Boolean;              // Did the ray hit something?
+    Distance: Single;          // Distance to nearest hit
+    position: TVector3;        // Position of nearest hit
+    normal: TVector3;          // Surface normal of hit
   end;
   PRayHitInfo = ^TRayHitInfo;
 
   // Bounding box type
   TBoundingBox = packed record
-    Min : TVector3;             // Minimum vertex box-corner
-    Max : TVector3;             // Maximum vertex box-corner
+    Min: TVector3;             // Minimum vertex box-corner
+    Max: TVector3;             // Maximum vertex box-corner
   end;
   PBoundingBox = ^TBoundingBox;
 
   // Wave type, defines audio wave data
   TWave = packed record
-    SampleCount : Cardinal;     // Total number of samples
-    SampleRate : Cardinal;      // Frequency (samples per second)
-    SampleSize : Cardinal;      // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
-    Channels : Cardinal;        // Number of channels (1-mono, 2-stereo)
-    Data : Pointer;             // Buffer data pointer
+    SampleCount: Cardinal;     // Total number of samples
+    SampleRate: Cardinal;      // Frequency (samples per second)
+    SampleSize: Cardinal;      // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
+    Channels: Cardinal;        // Number of channels (1-mono, 2-stereo)
+    Data: Pointer;             // Buffer data pointer
   end;
   PWave = ^TWave;
 
   //
-  TrAudioBuffer = record
+  TrAudioBuffer = packed record
   end;
   PrAudioBuffer = ^TrAudioBuffer;
 
@@ -444,27 +450,27 @@ type
     SampleSize: Cardinal;       // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
     Channels: Cardinal;         // Number of channels (1-mono, 2-stereo)
 
-    Buffer : PrAudioBuffer;     // Pointer to internal data used by the audio system
+    Buffer: PrAudioBuffer;     // Pointer to internal data used by the audio system
   end;
   PAudioStream = ^TAudioStream;
 
   // Sound source type
   TSound = packed record
-    SampleCount : Cardinal;     // Total number of samples
-    Stream : TAudioStream       // Audio stream
+    SampleCount: Cardinal;     // Total number of samples
+    Stream: TAudioStream       // Audio stream
   end;
   PSound = ^TSound;
 
   // Music stream type (audio file streaming from memory)
   // NOTE: Anything longer than ~10 seconds should be streamed
-  TMusic = record
-    CtxType : Integer;          // Type of music context (audio filetype)
-    CtxData : Pointer;          // Audio context data, depends on type
+  TMusic = packed record
+    CtxType: Integer;          // Type of music context (audio filetype)
+    CtxData: Pointer;          // Audio context data, depends on type
 
-    SampleCount : Cardinal;     // Total number of samples
-    LoopCount : Cardinal;       // Loops count (times music will play), 0 means infinite loop
+    SampleCount: Cardinal;     // Total number of samples
+    LoopCount: Cardinal;       // Loops count (times music will play), 0 means infinite loop
 
-    Stream : TAudioStream;      // Audio stream
+    Stream: TAudioStream;      // Audio stream
   end;
   PMusic = ^TMusic;
 
@@ -876,1106 +882,1110 @@ type
 
   // Callbacks to be implemented by users
 type
-  TTraceLogCallback = procedure(LogType : Integer; Text: PAnsiChar; Args: Pointer); cdecl; //TODO check Args
+  TTraceLogCallback = procedure(LogType: Integer; Text: PAnsiChar; Args: Pointer); cdecl; //TODO check Args
 
 //------------------------------------------------------------------------------------
 // Global Variables Definition
 //------------------------------------------------------------------------------------
 // It's lonely here...
 
+//------------------------------------------------------------------------------------
+// Window and Graphics Device Functions (Module: core)
+//------------------------------------------------------------------------------------
+
+var
+  { Window-related functions }
+
+  // Initialize window and OpenGL context
+  InitWindow: procedure(Width: Integer; Height: Integer; const Title: PUTF8Char); cdecl;
+  // Check if KEY_ESCAPE pressed or Close icon pressed
+  WindowShouldClose: function: boolean; cdecl;
+  // Close window and unload OpenGL context
+  CloseWindow: procedure; cdecl;
+  // Check if window has been initialized successfully
+  IsWindowReady: function: boolean; cdecl;
+  // Check if window has been minimized (or lost focus)
+  IsWindowMinimized: function: boolean; cdecl;
+  // Check if window has been resized
+  IsWindowResized: function: boolean; cdecl;
+  // Check if window is currently hidden
+  IsWindowHidden: function: boolean; cdecl;
+  // Check if window is currently fullscreen
+  IsWindowFullscreen: function: boolean; cdecl;
+  // Toggle fullscreen mode (only PLATFORM_DESKTOP)
+  ToggleFullscreen: procedure; cdecl;
+  // Show the window
+  UnhideWindow: procedure; cdecl;
+  // Hide the window
+  HideWindow: procedure; cdecl;
+  // Set icon for window (only PLATFORM_DESKTOP)
+  SetWindowIcon: procedure(image: TImage); cdecl;
+  // Set title for window (only PLATFORM_DESKTOP)
+  SetWindowTitle: procedure(const title: PUTF8Char); cdecl;
+  // Set window position on screen (only PLATFORM_DESKTOP)
+  SetWindowPosition: procedure(x: Integer; y: Integer); cdecl;
+  // Set monitor for the current window (fullscreen mode)
+  SetWindowMonitor: procedure(monitor: Integer); cdecl;
+  // Set window minimum dimensions (for FLAG_WINDOW_RESIZABLE)
+  SetWindowMinSize: procedure(width: Integer; height: Integer); cdecl;
+  // Set window dimensions
+  SetWindowSize: procedure(width: Integer; height: Integer); cdecl;
+  // Get native window handle
+  GetWindowHandle: function: Pointer; cdecl;
+  // Get current screen width
+  GetScreenWidth: function: Integer; cdecl;
+  // Get current screen height
+  GetScreenHeight: function: Integer; cdecl;
+  // Get number of connected monitors
+  GetMonitorCount: function: Integer; cdecl;
+  // Get primary monitor width
+  GetMonitorWidth: function(monitor: Integer): Integer; cdecl;
+  // Get primary monitor height
+  GetMonitorHeight: function(monitor: Integer): Integer; cdecl;
+  // Get primary monitor physical width in millimetres
+  GetMonitorPhysicalWidth: function(monitor: Integer): Integer; cdecl;
+  // Get primary monitor physical height in millimetres
+  GetMonitorPhysicalHeight: function(monitor: Integer): Integer; cdecl;
+  // Get window position XY on monitor
+  GetWindowPosition: function: TVector2; cdecl;
+  // Get the human-readable, UTF-8 encoded name of the primary monitor
+  GetMonitorName: function(monitor: Integer): PUTF8Char; cdecl;
+  // Get clipboard text content
+  GetClipboardText: function: PUTF8Char; cdecl;
+  // Set clipboard text content
+  SetClipboardText: procedure(const text: PUTF8Char); cdecl;
+
+  { Cursor-related functions }
+
+  // Shows cursor
+  ShowCursor: procedure; cdecl;
+  // Hides cursor
+  HideCursor: procedure; cdecl;
+  // Check if cursor is not visible
+  IsCursorHidden: function: boolean; cdecl;
+  // Enables cursor (unlock cursor)
+  EnableCursor: procedure; cdecl;
+  // Disables cursor (lock cursor)
+  DisableCursor: procedure; cdecl;
+
+  { Drawing-related functions }
+
+  // Set background color (framebuffer clear color)
+  ClearBackground: procedure(color: TColor); cdecl;
+  // Setup canvas (framebuffer) to start drawing
+  BeginDrawing: procedure; cdecl;
+  // End canvas drawing and swap buffers (double buffering)
+  EndDrawing: procedure; cdecl;
+  // Initialize 2D mode with custom camera (2D)
+  BeginMode2D: procedure(camera: TCamera2D); cdecl;
+  // Ends 2D mode with custom camera
+  EndMode2D: procedure; cdecl;
+  // Initializes 3D mode with custom camera (3D)
+  BeginMode3D: procedure(camera: TCamera3D); cdecl;
+  // Ends 3D mode and returns to default 2D orthographic mode
+  EndMode3D: procedure; cdecl;
+  // Initializes render texture for drawing
+  BeginTextureMode: procedure(target: TRenderTexture2D); cdecl;
+  // Ends drawing to render texture
+  EndTextureMode: procedure; cdecl;
+  // Begin scissor mode (define screen area for following drawing)
+  BeginScissorMode: procedure(x: Integer; y: Integer; width: Integer; height: Integer); cdecl;
+  // End scissor mode
+  EndScissorMode: procedure; cdecl;
+
+  { Screen-space-related functions }
+
+  // Returns a ray trace from mouse position
+  GetMouseRay: function(mousePosition: TVector2; camera: TCamera): TRay; cdecl;
+  // Returns camera transform matrix (view matrix)
+  GetCameraMatrix: function(camera: TCamera): TMatrix; cdecl;
+  // Returns camera 2d transform matrix
+  GetCameraMatrix2D: function(camera: TCamera2D): TMatrix; cdecl;
+  // Returns the screen space position for a 3d world space position
+  GetWorldToScreen: function(position: TVector3; camera: TCamera): TVector2; cdecl;
+  // Returns size position for a 3d world space position
+  GetWorldToScreenEx: function(position: TVector3; camera: TCamera; width: Integer; height: Integer): TVector2; cdecl;
+  // Returns the screen space position for a 2d camera world space position
+  GetWorldToScreen2D: function(position: TVector2; camera: TCamera2D): TVector2; cdecl;
+  // Returns the world space position for a 2d camera screen space position
+  GetScreenToWorld2D: function(position: TVector2; camera: TCamera2D): TVector2; cdecl;
+
+  { Timing-related functions }
+
+  // Set target FPS (maximum)
+  SetTargetFPS: procedure(fps: Integer); cdecl;
+  // Returns current FPS
+  GetFPS: function: Integer; cdecl;
+  // Returns time in seconds for last frame drawn
+  GetFrameTime: function: Single; cdecl;
+  // Returns elapsed time in seconds since InitWindow()
+  GetTime: function: Double; cdecl;
+
+  { Color-related functions }
+
+  // Returns hexadecimal value for a Color
+  ColorToInt: function(color: TColor): Integer; cdecl;
+  // Returns color normalized as float [0..1]
+  ColorNormalize: function(color: TColor): TVector4; cdecl;
+  // Returns color from normalized values [0..1]
+  ColorFromNormalized: function(normalized: TVector4): TColor; cdecl;
+  // Returns HSV values for a Color
+  ColorToHSV: function(color: TColor): TVector3; cdecl;
+  // Returns a Color from HSV values
+  ColorFromHSV: function(hsv: TVector3): TColor; cdecl;
+  // Returns a Color struct from hexadecimal value
+  GetColor: function(hexValue: Integer): TColor; cdecl;
+  // Color fade-in or fade-out, alpha goes from 0.0f to 1.0f
+  Fade: function(color: TColor; Alpha: Single): TColor; cdecl;
+
+  { Misc. functions }
+
+  // Setup window configuration flags (view FLAGS)
+  SetConfigFlags: procedure(flags: Cardinal); cdecl;
+  // Set the current threshold (minimum) log level
+  SetTraceLogLevel: procedure(logType: TTraceLogType); cdecl;
+  // Set the exit threshold (minimum) log level
+  SetTraceLogExit: procedure(logType: Integer); cdecl;
+  // Set a trace log callback to enable custom logging
+  SetTraceLogCallback: procedure(callback: TTraceLogCallback); cdecl;
+  // Show trace log messages (LOG_DEBUG, LOG_INFO, LOG_WARNING, LOG_ERROR)
+  TraceLog: procedure(logType: Integer; const text: PUTF8Char) varargs; cdecl;
+  // Takes a screenshot of current screen (saved a .png)
+  TakeScreenshot: procedure(const fileName: PUTF8Char); cdecl;
+  // Returns a random value between min and max (both included)
+  GetRandomValue: function(min: Integer; max: Integer): Integer; cdecl;
+
+  { Files management functions }
+
+  // Load file data as byte array (read)
+  LoadFileData: function(const fileName: PUTF8Char; bytesRead: PCardinal): PByte; cdecl;
+  // Save data to file from byte array (write)
+  SaveFileData: procedure(const fileName: PUTF8Char; data: Pointer; bytesToWrite: Cardinal); cdecl;
+  // Load text data from file (read), returns a '\0' terminated string
+  LoadFileText: function(const fileName: PUTF8Char): PUTF8Char; cdecl;
+  // Save text data to file (write), string must be '\0' terminated
+  SaveFileText: procedure(const fileName: PUTF8Char; text: PUTF8Char); cdecl;
+  // Check if file exists
+  FileExists: function(const fileName: PUTF8Char): boolean; cdecl;
+  // Check file extension
+  IsFileExtension: function(const fileName: PUTF8Char; const ext: PUTF8Char): boolean; cdecl;
+  // Check if a directory path exists
+  DirectoryExists: function(const dirPath: PUTF8Char): boolean; cdecl;
+  // Get pointer to extension for a filename string
+  GetExtension: function(const fileName: PUTF8Char): PUTF8Char; cdecl;
+  // Get pointer to filename for a path string
+  GetFileName: function(const filePath: PUTF8Char): PUTF8Char; cdecl;
+  // Get filename string without extension (uses static string)
+  GetFileNameWithoutExt: function(const filePath: PUTF8Char): PUTF8Char; cdecl;
+  // Get full path for a given fileName with path (uses static string)
+  GetDirectoryPath: function(const filePath: PUTF8Char): PUTF8Char; cdecl;
+  // Get previous directory path for a given path (uses static string)
+  GetPrevDirectoryPath: function(const dirPath: PUTF8Char): PUTF8Char; cdecl;
+  // Get current working directory (uses static string)
+  GetWorkingDirectory: function: PUTF8Char; cdecl;
+  // Get filenames in a directory path (memory should be freed)
+  GetDirectoryFiles: function(const dirPath: PUTF8Char; count: PInteger): PPUTF8Char; cdecl;
+  // Clear directory files paths buffers (free memory)
+  ClearDirectoryFiles: procedure; cdecl;
+  // Change working directory, returns true if success
+  ChangeDirectory: function(const dir: PUTF8Char): boolean; cdecl;
+  // Check if a file has been dropped into window
+  IsFileDropped: function: boolean; cdecl;
+  // Get dropped files names (memory should be freed)
+  GetDroppedFiles: function(count: PInteger): PPUTF8Char; cdecl;
+  // Clear dropped files paths buffer (free memory)
+  ClearDroppedFiles: procedure; cdecl;
+  // Get file modification time (last write time)
+  GetFileModTime: function(const fileName: PUTF8Char): Integer; cdecl;
+
+  // Compress data (DEFLATE algorythm)
+  CompressData: function(data: PByte; dataLength: Integer; compDataLength: PInteger): PByte; cdecl;
+  // Decompress data (DEFLATE algorythm)
+  DecompressData: function(compData: PByte; compDataLength: Integer; dataLength: PInteger): PByte; cdecl;
+
+  { Persistent storage management }
+
+  // Save integer value to storage file (to defined position)
+  SaveStorageValue: procedure(position: Cardinal; value: Integer); cdecl;
+  // Load integer value from storage file (from defined position)
+  LoadStorageValue: function(position: Cardinal): Integer; cdecl;
+
+  // Open URL with default system browser (if available)
+  OpenURL: procedure(const url: PUTF8Char); cdecl;
+
+//------------------------------------------------------------------------------------
+// Input Handling Functions (Module: core)
+//------------------------------------------------------------------------------------
+
+  { Input-related functions: keyboard }
+
+  // Detect if a key has been pressed once
+  IsKeyPressed: function(key: Integer): boolean; cdecl;
+  // Detect if a key is being pressed
+  IsKeyDown: function(key: Integer): boolean; cdecl;
+  // Detect if a key has been released once
+  IsKeyReleased: function(key: Integer): boolean; cdecl;
+
+  { Input-related functions: gamepads }
+
+  // Detect if a key is NOT being pressed
+  IsKeyUp: function(key: Integer): boolean; cdecl;
+  // Set a custom key to exit program (default is ESC)
+  SetExitKey: procedure(key: Integer); cdecl;
+  // Get key pressed, call it multiple times for chars queued
+  GetKeyPressed: function: Integer; cdecl;
+  // Detect if a gamepad is available
+  IsGamepadAvailable: function(gamepad: Integer): boolean; cdecl;
+  // Check gamepad name (if available)
+  IsGamepadName: function(gamepad: Integer; const name: PUTF8Char): boolean; cdecl;
+  // Return gamepad internal name id
+  GetGamepadName: function(gamepad: Integer): PUTF8Char; cdecl;
+  // Detect if a gamepad button has been pressed once
+  IsGamepadButtonPressed: function(gamepad: Integer; button: Integer): boolean; cdecl;
+  // Detect if a gamepad button is being pressed
+  IsGamepadButtonDown: function(gamepad: Integer; button: Integer): boolean; cdecl;
+  // Detect if a gamepad button has been released once
+  IsGamepadButtonReleased: function(gamepad: Integer; button: Integer): boolean; cdecl;
+  // Detect if a gamepad button is NOT being pressed
+  IsGamepadButtonUp: function(gamepad: Integer; button: Integer): boolean; cdecl;
+  // Get the last gamepad button pressed
+  GetGamepadButtonPressed: function: Integer; cdecl;
+  // Return gamepad axis count for a gamepad
+  GetGamepadAxisCount: function(gamepad: Integer): Integer; cdecl;
+  // Return axis movement value for a gamepad axis
+  GetGamepadAxisMovement: function(gamepad: Integer; axis: Integer): Single; cdecl;
+
+  { Input-related functions: mouse }
+
+  // Detect if a mouse button has been pressed once
+  IsMouseButtonPressed: function(button: TMouseButton): boolean; cdecl;
+  // Detect if a mouse button is being pressed
+  IsMouseButtonDown: function(button: TMouseButton): boolean; cdecl;
+  // Detect if a mouse button has been released once
+  IsMouseButtonReleased: function(button: TMouseButton): boolean; cdecl;
+  // Detect if a mouse button is NOT being pressed
+  IsMouseButtonUp: function(button: TMouseButton): boolean; cdecl;
+  // Returns mouse position X
+  GetMouseX: function: Integer; cdecl;
+  // Returns mouse position Y
+  GetMouseY: function: Integer; cdecl;
+  // Returns mouse position XY
+  GetMousePosition: function: TVector2; cdecl;
+  // Set mouse position XY
+  SetMousePosition: procedure(x: Integer; y: Integer); cdecl;
+  // Set mouse offset
+  SetMouseOffset: procedure(offsetX: Integer; offsetY: Integer); cdecl;
+  // Set mouse scaling
+  SetMouseScale: procedure(scaleX: Single; scaleY: Single); cdecl;
+  // Returns mouse wheel movement Y
+  GetMouseWheelMove: function: Integer; cdecl;
+
+  { Input-related functions: touch }
+
+  // Returns touch position X for touch point 0 (relative to screen size)
+  GetTouchX: function: Integer; cdecl;
+  // Returns touch position Y for touch point 0 (relative to screen size)
+  GetTouchY: function: Integer; cdecl;
+  // Returns touch position XY for a touch point index (relative to screen size)
+  GetTouchPosition: function(index: Integer): TVector2; cdecl;
+
+//------------------------------------------------------------------------------------
+// Gestures and Touch Handling Functions (Module: gestures)
+//------------------------------------------------------------------------------------
+
+  // Enable a set of gestures using flags
+  SetGesturesEnabled: procedure(gestureFlags: Cardinal); cdecl;
+  // Check if a gesture have been detected
+  IsGestureDetected: function(gesture: Integer): boolean; cdecl;
+  // Get latest detected gesture
+  GetGestureDetected: function: Integer; cdecl;
+  // Get touch points count
+  GetTouchPointsCount: function: Integer; cdecl;
+  // Get gesture hold time in milliseconds
+  GetGestureHoldDuration: function: Single; cdecl;
+  // Get gesture drag vector
+  GetGestureDragVector: function: TVector2; cdecl;
+  // Get gesture drag angle
+  GetGestureDragAngle: function: Single; cdecl;
+  // Get gesture pinch delta
+  GetGesturePinchVector: function: TVector2; cdecl;
+  // Get gesture pinch angle
+  GetGesturePinchAngle: function: Single; cdecl;
+
+//------------------------------------------------------------------------------------
+// Camera System Functions (Module: camera)
+//------------------------------------------------------------------------------------
+
+  // Set camera mode (multiple camera modes available)
+  SetCameraMode: procedure(camera: TCamera; mode: Integer); cdecl;
+  // Update camera position for selected mode
+  UpdateCamera: procedure(camera: PCamera); cdecl;
+
+  // Set camera pan key to combine with mouse movement (free camera)
+  SetCameraPanControl: procedure(panKey: Integer); cdecl;
+  // Set camera alt key to combine with mouse movement (free camera)
+  SetCameraAltControl: procedure(altKey: Integer); cdecl;
+  // Set camera smooth zoom key to combine with mouse (free camera)
+  SetCameraSmoothZoomControl: procedure(szKey: Integer); cdecl;
+  // Set camera move controls (1st person and 3rd person cameras)
+  SetCameraMoveControls: procedure(frontKey: Integer; backKey: Integer; rightKey: Integer; leftKey: Integer; upKey: Integer; downKey: Integer); cdecl;
+
+//------------------------------------------------------------------------------------
+// Basic Shapes Drawing Functions (Module: shapes)
+//------------------------------------------------------------------------------------
+
+  { Basic shapes drawing functions }
+
+  // Draw a pixel
+  DrawPixel: procedure(posX: Integer; posY: Integer; color: TColor); cdecl;
+  // Draw a pixel (Vector version)
+  DrawPixelV: procedure(position: TVector2; color: TColor); cdecl;
+  // Draw a line
+  DrawLine: procedure(startPosX: Integer; startPosY: Integer; endPosX: Integer; endPosY: Integer; color: TColor); cdecl;
+  // Draw a line (Vector version)
+  DrawLineV: procedure(startPos: TVector2; endPos: TVector2; color: TColor); cdecl;
+  // Draw a line defining thickness
+  DrawLineEx: procedure(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl;
+  // Draw a line using cubic-bezier curves in-out
+  DrawLineBezier: procedure(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl;
+  // Draw lines sequence
+  DrawLineStrip: procedure(points: PVector2; numPoints: Integer; color: TColor); cdecl;
+  // Draw a color-filled circle
+  DrawCircle: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl;
+  // Draw a piece of a circle
+  DrawCircleSector: procedure(center: TVector2; radius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
+  // Draw circle sector outline
+  DrawCircleSectorLines: procedure(center: TVector2; radius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
+  // Draw a gradient-filled circle
+  DrawCircleGradient: procedure(centerX: Integer; centerY: Integer; radius: Single; color1: TColor; color2: TColor); cdecl;
+  // Draw a color-filled circle (Vector version)
+  DrawCircleV: procedure(center: TVector2; radius: Single; color: TColor); cdecl;
+  // Draw circle outline
+  DrawCircleLines: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl;
+  // Draw ellipse
+  DrawEllipse: procedure(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl;
+  // Draw ellipse outline
+  DrawEllipseLines: procedure(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl;
+  // Draw ring
+  DrawRing: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
+  // Draw ring outline
+  DrawRingLines: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
+  // Draw a color-filled rectangle
+  DrawRectangle: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl;
+  // Draw a color-filled rectangle (Vector version)
+  DrawRectangleV: procedure(position: TVector2; size: TVector2; color: TColor); cdecl;
+  // Draw a color-filled rectangle
+  DrawRectangleRec: procedure(rec: TRectangle; color: TColor); cdecl;
+  // Draw a color-filled rectangle with pro parameters
+  DrawRectanglePro: procedure(rec: TRectangle; origin: TVector2; rotation: Single; color: TColor); cdecl;
+  // Draw a vertical-gradient-filled rectangle
+  DrawRectangleGradientV: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color1: TColor; color2: TColor); cdecl;
+  // Draw a horizontal-gradient-filled rectangle
+  DrawRectangleGradientH: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color1: TColor; color2: TColor); cdecl;
+  // Draw a gradient-filled rectangle with custom vertex colors
+  DrawRectangleGradientEx: procedure(rec: TRectangle; col1: TColor; col2: TColor; col3: TColor; col4: TColor); cdecl;
+  // Draw rectangle outline
+  DrawRectangleLines: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl;
+  // Draw rectangle outline with extended parameters
+  DrawRectangleLinesEx: procedure(rec: TRectangle; lineThick: Integer; color: TColor); cdecl;
+  // Draw rectangle with rounded edges
+  DrawRectangleRounded: procedure(rec: TRectangle; roundness: Single; segments: Integer; color: TColor); cdecl;
+  // Draw rectangle with rounded edges outline
+  DrawRectangleRoundedLines: procedure(rec: TRectangle; roundness: Single; segments: Integer; lineThick: Integer; color: TColor); cdecl;
+  // Draw a color-filled triangle (vertex in counter-clockwise order!)
+  DrawTriangle: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl;
+  // Draw triangle outline (vertex in counter-clockwise order!)
+  DrawTriangleLines: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl;
+  // Draw a triangle fan defined by points (first vertex is the center)
+  DrawTriangleFan: procedure(points: PVector2; numPoints: Integer; color: TColor); cdecl;
+  // Draw a triangle strip defined by points
+  DrawTriangleStrip: procedure(points: PVector2; pointsCount: Integer; color: TColor); cdecl;
+  // Draw a regular polygon (Vector version)
+  DrawPoly: procedure(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl;
+  // Draw a polygon outline of n sides
+  DrawPolyLines: procedure(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl;
+
+  { Basic shapes collision detection functions }
+
+  // Check collision between two rectangles
+  CheckCollisionRecs: function(rec1: TRectangle; rec2: TRectangle): boolean; cdecl;
+  // Check collision between two circles
+  CheckCollisionCircles: function(center1: TVector2; radius1: Single; center2: TVector2; radius2: Single): boolean; cdecl;
+  // Check collision between circle and rectangle
+  CheckCollisionCircleRec: function(center: TVector2; radius: Single; rec: TRectangle): boolean; cdecl;
+  // Get collision rectangle for two rectangles collision
+  GetCollisionRec: function(rec1: TRectangle; rec2: TRectangle): TRectangle; cdecl;
+  // Check if point is inside rectangle
+  CheckCollisionPointRec: function(point: TVector2; rec: TRectangle): boolean; cdecl;
+  // Check if point is inside circle
+  CheckCollisionPointCircle: function(point: TVector2; center: TVector2; radius: Single): boolean; cdecl;
+  // Check if point is inside a triangle
+  CheckCollisionPointTriangle: function(point: TVector2; p1: TVector2; p2: TVector2; p3: TVector2): boolean; cdecl;
+
+//------------------------------------------------------------------------------------
+// Texture Loading and Drawing Functions (Module: textures)
+//------------------------------------------------------------------------------------
+
+  { Image loading functions }
+  // NOTE: This functions do not require GPU access
+
+  // Load image from file into CPU memory (RAM)
+  LoadImage: function(const fileName: PUTF8Char): TImage; cdecl;
+  // Load image from Color array data (RGBA - 32bit)
+  LoadImageEx: function(pixels: PColor; width: Integer; height: Integer): TImage; cdecl;
+  // Load image from raw data with parameters
+  LoadImagePro: function(data: Pointer; width: Integer; height: Integer; format: Integer): TImage; cdecl;
+  // Load image from RAW file data
+  LoadImageRaw: function(const fileName: PUTF8Char; width: Integer; height: Integer; format: Integer; headerSize: Integer): TImage; cdecl;
+  // Unload image from CPU memory (RAM)
+  UnloadImage: procedure(image: TImage); cdecl;
+  // Export image data to file
+  ExportImage: procedure(image: TImage; const fileName: PUTF8Char); cdecl;
+  // Export image as code file defining an array of bytes
+  ExportImageAsCode: procedure(image: TImage; const fileName: PUTF8Char); cdecl;
+  // Get pixel data from image as a Color struct array
+  GetImageData: function(image: TImage): PColor; cdecl;
+  // Get pixel data from image as Vector4 array (float normalized)
+  GetImageDataNormalized: function(image: TImage): PVector4; cdecl;
+
+  { Image generation functions }
+
+  // Generate image: plain color
+  GenImageColor: function(width: Integer; height: Integer; color: TColor): TImage; cdecl;
+  // Generate image: vertical gradient
+  GenImageGradientV: function(width: Integer; height: Integer; top: TColor; bottom: TColor): TImage; cdecl;
+  // Generate image: horizontal gradient
+  GenImageGradientH: function(width: Integer; height: Integer; left: TColor; right: TColor): TImage; cdecl;
+  // Generate image: radial gradient
+  GenImageGradientRadial: function(width: Integer; height: Integer; density: Single; inner: TColor; outer: TColor): TImage; cdecl;
+  // Generate image: checked
+  GenImageChecked: function(width: Integer; height: Integer; checksX: Integer; checksY: Integer; col1: TColor; col2: TColor): TImage; cdecl;
+  // Generate image: white noise
+  GenImageWhiteNoise: function(width: Integer; height: Integer; factor: Single): TImage; cdecl;
+  // Generate image: perlin noise
+  GenImagePerlinNoise: function(width: Integer; height: Integer; offsetX: Integer; offsetY: Integer; scale: Single): TImage; cdecl;
+  // Generate image: cellular algorithm. Bigger tileSize means bigger cells
+  GenImageCellular: function(width: Integer; height: Integer; tileSize: Integer): TImage; cdecl;
+
+  { Image manipulation functions }
+
+  // Create an image duplicate (useful for transformations)
+  ImageCopy: function(image: TImage): TImage; cdecl;
+  // Create an image from another image piece
+  ImageFromImage: function(image: TImage; rec: TRectangle): TImage; cdecl;
+  // Create an image from text (default font)
+  ImageText: function(const text: PUTF8Char; fontSize: Integer; color: TColor): TImage; cdecl;
+  // Create an image from text (custom sprite font)
+  ImageTextEx: function(font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single; tint: TColor): TImage; cdecl;
+  // Convert image to POT (power-of-two)
+  ImageToPOT: procedure(image: PImage; fillColor: TColor); cdecl;
+  // Convert image data to desired format
+  ImageFormat: procedure(image: PImage; newFormat: Integer); cdecl;
+  // Apply alpha mask to image
+  ImageAlphaMask: procedure(image: PImage; alphaMask: TImage); cdecl;
+  // Clear alpha channel to desired color
+  ImageAlphaClear: procedure(image: PImage; color: TColor; threshold: Single); cdecl;
+  // Crop image depending on alpha value
+  ImageAlphaCrop: procedure(image: PImage; threshold: Single); cdecl;
+  // Premultiply alpha channel
+  ImageAlphaPremultiply: procedure(image: PImage); cdecl;
+  // Crop an image to a defined rectangle
+  ImageCrop: procedure(image: PImage; crop: TRectangle); cdecl;
+  // Resize image (Bicubic scaling algorithm)
+  ImageResize: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl;
+  // Resize image (Nearest-Neighbor scaling algorithm)
+  ImageResizeNN: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl;
+  // Resize canvas and fill with color
+  ImageResizeCanvas: procedure(image: PImage; newWidth: Integer; newHeight: Integer; offsetX: Integer; offsetY: Integer; color: TColor); cdecl;
+  // Generate all mipmap levels for a provided image
+  ImageMipmaps: procedure(image: PImage); cdecl;
+  // Dither image data to 16bpp or lower (Floyd-Steinberg dithering)
+  ImageDither: procedure(image: PImage; rBpp: Integer; gBpp: Integer; bBpp: Integer; aBpp: Integer); cdecl;
+  // Flip image vertically
+  ImageFlipVertical: procedure(image: PImage); cdecl;
+  // Flip image horizontally
+  ImageFlipHorizontal: procedure(image: PImage); cdecl;
+  // Rotate image clockwise 90deg
+  ImageRotateCW: procedure(image: PImage); cdecl;
+  // Rotate image counter-clockwise 90deg
+  ImageRotateCCW: procedure(image: PImage); cdecl;
+  // Modify image color: tint
+  ImageColorTint: procedure(image: PImage; color: TColor); cdecl;
+  // Modify image color: invert
+  ImageColorInvert: procedure(image: PImage); cdecl;
+  // Modify image color: grayscale
+  ImageColorGrayscale: procedure(image: PImage); cdecl;
+  // Modify image color: contrast (-100 to 100)
+  ImageColorContrast: procedure(image: PImage; contrast: Single); cdecl;
+  // Modify image color: brightness (-255 to 255)
+  ImageColorBrightness: procedure(image: PImage; brightness: Integer); cdecl;
+  // Modify image color: replace color
+  ImageColorReplace: procedure(image: PImage; color: TColor; replace: TColor); cdecl;
+  // Extract color palette from image to maximum size (memory should be freed)
+  ImageExtractPalette: function(image: TImage; maxPaletteSize: Integer; extractCount: PInteger): PColor; cdecl;
+  // Get image alpha border rectangle
+  GetImageAlphaBorder: function(image: TImage; threshold: Single): TRectangle; cdecl;
+
+  { Image drawing functions }
+  // NOTE: Image software-rendering functions (CPU)
+
+  // Clear image background with given color
+  ImageClearBackground: procedure(dst: PImage; color: TColor); cdecl;
+  // Draw pixel within an image
+  ImageDrawPixel: procedure(dst: PImage; posX: Integer; posY: Integer; color: TColor); cdecl;
+  // Draw pixel within an image (Vector version)
+  ImageDrawPixelV: procedure(dst: PImage; position: TVector2; color: TColor); cdecl;
+  // Draw line within an image
+  ImageDrawLine: procedure(dst: PImage; startPosX: Integer; startPosY: Integer; endPosX: Integer; endPosY: Integer; color: TColor); cdecl;
+  // Draw line within an image (Vector version)
+  ImageDrawLineV: procedure(dst: PImage; start: TVector2; &end: TVector2; color: TColor); cdecl;
+  // Draw circle within an image
+  ImageDrawCircle: procedure(dst: PImage; centerX: Integer; centerY: Integer; radius: Integer; color: TColor); cdecl;
+  // Draw circle within an image (Vector version)
+  ImageDrawCircleV: procedure(dst: PImage; center: TVector2; radius: Integer; color: TColor); cdecl;
+  // Draw rectangle within an image
+  ImageDrawRectangle: procedure(dst: PImage; posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl;
+  // Draw rectangle within an image (Vector version)
+  ImageDrawRectangleV: procedure(dst: PImage; position: TVector2; size: TVector2; color: TColor); cdecl;
+  // Draw rectangle within an image
+  ImageDrawRectangleRec: procedure(dst: PImage; rec: TRectangle; color: TColor); cdecl;
+  // Draw rectangle lines within an image
+  ImageDrawRectangleLines: procedure(dst: PImage; rec: TRectangle; thick: Integer; color: TColor); cdecl;
+  // Draw a source image within a destination image (tint applied to source)
+  ImageDraw: procedure(dst: PImage; src: TImage; srcRec: TRectangle; dstRec: TRectangle; tint: TColor); cdecl;
+  // Draw text (default font) within an image (destination)
+  ImageDrawText: procedure(dst: PImage; position: TVector2; const text: PUTF8Char; fontSize: Integer; color: TColor); cdecl;
+  // Draw text (custom sprite font) within an image (destination)
+  ImageDrawTextEx: procedure(dst: PImage; position: TVector2; font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single; color: TColor); cdecl;
+
+  { Texture loading functions }
+  // NOTE: These functions require GPU access
+
+  // Load texture from file into GPU memory (VRAM)
+  LoadTexture: function(const fileName: PUTF8Char): TTexture2D; cdecl;
+  // Load texture from image data
+  LoadTextureFromImage: function(image: TImage): TTexture2D; cdecl;
+  // Load cubemap from image, multiple image cubemap layouts supported
+  LoadTextureCubemap: function(image: TImage; layoutType: Integer): TTextureCubemap; cdecl;
+  // Load texture for rendering (framebuffer)
+  LoadRenderTexture: function(width: Integer; height: Integer): TRenderTexture2D; cdecl;
+  // Unload texture from GPU memory (VRAM)
+  UnloadTexture: procedure(texture: TTexture2D); cdecl;
+  // Unload render texture from GPU memory (VRAM)
+  UnloadRenderTexture: procedure(target: TRenderTexture2D); cdecl;
+  // Update GPU texture with new data
+  UpdateTexture: procedure(texture: TTexture2D; const pixels: Pointer); cdecl;
+  // Get pixel data from GPU texture and return an Image
+  GetTextureData: function(texture: TTexture2D): TImage; cdecl;
+  // Get pixel data from screen buffer and return an Image (screenshot)
+  GetScreenData: function: TImage; cdecl;
+
+  { Texture configuration functions }
+
+  // Generate GPU mipmaps for a texture
+  GenTextureMipmaps: procedure(texture: PTexture2D); cdecl;
+  // Set texture scaling filter mode
+  SetTextureFilter: procedure(texture: TTexture2D; FilterMode: TTextureFilterMode); cdecl;
+  // Set texture wrapping mode
+  SetTextureWrap: procedure(texture: TTexture2D; wrapMode: Integer); cdecl;
+
+  { Texture drawing functions }
+
+  // Draw a Texture2D
+  DrawTexture: procedure(texture: TTexture2D; posX: Integer; posY: Integer; tint: TColor); cdecl;
+  // Draw a Texture2D with position defined as Vector2
+  DrawTextureV: procedure(texture: TTexture2D; position: TVector2; tint: TColor); cdecl;
+  // Draw a Texture2D with extended parameters
+  DrawTextureEx: procedure(texture: TTexture2D; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl;
+  // Draw a part of a texture defined by a rectangle
+  DrawTextureRec: procedure(texture: TTexture2D; sourceRec: TRectangle; position: TVector2; tint: TColor); cdecl;
+  // Draw texture quad with tiling and offset parameters
+  DrawTextureQuad: procedure(texture: TTexture2D; tiling: TVector2; offset: TVector2; quad: TRectangle; tint: TColor); cdecl;
+  // Draw a part of a texture defined by a rectangle with 'pro' parameters
+  DrawTexturePro: procedure(texture: TTexture2D; sourceRec: TRectangle; destRec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
+  // Draws a texture (or part of it) that stretches or shrinks nicely
+  DrawTextureNPatch: procedure(texture: TTexture2D; nPatchInfo: TNPatchInfo; destRec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
+
+  { Image/Texture misc functions }
+
+  // Get pixel data size in bytes (image or texture)
+  GetPixelDataSize: function(width: Integer; height: Integer; format: Integer): Integer; cdecl;
+
+//------------------------------------------------------------------------------------
+// Font Loading and Text Drawing Functions (Module: text)
+//------------------------------------------------------------------------------------
+
+  { Font loading/unloading functions }
+
+  // Get the default Font
+  GetFontDefault: function: TFont; cdecl;
+  // Load font from file into GPU memory (VRAM)
+  LoadFont: function(const fileName: PUTF8Char): TFont; cdecl;
+  // Load font from file with extended parameters
+  LoadFontEx: function(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; charsCount: Integer): TFont; cdecl;
+  // Load font from Image (XNA style)
+  LoadFontFromImage: function(image: TImage; key: TColor; firstChar: Integer): TFont; cdecl;
+  // Load font data for further use
+  LoadFontData: function(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; charsCount: Integer; &type: Integer): PCharInfo; cdecl;
+  // Generate image font atlas using chars info
+  GenImageFontAtlas: function(const chars: PCharInfo; recs: PPRectangle; charsCount: Integer; fontSize: Integer; padding: Integer; packMethod: Integer): TImage; cdecl;
+  // Unload Font from GPU memory (VRAM)
+  UnloadFont: procedure(font: TFont); cdecl;
+
+  { Text drawing functions }
+
+  // Shows current FPS
+  DrawFPS: procedure(posX: Integer; posY: Integer); cdecl;
+  // Draw text (using default font)
+  DrawText: procedure(const Text: PUTF8Char; posX: Integer; posY: Integer; FontSize: Integer; Color: TColor); cdecl;
+  // Draw text using font and additional parameters
+  DrawTextEx: procedure(font: TFont; const text: PUTF8Char; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl;
+  // Draw text using font inside rectangle limits
+  DrawTextRec: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: boolean; tint: TColor); cdecl;
+  DrawTextRecEx: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: boolean; tint: TColor; selectStart: Integer; selectLength: Integer; selectTint: TColor; selectBackTint: TColor); cdecl;
+
+  // Draw text using font inside rectangle limits with support for text selection
+  DrawTextCodepoint: procedure(font: TFont; codepoint: Integer; position: TVector2; scale: Single; tint: TColor); cdecl;
+
+  { Text misc. functions }
+
+  // Measure string width for default font
+  MeasureText: function(const text: PUTF8Char; fontSize: Integer): Integer; cdecl;
+  // Measure string size for Font
+  MeasureTextEx: function(font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single): TVector2; cdecl;
+  // Get index position for a unicode character on font
+  GetGlyphIndex: function(font: TFont; codepoint: Integer): Integer; cdecl;
+
+  { Text strings management functions (no utf8 strings, only byte chars) }
+  // NOTE: Some strings allocate memory internally for returned strings, just be careful!
+
+  // Copy one string to another, returns bytes copied
+  TextCopy: function(dst: PUTF8Char; const src: PUTF8Char): Integer; cdecl;
+  // Check if two text string are equal
+  TextIsEqual: function(const text1: PUTF8Char; const text2: PUTF8Char): boolean; cdecl;
+  // Get text length, checks for '\0' ending
+  TextLength: function(const text: PUTF8Char): Cardinal; cdecl;
+  // Text formatting with variables (sprintf style)
+  TextFormat: function(const text: PUTF8Char): PUTF8Char varargs; cdecl;
+  // Get a piece of a text string
+  TextSubtext: function(const text: PUTF8Char; position: Integer; length: Integer): PUTF8Char; cdecl;
+  // Replace text string (memory must be freed!)
+  TextReplace: function(text: PUTF8Char; const replace: PUTF8Char; const by: PUTF8Char): PUTF8Char; cdecl;
+  // Insert text in a position (memory must be freed!)
+  TextInsert: function(const text: PUTF8Char; const insert: PUTF8Char; position: Integer): PUTF8Char; cdecl;
+  // Join text strings with delimiter
+  TextJoin: function(textList: PPUTF8Char; count: Integer; const delimiter: PUTF8Char): PUTF8Char; cdecl;
+  // Split text into multiple strings
+  TextSplit: function(const text: PUTF8Char; delimiter: UTF8Char; count: PInteger): PPUTF8Char; cdecl;
+  // Append text at specific position and move cursor!
+  TextAppend: procedure(text: PUTF8Char; const append: PUTF8Char; position: PInteger); cdecl;
+  // Find first text occurrence within a string
+  TextFindIndex: function(const text: PUTF8Char; const find: PUTF8Char): Integer; cdecl;
+  // Get upper case version of provided string
+  TextToUpper: function(const text: PUTF8Char): PUTF8Char; cdecl;
+  // Get lower case version of provided string
+  TextToLower: function(const text: PUTF8Char): PUTF8Char; cdecl;
+  // Get Pascal case notation version of provided string
+  TextToPascal: function(const text: PUTF8Char): PUTF8Char; cdecl;
+  // Get integer value from text (negative values not supported)
+  TextToInteger: function(const text: PUTF8Char): Integer; cdecl;
+  // Encode text codepoint into utf8 text (memory must be freed!)
+  TextToUtf8: function(codepoints: PInteger; length: Integer): PUTF8Char; cdecl;
+
+  { UTF8 text strings management functions }
+
+  // Get all codepoints in a string, codepoints count returned by parameters
+  GetCodepoints: function(const text: PUTF8Char; count: PInteger): PInteger; cdecl;
+  // Get total number of characters (codepoints) in a UTF8 encoded string
+  GetCodepointsCount: function(const text: PUTF8Char): Integer; cdecl;
+  // Returns next codepoint in a UTF8 encoded string; 0x3f('?') is returned on failure
+  GetNextCodepoint: function(const text: PUTF8Char; bytesProcessed: PInteger): Integer; cdecl;
+  // Encode codepoint into utf8 text (char array length returned as parameter)
+  CodepointToUtf8: function(codepoint: Integer; byteLength: PInteger): PUTF8Char; cdecl;
+
+//------------------------------------------------------------------------------------
+// Basic 3d Shapes Drawing Functions (Module: models)
+//------------------------------------------------------------------------------------
+
+  { Basic geometric 3D shapes drawing functions }
+
+  // Draw a line in 3D world space
+  DrawLine3D: procedure(startPos: TVector3; endPos: TVector3; color: TColor); cdecl;
+  // Draw a point in 3D space, actually a small line
+  DrawPoint3D: procedure(position: TVector3; color: TColor); cdecl;
+  // Draw a circle in 3D world space
+  DrawCircle3D: procedure(center: TVector3; radius: Single; rotationAxis: TVector3; rotationAngle: Single; color: TColor); cdecl;
+  // Draw cube
+  DrawCube: procedure(position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
+  // Draw cube (Vector version)
+  DrawCubeV: procedure(position: TVector3; size: TVector3; color: TColor); cdecl;
+  // Draw cube wires
+  DrawCubeWires: procedure(position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
+  // Draw cube wires (Vector version)
+  DrawCubeWiresV: procedure(position: TVector3; size: TVector3; color: TColor); cdecl;
+  // Draw cube textured
+  DrawCubeTexture: procedure(texture: TTexture2D; position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
+  // Draw sphere
+  DrawSphere: procedure(centerPos: TVector3; radius: Single; color: TColor); cdecl;
+  // Draw sphere with extended parameters
+  DrawSphereEx: procedure(centerPos: TVector3; radius: Single; rings: Integer; slices: Integer; color: TColor); cdecl;
+  // Draw sphere wires
+  DrawSphereWires: procedure(centerPos: TVector3; radius: Single; rings: Integer; slices: Integer; color: TColor); cdecl;
+  // Draw a cylinder/cone
+  DrawCylinder: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl;
+  // Draw a cylinder/cone wires
+  DrawCylinderWires: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl;
+  // Draw a plane XZ
+  DrawPlane: procedure(centerPos: TVector3; size: TVector2; color: TColor); cdecl;
+  // Draw a ray line
+  DrawRay: procedure(ray: TRay; color: TColor); cdecl;
+  // Draw a grid (centered at (0, 0, 0))
+  DrawGrid: procedure(slices: Integer; spacing: Single); cdecl;
+  // Draw simple gizmo
+  DrawGizmo: procedure(position: TVector3); cdecl;
+//DrawTorus(), DrawTeapot() could be useful?
+
+//------------------------------------------------------------------------------------
+// Model 3d Loading and Drawing Functions (Module: models)
+//------------------------------------------------------------------------------------
+
+  { Model loading/unloading functions }
+
+  // Load model from files (meshes and materials)
+  LoadModel: function(const fileName: PUTF8Char): TModel; cdecl;
+  // Load model from generated mesh (default material)
+  LoadModelFromMesh: function(mesh: TMesh): TModel; cdecl;
+  // Unload model from memory (RAM and/or VRAM)
+  UnloadModel: procedure(model: TModel); cdecl;
+
+  { Mesh loading/unloading functions }
+
+  // Load meshes from model file
+  LoadMeshes: function(const fileName: PUTF8Char; meshCount: PInteger): PMesh; cdecl;
+  // Export mesh data to file
+  ExportMesh: procedure(mesh: TMesh; const fileName: PUTF8Char); cdecl;
+  // Unload mesh from memory (RAM and/or VRAM)
+  UnloadMesh: procedure(mesh: TMesh); cdecl;
+
+  { Material loading/unloading functions }
+
+  // Load materials from model file
+  LoadMaterials: function(const fileName: PUTF8Char; materialCount: PInteger): PMaterial; cdecl;
+  // Load default material (Supports: DIFFUSE, SPECULAR, NORMAL maps)
+  LoadMaterialDefault: function: TMaterial; cdecl;
+  // Unload material from GPU memory (VRAM)
+  UnloadMaterial: procedure(material: TMaterial); cdecl;
+  // Set texture for a material map type (MAP_DIFFUSE, MAP_SPECULAR...)
+  SetMaterialTexture: procedure(material: PMaterial; mapType: Integer; texture: TTexture2D); cdecl;
+  // Set material for a mesh
+  SetModelMeshMaterial: procedure(model: PModel; meshId: Integer; materialId: Integer); cdecl;
+
+  { Model animations loading/unloading functions }
+
+  // Load model animations from file
+  LoadModelAnimations: function(const fileName: PUTF8Char; animsCount: PInteger): PModelAnimation; cdecl;
+  // Update model animation pose
+  UpdateModelAnimation: procedure(model: TModel; anim: TModelAnimation; frame: Integer); cdecl;
+  // Unload animation data
+  UnloadModelAnimation: procedure(anim: TModelAnimation); cdecl;
+  // Check model animation skeleton match
+  IsModelAnimationValid: function(model: TModel; anim: TModelAnimation): boolean; cdecl;
+
+  { Mesh generation functions }
+
+  // Generate polygonal mesh
+  GenMeshPoly: function(sides: Integer; radius: Single): TMesh; cdecl;
+  // Generate plane mesh (with subdivisions)
+  GenMeshPlane: function(width: Single; length: Single; resX: Integer; resZ: Integer): TMesh; cdecl;
+  // Generate cuboid mesh
+  GenMeshCube: function(width: Single; height: Single; length: Single): TMesh; cdecl;
+  // Generate sphere mesh (standard sphere)
+  GenMeshSphere: function(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl;
+  // Generate half-sphere mesh (no bottom cap)
+  GenMeshHemiSphere: function(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl;
+  // Generate cylinder mesh
+  GenMeshCylinder: function(radius: Single; height: Single; slices: Integer): TMesh; cdecl;
+  // Generate torus mesh
+  GenMeshTorus: function(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl;
+  // Generate trefoil knot mesh
+  GenMeshKnot: function(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl;
+  // Generate heightmap mesh from image data
+  GenMeshHeightmap: function(heightmap: TImage; size: TVector3): TMesh; cdecl;
+  // Generate cubes-based map mesh from image data
+  GenMeshCubicmap: function(cubicmap: TImage; cubeSize: TVector3): TMesh; cdecl;
+
+  { Mesh manipulation functions }
+
+  // Compute mesh bounding box limits
+  MeshBoundingBox: function(mesh: TMesh): TBoundingBox; cdecl;
+  // Compute mesh tangents
+  MeshTangents: procedure(mesh: PMesh); cdecl;
+  // Compute mesh binormals
+  MeshBinormals: procedure(mesh: PMesh); cdecl;
+
+  { Model drawing functions }
+
+  // Draw a model (with texture if set)
+  DrawModel: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl;
+  // Draw a model with extended parameters
+  DrawModelEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl;
+  // Draw a model wires (with texture if set)
+  DrawModelWires: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl;
+  // Draw a model wires (with texture if set) with extended parameters
+  DrawModelWiresEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl;
+  // Draw bounding box (wires)
+  DrawBoundingBox: procedure(box: TBoundingBox; color: TColor); cdecl;
+  // Draw a billboard texture
+  DrawBillboard: procedure(camera: TCamera; texture: TTexture2D; center: TVector3; size: Single; tint: TColor); cdecl;
+  // Draw a billboard texture defined by sourceRec
+  DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; sourceRec: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl;
+
+  { Collision detection functions }
+
+  // Detect collision between two spheres
+  CheckCollisionSpheres: function(centerA: TVector3; radiusA: Single; centerB: TVector3; radiusB: Single): boolean; cdecl;
+  // Detect collision between two bounding boxes
+  CheckCollisionBoxes: function(box1: TBoundingBox; box2: TBoundingBox): boolean; cdecl;
+  // Detect collision between box and sphere
+  CheckCollisionBoxSphere: function(box: TBoundingBox; center: TVector3; radius: Single): boolean; cdecl;
+  // Detect collision between ray and sphere
+  CheckCollisionRaySphere: function(ray: TRay; center: TVector3; radius: Single): boolean; cdecl;
+  // Detect collision between ray and sphere, returns collision point
+  CheckCollisionRaySphereEx: function(ray: TRay; center: TVector3; radius: Single; collisionPoint: PVector3): boolean; cdecl;
+  // Detect collision between ray and box
+  CheckCollisionRayBox: function(ray: TRay; box: TBoundingBox): boolean; cdecl;
+  // Get collision info between ray and model
+  GetCollisionRayModel: function(ray: TRay; model: TModel): TRayHitInfo; cdecl;
+  // Get collision info between ray and triangle
+  GetCollisionRayTriangle: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3): TRayHitInfo; cdecl;
+  // Get collision info between ray and ground plane (Y-normal plane)
+  GetCollisionRayGround: function(ray: TRay; groundHeight: Single): TRayHitInfo; cdecl;
+
+//------------------------------------------------------------------------------------
+// Shaders System Functions (Module: rlgl)
+// NOTE: This functions are useless when using OpenGL 1.1
+//------------------------------------------------------------------------------------
+
+  { Shader loading/unloading functions }
+
+  // Load shader from files and bind default locations
+  LoadShader: function(const vsFileName: PUTF8Char; const fsFileName: PUTF8Char): TShader; cdecl;
+  // Load shader from code strings and bind default locations
+  LoadShaderCode: function(const vsCode: PUTF8Char; const fsCode: PUTF8Char): TShader; cdecl;
+  // Unload shader from GPU memory (VRAM)
+  UnloadShader: procedure(shader: TShader); cdecl;
+
+  // Get default shader
+  GetShaderDefault: function: TShader; cdecl;
+  // Get default texture
+  GetTextureDefault: function: TTexture2D; cdecl;
+  // Get texture to draw shapes
+  GetShapesTexture: function: TTexture2D; cdecl;
+  // Get texture rectangle to draw shapes
+  GetShapesTextureRec: function: TRectangle; cdecl;
+  // Define default texture used to draw shapes
+  SetShapesTexture: procedure(texture: TTexture2D; source: TRectangle); cdecl;
+
+  { Shader configuration functions }
+
+  // Get shader uniform location
+  GetShaderLocation: function(shader: TShader; const uniformName: PUTF8Char): Integer; cdecl;
+  // Set shader uniform value
+  SetShaderValue: procedure(shader: TShader; uniformLoc: Integer; const value: Pointer; uniformType: Integer); cdecl;
+  // Set shader uniform value vector
+  SetShaderValueV: procedure(shader: TShader; uniformLoc: Integer; const value: Pointer; uniformType: Integer; count: Integer); cdecl;
+  // Set shader uniform value (matrix 4x4)
+  SetShaderValueMatrix: procedure(shader: TShader; uniformLoc: Integer; mat: TMatrix); cdecl;
+  // Set shader uniform value for texture
+  SetShaderValueTexture: procedure(shader: TShader; uniformLoc: Integer; texture: TTexture2D); cdecl;
+  // Set a custom projection matrix (replaces internal projection matrix)
+  SetMatrixProjection: procedure(proj: TMatrix); cdecl;
+  // Set a custom modelview matrix (replaces internal modelview matrix)
+  SetMatrixModelview: procedure(view: TMatrix); cdecl;
+  // Get internal modelview matrix
+  GetMatrixModelview: function: TMatrix; cdecl;
+  // Get internal projection matrix
+  GetMatrixProjection: function: TMatrix; cdecl;
+
+  { Texture maps generation (PBR) }
+  // NOTE: Required shaders should be provided
+
+  // Generate cubemap texture from 2D texture
+  GenTextureCubemap: function(shader: TShader; map: TTexture2D; size: Integer): TTexture2D; cdecl;
+  // Generate irradiance texture using cubemap data
+  GenTextureIrradiance: function(shader: TShader; cubemap: TTexture2D; size: Integer): TTexture2D; cdecl;
+  // Generate prefilter texture using cubemap data
+  GenTexturePrefilter: function(shader: TShader; cubemap: TTexture2D; size: Integer): TTexture2D; cdecl;
+  // Generate BRDF texture
+  GenTextureBRDF: function(shader: TShader; size: Integer): TTexture2D; cdecl;
+
+  { Shading begin/end functions }
+
+  // Begin custom shader drawing
+  BeginShaderMode: procedure(shader: TShader); cdecl;
+  // End custom shader drawing (use default shader)
+  EndShaderMode: procedure; cdecl;
+  // Begin blending mode (alpha, additive, multiplied)
+  BeginBlendMode: procedure(mode: Integer); cdecl;
+  // End blending mode (reset to default: alpha blending)
+  EndBlendMode: procedure; cdecl;
+
+  { VR control functions }
+
+  // Init VR simulator for selected device parameters
+  InitVrSimulator: procedure; cdecl;
+  // Close VR simulator for current device
+  CloseVrSimulator: procedure; cdecl;
+  // Update VR tracking (position and orientation) and camera
+  UpdateVrTracking: procedure(camera: PCamera); cdecl;
+  // Set stereo rendering configuration parameters
+  SetVrConfiguration: procedure(info: TVrDeviceInfo; distortion: TShader); cdecl;
+  // Detect if VR simulator is ready
+  IsVrSimulatorReady: function: boolean; cdecl;
+  // Enable/Disable VR experience
+  ToggleVrMode: procedure; cdecl;
+  // Begin VR simulator stereo rendering
+  BeginVrDrawing: procedure; cdecl;
+  // End VR simulator stereo rendering
+  EndVrDrawing: procedure; cdecl;
+
+//------------------------------------------------------------------------------------
+// Audio Loading and Playing Functions (Module: audio)
+//------------------------------------------------------------------------------------
+
+  { Audio device management functions }
+
+  // Initialize audio device and context
+  InitAudioDevice: procedure; cdecl;
+  // Close the audio device and context
+  CloseAudioDevice: procedure; cdecl;
+  // Check if audio device has been initialized successfully
+  IsAudioDeviceReady: function: boolean; cdecl;
+  // Set master volume (listener)
+  SetMasterVolume: procedure(volume: Single); cdecl;
+
+  { Wave/Sound loading/unloading functions }
+
+  // Load wave data from file
+  LoadWave: function(const fileName: PUTF8Char): TWave; cdecl;
+  // Load sound from file
+  LoadSound: function(const fileName: PUTF8Char): TSound; cdecl;
+  // Load sound from wave data
+  LoadSoundFromWave: function(wave: TWave): TSound; cdecl;
+  // Update sound buffer with new data
+  UpdateSound: procedure(sound: TSound; const data: Pointer; samplesCount: Integer); cdecl;
+  // Unload wave data
+  UnloadWave: procedure(wave: TWave); cdecl;
+  // Unload sound
+  UnloadSound: procedure(sound: TSound); cdecl;
+  // Export wave data to file
+  ExportWave: procedure(wave: TWave; const fileName: PUTF8Char); cdecl;
+  // Export wave sample data to code (.h)
+  ExportWaveAsCode: procedure(wave: TWave; const fileName: PUTF8Char); cdecl;
+
+  { Wave/Sound management functions }
+
+  // Play a sound
+  PlaySound: procedure(sound: TSound); cdecl;
+  // Stop playing a sound
+  StopSound: procedure(sound: TSound); cdecl;
+  // Pause a sound
+  PauseSound: procedure(sound: TSound); cdecl;
+  // Resume a paused sound
+  ResumeSound: procedure(sound: TSound); cdecl;
+  // Play a sound (using multichannel buffer pool)
+  PlaySoundMulti: procedure(sound: TSound); cdecl;
+  // Stop any sound playing (using multichannel buffer pool)
+  StopSoundMulti: procedure; cdecl;
+  // Get number of sounds playing in the multichannel
+  GetSoundsPlaying: function: Integer; cdecl;
+  // Check if a sound is currently playing
+  IsSoundPlaying: function(sound: TSound): boolean; cdecl;
+  // Set volume for a sound (1.0 is max level)
+  SetSoundVolume: procedure(sound: TSound; volume: Single); cdecl;
+  // Set pitch for a sound (1.0 is base level)
+  SetSoundPitch: procedure(sound: TSound; pitch: Single); cdecl;
+  // Convert wave data to desired format
+  WaveFormat: procedure(wave: PWave; sampleRate: Integer; sampleSize: Integer; channels: Integer); cdecl;
+  // Copy a wave to a new wave
+  WaveCopy: function(wave: TWave): TWave; cdecl;
+  // Crop a wave to defined samples range
+  WaveCrop: procedure(wave: PWave; initSample: Integer; finalSample: Integer); cdecl;
+  // Get samples data from wave as a floats array
+  GetWaveData: function(wave: TWave): PSingle; cdecl;
+
+  { Music management functions }
+
+  // Load music stream from file
+  LoadMusicStream: function(const fileName: PUTF8Char): TMusic; cdecl;
+  // Unload music stream
+  UnloadMusicStream: procedure(music: TMusic); cdecl;
+  // Start music playing
+  PlayMusicStream: procedure(music: TMusic); cdecl;
+  // Updates buffers for music streaming
+  UpdateMusicStream: procedure(music: TMusic); cdecl;
+  // Stop music playing
+  StopMusicStream: procedure(music: TMusic); cdecl;
+  // Pause music playing
+  PauseMusicStream: procedure(music: TMusic); cdecl;
+  // Resume playing paused music
+  ResumeMusicStream: procedure(music: TMusic); cdecl;
+  // Check if music is playing
+  IsMusicPlaying: function(music: TMusic): boolean; cdecl;
+  // Set volume for music (1.0 is max level)
+  SetMusicVolume: procedure(music: TMusic; volume: Single); cdecl;
+  // Set pitch for a music (1.0 is base level)
+  SetMusicPitch: procedure(music: TMusic; pitch: Single); cdecl;
+  // Set music loop count (loop repeats)
+  SetMusicLoopCount: procedure(music: TMusic; count: Integer); cdecl;
+  // Get music time length (in seconds)
+  GetMusicTimeLength: function(music: TMusic): Single; cdecl;
+  // Get current music time played (in seconds)
+  GetMusicTimePlayed: function(music: TMusic): Single; cdecl;
+
+  { AudioStream management functions }
+
+  // Init audio stream (to stream raw audio pcm data)
+  InitAudioStream: function(SampleRate: Cardinal; SampleSize: Cardinal; Channels: Cardinal): TAudioStream; cdecl;
+  // Update audio stream buffers with data
+  UpdateAudioStream: procedure(Stream: TAudioStream; const Data: Pointer; SamplesCount: Integer); cdecl;
+  // Close audio stream and free memory
+  CloseAudioStream: procedure(stream: TAudioStream); cdecl;
+  // Check if any audio stream buffers requires refill
+  IsAudioStreamProcessed: function(stream: TAudioStream): boolean; cdecl;
+  // Play audio stream
+  PlayAudioStream: procedure(stream: TAudioStream); cdecl;
+  // Pause audio stream
+  PauseAudioStream: procedure(stream: TAudioStream); cdecl;
+  // Resume audio stream
+  ResumeAudioStream: procedure(stream: TAudioStream); cdecl;
+  // Check if audio stream is playing
+  IsAudioStreamPlaying: function(stream: TAudioStream): boolean; cdecl;
+  // Stop audio stream
+  StopAudioStream: procedure(stream: TAudioStream); cdecl;
+  // Set volume for audio stream (1.0 is max level)
+  SetAudioStreamVolume: procedure(stream: TAudioStream; volume: Single); cdecl;
+  // Set pitch for audio stream (1.0 is base level)
+  SetAudioStreamPitch: procedure(stream: TAudioStream; pitch: Single); cdecl;
+  // Default size for new audio streams
+  SetAudioStreamBufferSizeDefault: procedure(size: Integer); cdecl;
+
+//------------------------------------------------------------------------------------
+// Network (Module: network)
+//------------------------------------------------------------------------------------
+
+// IN PROGRESS: Check rnet.h for reference
+
 {*
   Load library dynamically, use RayLib.Load to load it
 *}
+
+type
 
   { TmncRayLib }
 
   TmncRayLib = class(TmnLibrary)
   public
-  //------------------------------------------------------------------------------------
-  // Window and Graphics Device Functions (Module: core)
-  //------------------------------------------------------------------------------------
-
-    { Window-related functions }
-
-    // Initialize window and OpenGL context
-    InitWindow: procedure(Width: Integer; Height: Integer; const Title: PUTF8Char); cdecl;
-    // Check if KEY_ESCAPE pressed or Close icon pressed
-    WindowShouldClose: function: boolean; cdecl;
-    // Close window and unload OpenGL context
-    CloseWindow: procedure; cdecl;
-    // Check if window has been initialized successfully
-    IsWindowReady: function: boolean; cdecl;
-    // Check if window has been minimized (or lost focus)
-    IsWindowMinimized: function: boolean; cdecl;
-    // Check if window has been resized
-    IsWindowResized: function: boolean; cdecl;
-    // Check if window is currently hidden
-    IsWindowHidden: function: boolean; cdecl;
-    // Check if window is currently fullscreen
-    IsWindowFullscreen: function: boolean; cdecl;
-    // Toggle fullscreen mode (only PLATFORM_DESKTOP)
-    ToggleFullscreen: procedure; cdecl;
-    // Show the window
-    UnhideWindow: procedure; cdecl;
-    // Hide the window
-    HideWindow: procedure; cdecl;
-    // Set icon for window (only PLATFORM_DESKTOP)
-    SetWindowIcon: procedure(image: TImage); cdecl;
-    // Set title for window (only PLATFORM_DESKTOP)
-    SetWindowTitle: procedure(const title: PUTF8Char); cdecl;
-    // Set window position on screen (only PLATFORM_DESKTOP)
-    SetWindowPosition: procedure(x: Integer; y: Integer); cdecl;
-    // Set monitor for the current window (fullscreen mode)
-    SetWindowMonitor: procedure(monitor: Integer); cdecl;
-    // Set window minimum dimensions (for FLAG_WINDOW_RESIZABLE)
-    SetWindowMinSize: procedure(width: Integer; height: Integer); cdecl;
-    // Set window dimensions
-    SetWindowSize: procedure(width: Integer; height: Integer); cdecl;
-    // Get native window handle
-    GetWindowHandle: function: Pointer; cdecl;
-    // Get current screen width
-    GetScreenWidth: function: Integer; cdecl;
-    // Get current screen height
-    GetScreenHeight: function: Integer; cdecl;
-    // Get number of connected monitors
-    GetMonitorCount: function: Integer; cdecl;
-    // Get primary monitor width
-    GetMonitorWidth: function(monitor: Integer): Integer; cdecl;
-    // Get primary monitor height
-    GetMonitorHeight: function(monitor: Integer): Integer; cdecl;
-    // Get primary monitor physical width in millimetres
-    GetMonitorPhysicalWidth: function(monitor: Integer): Integer; cdecl;
-    // Get primary monitor physical height in millimetres
-    GetMonitorPhysicalHeight: function(monitor: Integer): Integer; cdecl;
-    // Get window position XY on monitor
-    GetWindowPosition: function: TVector2; cdecl;
-    // Get the human-readable, UTF-8 encoded name of the primary monitor
-    GetMonitorName: function(monitor: Integer): PUTF8Char; cdecl;
-    // Get clipboard text content
-    GetClipboardText: function: PUTF8Char; cdecl;
-    // Set clipboard text content
-    SetClipboardText: procedure(const text: PUTF8Char); cdecl;
-
-    { Cursor-related functions }
-
-    // Shows cursor
-    ShowCursor: procedure; cdecl;
-    // Hides cursor
-    HideCursor: procedure; cdecl;
-    // Check if cursor is not visible
-    IsCursorHidden: function: boolean; cdecl;
-    // Enables cursor (unlock cursor)
-    EnableCursor: procedure; cdecl;
-    // Disables cursor (lock cursor)
-    DisableCursor: procedure; cdecl;
-
-    { Drawing-related functions }
-
-    // Set background color (framebuffer clear color)
-    ClearBackground: procedure(color: TColor); cdecl;
-    // Setup canvas (framebuffer) to start drawing
-    BeginDrawing: procedure; cdecl;
-    // End canvas drawing and swap buffers (double buffering)
-    EndDrawing: procedure; cdecl;
-    // Initialize 2D mode with custom camera (2D)
-    BeginMode2D: procedure(camera: TCamera2D); cdecl;
-    // Ends 2D mode with custom camera
-    EndMode2D: procedure; cdecl;
-    // Initializes 3D mode with custom camera (3D)
-    BeginMode3D: procedure(camera: TCamera3D); cdecl;
-    // Ends 3D mode and returns to default 2D orthographic mode
-    EndMode3D: procedure; cdecl;
-    // Initializes render texture for drawing
-    BeginTextureMode: procedure(target: TRenderTexture2D); cdecl;
-    // Ends drawing to render texture
-    EndTextureMode: procedure; cdecl;
-    // Begin scissor mode (define screen area for following drawing)
-    BeginScissorMode: procedure(x: Integer; y: Integer; width: Integer; height: Integer); cdecl;
-    // End scissor mode
-    EndScissorMode: procedure; cdecl;
-
-    { Screen-space-related functions }
-
-    // Returns a ray trace from mouse position
-    GetMouseRay: function(mousePosition: TVector2; camera: TCamera): TRay; cdecl;
-    // Returns camera transform matrix (view matrix)
-    GetCameraMatrix: function(camera: TCamera): TMatrix; cdecl;
-    // Returns camera 2d transform matrix
-    GetCameraMatrix2D: function(camera: TCamera2D): TMatrix; cdecl;
-    // Returns the screen space position for a 3d world space position
-    GetWorldToScreen: function(position: TVector3; camera: TCamera): TVector2; cdecl;
-    // Returns size position for a 3d world space position
-    GetWorldToScreenEx: function(position: TVector3; camera: TCamera; width: Integer; height: Integer): TVector2; cdecl;
-    // Returns the screen space position for a 2d camera world space position
-    GetWorldToScreen2D: function(position: TVector2; camera: TCamera2D): TVector2; cdecl;
-    // Returns the world space position for a 2d camera screen space position
-    GetScreenToWorld2D: function(position: TVector2; camera: TCamera2D): TVector2; cdecl;
-
-    { Timing-related functions }
-
-    // Set target FPS (maximum)
-    SetTargetFPS: procedure(fps: Integer); cdecl;
-    // Returns current FPS
-    GetFPS: function: Integer; cdecl;
-    // Returns time in seconds for last frame drawn
-    GetFrameTime: function: Single; cdecl;
-    // Returns elapsed time in seconds since InitWindow()
-    GetTime: function: Double; cdecl;
-
-    { Color-related functions }
-
-    // Returns hexadecimal value for a Color
-    ColorToInt: function(color: TColor): Integer; cdecl;
-    // Returns color normalized as float [0..1]
-    ColorNormalize: function(color: TColor): TVector4; cdecl;
-    // Returns color from normalized values [0..1]
-    ColorFromNormalized: function(normalized: TVector4): TColor; cdecl;
-    // Returns HSV values for a Color
-    ColorToHSV: function(color: TColor): TVector3; cdecl;
-    // Returns a Color from HSV values
-    ColorFromHSV: function(hsv: TVector3): TColor; cdecl;
-    // Returns a Color struct from hexadecimal value
-    GetColor: function(hexValue: Integer): TColor; cdecl;
-    // Color fade-in or fade-out, alpha goes from 0.0f to 1.0f
-    Fade: function(color: TColor; Alpha: Single): TColor; cdecl;
-
-    { Misc. functions }
-
-    // Setup window configuration flags (view FLAGS)
-    SetConfigFlags: procedure(flags: Cardinal); cdecl;
-    // Set the current threshold (minimum) log level
-    SetTraceLogLevel: procedure(logType: TTraceLogType); cdecl;
-    // Set the exit threshold (minimum) log level
-    SetTraceLogExit: procedure(logType: Integer); cdecl;
-    // Set a trace log callback to enable custom logging
-    SetTraceLogCallback: procedure(callback: TTraceLogCallback); cdecl;
-    // Show trace log messages (LOG_DEBUG, LOG_INFO, LOG_WARNING, LOG_ERROR)
-    TraceLog: procedure(logType: Integer; const text: PUTF8Char) varargs; cdecl;
-    // Takes a screenshot of current screen (saved a .png)
-    TakeScreenshot: procedure(const fileName: PUTF8Char); cdecl;
-    // Returns a random value between min and max (both included)
-    GetRandomValue: function(min: Integer; max: Integer): Integer; cdecl;
-
-    { Files management functions }
-
-    // Load file data as byte array (read)
-    LoadFileData: function(const fileName: PUTF8Char; bytesRead: PCardinal): PByte; cdecl;
-    // Save data to file from byte array (write)
-    SaveFileData: procedure(const fileName: PUTF8Char; data: Pointer; bytesToWrite: Cardinal); cdecl;
-    // Load text data from file (read), returns a '\0' terminated string
-    LoadFileText: function(const fileName: PUTF8Char): PUTF8Char; cdecl;
-    // Save text data to file (write), string must be '\0' terminated
-    SaveFileText: procedure(const fileName: PUTF8Char; text: PUTF8Char); cdecl;
-    // Check if file exists
-    FileExists: function(const fileName: PUTF8Char): boolean; cdecl;
-    // Check file extension
-    IsFileExtension: function(const fileName: PUTF8Char; const ext: PUTF8Char): boolean; cdecl;
-    // Check if a directory path exists
-    DirectoryExists: function(const dirPath: PUTF8Char): boolean; cdecl;
-    // Get pointer to extension for a filename string
-    GetExtension: function(const fileName: PUTF8Char): PUTF8Char; cdecl;
-    // Get pointer to filename for a path string
-    GetFileName: function(const filePath: PUTF8Char): PUTF8Char; cdecl;
-    // Get filename string without extension (uses static string)
-    GetFileNameWithoutExt: function(const filePath: PUTF8Char): PUTF8Char; cdecl;
-    // Get full path for a given fileName with path (uses static string)
-    GetDirectoryPath: function(const filePath: PUTF8Char): PUTF8Char; cdecl;
-    // Get previous directory path for a given path (uses static string)
-    GetPrevDirectoryPath: function(const dirPath: PUTF8Char): PUTF8Char; cdecl;
-    // Get current working directory (uses static string)
-    GetWorkingDirectory: function: PUTF8Char; cdecl;
-    // Get filenames in a directory path (memory should be freed)
-    GetDirectoryFiles: function(const dirPath: PUTF8Char; count: PInteger): PPUTF8Char; cdecl;
-    // Clear directory files paths buffers (free memory)
-    ClearDirectoryFiles: procedure; cdecl;
-    // Change working directory, returns true if success
-    ChangeDirectory: function(const dir: PUTF8Char): boolean; cdecl;
-    // Check if a file has been dropped into window
-    IsFileDropped: function: boolean; cdecl;
-    // Get dropped files names (memory should be freed)
-    GetDroppedFiles: function(count: PInteger): PPUTF8Char; cdecl;
-    // Clear dropped files paths buffer (free memory)
-    ClearDroppedFiles: procedure; cdecl;
-    // Get file modification time (last write time)
-    GetFileModTime: function(const fileName: PUTF8Char): Integer; cdecl;
-
-    // Compress data (DEFLATE algorythm)
-    CompressData: function(data: PByte; dataLength: Integer; compDataLength: PInteger): PByte; cdecl;
-    // Decompress data (DEFLATE algorythm)
-    DecompressData: function(compData: PByte; compDataLength: Integer; dataLength: PInteger): PByte; cdecl;
-
-    { Persistent storage management }
-
-    // Save integer value to storage file (to defined position)
-    SaveStorageValue: procedure(position: Cardinal; value: Integer); cdecl;
-    // Load integer value from storage file (from defined position)
-    LoadStorageValue: function(position: Cardinal): Integer; cdecl;
-
-    // Open URL with default system browser (if available)
-    OpenURL: procedure(const url: PUTF8Char); cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Input Handling Functions (Module: core)
-  //------------------------------------------------------------------------------------
-
-    { Input-related functions: keyboard }
-
-    // Detect if a key has been pressed once
-    IsKeyPressed: function(key: Integer): boolean; cdecl;
-    // Detect if a key is being pressed
-    IsKeyDown: function(key: Integer): boolean; cdecl;
-    // Detect if a key has been released once
-    IsKeyReleased: function(key: Integer): boolean; cdecl;
-
-    { Input-related functions: gamepads }
-
-    // Detect if a key is NOT being pressed
-    IsKeyUp: function(key: Integer): boolean; cdecl;
-    // Set a custom key to exit program (default is ESC)
-    SetExitKey: procedure(key: Integer); cdecl;
-    // Get key pressed, call it multiple times for chars queued
-    GetKeyPressed: function: Integer; cdecl;
-    // Detect if a gamepad is available
-    IsGamepadAvailable: function(gamepad: Integer): boolean; cdecl;
-    // Check gamepad name (if available)
-    IsGamepadName: function(gamepad: Integer; const name: PUTF8Char): boolean; cdecl;
-    // Return gamepad internal name id
-    GetGamepadName: function(gamepad: Integer): PUTF8Char; cdecl;
-    // Detect if a gamepad button has been pressed once
-    IsGamepadButtonPressed: function(gamepad: Integer; button: Integer): boolean; cdecl;
-    // Detect if a gamepad button is being pressed
-    IsGamepadButtonDown: function(gamepad: Integer; button: Integer): boolean; cdecl;
-    // Detect if a gamepad button has been released once
-    IsGamepadButtonReleased: function(gamepad: Integer; button: Integer): boolean; cdecl;
-    // Detect if a gamepad button is NOT being pressed
-    IsGamepadButtonUp: function(gamepad: Integer; button: Integer): boolean; cdecl;
-    // Get the last gamepad button pressed
-    GetGamepadButtonPressed: function: Integer; cdecl;
-    // Return gamepad axis count for a gamepad
-    GetGamepadAxisCount: function(gamepad: Integer): Integer; cdecl;
-    // Return axis movement value for a gamepad axis
-    GetGamepadAxisMovement: function(gamepad: Integer; axis: Integer): Single; cdecl;
-
-    { Input-related functions: mouse }
-
-    // Detect if a mouse button has been pressed once
-    IsMouseButtonPressed: function(button: Integer): boolean; cdecl;
-    // Detect if a mouse button is being pressed
-    IsMouseButtonDown: function(button: Integer): boolean; cdecl;
-    // Detect if a mouse button has been released once
-    IsMouseButtonReleased: function(button: Integer): boolean; cdecl;
-    // Detect if a mouse button is NOT being pressed
-    IsMouseButtonUp: function(button: Integer): boolean; cdecl;
-    // Returns mouse position X
-    GetMouseX: function: Integer; cdecl;
-    // Returns mouse position Y
-    GetMouseY: function: Integer; cdecl;
-    // Returns mouse position XY
-    GetMousePosition: function: TVector2; cdecl;
-    // Set mouse position XY
-    SetMousePosition: procedure(x: Integer; y: Integer); cdecl;
-    // Set mouse offset
-    SetMouseOffset: procedure(offsetX: Integer; offsetY: Integer); cdecl;
-    // Set mouse scaling
-    SetMouseScale: procedure(scaleX: Single; scaleY: Single); cdecl;
-    // Returns mouse wheel movement Y
-    GetMouseWheelMove: function: Integer; cdecl;
-
-    { Input-related functions: touch }
-
-    // Returns touch position X for touch point 0 (relative to screen size)
-    GetTouchX: function: Integer; cdecl;
-    // Returns touch position Y for touch point 0 (relative to screen size)
-    GetTouchY: function: Integer; cdecl;
-    // Returns touch position XY for a touch point index (relative to screen size)
-    GetTouchPosition: function(index: Integer): TVector2; cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Gestures and Touch Handling Functions (Module: gestures)
-  //------------------------------------------------------------------------------------
-
-    // Enable a set of gestures using flags
-    SetGesturesEnabled: procedure(gestureFlags: Cardinal); cdecl;
-    // Check if a gesture have been detected
-    IsGestureDetected: function(gesture: Integer): boolean; cdecl;
-    // Get latest detected gesture
-    GetGestureDetected: function: Integer; cdecl;
-    // Get touch points count
-    GetTouchPointsCount: function: Integer; cdecl;
-    // Get gesture hold time in milliseconds
-    GetGestureHoldDuration: function: Single; cdecl;
-    // Get gesture drag vector
-    GetGestureDragVector: function: TVector2; cdecl;
-    // Get gesture drag angle
-    GetGestureDragAngle: function: Single; cdecl;
-    // Get gesture pinch delta
-    GetGesturePinchVector: function: TVector2; cdecl;
-    // Get gesture pinch angle
-    GetGesturePinchAngle: function: Single; cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Camera System Functions (Module: camera)
-  //------------------------------------------------------------------------------------
-
-    // Set camera mode (multiple camera modes available)
-    SetCameraMode: procedure(camera: TCamera; mode: Integer); cdecl;
-    // Update camera position for selected mode
-    UpdateCamera: procedure(camera: PCamera); cdecl;
-
-    // Set camera pan key to combine with mouse movement (free camera)
-    SetCameraPanControl: procedure(panKey: Integer); cdecl;
-    // Set camera alt key to combine with mouse movement (free camera)
-    SetCameraAltControl: procedure(altKey: Integer); cdecl;
-    // Set camera smooth zoom key to combine with mouse (free camera)
-    SetCameraSmoothZoomControl: procedure(szKey: Integer); cdecl;
-    // Set camera move controls (1st person and 3rd person cameras)
-    SetCameraMoveControls: procedure(frontKey: Integer; backKey: Integer; rightKey: Integer; leftKey: Integer; upKey: Integer; downKey: Integer); cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Basic Shapes Drawing Functions (Module: shapes)
-  //------------------------------------------------------------------------------------
-
-    { Basic shapes drawing functions }
-
-    // Draw a pixel
-    DrawPixel: procedure(posX: Integer; posY: Integer; color: TColor); cdecl;
-    // Draw a pixel (Vector version)
-    DrawPixelV: procedure(position: TVector2; color: TColor); cdecl;
-    // Draw a line
-    DrawLine: procedure(startPosX: Integer; startPosY: Integer; endPosX: Integer; endPosY: Integer; color: TColor); cdecl;
-    // Draw a line (Vector version)
-    DrawLineV: procedure(startPos: TVector2; endPos: TVector2; color: TColor); cdecl;
-    // Draw a line defining thickness
-    DrawLineEx: procedure(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl;
-    // Draw a line using cubic-bezier curves in-out
-    DrawLineBezier: procedure(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl;
-    // Draw lines sequence
-    DrawLineStrip: procedure(points: PVector2; numPoints: Integer; color: TColor); cdecl;
-    // Draw a color-filled circle
-    DrawCircle: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl;
-    // Draw a piece of a circle
-    DrawCircleSector: procedure(center: TVector2; radius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
-    // Draw circle sector outline
-    DrawCircleSectorLines: procedure(center: TVector2; radius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
-    // Draw a gradient-filled circle
-    DrawCircleGradient: procedure(centerX: Integer; centerY: Integer; radius: Single; color1: TColor; color2: TColor); cdecl;
-    // Draw a color-filled circle (Vector version)
-    DrawCircleV: procedure(center: TVector2; radius: Single; color: TColor); cdecl;
-    // Draw circle outline
-    DrawCircleLines: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl;
-    // Draw ellipse
-    DrawEllipse: procedure(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl;
-    // Draw ellipse outline
-    DrawEllipseLines: procedure(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl;
-    // Draw ring
-    DrawRing: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
-    // Draw ring outline
-    DrawRingLines: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
-    // Draw a color-filled rectangle
-    DrawRectangle: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl;
-    // Draw a color-filled rectangle (Vector version)
-    DrawRectangleV: procedure(position: TVector2; size: TVector2; color: TColor); cdecl;
-    // Draw a color-filled rectangle
-    DrawRectangleRec: procedure(rec: TRectangle; color: TColor); cdecl;
-    // Draw a color-filled rectangle with pro parameters
-    DrawRectanglePro: procedure(rec: TRectangle; origin: TVector2; rotation: Single; color: TColor); cdecl;
-    // Draw a vertical-gradient-filled rectangle
-    DrawRectangleGradientV: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color1: TColor; color2: TColor); cdecl;
-    // Draw a horizontal-gradient-filled rectangle
-    DrawRectangleGradientH: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color1: TColor; color2: TColor); cdecl;
-    // Draw a gradient-filled rectangle with custom vertex colors
-    DrawRectangleGradientEx: procedure(rec: TRectangle; col1: TColor; col2: TColor; col3: TColor; col4: TColor); cdecl;
-    // Draw rectangle outline
-    DrawRectangleLines: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl;
-    // Draw rectangle outline with extended parameters
-    DrawRectangleLinesEx: procedure(rec: TRectangle; lineThick: Integer; color: TColor); cdecl;
-    // Draw rectangle with rounded edges
-    DrawRectangleRounded: procedure(rec: TRectangle; roundness: Single; segments: Integer; color: TColor); cdecl;
-    // Draw rectangle with rounded edges outline
-    DrawRectangleRoundedLines: procedure(rec: TRectangle; roundness: Single; segments: Integer; lineThick: Integer; color: TColor); cdecl;
-    // Draw a color-filled triangle (vertex in counter-clockwise order!)
-    DrawTriangle: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl;
-    // Draw triangle outline (vertex in counter-clockwise order!)
-    DrawTriangleLines: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl;
-    // Draw a triangle fan defined by points (first vertex is the center)
-    DrawTriangleFan: procedure(points: PVector2; numPoints: Integer; color: TColor); cdecl;
-    // Draw a triangle strip defined by points
-    DrawTriangleStrip: procedure(points: PVector2; pointsCount: Integer; color: TColor); cdecl;
-    // Draw a regular polygon (Vector version)
-    DrawPoly: procedure(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl;
-    // Draw a polygon outline of n sides
-    DrawPolyLines: procedure(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl;
-
-    { Basic shapes collision detection functions }
-
-    // Check collision between two rectangles
-    CheckCollisionRecs: function(rec1: TRectangle; rec2: TRectangle): boolean; cdecl;
-    // Check collision between two circles
-    CheckCollisionCircles: function(center1: TVector2; radius1: Single; center2: TVector2; radius2: Single): boolean; cdecl;
-    // Check collision between circle and rectangle
-    CheckCollisionCircleRec: function(center: TVector2; radius: Single; rec: TRectangle): boolean; cdecl;
-    // Get collision rectangle for two rectangles collision
-    GetCollisionRec: function(rec1: TRectangle; rec2: TRectangle): TRectangle; cdecl;
-    // Check if point is inside rectangle
-    CheckCollisionPointRec: function(point: TVector2; rec: TRectangle): boolean; cdecl;
-    // Check if point is inside circle
-    CheckCollisionPointCircle: function(point: TVector2; center: TVector2; radius: Single): boolean; cdecl;
-    // Check if point is inside a triangle
-    CheckCollisionPointTriangle: function(point: TVector2; p1: TVector2; p2: TVector2; p3: TVector2): boolean; cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Texture Loading and Drawing Functions (Module: textures)
-  //------------------------------------------------------------------------------------
-
-    { Image loading functions }
-    // NOTE: This functions do not require GPU access
-
-    // Load image from file into CPU memory (RAM)
-    LoadImage: function(const fileName: PUTF8Char): TImage; cdecl;
-    // Load image from Color array data (RGBA - 32bit)
-    LoadImageEx: function(pixels: PColor; width: Integer; height: Integer): TImage; cdecl;
-    // Load image from raw data with parameters
-    LoadImagePro: function(data: Pointer; width: Integer; height: Integer; format: Integer): TImage; cdecl;
-    // Load image from RAW file data
-    LoadImageRaw: function(const fileName: PUTF8Char; width: Integer; height: Integer; format: Integer; headerSize: Integer): TImage; cdecl;
-    // Unload image from CPU memory (RAM)
-    UnloadImage: procedure(image: TImage); cdecl;
-    // Export image data to file
-    ExportImage: procedure(image: TImage; const fileName: PUTF8Char); cdecl;
-    // Export image as code file defining an array of bytes
-    ExportImageAsCode: procedure(image: TImage; const fileName: PUTF8Char); cdecl;
-    // Get pixel data from image as a Color struct array
-    GetImageData: function(image: TImage): PColor; cdecl;
-    // Get pixel data from image as Vector4 array (float normalized)
-    GetImageDataNormalized: function(image: TImage): PVector4; cdecl;
-
-    { Image generation functions }
-
-    // Generate image: plain color
-    GenImageColor: function(width: Integer; height: Integer; color: TColor): TImage; cdecl;
-    // Generate image: vertical gradient
-    GenImageGradientV: function(width: Integer; height: Integer; top: TColor; bottom: TColor): TImage; cdecl;
-    // Generate image: horizontal gradient
-    GenImageGradientH: function(width: Integer; height: Integer; left: TColor; right: TColor): TImage; cdecl;
-    // Generate image: radial gradient
-    GenImageGradientRadial: function(width: Integer; height: Integer; density: Single; inner: TColor; outer: TColor): TImage; cdecl;
-    // Generate image: checked
-    GenImageChecked: function(width: Integer; height: Integer; checksX: Integer; checksY: Integer; col1: TColor; col2: TColor): TImage; cdecl;
-    // Generate image: white noise
-    GenImageWhiteNoise: function(width: Integer; height: Integer; factor: Single): TImage; cdecl;
-    // Generate image: perlin noise
-    GenImagePerlinNoise: function(width: Integer; height: Integer; offsetX: Integer; offsetY: Integer; scale: Single): TImage; cdecl;
-    // Generate image: cellular algorithm. Bigger tileSize means bigger cells
-    GenImageCellular: function(width: Integer; height: Integer; tileSize: Integer): TImage; cdecl;
-
-    { Image manipulation functions }
-
-    // Create an image duplicate (useful for transformations)
-    ImageCopy: function(image: TImage): TImage; cdecl;
-    // Create an image from another image piece
-    ImageFromImage: function(image: TImage; rec: TRectangle): TImage; cdecl;
-    // Create an image from text (default font)
-    ImageText: function(const text: PUTF8Char; fontSize: Integer; color: TColor): TImage; cdecl;
-    // Create an image from text (custom sprite font)
-    ImageTextEx: function(font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single; tint: TColor): TImage; cdecl;
-    // Convert image to POT (power-of-two)
-    ImageToPOT: procedure(image: PImage; fillColor: TColor); cdecl;
-    // Convert image data to desired format
-    ImageFormat: procedure(image: PImage; newFormat: Integer); cdecl;
-    // Apply alpha mask to image
-    ImageAlphaMask: procedure(image: PImage; alphaMask: TImage); cdecl;
-    // Clear alpha channel to desired color
-    ImageAlphaClear: procedure(image: PImage; color: TColor; threshold: Single); cdecl;
-    // Crop image depending on alpha value
-    ImageAlphaCrop: procedure(image: PImage; threshold: Single); cdecl;
-    // Premultiply alpha channel
-    ImageAlphaPremultiply: procedure(image: PImage); cdecl;
-    // Crop an image to a defined rectangle
-    ImageCrop: procedure(image: PImage; crop: TRectangle); cdecl;
-    // Resize image (Bicubic scaling algorithm)
-    ImageResize: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl;
-    // Resize image (Nearest-Neighbor scaling algorithm)
-    ImageResizeNN: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl;
-    // Resize canvas and fill with color
-    ImageResizeCanvas: procedure(image: PImage; newWidth: Integer; newHeight: Integer; offsetX: Integer; offsetY: Integer; color: TColor); cdecl;
-    // Generate all mipmap levels for a provided image
-    ImageMipmaps: procedure(image: PImage); cdecl;
-    // Dither image data to 16bpp or lower (Floyd-Steinberg dithering)
-    ImageDither: procedure(image: PImage; rBpp: Integer; gBpp: Integer; bBpp: Integer; aBpp: Integer); cdecl;
-    // Flip image vertically
-    ImageFlipVertical: procedure(image: PImage); cdecl;
-    // Flip image horizontally
-    ImageFlipHorizontal: procedure(image: PImage); cdecl;
-    // Rotate image clockwise 90deg
-    ImageRotateCW: procedure(image: PImage); cdecl;
-    // Rotate image counter-clockwise 90deg
-    ImageRotateCCW: procedure(image: PImage); cdecl;
-    // Modify image color: tint
-    ImageColorTint: procedure(image: PImage; color: TColor); cdecl;
-    // Modify image color: invert
-    ImageColorInvert: procedure(image: PImage); cdecl;
-    // Modify image color: grayscale
-    ImageColorGrayscale: procedure(image: PImage); cdecl;
-    // Modify image color: contrast (-100 to 100)
-    ImageColorContrast: procedure(image: PImage; contrast: Single); cdecl;
-    // Modify image color: brightness (-255 to 255)
-    ImageColorBrightness: procedure(image: PImage; brightness: Integer); cdecl;
-    // Modify image color: replace color
-    ImageColorReplace: procedure(image: PImage; color: TColor; replace: TColor); cdecl;
-    // Extract color palette from image to maximum size (memory should be freed)
-    ImageExtractPalette: function(image: TImage; maxPaletteSize: Integer; extractCount: PInteger): PColor; cdecl;
-    // Get image alpha border rectangle
-    GetImageAlphaBorder: function(image: TImage; threshold: Single): TRectangle; cdecl;
-
-    { Image drawing functions }
-    // NOTE: Image software-rendering functions (CPU)
-
-    // Clear image background with given color
-    ImageClearBackground: procedure(dst: PImage; color: TColor); cdecl;
-    // Draw pixel within an image
-    ImageDrawPixel: procedure(dst: PImage; posX: Integer; posY: Integer; color: TColor); cdecl;
-    // Draw pixel within an image (Vector version)
-    ImageDrawPixelV: procedure(dst: PImage; position: TVector2; color: TColor); cdecl;
-    // Draw line within an image
-    ImageDrawLine: procedure(dst: PImage; startPosX: Integer; startPosY: Integer; endPosX: Integer; endPosY: Integer; color: TColor); cdecl;
-    // Draw line within an image (Vector version)
-    ImageDrawLineV: procedure(dst: PImage; start: TVector2; &end: TVector2; color: TColor); cdecl;
-    // Draw circle within an image
-    ImageDrawCircle: procedure(dst: PImage; centerX: Integer; centerY: Integer; radius: Integer; color: TColor); cdecl;
-    // Draw circle within an image (Vector version)
-    ImageDrawCircleV: procedure(dst: PImage; center: TVector2; radius: Integer; color: TColor); cdecl;
-    // Draw rectangle within an image
-    ImageDrawRectangle: procedure(dst: PImage; posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl;
-    // Draw rectangle within an image (Vector version)
-    ImageDrawRectangleV: procedure(dst: PImage; position: TVector2; size: TVector2; color: TColor); cdecl;
-    // Draw rectangle within an image
-    ImageDrawRectangleRec: procedure(dst: PImage; rec: TRectangle; color: TColor); cdecl;
-    // Draw rectangle lines within an image
-    ImageDrawRectangleLines: procedure(dst: PImage; rec: TRectangle; thick: Integer; color: TColor); cdecl;
-    // Draw a source image within a destination image (tint applied to source)
-    ImageDraw: procedure(dst: PImage; src: TImage; srcRec: TRectangle; dstRec: TRectangle; tint: TColor); cdecl;
-    // Draw text (default font) within an image (destination)
-    ImageDrawText: procedure(dst: PImage; position: TVector2; const text: PUTF8Char; fontSize: Integer; color: TColor); cdecl;
-    // Draw text (custom sprite font) within an image (destination)
-    ImageDrawTextEx: procedure(dst: PImage; position: TVector2; font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single; color: TColor); cdecl;
-
-    { Texture loading functions }
-    // NOTE: These functions require GPU access
-
-    // Load texture from file into GPU memory (VRAM)
-    LoadTexture: function(const fileName: PUTF8Char): TTexture2D; cdecl;
-    // Load texture from image data
-    LoadTextureFromImage: function(image: TImage): TTexture2D; cdecl;
-    // Load cubemap from image, multiple image cubemap layouts supported
-    LoadTextureCubemap: function(image: TImage; layoutType: Integer): TTextureCubemap; cdecl;
-    // Load texture for rendering (framebuffer)
-    LoadRenderTexture: function(width: Integer; height: Integer): TRenderTexture2D; cdecl;
-    // Unload texture from GPU memory (VRAM)
-    UnloadTexture: procedure(texture: TTexture2D); cdecl;
-    // Unload render texture from GPU memory (VRAM)
-    UnloadRenderTexture: procedure(target: TRenderTexture2D); cdecl;
-    // Update GPU texture with new data
-    UpdateTexture: procedure(texture: TTexture2D; const pixels: Pointer); cdecl;
-    // Get pixel data from GPU texture and return an Image
-    GetTextureData: function(texture: TTexture2D): TImage; cdecl;
-    // Get pixel data from screen buffer and return an Image (screenshot)
-    GetScreenData: function: TImage; cdecl;
-
-    { Texture configuration functions }
-
-    // Generate GPU mipmaps for a texture
-    GenTextureMipmaps: procedure(texture: PTexture2D); cdecl;
-    // Set texture scaling filter mode
-    SetTextureFilter: procedure(texture: TTexture2D; FilterMode: TTextureFilterMode); cdecl;
-    // Set texture wrapping mode
-    SetTextureWrap: procedure(texture: TTexture2D; wrapMode: Integer); cdecl;
-
-    { Texture drawing functions }
-
-    // Draw a Texture2D
-    DrawTexture: procedure(texture: TTexture2D; posX: Integer; posY: Integer; tint: TColor); cdecl;
-    // Draw a Texture2D with position defined as Vector2
-    DrawTextureV: procedure(texture: TTexture2D; position: TVector2; tint: TColor); cdecl;
-    // Draw a Texture2D with extended parameters
-    DrawTextureEx: procedure(texture: TTexture2D; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl;
-    // Draw a part of a texture defined by a rectangle
-    DrawTextureRec: procedure(texture: TTexture2D; sourceRec: TRectangle; position: TVector2; tint: TColor); cdecl;
-    // Draw texture quad with tiling and offset parameters
-    DrawTextureQuad: procedure(texture: TTexture2D; tiling: TVector2; offset: TVector2; quad: TRectangle; tint: TColor); cdecl;
-    // Draw a part of a texture defined by a rectangle with 'pro' parameters
-    DrawTexturePro: procedure(texture: TTexture2D; sourceRec: TRectangle; destRec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
-    // Draws a texture (or part of it) that stretches or shrinks nicely
-    DrawTextureNPatch: procedure(texture: TTexture2D; nPatchInfo: TNPatchInfo; destRec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
-
-    { Image/Texture misc functions }
-
-    // Get pixel data size in bytes (image or texture)
-    GetPixelDataSize: function(width: Integer; height: Integer; format: Integer): Integer; cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Font Loading and Text Drawing Functions (Module: text)
-  //------------------------------------------------------------------------------------
-
-    { Font loading/unloading functions }
-
-    // Get the default Font
-    GetFontDefault: function: TFont; cdecl;
-    // Load font from file into GPU memory (VRAM)
-    LoadFont: function(const fileName: PUTF8Char): TFont; cdecl;
-    // Load font from file with extended parameters
-    LoadFontEx: function(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; charsCount: Integer): TFont; cdecl;
-    // Load font from Image (XNA style)
-    LoadFontFromImage: function(image: TImage; key: TColor; firstChar: Integer): TFont; cdecl;
-    // Load font data for further use
-    LoadFontData: function(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; charsCount: Integer; &type: Integer): PCharInfo; cdecl;
-    // Generate image font atlas using chars info
-    GenImageFontAtlas: function(const chars: PCharInfo; recs: PPRectangle; charsCount: Integer; fontSize: Integer; padding: Integer; packMethod: Integer): TImage; cdecl;
-    // Unload Font from GPU memory (VRAM)
-    UnloadFont: procedure(font: TFont); cdecl;
-
-    { Text drawing functions }
-
-    // Shows current FPS
-    DrawFPS: procedure(posX: Integer; posY: Integer); cdecl;
-    // Draw text (using default font)
-    DrawText: procedure(const text: PUTF8Char; posX: Integer; posY: Integer; fontSize: Integer; color: TColor); cdecl;
-    // Draw text using font and additional parameters
-    DrawTextEx: procedure(font: TFont; const text: PUTF8Char; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl;
-    // Draw text using font inside rectangle limits
-    DrawTextRec: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: boolean; tint: TColor); cdecl;
-    DrawTextRecEx: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: boolean; tint: TColor; selectStart: Integer; selectLength: Integer; selectTint: TColor; selectBackTint: TColor); cdecl;
-
-    // Draw text using font inside rectangle limits with support for text selection
-    DrawTextCodepoint: procedure(font: TFont; codepoint: Integer; position: TVector2; scale: Single; tint: TColor); cdecl;
-
-    { Text misc. functions }
-
-    // Measure string width for default font
-    MeasureText: function(const text: PUTF8Char; fontSize: Integer): Integer; cdecl;
-    // Measure string size for Font
-    MeasureTextEx: function(font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single): TVector2; cdecl;
-    // Get index position for a unicode character on font
-    GetGlyphIndex: function(font: TFont; codepoint: Integer): Integer; cdecl;
-
-    { Text strings management functions (no utf8 strings, only byte chars) }
-    // NOTE: Some strings allocate memory internally for returned strings, just be careful!
-
-    // Copy one string to another, returns bytes copied
-    TextCopy: function(dst: PUTF8Char; const src: PUTF8Char): Integer; cdecl;
-    // Check if two text string are equal
-    TextIsEqual: function(const text1: PUTF8Char; const text2: PUTF8Char): boolean; cdecl;
-    // Get text length, checks for '\0' ending
-    TextLength: function(const text: PUTF8Char): Cardinal; cdecl;
-    // Text formatting with variables (sprintf style)
-    TextFormat: function(const text: PUTF8Char): PUTF8Char varargs; cdecl;
-    // Get a piece of a text string
-    TextSubtext: function(const text: PUTF8Char; position: Integer; length: Integer): PUTF8Char; cdecl;
-    // Replace text string (memory must be freed!)
-    TextReplace: function(text: PUTF8Char; const replace: PUTF8Char; const by: PUTF8Char): PUTF8Char; cdecl;
-    // Insert text in a position (memory must be freed!)
-    TextInsert: function(const text: PUTF8Char; const insert: PUTF8Char; position: Integer): PUTF8Char; cdecl;
-    // Join text strings with delimiter
-    TextJoin: function(textList: PPUTF8Char; count: Integer; const delimiter: PUTF8Char): PUTF8Char; cdecl;
-    // Split text into multiple strings
-    TextSplit: function(const text: PUTF8Char; delimiter: UTF8Char; count: PInteger): PPUTF8Char; cdecl;
-    // Append text at specific position and move cursor!
-    TextAppend: procedure(text: PUTF8Char; const append: PUTF8Char; position: PInteger); cdecl;
-    // Find first text occurrence within a string
-    TextFindIndex: function(const text: PUTF8Char; const find: PUTF8Char): Integer; cdecl;
-    // Get upper case version of provided string
-    TextToUpper: function(const text: PUTF8Char): PUTF8Char; cdecl;
-    // Get lower case version of provided string
-    TextToLower: function(const text: PUTF8Char): PUTF8Char; cdecl;
-    // Get Pascal case notation version of provided string
-    TextToPascal: function(const text: PUTF8Char): PUTF8Char; cdecl;
-    // Get integer value from text (negative values not supported)
-    TextToInteger: function(const text: PUTF8Char): Integer; cdecl;
-    // Encode text codepoint into utf8 text (memory must be freed!)
-    TextToUtf8: function(codepoints: PInteger; length: Integer): PUTF8Char; cdecl;
-
-    { UTF8 text strings management functions }
-
-    // Get all codepoints in a string, codepoints count returned by parameters
-    GetCodepoints: function(const text: PUTF8Char; count: PInteger): PInteger; cdecl;
-    // Get total number of characters (codepoints) in a UTF8 encoded string
-    GetCodepointsCount: function(const text: PUTF8Char): Integer; cdecl;
-    // Returns next codepoint in a UTF8 encoded string; 0x3f('?') is returned on failure
-    GetNextCodepoint: function(const text: PUTF8Char; bytesProcessed: PInteger): Integer; cdecl;
-    // Encode codepoint into utf8 text (char array length returned as parameter)
-    CodepointToUtf8: function(codepoint: Integer; byteLength: PInteger): PUTF8Char; cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Basic 3d Shapes Drawing Functions (Module: models)
-  //------------------------------------------------------------------------------------
-
-    { Basic geometric 3D shapes drawing functions }
-
-    // Draw a line in 3D world space
-    DrawLine3D: procedure(startPos: TVector3; endPos: TVector3; color: TColor); cdecl;
-    // Draw a point in 3D space, actually a small line
-    DrawPoint3D: procedure(position: TVector3; color: TColor); cdecl;
-    // Draw a circle in 3D world space
-    DrawCircle3D: procedure(center: TVector3; radius: Single; rotationAxis: TVector3; rotationAngle: Single; color: TColor); cdecl;
-    // Draw cube
-    DrawCube: procedure(position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
-    // Draw cube (Vector version)
-    DrawCubeV: procedure(position: TVector3; size: TVector3; color: TColor); cdecl;
-    // Draw cube wires
-    DrawCubeWires: procedure(position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
-    // Draw cube wires (Vector version)
-    DrawCubeWiresV: procedure(position: TVector3; size: TVector3; color: TColor); cdecl;
-    // Draw cube textured
-    DrawCubeTexture: procedure(texture: TTexture2D; position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
-    // Draw sphere
-    DrawSphere: procedure(centerPos: TVector3; radius: Single; color: TColor); cdecl;
-    // Draw sphere with extended parameters
-    DrawSphereEx: procedure(centerPos: TVector3; radius: Single; rings: Integer; slices: Integer; color: TColor); cdecl;
-    // Draw sphere wires
-    DrawSphereWires: procedure(centerPos: TVector3; radius: Single; rings: Integer; slices: Integer; color: TColor); cdecl;
-    // Draw a cylinder/cone
-    DrawCylinder: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl;
-    // Draw a cylinder/cone wires
-    DrawCylinderWires: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl;
-    // Draw a plane XZ
-    DrawPlane: procedure(centerPos: TVector3; size: TVector2; color: TColor); cdecl;
-    // Draw a ray line
-    DrawRay: procedure(ray: TRay; color: TColor); cdecl;
-    // Draw a grid (centered at (0, 0, 0))
-    DrawGrid: procedure(slices: Integer; spacing: Single); cdecl;
-    // Draw simple gizmo
-    DrawGizmo: procedure(position: TVector3); cdecl;
-  //DrawTorus(), DrawTeapot() could be useful?
-
-  //------------------------------------------------------------------------------------
-  // Model 3d Loading and Drawing Functions (Module: models)
-  //------------------------------------------------------------------------------------
-
-    { Model loading/unloading functions }
-
-    // Load model from files (meshes and materials)
-    LoadModel: function(const fileName: PUTF8Char): TModel; cdecl;
-    // Load model from generated mesh (default material)
-    LoadModelFromMesh: function(mesh: TMesh): TModel; cdecl;
-    // Unload model from memory (RAM and/or VRAM)
-    UnloadModel: procedure(model: TModel); cdecl;
-
-    { Mesh loading/unloading functions }
-
-    // Load meshes from model file
-    LoadMeshes: function(const fileName: PUTF8Char; meshCount: PInteger): PMesh; cdecl;
-    // Export mesh data to file
-    ExportMesh: procedure(mesh: TMesh; const fileName: PUTF8Char); cdecl;
-    // Unload mesh from memory (RAM and/or VRAM)
-    UnloadMesh: procedure(mesh: TMesh); cdecl;
-
-    { Material loading/unloading functions }
-
-    // Load materials from model file
-    LoadMaterials: function(const fileName: PUTF8Char; materialCount: PInteger): PMaterial; cdecl;
-    // Load default material (Supports: DIFFUSE, SPECULAR, NORMAL maps)
-    LoadMaterialDefault: function: TMaterial; cdecl;
-    // Unload material from GPU memory (VRAM)
-    UnloadMaterial: procedure(material: TMaterial); cdecl;
-    // Set texture for a material map type (MAP_DIFFUSE, MAP_SPECULAR...)
-    SetMaterialTexture: procedure(material: PMaterial; mapType: Integer; texture: TTexture2D); cdecl;
-    // Set material for a mesh
-    SetModelMeshMaterial: procedure(model: PModel; meshId: Integer; materialId: Integer); cdecl;
-
-    { Model animations loading/unloading functions }
-
-    // Load model animations from file
-    LoadModelAnimations: function(const fileName: PUTF8Char; animsCount: PInteger): PModelAnimation; cdecl;
-    // Update model animation pose
-    UpdateModelAnimation: procedure(model: TModel; anim: TModelAnimation; frame: Integer); cdecl;
-    // Unload animation data
-    UnloadModelAnimation: procedure(anim: TModelAnimation); cdecl;
-    // Check model animation skeleton match
-    IsModelAnimationValid: function(model: TModel; anim: TModelAnimation): boolean; cdecl;
-
-    { Mesh generation functions }
-
-    // Generate polygonal mesh
-    GenMeshPoly: function(sides: Integer; radius: Single): TMesh; cdecl;
-    // Generate plane mesh (with subdivisions)
-    GenMeshPlane: function(width: Single; length: Single; resX: Integer; resZ: Integer): TMesh; cdecl;
-    // Generate cuboid mesh
-    GenMeshCube: function(width: Single; height: Single; length: Single): TMesh; cdecl;
-    // Generate sphere mesh (standard sphere)
-    GenMeshSphere: function(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl;
-    // Generate half-sphere mesh (no bottom cap)
-    GenMeshHemiSphere: function(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl;
-    // Generate cylinder mesh
-    GenMeshCylinder: function(radius: Single; height: Single; slices: Integer): TMesh; cdecl;
-    // Generate torus mesh
-    GenMeshTorus: function(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl;
-    // Generate trefoil knot mesh
-    GenMeshKnot: function(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl;
-    // Generate heightmap mesh from image data
-    GenMeshHeightmap: function(heightmap: TImage; size: TVector3): TMesh; cdecl;
-    // Generate cubes-based map mesh from image data
-    GenMeshCubicmap: function(cubicmap: TImage; cubeSize: TVector3): TMesh; cdecl;
-
-    { Mesh manipulation functions }
-
-    // Compute mesh bounding box limits
-    MeshBoundingBox: function(mesh: TMesh): TBoundingBox; cdecl;
-    // Compute mesh tangents
-    MeshTangents: procedure(mesh: PMesh); cdecl;
-    // Compute mesh binormals
-    MeshBinormals: procedure(mesh: PMesh); cdecl;
-
-    { Model drawing functions }
-
-    // Draw a model (with texture if set)
-    DrawModel: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl;
-    // Draw a model with extended parameters
-    DrawModelEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl;
-    // Draw a model wires (with texture if set)
-    DrawModelWires: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl;
-    // Draw a model wires (with texture if set) with extended parameters
-    DrawModelWiresEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl;
-    // Draw bounding box (wires)
-    DrawBoundingBox: procedure(box: TBoundingBox; color: TColor); cdecl;
-    // Draw a billboard texture
-    DrawBillboard: procedure(camera: TCamera; texture: TTexture2D; center: TVector3; size: Single; tint: TColor); cdecl;
-    // Draw a billboard texture defined by sourceRec
-    DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; sourceRec: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl;
-
-    { Collision detection functions }
-
-    // Detect collision between two spheres
-    CheckCollisionSpheres: function(centerA: TVector3; radiusA: Single; centerB: TVector3; radiusB: Single): boolean; cdecl;
-    // Detect collision between two bounding boxes
-    CheckCollisionBoxes: function(box1: TBoundingBox; box2: TBoundingBox): boolean; cdecl;
-    // Detect collision between box and sphere
-    CheckCollisionBoxSphere: function(box: TBoundingBox; center: TVector3; radius: Single): boolean; cdecl;
-    // Detect collision between ray and sphere
-    CheckCollisionRaySphere: function(ray: TRay; center: TVector3; radius: Single): boolean; cdecl;
-    // Detect collision between ray and sphere, returns collision point
-    CheckCollisionRaySphereEx: function(ray: TRay; center: TVector3; radius: Single; collisionPoint: PVector3): boolean; cdecl;
-    // Detect collision between ray and box
-    CheckCollisionRayBox: function(ray: TRay; box: TBoundingBox): boolean; cdecl;
-    // Get collision info between ray and model
-    GetCollisionRayModel: function(ray: TRay; model: TModel): TRayHitInfo; cdecl;
-    // Get collision info between ray and triangle
-    GetCollisionRayTriangle: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3): TRayHitInfo; cdecl;
-    // Get collision info between ray and ground plane (Y-normal plane)
-    GetCollisionRayGround: function(ray: TRay; groundHeight: Single): TRayHitInfo; cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Shaders System Functions (Module: rlgl)
-  // NOTE: This functions are useless when using OpenGL 1.1
-  //------------------------------------------------------------------------------------
-
-    { Shader loading/unloading functions }
-
-    // Load shader from files and bind default locations
-    LoadShader: function(const vsFileName: PUTF8Char; const fsFileName: PUTF8Char): TShader; cdecl;
-    // Load shader from code strings and bind default locations
-    LoadShaderCode: function(const vsCode: PUTF8Char; const fsCode: PUTF8Char): TShader; cdecl;
-    // Unload shader from GPU memory (VRAM)
-    UnloadShader: procedure(shader: TShader); cdecl;
-
-    // Get default shader
-    GetShaderDefault: function: TShader; cdecl;
-    // Get default texture
-    GetTextureDefault: function: TTexture2D; cdecl;
-    // Get texture to draw shapes
-    GetShapesTexture: function: TTexture2D; cdecl;
-    // Get texture rectangle to draw shapes
-    GetShapesTextureRec: function: TRectangle; cdecl;
-    // Define default texture used to draw shapes
-    SetShapesTexture: procedure(texture: TTexture2D; source: TRectangle); cdecl;
-
-    { Shader configuration functions }
-
-    // Get shader uniform location
-    GetShaderLocation: function(shader: TShader; const uniformName: PUTF8Char): Integer; cdecl;
-    // Set shader uniform value
-    SetShaderValue: procedure(shader: TShader; uniformLoc: Integer; const value: Pointer; uniformType: Integer); cdecl;
-    // Set shader uniform value vector
-    SetShaderValueV: procedure(shader: TShader; uniformLoc: Integer; const value: Pointer; uniformType: Integer; count: Integer); cdecl;
-    // Set shader uniform value (matrix 4x4)
-    SetShaderValueMatrix: procedure(shader: TShader; uniformLoc: Integer; mat: TMatrix); cdecl;
-    // Set shader uniform value for texture
-    SetShaderValueTexture: procedure(shader: TShader; uniformLoc: Integer; texture: TTexture2D); cdecl;
-    // Set a custom projection matrix (replaces internal projection matrix)
-    SetMatrixProjection: procedure(proj: TMatrix); cdecl;
-    // Set a custom modelview matrix (replaces internal modelview matrix)
-    SetMatrixModelview: procedure(view: TMatrix); cdecl;
-    // Get internal modelview matrix
-    GetMatrixModelview: function: TMatrix; cdecl;
-    // Get internal projection matrix
-    GetMatrixProjection: function: TMatrix; cdecl;
-
-    { Texture maps generation (PBR) }
-    // NOTE: Required shaders should be provided
-
-    // Generate cubemap texture from 2D texture
-    GenTextureCubemap: function(shader: TShader; map: TTexture2D; size: Integer): TTexture2D; cdecl;
-    // Generate irradiance texture using cubemap data
-    GenTextureIrradiance: function(shader: TShader; cubemap: TTexture2D; size: Integer): TTexture2D; cdecl;
-    // Generate prefilter texture using cubemap data
-    GenTexturePrefilter: function(shader: TShader; cubemap: TTexture2D; size: Integer): TTexture2D; cdecl;
-    // Generate BRDF texture
-    GenTextureBRDF: function(shader: TShader; size: Integer): TTexture2D; cdecl;
-
-    { Shading begin/end functions }
-
-    // Begin custom shader drawing
-    BeginShaderMode: procedure(shader: TShader); cdecl;
-    // End custom shader drawing (use default shader)
-    EndShaderMode: procedure; cdecl;
-    // Begin blending mode (alpha, additive, multiplied)
-    BeginBlendMode: procedure(mode: Integer); cdecl;
-    // End blending mode (reset to default: alpha blending)
-    EndBlendMode: procedure; cdecl;
-
-    { VR control functions }
-
-    // Init VR simulator for selected device parameters
-    InitVrSimulator: procedure; cdecl;
-    // Close VR simulator for current device
-    CloseVrSimulator: procedure; cdecl;
-    // Update VR tracking (position and orientation) and camera
-    UpdateVrTracking: procedure(camera: PCamera); cdecl;
-    // Set stereo rendering configuration parameters
-    SetVrConfiguration: procedure(info: TVrDeviceInfo; distortion: TShader); cdecl;
-    // Detect if VR simulator is ready
-    IsVrSimulatorReady: function: boolean; cdecl;
-    // Enable/Disable VR experience
-    ToggleVrMode: procedure; cdecl;
-    // Begin VR simulator stereo rendering
-    BeginVrDrawing: procedure; cdecl;
-    // End VR simulator stereo rendering
-    EndVrDrawing: procedure; cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Audio Loading and Playing Functions (Module: audio)
-  //------------------------------------------------------------------------------------
-
-    { Audio device management functions }
-
-    // Initialize audio device and context
-    InitAudioDevice: procedure; cdecl;
-    // Close the audio device and context
-    CloseAudioDevice: procedure; cdecl;
-    // Check if audio device has been initialized successfully
-    IsAudioDeviceReady: function: boolean; cdecl;
-    // Set master volume (listener)
-    SetMasterVolume: procedure(volume: Single); cdecl;
-
-    { Wave/Sound loading/unloading functions }
-
-    // Load wave data from file
-    LoadWave: function(const fileName: PUTF8Char): TWave; cdecl;
-    // Load sound from file
-    LoadSound: function(const fileName: PUTF8Char): TSound; cdecl;
-    // Load sound from wave data
-    LoadSoundFromWave: function(wave: TWave): TSound; cdecl;
-    // Update sound buffer with new data
-    UpdateSound: procedure(sound: TSound; const data: Pointer; samplesCount: Integer); cdecl;
-    // Unload wave data
-    UnloadWave: procedure(wave: TWave); cdecl;
-    // Unload sound
-    UnloadSound: procedure(sound: TSound); cdecl;
-    // Export wave data to file
-    ExportWave: procedure(wave: TWave; const fileName: PUTF8Char); cdecl;
-    // Export wave sample data to code (.h)
-    ExportWaveAsCode: procedure(wave: TWave; const fileName: PUTF8Char); cdecl;
-
-    { Wave/Sound management functions }
-
-    // Play a sound
-    PlaySound: procedure(sound: TSound); cdecl;
-    // Stop playing a sound
-    StopSound: procedure(sound: TSound); cdecl;
-    // Pause a sound
-    PauseSound: procedure(sound: TSound); cdecl;
-    // Resume a paused sound
-    ResumeSound: procedure(sound: TSound); cdecl;
-    // Play a sound (using multichannel buffer pool)
-    PlaySoundMulti: procedure(sound: TSound); cdecl;
-    // Stop any sound playing (using multichannel buffer pool)
-    StopSoundMulti: procedure; cdecl;
-    // Get number of sounds playing in the multichannel
-    GetSoundsPlaying: function: Integer; cdecl;
-    // Check if a sound is currently playing
-    IsSoundPlaying: function(sound: TSound): boolean; cdecl;
-    // Set volume for a sound (1.0 is max level)
-    SetSoundVolume: procedure(sound: TSound; volume: Single); cdecl;
-    // Set pitch for a sound (1.0 is base level)
-    SetSoundPitch: procedure(sound: TSound; pitch: Single); cdecl;
-    // Convert wave data to desired format
-    WaveFormat: procedure(wave: PWave; sampleRate: Integer; sampleSize: Integer; channels: Integer); cdecl;
-    // Copy a wave to a new wave
-    WaveCopy: function(wave: TWave): TWave; cdecl;
-    // Crop a wave to defined samples range
-    WaveCrop: procedure(wave: PWave; initSample: Integer; finalSample: Integer); cdecl;
-    // Get samples data from wave as a floats array
-    GetWaveData: function(wave: TWave): PSingle; cdecl;
-
-    { Music management functions }
-
-    // Load music stream from file
-    LoadMusicStream: function(const fileName: PUTF8Char): TMusic; cdecl;
-    // Unload music stream
-    UnloadMusicStream: procedure(music: TMusic); cdecl;
-    // Start music playing
-    PlayMusicStream: procedure(music: TMusic); cdecl;
-    // Updates buffers for music streaming
-    UpdateMusicStream: procedure(music: TMusic); cdecl;
-    // Stop music playing
-    StopMusicStream: procedure(music: TMusic); cdecl;
-    // Pause music playing
-    PauseMusicStream: procedure(music: TMusic); cdecl;
-    // Resume playing paused music
-    ResumeMusicStream: procedure(music: TMusic); cdecl;
-    // Check if music is playing
-    IsMusicPlaying: function(music: TMusic): boolean; cdecl;
-    // Set volume for music (1.0 is max level)
-    SetMusicVolume: procedure(music: TMusic; volume: Single); cdecl;
-    // Set pitch for a music (1.0 is base level)
-    SetMusicPitch: procedure(music: TMusic; pitch: Single); cdecl;
-    // Set music loop count (loop repeats)
-    SetMusicLoopCount: procedure(music: TMusic; count: Integer); cdecl;
-    // Get music time length (in seconds)
-    GetMusicTimeLength: function(music: TMusic): Single; cdecl;
-    // Get current music time played (in seconds)
-    GetMusicTimePlayed: function(music: TMusic): Single; cdecl;
-
-    { AudioStream management functions }
-
-    // Init audio stream (to stream raw audio pcm data)
-    InitAudioStream: function(sampleRate: Cardinal; sampleSize: Cardinal; channels: Cardinal): TAudioStream; cdecl;
-    // Update audio stream buffers with data
-    UpdateAudioStream: procedure(stream: TAudioStream; const data: Pointer; samplesCount: Integer); cdecl;
-    // Close audio stream and free memory
-    CloseAudioStream: procedure(stream: TAudioStream); cdecl;
-    // Check if any audio stream buffers requires refill
-    IsAudioStreamProcessed: function(stream: TAudioStream): boolean; cdecl;
-    // Play audio stream
-    PlayAudioStream: procedure(stream: TAudioStream); cdecl;
-    // Pause audio stream
-    PauseAudioStream: procedure(stream: TAudioStream); cdecl;
-    // Resume audio stream
-    ResumeAudioStream: procedure(stream: TAudioStream); cdecl;
-    // Check if audio stream is playing
-    IsAudioStreamPlaying: function(stream: TAudioStream): boolean; cdecl;
-    // Stop audio stream
-    StopAudioStream: procedure(stream: TAudioStream); cdecl;
-    // Set volume for audio stream (1.0 is max level)
-    SetAudioStreamVolume: procedure(stream: TAudioStream; volume: Single); cdecl;
-    // Set pitch for audio stream (1.0 is base level)
-    SetAudioStreamPitch: procedure(stream: TAudioStream; pitch: Single); cdecl;
-    // Default size for new audio streams
-    SetAudioStreamBufferSizeDefault: procedure(size: Integer); cdecl;
-
-  //------------------------------------------------------------------------------------
-  // Network (Module: network)
-  //------------------------------------------------------------------------------------
-
-  // IN PROGRESS: Check rnet.h for reference
   protected
     procedure Loaded; override;
   end;
@@ -2012,9 +2022,22 @@ begin
   Alpha := AAlpha;
 end;
 
-constructor TColor.Create(AValue: Longint);
+constructor TColor.Create(AValue: Cardinal);
 begin
+  {$ifdef ENDIAN_LITTLE}
   Value := AValue;
+  {$else}
+  Value := AValue; //TODO Swap it SwapEndian()
+  {$endif}
+end;
+
+constructor TColor.CreateRGBA(RGBA: Cardinal);
+begin
+  {$ifdef ENDIAN_LITTLE}
+  Value := SwapEndian(RGBA);
+  {$else}
+  Value := RGBA; //TODO Swap it SwapEndian()
+  {$endif}
 end;
 
 { TVector2 }
