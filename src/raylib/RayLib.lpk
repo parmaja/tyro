@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <Package Version="5">
+    <PathDelim Value="\"/>
+    <Name Value="RayLib"/>
+    <AutoUpdate Value="OnRebuildingAll"/>
+    <CompilerOptions>
+      <Version Value="11"/>
+      <PathDelim Value="\"/>
+      <SearchPaths>
+        <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)\"/>
+      </SearchPaths>
+    </CompilerOptions>
+    <Version Major="1" Minor="3" Release="1" Build="1"/>
+    <Files>
+      <Item>
+        <Filename Value="RayLib3.pas"/>
+        <UnitName Value="RayLib3"/>
+      </Item>
+      <Item>
+        <Filename Value="RayLibClasses.pas"/>
+        <UnitName Value="RayLibClasses"/>
+      </Item>
+    </Files>
+    <CompatibilityMode Value="False"/>
+    <RequiredPkgs>
+      <Item>
+        <PackageName Value="FCL"/>
+      </Item>
+      <Item>
+        <PackageName Value="MiniCommons"/>
+      </Item>
+    </RequiredPkgs>
+    <UsageOptions>
+      <UnitPath Value="$(PkgOutDir)"/>
+    </UsageOptions>
+    <PublishOptions>
+      <Version Value="2"/>
+      <UseFileFilters Value="True"/>
+    </PublishOptions>
+  </Package>
+</CONFIG>
