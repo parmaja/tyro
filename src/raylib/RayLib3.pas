@@ -450,7 +450,6 @@ type
     SampleSize: Cardinal;       // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
     Channels: Cardinal;         // Number of channels (1-mono, 2-stereo)
 
-    Buffer: PrAudioBuffer;     // Pointer to internal data used by the audio system
   end;
   PAudioStream = ^TAudioStream;
 
@@ -1952,7 +1951,7 @@ var
   // Close audio stream and free memory
   CloseAudioStream: procedure(stream: TAudioStream); cdecl;
   // Check if any audio stream buffers requires refill
-  IsAudioStreamProcessed: function(stream: TAudioStream): boolean; cdecl;
+  IsAudioStreamProcessed: function(Stream: TAudioStream): Boolean; cdecl;
   // Play audio stream
   PlayAudioStream: procedure(stream: TAudioStream); cdecl;
   // Pause audio stream
@@ -2482,6 +2481,7 @@ begin
   SetMusicLoopCount := GetAddress('SetMusicLoopCount');
   GetMusicTimeLength := GetAddress('GetMusicTimeLength');
   GetMusicTimePlayed := GetAddress('GetMusicTimePlayed');
+  InitAudioStream := GetAddress('InitAudioStream');
   UpdateAudioStream := GetAddress('UpdateAudioStream');
   CloseAudioStream := GetAddress('CloseAudioStream');
   IsAudioStreamProcessed := GetAddress('IsAudioStreamProcessed');
