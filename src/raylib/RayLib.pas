@@ -8,7 +8,7 @@ unit RayLib;
 interface
 
 uses
-  RayLib3, RayLibClasses;
+  RayLib3, RayClasses;
 
 implementation
 

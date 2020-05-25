@@ -25,7 +25,7 @@ uses
   cthreads,
   {$ENDIF}
   SysUtils, Classes, CustApp,
-  TyroClasses, raylib3,
+  TyroClasses, raylib3, RayClasses,
   TyroLua, TyroEditors, 
 TyroSounds;  //Add all languages units here
 

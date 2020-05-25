@@ -17,7 +17,8 @@ interface
 uses
   Classes, SysUtils,
   lua53, FPImage,
-  RayLib3, //remove it
+  RayLib3, RayClasses, //remove it
+  TyroSounds,
   TyroClasses;
 
 type
@@ -88,6 +89,9 @@ type
     function DrawPoint_func(L: Plua_State): Integer; cdecl;
     //global functions
     function Print_func(L: Plua_State): Integer; cdecl;
+
+    function PlaySound_func(L: Plua_State): Integer; cdecl;
+    function PlayMusic_func(L: Plua_State): Integer; cdecl;
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -424,6 +428,8 @@ begin
 
   lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
 
+  lua_register_table_method(LuaState, 'music', self, 'play', @PlayMusic_func);
+
   lua_newtable(LuaState);
   for i := 0 to Length(LuaColors.Colors) -1 do
     lua_register_color(LuaState, LuaColors.Colors[i].Name, LuaColors.Colors[i].Color);
@@ -590,6 +596,27 @@ begin
   x := round(lua_tonumber(L, 2));
   y := round(lua_tonumber(L, 3));
   AddQueueObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  Result := 0;
+end;
+
+function TLuaScript.PlaySound_func(L: Plua_State): Integer; cdecl;
+var
+  Freq, Period: integer;
+begin
+  Freq := round(lua_tonumber(L, 1));
+  Period := round(lua_tonumber(L, 2));
+  TyroSounds.PlaySound(Freq, Period);
+  Result := 0;
+end;
+
+function TLuaScript.PlayMusic_func(L: Plua_State): Integer; cdecl;
+var
+  s: string;
+begin
+  s := lua_tostring(L, 1);
+  if ExtractFileDir(s) = '' then
+    s := AssetsFolder + s;
+  AddQueueObject(TPlayMusicFileObject.Create(s));
   Result := 0;
 end;
 

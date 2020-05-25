@@ -507,7 +507,7 @@ type
   );
 
   // Trace log type
-  TTraceLogType = set of (
+  TTraceLogType = (
     LOG_ALL = 0,        // Display all logs
     LOG_TRACE,
     LOG_DEBUG,
@@ -517,6 +517,7 @@ type
     LOG_FATAL,
     LOG_NONE            // Disable logging
   );
+  TTraceLogTypes = set of TTraceLogType;
 
 const
   // Keyboard keys
@@ -1043,7 +1044,7 @@ var
   // Setup window configuration flags (view FLAGS)
   SetConfigFlags: procedure(flags: Cardinal); cdecl;
   // Set the current threshold (minimum) log level
-  SetTraceLogLevel: procedure(logType: TTraceLogType); cdecl;
+  SetTraceLogLevel: procedure(logType: TTraceLogTypes); cdecl;
   // Set the exit threshold (minimum) log level
   SetTraceLogExit: procedure(logType: Integer); cdecl;
   // Set a trace log callback to enable custom logging
@@ -1917,31 +1918,31 @@ var
   { Music management functions }
 
   // Load music stream from file
-  LoadMusicStream: function(const fileName: PUTF8Char): TMusic; cdecl;
+  LoadMusicStream: function(const FileName: PUTF8Char): TMusic; cdecl;
   // Unload music stream
-  UnloadMusicStream: procedure(music: TMusic); cdecl;
+  UnloadMusicStream: procedure(Music: TMusic); cdecl;
   // Start music playing
-  PlayMusicStream: procedure(music: TMusic); cdecl;
+  PlayMusicStream: procedure(Music: TMusic); cdecl;
   // Updates buffers for music streaming
-  UpdateMusicStream: procedure(music: TMusic); cdecl;
+  UpdateMusicStream: procedure(Music: TMusic); cdecl;
   // Stop music playing
-  StopMusicStream: procedure(music: TMusic); cdecl;
+  StopMusicStream: procedure(Music: TMusic); cdecl;
   // Pause music playing
-  PauseMusicStream: procedure(music: TMusic); cdecl;
+  PauseMusicStream: procedure(Music: TMusic); cdecl;
   // Resume playing paused music
-  ResumeMusicStream: procedure(music: TMusic); cdecl;
+  ResumeMusicStream: procedure(Music: TMusic); cdecl;
   // Check if music is playing
-  IsMusicPlaying: function(music: TMusic): boolean; cdecl;
+  IsMusicPlaying: function(Music: TMusic): boolean; cdecl;
   // Set volume for music (1.0 is max level)
-  SetMusicVolume: procedure(music: TMusic; volume: Single); cdecl;
+  SetMusicVolume: procedure(Music: TMusic; volume: Single); cdecl;
   // Set pitch for a music (1.0 is base level)
-  SetMusicPitch: procedure(music: TMusic; pitch: Single); cdecl;
+  SetMusicPitch: procedure(Music: TMusic; pitch: Single); cdecl;
   // Set music loop count (loop repeats)
-  SetMusicLoopCount: procedure(music: TMusic; count: Integer); cdecl;
+  SetMusicLoopCount: procedure(Music: TMusic; count: Integer); cdecl;
   // Get music time length (in seconds)
-  GetMusicTimeLength: function(music: TMusic): Single; cdecl;
+  GetMusicTimeLength: function(Music: TMusic): Single; cdecl;
   // Get current music time played (in seconds)
-  GetMusicTimePlayed: function(music: TMusic): Single; cdecl;
+  GetMusicTimePlayed: function(Music: TMusic): Single; cdecl;
 
   { AudioStream management functions }
 

@@ -16,7 +16,7 @@ interface
 uses
   Classes, SysUtils, SyncObjs, fgl,
   FPImage, FPCanvas, FPImgCanv, pngcomn, FPReadPNG,
-  TyroSounds, RayLib3;
+  RayClasses, TyroSounds, RayLib3;
 
 type
   TMyFPMemoryImage = class(TFPMemoryImage)
@@ -32,6 +32,7 @@ type
   TTyroScript = class abstract(TThread)
   private
     FActive: Boolean;
+    FAssetsFolder: string;
     function GetActive: Boolean;
   protected
     //Canvas: TTyroCanvas;
@@ -45,6 +46,7 @@ type
     destructor Destroy; override;
     procedure Execute; override;
     procedure LoadFile(FileName: string); overload;
+    property AssetsFolder: string read FAssetsFolder write FAssetsFolder;
     property Active: Boolean read GetActive;
   end;
 
@@ -223,6 +225,15 @@ type
     procedure DoExecute; override;
   end;
 
+  { TPlayMusicFileObject }
+
+  TPlayMusicFileObject = class(TQueueObject)
+  public
+    FileName: string;
+    constructor Create(AFileName: string);
+    procedure DoExecute; override;
+  end;
+
   { TClearObject }
 
   TClearObject = class(TDrawObject)
@@ -352,6 +363,19 @@ begin
   Result := Result or C.Green;
   Result := Result shl 8;
   Result := Result or C.Red;
+end;
+
+{ TPlayMusicFileObject }
+
+constructor TPlayMusicFileObject.Create(AFileName: string);
+begin
+  inherited Create;
+  FileName := AFileName;
+end;
+
+procedure TPlayMusicFileObject.DoExecute;
+begin
+  RaySound.PlayMusicFile(FileName);
 end;
 
 { TDrawSetAlphaObject }
@@ -782,6 +806,7 @@ begin
       begin
         if LeftStr(FileName, 1) = '.' then
           FileName := ExpandFileName(WorkSpace + FileName);
+        FScript.AssetsFolder := ExtractFilePath(FileName);
         FScript.LoadFile(FileName);
       end;
     end
@@ -821,6 +846,7 @@ begin
     finally
     end;
 
+    RayUpdates.Update;
     Loop;
     EndDrawing;
   end;

@@ -14,6 +14,8 @@ const
   MAX_SAMPLES            =   512;
   MAX_SAMPLES_PER_UPDATE =  4096;
 
+  SampleRate = 22050;
+
   ScreenWidth = 800;
   ScreenHeight = 450;
 
@@ -21,11 +23,13 @@ var
   Stream: TAudioStream;
   Data, WriteBuf: PSmallInt;
   mousePosition: TVector2;
-  Frequency, OldFrequency: Single;
-  readCursor, waveLength: Integer;
+  Frequency: Single;
+  OldFrequency: Single;
+  readCursor: Integer;
+  waveLength: Integer; //in sample rate pieces
+  oldWavelength: integer;
   position: TVector2;
   fp: Single;
-  oldWavelength: integer;
   i: Integer;
   writeCursor: Integer;
   writeLength: Integer;
@@ -37,7 +41,7 @@ begin
   InitAudioDevice;  // Initialize audio device
 
   // Init raw audio stream (sample rate: 22050, sample size: 16bit, channels: 1-mono)
-  Stream := InitAudioStream(22050, 16, 1);
+  Stream := InitAudioStream(SampleRate, 16, 1);
 
   // Buffer for the single cycle waveform we are synthesizing
   Data      := AllocMem(Sizeof(SmallInt) * MAX_SAMPLES);
@@ -89,7 +93,8 @@ begin
     begin
         // Compute wavelength. Limit size in both directions.
         oldWavelength := waveLength;
-        waveLength := Round(22050 / frequency);
+        waveLength := Round(SampleRate / frequency);
+        //WriteLn(waveLength);
         if (waveLength > (MAX_SAMPLES div 2)) then
           waveLength := MAX_SAMPLES div 2;
         if (waveLength < 1) then
@@ -97,9 +102,7 @@ begin
 
         // Write sine wave.
         for i := 0 to waveLength * 2 - 1 do
-        begin
           Data[i] := Round((Sin(((2 * PI * i / waveLength))) * MaxSmallint));
-        end;
 
         // Scale read cursor's position to minimize transition artifacts
         readCursor := Round(readCursor * (waveLength div oldWavelength));
@@ -143,14 +146,14 @@ begin
 
     ClearBackground(RAYWHITE);
 
-    DrawText(PChar(Format('sine frequency: %i', [frequency])), GetScreenWidth() - 220, 10, 20, RED);
+    DrawText(PChar(Format('sine frequency: %d', [Round(frequency)])), GetScreenWidth() - 220, 10, 20, RED);
     DrawText('click mouse button to change frequency', 10, 10, 20, DARKGRAY);
 
     // Draw the current buffer state proportionate to the screen
     for i := 0 to screenWidth -1 do
     begin
       position.x := i;
-      position.y := 250 + 50 * Data[i * MAX_SAMPLES div screenWidth] div MaxSmallint;
+      position.y := (ScreenHeight div 2) + 50 * Data[i * MAX_SAMPLES div screenWidth] div MaxSmallint;
 
       DrawPixelV(position, RED);
     end;

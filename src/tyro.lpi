@@ -31,6 +31,7 @@
           </Target>
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir)"/>
+            <OtherUnitFiles Value="raylib"/>
             <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
@@ -120,6 +121,10 @@
       </Unit>
       <Unit>
         <Filename Value="TyroSounds.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="raylib\RayClasses.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
