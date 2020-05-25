@@ -32,14 +32,15 @@ var
   readLength: Integer;
 begin
   RayLib.Load;
+
   InitWindow(screenWidth, screenHeight, 'raylib [audio] example - raw audio streaming');
   InitAudioDevice;  // Initialize audio device
 
-  // Init raw audio stream (sample rate: 22050, sample size: 16bit-short, channels: 1-mono)
+  // Init raw audio stream (sample rate: 22050, sample size: 16bit, channels: 1-mono)
   Stream := InitAudioStream(22050, 16, 1);
 
   // Buffer for the single cycle waveform we are synthesizing
-  Data := AllocMem(sizeof(SmallInt) * MAX_SAMPLES);
+  Data      := AllocMem(Sizeof(SmallInt) * MAX_SAMPLES);
 
   // Frame buffer, describing the waveform when repeated over the course of a frame
   WriteBuf := AllocMem(sizeof(SmallInt) * MAX_SAMPLES_PER_UPDATE);
@@ -88,14 +89,14 @@ begin
     begin
         // Compute wavelength. Limit size in both directions.
         oldWavelength := waveLength;
-        waveLength := round(22050 / frequency);
+        waveLength := Round(22050 / frequency);
         if (waveLength > (MAX_SAMPLES div 2)) then
           waveLength := MAX_SAMPLES div 2;
         if (waveLength < 1) then
           waveLength := 1;
 
         // Write sine wave.
-        for i := 0 to waveLength * 2 do
+        for i := 0 to waveLength * 2 - 1 do
         begin
           Data[i] := Round((Sin(((2 * PI * i / waveLength))) * MaxSmallint));
         end;
@@ -123,7 +124,7 @@ begin
             writeLength := readLength;
 
           // Write the slice
-          Move((WriteBuf + writeCursor)^, (Data + readCursor)^, writeLength * sizeof(SmallInt));
+          Move((Data + readCursor)^, (WriteBuf + writeCursor)^, writeLength * sizeof(SmallInt));
 
           // Update cursors and loop audio
           readCursor := (readCursor + writeLength) div waveLength;
