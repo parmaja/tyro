@@ -39,7 +39,7 @@ type
 
   EMelodyException = class(Exception)
   public
-    constructor Create(Msg: String; Line, CharIndex: Integer);
+    constructor Create(Msg: String; Line, CharIndex: Integer); overload;
   end;
 
   TmmlNotes = Utf8String;
@@ -55,7 +55,6 @@ type
     Melody: TMelody;
     ID: Integer;
     Finished: Boolean;
-    Source: TObject;//
     Chr: Char;
     Line, Current: Integer;
     Notes: TmmlNotes;
@@ -68,11 +67,13 @@ type
     Expired: Longint;
     SoundLength: Integer;
     SoundRest: Integer;
-    constructor Create(AMelody: TMelody);
-    procedure Prepare(ANotes: TmmlNotes);
-    procedure SetWaveform(Instrument: String); virtual;
+    constructor Create(AMelody: TMelody); virtual;
+    procedure Prepare(ANotes: TmmlNotes); virtual;
+    procedure Unprepare; virtual;
+    procedure SetInstrument(Instrument: String); virtual;
     procedure SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single); virtual;
     function PlaySound: Boolean; virtual;
+    function StopSound: Boolean; virtual;
     function Next: Boolean;
     property Volume: Single read FVolume write FVolume;
   end;
@@ -86,11 +87,15 @@ type
 
   TMelody = class(TObject)
   private
+  protected
+    procedure BeforePlay; virtual;
+    procedure AfterPlay; virtual;
   public
     Terminated: Boolean;
-    constructor Create;
+    constructor Create; virtual;
     destructor Destroy; override;
 
+    function CreateChannel: TMelodyChannel; virtual;
     procedure Play(Instrument: String; Song: TArray<TmmlNotes>);
   end;
 
@@ -209,6 +214,10 @@ begin
     Chr := Notes[Current];
 end;
 
+procedure TMelodyChannel.Unprepare;
+begin
+end;
+
 procedure TMelodyChannel.SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single);
 begin
   WriteLn(Format('Frequency %f, Duration %f, Rest %f ', [Frequency, Duration, Rest]));
@@ -219,9 +228,14 @@ begin
   Result := False;
 end;
 
-procedure TMelodyChannel.SetWaveform(Instrument: String);
+function TMelodyChannel.StopSound: Boolean;
 begin
-  WriteLn('SetWaveForm(' + Instrument + ')');
+  Result := False;
+end;
+
+procedure TMelodyChannel.SetInstrument(Instrument: String);
+begin
+  WriteLn('SetInstrument(' + Instrument + ')');
 end;
 
 function TMelodyChannel.Next: Boolean;
@@ -299,7 +313,7 @@ function TMelodyChannel.Next: Boolean;
     Tempo := 120;
     Octave := 4;
     ShiftOctave := 0;
-    SetWaveForm('');//To default
+    SetInstrument('');//To default
     NoteLength := 4; //note length
     SubSequent := 0; // 0 = legato 1 = normal 2 = staccato
   end;
@@ -481,6 +495,7 @@ begin
         Connected := True;
       end;
       Result := PlayNote(Note, Duration, Offset, Increase, Connected);
+      exit;
     end
     else if Chr = 'n' then
     begin
@@ -489,6 +504,7 @@ begin
       if Number = -1 then
         raise EMelodyException.Create('"n" command need a number', Line, Current);
       Result := PlayNote(Number, NoteLength);
+      exit;
     end
     else if Chr = 'q' then //by frequency
     begin
@@ -497,6 +513,7 @@ begin
       if Number = -1 then
         raise EMelodyException.Create('"q" command need a number', Line, Current);
       Result := playnote(number, NoteLength);
+      exit;
     end
     else if Chr = 't' then
     begin
@@ -537,6 +554,7 @@ begin
       if (Chr = '&') then  //skip it
         Step;
       Result := PlayNote('r', Duration, 0, Increase, True);
+      exit;
     end
     else if Chr = 'o' then
     begin
@@ -580,20 +598,17 @@ begin
       Step;
       Volume := ScanNumber;
     end
-    else if Chr = 'w' then //set a waveform
+    else if Chr = 'i' then //set a instrument
     begin
       Step;
       if Chr = '[' then
       begin
         Step;
         S := ScanTo(']'); //by name
-        SetWaveform(S);
+        SetInstrument(S);
       end
       else
-      begin
-        Number := Round(ScanNumber);
-        //SetWaveForm(Number);
-      end;
+        SetInstrument(''); //Default
     end
     else if Chr = 'm' then
     begin
@@ -642,6 +657,16 @@ end;
 
 { TMelody }
 
+procedure TMelody.BeforePlay;
+begin
+
+end;
+
+procedure TMelody.AfterPlay;
+begin
+
+end;
+
 constructor TMelody.Create;
 begin
   inherited Create;
@@ -652,22 +677,26 @@ begin
   inherited Destroy;
 end;
 
+function TMelody.CreateChannel: TMelodyChannel;
+begin
+  Result := TMelodyChannel.Create(Self);
+end;
+
 procedure TMelody.Play(Instrument: String; Song: TArray<TmmlNotes>);
 var
   Channels: TMelodyChannels;
   Channel: TMelodyChannel;
   mml: TmmlNotes;
   Index: Integer;
-  Count: Integer;
-  Busy: Boolean;
+  Busy: Boolean;//At least one of channel is playing
 begin
+  BeforePlay;
   Channels := TMelodyChannels.Create;
   try
     for mml in Song do
     begin
-      Channel := TMelodyChannel.Create(Self);
+      Channel := CreateChannel;
       Channel.Volume := 100;
-      Channel.Source := nil;
       Channel.Finished := False;
       Channel.Name := 'notdefined';
       Channel.ID := Channels.Add(Channel);
@@ -676,7 +705,6 @@ begin
 
       Index := 0;
       Busy := False;
-      Count := Channels.Count;
       while True do
       begin
         if Terminated then
@@ -696,14 +724,14 @@ begin
           end
           else
           begin
-            Channel.finished := True;
-            FreeAndNil(Channel.Source);
+            Channel.Finished := True;
+            Channel.Unprepare;
           end;
         end;
         index := index + 1;
-        if index > Count then
+        if index >= Channels.Count then
         begin
-          index := 1;
+          index := 0;
           if not Busy then
             break
           else
@@ -713,6 +741,7 @@ begin
     end;
   finally
     Channels.Free;
+    AfterPlay;
   end;
 end;
 

@@ -18,8 +18,7 @@ uses
   Classes, SysUtils,
   lua53, FPImage,
   RayLib3, RayClasses, //remove it
-  TyroSounds,
-  TyroClasses;
+  TyroSounds, TyroClasses;
 
 type
   TLuaScript = class;
@@ -92,6 +91,7 @@ type
 
     function PlaySound_func(L: Plua_State): Integer; cdecl;
     function PlayMusic_func(L: Plua_State): Integer; cdecl;
+    function PlayMML_func(L: Plua_State): Integer; cdecl;
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -430,6 +430,7 @@ begin
 
   lua_register_table_method(LuaState, 'music', self, 'sound', @PlaySound_func);
   lua_register_table_method(LuaState, 'music', self, 'play', @PlayMusic_func);
+  lua_register_table_method(LuaState, 'music', self, 'mml', @PlayMML_func);
 
   lua_newtable(LuaState);
   for i := 0 to Length(LuaColors.Colors) -1 do
@@ -618,6 +619,15 @@ begin
   if ExtractFileDir(s) = '' then
     s := AssetsFolder + s;
   AddQueueObject(TPlayMusicFileObject.Create(s));
+  Result := 0;
+end;
+
+function TLuaScript.PlayMML_func(L: Plua_State): Integer; cdecl;
+var
+  s: string;
+begin
+  s := lua_tostring(L, 1);
+  AddQueueObject(TPlayMMFObject.Create(s));
   Result := 0;
 end;
 

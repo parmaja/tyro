@@ -243,6 +243,15 @@ type
     procedure DoExecute; override;
   end;
 
+  { TPlayMMFObject }
+
+  TPlayMMFObject = class(TQueueObject)
+  public
+    MML: string;
+    constructor Create(AMML: string);
+    procedure DoExecute; override;
+  end;
+
   { TClearObject }
 
   TClearObject = class(TDrawObject)
@@ -374,6 +383,21 @@ begin
   Result := Result or C.Red;
 end;
 
+{ TPlayMMFObject }
+
+constructor TPlayMMFObject.Create(AMML: string);
+begin
+  MML := AMML;
+end;
+
+procedure TPlayMMFObject.DoExecute;
+var
+  Melody: TRayMelody;
+begin
+  Melody := TRayMelody.Create;
+  Melody.Play('', [MML]);
+end;
+
 { TPlaySoundObject }
 
 constructor TPlaySoundObject.Create(AFreq, APeriod: Integer);
@@ -385,7 +409,7 @@ end;
 
 procedure TPlaySoundObject.DoExecute;
 begin
-  RaySound.PlaySound(Freq, Period);
+  RayLibSound.PlaySound(Freq, Period);
 end;
 
 { TPlayMusicFileObject }
@@ -398,7 +422,7 @@ end;
 
 procedure TPlayMusicFileObject.DoExecute;
 begin
-  RaySound.PlayMusicFile(FileName);
+  RayLibSound.PlayMusicFile(FileName);
 end;
 
 { TDrawSetAlphaObject }
