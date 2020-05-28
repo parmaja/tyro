@@ -1887,33 +1887,33 @@ var
   { Wave/Sound management functions }
 
   // Play a sound
-  PlaySound: procedure(sound: TSound); cdecl;
+  PlaySound: procedure(Sound: TSound); cdecl;
   // Stop playing a sound
-  StopSound: procedure(sound: TSound); cdecl;
+  StopSound: procedure(Sound: TSound); cdecl;
   // Pause a sound
-  PauseSound: procedure(sound: TSound); cdecl;
+  PauseSound: procedure(Sound: TSound); cdecl;
   // Resume a paused sound
-  ResumeSound: procedure(sound: TSound); cdecl;
+  ResumeSound: procedure(Sound: TSound); cdecl;
   // Play a sound (using multichannel buffer pool)
-  PlaySoundMulti: procedure(sound: TSound); cdecl;
+  PlaySoundMulti: procedure(Sound: TSound); cdecl;
   // Stop any sound playing (using multichannel buffer pool)
   StopSoundMulti: procedure; cdecl;
   // Get number of sounds playing in the multichannel
   GetSoundsPlaying: function: Integer; cdecl;
   // Check if a sound is currently playing
-  IsSoundPlaying: function(sound: TSound): boolean; cdecl;
+  IsSoundPlaying: function(Sound: TSound): boolean; cdecl;
   // Set volume for a sound (1.0 is max level)
-  SetSoundVolume: procedure(sound: TSound; volume: Single); cdecl;
+  SetSoundVolume: procedure(Sound: TSound; volume: Single); cdecl;
   // Set pitch for a sound (1.0 is base level)
-  SetSoundPitch: procedure(sound: TSound; pitch: Single); cdecl;
+  SetSoundPitch: procedure(Sound: TSound; pitch: Single); cdecl;
   // Convert wave data to desired format
-  WaveFormat: procedure(wave: PWave; sampleRate: Integer; sampleSize: Integer; channels: Integer); cdecl;
+  WaveFormat: procedure(Wave: PWave; sampleRate: Integer; sampleSize: Integer; channels: Integer); cdecl;
   // Copy a wave to a new wave
-  WaveCopy: function(wave: TWave): TWave; cdecl;
+  WaveCopy: function(Wave: TWave): TWave; cdecl;
   // Crop a wave to defined samples range
-  WaveCrop: procedure(wave: PWave; initSample: Integer; finalSample: Integer); cdecl;
+  WaveCrop: procedure(Wave: PWave; initSample: Integer; finalSample: Integer); cdecl;
   // Get samples data from wave as a floats array
-  GetWaveData: function(wave: TWave): PSingle; cdecl;
+  GetWaveData: function(Wave: TWave): PSingle; cdecl;
 
   { Music management functions }
 

@@ -225,6 +225,15 @@ type
     procedure DoExecute; override;
   end;
 
+  { TPlaySoundObject }
+
+  TPlaySoundObject = class(TQueueObject)
+  public
+    Freq, Period: Integer;
+    constructor Create(AFreq, APeriod: Integer);
+    procedure DoExecute; override;
+  end;
+
   { TPlayMusicFileObject }
 
   TPlayMusicFileObject = class(TQueueObject)
@@ -363,6 +372,20 @@ begin
   Result := Result or C.Green;
   Result := Result shl 8;
   Result := Result or C.Red;
+end;
+
+{ TPlaySoundObject }
+
+constructor TPlaySoundObject.Create(AFreq, APeriod: Integer);
+begin
+  inherited Create;
+  Freq := AFreq;
+  Period := APeriod;
+end;
+
+procedure TPlaySoundObject.DoExecute;
+begin
+  RaySound.PlaySound(Freq, Period);
 end;
 
 { TPlayMusicFileObject }
@@ -619,6 +642,7 @@ begin
   //Font := LoadFont(PChar(Main.WorkSpace + 'fonts/alpha_beta.png'));
   //Font := LoadFont(PChar(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
   //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/terminus.ttf'), 12, nil, 255);
+  //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/AnonymousPro-Regular.ttf'), 12, nil, 255);
   //Font := LoadFont(PChar('computer_pixel.fon.ttf'));
 
   Font := LoadFont(PChar(Main.WorkSpace + 'fonts/font.png'));

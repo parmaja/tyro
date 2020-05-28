@@ -428,6 +428,7 @@ begin
 
   lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
 
+  lua_register_table_method(LuaState, 'music', self, 'sound', @PlaySound_func);
   lua_register_table_method(LuaState, 'music', self, 'play', @PlayMusic_func);
 
   lua_newtable(LuaState);
@@ -605,7 +606,7 @@ var
 begin
   Freq := round(lua_tonumber(L, 1));
   Period := round(lua_tonumber(L, 2));
-  TyroSounds.PlaySound(Freq, Period);
+  AddQueueObject(TPlaySoundObject.Create(Freq, Period));
   Result := 0;
 end;
 
