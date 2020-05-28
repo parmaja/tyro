@@ -64,10 +64,14 @@ type
     SubSequent: Integer;
     ShiftOctave: Integer;
     Instrument: String;
-    Expired: Integer;
+    Expired: LongInt;
+    SoundLength: Integer;
+    SoundRest: Integer;
     constructor Create(AMelody: TMelody);
     procedure Prepare(ANotes: TmmlNotes);
     procedure SetWaveform(Instrument: String); virtual;
+    procedure SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single); virtual;
+    function PlaySound: Boolean; virtual;
     function Next: Boolean;
     property Volume: Single read FVolume write FVolume;
   end;
@@ -86,7 +90,7 @@ type
     constructor Create;
     destructor Destroy; override;
 
-    procedure Play(Instrument: String; mmls: TArray<TmmlNotes>);
+    procedure Play(Instrument: String; Song: TArray<TmmlNotes>);
   end;
 
   //		http://www.headchant.com/2011/11/01/sound-synthesis-with-love-part-ii-sine-waves/
@@ -196,15 +200,23 @@ begin
       Chr := Notes[Current];
 end;
 
+procedure TMelodyChannel.SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single);
+begin
+  WriteLn(Format('Frequency %d, Duration %d, Rest %d ', [Frequency, Duration, Rest]));
+end;
+
+function TMelodyChannel.PlaySound: Boolean;
+begin
+  Result := False;
+end;
+
 procedure TMelodyChannel.SetWaveform(Instrument: String);
 begin
+  WriteLn('SetWaveForm('+Instrument+')');
 end;
 
 function TMelodyChannel.Next: Boolean;
-//playnote(char, number[-1,0,+1], number[1..16], number[1..2])
-//playnote('c#', 1, 0, 0)
-//playnote('r', 1)
-//playnote(20, 1) //by number
+
   function IndexOfScore(Score: String): Integer;
   var
     i: Integer;
@@ -220,6 +232,10 @@ function TMelodyChannel.Next: Boolean;
     end;
   end;
 
+  //playnote(char, number[-1,0,+1], number[1..16], number[1..2])
+  //playnote('c#', 1, 0, 0)
+  //playnote('r', 1)
+  //playnote(20, 1) //by number
   function PlayNote(Note: String; Duration: Single; Offset: Integer = 0; Increase: Single = 0; Connected: Boolean = False): Boolean; overload;
   var
     f: Integer;
@@ -259,10 +275,9 @@ function TMelodyChannel.Next: Boolean;
             l := l - r;
         end
     end;
-    //TODO
-    //sound = {id = self.id, pitch = f, length = l, rest = r, ['connected'] = connected, volume = self.volume, waveform = self.waveform}
-    //now use it to play
-    Result := true;
+
+    SetSound(f, l, r, Connected, Volume);
+    Result := True;
   end;
 
   function PlayNote(Note: Integer; Duration: Single; Offset: Integer = 0; Increase: Single = 0; Connected: Boolean = False): Boolean; overload;
@@ -628,7 +643,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TMelody.Play(Instrument: String; mmls: TArray<TmmlNotes>);
+procedure TMelody.Play(Instrument: String; Song: TArray<TmmlNotes>);
 var
   Channels: TMelodyChannels;
   Channel: TMelodyChannel;
@@ -639,7 +654,7 @@ var
 begin
   Channels := TMelodyChannels.Create;
   try
-    for mml in mmls do
+    for mml in Song do
     begin
       Channel := TMelodyChannel.Create(Self);
       Channel.Volume := 100;
@@ -660,14 +675,14 @@ begin
         Channel := Channels[Index];
         if not Channel.Finished then
         begin
-          if (Channel.Expired > 0) and (Channel.Expired > GetTickCount) then
+          if (Channel.Expired > 0) and (Channel.Expired > GetTickCount64) then
               Busy := true
           else if Channel.Next then
           begin
               //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
-              {Channel.Expired := GetTickCount + Channel.Sound.Size + Channel.Sound.Rest; //TODO
-              if not PlaySound(Channel.Sound) then
-                break;}
+              Channel.Expired := GetTickCount64 + Channel.SoundLength + Channel.SoundRest;
+              if not Channel.PlaySound then
+                break;
               Busy := True;
           end
           else
