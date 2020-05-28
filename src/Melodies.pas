@@ -1,4 +1,5 @@
 unit Melodies;
+
 {$IFDEF FPC}
 {$MODE delphi}
 {$ENDIF}
@@ -13,7 +14,7 @@ unit Melodies;
  *}
 
 {////////////////////////////////////////////////////////////////////////////-
-*  	Music Macro Language
+*    Music Macro Language
 *   https://en.wikipedia.org/wiki/Music_Macro_Language
 *
 *   This file is used part of the 'Tyro'
@@ -22,7 +23,7 @@ unit Melodies;
 //////////////////////////////////////////////////////////////////////////////-
 *  Look at this site, it have many of songs
 *  https://archeagemmllibrary.com/
-*	 usefull refereces
+*   usefull refereces
 *
 *  http://web.mit.edu/18.06/www/Essays/linear-algebra-and-music.pdf
 //////////////////////////////////////////////////////////////////////////////-}
@@ -38,7 +39,7 @@ type
 
   EMelodyException = class(Exception)
   public
-    constructor Create(Msg: string; Line, CharIndex: Integer);
+    constructor Create(Msg: String; Line, CharIndex: Integer);
   end;
 
   TmmlNotes = Utf8String;
@@ -64,7 +65,7 @@ type
     SubSequent: Integer;
     ShiftOctave: Integer;
     Instrument: String;
-    Expired: LongInt;
+    Expired: Longint;
     SoundLength: Integer;
     SoundRest: Integer;
     constructor Create(AMelody: TMelody);
@@ -78,7 +79,7 @@ type
 
   { TMelodyChannels }
 
-  TMelodyChannels = Class(TmnNamedObjectList<TMelodyChannel>)
+  TMelodyChannels = class(TmnNamedObjectList<TMelodyChannel>)
   end;
 
   { TMelody }
@@ -93,19 +94,19 @@ type
     procedure Play(Instrument: String; Song: TArray<TmmlNotes>);
   end;
 
-  //		http://www.headchant.com/2011/11/01/sound-synthesis-with-love-part-ii-sine-waves/
-  //      https://stackoverflow.com/questions/11355353/how-can-i-convert-qbasic-play-commands-to-something-more-contemporary
-  //ref:  http://www.phy.mtu.edu/~suits/notefreqs.html
-  // 		http://wiki.mabinogiworld.com/view/User:LexisMikaya/MML_101_Guide
-  //ref:	The calculation of freq: http://www.phy.mtu.edu/~suits/NoteFreqCalcs.html
-  // Between C4 and C4# is one step so C4 freq * (2^1/12) = 262 * 1.059463
-  // Between C4 and D4 is 2 steps = so C4 freq * (2^1/12) = 262 * 1.059463 ^ 2
+//    http://www.headchant.com/2011/11/01/sound-synthesis-with-love-part-ii-sine-waves/
+//      https://stackoverflow.com/questions/11355353/how-can-i-convert-qbasic-play-commands-to-something-more-contemporary
+//ref:  http://www.phy.mtu.edu/~suits/notefreqs.html
+//     http://wiki.mabinogiworld.com/view/User:LexisMikaya/MML_101_Guide
+//ref:  The calculation of freq: http://www.phy.mtu.edu/~suits/NoteFreqCalcs.html
+// Between C4 and C4# is one step so C4 freq * (2^1/12) = 262 * 1.059463
+// Between C4 and D4 is 2 steps = so C4 freq * (2^1/12) = 262 * 1.059463 ^ 2
 
-  //?    f = 440 * 2^((n-49)/12)
+//?    f = 440 * 2^((n-49)/12)
 
-  //////////////////////////////////////////////////////////////////////////////-
-  //ref: http://www.qb64.net/wiki/index.php?title=SOUND
-  {					The Seven Music Octaves
+//////////////////////////////////////////////////////////////////////////////-
+//ref: http://www.qb64.net/wiki/index.php?title=SOUND
+  {          The Seven Music Octaves
 
        Note     Frequency      Note     Frequency      Note      Frequency
      1* D#1 ...... 39           G3 ....... 196          A#5 ...... 932
@@ -141,34 +142,42 @@ type
 
 const
   Scores: TArray<String> = [
-      'c',
-      'c#',
-      'd',
-      'd#',
-      'e',
-      'f',
-      'f#',
-      'g',
-      'g#',
-      'a',
-      'a#',
-      'b'
-  ];
+    'c',
+    'c#',
+    'd',
+    'd#',
+    'e',
+    'f',
+    'f#',
+    'g',
+    'g#',
+    'a',
+    'a#',
+    'b'
+    ];
 
 var
   //initialized in initialization
-  baseNumber : Single;
-  baseOctave : Integer;
-  baseNoteC4 : Single; // yes i am using C4 not A4
-  baseNote   : Single;
-  baseLength : Integer;
-  baseTempo  : Integer;
+  BaseNumber: Single;
+  BaseOctave: Integer;
+  BaseNoteFreqC4: Single; // yes i am using C4 not A4
+  BaseNoteIndex: Integer;
+  BaseDuration: Single;
+  BaseTempo: Single;
 
 implementation
 
+function CharToStr(C: Char):String;
+begin
+  if C <= #32 then
+    Result := '#' + IntToStr(Ord(C))
+  else
+    Result := C;
+end;
+
 { EMelodyException }
 
-constructor EMelodyException.Create(Msg: string; Line, CharIndex: Integer);
+constructor EMelodyException.Create(Msg: String; Line, CharIndex: Integer);
 begin
   inherited Create(Msg + '[' + IntToStr(Line) + ',' + IntToStr(CharIndex) + ']');
 end;
@@ -197,12 +206,12 @@ begin
   Current := 1;
 
   if (Current <= Length(Notes)) then
-      Chr := Notes[Current];
+    Chr := Notes[Current];
 end;
 
 procedure TMelodyChannel.SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single);
 begin
-  WriteLn(Format('Frequency %d, Duration %d, Rest %d ', [Frequency, Duration, Rest]));
+  WriteLn(Format('Frequency %f, Duration %f, Rest %f ', [Frequency, Duration, Rest]));
 end;
 
 function TMelodyChannel.PlaySound: Boolean;
@@ -212,7 +221,7 @@ end;
 
 procedure TMelodyChannel.SetWaveform(Instrument: String);
 begin
-  WriteLn('SetWaveForm('+Instrument+')');
+  WriteLn('SetWaveForm(' + Instrument + ')');
 end;
 
 function TMelodyChannel.Next: Boolean;
@@ -240,43 +249,43 @@ function TMelodyChannel.Next: Boolean;
   var
     f: Integer;
     r: Single;
-    l: Single;
+    d: Single;
     index: Integer;
   begin
     f := 0;
     if (Note = 'r') or (Note = 'p') then
       f := 0
     else if TryStrToInt(Note, index) then
-      f := floor((baseNote + ShiftOctave) * Power(baseNumber, index))
+      f := floor((BaseNoteIndex + ShiftOctave) * Power(BaseNumber, Index))
     else
     begin
       index := IndexOfScore(Note);
       if index < 0 then
         raise Exception.Create('We dont have it in music:' + Note);// ,line, self.pos)
       //calc index using current octave
-      index := ((octave + ShiftOctave)- baseOctave) * 12 + index + offset;
-      f := floor(baseNoteC4 * power(baseNumber, index));
+      index := ((octave + ShiftOctave) - BaseOctave) * 12 + index + offset;
+      f := floor(BaseNoteFreqC4 * power(BaseNumber, index));
     end;
     //ref: https://music.stackexchange.com/questions/24140/how-can-i-find-the-length-in-seconds-of-a-quarter-note-crotchet-if-i-have-a-te
     //     http://www.sengpielaudio.com/calculator-bpmtempotime.htm
     //4 seconds for tempo = 60 beat per second, so what if tempo 120 and 2 for duration
-    l := (baseLength / duration) * (baseTempo / tempo) * (1 + increase);
+    d := (BaseDuration / Duration) * (BaseTempo / Tempo) * (1 + Increase);
     r := 0; //legato
     if not Connected then //only if not connected to the next note
     begin
-        if SubSequent = 1 then //normal
-        begin
-            r := l / 8;
-            l := l - r;
-        end
-        else if SubSequent = 2 then //staccato
-        begin
-            r := l / 4;
-            l := l - r;
-        end
+      if SubSequent = 1 then //normal
+      begin
+        r := d / 8;
+        d := d - r;
+      end
+      else if SubSequent = 2 then //staccato
+      begin
+        r := d / 4;
+        d := d - r;
+      end;
     end;
 
-    SetSound(f, l, r, Connected, Volume);
+    SetSound(f, d, r, Connected, Volume);
     Result := True;
   end;
 
@@ -307,7 +316,7 @@ function TMelodyChannel.Next: Boolean;
     begin
       Chr := Notes[Current];
       Result := True;
-    end
+    end;
   end;
 
   procedure Restart;
@@ -320,7 +329,7 @@ function TMelodyChannel.Next: Boolean;
 
   function ScanNumber(MaxChar: Integer = 0; Default: Single = 0): Single;
   var
-    r: string;
+    r: String;
   begin
     r := '';
     while Current <= Length(Notes) do
@@ -350,16 +359,16 @@ function TMelodyChannel.Next: Boolean;
     begin
       if c = v then
       begin
-          Result := True;
-          exit;
+        Result := True;
+        exit;
       end;
     end;
     Result := False;
   end;
 
-  function Scan(t: array of Char): string;
+  function Scan(t: array of Char): String;
   var
-    r: string;
+    r: String;
   begin
     r := '';
     while Current <= Length(Notes) do
@@ -373,7 +382,7 @@ function TMelodyChannel.Next: Boolean;
     Result := r;
   end;
 
-  function ScanTo(c: Char): string;
+  function ScanTo(c: Char): String;
   begin
     Result := '';
     while Current <= Length(Notes) do
@@ -385,21 +394,21 @@ function TMelodyChannel.Next: Boolean;
       end;
       Result := Result + Chr;
       Step;
-    end
+    end;
   end;
 
   procedure ScanEol;
   begin
     while Current <= Length(Notes) do
     begin
-      if (Chr = '\n') then
+      if (Chr = #13) then
         Break;
       Step;
-    end
+    end;
   end;
 
 var
-  Note: string;
+  Note: String;
   Offset: Integer;
 
   Duration: Single;
@@ -407,228 +416,228 @@ var
   Increase, By: Single;
   Number: Integer;
   l: Single;
-  S: string;
+  S: String;
 begin
-  while Current<= Length(Notes) do
+  while Current <= Length(Notes) do
   begin
+    if Chr = '#' then
+    begin
+      Step;
+      ScanEol;
+    end
+    else if Check(Chr, [' ', #9,  #10]) then //#13
+      Step
+    else if Chr = #13 then
+    begin
+      Line := Line + 1; //line only for error messages
+      Step;
+    end
+    else if Chr = '!' then
+    begin
+      Reset;
+      Step;
+    end
+    else if (Chr >= 'a') and (Chr <= 'g') then
+    begin
+      Note := Chr;
+      Step;
+
       if Chr = '#' then
       begin
+        Note := Note + '#';
         Step;
-        ScanEol;
-      end
-      else if Check(Chr, [' ', #9, #13]) then
-        Step
-      else if Chr = '\n' then
-      begin
-        Line := Line + 1; //line only for error messages
-        Step;
-      end
-      else if Chr = '!' then
-      begin
-        Reset;
-        Step;
-      end
-      else if (Chr >= 'a') and (Chr <='g') then
-      begin
-          Note := Chr;
-          Step;
+      end;
 
-          if Chr = '#' then
-          begin
-            Note := Note + '#';
-            Step;
-          end;
+      Offset := 0;
+      if Chr = '+' then
+      begin
+        offset := 1;
+        Step;
+      end
+      else if (Chr = '-') then
+      begin
+        Offset := -1;
+        Step;
+      end;
 
-          Offset := 0;
-          if Chr = '+' then
-          begin
-            offset := 1;
-            Step;
-          end
-          else if (Chr = '-') then
-          begin
-            Offset := -1;
-            Step;
-          end;
+      Duration := ScanNumber(0, NoteLength);
+      if Duration > 96 then
+        raise EMelodyException.Create('Length should be less or equal 96: your length is: ' + FloatToStr(Duration), Line, Current);
 
-          Duration := ScanNumber(0, NoteLength);
-          if Duration > 96 then
-            raise EMelodyException.Create('Length should be less or equal 96: your length is: ' + FloatToStr(Duration), Line, Current);
+      Increase := 0;
+      By := 0.5;
+      if (Chr = '.') then
+      begin
+        repeat
+          Increase := Increase + By; //not sure about next dot
+          By := By / 2;
+        until not Step or (Chr <> '.');
+      end;
 
-          Increase := 0;
-          By := 0.5;
-          if (Chr = '.') then
-          begin
-              repeat
-                  Increase := Increase + By; //not sure about next dot
-                  By := By / 2;
-              until not Step or (Chr <> '.');
-          end;
+      Connected := False;
+      if (Chr = '&') then  //trying to use it, but i think i cant
+      begin
+        Step;
+        Connected := True;
+      end;
+      Result := PlayNote(Note, Duration, Offset, Increase, Connected);
+    end
+    else if Chr = 'n' then
+    begin
+      Step;
+      Number := Round(ScanNumber(2, -1));
+      if Number = -1 then
+        raise EMelodyException.Create('"n" command need a number', Line, Current);
+      Result := PlayNote(Number, NoteLength);
+    end
+    else if Chr = 'q' then //by frequency
+    begin
+      Step;
+      Number := Round(ScanNumber(0, -1));
+      if Number = -1 then
+        raise EMelodyException.Create('"q" command need a number', Line, Current);
+      Result := playnote(number, NoteLength);
+    end
+    else if Chr = 't' then
+    begin
+      Step;
+      Tempo := Round(ScanNumber(0, Tempo));
+    end
+    else if Chr = 'l' then
+    begin
+      Step;
+      l := ScanNumber;
+      if l > 96 then
+        raise EMelodyException.Create('"l" command, length should be less or equal 96: your length is:' + FloatToStr(l), Line, Current);
+      Increase := 0;
+      By := 0.5;
+      if (Chr = '.') then
+      begin
+        repeat
+          increase := increase + by; //not sure about next dot
+          by := by / 2;
+        until not Step or (Chr <> '.');
+      end;
 
-          Connected := False;
-          if (Chr = '&') then  //trying to use it, but i think i cant
-          begin
-            Step;
-            Connected := true;
-          end;
-          Result := PlayNote(Note, Duration, Offset, Increase, Connected);
-      end
-      else if Chr = 'n' then
+      NoteLength := l + Increase;
+    end
+    else if (Chr = 'p') or (Chr = 'r') then //rest or pause
+    begin
+      Step;
+      Duration := ScanNumber(0, NoteLength);
+      Increase := 0;
+      By := 0.5;
+      if Chr = '.' then
       begin
-          Step;
-          Number := Round(ScanNumber(2, -1));
-          if Number = -1 then
-              raise EMelodyException.Create('n command need a number', Line, Current);
-          Result := PlayNote(Number, NoteLength);
-      end
-      else if Chr = 'q' then //by frequency
-      begin
-          Step;
-          Number := Round(ScanNumber(0, -1));
-          if Number = -1 then
-            raise EMelodyException.Create('q command need a number', Line, Current);
-          Result := playnote(number, NoteLength);
-      end
-      else if Chr = 't' then
+        repeat
+          increase := increase + By; //not sure about next dot
+          By := By / 2;
+        until not Step or (Chr <> '.');
+      end;
+      if (Chr = '&') then  //skip it
+        Step;
+      Result := PlayNote('r', Duration, 0, Increase, True);
+    end
+    else if Chr = 'o' then
+    begin
+      Step;
+      Octave := Round(ScanNumber);
+    end
+    else if Chr = '>' then
+    begin
+      Step;
+      Number := Round(ScanNumber(1, 1));
+      Octave := Octave + Number;
+    end
+    else if Chr = '<' then
+    begin
+      Step;
+      Number := Round(ScanNumber(1, 1));
+      Octave := self.octave - Number;
+    end
+    else if Chr = 's' then //shift octave, special for compatibility with some devices
+    begin
+      Step;
+      Number := Round(ScanNumber(0, -1));
+      if Number >= 0 then
+        ShiftOctave := ShiftOctave + Number
+      else
+        ShiftOctave := 0;
+    end
+    else if Chr = ',' then
+    begin
+      Step;
+      raise EMelodyException.Create('"," not supported yet, it used to split song to multiple channels, use play(note1, note2)', Line, Current);
+    end
+    else if Chr = ';' then //stop
+    begin
+      Step;
+      Result := False; //finish it
+      exit;
+    end
+    else if Chr = 'v' then
+    begin
+      Step;
+      Volume := ScanNumber;
+    end
+    else if Chr = 'w' then //set a waveform
+    begin
+      Step;
+      if Chr = '[' then
       begin
         Step;
-        Tempo := Round(ScanNumber(0, Tempo));
-      end
-      else if Chr = 'l' then
-      begin
-        Step;
-        l := ScanNumber;
-        if l > 96 then
-          raise EMelodyException.Create('Length should be less or equal 96: your length is:' + FloatToStr(l), Line, Current);
-        Increase := 0;
-        By := 0.5;
-        if (Chr = '.') then
-        begin
-          repeat
-            increase := increase + by; //not sure about next dot
-            by := by / 2;
-          until not Step or (Chr <> '.')
-        end;
-
-        NoteLength := l + Increase;
-      end
-      else if (Chr = 'p') or (Chr = 'r') then //rest or pause
-      begin
-          Step;
-          Duration := ScanNumber(0, NoteLength);
-          Increase := 0;
-          By := 0.5;
-          if Chr = '.' then
-          begin
-            repeat
-                increase := increase + By; //not sure about next dot
-                By := By / 2;
-            until not Step or (Chr <> '.')
-          end;
-          if (Chr = '&') then  //skip it
-            Step;
-          Result := PlayNote('r', Duration, 0, Increase, True);
-      end
-      else if Chr = 'o' then
-      begin
-        Step;
-        Octave := Round(ScanNumber);
-      end
-      else if Chr = '>' then
-      begin
-        Step;
-        Number := Round(ScanNumber(1, 1));
-        Octave := Octave + Number;
-      end
-      else if Chr = '<' then
-      begin
-        Step;
-        Number := Round(ScanNumber(1, 1));
-        Octave := self.octave - Number;
-      end
-      else if Chr = 's' then //shift octave, special for compatibility with some devices
-      begin
-        Step;
-        Number := Round(ScanNumber(0, -1));
-        if Number >= 0 then
-            ShiftOctave := ShiftOctave + Number
-        else
-            ShiftOctave := 0;
-      end
-      else if Chr = ',' then
-      begin
-        Step;
-        raise EMelodyException.Create('command , not supported, it used to split song to multiple channels, use play(note1, note2)', Line, Current);
-      end
-      else if Chr = ';' then //stop
-      begin
-        Step;
-        Result := false; //finish it
-        exit;
-      end
-      else if Chr = 'v' then
-      begin
-        Step;
-        Volume := ScanNumber;
-      end
-      else if Chr = 'w' then //set a waveform
-      begin
-          Step;
-          if Chr = '[' then
-          begin
-              Step;
-              S := ScanTo(']'); //by name
-              SetWaveform(S);
-          end
-          else
-          begin
-              Number := Round(ScanNumber);
-              //SetWaveForm(Number);
-          end
-      end
-      else if Chr = 'm' then
-      begin
-          Step;
-          if Chr = 'l' then //legato
-          begin
-            Step;
-            self.subsequent := 0;
-          end
-          else if Chr = 'n' then //normal
-          begin
-            Step;
-            Subsequent := 1;
-          end
-          else if Chr = 's' then //staccato
-          begin
-            Step;
-            SubSequent := 2;
-          end
-          else if Chr='r' then //repeat it
-          begin
-            Step;
-            //Number := Round(ScanNumber); //todo
-            Restart;
-            //Restart(number);
-          end
-          else if Chr = 'x' then //exit
-          begin
-            Step;
-            exit(False);
-          end
-          else if Chr = 'f' then //just for compatibility
-              Step
-          else if Chr = 'b' then
-              Step
-          else
-          begin
-            Step;
-            raise EMelodyException.Create('Illegal subcommand for M' + Chr, Line, Current)
-          end
+        S := ScanTo(']'); //by name
+        SetWaveform(S);
       end
       else
-          raise EMelodyException.Create('Can not recognize: ' + Chr, Line, Current)
-  end
+      begin
+        Number := Round(ScanNumber);
+        //SetWaveForm(Number);
+      end;
+    end
+    else if Chr = 'm' then
+    begin
+      Step;
+      if Chr = 'l' then //legato
+      begin
+        Step;
+        self.subsequent := 0;
+      end
+      else if Chr = 'n' then //normal
+      begin
+        Step;
+        Subsequent := 1;
+      end
+      else if Chr = 's' then //staccato
+      begin
+        Step;
+        SubSequent := 2;
+      end
+      else if Chr = 'r' then //repeat it
+      begin
+        Step;
+        //Number := Round(ScanNumber); //todo
+        Restart;
+        //Restart(number);
+      end
+      else if Chr = 'x' then //exit
+      begin
+        Step;
+        exit(False);
+      end
+      else if Chr = 'f' then //just for compatibility
+        Step
+      else if Chr = 'b' then
+        Step
+      else
+      begin
+        Step;
+        raise EMelodyException.Create('Illegal subcommand for M' + CharToStr(Chr), Line, Current);
+      end;
+    end
+    else
+      raise EMelodyException.Create('Can not recognize: ' + CharToStr(Chr), Line, Current);
+  end;
 end;
 
 { TMelody }
@@ -659,16 +668,16 @@ begin
       Channel := TMelodyChannel.Create(Self);
       Channel.Volume := 100;
       Channel.Source := nil;
-      Channel.Finished := false;
+      Channel.Finished := False;
       Channel.Name := 'notdefined';
-      Channel.ID :=  Channels.Add(Channel);
+      Channel.ID := Channels.Add(Channel);
       Channel.Name := IntToStr(Channel.ID);
       Channel.Prepare(mml);
 
       Index := 0;
       Busy := False;
       Count := Channels.Count;
-      while true do
+      while True do
       begin
         if Terminated then
           break;
@@ -676,29 +685,29 @@ begin
         if not Channel.Finished then
         begin
           if (Channel.Expired > 0) and (Channel.Expired > GetTickCount64) then
-              Busy := true
+            Busy := True
           else if Channel.Next then
           begin
-              //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
-              Channel.Expired := GetTickCount64 + Channel.SoundLength + Channel.SoundRest;
-              if not Channel.PlaySound then
-                break;
-              Busy := True;
+            //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
+            Channel.Expired := GetTickCount64 + Channel.SoundLength + Channel.SoundRest;
+            if not Channel.PlaySound then
+              break;
+            Busy := True;
           end
           else
           begin
             Channel.finished := True;
             FreeAndNil(Channel.Source);
-          end
+          end;
         end;
         index := index + 1;
-        if index > count then
+        if index > Count then
         begin
-            index := 1;
-            if not Busy then
-                break
-            else
-                busy := False;
+          index := 1;
+          if not Busy then
+            break
+          else
+            busy := False;
         end;
       end;
     end;
@@ -708,11 +717,10 @@ begin
 end;
 
 initialization
-  baseNumber := power(2, 1/12);
-  baseOctave := 4;
-  baseNoteC4 := 261.63; // yes i am using C4 not A4
-  baseNote   := 39;
-  baseLength := 4;
-  baseTempo  := 60;
+  BaseNumber := power(2, 1 / 12);
+  BaseOctave := 4;
+  BaseNoteFreqC4 := 261.63; // yes i am using C4 not A4
+  BaseNoteIndex := 39;
+  BaseDuration := 4;
+  BaseTempo := 60;
 end.
-
