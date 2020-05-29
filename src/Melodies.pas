@@ -6,10 +6,9 @@ unit Melodies;
 {$M+}{$H+}
 {**
  * This file is part of the 'Tyro'
- * @description Simple Wave generator using RayLib
+ * @description MML parser to play music language in a string
  * @license   MIT
- *
- * @author    Zaher Dirkey <zaher at parmaja dot com>
+ * @author    Zaher Dirkey , zaher, zaherdirkey
  *
  *}
 
@@ -31,7 +30,7 @@ unit Melodies;
 interface
 
 uses
-  Classes, SysUtils, mnClasses, mnUtils, Math;
+  Classes, SysUtils, mnClasses, Math;
 
 type
 
@@ -51,12 +50,14 @@ type
   TMelodyChannel = class(TmnNamedObject)
   private
     FVolume: Single;
-  public
+  private
+    Chr: Char;
+    Line, Current: Integer; //For Parser
+  protected
     Melody: TMelody;
+  public
     ID: Integer;
     Finished: Boolean;
-    Chr: Char;
-    Line, Current: Integer;
     Notes: TmmlNotes;
     Tempo: Integer;
     Octave: Integer;
@@ -432,6 +433,7 @@ var
   l: Single;
   S: String;
 begin
+  Result := False;
   while Current <= Length(Notes) do
   begin
     if Chr = '#' then
@@ -712,7 +714,7 @@ begin
         Channel := Channels[Index];
         if not Channel.Finished then
         begin
-          if (Channel.Expired > 0) and (Channel.Expired > GetTickCount64) then
+          if (Channel.Expired > 0) and (Channel.Expired > GetTickCount64) then //Still waiting to finish playing
             Busy := True
           else if Channel.Next then
           begin

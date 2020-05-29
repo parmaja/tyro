@@ -5,10 +5,10 @@ unit TyroSounds;
 {$M+}{$H+}
 {**
  * This file is part of the 'Tyro'
- * @description Simple Wave generator using RayLib
+ *
  * @license   MIT
  *
- * @author    Zaher Dirkey <zaher at parmaja dot com>
+ * @author    Zaher Dirkey , zaher, zaherdirkey
  *
  *}
 
@@ -155,19 +155,20 @@ end;
 procedure TRayMelody.BeforePlay;
 begin
   inherited;
-  RayLibSound.Init;
+  RayLibSound.Open;
 end;
 
 procedure TRayMelody.AfterPlay;
 begin
   inherited AfterPlay;
+  RayLibSound.Close;
 end;
 
 constructor TRayMelody.Create;
 begin
   inherited Create;
   FWaveForms := TWaveForms.Create;
-  Waveforms.Add('Sin', WaveformSin);
+  Waveforms.Add('Sin', Sin_Waveform);
 end;
 
 destructor TRayMelody.Destroy;

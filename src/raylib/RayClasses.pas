@@ -60,7 +60,7 @@ type
     procedure Stop; virtual;
   end;
 
-  TWaveformProc = function(index, samples, frequency, rate:Integer; connected: Boolean): Integer;
+  TWaveformProc = function(Index: Integer; SampleRate: Integer; Frequency: Single): Integer;
 
   { TRayMusic }
 
@@ -94,15 +94,16 @@ type
   TRayLibSound = class(TRayObject)
   public
     Playing: TObjectList;
-    procedure Init;
+    procedure Open;
+    procedure Close;
     constructor Create;
     destructor Destroy; override;
     procedure PlayMusicFile(FileName: string);
     procedure PlaySound(Freq, Duration: integer);
   end;
 
-function WaveformSin(index, samples, frequency, rate:Integer; connected: Boolean): Integer;
-function WaveformPiano(index, samples, frequency, rate: Integer; Connected: Boolean): Integer;
+function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Integer;
+function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Integer;
 
 var
   RayLibSound: TRayLibSound = nil;
@@ -111,26 +112,26 @@ var
 implementation
 
 var
-  FAudioDeviceInitialized: Boolean = False;
+  FAudioDeviceInitialized: Integer = 0;
 
-function WaveformSin(index, samples, frequency, rate:Integer; connected: Boolean): Integer;
+function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Integer;
 begin
-  Result := round(sin((index * frequency) * ((2 * pi) / rate)));
+  Result := Round(Sin((Index * Frequency) * ((2 * Pi) / SampleRate)));
 end;
 
 //ref: http://web.mit.edu/6.02/www/s2007/lab2.pdf
-function WaveformPiano(index, samples, frequency, rate: Integer; Connected: Boolean): Integer;
+function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Integer;
 var
   a, b,
   Sample, Fade: Single;
 begin
   //https://stackoverflow.com/questions/20037947/fade-out-function-of-audio-between-samplerate-changes
-  fade := 1;
+{  fade := 1;
   if not connected then
-      fade := exp(-log10(50) * index / samples / 3); //fadeout
-  sample := sin(index * (2 * pi) * frequency / rate);
-  a := sin(index * (2 * pi) * frequency * 2 / rate);
-  b := sin(index * (2 * pi) * frequency / 2 / rate);
+      fade := exp(-log10(50) * index / samples / 3); //fadeout}
+  sample := sin(index * (2 * pi) * frequency / SampleRate);
+  a := sin(index * (2 * pi) * frequency * 2 / SampleRate);
+  b := sin(index * (2 * pi) * frequency / 2 / SampleRate);
   sample := (sample - a - b) / 3;
   Result := Round(sample * fade);
 end;
@@ -151,7 +152,8 @@ begin
   Wave.Data := GetMem(Wave.SampleCount * Sizeof(Smallint));
   for i := 0 to Wave.SampleCount -1 do
   begin
-    v := GetRandomValue(0, MaxSmallint);
+    //v := GetRandomValue(0, MaxSmallint);
+    v := Proc(i, SampleRate, Freq);
     PSmallInt(Wave.Data)[i] := v;
   end;
   Sound := LoadSoundFromWave(Wave);
@@ -159,7 +161,7 @@ end;
 
 procedure TRayWave.Play;
 begin
-  inherited Play;
+  inherited;
   PlaySound(Sound);
 {  while IsSoundPlaying(Sound) do
   begin
@@ -251,11 +253,21 @@ end;
 
 { TRayLibSound }
 
-procedure TRayLibSound.Init;
+procedure TRayLibSound.Open;
 begin
-  if not FAudioDeviceInitialized then
+  if not FAudioDeviceInitialized = 0 then
     InitAudioDevice();
-  FAudioDeviceInitialized := True;
+  Inc(FAudioDeviceInitialized);
+end;
+
+procedure TRayLibSound.Close;
+begin
+  if FAudioDeviceInitialized > 0 then
+  begin
+    Dec(FAudioDeviceInitialized);
+    if FAudioDeviceInitialized = 0 then
+      CloseAudioDevice;
+  end;
 end;
 
 constructor TRayLibSound.Create;
@@ -267,7 +279,7 @@ end;
 destructor TRayLibSound.Destroy;
 begin
   FreeAndNil(Playing);
-  if FAudioDeviceInitialized then
+  if FAudioDeviceInitialized > 0 then
     CloseAudioDevice();
   inherited Destroy;
 end;
@@ -276,7 +288,7 @@ procedure TRayLibSound.PlayMusicFile(FileName: string);
 var
   MusicPlaying: TRayMusic;
 begin
-  Init;
+  Open;
   MusicPlaying := TRayMusic.Create;
   MusicPlaying.Music := LoadMusicStream(PUTF8Char(FileName));
   Playing.Add(MusicPlaying);
@@ -288,9 +300,9 @@ procedure TRayLibSound.PlaySound(Freq, Duration: integer);
 var
   WavePlaying: TRayWave;
 begin
-  Init;
+  Open;
   WavePlaying := TRayWave.Create;
-  WavePlaying.Generate(@WaveformSin, Freq, Duration);
+  WavePlaying.Generate(@Sin_Waveform, Freq, Duration);
   Playing.Add(WavePlaying);
   //RayUpdates.Add(MusicPlaying);
   WavePlaying.Play;
