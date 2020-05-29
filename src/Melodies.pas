@@ -66,10 +66,9 @@ type
     ShiftOctave: Integer;
     Instrument: String;
     Expired: Longint;
-    SoundLength: Integer;
-    SoundRest: Integer;
+    SoundDuration: Single;
     constructor Create(AMelody: TMelody); virtual;
-    procedure Prepare(ANotes: TmmlNotes); virtual;
+    procedure Prepare; virtual;
     procedure Unprepare; virtual;
     procedure SetInstrument(Instrument: String); virtual;
     procedure SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single); virtual;
@@ -197,9 +196,9 @@ begin
   FVolume := 100;
 end;
 
-procedure TMelodyChannel.Prepare(ANotes: TmmlNotes);
+procedure TMelodyChannel.Prepare;
 begin
-  Notes := LowerCase(ANotes);
+  Notes := LowerCase(Notes);
 
   //Current values by default
   Tempo := 120;
@@ -221,6 +220,7 @@ end;
 
 procedure TMelodyChannel.SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single);
 begin
+  SoundDuration := Duration + Rest;
   WriteLn(Format('Frequency %f, Duration %f, Rest %f ', [Frequency, Duration, Rest]));
 end;
 
@@ -703,7 +703,8 @@ begin
       Channel.Name := 'notdefined';
       Channel.ID := Channels.Add(Channel);
       Channel.Name := IntToStr(Channel.ID);
-      Channel.Prepare(mml);
+      Channel.Notes := mml;
+      Channel.Prepare;
 
       Index := 0;
       Busy := False;
@@ -719,7 +720,7 @@ begin
           else if Channel.Next then
           begin
             //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
-            Channel.Expired := GetTickCount64 + Channel.SoundLength + Channel.SoundRest;
+            Channel.Expired := GetTickCount64 + Round(Channel.SoundDuration);
             if not Channel.PlaySound then
               break;
             Busy := True;

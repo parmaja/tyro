@@ -60,7 +60,7 @@ type
     procedure Stop; virtual;
   end;
 
-  TWaveformProc = function(Index: Integer; SampleRate: Integer; Frequency: Single): Integer;
+  TWaveformProc = function(Index: Integer; SampleRate: Integer; Frequency: Single): Single;
 
   { TRayMusic }
 
@@ -81,7 +81,7 @@ type
     Wave: TWave;
   public
     Sound: TSound;
-    procedure Generate(Proc: TWaveformProc; Freq, Duration: Single; Rest: Single = 0; SampleRate: Integer = 44100; BitRate: Integer = 16);
+    procedure Generate(Proc: TWaveformProc; Freq, Duration, Amplitude: Single; Rest: Single = 0; SampleRate: Integer = 44100; BitRate: Integer = 16);
     procedure Play; override;
     function IsPlaying: Boolean; override;
     procedure Stop; override;
@@ -99,11 +99,12 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure PlayMusicFile(FileName: string);
-    procedure PlaySound(Freq, Duration: integer);
+    procedure PlaySound(Freq, Duration: Single);
   end;
 
-function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Integer;
-function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Integer;
+function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 var
   RayLibSound: TRayLibSound = nil;
@@ -114,13 +115,23 @@ implementation
 var
   FAudioDeviceInitialized: Integer = 0;
 
-function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Integer;
+function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 begin
-  Result := Round(Sin((Index * Frequency) * ((2 * Pi) / SampleRate)));
+  Result := GetRandomValue(-100,+100) / 100;
+end;
+
+function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Sample, WaveSamples: Single;
+begin
+  WaveSamples := SampleRate / Frequency;
+  Sample := Index mod WaveSamples;
+  Result := Sin(2*Pi * (Sample / WaveSamples));
+  WriteLn('Sample = ' + FloatTOStr(Sample) + ' WaveSamples = '+ FloatToStr(wavesamples) + ' Result: ' + FloatToStr(Result));
 end;
 
 //ref: http://web.mit.edu/6.02/www/s2007/lab2.pdf
-function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Integer;
+function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 var
   a, b,
   Sample, Fade: Single;
@@ -133,18 +144,18 @@ begin
   a := sin(index * (2 * pi) * frequency * 2 / SampleRate);
   b := sin(index * (2 * pi) * frequency / 2 / SampleRate);
   sample := (sample - a - b) / 3;
-  Result := Round(sample * fade);
+  Result := sample * fade;
 end;
 
 { TRayWave }
 
-procedure TRayWave.Generate(Proc: TWaveformProc; Freq, Duration: Single; Rest: Single; SampleRate: Integer; BitRate: Integer);
+procedure TRayWave.Generate(Proc: TWaveformProc; Freq, Duration, Amplitude: Single; Rest: Single; SampleRate: Integer; BitRate: Integer);
 var
   i: Integer;
-  v: Integer;
+  v: Smallint;
 begin
   Wave.SampleCount := Round((Duration + Rest) * SampleRate); //rest keep it empty;
-  Wave.SampleRate := 44100; // By default 44100 Hz
+  Wave.SampleRate := SampleRate; // By default 44100 Hz
   Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit
   Wave.Channels := 1;                  // By default 1 channel (mono)
   if Wave.Data <> nil then
@@ -153,7 +164,7 @@ begin
   for i := 0 to Wave.SampleCount -1 do
   begin
     //v := GetRandomValue(0, MaxSmallint);
-    v := Proc(i, SampleRate, Freq);
+    v := Round(Proc(i, SampleRate, Freq) * Amplitude);
     PSmallInt(Wave.Data)[i] := v;
   end;
   Sound := LoadSoundFromWave(Wave);
@@ -193,6 +204,7 @@ begin
     Freemem(Wave.Data);
     Wave.Data := nil;
   end;
+  UnloadSound(Sound);
 end;
 
 { TRayUpdateList }
@@ -296,13 +308,13 @@ begin
   MusicPlaying.Play;
 end;
 
-procedure TRayLibSound.PlaySound(Freq, Duration: integer);
+procedure TRayLibSound.PlaySound(Freq, Duration: Single);
 var
   WavePlaying: TRayWave;
 begin
   Open;
   WavePlaying := TRayWave.Create;
-  WavePlaying.Generate(@Sin_Waveform, Freq, Duration);
+  WavePlaying.Generate(@Sin_Waveform, Freq, Duration, MaxSmallint div 2);
   Playing.Add(WavePlaying);
   //RayUpdates.Add(MusicPlaying);
   WavePlaying.Play;

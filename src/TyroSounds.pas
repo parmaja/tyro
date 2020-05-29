@@ -53,6 +53,7 @@ type
 
   TRayMelodyChannel = class(TMelodyChannel)
   public
+    Amplitude: Single;
     SampleRate: Integer;
     BitRate: Integer;
     Sound: TRayWave;
@@ -62,6 +63,7 @@ type
     function PlaySound: Boolean; override;
     function StopSound: Boolean; override;
 
+    procedure Prepare; override;
     procedure Unprepare; override;
     constructor Create(AMelody: TMelody); override;
     destructor Destroy; override;
@@ -113,21 +115,31 @@ end;
 
 procedure TRayMelodyChannel.SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single);
 begin
+  inherited;
   if Waveform = nil then
     raise EMelodyException.Create('Waveform not defined');
-  Sound.Generate(Waveform.Proc, Frequency, Duration, Rest, SampleRate, BitRate);
+  Sound.Generate(Waveform.Proc, Frequency, Duration, Amplitude, Rest, SampleRate, BitRate);
+  //Sound.Generate(Waveform.Proc, 2, 1, 10, Rest, 20, BitRate);
 end;
 
 function TRayMelodyChannel.PlaySound: Boolean;
 begin
+  inherited;
   Sound.Play;
   Result := Sound.IsPlaying;
 end;
 
 function TRayMelodyChannel.StopSound: Boolean;
 begin
+  inherited;
   Result := Sound.IsPlaying;
   Sound.Stop;
+end;
+
+procedure TRayMelodyChannel.Prepare;
+begin
+  inherited Prepare;
+  Amplitude := 1000;//MaxSmallint div 2;
 end;
 
 procedure TRayMelodyChannel.Unprepare;
@@ -168,7 +180,8 @@ constructor TRayMelody.Create;
 begin
   inherited Create;
   FWaveForms := TWaveForms.Create;
-  Waveforms.Add('Sin', Sin_Waveform);
+  //Waveforms.Add('Sin', Sin_Waveform);
+  Waveforms.Add('Noise', Noise_Waveform());
 end;
 
 destructor TRayMelody.Destroy;
