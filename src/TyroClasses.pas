@@ -225,6 +225,15 @@ type
     procedure DoExecute; override;
   end;
 
+
+  { TBeepObject }
+
+  TBeepObject = class(TQueueObject)
+  public
+    constructor Create;
+    procedure DoExecute; override;
+  end;
+
   { TPlaySoundObject }
 
   TPlaySoundObject = class(TQueueObject)
@@ -383,6 +392,18 @@ begin
   Result := Result or C.Red;
 end;
 
+{ TBeepObject }
+
+constructor TBeepObject.Create;
+begin
+  inherited Create;
+end;
+
+procedure TBeepObject.DoExecute;
+begin
+  RayLibSound.PlaySound(440, 2);
+end;
+
 { TPlayMMFObject }
 
 constructor TPlayMMFObject.Create(AMML: string);
@@ -395,7 +416,7 @@ var
   Melody: TRayMelody;
 begin
   Melody := TRayMelody.Create;
-  Melody.Play('', [MML]);
+  Melody.Play([MML]);
 end;
 
 { TPlaySoundObject }

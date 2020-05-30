@@ -89,6 +89,7 @@ type
     //global functions
     function Print_func(L: Plua_State): Integer; cdecl;
 
+    function Beep_func(L: Plua_State): Integer; cdecl;
     function PlaySound_func(L: Plua_State): Integer; cdecl;
     function PlayMusic_func(L: Plua_State): Integer; cdecl;
     function PlayMML_func(L: Plua_State): Integer; cdecl;
@@ -428,6 +429,7 @@ begin
 
   lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
 
+  lua_register_table_method(LuaState, 'music', self, 'beep', @Beep_func);
   lua_register_table_method(LuaState, 'music', self, 'sound', @PlaySound_func);
   lua_register_table_method(LuaState, 'music', self, 'play', @PlayMusic_func);
   lua_register_table_method(LuaState, 'music', self, 'mml', @PlayMML_func);
@@ -598,6 +600,12 @@ begin
   x := round(lua_tonumber(L, 2));
   y := round(lua_tonumber(L, 3));
   AddQueueObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  Result := 0;
+end;
+
+function TLuaScript.Beep_func(L: Plua_State): Integer; cdecl;
+begin
+  AddQueueObject(TBeepObject.Create);
   Result := 0;
 end;
 

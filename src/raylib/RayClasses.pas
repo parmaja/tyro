@@ -51,12 +51,15 @@ type
   public
   end;
 
+  TRayPlayState = (plyStop, plyPlay, plyPause);
   { TRayPlay }
 
   TRayPlay = class abstract (TRayUpdate)
   public
+    State: TRayPlayState;
     procedure Play; virtual;
     function IsPlaying: Boolean; virtual;
+    procedure Pause; virtual;
     procedure Stop; virtual;
   end;
 
@@ -70,6 +73,7 @@ type
     procedure Play; override;
     function IsPlaying: Boolean; override;
     procedure Stop; override;
+    procedure Pause; override;
     procedure Update; override;
   end;
 
@@ -81,10 +85,11 @@ type
     Wave: TWave;
   public
     Sound: TSound;
-    procedure Generate(Proc: TWaveformProc; Freq, Duration, Amplitude: Single; Rest: Single = 0; SampleRate: Integer = 44100; BitRate: Integer = 16);
+    procedure Generate(Proc: TWaveformProc; Freq, Duration, Amplitude: Single; SampleRate: Integer = 44100; BitRate: Integer = 16);
     procedure Play; override;
     function IsPlaying: Boolean; override;
     procedure Stop; override;
+    procedure Pause; override;
     procedure Update; override;
     destructor Destroy; override;
   end;
@@ -124,10 +129,20 @@ function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 var
   Sample, WaveSamples: Single;
 begin
-  WaveSamples := SampleRate / Frequency;
-  Sample := Index mod WaveSamples;
-  Result := Sin(2*Pi * (Sample / WaveSamples));
-  WriteLn('Sample = ' + FloatTOStr(Sample) + ' WaveSamples = '+ FloatToStr(wavesamples) + ' Result: ' + FloatToStr(Result));
+  if Frequency > 0 then
+  begin
+    WaveSamples := SampleRate / Frequency;
+    if WaveSamples > 0 then
+    begin
+      Sample := Index mod WaveSamples;
+      Result := Sin(2*Pi * (Sample / WaveSamples));
+    end
+    else
+      Result := 0;
+  end
+  else
+    Result := 0;
+  //WriteLn('Sample = ' + FloatTOStr(Sample) + ' WaveSamples = '+ FloatToStr(wavesamples) + ' Result: ' + FloatToStr(Result));
 end;
 
 //ref: http://web.mit.edu/6.02/www/s2007/lab2.pdf
@@ -149,12 +164,12 @@ end;
 
 { TRayWave }
 
-procedure TRayWave.Generate(Proc: TWaveformProc; Freq, Duration, Amplitude: Single; Rest: Single; SampleRate: Integer; BitRate: Integer);
+procedure TRayWave.Generate(Proc: TWaveformProc; Freq, Duration, Amplitude: Single; SampleRate: Integer; BitRate: Integer);
 var
   i: Integer;
   v: Smallint;
 begin
-  Wave.SampleCount := Round((Duration + Rest) * SampleRate); //rest keep it empty;
+  Wave.SampleCount := Round(Duration * SampleRate); //rest keep it empty;
   Wave.SampleRate := SampleRate; // By default 44100 Hz
   Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit
   Wave.Channels := 1;                  // By default 1 channel (mono)
@@ -163,7 +178,6 @@ begin
   Wave.Data := GetMem(Wave.SampleCount * Sizeof(Smallint));
   for i := 0 to Wave.SampleCount -1 do
   begin
-    //v := GetRandomValue(0, MaxSmallint);
     v := Round(Proc(i, SampleRate, Freq) * Amplitude);
     PSmallInt(Wave.Data)[i] := v;
   end;
@@ -187,13 +201,19 @@ end;
 
 procedure TRayWave.Stop;
 begin
-  StopSound(Sound);
-  UnloadSound(Sound);
+  inherited;
+  if State > plyStop then
+    StopSound(Sound);
+end;
+
+procedure TRayWave.Pause;
+begin
+  inherited;
 end;
 
 procedure TRayWave.Update;
 begin
-
+  inherited;
 end;
 
 destructor TRayWave.Destroy;
@@ -203,6 +223,7 @@ begin
   begin
     Freemem(Wave.Data);
     Wave.Data := nil;
+    UnloadWave(Wave);
   end;
   UnloadSound(Sound);
 end;
@@ -241,6 +262,12 @@ begin
   StopMusicStream(Music);
 end;
 
+procedure TRayMusic.Pause;
+begin
+  inherited Pause;
+  PauseMusicStream(Music);
+end;
+
 procedure TRayMusic.Update;
 begin
   UpdateMusicStream(Music);
@@ -250,7 +277,7 @@ end;
 
 procedure TRayPlay.Play;
 begin
-
+  State := plyPlay;
 end;
 
 function TRayPlay.IsPlaying: Boolean;
@@ -258,16 +285,21 @@ begin
   Result := True;
 end;
 
+procedure TRayPlay.Pause;
+begin
+  State := plyPause;
+end;
+
 procedure TRayPlay.Stop;
 begin
-
+  State := plyStop;
 end;
 
 { TRayLibSound }
 
 procedure TRayLibSound.Open;
 begin
-  if not FAudioDeviceInitialized = 0 then
+  if FAudioDeviceInitialized = 0 then
     InitAudioDevice();
   Inc(FAudioDeviceInitialized);
 end;
@@ -285,7 +317,7 @@ end;
 constructor TRayLibSound.Create;
 begin
   inherited Create;
-  Playing:=TObjectList.Create;
+  Playing := TObjectList.Create;
 end;
 
 destructor TRayLibSound.Destroy;
@@ -298,26 +330,26 @@ end;
 
 procedure TRayLibSound.PlayMusicFile(FileName: string);
 var
-  MusicPlaying: TRayMusic;
+  Music: TRayMusic;
 begin
   Open;
-  MusicPlaying := TRayMusic.Create;
-  MusicPlaying.Music := LoadMusicStream(PUTF8Char(FileName));
-  Playing.Add(MusicPlaying);
-  RayUpdates.Add(MusicPlaying);
-  MusicPlaying.Play;
+  Music := TRayMusic.Create;
+  Music.Music := LoadMusicStream(PUTF8Char(FileName));
+  Playing.Add(Music);
+  RayUpdates.Add(Music);
+  Music.Play;
 end;
 
 procedure TRayLibSound.PlaySound(Freq, Duration: Single);
 var
-  WavePlaying: TRayWave;
+  Wave: TRayWave;
 begin
   Open;
-  WavePlaying := TRayWave.Create;
-  WavePlaying.Generate(@Sin_Waveform, Freq, Duration, MaxSmallint div 2);
-  Playing.Add(WavePlaying);
+  Wave := TRayWave.Create;
+  Wave.Generate(@Sin_Waveform, Freq, Duration, MaxSmallint div 4);
+  Playing.Add(Wave);
   //RayUpdates.Add(MusicPlaying);
-  WavePlaying.Play;
+  Wave.Play;
 end;
 
 initialization

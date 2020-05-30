@@ -96,7 +96,7 @@ type
     destructor Destroy; override;
 
     function CreateChannel: TMelodyChannel; virtual;
-    procedure Play(Instrument: String; Song: TArray<TmmlNotes>);
+    procedure Play(Song: TArray<TmmlNotes>);
   end;
 
 //    http://www.headchant.com/2011/11/01/sound-synthesis-with-love-part-ii-sine-waves/
@@ -221,7 +221,7 @@ end;
 procedure TMelodyChannel.SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single);
 begin
   SoundDuration := Duration + Rest;
-  WriteLn(Format('Frequency %f, Duration %f, Rest %f ', [Frequency, Duration, Rest]));
+  //WriteLn(Format('Frequency %f, Duration %f, Rest %f ', [Frequency, Duration, Rest]));
 end;
 
 function TMelodyChannel.PlaySound: Boolean;
@@ -480,6 +480,12 @@ begin
       if Duration > 96 then
         raise EMelodyException.Create('Length should be less or equal 96: your length is: ' + FloatToStr(Duration), Line, Current);
 
+      if Chr = ',' then
+      begin
+        Offset := Offset + (Round(ScanNumber(0, Octave)) - Octave);
+        Step;
+      end;
+
       Increase := 0;
       By := 0.5;
       if (Chr = '.') then
@@ -684,7 +690,7 @@ begin
   Result := TMelodyChannel.Create(Self);
 end;
 
-procedure TMelody.Play(Instrument: String; Song: TArray<TmmlNotes>);
+procedure TMelody.Play(Song: TArray<TmmlNotes>);
 var
   Channels: TMelodyChannels;
   Channel: TMelodyChannel;
@@ -717,18 +723,22 @@ begin
         begin
           if (Channel.Expired > 0) and (Channel.Expired > GetTickCount64) then //Still waiting to finish playing
             Busy := True
-          else if Channel.Next then
-          begin
-            //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
-            Channel.Expired := GetTickCount64 + Round(Channel.SoundDuration);
-            if not Channel.PlaySound then
-              break;
-            Busy := True;
-          end
           else
           begin
-            Channel.Finished := True;
-            Channel.Unprepare;
+            Channel.StopSound;//no if we like to make some waves say playing
+            if Channel.Next then //SetSound will be in Next function
+            begin
+              //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
+              Channel.Expired := Round(Channel.SoundDuration * 1000) + GetTickCount64 + 1;
+              if not Channel.PlaySound then //Assuming can't play it, idk why
+                break;
+              Busy := True;
+            end
+            else
+            begin
+              Channel.Finished := True;
+              Channel.Unprepare;
+            end;
           end;
         end;
         index := index + 1;
