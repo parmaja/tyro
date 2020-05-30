@@ -252,9 +252,9 @@ type
     procedure DoExecute; override;
   end;
 
-  { TPlayMMFObject }
+  { TPlayMMLObject }
 
-  TPlayMMFObject = class(TQueueObject)
+  TPlayMMLObject = class(TQueueObject)
   public
     MML: string;
     constructor Create(AMML: string);
@@ -404,14 +404,14 @@ begin
   RayLibSound.PlaySound(440, 2);
 end;
 
-{ TPlayMMFObject }
+{ TPlayMMLObject }
 
-constructor TPlayMMFObject.Create(AMML: string);
+constructor TPlayMMLObject.Create(AMML: string);
 begin
   MML := AMML;
 end;
 
-procedure TPlayMMFObject.DoExecute;
+procedure TPlayMMLObject.DoExecute;
 var
   Melody: TRayMelody;
 begin

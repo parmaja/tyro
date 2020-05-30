@@ -138,7 +138,7 @@ end;
 procedure TRayMelodyChannel.Prepare;
 begin
   inherited Prepare;
-  Amplitude := MaxSmallint div 4;
+  Amplitude := 100;
 end;
 
 procedure TRayMelodyChannel.Unprepare;

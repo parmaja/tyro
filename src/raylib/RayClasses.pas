@@ -85,7 +85,7 @@ type
     Wave: TWave;
   public
     Sound: TSound;
-    procedure Generate(Proc: TWaveformProc; Freq, Duration, Amplitude: Single; SampleRate: Integer = 44100; BitRate: Integer = 16);
+    procedure Generate(Proc: TWaveformProc; Freq, Duration: Single; Amplitude: Single = 100; SampleRate: Integer = 44100; BitRate: Integer = 16);
     procedure Play; override;
     function IsPlaying: Boolean; override;
     procedure Stop; override;
@@ -176,11 +176,13 @@ begin
   if Wave.Data <> nil then
     Freemem(Wave.Data);
   Wave.Data := GetMem(Wave.SampleCount * Sizeof(Smallint));
+  Amplitude := (Amplitude * (Power(2, Wave.SampleSize) / 2) / 100) -1;
   for i := 0 to Wave.SampleCount -1 do
   begin
     v := Round(Proc(i, SampleRate, Freq) * Amplitude);
     PSmallInt(Wave.Data)[i] := v;
   end;
+  //ExportWave(Wave, 'c:\temp\tune.wav');
   Sound := LoadSoundFromWave(Wave);
 end;
 
@@ -301,14 +303,14 @@ procedure TRayLibSound.Open;
 begin
   if FAudioDeviceInitialized = 0 then
     InitAudioDevice();
-  Inc(FAudioDeviceInitialized);
+  InterlockedIncrement(FAudioDeviceInitialized);
 end;
 
 procedure TRayLibSound.Close;
 begin
   if FAudioDeviceInitialized > 0 then
   begin
-    Dec(FAudioDeviceInitialized);
+    InterlockedDecrement(FAudioDeviceInitialized);
     if FAudioDeviceInitialized = 0 then
       CloseAudioDevice;
   end;
@@ -346,7 +348,7 @@ var
 begin
   Open;
   Wave := TRayWave.Create;
-  Wave.Generate(@Sin_Waveform, Freq, Duration, MaxSmallint div 4);
+  Wave.Generate(@Sin_Waveform, Freq, Duration, 100);
   Playing.Add(Wave);
   //RayUpdates.Add(MusicPlaying);
   Wave.Play;

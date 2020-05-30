@@ -635,7 +635,12 @@ var
   s: string;
 begin
   s := lua_tostring(L, 1);
-  AddQueueObject(TPlayMMFObject.Create(s));
+  //AddQueueObject(TPlayMMLObject.Create(s));
+  with TPlayMMLObject.Create(s) do //using current thread
+  begin
+    Execute;
+    Free;
+  end;
   Result := 0;
 end;
 

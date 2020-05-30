@@ -99,6 +99,18 @@ type
     procedure Play(Song: TArray<TmmlNotes>);
   end;
 
+  { TMelodyThread }
+
+  TMelodyThread = class(TThread)
+  private
+    Song: TArray<TmmlNotes>;
+    Melody: TMelody;
+  public
+    procedure Execute; override;
+    constructor Create(Song: TArray<TmmlNotes>);
+  end;
+
+
 //    http://www.headchant.com/2011/11/01/sound-synthesis-with-love-part-ii-sine-waves/
 //      https://stackoverflow.com/questions/11355353/how-can-i-convert-qbasic-play-commands-to-something-more-contemporary
 //ref:  http://www.phy.mtu.edu/~suits/notefreqs.html
@@ -178,6 +190,23 @@ begin
     Result := '#' + IntToStr(Ord(C))
   else
     Result := C;
+end;
+
+{ TMelodyThread }
+
+procedure TMelodyThread.Execute;
+begin
+  Melody := TMelody.Create;
+  try
+    Melody.Play(Song);
+  finally
+    Melody.Free;
+  end;
+end;
+
+constructor TMelodyThread.Create(Song: TArray<TmmlNotes>);
+begin
+  inherited Create(True);
 end;
 
 { EMelodyException }
@@ -482,8 +511,8 @@ begin
 
       if Chr = ',' then
       begin
-        Offset := Offset + (Round(ScanNumber(0, Octave)) - Octave);
         Step;
+        Offset := Offset + (Round(ScanNumber(0, Octave)) - Octave);
       end;
 
       Increase := 0;
