@@ -1,10 +1,10 @@
 window()
-canvas.text(50, 50, "Now is playing MOD file")
+canvas.text(50, 50, "Now is playing a aong")
 --music.play('willtell.xm');
 --music.sound(440, 1000);
 --music.mml('mfl16t155s2 o2mnb4p8msbbmnb4p8msbbb8g#8 e8g#8b8g#8b8o3e8o2b8g#8e8g#8');
 --music.mml('cdefgab');
---music.mml('c');
+music.mml('c');
 --music.beep()
 
 
@@ -110,4 +110,4 @@ g#8o3e8o2b8o3e8o2b8o3g#8e8b8g#8o4e4
 p8eee8e8e8e8e4p8p16
 ee4p8p16o2ee2
 ]]
-music.mml(WilliamTell)
+--music.mml(WilliamTell)

@@ -79,13 +79,11 @@ type
 
   { TRayWave }
 
-  TRayWave = class(TRayPlay)
+  TRaySound = class(TRayPlay)
   private
   protected
-    Wave: TWave;
   public
     Sound: TSound;
-    procedure Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single = 100; SampleRate: Integer = 44100; BitRate: Integer = 16);
     procedure Play; override;
     function IsPlaying: Boolean; override;
     procedure Stop; override;
@@ -104,7 +102,6 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure PlayMusicFile(FileName: string);
-    procedure PlaySound(Freq, Duration: Single);
   end;
 
 function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -162,50 +159,7 @@ begin
   Result := sample * fade;
 end;
 
-{ TRayWave }
-
-procedure TRayWave.Generate(Proc: TWaveformProc; Frequency, Duration, Amplitude: Single; SampleRate: Integer; BitRate: Integer);
-var
-  i: Integer;
-  v: Smallint;
-  WaveSamples: Integer;
-  starting, ending: Integer;
-  delta: single;
-  aSize: Integer;
-begin
-  Wave.SampleCount := Round(Duration * SampleRate); //rest keep it empty;
-  Wave.SampleRate := SampleRate; // By default 44100 Hz
-  Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit
-  Wave.Channels := 1;                  // By default 1 channel (mono)
-  if Wave.Data <> nil then
-    Freemem(Wave.Data);
-  aSize := Wave.SampleCount * Sizeof(Smallint);
-  Wave.Data := GetMem(aSize);
-  if Frequency <> 0 then
-  begin
-    Amplitude := (Amplitude * (Power(2, Wave.SampleSize) / 2) / 100) -1;
-    WaveSamples := SampleRate div round(Frequency);
-    starting := WaveSamples * 3;
-    ending := Wave.SampleCount - WaveSamples * 3;
-    delta := 100 / (WaveSamples * 3);
-    for i := 0 to Wave.SampleCount -1 do
-    begin
-      v := Round(Proc(i, SampleRate, Frequency) * Amplitude);
-
-      if i < starting then
-        v := round(v * i * delta / 100);
-      if i > ending then
-        v := round(v * (Wave.SampleCount - i) * delta / 100);
-      PSmallInt(Wave.Data)[i] := v;
-    end;
-  end
-  else
-    FillChar(Wave.Data^, aSize, #0);
-  //ExportWave(Wave, 'c:\temp\tune.wav');
-  Sound := LoadSoundFromWave(Wave);
-end;
-
-procedure TRayWave.Play;
+procedure TRaySound.Play;
 begin
   inherited;
   PlaySound(Sound);
@@ -215,37 +169,31 @@ begin
   end;}
 end;
 
-function TRayWave.IsPlaying: Boolean;
+function TRaySound.IsPlaying: Boolean;
 begin
   Result := IsSoundPlaying(Sound);
 end;
 
-procedure TRayWave.Stop;
+procedure TRaySound.Stop;
 begin
   inherited;
   if State > plyStop then
     StopSound(Sound);
 end;
 
-procedure TRayWave.Pause;
+procedure TRaySound.Pause;
 begin
   inherited;
 end;
 
-procedure TRayWave.Update;
+procedure TRaySound.Update;
 begin
   inherited;
 end;
 
-destructor TRayWave.Destroy;
+destructor TRaySound.Destroy;
 begin
   inherited;
-  if Wave.Data <> nil then
-  begin
-    Freemem(Wave.Data);
-    Wave.Data := nil;
-    UnloadWave(Wave);
-  end;
   UnloadSound(Sound);
 end;
 
@@ -359,18 +307,6 @@ begin
   Playing.Add(Music);
   RayUpdates.Add(Music);
   Music.Play;
-end;
-
-procedure TRayLibSound.PlaySound(Freq, Duration: Single);
-var
-  Wave: TRayWave;
-begin
-  Open;
-  Wave := TRayWave.Create;
-  Wave.Generate(@Sin_Waveform, Freq, Duration, 100);
-  Playing.Add(Wave);
-  //RayUpdates.Add(MusicPlaying);
-  Wave.Play;
 end;
 
 initialization

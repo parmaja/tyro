@@ -49,6 +49,16 @@ type
     procedure Add(Name: string; Proc: TWaveformProc);
   end;
 
+  { TTyroRayWave }
+
+  TTyroRayWave = class(TRaySound)
+  protected
+    Wave: TWave;
+  public
+    destructor Destroy; override;
+    procedure Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single = 100; SampleRate: Integer = 44100; BitRate: Integer = 16);
+  end;
+
   { TRayMelodyChannel }
 
   TRayMelodyChannel = class(TMelodyChannel)
@@ -56,7 +66,7 @@ type
     Amplitude: Single;
     SampleRate: Integer;
     BitRate: Integer;
-    Sound: TRayWave;
+    Sound: TTyroRayWave;
     Waveform: TWaveForm;
     procedure SetInstrument(Instrument: String); override;
     procedure SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single); override;
@@ -84,7 +94,64 @@ type
     property WaveForms: TWaveForms read FWaveForms;
   end;
 
+procedure PlayWaveform(Freq, Duration: Single);
+
 implementation
+
+{ TTyroRayWave }
+
+destructor TTyroRayWave.Destroy;
+begin
+  inherited Destroy;
+end;
+
+procedure TTyroRayWave.Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single; SampleRate: Integer; BitRate: Integer);
+var
+  i: Integer;
+  v: Smallint;
+  WaveSamples: Integer;
+  starting, ending: Integer;
+  delta: single;
+  aSize: Integer;
+begin
+  Wave.SampleCount := Round(Duration * SampleRate); //rest keep it empty;
+  Wave.SampleRate := SampleRate; // By default 44100 Hz
+  Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit
+  Wave.Channels := 1;                  // By default 1 channel (mono)
+  if Wave.Data <> nil then
+    Freemem(Wave.Data);
+  aSize := Wave.SampleCount * Sizeof(Smallint);
+  Wave.Data := GetMem(aSize);
+  if Frequency <> 0 then
+  begin
+    Amplitude := (Amplitude * (Power(2, Wave.SampleSize) / 2) / 100) -1;
+    WaveSamples := SampleRate div round(Frequency);
+    starting := WaveSamples * 3;
+    ending := Wave.SampleCount - WaveSamples * 3;
+    delta := 100 / (WaveSamples * 3);
+    for i := 0 to Wave.SampleCount -1 do
+    begin
+      v := Round(Proc(i, SampleRate, Frequency) * Amplitude);
+
+      if i < starting then
+        v := round(v * i * delta / 100);
+      if i > ending then
+        v := round(v * (Wave.SampleCount - i) * delta / 100);
+      PSmallInt(Wave.Data)[i] := v;
+    end;
+  end
+  else
+    FillChar(Wave.Data^, aSize, #0);
+  ExportWave(Wave, 'c:\temp\tune.wav');
+  Sound := LoadSoundFromWave(Wave);
+  if Wave.Data <> nil then //maybe move it to generate
+  begin
+    Freemem(Wave.Data);
+    Wave.Data := nil;
+    UnloadWave(Wave);
+  end;
+end;
+
 
 { TWaveForms }
 
@@ -151,7 +218,7 @@ begin
   inherited;
   SampleRate := 44100;
   BitRate := 16;
-  Sound := TRayWave.Create;
+  Sound := TTyroRayWave.Create;
   SetInstrument('');
 end;
 
@@ -193,6 +260,16 @@ end;
 function TRayMelody.CreateChannel: TMelodyChannel;
 begin
   Result := TRayMelodyChannel.Create(Self);
+end;
+
+procedure PlayWaveform(Freq, Duration: Single);
+var
+  Wave: TTyroRayWave;
+begin
+  RayLibSound.Open;
+  Wave := TTyroRayWave.Create;
+  Wave.Generate(@Sin_Waveform, Freq, Duration, 100);
+  Wave.Play;
 end;
 
 initialization

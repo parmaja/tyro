@@ -401,7 +401,7 @@ end;
 
 procedure TBeepObject.DoExecute;
 begin
-  RayLibSound.PlaySound(440, 2);
+  PlayWaveform(440, 1);
 end;
 
 { TPlayMMLObject }
@@ -430,7 +430,7 @@ end;
 
 procedure TPlaySoundObject.DoExecute;
 begin
-  RayLibSound.PlaySound(Freq, Period);
+  PlayWaveform(Freq, Period);
 end;
 
 { TPlayMusicFileObject }
