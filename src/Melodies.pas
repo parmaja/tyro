@@ -1,10 +1,9 @@
 unit Melodies;
-
 {$IFDEF FPC}
 {$MODE delphi}
 {$ENDIF}
 {$M+}{$H+}
-{**
+{*
  * This file is part of the 'Tyro'
  * @description MML parser to play music language in a string
  * @license   MIT
@@ -12,20 +11,36 @@ unit Melodies;
  *
  *}
 
-{////////////////////////////////////////////////////////////////////////////-
+{*
 *    Music Macro Language
 *   https://en.wikipedia.org/wiki/Music_Macro_Language
 *
 *   This file is used part of the 'Tyro'
 *   @license   The MIT License (MIT) Included in this distribution
 *   @author    Zaher Dirkey <zaherdirkey at yahoo dot com>
-//////////////////////////////////////////////////////////////////////////////-
+*-----------------------------------------------------------------------------
 *  Look at this site, it have many of songs
 *  https://archeagemmllibrary.com/
 *   usefull refereces
 *
 *  http://web.mit.edu/18.06/www/Essays/linear-algebra-and-music.pdf
-//////////////////////////////////////////////////////////////////////////////-}
+}
+
+{*
+*  Ref:
+*   http://www.antonis.de/qbebooks/gwbasman/play.html
+*   http://www.antonis.de/qbebooks/gwbasman/play.html
+*   https://woolyss.com/chipmusic-mml.php
+*   https://music.stackexchange.com/questions/24140/how-can-i-find-the-length-in-seconds-of-a-quarter-note-crotchet-if-i-have-a-te
+*   http://www.sengpielaudio.com/calculator-bpmtempotime.htm
+*      4 seconds for tempo = 60 beat per second, so what if tempo 120 and 2 for duration
+*}
+
+{TODO
+  dot means increase the duration of note by half, i am not sure if i understand it, i need to read about it
+}
+
+
 
 interface
 
@@ -42,6 +57,7 @@ type
   end;
 
   TmmlNotes = Utf8String;
+  TmmlSong = TArray<TmmlNotes>;
 
   TMelody = class;
 
@@ -54,27 +70,42 @@ type
     Chr: Char;
     Line, Current: Integer; //For Parser
   protected
-    Melody: TMelody;
-  public
-    ID: Integer;
-    Finished: Boolean;
-    Notes: TmmlNotes;
-    Tempo: Integer;
-    Octave: Integer;
+    Melody: TMelody; //Parent
+
     NoteLength: Single;
     SubSequent: Integer;
     ShiftOctave: Integer;
-    Instrument: String;
-    Expired: Longint;
-    SoundDuration: Single;
+    function Next: Boolean; //For parser
+  public
+    ID: Integer;
+    Finished: Boolean;
+
+    Notes: TmmlNotes; //Playing Notes
+
+    Tempo: Integer; //current Tempo
+    Octave: Integer; //current octave
+
+    Instrument: String; //for waveform
+    SoundExpired: QWord; //When the note should be end, by milliseconds
+    SoundDuration: Single; //Duration and Rest by second
     constructor Create(AMelody: TMelody); virtual;
     procedure Prepare; virtual;
     procedure Unprepare; virtual;
     procedure SetInstrument(Instrument: String); virtual;
+    {
+      SetSound used to genereate a wave to play it using PlaySound
+
+      Frequency: Ok the name is reveals
+      Duration: in seconds 0.5 is a half of second
+      Rest: in seconds 0.5 is a half of second, it is space after note played
+      Connected: mean at the end of wave do not fade it our to reduce the tick, it is connecetd to the next wave
+
+      please call inherited in derived class
+    }
     procedure SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single); virtual;
     function PlaySound: Boolean; virtual;
+    function IsPlaying: Boolean; virtual;
     function StopSound: Boolean; virtual;
-    function Next: Boolean;
     property Volume: Single read FVolume write FVolume;
   end;
 
@@ -96,7 +127,7 @@ type
     destructor Destroy; override;
 
     function CreateChannel: TMelodyChannel; virtual;
-    procedure Play(Song: TArray<TmmlNotes>);
+    procedure Play(Song: TmmlSong);
   end;
 
   { TMelodyThread }
@@ -245,6 +276,8 @@ end;
 
 procedure TMelodyChannel.Unprepare;
 begin
+  SoundDuration := 0;
+  SoundExpired := 0;
 end;
 
 procedure TMelodyChannel.SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single);
@@ -254,6 +287,11 @@ begin
 end;
 
 function TMelodyChannel.PlaySound: Boolean;
+begin
+  Result := False;
+end;
+
+function TMelodyChannel.IsPlaying: Boolean;
 begin
   Result := False;
 end;
@@ -296,6 +334,8 @@ function TMelodyChannel.Next: Boolean;
     d: Single;
     index: Integer;
   begin
+    if Duration = 0 then
+      raise EMelodyException.Create('Duration is zero, is it typo?', Line, Current);
     f := 0;
     if (Note = 'r') or (Note = 'p') then
       f := 0
@@ -305,7 +345,7 @@ function TMelodyChannel.Next: Boolean;
     begin
       index := IndexOfScore(Note);
       if index < 0 then
-        raise Exception.Create('We dont have it in music:' + Note);// ,line, self.pos)
+        raise Exception.Create('We dont have it in music:' + Note);// ,line, Current)
       //calc index using current octave
       index := ((octave + ShiftOctave) - BaseOctave) * 12 + index + offset;
       f := floor(BaseNoteFreqC4 * power(BaseNumber, index));
@@ -367,7 +407,7 @@ function TMelodyChannel.Next: Boolean;
   begin
     Reset;
     Line := 1; //line for error messages
-    Current := 0; //zero because we do step()
+    Current := 0; //zero because we do step
     Step;
   end;
 
@@ -378,7 +418,7 @@ function TMelodyChannel.Next: Boolean;
     r := '';
     while Current <= Length(Notes) do
     begin
-      if ((Chr >= '0') and (Chr <= '9')) or (Chr = '-') or (Chr = '+') or (Chr = '.') then
+      if ((Chr >= '0') and (Chr <= '9')) or (Chr = '-') or (Chr = '+') {or (Chr = '.')} then //dot used as param of note
         r := r + Chr
       else
         break;
@@ -451,6 +491,10 @@ function TMelodyChannel.Next: Boolean;
     end;
   end;
 
+  {procedure StepOn; inline;
+  begin
+    if not Step then break;
+  end;}
 var
   Note: String;
   Offset: Integer;
@@ -467,7 +511,7 @@ begin
   begin
     if Chr = '#' then
     begin
-      Step;
+      if not Step then break;
       ScanEol;
     end
     else if Check(Chr, [' ', #9,  #10]) then //#13
@@ -506,6 +550,8 @@ begin
       end;
 
       Duration := ScanNumber(0, NoteLength);
+      if Duration <= 0 then
+        raise EMelodyException.Create('Length should be greater than zero: your length is: ' + FloatToStr(Duration), Line, Current);
       if Duration > 96 then
         raise EMelodyException.Create('Length should be less or equal 96: your length is: ' + FloatToStr(Duration), Line, Current);
 
@@ -516,16 +562,16 @@ begin
       end;
 
       Increase := 0;
-      By := 0.5;
       if (Chr = '.') then
       begin
+        By := 0.5;
         repeat
           Increase := Increase + By; //not sure about next dot
           By := By / 2;
         until not Step or (Chr <> '.');
       end;
 
-      Connected := False;
+      Connected := False; //connected with next note, no fading out
       if (Chr = '&') then  //trying to use it, but i think i cant
       begin
         Step;
@@ -561,12 +607,14 @@ begin
     begin
       Step;
       l := ScanNumber;
+      if l <=0 then
+        raise EMelodyException.Create('"l" command, length should be greater than zero: your length is:' + FloatToStr(l), Line, Current);
       if l > 96 then
         raise EMelodyException.Create('"l" command, length should be less or equal 96: your length is:' + FloatToStr(l), Line, Current);
       Increase := 0;
-      By := 0.5;
       if (Chr = '.') then
       begin
+        By := 0.5;
         repeat
           increase := increase + by; //not sure about next dot
           by := by / 2;
@@ -580,16 +628,18 @@ begin
       Step;
       Duration := ScanNumber(0, NoteLength);
       Increase := 0;
-      By := 0.5;
       if Chr = '.' then
       begin
+          By := 0.5;
         repeat
           increase := increase + By; //not sure about next dot
           By := By / 2;
         until not Step or (Chr <> '.');
       end;
+
       if (Chr = '&') then  //skip it
         Step;
+
       Result := PlayNote('r', Duration, 0, Increase, True);
       exit;
     end
@@ -723,14 +773,15 @@ procedure TMelody.Play(Song: TArray<TmmlNotes>);
 var
   Channels: TMelodyChannels;
   Channel: TMelodyChannel;
-  mml: TmmlNotes;
+  Notes: TmmlNotes;
   Index: Integer;
   Busy: Boolean;//At least one of channel is playing
+  SoundDurationMS: Int64;
 begin
   BeforePlay;
   Channels := TMelodyChannels.Create;
   try
-    for mml in Song do
+    for Notes in Song do
     begin
       Channel := CreateChannel;
       Channel.Volume := 100;
@@ -738,48 +789,45 @@ begin
       Channel.Name := 'notdefined';
       Channel.ID := Channels.Add(Channel);
       Channel.Name := IntToStr(Channel.ID);
-      Channel.Notes := mml;
+      Channel.Notes := Notes;
       Channel.Prepare;
+    end;
 
-      Index := 0;
-      Busy := False;
-      while True do
+    Index := 0;
+    Busy := False;
+    while not Terminated do
+    begin
+      Channel := Channels[Index];
+      if not Channel.Finished then
       begin
-        if Terminated then
-          break;
-        Channel := Channels[Index];
-        if not Channel.Finished then
+        if (Channel.SoundExpired > GetTickCount64) then //Still waiting to finish playing
+          Busy := True
+        else
         begin
-          if (Channel.Expired > 0) and (Channel.Expired > GetTickCount64) then //Still waiting to finish playing
-            Busy := True
+          Channel.StopSound;//no if we like to make some waves say playing
+          if Channel.Next then //SetSound will be in Next function
+          begin
+            //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
+            Channel.PlaySound;
+            SoundDurationMS := Round(Channel.SoundDuration * 1000);
+            Channel.SoundExpired := SoundDurationMS + GetTickCount64; //after playsound to take of full time
+            Busy := True;
+          end
           else
           begin
-            Channel.StopSound;//no if we like to make some waves say playing
-            if Channel.Next then //SetSound will be in Next function
-            begin
-              //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
-              Channel.Expired := Round(Channel.SoundDuration * 1000) + GetTickCount64;
-              if not Channel.PlaySound then //Assuming can't play it, idk why
-                break;
-              Busy := True;
-            end
-            else
-            begin
-              Channel.Finished := True;
-              Channel.Unprepare;
-            end;
+            Channel.StopSound;
+            Channel.Finished := True;
+            Channel.Unprepare;
           end;
         end;
-        index := index + 1;
-        if index >= Channels.Count then
-        begin
-          index := 0;
-          if not Busy then
-            break
-          else
-            busy := False;
-        end;
       end;
+      index := index + 1;
+      if Index >= Channels.Count then
+        Index := 0;
+      if not Busy then
+        break
+      else
+        Busy := False;
     end;
   finally
     Channels.Free;

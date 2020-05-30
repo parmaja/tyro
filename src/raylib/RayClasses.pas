@@ -63,8 +63,6 @@ type
     procedure Stop; virtual;
   end;
 
-  TWaveformProc = function(Index: Integer; SampleRate: Integer; Frequency: Single): Single;
-
   { TRayMusic }
 
   TRayMusic = class(TRayPlay)
@@ -104,60 +102,14 @@ type
     procedure PlayMusicFile(FileName: string);
   end;
 
-function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-
 var
   RayLibSound: TRayLibSound = nil;
-  RayUpdates: TRayUpdateList = nil;
+  RayUpdates: TRayUpdateList = nil; //move it to Tyro classes
 
 implementation
 
 var
   FAudioDeviceInitialized: Integer = 0;
-
-function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-begin
-  Result := GetRandomValue(-100,+100) / 100;
-end;
-
-function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-var
-  Sample, WaveSamples: Single;
-begin
-  if Frequency > 0 then
-  begin
-    WaveSamples := SampleRate / Frequency;
-    if WaveSamples > 0 then
-    begin
-      Sample := Index mod WaveSamples;
-      Result := Sin(2*Pi * (Sample / WaveSamples));
-    end
-    else
-      Result := 0;
-  end
-  else
-    Result := 0;
-  //WriteLn('Sample = ' + FloatTOStr(Sample) + ' WaveSamples = '+ FloatToStr(wavesamples) + ' Result: ' + FloatToStr(Result));
-end;
-
-//ref: http://web.mit.edu/6.02/www/s2007/lab2.pdf
-function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-var
-  a, b,
-  Sample, Fade: Single;
-begin
-  //https://stackoverflow.com/questions/20037947/fade-out-function-of-audio-between-samplerate-changes
-{  fade := 1;
-  if not connected then
-      fade := exp(-log10(50) * index / samples / 3); //fadeout}
-  sample := sin(index * (2 * pi) * frequency / SampleRate);
-  a := sin(index * (2 * pi) * frequency * 2 / SampleRate);
-  b := sin(index * (2 * pi) * frequency / 2 / SampleRate);
-  sample := (sample - a - b) / 3;
-  Result := sample * fade;
-end;
 
 procedure TRaySound.Play;
 begin
@@ -176,9 +128,9 @@ end;
 
 procedure TRaySound.Stop;
 begin
-  inherited;
   if State > plyStop then
     StopSound(Sound);
+  inherited;
 end;
 
 procedure TRaySound.Pause;
@@ -251,7 +203,7 @@ end;
 
 function TRayPlay.IsPlaying: Boolean;
 begin
-  Result := True;
+  Result := False;
 end;
 
 procedure TRayPlay.Pause;

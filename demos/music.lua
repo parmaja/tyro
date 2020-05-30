@@ -4,9 +4,8 @@ canvas.text(50, 50, "Now is playing a aong")
 --music.sound(440, 1000);
 --music.mml('mfl16t155s2 o2mnb4p8msbbmnb4p8msbbb8g#8 e8g#8b8g#8b8o3e8o2b8g#8e8g#8');
 --music.mml('cdefgab');
-music.mml('c');
+music.mml('a');
 --music.beep()
-
 
 WilliamTell = [[
 mfl16t155s2
@@ -110,4 +109,17 @@ g#8o3e8o2b8o3e8o2b8o3g#8e8b8g#8o4e4
 p8eee8e8e8e8e4p8p16
 ee4p8p16o2ee2
 ]]
+
+PinkPanther1 =
+[[
+t120r1r1r1r2rr8l16ro5<d+e4r8r16f+g4r8r16d+e8.f+g8.b+b8.eg8.ba+2l8agede2.rr16l16d+e4r8r16f+g4r8r16d+e8.f+g8.b+b8.gb8.>ed+1&d+2.&d+8r<d+e4r8r16f+g4r8r16d+e8.f+g8.b+b8.eg8.ba+2l8agede1r4>e.l16d<b8.ag8.ea+a8.a+a8.a+a8.a+l8a.gede&e2&e2.
+]]
+
+PinkPanther2 =
+[[
+v50t120l4o3e1&e2&e8l16rc+d8rd+e1&e2&e8rc+d8rd+e1&e2&e8rd+d8rc+c1&c2&c8rc+d8rd+e1&e2&e8rc+d8rd+f1&f2&f8rc+d8rd+e1&e2&e8rd+d8rc+c1&c2&c8rc+d8rd+e8r2r4r8c2c-2e2&e8rc+d8rd+e2&e8;
+]]
+
+
 --music.mml(WilliamTell)
+--music.mml(PinkPanther1)

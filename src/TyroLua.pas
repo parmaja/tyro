@@ -18,7 +18,7 @@ uses
   Classes, SysUtils,
   lua53, FPImage,
   RayLib3, RayClasses, //remove it
-  TyroSounds, TyroClasses;
+  TyroSounds, TyroClasses, Melodies;
 
 type
   TLuaScript = class;
@@ -632,11 +632,20 @@ end;
 
 function TLuaScript.PlayMML_func(L: Plua_State): Integer; cdecl;
 var
+  i, c: integer;
   s: string;
+  Song: TmmlSong;
 begin
-  s := lua_tostring(L, 1);
-  //AddQueueObject(TPlayMMLObject.Create(s));
-  with TPlayMMLObject.Create(s) do //using current thread
+  Song := nil;
+  c := lua_gettop(L);
+  SetLength(Song, c);
+  for i := 0 to c - 1 do
+  begin
+    s := lua_tostring(L, i + 1);
+    Song[i] := s;
+  end;
+  //AddQueueObject(TPlayMMLObject.Create(Song));
+  with TPlayMMLObject.Create(Song) do //using current lua thread
   begin
     Execute;
     Free;

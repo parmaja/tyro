@@ -34,7 +34,12 @@ uses
   Melodies,
   RayLib3, RayClasses;
 
+{$define FADE} //fadein fadeout generated sound to reduce tick at the end of sound
+
 type
+
+  TWaveformProc = function(Index: Integer; SampleRate: Integer; Frequency: Single): Single;
+
   { TWaveForm }
 
   TWaveForm = class(TmnNamedObject)
@@ -53,7 +58,6 @@ type
 
   TTyroRayWave = class(TRaySound)
   protected
-    Wave: TWave;
   public
     destructor Destroy; override;
     procedure Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single = 100; SampleRate: Integer = 44100; BitRate: Integer = 16);
@@ -71,6 +75,7 @@ type
     procedure SetInstrument(Instrument: String); override;
     procedure SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single); override;
     function PlaySound: Boolean; override;
+    function IsPlaying: Boolean; override;
     function StopSound: Boolean; override;
 
     procedure Prepare; override;
@@ -96,6 +101,10 @@ type
 
 procedure PlayWaveform(Freq, Duration: Single);
 
+function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+
 implementation
 
 { TTyroRayWave }
@@ -107,36 +116,40 @@ end;
 
 procedure TTyroRayWave.Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single; SampleRate: Integer; BitRate: Integer);
 var
-  i: Integer;
+  Wave: TWave;
+  i: Cardinal;
   v: Smallint;
-  WaveSamples: Integer;
-  starting, ending: Integer;
-  delta: single;
+  {$ifdef FADE}
+  WaveSamples: Cardinal;
+  Starting, Ending: Cardinal;
+  Delta: Single;
+  {$endif}
   aSize: Integer;
 begin
-  Wave.SampleCount := Round(Duration * SampleRate); //rest keep it empty;
+  Wave.SampleCount := Round(Duration * SampleRate);
   Wave.SampleRate := SampleRate; // By default 44100 Hz
-  Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit
+  Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
   Wave.Channels := 1;                  // By default 1 channel (mono)
-  if Wave.Data <> nil then
-    Freemem(Wave.Data);
   aSize := Wave.SampleCount * Sizeof(Smallint);
   Wave.Data := GetMem(aSize);
   if Frequency <> 0 then
   begin
     Amplitude := (Amplitude * (Power(2, Wave.SampleSize) / 2) / 100) -1;
+    {$ifdef FADE}
     WaveSamples := SampleRate div round(Frequency);
-    starting := WaveSamples * 3;
-    ending := Wave.SampleCount - WaveSamples * 3;
-    delta := 100 / (WaveSamples * 3);
+    Starting := WaveSamples * 3;
+    Ending := Wave.SampleCount - WaveSamples * 3;
+    Delta := 100 / (WaveSamples * 3);
+    {$endif}
     for i := 0 to Wave.SampleCount -1 do
     begin
       v := Round(Proc(i, SampleRate, Frequency) * Amplitude);
-
-      if i < starting then
-        v := round(v * i * delta / 100);
-      if i > ending then
-        v := round(v * (Wave.SampleCount - i) * delta / 100);
+      {$ifdef FADE}
+      if i < Starting then
+        v := Round(v * i * Delta / 100);
+      if i > Ending then
+        v := Round(v * (Wave.SampleCount - i) * Delta / 100);
+      {$endif}
       PSmallInt(Wave.Data)[i] := v;
     end;
   end
@@ -185,13 +198,19 @@ begin
   inherited;
   if Waveform = nil then
     raise EMelodyException.Create('Waveform not defined');
-  Sound.Generate(Waveform.Proc, Frequency, Duration, Amplitude, SampleRate, BitRate);
+  //if (Frequency > 0) and (Duration > 0) then
+    Sound.Generate(Waveform.Proc, Frequency, Duration, Amplitude, SampleRate, BitRate);
 end;
 
 function TRayMelodyChannel.PlaySound: Boolean;
 begin
   inherited;
   Sound.Play;
+  Result := Sound.IsPlaying;
+end;
+
+function TRayMelodyChannel.IsPlaying: Boolean;
+begin
   Result := Sound.IsPlaying;
 end;
 
@@ -270,6 +289,48 @@ begin
   Wave := TTyroRayWave.Create;
   Wave.Generate(@Sin_Waveform, Freq, Duration, 100);
   Wave.Play;
+end;
+
+function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+begin
+  Result := GetRandomValue(-100,+100) / 100;
+end;
+
+function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Sample, WaveSamples: Single;
+begin
+  if Frequency > 0 then
+  begin
+    WaveSamples := SampleRate / Frequency;
+    if WaveSamples > 0 then
+    begin
+      Sample := Index mod WaveSamples;
+      Result := Sin(2*Pi * (Sample / WaveSamples));
+    end
+    else
+      Result := 0;
+  end
+  else
+    Result := 0;
+  //WriteLn('Sample = ' + FloatTOStr(Sample) + ' WaveSamples = '+ FloatToStr(wavesamples) + ' Result: ' + FloatToStr(Result));
+end;
+
+//ref: http://web.mit.edu/6.02/www/s2007/lab2.pdf
+function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  a, b,
+  Sample, Fade: Single;
+begin
+//https://stackoverflow.com/questions/20037947/fade-out-function-of-audio-between-samplerate-changes
+  fade := 1;
+//  if not connected then
+      fade := exp(-log10(50) * index / SampleRate / 3); //fadeout
+  sample := sin(index * (2 * pi) * frequency / SampleRate);
+  a := sin(index * (2 * pi) * frequency * 2 / SampleRate);
+  b := sin(index * (2 * pi) * frequency / 2 / SampleRate);
+  sample := (sample - a - b) / 3;
+  Result := sample * fade;
 end;
 
 initialization

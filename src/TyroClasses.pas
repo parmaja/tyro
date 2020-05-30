@@ -16,7 +16,7 @@ interface
 uses
   Classes, SysUtils, SyncObjs, fgl,
   FPImage, FPCanvas, FPImgCanv, pngcomn, FPReadPNG,
-  RayClasses, TyroSounds, RayLib3;
+  Melodies, RayClasses, TyroSounds, RayLib3;
 
 type
   TMyFPMemoryImage = class(TFPMemoryImage)
@@ -256,8 +256,8 @@ type
 
   TPlayMMLObject = class(TQueueObject)
   public
-    MML: string;
-    constructor Create(AMML: string);
+    Song: TmmlSong;
+    constructor Create(ASong: TmmlSong);
     procedure DoExecute; override;
   end;
 
@@ -406,9 +406,9 @@ end;
 
 { TPlayMMLObject }
 
-constructor TPlayMMLObject.Create(AMML: string);
+constructor TPlayMMLObject.Create(ASong: TmmlSong);
 begin
-  MML := AMML;
+  Song := ASong;
 end;
 
 procedure TPlayMMLObject.DoExecute;
@@ -416,7 +416,7 @@ var
   Melody: TRayMelody;
 begin
   Melody := TRayMelody.Create;
-  Melody.Play([MML]);
+  Melody.Play(Song);
 end;
 
 { TPlaySoundObject }
