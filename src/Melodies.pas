@@ -758,7 +758,7 @@ begin
             if Channel.Next then //SetSound will be in Next function
             begin
               //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
-              Channel.Expired := Round(Channel.SoundDuration * 1000) + GetTickCount64 + 1;
+              Channel.Expired := Round(Channel.SoundDuration * 1000) + GetTickCount64;
               if not Channel.PlaySound then //Assuming can't play it, idk why
                 break;
               Busy := True;

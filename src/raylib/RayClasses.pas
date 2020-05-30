@@ -85,7 +85,7 @@ type
     Wave: TWave;
   public
     Sound: TSound;
-    procedure Generate(Proc: TWaveformProc; Freq, Duration: Single; Amplitude: Single = 100; SampleRate: Integer = 44100; BitRate: Integer = 16);
+    procedure Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single = 100; SampleRate: Integer = 44100; BitRate: Integer = 16);
     procedure Play; override;
     function IsPlaying: Boolean; override;
     procedure Stop; override;
@@ -164,10 +164,14 @@ end;
 
 { TRayWave }
 
-procedure TRayWave.Generate(Proc: TWaveformProc; Freq, Duration, Amplitude: Single; SampleRate: Integer; BitRate: Integer);
+procedure TRayWave.Generate(Proc: TWaveformProc; Frequency, Duration, Amplitude: Single; SampleRate: Integer; BitRate: Integer);
 var
   i: Integer;
   v: Smallint;
+  WaveSamples: Integer;
+  starting, ending: Integer;
+  delta: single;
+  aSize: Integer;
 begin
   Wave.SampleCount := Round(Duration * SampleRate); //rest keep it empty;
   Wave.SampleRate := SampleRate; // By default 44100 Hz
@@ -175,13 +179,28 @@ begin
   Wave.Channels := 1;                  // By default 1 channel (mono)
   if Wave.Data <> nil then
     Freemem(Wave.Data);
-  Wave.Data := GetMem(Wave.SampleCount * Sizeof(Smallint));
-  Amplitude := (Amplitude * (Power(2, Wave.SampleSize) / 2) / 100) -1;
-  for i := 0 to Wave.SampleCount -1 do
+  aSize := Wave.SampleCount * Sizeof(Smallint);
+  Wave.Data := GetMem(aSize);
+  if Frequency <> 0 then
   begin
-    v := Round(Proc(i, SampleRate, Freq) * Amplitude);
-    PSmallInt(Wave.Data)[i] := v;
-  end;
+    Amplitude := (Amplitude * (Power(2, Wave.SampleSize) / 2) / 100) -1;
+    WaveSamples := SampleRate div round(Frequency);
+    starting := WaveSamples * 3;
+    ending := Wave.SampleCount - WaveSamples * 3;
+    delta := 100 / (WaveSamples * 3);
+    for i := 0 to Wave.SampleCount -1 do
+    begin
+      v := Round(Proc(i, SampleRate, Frequency) * Amplitude);
+
+      if i < starting then
+        v := round(v * i * delta / 100);
+      if i > ending then
+        v := round(v * (Wave.SampleCount - i) * delta / 100);
+      PSmallInt(Wave.Data)[i] := v;
+    end;
+  end
+  else
+    FillChar(Wave.Data^, aSize, #0);
   //ExportWave(Wave, 'c:\temp\tune.wav');
   Sound := LoadSoundFromWave(Wave);
 end;
