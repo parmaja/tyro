@@ -92,6 +92,7 @@ type
   protected
     procedure BeforePlay; override;
     procedure AfterPlay; override;
+    function CheckTerminated: Boolean; override;
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -155,7 +156,9 @@ begin
   end
   else
     FillChar(Wave.Data^, aSize, #0);
-  ExportWave(Wave, 'c:\temp\tune.wav');
+  //ExportWave(Wave, 'c:\temp\tune.wav');
+
+  UnloadSound(Sound);
   Sound := LoadSoundFromWave(Wave);
   if Wave.Data <> nil then //maybe move it to generate
   begin
@@ -259,6 +262,12 @@ procedure TRayMelody.AfterPlay;
 begin
   inherited AfterPlay;
   RayLibSound.Close;
+end;
+
+function TRayMelody.CheckTerminated: Boolean;
+begin
+  Result := inherited CheckTerminated;
+  //Sleep(1);
 end;
 
 constructor TRayMelody.Create;

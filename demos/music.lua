@@ -4,7 +4,7 @@ canvas.text(50, 50, "Now is playing a aong")
 --music.sound(440, 1000);
 --music.mml('mfl16t155s2 o2mnb4p8msbbmnb4p8msbbb8g#8 e8g#8b8g#8b8o3e8o2b8g#8e8g#8');
 --music.mml('cdefgab');
-music.mml('a');
+--music.mml('a1', 'o5a1');
 --music.beep()
 
 WilliamTell = [[
@@ -122,4 +122,4 @@ v50t120l4o3e1&e2&e8l16rc+d8rd+e1&e2&e8rc+d8rd+e1&e2&e8rd+d8rc+c1&c2&c8rc+d8rd+e1
 
 
 --music.mml(WilliamTell)
---music.mml(PinkPanther1)
+music.mml(PinkPanther1, PinkPanther2)

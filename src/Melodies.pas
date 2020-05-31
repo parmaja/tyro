@@ -121,6 +121,7 @@ type
   protected
     procedure BeforePlay; virtual;
     procedure AfterPlay; virtual;
+    function CheckTerminated: Boolean; virtual;
   public
     Terminated: Boolean;
     constructor Create; virtual;
@@ -754,6 +755,11 @@ begin
 
 end;
 
+function TMelody.CheckTerminated: Boolean;
+begin
+  Result := Terminated;
+end;
+
 constructor TMelody.Create;
 begin
   inherited Create;
@@ -769,7 +775,7 @@ begin
   Result := TMelodyChannel.Create(Self);
 end;
 
-procedure TMelody.Play(Song: TArray<TmmlNotes>);
+procedure TMelody.Play(Song: TmmlSong);
 var
   Channels: TMelodyChannels;
   Channel: TMelodyChannel;
@@ -795,7 +801,7 @@ begin
 
     Index := 0;
     Busy := False;
-    while not Terminated do
+    while not CheckTerminated do
     begin
       Channel := Channels[Index];
       if not Channel.Finished then
