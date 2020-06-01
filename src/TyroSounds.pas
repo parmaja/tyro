@@ -59,9 +59,18 @@ type
   TTyroRayWave = class(TRaySound)
   protected
   public
-    destructor Destroy; override;
     procedure Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single = 100; SampleRate: Integer = 44100; BitRate: Integer = 16);
   end;
+
+  { TTyroRayAudio }
+
+  TTyroRayAudio = class(TRayAudio)
+  protected
+  public
+    procedure Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single = 100; SampleRate: Integer = 44100; BitRate: Integer = 16);
+  end;
+
+  TTyroMelodySound = TTyroRayWave;
 
   { TRayMelodyChannel }
 
@@ -70,7 +79,7 @@ type
     Amplitude: Single;
     SampleRate: Integer;
     BitRate: Integer;
-    Sound: TTyroRayWave;
+    Sound: TTyroMelodySound;
     Waveform: TWaveForm;
     procedure SetInstrument(Instrument: String); override;
     procedure SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single); override;
@@ -79,6 +88,7 @@ type
     function StopSound: Boolean; override;
 
     procedure Prepare; override;
+    procedure Update; override;
     procedure Unprepare; override;
     constructor Create(AMelody: TMelody); override;
     destructor Destroy; override;
@@ -108,12 +118,58 @@ function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
-{ TTyroRayWave }
+{ TTyroRayAudio }
 
-destructor TTyroRayWave.Destroy;
+procedure TTyroRayAudio.Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single; SampleRate: Integer; BitRate: Integer);
+var
+  Data: Pointer;
+  SampleCount, SampleSize: Cardinal;
+  i: Cardinal;
+  v: Smallint;
+  {$ifdef FADE}
+  WaveSamples: Cardinal;
+  Starting, Ending: Cardinal;
+  Delta: Single;
+  {$endif}
+  aSize: Integer;
 begin
-  inherited Destroy;
+  SampleCount := Round(Duration * SampleRate);
+  SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
+  aSize := SampleCount * Sizeof(Smallint);
+  Data := GetMem(aSize);
+  if Frequency <> 0 then
+  begin
+    Amplitude := (Amplitude * ((Power(2, SampleSize) / 2) - 1) / 100) - 1;
+    {$ifdef FADE}
+    WaveSamples := SampleRate div round(Frequency);
+    Starting := WaveSamples * 3;
+    Ending := SampleCount - WaveSamples * 3;
+    Delta := 100 / (WaveSamples * 3);
+    {$endif}
+    for i := 0 to SampleCount -1 do
+    begin
+      v := Round(Proc(i, SampleRate, Frequency) * Amplitude);
+      {$ifdef FADE}
+      if i < Starting then
+        v := Round(v * i * Delta / 100);
+      if i > Ending then
+        v := Round(v * (SampleCount - i) * Delta / 100);
+      {$endif}
+      PSmallInt(Data)[i] := v;
+    end;
+  end
+  else
+    FillChar(Data^, aSize, #0);
+  UpdateData(Data, SampleCount);
+
+  if Data <> nil then //maybe move it to generate
+  begin
+{    Freemem(Data);
+    Data := nil;}
+  end;
 end;
+
+{ TTyroRayWave }
 
 procedure TTyroRayWave.Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single; SampleRate: Integer; BitRate: Integer);
 var
@@ -135,7 +191,7 @@ begin
   Wave.Data := GetMem(aSize);
   if Frequency <> 0 then
   begin
-    Amplitude := (Amplitude * (Power(2, Wave.SampleSize) / 2) / 100) -1;
+    Amplitude := (Amplitude * ((Power(2, Wave.SampleSize) / 2) - 1) / 100) - 1;
     {$ifdef FADE}
     WaveSamples := SampleRate div round(Frequency);
     Starting := WaveSamples * 3;
@@ -156,8 +212,7 @@ begin
   end
   else
     FillChar(Wave.Data^, aSize, #0);
-  //ExportWave(Wave, 'c:\temp\tune.wav');
-
+  //ExportWave(Wave, PChar('c:\temp\'+IntTOStr(round(Frequency))+'.wav'));
   UnloadSound(Sound);
   Sound := LoadSoundFromWave(Wave);
   if Wave.Data <> nil then //maybe move it to generate
@@ -167,7 +222,6 @@ begin
     UnloadWave(Wave);
   end;
 end;
-
 
 { TWaveForms }
 
@@ -209,7 +263,7 @@ function TRayMelodyChannel.PlaySound: Boolean;
 begin
   inherited;
   Sound.Play;
-  Result := Sound.IsPlaying;
+  Result := True;
 end;
 
 function TRayMelodyChannel.IsPlaying: Boolean;
@@ -230,6 +284,12 @@ begin
   Amplitude := 100;
 end;
 
+procedure TRayMelodyChannel.Update;
+begin
+  inherited Update;
+  Sound.Update;
+end;
+
 procedure TRayMelodyChannel.Unprepare;
 begin
   inherited;
@@ -238,9 +298,10 @@ end;
 constructor TRayMelodyChannel.Create(AMelody: TMelody);
 begin
   inherited;
-  SampleRate := 44100;
+  SampleRate := cDefaultSampleRate;
   BitRate := 16;
-  Sound := TTyroRayWave.Create;
+  Sound := TTyroMelodySound.Create(False);
+  //Sound := TTyroMelodySound.Create;
   SetInstrument('');
 end;
 

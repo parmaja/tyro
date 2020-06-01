@@ -1,9 +1,11 @@
 window()
-canvas.text(50, 50, "Now is playing a aong")
+canvas.text(50, 50, "Now playing a song")
 --music.play('willtell.xm');
 --music.sound(440, 1000);
 --music.mml('mfl16t155s2 o2mnb4p8msbbmnb4p8msbbb8g#8 e8g#8b8g#8b8o3e8o2b8g#8e8g#8');
 --music.mml('cdefgab');
+--music.mml('bagfedc');
+--music.mml('cdefgab', 'bagfedc');
 --music.mml('a1', 'o5a1');
 --music.beep()
 

@@ -89,6 +89,7 @@ type
     SoundExpired: QWord; //When the note should be end, by milliseconds
     SoundDuration: Single; //Duration and Rest by second
     constructor Create(AMelody: TMelody); virtual;
+    procedure Update; virtual;
     procedure Prepare; virtual;
     procedure Unprepare; virtual;
     procedure SetInstrument(Instrument: String); virtual;
@@ -141,7 +142,6 @@ type
     procedure Execute; override;
     constructor Create(Song: TArray<TmmlNotes>);
   end;
-
 
 //    http://www.headchant.com/2011/11/01/sound-synthesis-with-love-part-ii-sine-waves/
 //      https://stackoverflow.com/questions/11355353/how-can-i-convert-qbasic-play-commands-to-something-more-contemporary
@@ -255,6 +255,10 @@ begin
   inherited Create;
   Melody := AMelody;
   FVolume := 100;
+end;
+
+procedure TMelodyChannel.Update;
+begin
 end;
 
 procedure TMelodyChannel.Prepare;
@@ -806,7 +810,9 @@ begin
       Channel := Channels[Index];
       if not Channel.Finished then
       begin
-        if (Channel.SoundExpired > GetTickCount64) then //Still waiting to finish playing
+        //Sleep(1); //make other thread breathing
+        //Channel.Update;
+        if Channel.IsPlaying or (Channel.SoundExpired > GetTickCount64) then //Still waiting to finish playing
           Busy := True
         else
         begin
@@ -816,7 +822,7 @@ begin
             //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
             Channel.PlaySound;
             SoundDurationMS := Round(Channel.SoundDuration * 1000);
-            Channel.SoundExpired := SoundDurationMS + GetTickCount64; //after playsound to take of full time
+            Channel.SoundExpired := SoundDurationMS + GetTickCount64 + 1; //after playsound to take of full time
             Busy := True;
           end
           else
@@ -829,11 +835,13 @@ begin
       end;
       index := index + 1;
       if Index >= Channels.Count then
+      begin
         Index := 0;
-      if not Busy then
-        break
-      else
-        Busy := False;
+        if not Busy then //after checking busy for all channels, all are not busy
+          break
+        else
+          Busy := False;
+      end;
     end;
   finally
     Channels.Free;

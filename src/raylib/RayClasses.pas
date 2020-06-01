@@ -22,6 +22,9 @@ uses
   mnClasses, mnUtils,
   RayLib3;
 
+const
+  cDefaultSampleRate = 44100;     // Default sample rate
+
 type
   TRayObject = class(TObject)
   public
@@ -58,7 +61,7 @@ type
   public
     State: TRayPlayState;
     procedure Play; virtual;
-    function IsPlaying: Boolean; virtual;
+    function IsPlaying: Boolean; virtual; abstract;
     procedure Pause; virtual;
     procedure Stop; virtual;
   end;
@@ -66,8 +69,9 @@ type
   { TRayMusic }
 
   TRayMusic = class(TRayPlay)
-  public
+  protected
     Music: TMusic;
+  public
     procedure Play; override;
     function IsPlaying: Boolean; override;
     procedure Stop; override;
@@ -75,13 +79,33 @@ type
     procedure Update; override;
   end;
 
-  { TRayWave }
+  { TRaySound }
 
   TRaySound = class(TRayPlay)
   private
   protected
-  public
     Sound: TSound;
+    IsMutli: Boolean;
+    procedure UpdateData(Data: Pointer; SampleCount: Cardinal); virtual;
+  public
+    constructor Create(AIsMutli: Boolean); overload;
+    procedure Play; override;
+    function IsPlaying: Boolean; override;
+    procedure Stop; override;
+    procedure Pause; override;
+    procedure Update; override;
+    destructor Destroy; override;
+  end;
+
+  { TRayAudio }
+
+  TRayAudio = class(TRayPlay)
+  private
+  protected
+    AudioStream: TAudioStream;
+  public
+    constructor Create(SampleRate: Cardinal; BitRate: Cardinal; Channels: Cardinal);
+    procedure UpdateData(Data: Pointer; SampleCount: Cardinal); virtual;
     procedure Play; override;
     function IsPlaying: Boolean; override;
     procedure Stop; override;
@@ -111,14 +135,73 @@ implementation
 var
   FAudioDeviceInitialized: Integer = 0;
 
+{ TRayAudio }
+
+constructor TRayAudio.Create(SampleRate: Cardinal; BitRate: Cardinal; Channels: Cardinal);
+begin
+  inherited Create;
+  AudioStream := InitAudioStream(SampleRate, BitRate, Channels);
+  Play;
+end;
+
+procedure TRayAudio.UpdateData(Data: Pointer; SampleCount: Cardinal);
+begin
+  UpdateAudioStream(AudioStream, Data, SampleCount);
+  PlayAudioStream(AudioStream);
+end;
+
+procedure TRayAudio.Play;
+begin
+  inherited;
+  PlayAudioStream(AudioStream);
+end;
+
+function TRayAudio.IsPlaying: Boolean;
+begin
+  Result := IsAudioStreamPlaying(AudioStream);
+end;
+
+procedure TRayAudio.Stop;
+begin
+  inherited Stop;
+  StopAudioStream(AudioStream);
+end;
+
+procedure TRayAudio.Pause;
+begin
+  inherited Pause;
+  PauseAudioStream(AudioStream);
+end;
+
+procedure TRayAudio.Update;
+begin
+  IsAudioStreamProcessed(AudioStream);
+end;
+
+destructor TRayAudio.Destroy;
+begin
+  inherited Destroy;
+  CloseAudioStream(AudioStream);
+end;
+
+procedure TRaySound.UpdateData(Data: Pointer; SampleCount: Cardinal);
+begin
+  UpdateSound(Sound, Data, SampleCount);
+end;
+
+constructor TRaySound.Create(AIsMutli: Boolean);
+begin
+  inherited Create;
+  IsMutli := AIsMutli;
+end;
+
 procedure TRaySound.Play;
 begin
   inherited;
-  PlaySound(Sound);
-{  while IsSoundPlaying(Sound) do
-  begin
-
-  end;}
+  if IsMutli then
+    PlaySoundMulti(Sound)
+  else
+    PlaySound(Sound);
 end;
 
 function TRaySound.IsPlaying: Boolean;
@@ -129,7 +212,12 @@ end;
 procedure TRaySound.Stop;
 begin
   if State > plyStop then
-    StopSound(Sound);
+  begin
+    if IsMutli then
+      PlaySoundMulti(Sound)
+    else
+      StopSound(Sound);
+  end;
   inherited;
 end;
 
@@ -140,7 +228,6 @@ end;
 
 procedure TRaySound.Update;
 begin
-  inherited;
 end;
 
 destructor TRaySound.Destroy;
@@ -162,9 +249,6 @@ begin
 end;
 
 { TRayMusic }
-
-const
-  cDefaultSampleRate = 44100;     // Default sample rate
 
 procedure TRayMusic.Play;
 begin
@@ -201,11 +285,6 @@ begin
   State := plyPlay;
 end;
 
-function TRayPlay.IsPlaying: Boolean;
-begin
-  Result := False;
-end;
-
 procedure TRayPlay.Pause;
 begin
   State := plyPause;
@@ -221,7 +300,8 @@ end;
 procedure TRayLibSound.Open;
 begin
   if FAudioDeviceInitialized = 0 then
-    InitAudioDevice();
+    if not IsAudioDeviceReady then
+      InitAudioDevice;
   InterlockedIncrement(FAudioDeviceInitialized);
 end;
 
@@ -229,9 +309,9 @@ procedure TRayLibSound.Close;
 begin
   if FAudioDeviceInitialized > 0 then
   begin
+    {if FAudioDeviceInitialized = 0 then
+      CloseAudioDevice;} //leave it open
     InterlockedDecrement(FAudioDeviceInitialized);
-    if FAudioDeviceInitialized = 0 then
-      CloseAudioDevice;
   end;
 end;
 
