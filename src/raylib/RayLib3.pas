@@ -150,6 +150,7 @@ const
   Beige:     TColor = (Red: 211; Green: 176; Blue: 131; Alpha: 255);   // Beige
   Brown:     TColor = (Red: 127; Green: 106; Blue: 79; Alpha: 255);    // Brown
   Darkbrown: TColor = (Red: 76; Green: 63; Blue: 47; Alpha: 255);      // Dark Brown
+
   White:     TColor = (Red: 255; Green: 255; Blue: 255; Alpha: 255);   // White
   Black:     TColor = (Red: 0; Green: 0; Blue: 0; Alpha: 255);         // Black
   Blank:     TColor = (Red: 0; Green: 0; Blue: 0; Alpha: 0);           // Blank (Transparent)
@@ -221,42 +222,41 @@ type
   end;
   PImage = ^TImage;
 
-  // Texture2D type
+  // Texture type
   // NOTE: Data stored in GPU memory
-  TTexture2D = packed record
+  TTexture = packed record
     ID: Cardinal;      // OpenGL texture id
     Width: Integer;    // Texture base width
     Height: Integer;   // Texture base height
     Mipmaps: Integer;  // Mipmap levels, 1 by default
     Format: Integer;   // Data format (PixelFormat type)
   end;
-  PTexture2D = ^TTexture2D;
+  PTexture = ^TTexture;
 
   // Texture type, same as Texture2D
-  TTexture = TTexture2D;
-  PTexture = ^PTexture2D;
+  TTexture2D = TTexture;
+  PTexture2D = ^PTexture;
 
   // TextureCubemap type, actually, same as Texture2D
-  TTextureCubemap = TTexture2D;
-  PTextureCubemap = ^PTexture2D;
+  TTextureCubemap = TTexture;
+  PTextureCubemap = ^PTexture;
 
-  // RenderTexture2D type, for texture rendering
-  // RenderTexture2D type, for texture rendering
-  TRenderTexture2D = packed record
+  // RenderTexture type, for texture rendering
+  // RenderTexture type, for texture rendering
+  TRenderTexture = packed record
     ID: Cardinal;          // OpenGL Framebuffer Object (FBO) id
-    Texture: TTexture2D;   // Color buffer attachment texture
-    Depth: TTexture2D;     // Depth buffer attachment texture
-    DepthTexture: Boolean; // Track if depth attachment is a texture or renderbuffer
+    Texture: TTexture;   // Color buffer attachment texture
+    Depth: TTexture;     // Depth buffer attachment texture
   end;
-  PRenderTexture2D = ^TRenderTexture2D;
+  PRenderTexture = ^TRenderTexture;
 
   // RenderTexture type, same as RenderTexture2D
-  TRenderTexture = TRenderTexture2D;
-  PRenderTexture = ^TRenderTexture;
+  TRenderTexture2D = TRenderTexture;
+  PRenderTexture2D = ^TRenderTexture;
 
   // N-Patch layout info
   TNPatchInfo = packed record
-    SourceRec: TRectangle; // Region in the texture
+    Source: TRectangle; // Region in the texture
     Left: Integer;         // left border offset
     Top: Integer;          // top border offset
     Right: Integer;        // right border offset
@@ -279,6 +279,7 @@ type
   TFont = packed record
     BaseSize: Integer;
     CharsCount: Integer;
+    CharsPadding: Integer;
     Texture: TTexture2D;
     Recs: PRectangle;
     Chars: PCharInfo;
@@ -382,9 +383,9 @@ type
     Transform: TMatrix;        // Local transform matrix
 
     MeshCount: Integer;        // Number of meshes
+    MaterialCount: Integer;    // Number of materials
     Meshes: PMesh;             // Meshes array
 
-    MaterialCount: Integer;    // Number of materials
     Materials: PMaterial;      // Materials array
     MeshMaterial: PInteger;    // Mesh material number
 
@@ -398,9 +399,9 @@ type
   // Model animation
   TModelAnimation = packed record
     BoneCount: Integer;        // Number of bones
+    FrameCount: Integer;       // Number of animation frames
     BoneInfo: PBoneInfo;       // Bones information (skeleton)
 
-    FrameCount: Integer;       // Number of animation frames
     FramePoses: PPTransform;   // Poses array by frame
   end;
   PModelAnimation = ^TModelAnimation;
@@ -446,31 +447,30 @@ type
   // Audio stream type
   // NOTE: Useful to create custom audio streams not bound to a specific file
   TAudioStream = packed record
+    Buffer: PrAudioBuffer;     // Pointer to internal data used by the audio system
+
     SampleRate: Cardinal;       // Frequency (samples per second)
     SampleSize: Cardinal;       // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
     Channels: Cardinal;         // Number of channels (1-mono, 2-stereo)
-
-    Buffer: PrAudioBuffer;     // Pointer to internal data used by the audio system
   end;
   PAudioStream = ^TAudioStream;
 
   // Sound source type
   TSound = packed record
+    Stream: TAudioStream;       // Audio stream
     SampleCount: Cardinal;     // Total number of samples
-    Stream: TAudioStream       // Audio stream
   end;
   PSound = ^TSound;
 
   // Music stream type (audio file streaming from memory)
   // NOTE: Anything longer than ~10 seconds should be streamed
   TMusic = packed record
+    Stream: TAudioStream;      // Audio stream
+    SampleCount: Cardinal;     // Total number of samples
+    Looping: Boolean;           // Music looping enable
+
     CtxType: Integer;          // Type of music context (audio filetype)
     CtxData: Pointer;          // Audio context data, depends on type
-
-    SampleCount: Cardinal;     // Total number of samples
-    LoopCount: Cardinal;       // Loops count (times music will play), 0 means infinite loop
-
-    Stream: TAudioStream;      // Audio stream
   end;
   PMusic = ^TMusic;
 
@@ -492,18 +492,24 @@ type
   //----------------------------------------------------------------------------------
   // Enumerators Definition
   //----------------------------------------------------------------------------------
-  // System config flags
-  // NOTE: Used for bit masks
+  // System/Window config flags
+  // NOTE: Every bit registers one state (use it with bit masks)
+  // By default all flags are set to 0
   TConfigFlag = (
-    FLAG_RESERVED           = 1,    // Reserved
-    FLAG_FULLSCREEN_MODE    = 2,    // Set to run program in fullscreen
-    FLAG_WINDOW_RESIZABLE   = 4,    // Set to allow resizable window
-    FLAG_WINDOW_UNDECORATED = 8,    // Set to disable window decoration (frame and buttons)
-    FLAG_WINDOW_TRANSPARENT = 16,   // Set to allow transparent window
-    FLAG_WINDOW_HIDDEN      = 128,  // Set to create the window initially hidden
-    FLAG_WINDOW_ALWAYS_RUN  = 256,  // Set to allow windows running while minimized
-    FLAG_MSAA_4X_HINT       = 32,   // Set to try enabling MSAA 4X
-    FLAG_VSYNC_HINT         = 64    // Set to try enabling V-Sync on GPU
+    FLAG_VSYNC_HINT         = $00000040,   // Set to try enabling V-Sync on GPU
+    FLAG_FULLSCREEN_MODE    = $00000002,   // Set to run program in fullscreen
+    FLAG_WINDOW_RESIZABLE   = $00000004,   // Set to allow resizable window
+    FLAG_WINDOW_UNDECORATED = $00000008,   // Set to disable window decoration (frame and buttons)
+    FLAG_WINDOW_HIDDEN      = $00000080,   // Set to hide window
+    FLAG_WINDOW_MINIMIZED   = $00000200,   // Set to minimize window (iconify)
+    FLAG_WINDOW_MAXIMIZED   = $00000400,   // Set to maximize window (expanded to monitor)
+    FLAG_WINDOW_UNFOCUSED   = $00000800,   // Set to window non focused
+    FLAG_WINDOW_TOPMOST     = $00001000,   // Set to window always on top
+    FLAG_WINDOW_ALWAYS_RUN  = $00000100,   // Set to allow windows running while minimized
+    FLAG_WINDOW_TRANSPARENT = $00000010,   // Set to allow transparent framebuffer
+    FLAG_WINDOW_HIGHDPI     = $00002000,   // Set to support HighDPI
+    FLAG_MSAA_4X_HINT       = $00000020,   // Set to try enabling MSAA 4X
+    FLAG_INTERLACED_HINT    = $00010000    // Set to try enabling interlaced video format (for V3D)
   );
 
   // Trace log type
@@ -520,8 +526,9 @@ type
   TTraceLogTypes = set of TTraceLogType;
 
 const
-  // Keyboard keys
-  // Alphanumeric keys
+  // Keyboard keys (US keyboard layout)
+  // NOTE: Use GetKeyPressed() to allow redefining
+  // required keys for alternative layouts
   KEY_APOSTROPHE      = 39;
   KEY_COMMA           = 44;
   KEY_MINUS           = 45;
@@ -648,6 +655,21 @@ type
     MOUSE_MIDDLE_BUTTON = 2
   );
 
+  // Mouse cursor types
+  TMouseCursor = (
+    MOUSE_CURSOR_DEFAULT       = 0,
+    MOUSE_CURSOR_ARROW         = 1,
+    MOUSE_CURSOR_IBEAM         = 2,
+    MOUSE_CURSOR_CROSSHAIR     = 3,
+    MOUSE_CURSOR_POINTING_HAND = 4,
+    MOUSE_CURSOR_RESIZE_EW     = 5,     // The horizontal resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NS     = 6,     // The vertical resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NWSE   = 7,     // The top-left to bottom-right diagonal resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NESW   = 8,     // The top-right to bottom-left diagonal resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_ALL    = 9,     // The omni-directional resize/move cursor shape
+    MOUSE_CURSOR_NOT_ALLOWED   = 10     // The operation-not-allowed shape
+  );
+
   // Gamepad number
   TGamepadNumber = (
       GAMEPAD_PLAYER1     = 0,
@@ -692,6 +714,7 @@ type
       GAMEPAD_BUTTON_RIGHT_THUMB
   );
 
+  // Gamepad axis
   TGamepadAxis = (
     // This is here just for error checking
     GAMEPAD_AXIS_UNKNOWN = 0,
@@ -709,7 +732,7 @@ type
     GAMEPAD_AXIS_RIGHT_TRIGGER      // [1..-1] (pressure-level)
   );
 
-  // Shader location point type
+  // Shader location point
   TShaderLocationIndex = (
     LOC_VERTEX_POSITION = 0,
     LOC_VERTEX_TEXCOORD01,
@@ -755,7 +778,7 @@ type
     UNIFORM_SAMPLER2D
   );
 
-  // Material map type
+  // Material map
   TMaterialMapType = (
     MAP_ALBEDO    = 0,       // MAP_DIFFUSE
     MAP_METALNESS = 1,       // MAP_SPECULAR
@@ -811,7 +834,15 @@ type
     FILTER_ANISOTROPIC_16X         // Anisotropic filtering 16x
   );
 
-  // Cubemap layout type
+  // Texture parameters: wrap mode
+  TTextureWrapMode = (
+    WRAP_REPEAT = 0,        // Repeats texture in tiled mode
+    WRAP_CLAMP,             // Clamps texture to edge pixel in tiled mode
+    WRAP_MIRROR_REPEAT,     // Mirrors and repeats the texture in tiled mode
+    WRAP_MIRROR_CLAMP       // Mirrors and clamps to border the texture in tiled mode
+  );
+
+  // Cubemap layout
   TCubemapLayoutType = (
     CUBEMAP_AUTO_DETECT = 0,        // Automatically detect layout type
     CUBEMAP_LINE_VERTICAL,          // Layout is defined by a vertical line with faces
@@ -819,14 +850,6 @@ type
     CUBEMAP_CROSS_THREE_BY_FOUR,    // Layout is defined by a 3x4 cross with cubemap faces
     CUBEMAP_CROSS_FOUR_BY_THREE,    // Layout is defined by a 4x3 cross with cubemap faces
     CUBEMAP_PANORAMA                // Layout is defined by a panorama image (equirectangular map)
-  );
-
-  // Texture parameters: wrap mode
-  TTextureWrapMode = (
-    WRAP_REPEAT = 0,        // Repeats texture in tiled mode
-    WRAP_CLAMP,             // Clamps texture to edge pixel in tiled mode
-    WRAP_MIRROR_REPEAT,     // Mirrors and repeats the texture in tiled mode
-    WRAP_MIRROR_CLAMP       // Mirrors and clamps to border the texture in tiled mode
   );
 
   // Font type, defines generation method
@@ -840,7 +863,10 @@ type
   TBlendMode = (
     BLEND_ALPHA = 0,        // Blend textures considering alpha (default)
     BLEND_ADDITIVE,         // Blend textures adding colors
-    BLEND_MULTIPLIED        // Blend textures multiplying colors
+    BLEND_MULTIPLIED,        // Blend textures multiplying colors
+    BLEND_ADD_COLORS,       // Blend textures adding colors (alternative)
+    BLEND_SUBTRACT_COLORS,  // Blend textures subtracting colors (alternative)
+    BLEND_CUSTOM            // Belnd textures using custom src/dst factors (use SetBlendModeCustom())
   );
 
   // Gestures type
@@ -874,7 +900,7 @@ type
     CAMERA_ORTHOGRAPHIC
   );
 
-  // Type of n-patch
+  // N-patch types
   TNPatchType = (
     NPT_9PATCH = 0,         // Npatch defined by 3x3 tiles
     NPT_3PATCH_VERTICAL,    // Npatch defined by 1x3 tiles
@@ -905,20 +931,30 @@ var
   CloseWindow: procedure; cdecl;
   // Check if window has been initialized successfully
   IsWindowReady: function: boolean; cdecl;
-  // Check if window has been minimized (or lost focus)
-  IsWindowMinimized: function: boolean; cdecl;
-  // Check if window has been resized
-  IsWindowResized: function: boolean; cdecl;
-  // Check if window is currently hidden
-  IsWindowHidden: function: boolean; cdecl;
   // Check if window is currently fullscreen
   IsWindowFullscreen: function: boolean; cdecl;
-  // Toggle fullscreen mode (only PLATFORM_DESKTOP)
+  // Check if window is currently hidden (only PLATFORM_DESKTOP)
+  IsWindowHidden: function: boolean; cdecl;
+  // Check if window has been minimized (or lost focus)
+  IsWindowMinimized: function: boolean; cdecl;
+  // Check if window is currently maximized (only PLATFORM_DESKTOP)
+  IsWindowMaximized: function: boolean; cdecl;
+  // Check if window has been resized
+  IsWindowResized: function: boolean; cdecl;
+  // Check if one specific window flag is enabled
+  IsWindowState: function(flag: Cardinal): boolean; cdecl;
+  // Set window configuration state using flags
+  SetWindowState: procedure(flag: Cardinal); cdecl;
+  // Clear window configuration state flags
+  ClearWindowState: procedure(flag: Cardinal); cdecl;
+  // Check if window is currently hidden
   ToggleFullscreen: procedure; cdecl;
-  // Show the window
-  UnhideWindow: procedure; cdecl;
-  // Hide the window
-  HideWindow: procedure; cdecl;
+  // Set window state: maximized, if resizable (only PLATFORM_DESKTOP)
+  MaximizeWindow: procedure; cdecl;
+  // Set window state: minimized, if resizable (only PLATFORM_DESKTOP)
+  MinimizeWindow: procedure; cdecl;
+  // Set window state: not minimized/maximized (only PLATFORM_DESKTOP)
+  RestoreWindow: procedure; cdecl;
   // Set icon for window (only PLATFORM_DESKTOP)
   SetWindowIcon: procedure(image: TImage); cdecl;
   // Set title for window (only PLATFORM_DESKTOP)
@@ -937,8 +973,10 @@ var
   GetScreenWidth: function: Integer; cdecl;
   // Get current screen height
   GetScreenHeight: function: Integer; cdecl;
-  // Get number of connected monitors
+  // Get number of connected xtors
   GetMonitorCount: function: Integer; cdecl;
+  // Get specified monitor position
+  GetMonitorPosition: function(monitor: Integer): TVector2; cdecl;
   // Get primary monitor width
   GetMonitorWidth: function(monitor: Integer): Integer; cdecl;
   // Get primary monitor height
@@ -947,14 +985,18 @@ var
   GetMonitorPhysicalWidth: function(monitor: Integer): Integer; cdecl;
   // Get primary monitor physical height in millimetres
   GetMonitorPhysicalHeight: function(monitor: Integer): Integer; cdecl;
+  // Get specified monitor refresh rate
+  GetMonitorRefreshRate: function(monitor: Integer): Integer; cdecl;
   // Get window position XY on monitor
-  GetWindowPosition: function: TVector2; cdecl;
+  GetWindowPosition: function(monitor: Integer): TVector2; cdecl;
+  // Get window scale DPI factor
+  GetWindowScaleDPI: function(monitor: Integer): TVector2; cdecl;
   // Get the human-readable, UTF-8 encoded name of the primary monitor
   GetMonitorName: function(monitor: Integer): PUTF8Char; cdecl;
-  // Get clipboard text content
-  GetClipboardText: function: PUTF8Char; cdecl;
   // Set clipboard text content
   SetClipboardText: procedure(const text: PUTF8Char); cdecl;
+  // Get clipboard text content
+  GetClipboardText: function: PUTF8Char; cdecl;
 
   { Cursor-related functions }
 
@@ -968,6 +1010,8 @@ var
   EnableCursor: procedure; cdecl;
   // Disables cursor (lock cursor)
   DisableCursor: procedure; cdecl;
+  // Check if cursor is on the current screen.
+  IsCursorOnScreen: function: boolean; cdecl;
 
   { Drawing-related functions }
 
@@ -1022,23 +1066,6 @@ var
   // Returns elapsed time in seconds since InitWindow()
   GetTime: function: Double; cdecl;
 
-  { Color-related functions }
-
-  // Returns hexadecimal value for a Color
-  ColorToInt: function(color: TColor): Integer; cdecl;
-  // Returns color normalized as float [0..1]
-  ColorNormalize: function(color: TColor): TVector4; cdecl;
-  // Returns color from normalized values [0..1]
-  ColorFromNormalized: function(normalized: TVector4): TColor; cdecl;
-  // Returns HSV values for a Color
-  ColorToHSV: function(color: TColor): TVector3; cdecl;
-  // Returns a Color from HSV values
-  ColorFromHSV: function(hsv: TVector3): TColor; cdecl;
-  // Returns a Color struct from hexadecimal value
-  GetColor: function(hexValue: Integer): TColor; cdecl;
-  // Color fade-in or fade-out, alpha goes from 0.0f to 1.0f
-  Fade: function(color: TColor; Alpha: Single): TColor; cdecl;
-
   { Misc. functions }
 
   // Setup window configuration flags (view FLAGS)
@@ -1051,6 +1078,11 @@ var
   SetTraceLogCallback: procedure(callback: TTraceLogCallback); cdecl;
   // Show trace log messages (LOG_DEBUG, LOG_INFO, LOG_WARNING, LOG_ERROR)
   TraceLog: procedure(logType: Integer; const text: PUTF8Char) varargs; cdecl;
+
+  // Internal memory allocator
+  MemAlloc: function(Size: Integer): Pointer; cdecl;
+  // Internal memory free
+  MemFree: procedure(ptr: Pointer); cdecl;
   // Takes a screenshot of current screen (saved a .png)
   TakeScreenshot: procedure(const fileName: PUTF8Char); cdecl;
   // Returns a random value between min and max (both included)
@@ -1060,20 +1092,24 @@ var
 
   // Load file data as byte array (read)
   LoadFileData: function(const fileName: PUTF8Char; bytesRead: PCardinal): PByte; cdecl;
+  // Unload file data allocated by LoadFileData()
+  UnloadFileData: procedure(Data: PByte); cdecl;
   // Save data to file from byte array (write)
   SaveFileData: procedure(const fileName: PUTF8Char; data: Pointer; bytesToWrite: Cardinal); cdecl;
   // Load text data from file (read), returns a '\0' terminated string
   LoadFileText: function(const fileName: PUTF8Char): PUTF8Char; cdecl;
+  // Unload file text data allocated by LoadFileText()
+  UnloadFileText: procedure(Text: PUTF8Char); cdecl;
   // Save text data to file (write), string must be '\0' terminated
   SaveFileText: procedure(const fileName: PUTF8Char; text: PUTF8Char); cdecl;
   // Check if file exists
   FileExists: function(const fileName: PUTF8Char): boolean; cdecl;
-  // Check file extension
-  IsFileExtension: function(const fileName: PUTF8Char; const ext: PUTF8Char): boolean; cdecl;
   // Check if a directory path exists
   DirectoryExists: function(const dirPath: PUTF8Char): boolean; cdecl;
+  // Check file extension
+  IsFileExtension: function(const fileName: PUTF8Char; const ext: PUTF8Char): boolean; cdecl;
   // Get pointer to extension for a filename string
-  GetExtension: function(const fileName: PUTF8Char): PUTF8Char; cdecl;
+  GetFileExtension: function(const fileName: PUTF8Char): PUTF8Char; cdecl;
   // Get pointer to filename for a path string
   GetFileName: function(const filePath: PUTF8Char): PUTF8Char; cdecl;
   // Get filename string without extension (uses static string)
@@ -1107,7 +1143,7 @@ var
   { Persistent storage management }
 
   // Save integer value to storage file (to defined position)
-  SaveStorageValue: procedure(position: Cardinal; value: Integer); cdecl;
+  SaveStorageValue: function(position: Cardinal; value: Integer): Boolean; cdecl;
   // Load integer value from storage file (from defined position)
   LoadStorageValue: function(position: Cardinal): Integer; cdecl;
 
@@ -1135,6 +1171,11 @@ var
   SetExitKey: procedure(key: Integer); cdecl;
   // Get key pressed, call it multiple times for chars queued
   GetKeyPressed: function: Integer; cdecl;
+  // Get char pressed (unicode), call it multiple times for chars queued
+  GetCharPressed: function: Integer; cdecl;
+
+  // Input-related functions: gamepads
+
   // Detect if a gamepad is available
   IsGamepadAvailable: function(gamepad: Integer): boolean; cdecl;
   // Check gamepad name (if available)
@@ -1179,7 +1220,11 @@ var
   // Set mouse scaling
   SetMouseScale: procedure(scaleX: Single; scaleY: Single); cdecl;
   // Returns mouse wheel movement Y
-  GetMouseWheelMove: function: Integer; cdecl;
+  GetMouseWheelMove: function: Single; cdecl;
+  // Returns mouse cursor if (MouseCursor enum)
+  GetMouseCursor: function: Integer; cdecl;
+  // Set mouse cursor
+  SetMouseCursor: procedure(Cursor: Integer); cdecl;
 
   { Input-related functions: touch }
 
@@ -1223,13 +1268,13 @@ var
   UpdateCamera: procedure(camera: PCamera); cdecl;
 
   // Set camera pan key to combine with mouse movement (free camera)
-  SetCameraPanControl: procedure(panKey: Integer); cdecl;
+  SetCameraPanControl: procedure(KeyPan: Integer); cdecl;
   // Set camera alt key to combine with mouse movement (free camera)
-  SetCameraAltControl: procedure(altKey: Integer); cdecl;
+  SetCameraAltControl: procedure(Keylt: Integer); cdecl;
   // Set camera smooth zoom key to combine with mouse (free camera)
-  SetCameraSmoothZoomControl: procedure(szKey: Integer); cdecl;
+  SetCameraSmoothZoomControl: procedure(keySmoothZoom: Integer); cdecl;
   // Set camera move controls (1st person and 3rd person cameras)
-  SetCameraMoveControls: procedure(frontKey: Integer; backKey: Integer; rightKey: Integer; leftKey: Integer; upKey: Integer; downKey: Integer); cdecl;
+  SetCameraMoveControls: procedure(KeyFront: Integer; KeyBack: Integer; KeyRight: Integer; KeyLeft: Integer; KeyUp: Integer; KeyDown: Integer); cdecl;
 
 //------------------------------------------------------------------------------------
 // Basic Shapes Drawing Functions (Module: shapes)
@@ -1250,7 +1295,7 @@ var
   // Draw a line using cubic-bezier curves in-out
   DrawLineBezier: procedure(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl;
   // Draw lines sequence
-  DrawLineStrip: procedure(points: PVector2; numPoints: Integer; color: TColor); cdecl;
+  DrawLineStrip: procedure(points: PVector2; pointsCount: Integer; color: TColor); cdecl;
   // Draw a color-filled circle
   DrawCircle: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl;
   // Draw a piece of a circle
@@ -1314,14 +1359,16 @@ var
   CheckCollisionCircles: function(center1: TVector2; radius1: Single; center2: TVector2; radius2: Single): boolean; cdecl;
   // Check collision between circle and rectangle
   CheckCollisionCircleRec: function(center: TVector2; radius: Single; rec: TRectangle): boolean; cdecl;
-  // Get collision rectangle for two rectangles collision
-  GetCollisionRec: function(rec1: TRectangle; rec2: TRectangle): TRectangle; cdecl;
   // Check if point is inside rectangle
   CheckCollisionPointRec: function(point: TVector2; rec: TRectangle): boolean; cdecl;
   // Check if point is inside circle
   CheckCollisionPointCircle: function(point: TVector2; center: TVector2; radius: Single): boolean; cdecl;
   // Check if point is inside a triangle
   CheckCollisionPointTriangle: function(point: TVector2; p1: TVector2; p2: TVector2; p3: TVector2): boolean; cdecl;
+  // Check the collision between two lines defined by two points each, returns collision point by reference
+  CheckCollisionLines: function(startPos1, endPos1, startPos2, endPos2: TVector2; collisionPoint: PVector2): boolean; cdecl;
+  // Get collision rectangle for two rectangles collision
+  GetCollisionRec: function(rec1: TRectangle; rec2: TRectangle): TRectangle; cdecl;
 
 //------------------------------------------------------------------------------------
 // Texture Loading and Drawing Functions (Module: textures)
@@ -1345,7 +1392,7 @@ var
   // Export image as code file defining an array of bytes
   ExportImageAsCode: procedure(image: TImage; const fileName: PUTF8Char); cdecl;
   // Get pixel data from image as a Color struct array
-  GetImageData: function(image: TImage): PColor; cdecl;
+  LoadImageColors: function(image: TImage): PColor; cdecl;
   // Get pixel data from image as Vector4 array (float normalized)
   GetImageDataNormalized: function(image: TImage): PVector4; cdecl;
 
@@ -1511,6 +1558,23 @@ var
 
   // Get pixel data size in bytes (image or texture)
   GetPixelDataSize: function(width: Integer; height: Integer; format: Integer): Integer; cdecl;
+
+  { Color-related functions }
+
+  // Returns hexadecimal value for a Color
+  ColorToInt: function(color: TColor): Integer; cdecl;
+  // Returns color normalized as float [0..1]
+  ColorNormalize: function(color: TColor): TVector4; cdecl;
+  // Returns color from normalized values [0..1]
+  ColorFromNormalized: function(normalized: TVector4): TColor; cdecl;
+  // Returns HSV values for a Color
+  ColorToHSV: function(color: TColor): TVector3; cdecl;
+  // Returns a Color from HSV values
+  ColorFromHSV: function(hsv: TVector3): TColor; cdecl;
+  // Returns a Color struct from hexadecimal value
+  GetColor: function(hexValue: Integer): TColor; cdecl;
+  // Color fade-in or fade-out, alpha goes from 0.0f to 1.0f
+  Fade: function(color: TColor; Alpha: Single): TColor; cdecl;
 
 //------------------------------------------------------------------------------------
 // Font Loading and Text Drawing Functions (Module: text)
@@ -1988,7 +2052,7 @@ type
   TmncRayLib = class(TmnLibrary)
   public
   protected
-    procedure Loaded; override;
+    procedure Link; override;
   end;
 
 var
@@ -2051,7 +2115,7 @@ end;
 
 { TmncRayLib }
 
-procedure TmncRayLib.Loaded;
+procedure TmncRayLib.Link;
 begin
   RaiseError := True; //Raise error of one of this functions not exists
   InitWindow := GetAddress('InitWindow');
@@ -2063,8 +2127,6 @@ begin
   IsWindowHidden := GetAddress('IsWindowHidden');
   IsWindowFullscreen := GetAddress('IsWindowFullscreen');
   ToggleFullscreen := GetAddress('ToggleFullscreen');
-  UnhideWindow := GetAddress('UnhideWindow');
-  HideWindow := GetAddress('HideWindow');
   SetWindowIcon := GetAddress('SetWindowIcon');
   SetWindowTitle := GetAddress('SetWindowTitle');
   SetWindowPosition := GetAddress('SetWindowPosition');
@@ -2131,7 +2193,7 @@ begin
   FileExists := GetAddress('FileExists');
   IsFileExtension := GetAddress('IsFileExtension');
   DirectoryExists := GetAddress('DirectoryExists');
-  GetExtension := GetAddress('GetExtension');
+  GetFileExtension := GetAddress('GetFileExtension');
   GetFileName := GetAddress('GetFileName');
   GetFileNameWithoutExt := GetAddress('GetFileNameWithoutExt');
   GetDirectoryPath := GetAddress('GetDirectoryPath');
@@ -2242,7 +2304,7 @@ begin
   UnloadImage := GetAddress('UnloadImage');
   ExportImage := GetAddress('ExportImage');
   ExportImageAsCode := GetAddress('ExportImageAsCode');
-  GetImageData := GetAddress('GetImageData');
+  LoadImageColors := GetAddress('LoadImageColors');
   GetImageDataNormalized := GetAddress('GetImageDataNormalized');
   GenImageColor := GetAddress('GenImageColor');
   GenImageGradientV := GetAddress('GenImageGradientV');
