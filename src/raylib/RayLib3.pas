@@ -1604,10 +1604,14 @@ var
   LoadFontEx: function(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; charsCount: Integer): TFont; cdecl;
   // Load font from Image (XNA style)
   LoadFontFromImage: function(image: TImage; key: TColor; firstChar: Integer): TFont; cdecl;
+  // Load font from memory buffer, fileType refers to extension: i.e. "ttf"
+  LoadFontFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer; fontSize: Integer; fontChars: PInteger; charsCount: Integer): TFont; cdecl;
   // Load font data for further use
-  LoadFontData: function(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; charsCount: Integer; &type: Integer): PCharInfo; cdecl;
+  LoadFontData: function(fileData: PByte; dataSize, fontSize: Integer; fontChars: PInteger; charsCount: Integer; &type: Integer): PCharInfo; cdecl;
   // Generate image font atlas using chars info
   GenImageFontAtlas: function(const chars: PCharInfo; recs: PPRectangle; charsCount: Integer; fontSize: Integer; padding: Integer; packMethod: Integer): TImage; cdecl;
+  // Unload font chars info data (RAM)
+  UnloadFontData: procedure(fileData: PByte; charsCount: Integer); cdecl;
   // Unload Font from GPU memory (VRAM)
   UnloadFont: procedure(font: TFont); cdecl;
 
@@ -1624,7 +1628,7 @@ var
   DrawTextRecEx: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: boolean; tint: TColor; selectStart: Integer; selectLength: Integer; selectTint: TColor; selectBackTint: TColor); cdecl;
 
   // Draw text using font inside rectangle limits with support for text selection
-  DrawTextCodepoint: procedure(font: TFont; codepoint: Integer; position: TVector2; scale: Single; tint: TColor); cdecl;
+  DrawTextCodepoint: procedure(font: TFont; codepoint: Integer; position: TVector2; fontSize: Single; tint: TColor); cdecl;
 
   { Text misc. functions }
 
@@ -1694,6 +1698,10 @@ var
   DrawPoint3D: procedure(position: TVector3; color: TColor); cdecl;
   // Draw a circle in 3D world space
   DrawCircle3D: procedure(center: TVector3; radius: Single; rotationAxis: TVector3; rotationAngle: Single; color: TColor); cdecl;
+  // Draw a color-filled triangle (vertex in counter-clockwise order!)
+  DrawTriangle3D: procedure(v1: TVector3; v2: TVector3; v3: TVector3; color: TColor); cdecl;
+  // Draw a triangle strip defined by points
+  DrawTriangleStrip3D: procedure(Points: PVector3; pointsCount: integer; Color: TColor); cdecl;
   // Draw cube
   DrawCube: procedure(position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
   // Draw cube (Vector version)
@@ -1736,15 +1744,17 @@ var
   LoadModelFromMesh: function(mesh: TMesh): TModel; cdecl;
   // Unload model from memory (RAM and/or VRAM)
   UnloadModel: procedure(model: TModel); cdecl;
+  // Unload model (but not meshes) from memory (RAM and/or VRAM)
+  UnloadModelKeepMeshes: procedure(model: TModel); cdecl;
 
   { Mesh loading/unloading functions }
 
   // Load meshes from model file
   LoadMeshes: function(const fileName: PUTF8Char; meshCount: PInteger): PMesh; cdecl;
-  // Export mesh data to file
-  ExportMesh: procedure(mesh: TMesh; const fileName: PUTF8Char); cdecl;
   // Unload mesh from memory (RAM and/or VRAM)
   UnloadMesh: procedure(mesh: TMesh); cdecl;
+  // Export mesh data to file
+  ExportMesh: procedure(mesh: TMesh; const fileName: PUTF8Char); cdecl;
 
   { Material loading/unloading functions }
 
@@ -1801,6 +1811,8 @@ var
   MeshTangents: procedure(mesh: PMesh); cdecl;
   // Compute mesh binormals
   MeshBinormals: procedure(mesh: PMesh); cdecl;
+  // Smooth (average) vertex normals
+  MeshNormalsSmooth: procedure(mesh: PMesh); cdecl;
 
   { Model drawing functions }
 
@@ -1817,7 +1829,7 @@ var
   // Draw a billboard texture
   DrawBillboard: procedure(camera: TCamera; texture: TTexture2D; center: TVector3; size: Single; tint: TColor); cdecl;
   // Draw a billboard texture defined by sourceRec
-  DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; sourceRec: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl;
+  DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; source: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl;
 
   { Collision detection functions }
 
@@ -1833,6 +1845,8 @@ var
   CheckCollisionRaySphereEx: function(ray: TRay; center: TVector3; radius: Single; collisionPoint: PVector3): boolean; cdecl;
   // Detect collision between ray and box
   CheckCollisionRayBox: function(ray: TRay; box: TBoundingBox): boolean; cdecl;
+  // Get collision info between ray and mesh
+  GetCollisionRayMesh: function(ray: TRay; mesh: TMesh; transform: TMatrix): TRayHitInfo; cdecl;
   // Get collision info between ray and model
   GetCollisionRayModel: function(ray: TRay; model: TModel): TRayHitInfo; cdecl;
   // Get collision info between ray and triangle
@@ -1869,6 +1883,7 @@ var
 
   // Get shader uniform location
   GetShaderLocation: function(shader: TShader; const uniformName: PUTF8Char): Integer; cdecl;
+  GetShaderLocationAttrib: function(shader: TShader; const attribName: PUTF8Char): Integer; cdecl;
   // Set shader uniform value
   SetShaderValue: procedure(shader: TShader; uniformLoc: Integer; const value: Pointer; uniformType: Integer); cdecl;
   // Set shader uniform value vector
@@ -1889,12 +1904,12 @@ var
   { Texture maps generation (PBR) }
   // NOTE: Required shaders should be provided
 
-  // Generate cubemap texture from 2D texture
-  GenTextureCubemap: function(shader: TShader; map: TTexture2D; size: Integer): TTexture2D; cdecl;
+  // Generate cubemap texture from 2D panorama texture
+  GenTextureCubemap: function(shader: TShader; map: TTexture2D; size: Integer): TTextureCubemap; cdecl;
   // Generate irradiance texture using cubemap data
-  GenTextureIrradiance: function(shader: TShader; cubemap: TTexture2D; size: Integer): TTexture2D; cdecl;
+  GenTextureIrradiance: function(shader: TShader; cubemap: TTextureCubemap; size: Integer): TTextureCubemap; cdecl;
   // Generate prefilter texture using cubemap data
-  GenTexturePrefilter: function(shader: TShader; cubemap: TTexture2D; size: Integer): TTexture2D; cdecl;
+  GenTexturePrefilter: function(shader: TShader; cubemap: TTextureCubemap; size: Integer): TTextureCubemap; cdecl;
   // Generate BRDF texture
   GenTextureBRDF: function(shader: TShader; size: Integer): TTexture2D; cdecl;
 
@@ -1947,6 +1962,8 @@ var
 
   // Load wave data from file
   LoadWave: function(const fileName: PUTF8Char): TWave; cdecl;
+  // Load wave from memory buffer, fileType refers to extension: i.e. "wav"
+  LoadWaveFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer): TImage; cdecl;
   // Load sound from file
   LoadSound: function(const fileName: PUTF8Char): TSound; cdecl;
   // Load sound from wave data
@@ -1958,9 +1975,9 @@ var
   // Unload sound
   UnloadSound: procedure(sound: TSound); cdecl;
   // Export wave data to file
-  ExportWave: procedure(wave: TWave; const fileName: PUTF8Char); cdecl;
+  ExportWave: function(wave: TWave; const fileName: PUTF8Char): Boolean; cdecl;
   // Export wave sample data to code (.h)
-  ExportWaveAsCode: procedure(wave: TWave; const fileName: PUTF8Char); cdecl;
+  ExportWaveAsCode: function(wave: TWave; const fileName: PUTF8Char): Boolean; cdecl;
 
   { Wave/Sound management functions }
 
@@ -1991,7 +2008,9 @@ var
   // Crop a wave to defined samples range
   WaveCrop: procedure(Wave: PWave; initSample: Integer; finalSample: Integer); cdecl;
   // Get samples data from wave as a floats array
-  GetWaveData: function(Wave: TWave): PSingle; cdecl;
+  LoadWaveSamples: function(Wave: TWave): PSingle; cdecl;
+  // Unload samples data loaded with LoadWaveSamples()
+  UnloadWaveSamples: procedure(samples: PSingle); cdecl;
 
   { Music management functions }
 
@@ -2015,8 +2034,6 @@ var
   SetMusicVolume: procedure(Music: TMusic; volume: Single); cdecl;
   // Set pitch for a music (1.0 is base level)
   SetMusicPitch: procedure(Music: TMusic; pitch: Single); cdecl;
-  // Set music loop count (loop repeats)
-  SetMusicLoopCount: procedure(Music: TMusic; count: Integer); cdecl;
   // Get music time length (in seconds)
   GetMusicTimeLength: function(Music: TMusic): Single; cdecl;
   // Get current music time played (in seconds)
@@ -2541,7 +2558,7 @@ begin
   WaveFormat := GetAddress('WaveFormat');
   WaveCopy := GetAddress('WaveCopy');
   WaveCrop := GetAddress('WaveCrop');
-  GetWaveData := GetAddress('GetWaveData');
+  LoadWaveSamples := GetAddress('LoadWaveSamples');
   LoadMusicStream := GetAddress('LoadMusicStream');
   UnloadMusicStream := GetAddress('UnloadMusicStream');
   PlayMusicStream := GetAddress('PlayMusicStream');
@@ -2552,7 +2569,6 @@ begin
   IsMusicPlaying := GetAddress('IsMusicPlaying');
   SetMusicVolume := GetAddress('SetMusicVolume');
   SetMusicPitch := GetAddress('SetMusicPitch');
-  SetMusicLoopCount := GetAddress('SetMusicLoopCount');
   GetMusicTimeLength := GetAddress('GetMusicTimeLength');
   GetMusicTimePlayed := GetAddress('GetMusicTimePlayed');
   InitAudioStream := GetAddress('InitAudioStream');
