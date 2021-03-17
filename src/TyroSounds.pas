@@ -136,7 +136,7 @@ begin
   SampleCount := Round(Duration * SampleRate);
   SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
   aSize := SampleCount * Sizeof(Smallint);
-  Data := GetMem(aSize);
+  Data := RayLib3.MemAlloc(aSize);
   if Frequency <> 0 then
   begin
     Amplitude := (Amplitude * ((Power(2, SampleSize) / 2) - 1) / 100) - 1;
@@ -164,7 +164,7 @@ begin
 
   if Data <> nil then //maybe move it to generate
   begin
-{    Freemem(Data);
+{    RayLib3.MemFree(Data);
     Data := nil;}
   end;
 end;
@@ -217,7 +217,7 @@ begin
   Sound := LoadSoundFromWave(Wave);
   if Wave.Data <> nil then //maybe move it to generate
   begin
-    Freemem(Wave.Data);
+    RayLib3.MemFree(Wave.Data);
     Wave.Data := nil;
     UnloadWave(Wave);
   end;

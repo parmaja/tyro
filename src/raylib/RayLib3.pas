@@ -926,23 +926,23 @@ var
   // Initialize window and OpenGL context
   InitWindow: procedure(Width: Integer; Height: Integer; const Title: PUTF8Char); cdecl;
   // Check if KEY_ESCAPE pressed or Close icon pressed
-  WindowShouldClose: function: boolean; cdecl;
+  WindowShouldClose: function: Boolean; cdecl;
   // Close window and unload OpenGL context
   CloseWindow: procedure; cdecl;
   // Check if window has been initialized successfully
-  IsWindowReady: function: boolean; cdecl;
+  IsWindowReady: function: Boolean; cdecl;
   // Check if window is currently fullscreen
-  IsWindowFullscreen: function: boolean; cdecl;
+  IsWindowFullscreen: function: Boolean; cdecl;
   // Check if window is currently hidden (only PLATFORM_DESKTOP)
-  IsWindowHidden: function: boolean; cdecl;
+  IsWindowHidden: function: Boolean; cdecl;
   // Check if window has been minimized (or lost focus)
-  IsWindowMinimized: function: boolean; cdecl;
+  IsWindowMinimized: function: Boolean; cdecl;
   // Check if window is currently maximized (only PLATFORM_DESKTOP)
-  IsWindowMaximized: function: boolean; cdecl;
+  IsWindowMaximized: function: Boolean; cdecl;
   // Check if window has been resized
-  IsWindowResized: function: boolean; cdecl;
+  IsWindowResized: function: Boolean; cdecl;
   // Check if one specific window flag is enabled
-  IsWindowState: function(flag: Cardinal): boolean; cdecl;
+  IsWindowState: function(flag: Cardinal): Boolean; cdecl;
   // Set window configuration state using flags
   SetWindowState: procedure(flag: Cardinal); cdecl;
   // Clear window configuration state flags
@@ -1005,13 +1005,13 @@ var
   // Hides cursor
   HideCursor: procedure; cdecl;
   // Check if cursor is not visible
-  IsCursorHidden: function: boolean; cdecl;
+  IsCursorHidden: function: Boolean; cdecl;
   // Enables cursor (unlock cursor)
   EnableCursor: procedure; cdecl;
   // Disables cursor (lock cursor)
   DisableCursor: procedure; cdecl;
   // Check if cursor is on the current screen.
-  IsCursorOnScreen: function: boolean; cdecl;
+  IsCursorOnScreen: function: Boolean; cdecl;
 
   { Drawing-related functions }
 
@@ -1103,11 +1103,11 @@ var
   // Save text data to file (write), string must be '\0' terminated
   SaveFileText: procedure(const fileName: PUTF8Char; text: PUTF8Char); cdecl;
   // Check if file exists
-  FileExists: function(const fileName: PUTF8Char): boolean; cdecl;
+  FileExists: function(const fileName: PUTF8Char): Boolean; cdecl;
   // Check if a directory path exists
-  DirectoryExists: function(const dirPath: PUTF8Char): boolean; cdecl;
+  DirectoryExists: function(const dirPath: PUTF8Char): Boolean; cdecl;
   // Check file extension
-  IsFileExtension: function(const fileName: PUTF8Char; const ext: PUTF8Char): boolean; cdecl;
+  IsFileExtension: function(const fileName: PUTF8Char; const ext: PUTF8Char): Boolean; cdecl;
   // Get pointer to extension for a filename string
   GetFileExtension: function(const fileName: PUTF8Char): PUTF8Char; cdecl;
   // Get pointer to filename for a path string
@@ -1125,9 +1125,9 @@ var
   // Clear directory files paths buffers (free memory)
   ClearDirectoryFiles: procedure; cdecl;
   // Change working directory, returns true if success
-  ChangeDirectory: function(const dir: PUTF8Char): boolean; cdecl;
+  ChangeDirectory: function(const dir: PUTF8Char): Boolean; cdecl;
   // Check if a file has been dropped into window
-  IsFileDropped: function: boolean; cdecl;
+  IsFileDropped: function: Boolean; cdecl;
   // Get dropped files names (memory should be freed)
   GetDroppedFiles: function(count: PInteger): PPUTF8Char; cdecl;
   // Clear dropped files paths buffer (free memory)
@@ -1157,16 +1157,16 @@ var
   { Input-related functions: keyboard }
 
   // Detect if a key has been pressed once
-  IsKeyPressed: function(key: Integer): boolean; cdecl;
+  IsKeyPressed: function(key: Integer): Boolean; cdecl;
   // Detect if a key is being pressed
-  IsKeyDown: function(key: Integer): boolean; cdecl;
+  IsKeyDown: function(key: Integer): Boolean; cdecl;
   // Detect if a key has been released once
-  IsKeyReleased: function(key: Integer): boolean; cdecl;
+  IsKeyReleased: function(key: Integer): Boolean; cdecl;
 
   { Input-related functions: gamepads }
 
   // Detect if a key is NOT being pressed
-  IsKeyUp: function(key: Integer): boolean; cdecl;
+  IsKeyUp: function(key: Integer): Boolean; cdecl;
   // Set a custom key to exit program (default is ESC)
   SetExitKey: procedure(key: Integer); cdecl;
   // Get key pressed, call it multiple times for chars queued
@@ -1177,19 +1177,19 @@ var
   // Input-related functions: gamepads
 
   // Detect if a gamepad is available
-  IsGamepadAvailable: function(gamepad: Integer): boolean; cdecl;
+  IsGamepadAvailable: function(gamepad: Integer): Boolean; cdecl;
   // Check gamepad name (if available)
-  IsGamepadName: function(gamepad: Integer; const name: PUTF8Char): boolean; cdecl;
+  IsGamepadName: function(gamepad: Integer; const name: PUTF8Char): Boolean; cdecl;
   // Return gamepad internal name id
   GetGamepadName: function(gamepad: Integer): PUTF8Char; cdecl;
   // Detect if a gamepad button has been pressed once
-  IsGamepadButtonPressed: function(gamepad: Integer; button: Integer): boolean; cdecl;
+  IsGamepadButtonPressed: function(gamepad: Integer; button: Integer): Boolean; cdecl;
   // Detect if a gamepad button is being pressed
-  IsGamepadButtonDown: function(gamepad: Integer; button: Integer): boolean; cdecl;
+  IsGamepadButtonDown: function(gamepad: Integer; button: Integer): Boolean; cdecl;
   // Detect if a gamepad button has been released once
-  IsGamepadButtonReleased: function(gamepad: Integer; button: Integer): boolean; cdecl;
+  IsGamepadButtonReleased: function(gamepad: Integer; button: Integer): Boolean; cdecl;
   // Detect if a gamepad button is NOT being pressed
-  IsGamepadButtonUp: function(gamepad: Integer; button: Integer): boolean; cdecl;
+  IsGamepadButtonUp: function(gamepad: Integer; button: Integer): Boolean; cdecl;
   // Get the last gamepad button pressed
   GetGamepadButtonPressed: function: Integer; cdecl;
   // Return gamepad axis count for a gamepad
@@ -1200,13 +1200,13 @@ var
   { Input-related functions: mouse }
 
   // Detect if a mouse button has been pressed once
-  IsMouseButtonPressed: function(button: TMouseButton): boolean; cdecl;
+  IsMouseButtonPressed: function(button: TMouseButton): Boolean; cdecl;
   // Detect if a mouse button is being pressed
-  IsMouseButtonDown: function(button: TMouseButton): boolean; cdecl;
+  IsMouseButtonDown: function(button: TMouseButton): Boolean; cdecl;
   // Detect if a mouse button has been released once
-  IsMouseButtonReleased: function(button: TMouseButton): boolean; cdecl;
+  IsMouseButtonReleased: function(button: TMouseButton): Boolean; cdecl;
   // Detect if a mouse button is NOT being pressed
-  IsMouseButtonUp: function(button: TMouseButton): boolean; cdecl;
+  IsMouseButtonUp: function(button: TMouseButton): Boolean; cdecl;
   // Returns mouse position X
   GetMouseX: function: Integer; cdecl;
   // Returns mouse position Y
@@ -1242,7 +1242,7 @@ var
   // Enable a set of gestures using flags
   SetGesturesEnabled: procedure(gestureFlags: Cardinal); cdecl;
   // Check if a gesture have been detected
-  IsGestureDetected: function(gesture: Integer): boolean; cdecl;
+  IsGestureDetected: function(gesture: Integer): Boolean; cdecl;
   // Get latest detected gesture
   GetGestureDetected: function: Integer; cdecl;
   // Get touch points count
@@ -1354,19 +1354,19 @@ var
   { Basic shapes collision detection functions }
 
   // Check collision between two rectangles
-  CheckCollisionRecs: function(rec1: TRectangle; rec2: TRectangle): boolean; cdecl;
+  CheckCollisionRecs: function(rec1: TRectangle; rec2: TRectangle): Boolean; cdecl;
   // Check collision between two circles
-  CheckCollisionCircles: function(center1: TVector2; radius1: Single; center2: TVector2; radius2: Single): boolean; cdecl;
+  CheckCollisionCircles: function(center1: TVector2; radius1: Single; center2: TVector2; radius2: Single): Boolean; cdecl;
   // Check collision between circle and rectangle
-  CheckCollisionCircleRec: function(center: TVector2; radius: Single; rec: TRectangle): boolean; cdecl;
+  CheckCollisionCircleRec: function(center: TVector2; radius: Single; rec: TRectangle): Boolean; cdecl;
   // Check if point is inside rectangle
-  CheckCollisionPointRec: function(point: TVector2; rec: TRectangle): boolean; cdecl;
+  CheckCollisionPointRec: function(point: TVector2; rec: TRectangle): Boolean; cdecl;
   // Check if point is inside circle
-  CheckCollisionPointCircle: function(point: TVector2; center: TVector2; radius: Single): boolean; cdecl;
+  CheckCollisionPointCircle: function(point: TVector2; center: TVector2; radius: Single): Boolean; cdecl;
   // Check if point is inside a triangle
-  CheckCollisionPointTriangle: function(point: TVector2; p1: TVector2; p2: TVector2; p3: TVector2): boolean; cdecl;
+  CheckCollisionPointTriangle: function(point: TVector2; p1: TVector2; p2: TVector2; p3: TVector2): Boolean; cdecl;
   // Check the collision between two lines defined by two points each, returns collision point by reference
-  CheckCollisionLines: function(startPos1, endPos1, startPos2, endPos2: TVector2; collisionPoint: PVector2): boolean; cdecl;
+  CheckCollisionLines: function(startPos1, endPos1, startPos2, endPos2: TVector2; collisionPoint: PVector2): Boolean; cdecl;
   // Get collision rectangle for two rectangles collision
   GetCollisionRec: function(rec1: TRectangle; rec2: TRectangle): TRectangle; cdecl;
 
@@ -1624,8 +1624,8 @@ var
   // Draw text using font and additional parameters
   DrawTextEx: procedure(font: TFont; const text: PUTF8Char; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl;
   // Draw text using font inside rectangle limits
-  DrawTextRec: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: boolean; tint: TColor); cdecl;
-  DrawTextRecEx: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: boolean; tint: TColor; selectStart: Integer; selectLength: Integer; selectTint: TColor; selectBackTint: TColor); cdecl;
+  DrawTextRec: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: Boolean; tint: TColor); cdecl;
+  DrawTextRecEx: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: Boolean; tint: TColor; selectStart: Integer; selectLength: Integer; selectTint: TColor; selectBackTint: TColor); cdecl;
 
   // Draw text using font inside rectangle limits with support for text selection
   DrawTextCodepoint: procedure(font: TFont; codepoint: Integer; position: TVector2; fontSize: Single; tint: TColor); cdecl;
@@ -1645,7 +1645,7 @@ var
   // Copy one string to another, returns bytes copied
   TextCopy: function(dst: PUTF8Char; const src: PUTF8Char): Integer; cdecl;
   // Check if two text string are equal
-  TextIsEqual: function(const text1: PUTF8Char; const text2: PUTF8Char): boolean; cdecl;
+  TextIsEqual: function(const text1: PUTF8Char; const text2: PUTF8Char): Boolean; cdecl;
   // Get text length, checks for '\0' ending
   TextLength: function(const text: PUTF8Char): Cardinal; cdecl;
   // Text formatting with variables (sprintf style)
@@ -1778,7 +1778,7 @@ var
   // Unload animation data
   UnloadModelAnimation: procedure(anim: TModelAnimation); cdecl;
   // Check model animation skeleton match
-  IsModelAnimationValid: function(model: TModel; anim: TModelAnimation): boolean; cdecl;
+  IsModelAnimationValid: function(model: TModel; anim: TModelAnimation): Boolean; cdecl;
 
   { Mesh generation functions }
 
@@ -1834,17 +1834,17 @@ var
   { Collision detection functions }
 
   // Detect collision between two spheres
-  CheckCollisionSpheres: function(centerA: TVector3; radiusA: Single; centerB: TVector3; radiusB: Single): boolean; cdecl;
+  CheckCollisionSpheres: function(centerA: TVector3; radiusA: Single; centerB: TVector3; radiusB: Single): Boolean; cdecl;
   // Detect collision between two bounding boxes
-  CheckCollisionBoxes: function(box1: TBoundingBox; box2: TBoundingBox): boolean; cdecl;
+  CheckCollisionBoxes: function(box1: TBoundingBox; box2: TBoundingBox): Boolean; cdecl;
   // Detect collision between box and sphere
-  CheckCollisionBoxSphere: function(box: TBoundingBox; center: TVector3; radius: Single): boolean; cdecl;
+  CheckCollisionBoxSphere: function(box: TBoundingBox; center: TVector3; radius: Single): Boolean; cdecl;
   // Detect collision between ray and sphere
-  CheckCollisionRaySphere: function(ray: TRay; center: TVector3; radius: Single): boolean; cdecl;
+  CheckCollisionRaySphere: function(ray: TRay; center: TVector3; radius: Single): Boolean; cdecl;
   // Detect collision between ray and sphere, returns collision point
-  CheckCollisionRaySphereEx: function(ray: TRay; center: TVector3; radius: Single; collisionPoint: PVector3): boolean; cdecl;
+  CheckCollisionRaySphereEx: function(ray: TRay; center: TVector3; radius: Single; collisionPoint: PVector3): Boolean; cdecl;
   // Detect collision between ray and box
-  CheckCollisionRayBox: function(ray: TRay; box: TBoundingBox): boolean; cdecl;
+  CheckCollisionRayBox: function(ray: TRay; box: TBoundingBox): Boolean; cdecl;
   // Get collision info between ray and mesh
   GetCollisionRayMesh: function(ray: TRay; mesh: TMesh; transform: TMatrix): TRayHitInfo; cdecl;
   // Get collision info between ray and model
@@ -1935,7 +1935,7 @@ var
   // Set stereo rendering configuration parameters
   SetVrConfiguration: procedure(info: TVrDeviceInfo; distortion: TShader); cdecl;
   // Detect if VR simulator is ready
-  IsVrSimulatorReady: function: boolean; cdecl;
+  IsVrSimulatorReady: function: Boolean; cdecl;
   // Enable/Disable VR experience
   ToggleVrMode: procedure; cdecl;
   // Begin VR simulator stereo rendering
@@ -1954,7 +1954,7 @@ var
   // Close the audio device and context
   CloseAudioDevice: procedure; cdecl;
   // Check if audio device has been initialized successfully
-  IsAudioDeviceReady: function: boolean; cdecl;
+  IsAudioDeviceReady: function: Boolean; cdecl;
   // Set master volume (listener)
   SetMasterVolume: procedure(volume: Single); cdecl;
 
@@ -1996,7 +1996,7 @@ var
   // Get number of sounds playing in the multichannel
   GetSoundsPlaying: function: Integer; cdecl;
   // Check if a sound is currently playing
-  IsSoundPlaying: function(Sound: TSound): boolean; cdecl;
+  IsSoundPlaying: function(Sound: TSound): Boolean; cdecl;
   // Set volume for a sound (1.0 is max level)
   SetSoundVolume: procedure(Sound: TSound; volume: Single); cdecl;
   // Set pitch for a sound (1.0 is base level)
@@ -2029,7 +2029,7 @@ var
   // Resume playing paused music
   ResumeMusicStream: procedure(Music: TMusic); cdecl;
   // Check if music is playing
-  IsMusicPlaying: function(Music: TMusic): boolean; cdecl;
+  IsMusicPlaying: function(Music: TMusic): Boolean; cdecl;
   // Set volume for music (1.0 is max level)
   SetMusicVolume: procedure(Music: TMusic; volume: Single); cdecl;
   // Set pitch for a music (1.0 is base level)
@@ -2056,7 +2056,7 @@ var
   // Resume audio stream
   ResumeAudioStream: procedure(stream: TAudioStream); cdecl;
   // Check if audio stream is playing
-  IsAudioStreamPlaying: function(stream: TAudioStream): boolean; cdecl;
+  IsAudioStreamPlaying: function(stream: TAudioStream): Boolean; cdecl;
   // Stop audio stream
   StopAudioStream: procedure(stream: TAudioStream); cdecl;
   // Set volume for audio stream (1.0 is max level)
@@ -2219,6 +2219,8 @@ begin
   ColorFromNormalized := GetAddress('ColorFromNormalized');
   ColorToHSV := GetAddress('ColorToHSV');
   ColorFromHSV := GetAddress('ColorFromHSV');
+  ColorAlpha := GetAddress('ColorAlpha');
+  ColorAlphaBlend := GetAddress('ColorAlphaBlend');
   GetColor := GetAddress('GetColor');
   Fade := GetAddress('Fade');
   SetConfigFlags := GetAddress('SetConfigFlags');
@@ -2226,11 +2228,15 @@ begin
   SetTraceLogExit := GetAddress('SetTraceLogExit');
   SetTraceLogCallback := GetAddress('SetTraceLogCallback');
   TraceLog := GetAddress('TraceLog');
+  MemAlloc := GetAddress('MemAlloc');
+  MemFree := GetAddress('MemFree');
   TakeScreenshot := GetAddress('TakeScreenshot');
   GetRandomValue := GetAddress('GetRandomValue');
   LoadFileData := GetAddress('LoadFileData');
+  UnloadFileData := GetAddress('UnloadFileData');
   SaveFileData := GetAddress('SaveFileData');
   LoadFileText := GetAddress('LoadFileText');
+  UnloadFileText := GetAddress('UnloadFileText');
   SaveFileText := GetAddress('SaveFileText');
   FileExists := GetAddress('FileExists');
   IsFileExtension := GetAddress('IsFileExtension');
@@ -2259,6 +2265,7 @@ begin
   IsKeyUp := GetAddress('IsKeyUp');
   SetExitKey := GetAddress('SetExitKey');
   GetKeyPressed := GetAddress('GetKeyPressed');
+  GetCharPressed := GetAddress('GetCharPressed');
   IsGamepadAvailable := GetAddress('IsGamepadAvailable');
   IsGamepadName := GetAddress('IsGamepadName');
   GetGamepadName := GetAddress('GetGamepadName');
@@ -2280,6 +2287,8 @@ begin
   SetMouseOffset := GetAddress('SetMouseOffset');
   SetMouseScale := GetAddress('SetMouseScale');
   GetMouseWheelMove := GetAddress('GetMouseWheelMove');
+  GetMouseCursor := GetAddress('GetMouseCursor');
+  SetMouseCursor := GetAddress('SetMouseCursor');
   GetTouchX := GetAddress('GetTouchX');
   GetTouchY := GetAddress('GetTouchY');
   GetTouchPosition := GetAddress('GetTouchPosition');
@@ -2339,12 +2348,19 @@ begin
   CheckCollisionPointRec := GetAddress('CheckCollisionPointRec');
   CheckCollisionPointCircle := GetAddress('CheckCollisionPointCircle');
   CheckCollisionPointTriangle := GetAddress('CheckCollisionPointTriangle');
+  CheckCollisionLines := GetAddress('CheckCollisionLines');
+  GetCollisionRec := GetAddress('GetCollisionRec');
   LoadImage := GetAddress('LoadImage');
   LoadImageRaw := GetAddress('LoadImageRaw');
+  LoadImageAnim := GetAddress('LoadImageAnim');
+  LoadImageFromMemory := GetAddress('LoadImageFromMemory');
   UnloadImage := GetAddress('UnloadImage');
   ExportImage := GetAddress('ExportImage');
   ExportImageAsCode := GetAddress('ExportImageAsCode');
   LoadImageColors := GetAddress('LoadImageColors');
+  LoadImagePalette := GetAddress('LoadImagePalette');
+  UnloadImageColors := GetAddress('UnloadImageColors');
+  UnloadImagePalette := GetAddress('UnloadImagePalette');
   GenImageColor := GetAddress('GenImageColor');
   GenImageGradientV := GetAddress('GenImageGradientV');
   GenImageGradientH := GetAddress('GenImageGradientH');
@@ -2359,8 +2375,10 @@ begin
   ImageTextEx := GetAddress('ImageTextEx');
   ImageToPOT := GetAddress('ImageToPOT');
   ImageFormat := GetAddress('ImageFormat');
-  ImageAlphaMask := GetAddress('ImageAlphaMask');
+  ImageCrop := GetAddress('ImageCrop');
+  ImageAlphaCrop := GetAddress('ImageAlphaCrop');
   ImageAlphaClear := GetAddress('ImageAlphaClear');
+  ImageAlphaMask := GetAddress('ImageAlphaMask');
   ImageAlphaCrop := GetAddress('ImageAlphaCrop');
   ImageAlphaPremultiply := GetAddress('ImageAlphaPremultiply');
   ImageCrop := GetAddress('ImageCrop');
@@ -2401,6 +2419,7 @@ begin
   UnloadTexture := GetAddress('UnloadTexture');
   UnloadRenderTexture := GetAddress('UnloadRenderTexture');
   UpdateTexture := GetAddress('UpdateTexture');
+  UpdateTextureRec := GetAddress('UpdateTextureRec');
   GetTextureData := GetAddress('GetTextureData');
   GetScreenData := GetAddress('GetScreenData');
   GenTextureMipmaps := GetAddress('GenTextureMipmaps');
@@ -2411,15 +2430,20 @@ begin
   DrawTextureEx := GetAddress('DrawTextureEx');
   DrawTextureRec := GetAddress('DrawTextureRec');
   DrawTextureQuad := GetAddress('DrawTextureQuad');
+  DrawTextureTiled := GetAddress('DrawTextureTiled');
   DrawTexturePro := GetAddress('DrawTexturePro');
   DrawTextureNPatch := GetAddress('DrawTextureNPatch');
+  GetPixelColor := GetAddress('GetPixelColor');
+  SetPixelColor := GetAddress('SetPixelColor');
   GetPixelDataSize := GetAddress('GetPixelDataSize');
   GetFontDefault := GetAddress('GetFontDefault');
   LoadFont := GetAddress('LoadFont');
   LoadFontEx := GetAddress('LoadFontEx');
   LoadFontFromImage := GetAddress('LoadFontFromImage');
+  LoadFontFromMemory := GetAddress('LoadFontFromMemory');
   LoadFontData := GetAddress('LoadFontData');
   GenImageFontAtlas := GetAddress('GenImageFontAtlas');
+  UnloadFontData := GetAddress('UnloadFontData');
   UnloadFont := GetAddress('UnloadFont');
   DrawFPS := GetAddress('DrawFPS');
   DrawText := GetAddress('DrawText');
@@ -2453,6 +2477,8 @@ begin
   DrawLine3D := GetAddress('DrawLine3D');
   DrawPoint3D := GetAddress('DrawPoint3D');
   DrawCircle3D := GetAddress('DrawCircle3D');
+  DrawTriangle3D := GetAddress('DrawTriangle3D');
+  DrawTriangleStrip3D := GetAddress('DrawTriangleStrip3D');
   DrawCube := GetAddress('DrawCube');
   DrawCubeV := GetAddress('DrawCubeV');
   DrawCubeWires := GetAddress('DrawCubeWires');
@@ -2470,6 +2496,7 @@ begin
   LoadModel := GetAddress('LoadModel');
   LoadModelFromMesh := GetAddress('LoadModelFromMesh');
   UnloadModel := GetAddress('UnloadModel');
+  UnloadModelKeepMeshes := GetAddress('UnloadModelKeepMeshes');
   LoadMeshes := GetAddress('LoadMeshes');
   ExportMesh := GetAddress('ExportMesh');
   UnloadMesh := GetAddress('UnloadMesh');
@@ -2495,6 +2522,7 @@ begin
   MeshBoundingBox := GetAddress('MeshBoundingBox');
   MeshTangents := GetAddress('MeshTangents');
   MeshBinormals := GetAddress('MeshBinormals');
+  MeshNormalsSmooth := GetAddress('MeshNormalsSmooth');
   DrawModel := GetAddress('DrawModel');
   DrawModelEx := GetAddress('DrawModelEx');
   DrawModelWires := GetAddress('DrawModelWires');
@@ -2508,6 +2536,7 @@ begin
   CheckCollisionRaySphere := GetAddress('CheckCollisionRaySphere');
   CheckCollisionRaySphereEx := GetAddress('CheckCollisionRaySphereEx');
   CheckCollisionRayBox := GetAddress('CheckCollisionRayBox');
+  GetCollisionRayMesh := GetAddress('GetCollisionRayMesh');
   GetCollisionRayModel := GetAddress('GetCollisionRayModel');
   GetCollisionRayTriangle := GetAddress('GetCollisionRayTriangle');
   GetCollisionRayGround := GetAddress('GetCollisionRayGround');
@@ -2520,6 +2549,7 @@ begin
   GetShapesTextureRec := GetAddress('GetShapesTextureRec');
   SetShapesTexture := GetAddress('SetShapesTexture');
   GetShaderLocation := GetAddress('GetShaderLocation');
+  GetShaderLocationAttrib := GetAddress('GetShaderLocationAttrib');
   SetShaderValue := GetAddress('SetShaderValue');
   SetShaderValueV := GetAddress('SetShaderValueV');
   SetShaderValueMatrix := GetAddress('SetShaderValueMatrix');
@@ -2549,6 +2579,7 @@ begin
   IsAudioDeviceReady := GetAddress('IsAudioDeviceReady');
   SetMasterVolume := GetAddress('SetMasterVolume');
   LoadWave := GetAddress('LoadWave');
+  LoadWaveFromMemory := GetAddress('LoadWaveFromMemory');
   LoadSound := GetAddress('LoadSound');
   LoadSoundFromWave := GetAddress('LoadSoundFromWave');
   UpdateSound := GetAddress('UpdateSound');
@@ -2570,6 +2601,7 @@ begin
   WaveCopy := GetAddress('WaveCopy');
   WaveCrop := GetAddress('WaveCrop');
   LoadWaveSamples := GetAddress('LoadWaveSamples');
+  UnloadWaveSamples := GetAddress('UnloadWaveSamples');
   LoadMusicStream := GetAddress('LoadMusicStream');
   UnloadMusicStream := GetAddress('UnloadMusicStream');
   PlayMusicStream := GetAddress('PlayMusicStream');
