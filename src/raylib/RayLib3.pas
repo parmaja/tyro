@@ -947,14 +947,14 @@ var
   SetWindowState: procedure(flag: Cardinal); cdecl;
   // Clear window configuration state flags
   ClearWindowState: procedure(flag: Cardinal); cdecl;
-  // Check if window is currently hidden
+  // Toggle window state: fullscreen/windowed (only PLATFORM_DESKTOP)
   ToggleFullscreen: procedure; cdecl;
   // Set window state: maximized, if resizable (only PLATFORM_DESKTOP)
   MaximizeWindow: procedure; cdecl;
   // Set window state: minimized, if resizable (only PLATFORM_DESKTOP)
   MinimizeWindow: procedure; cdecl;
   // Set window state: not minimized/maximized (only PLATFORM_DESKTOP)
-  RestoreWindow: procedure; cdecl;
+  RestoreWindow : procedure; cdecl;
   // Set icon for window (only PLATFORM_DESKTOP)
   SetWindowIcon: procedure(image: TImage); cdecl;
   // Set title for window (only PLATFORM_DESKTOP)
@@ -973,7 +973,7 @@ var
   GetScreenWidth: function: Integer; cdecl;
   // Get current screen height
   GetScreenHeight: function: Integer; cdecl;
-  // Get number of connected xtors
+  // Get number of connected monitors
   GetMonitorCount: function: Integer; cdecl;
   // Get specified monitor position
   GetMonitorPosition: function(monitor: Integer): TVector2; cdecl;
@@ -2153,11 +2153,18 @@ begin
   WindowShouldClose := GetAddress('WindowShouldClose');
   CloseWindow := GetAddress('CloseWindow');
   IsWindowReady := GetAddress('IsWindowReady');
-  IsWindowMinimized := GetAddress('IsWindowMinimized');
-  IsWindowResized := GetAddress('IsWindowResized');
-  IsWindowHidden := GetAddress('IsWindowHidden');
   IsWindowFullscreen := GetAddress('IsWindowFullscreen');
+  IsWindowHidden := GetAddress('IsWindowHidden');
+  IsWindowMinimized := GetAddress('IsWindowMinimized');
+  IsWindowMaximized := GetAddress('IsWindowMaximized');
+  IsWindowResized := GetAddress('IsWindowResized');
+  IsWindowState := GetAddress('IsWindowState');
+  SetWindowStare := GetAddress('SetWindowStare');
+  ClearWindowState := GetAddress('ClearWindowState');
   ToggleFullscreen := GetAddress('ToggleFullscreen');
+  MaximizeWindow := GetAddress('MaximizeWindow');
+  MinimizeWindow := GetAddress('MinimizeWindow');
+  RestoreWindow := GetAddress('RestoreWindow');
   SetWindowIcon := GetAddress('SetWindowIcon');
   SetWindowTitle := GetAddress('SetWindowTitle');
   SetWindowPosition := GetAddress('SetWindowPosition');
@@ -2168,19 +2175,23 @@ begin
   GetScreenWidth := GetAddress('GetScreenWidth');
   GetScreenHeight := GetAddress('GetScreenHeight');
   GetMonitorCount := GetAddress('GetMonitorCount');
+  GetMonitorPosition := GetAddress('GetMonitorPosition');
   GetMonitorWidth := GetAddress('GetMonitorWidth');
   GetMonitorHeight := GetAddress('GetMonitorHeight');
   GetMonitorPhysicalWidth := GetAddress('GetMonitorPhysicalWidth');
   GetMonitorPhysicalHeight := GetAddress('GetMonitorPhysicalHeight');
+  GetMonitorRefreshRate := GetAddress('GetMonitorRefreshRate');
   GetWindowPosition := GetAddress('GetWindowPosition');
   GetMonitorName := GetAddress('GetMonitorName');
-  GetClipboardText := GetAddress('GetClipboardText');
+  GetWindowScaleDPI := GetAddress('GetWindowScaleDPI');
   SetClipboardText := GetAddress('SetClipboardText');
+  GetClipboardText := GetAddress('GetClipboardText');
   ShowCursor := GetAddress('ShowCursor');
   HideCursor := GetAddress('HideCursor');
   IsCursorHidden := GetAddress('IsCursorHidden');
   EnableCursor := GetAddress('EnableCursor');
   DisableCursor := GetAddress('DisableCursor');
+  IsCursorOnScreen := GetAddress('IsCursorOnScreen');
   ClearBackground := GetAddress('ClearBackground');
   BeginDrawing := GetAddress('BeginDrawing');
   EndDrawing := GetAddress('EndDrawing');
