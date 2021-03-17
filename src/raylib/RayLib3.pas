@@ -2159,7 +2159,7 @@ begin
   IsWindowMaximized := GetAddress('IsWindowMaximized');
   IsWindowResized := GetAddress('IsWindowResized');
   IsWindowState := GetAddress('IsWindowState');
-  SetWindowStare := GetAddress('SetWindowStare');
+  SetWindowState := GetAddress('SetWindowState');
   ClearWindowState := GetAddress('ClearWindowState');
   ToggleFullscreen := GetAddress('ToggleFullscreen');
   MaximizeWindow := GetAddress('MaximizeWindow');
