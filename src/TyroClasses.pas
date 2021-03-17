@@ -15,7 +15,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs, fgl,
-  FPImage, FPCanvas, FPImgCanv, pngcomn, FPReadPNG,
+  FPImage, FPCanvas,
   Melodies, RayClasses, TyroSounds, RayLib3;
 
 type

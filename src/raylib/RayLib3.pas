@@ -1379,22 +1379,18 @@ var
 
   // Load image from file into CPU memory (RAM)
   LoadImage: function(const fileName: PUTF8Char): TImage; cdecl;
-  // Load image from Color array data (RGBA - 32bit)
-  LoadImageEx: function(pixels: PColor; width: Integer; height: Integer): TImage; cdecl;
-  // Load image from raw data with parameters
-  LoadImagePro: function(data: Pointer; width: Integer; height: Integer; format: Integer): TImage; cdecl;
   // Load image from RAW file data
   LoadImageRaw: function(const fileName: PUTF8Char; width: Integer; height: Integer; format: Integer; headerSize: Integer): TImage; cdecl;
+  // Load image sequence from file (frames appended to image.data)
+  LoadImageAnim: function(const fileName: PUTF8Char; frames: Integer): TImage; cdecl;
+  // Load image from memory buffer, fileType refers to extension: i.e. "png"
+  LoadImageFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer): TImage; cdecl;
   // Unload image from CPU memory (RAM)
   UnloadImage: procedure(image: TImage); cdecl;
   // Export image data to file
   ExportImage: procedure(image: TImage; const fileName: PUTF8Char); cdecl;
   // Export image as code file defining an array of bytes
   ExportImageAsCode: procedure(image: TImage; const fileName: PUTF8Char); cdecl;
-  // Get pixel data from image as a Color struct array
-  LoadImageColors: function(image: TImage): PColor; cdecl;
-  // Get pixel data from image as Vector4 array (float normalized)
-  GetImageDataNormalized: function(image: TImage): PVector4; cdecl;
 
   { Image generation functions }
 
@@ -1429,16 +1425,16 @@ var
   ImageToPOT: procedure(image: PImage; fillColor: TColor); cdecl;
   // Convert image data to desired format
   ImageFormat: procedure(image: PImage; newFormat: Integer); cdecl;
-  // Apply alpha mask to image
-  ImageAlphaMask: procedure(image: PImage; alphaMask: TImage); cdecl;
-  // Clear alpha channel to desired color
-  ImageAlphaClear: procedure(image: PImage; color: TColor; threshold: Single); cdecl;
-  // Crop image depending on alpha value
-  ImageAlphaCrop: procedure(image: PImage; threshold: Single); cdecl;
-  // Premultiply alpha channel
-  ImageAlphaPremultiply: procedure(image: PImage); cdecl;
   // Crop an image to a defined rectangle
   ImageCrop: procedure(image: PImage; crop: TRectangle); cdecl;
+  // Crop image depending on alpha value
+  ImageAlphaCrop: procedure(image: PImage; threshold: Single); cdecl;
+  // Clear alpha channel to desired color
+  ImageAlphaClear: procedure(image: PImage; color: TColor; threshold: Single); cdecl;
+  // Apply alpha mask to image
+  ImageAlphaMask: procedure(image: PImage; alphaMask: TImage); cdecl;
+  // Premultiply alpha channel
+  ImageAlphaPremultiply: procedure(image: PImage); cdecl;
   // Resize image (Bicubic scaling algorithm)
   ImageResize: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl;
   // Resize image (Nearest-Neighbor scaling algorithm)
@@ -1469,10 +1465,16 @@ var
   ImageColorBrightness: procedure(image: PImage; brightness: Integer); cdecl;
   // Modify image color: replace color
   ImageColorReplace: procedure(image: PImage; color: TColor; replace: TColor); cdecl;
+  // Get pixel data from image as a Color struct array
+  LoadImageColors: function(image: TImage): PColor; cdecl;
   // Extract color palette from image to maximum size (memory should be freed)
-  ImageExtractPalette: function(image: TImage; maxPaletteSize: Integer; extractCount: PInteger): PColor; cdecl;
+  LoadImagePalette: function(image: TImage; maxPaletteSize: Integer; colorsCount: PInteger): PColor; cdecl;
   // Get image alpha border rectangle
   GetImageAlphaBorder: function(image: TImage; threshold: Single): TRectangle; cdecl;
+  // Unload color data loaded with LoadImageColors()
+  UnloadImageColors: procedure(Colors: PColor); cdecl;
+  // Unload colors palette loaded with LoadImagePalette()
+  UnloadImagePalette: procedure(Colors: PColor); cdecl;
 
   { Image drawing functions }
   // NOTE: Image software-rendering functions (CPU)
@@ -1501,10 +1503,10 @@ var
   ImageDrawRectangleLines: procedure(dst: PImage; rec: TRectangle; thick: Integer; color: TColor); cdecl;
   // Draw a source image within a destination image (tint applied to source)
   ImageDraw: procedure(dst: PImage; src: TImage; srcRec: TRectangle; dstRec: TRectangle; tint: TColor); cdecl;
-  // Draw text (default font) within an image (destination)
-  ImageDrawText: procedure(dst: PImage; position: TVector2; const text: PUTF8Char; fontSize: Integer; color: TColor); cdecl;
+  // Draw text (using default font) within an image (destination)
+  ImageDrawText: procedure(dst: PImage; const text: PUTF8Char; posX, posY: Integer; fontSize: Integer; color: TColor); cdecl;
   // Draw text (custom sprite font) within an image (destination)
-  ImageDrawTextEx: procedure(dst: PImage; position: TVector2; font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single; color: TColor); cdecl;
+  ImageDrawTextEx: procedure(dst: PImage; font: TFont; const text: PUTF8Char; position: TVector2; fontSize: Single; spacing: Single; color: TColor); cdecl;
 
   { Texture loading functions }
   // NOTE: These functions require GPU access
@@ -1523,6 +1525,8 @@ var
   UnloadRenderTexture: procedure(target: TRenderTexture2D); cdecl;
   // Update GPU texture with new data
   UpdateTexture: procedure(texture: TTexture2D; const pixels: Pointer); cdecl;
+  // Update GPU texture rectangle with new data
+  UpdateTextureRec: procedure(texture: TTexture2D; rec: TRectangle; const pixels: Pointer); cdecl;
   // Get pixel data from GPU texture and return an Image
   GetTextureData: function(texture: TTexture2D): TImage; cdecl;
   // Get pixel data from screen buffer and return an Image (screenshot)
@@ -1546,21 +1550,23 @@ var
   // Draw a Texture2D with extended parameters
   DrawTextureEx: procedure(texture: TTexture2D; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl;
   // Draw a part of a texture defined by a rectangle
-  DrawTextureRec: procedure(texture: TTexture2D; sourceRec: TRectangle; position: TVector2; tint: TColor); cdecl;
+  DrawTextureRec: procedure(texture: TTexture2D; source: TRectangle; position: TVector2; tint: TColor); cdecl;
   // Draw texture quad with tiling and offset parameters
   DrawTextureQuad: procedure(texture: TTexture2D; tiling: TVector2; offset: TVector2; quad: TRectangle; tint: TColor); cdecl;
+  // Draw part of a texture (defined by a rectangle) with rotation and scale tiled into dest.
+  DrawTextureTiled: procedure(texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; Scale: Single; tint: TColor); cdecl;
   // Draw a part of a texture defined by a rectangle with 'pro' parameters
-  DrawTexturePro: procedure(texture: TTexture2D; sourceRec: TRectangle; destRec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
+  DrawTexturePro: procedure(texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
   // Draws a texture (or part of it) that stretches or shrinks nicely
-  DrawTextureNPatch: procedure(texture: TTexture2D; nPatchInfo: TNPatchInfo; destRec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
+  DrawTextureNPatch: procedure(texture: TTexture2D; nPatchInfo: TNPatchInfo; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
 
   { Image/Texture misc functions }
 
-  // Get pixel data size in bytes (image or texture)
-  GetPixelDataSize: function(width: Integer; height: Integer; format: Integer): Integer; cdecl;
 
   { Color-related functions }
 
+  // Color fade-in or fade-out, alpha goes from 0.0f to 1.0f
+  Fade: function(color: TColor; Alpha: Single): TColor; cdecl;
   // Returns hexadecimal value for a Color
   ColorToInt: function(color: TColor): Integer; cdecl;
   // Returns color normalized as float [0..1]
@@ -1571,10 +1577,18 @@ var
   ColorToHSV: function(color: TColor): TVector3; cdecl;
   // Returns a Color from HSV values
   ColorFromHSV: function(hsv: TVector3): TColor; cdecl;
+  // Returns color with alpha applied, alpha goes from 0.0f to 1.0f
+  ColorAlpha: function(color: TColor; Alpha: Single): TColor; cdecl;
+  // Returns src alpha-blended into dst color with tint
+  ColorAlphaBlend: function(dst, src, tint: TColor): TColor; cdecl;
   // Returns a Color struct from hexadecimal value
   GetColor: function(hexValue: Integer): TColor; cdecl;
-  // Color fade-in or fade-out, alpha goes from 0.0f to 1.0f
-  Fade: function(color: TColor; Alpha: Single): TColor; cdecl;
+  // Get Color from a source pixel pointer of certain format
+  GetPixelColor: function(srcPtr: Pointer; format: Integer): TColor; cdecl;
+  // Set color formatted into destination pixel pointer
+  SetPixelColor: function(dstPtr: Pointer; Color: TColor; format: Integer): TColor; cdecl;
+  // Get pixel data size in bytes (image or texture)
+  GetPixelDataSize: function(width: Integer; height: Integer; format: Integer): Integer; cdecl;
 
 //------------------------------------------------------------------------------------
 // Font Loading and Text Drawing Functions (Module: text)
@@ -2298,14 +2312,11 @@ begin
   CheckCollisionPointCircle := GetAddress('CheckCollisionPointCircle');
   CheckCollisionPointTriangle := GetAddress('CheckCollisionPointTriangle');
   LoadImage := GetAddress('LoadImage');
-  LoadImageEx := GetAddress('LoadImageEx');
-  LoadImagePro := GetAddress('LoadImagePro');
   LoadImageRaw := GetAddress('LoadImageRaw');
   UnloadImage := GetAddress('UnloadImage');
   ExportImage := GetAddress('ExportImage');
   ExportImageAsCode := GetAddress('ExportImageAsCode');
   LoadImageColors := GetAddress('LoadImageColors');
-  GetImageDataNormalized := GetAddress('GetImageDataNormalized');
   GenImageColor := GetAddress('GenImageColor');
   GenImageGradientV := GetAddress('GenImageGradientV');
   GenImageGradientH := GetAddress('GenImageGradientH');
@@ -2340,7 +2351,6 @@ begin
   ImageColorContrast := GetAddress('ImageColorContrast');
   ImageColorBrightness := GetAddress('ImageColorBrightness');
   ImageColorReplace := GetAddress('ImageColorReplace');
-  ImageExtractPalette := GetAddress('ImageExtractPalette');
   GetImageAlphaBorder := GetAddress('GetImageAlphaBorder');
   ImageClearBackground := GetAddress('ImageClearBackground');
   ImageDrawPixel := GetAddress('ImageDrawPixel');
