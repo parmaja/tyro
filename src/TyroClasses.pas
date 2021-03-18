@@ -289,6 +289,7 @@ type
     procedure ShowWindow(W, H: Integer);
     procedure HideWindow;
   public
+    Running: Boolean;
     WindowVisible: Boolean;
     Title: string;
     FileName: string;//that to run in script
@@ -778,16 +779,15 @@ end;
 
 function TTyroMain.GetActive: Boolean;
 begin
-  if WindowVisible then
-    Result := not WindowShouldClose()
-  else
-    Result := (FScript <> nil) and FScript.Active;
+  Result := Running or ((FScript <> nil) and FScript.Active);
 end;
 
 procedure TTyroMain.ShowWindow(W, H: Integer);
 begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(W, H, PChar(Title));
+  WriteLn('InitWindow');
+  WriteLn(ThreadID);
   SetTargetFPS(cFramePerSeconds);
   ShowCursor();
   WindowVisible := True;
@@ -864,7 +864,8 @@ procedure TTyroMain.Start;
 var
   ScriptType: TScriptType;
 begin
-  //ShowWindow(ScreenWidth, ScreenHeight); with option to show window /w
+  Running := True;
+//ShowWindow(ScreenWidth, ScreenHeight); with option to show window /w
   if FileName <> '' then
   begin
     ScriptType := ScriptTypes.FindByExtension(ExtractFileExt(FileName));
@@ -894,12 +895,14 @@ begin
 
   if WindowVisible then
   begin
+    WriteLN(ThreadID);
+    if WindowShouldClose() then
+      Running := False;
+
     ProcessQueue;
 
     BeginDrawing;
     ClearBackground(DefaultBackground);
-
-
 
     try
       {im := LoadImageEx(PColor(FScript.FPImage.Data), FScript.FPImage.Width, FScript.FPImage.Height);
@@ -938,6 +941,7 @@ end;
 
 procedure TTyroMain.Stop;
 begin
+  Running := False;
   if FScript <> nil then
   begin
     FScript.Terminate;
