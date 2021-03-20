@@ -78,6 +78,7 @@ type
     procedure ExecuteQueueObject;
     procedure DoError(S: string);
     procedure Run; override;
+  protected
     procedure AddQueueObject(AQueueObject: TQueueObject); override;
     //canvas functions
     function Clear_func(L: Plua_State): Integer; cdecl;
@@ -391,9 +392,12 @@ begin
   inherited;
 end;
 
+threadvar
+  ThreadRunning: TTyroScript;
+
 procedure HookCount(L: Plua_State; ar: Plua_Debug); cdecl;
 begin
-  if not Main.Active then
+  if not ThreadRunning.Active then
     luaL_error(L, PChar('Terminated by user!'));
 end;
 
@@ -402,6 +406,7 @@ var
   i: Integer;
 begin
   inherited;
+  WriteLn(ThreadID);
   LuaState := lua_newstate(@LuaAlloc, nil);
   lual_openlibs(LuaState);
   lua_sethook(LuaState, @HookCount, LUA_MASKCOUNT, 100);
@@ -466,6 +471,8 @@ var
   r: integer;
   Msg: string;
 begin
+  WriteLn(ThreadID);
+  ThreadRunning := Self;
   //WriteLn('Run Script');
   //Sleep(1000);
   r := luaL_loadstring(LuaState, PChar(ScriptText.Text));

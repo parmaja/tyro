@@ -41,6 +41,7 @@ type
     procedure Run; virtual; abstract;
     procedure AfterRun; virtual;
     procedure AddQueueObject(AQueueObject: TQueueObject); virtual;
+    procedure TerminatedSet; override;
   public
     constructor Create; virtual;
     destructor Destroy; override;
@@ -786,8 +787,6 @@ procedure TTyroMain.ShowWindow(W, H: Integer);
 begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(W, H, PChar(Title));
-  WriteLn('InitWindow');
-  WriteLn(ThreadID);
   SetTargetFPS(cFramePerSeconds);
   ShowCursor();
   WindowVisible := True;
@@ -895,9 +894,12 @@ begin
 
   if WindowVisible then
   begin
-    WriteLN(ThreadID);
     if WindowShouldClose() then
+    begin
       Running := False;
+      if (FScript <> nil) then
+        FScript.Terminate;
+    end;
 
     ProcessQueue;
 
@@ -991,6 +993,12 @@ begin
   FreeAndNil(ScriptText);
   //FreeAndNil(Canvas);
   inherited Destroy;
+end;
+
+procedure TTyroScript.TerminatedSet;
+begin
+  inherited TerminatedSet;
+  FActive := False;
 end;
 
 procedure TTyroScript.Execute;
