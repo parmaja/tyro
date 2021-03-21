@@ -4,6 +4,10 @@ unit RayLib3;
 {$ENDIF}
 {$M+}{$H+}
 
+{$MINENUMSIZE 4} //All enum must be sized as Integer
+{$Z4}
+{$A8}
+
 {**
  *  This file is part of Tyro project, ported from C header raylib.h
  *
@@ -98,11 +102,6 @@ uses
   Types, Classes, SysUtils,
   mnLibraries; // take it from github/parmaja/minilib
 
-{$MINENUMSIZE 4} //All enum must be sized as Integer
-{$Z4}
-{$A8}
-
-
 type
   PPUTF8Char = ^PUTF8Char;
 
@@ -157,7 +156,8 @@ type
   TVector2 = packed record
     X: Single;
     Y: Single;
-    constructor Create(AX, AY: Single);
+    constructor Create(AX, AY: Single); overload;
+    constructor Create(I: Int64); overload;
   end;
   PVector2 = ^TVector2;
 
@@ -488,19 +488,19 @@ type
   // NOTE: Every bit registers one state (use it with bit masks)
   // By default all flags are set to 0
   TConfigFlag = (
-    FLAG_VSYNC_HINT         = $00000040,   // Set to try enabling V-Sync on GPU
     FLAG_FULLSCREEN_MODE    = $00000002,   // Set to run program in fullscreen
     FLAG_WINDOW_RESIZABLE   = $00000004,   // Set to allow resizable window
     FLAG_WINDOW_UNDECORATED = $00000008,   // Set to disable window decoration (frame and buttons)
+    FLAG_WINDOW_TRANSPARENT = $00000010,   // Set to allow transparent framebuffer
+    FLAG_MSAA_4X_HINT       = $00000020,   // Set to try enabling MSAA 4X
+    FLAG_VSYNC_HINT         = $00000040,   // Set to try enabling V-Sync on GPU
     FLAG_WINDOW_HIDDEN      = $00000080,   // Set to hide window
+    FLAG_WINDOW_ALWAYS_RUN  = $00000100,   // Set to allow windows running while minimized
     FLAG_WINDOW_MINIMIZED   = $00000200,   // Set to minimize window (iconify)
     FLAG_WINDOW_MAXIMIZED   = $00000400,   // Set to maximize window (expanded to monitor)
     FLAG_WINDOW_UNFOCUSED   = $00000800,   // Set to window non focused
     FLAG_WINDOW_TOPMOST     = $00001000,   // Set to window always on top
-    FLAG_WINDOW_ALWAYS_RUN  = $00000100,   // Set to allow windows running while minimized
-    FLAG_WINDOW_TRANSPARENT = $00000010,   // Set to allow transparent framebuffer
     FLAG_WINDOW_HIGHDPI     = $00002000,   // Set to support HighDPI
-    FLAG_MSAA_4X_HINT       = $00000020,   // Set to try enabling MSAA 4X
     FLAG_INTERLACED_HINT    = $00010000    // Set to try enabling interlaced video format (for V3D)
   );
 
@@ -635,9 +635,9 @@ type
   // Android buttons
   TAndroidButton = (
     KEY_BACK            = 4,
-    KEY_MENU            = 82,
     KEY_VOLUME_UP       = 24,
-    KEY_VOLUME_DOWN     = 25
+    KEY_VOLUME_DOWN     = 25,
+    KEY_MENU            = 82
   );
 
   // Mouse buttons
@@ -1204,7 +1204,11 @@ var
   // Returns mouse position Y
   GetMouseY: function: Integer; cdecl;
   // Returns mouse position XY
+  {$ifdef FPC}
   GetMousePosition: function: TVector2; cdecl;
+  {$else}
+  GetMousePosition: function: Int64; cdecl; //Stupid Delphi
+  {$endif}
   // Set mouse position XY
   SetMousePosition: procedure(x: Integer; y: Integer); cdecl;
   // Set mouse offset
@@ -2087,7 +2091,8 @@ implementation
 
 function Vector2Of(X, Y: Single): TVector2;
 begin
-  Result := TVector2.Create(X, Y);
+  Result.X := X;
+  Result.Y := Y;
 end;
 
 { TRectangle }
@@ -2134,6 +2139,11 @@ constructor TVector2.Create(AX, AY: Single);
 begin
   X := AX;
   Y := AY;
+end;
+
+constructor TVector2.Create(I: Int64);
+begin
+  Self := TVector2(i);
 end;
 
 { TmncRayLib }

@@ -1,6 +1,9 @@
 program audio_raw_stream;
 
 {$APPTYPE CONSOLE}
+{$MINENUMSIZE 4} //All enum must be sized as Integer
+{$Z4}
+{$A8}
 
 uses
   System.SysUtils, RayLib3;
@@ -35,6 +38,7 @@ var
   writeCursor: Integer;
   writeLength: Integer;
   readLength: Integer;
+  s: utf8string;
 begin
   RayLib.Load;
 
@@ -53,7 +57,7 @@ begin
   PlayAudioStream(Stream);        // Start processing stream buffer (no data loaded currently)
 
   // Position read in to determine next frequency
-  mousePosition := TVector2.Create( -100.0, -100.0 );
+  mousePosition := Vector2Of( -100, -100 );
 
   // Cycles per second (hz)
   Frequency := 440.0;
@@ -67,7 +71,7 @@ begin
   // Computed size in samples of the sine wave
   waveLength := 1;
 
-  position := TVector2.Create( 0, 0 );
+  position := Vector2Of( 0, 0 );
 
   SetTargetFPS(30);               // Set our game to run at 30 frames-per-second
 
@@ -82,8 +86,7 @@ begin
     if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) then
     begin
         // Sample mouse input.
-        mousePosition := GetMousePosition();
-
+        mousePosition := TVector2(GetMousePosition());
         fp := mousePosition.y;
         frequency := 40 + fp;
     end;
@@ -148,7 +151,8 @@ begin
 
     ClearBackground(RAYWHITE);
 
-    DrawText(PUTF8Char(Format('sine frequency: %d', [Round(frequency)])), GetScreenWidth() - 220, 10, 20, RED);
+    s := Format('sine frequency: %d', [Round(frequency)]);
+    DrawText(PUtf8Char(s), GetScreenWidth() - 220, 10, 20, RED);
     DrawText('click mouse button to change frequency', 10, 10, 20, DARKGRAY);
 
     // Draw the current buffer state proportionate to the screen
