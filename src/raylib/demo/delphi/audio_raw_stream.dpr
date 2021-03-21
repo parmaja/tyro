@@ -1,14 +1,9 @@
 program audio_raw_stream;
-//ported from offical c file in raylib examples
-{$mode objfpc}{$H+}
+
+{$APPTYPE CONSOLE}
 
 uses
-  {$IFDEF UNIX}
-  cthreads,
-  {$ENDIF}
-  SysUtils,
-  Classes,
-  RayLib3;
+  System.SysUtils, RayLib3;
 
 const
   MAX_SAMPLES            =   512;
@@ -19,9 +14,15 @@ const
   ScreenWidth = 800;
   ScreenHeight = 450;
 
+  MaxSmallint = High(SmallInt)-1;
+
+type
+  TSmallintArray = array[0..MaxSmallint] of SmallInt;
+  PSmallintArray = ^TSmallintArray;
+
 var
   Stream: TAudioStream;
-  Data, WriteBuf: PSmallInt;
+  Data, WriteBuf: PSmallintArray;
   mousePosition: TVector2;
   Frequency: Single;
   OldFrequency: Single;
@@ -101,8 +102,9 @@ begin
           waveLength := 1;
 
         // Write sine wave.
+
         for i := 0 to waveLength * 2 - 1 do
-          Data[i] := Round((Sin(((2 * PI * i / waveLength))) * MaxSmallint));
+          TSmallintArray(Data^)[i] := Round((Sin(((2 * PI * i / waveLength))) * High(SmallInt)-1));
 
         // Scale read cursor's position to minimize transition artifacts
         readCursor := Round(readCursor * (waveLength div oldWavelength));
@@ -127,7 +129,7 @@ begin
             writeLength := readLength;
 
           // Write the slice
-          Move((Data + readCursor)^, (WriteBuf + writeCursor)^, writeLength * sizeof(SmallInt));
+          Move(Data^[readCursor], WriteBuf^[writeCursor], writeLength * sizeof(SmallInt));
 
           // Update cursors and loop audio
           readCursor := (readCursor + writeLength) div waveLength;
@@ -146,7 +148,7 @@ begin
 
     ClearBackground(RAYWHITE);
 
-    DrawText(PChar(Format('sine frequency: %d', [Round(frequency)])), GetScreenWidth() - 220, 10, 20, RED);
+    DrawText(PUTF8Char(Format('sine frequency: %d', [Round(frequency)])), GetScreenWidth() - 220, 10, 20, RED);
     DrawText('click mouse button to change frequency', 10, 10, 20, DARKGRAY);
 
     // Draw the current buffer state proportionate to the screen
@@ -172,6 +174,4 @@ begin
 
   CloseWindow();              // Close window and OpenGL context
   //--------------------------------------------------------------------------------------
-
 end.
-

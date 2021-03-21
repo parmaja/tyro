@@ -124,4 +124,4 @@ v50t120l4o3e1&e2&e8l16rc+d8rd+e1&e2&e8rc+d8rd+e1&e2&e8rd+d8rc+c1&c2&c8rc+d8rd+e1
 
 
 --music.mml(WilliamTell)
-music.mml(PinkPanther1, PinkPanther2)
+music.mml(PinkPanther2)

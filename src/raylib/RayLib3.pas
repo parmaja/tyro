@@ -74,7 +74,7 @@ unit RayLib3;
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
-*
+	*
 *   Permission is granted to anyone to use this software for any purpose, including commercial
 *   applications, and to alter it and redistribute it freely, subject to the following restrictions:
 *
@@ -93,14 +93,6 @@ interface
 {*
 * TODO:
 *       Change to use enum types inside functions
-*
-* Tools used to translate
-*       https://github.com/neslib/Chet
-*       http://www.astonshell.com/freeware/c2pas32/
-*
-* Compitation:
-*       https://github.com/tazdij/raylib-pas
-*       https://github.com/drezgames/raylib-pascal
 *}
 uses
   Types, Classes, SysUtils,

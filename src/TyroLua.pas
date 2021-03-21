@@ -662,6 +662,7 @@ begin
 end;
 
 initialization
+  ThreadRunning := nil;
   Main.RegisterLanguage('Lua', '.lua', TLuaScript);
 end.
 
