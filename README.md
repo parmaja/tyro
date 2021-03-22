@@ -43,7 +43,8 @@ Use FreePascal 3.x or Lazarus with it
 
 # Libraries
 
-[minilib](https://sourceforge.net/p/minilib/)
+You need only MiniCommons package
+[minilib](https://github.com/parmaja/minilib)
 
 # Dependencies
 

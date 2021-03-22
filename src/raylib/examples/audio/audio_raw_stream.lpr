@@ -52,7 +52,7 @@ begin
   PlayAudioStream(Stream);        // Start processing stream buffer (no data loaded currently)
 
   // Position read in to determine next frequency
-  mousePosition := TVector2.Create( -100.0, -100.0 );
+  mousePosition := TVector2.Create( -100, -100 );
 
   // Cycles per second (hz)
   Frequency := 440.0;

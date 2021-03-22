@@ -54,6 +54,9 @@
       <OtherUnitFiles Value="..\.."/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
+    <CodeGeneration>
+      <TargetCPU Value="i386"/>
+    </CodeGeneration>
   </CompilerOptions>
   <Debugging>
     <Exceptions>
