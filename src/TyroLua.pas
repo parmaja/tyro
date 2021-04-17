@@ -19,7 +19,7 @@ uses
   Classes, SysUtils,
   lua53, FPImage,
   RayLib3, RayClasses, //remove it
-  TyroSounds, TyroClasses, Melodies;
+  TyroSounds, TyroClasses, Melodies, TyroEngines;
 
 type
   TLuaScript = class;

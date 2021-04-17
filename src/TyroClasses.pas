@@ -121,6 +121,7 @@ type
     property Alpha: Byte read GetAlpha write SetAlpha;
     property BackColor: TColor read FBackColor write SetBackColor;
     property FontSize: Integer read FFontSize write FFontSize;
+    property Texture: TRenderTexture2D read FTexture;
   end;
 
   { TQueueObject }
@@ -148,7 +149,7 @@ type
   protected
     procedure Created; virtual;
   public
-    constructor Create(ACanvas: TTyroCanvas); virtual;
+    constructor Create(ACanvas: TTyroCanvas);
     procedure Execute; override;
     property Canvas: TTyroCanvas read FCanvas;
   end;
@@ -261,7 +262,7 @@ type
   public
     Freq, Period: Integer;
     constructor Create(AFreq, APeriod: Integer);
-    procedure DoExecute; virtual;
+    procedure DoExecute; override;
   end;
 
   { TPlayMusicFileObject }
@@ -270,7 +271,7 @@ type
   public
     FileName: string;
     constructor Create(AFileName: string);
-    procedure DoExecute; virtual;
+    procedure DoExecute; override;
   end;
 
   { TPlayMMLObject }
@@ -290,47 +291,6 @@ type
     procedure DoExecute; override;
   end;
 
-  { TTyroMain }
-
-  TTyroMain = class(TObject)
-  private
-    //FBoard: TTyroImage;
-    function GetActive: Boolean;
-  protected
-    FQueue: TQueueObjects;
-    FScript: TTyroScript;
-    FScriptTypes: TScriptTypes;
-    FCanvasLock: TCriticalSection;
-    FCanvas: TTyroCanvas;
-  protected
-    DefaultBackground: raylib3.TColor;
-
-    property Queue: TQueueObjects read FQueue;
-    property ScriptTypes: TScriptTypes read FScriptTypes;
-    procedure ShowWindow(W, H: Integer);
-    procedure HideWindow;
-  public
-    Running: Boolean;
-    WindowVisible: Boolean;
-    Title: string;
-    FileName: string;//that to run in script
-    WorkSpace: string;
-    constructor Create;
-    destructor Destroy; virtual;
-    procedure Start;
-    procedure Stop;
-    procedure ProcessQueue;
-    procedure Run;
-    procedure Loop;
-    property Canvas: TTyroCanvas read FCanvas;
-    //property Board: TTyroImage read FBoard;
-    property Active: Boolean read GetActive;
-
-    procedure RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
-
-    property CanvasLock: TCriticalSection read FCanvasLock;
-  end;
-
   function IntToFPColor(I: Integer): TFPColor;
   function FPColorToInt(C: TFPColor): Integer;
 
@@ -347,57 +307,6 @@ const
 
 var
   Lock: TCriticalSection = nil;
-  Main : TTyroMain = nil;
-
-//Contros
-type
-  TUTF8Char = String[7]; // UTF-8 character is at most 6 bytes plus a #0
-
-  TScrollbarType = (sbtHorizontal, sbtVertical);
-  TScrollbarTypes = set of TScrollbarType;
-
-  TScrollCode = (
-    scrollTOP,
-    scrollBOTTOM,
-    scrollLINEDOWN,
-    scrollLINEUP,
-    scrollPAGEDOWN,
-    scrollPAGEUP,
-    scrollTHUMBPOSITION,
-    scrollTHUMBTRACK,
-    scrollENDSCROLL
-  );
-
-
-  { TTyroControl }
-
-  TTyroControl = class(TObject)
-  private
-  protected
-    IsCreated: Boolean;
-    Focused: Boolean;
-    function ClientWidth: Integer;
-    function ClientHeight: Integer;
-
-    procedure ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
-    procedure SetScrollRange(Which: TScrollbarType; AMin, AMax: Integer; APage: Integer);
-    procedure SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
-
-    procedure SetBounds(Left, Top, Width, Height: Integer); virtual;
-    procedure Invalidate; virtual;
-    procedure Paint(ACanvas: TTyroCanvas); virtual;
-    procedure Resize; virtual;
-    procedure KeyPress(var Key: TUTF8Char); virtual;
-    procedure KeyDown(var Key: word; Shift: TShiftState); virtual;
-    procedure KeyUp(var Key: word; Shift: TShiftState); virtual;
-    procedure CreateWnd; virtual;
-    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
-    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
-    procedure MouseMove(Shift: TShiftState; x, y: integer); virtual;
-  public
-    constructor Create(AParent: TTyroControl); virtual;
-    destructor Destroy; override;
-  end;
 
 procedure Log(S: string);
 function RayColorOf(Color: TFPColor): TRGBAColor;
@@ -405,7 +314,7 @@ function RayColorOf(Color: TFPColor): TRGBAColor;
 implementation
 
 uses
-  minibidi;
+  TyroEngines, minibidi;
 
 procedure Log(S: string);
 begin
@@ -468,98 +377,6 @@ begin
   Result := Result or C.RGBA.Green;
   Result := Result shl 8;
   Result := Result or C.RGBA.Red;
-end;
-
-{ TTyroControl }
-
-function TTyroControl.ClientWidth: Integer;
-begin
-
-end;
-
-function TTyroControl.ClientHeight: Integer;
-begin
-
-end;
-
-procedure TTyroControl.ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
-begin
-
-end;
-
-procedure TTyroControl.SetScrollRange(Which: TScrollbarType; AMin, AMax: Integer; APage: Integer);
-begin
-
-end;
-
-procedure TTyroControl.SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
-begin
-
-end;
-
-procedure TTyroControl.SetBounds(Left, Top, Width, Height: Integer);
-begin
-
-end;
-
-procedure TTyroControl.Invalidate;
-begin
-
-end;
-
-procedure TTyroControl.Paint(ACanvas: TTyroCanvas);
-begin
-
-end;
-
-procedure TTyroControl.Resize;
-begin
-
-end;
-
-procedure TTyroControl.KeyPress(var Key: TUTF8Char);
-begin
-
-end;
-
-procedure TTyroControl.KeyDown(var Key: word; Shift: TShiftState);
-begin
-
-end;
-
-procedure TTyroControl.KeyUp(var Key: word; Shift: TShiftState);
-begin
-
-end;
-
-procedure TTyroControl.CreateWnd;
-begin
-
-end;
-
-procedure TTyroControl.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer);
-begin
-
-end;
-
-procedure TTyroControl.MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer);
-begin
-
-end;
-
-procedure TTyroControl.MouseMove(Shift: TShiftState; x, y: integer);
-begin
-
-end;
-
-constructor TTyroControl.Create(AParent: TTyroControl);
-begin
-
-end;
-
-destructor TTyroControl.Destroy;
-begin
-  inherited Destroy;
 end;
 
 { TTyroImage }
@@ -1012,193 +829,6 @@ begin
   FTextColor.RGBA.Green := AValue.RGBA.Green;
   FTextColor.RGBA.Blue := AValue.RGBA.Blue;
   //No alpha
-end;
-
-{ TTyroMain }
-
-function TTyroMain.GetActive: Boolean;
-begin
-  Result := Running or ((FScript <> nil) and FScript.Active);
-end;
-
-procedure TTyroMain.ShowWindow(W, H: Integer);
-begin
-  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  InitWindow(W, H, PChar(Title));
-  SetTargetFPS(cFramePerSeconds);
-  ShowCursor();
-  WindowVisible := True;
-  FCanvas := TTyroCanvas.Create(W, H);
-  //FBoard := TTyroImage.Create(W, H);
-end;
-
-procedure TTyroMain.HideWindow;
-begin
-  if WindowVisible then
-    CloseWindow;
-end;
-
-procedure TTyroMain.ProcessQueue;
-var
-  p: TQueueObject;
-  c: Integer;
-  fpd: Double;
-  ft, ft2: Double;
-begin
-  if Canvas <> nil then
-  begin
-    CanvasLock.Enter;
-    try
-      ft := GetTime();
-      fpd := (1 / cFramePerSeconds);
-      Canvas.BeginDraw;
-      c := 0;
-      while Queue.Count > 0 do
-      begin
-        Lock.Enter;
-        try
-          p := Queue.Extract(Queue[0]);
-        finally
-          Lock.Leave;
-        end;
-        p.Execute;
-        p.Free;
-        Inc(c);
-        ft2 := GetTime() - ft;
-        if ft2 >= fpd then
-        begin
-          break;
-        end;
-      end;
-      Canvas.EndDraw;
-    finally
-      CanvasLock.Leave;
-    end;
-  end;
-end;
-
-constructor TTyroMain.Create;
-begin
-  inherited Create;
-  FCanvasLock := TCriticalSection.Create;
-  RayLib.Load;
-  //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
-  SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
-  FQueue := TQueueObjects.Create(True);
-  FScriptTypes := TScriptTypes.Create(true);
-  {$IFDEF DARWIN}
-  SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
-  {$IFEND}
-  DefaultBackground := TColor.Create(220, 230, 240, 0);
-end;
-
-destructor TTyroMain.Destroy;
-begin
-  //Stop;
-  HideWindow;
-  FreeAndNil(FCanvas);
-  //FreeAndNil(FBoard);
-  FreeAndNil(FQueue);
-  FreeAndNil(FScriptTypes);
-  FreeAndNil(FCanvasLock);
-  inherited Destroy;
-end;
-
-procedure TTyroMain.Start;
-var
-  ScriptType: TScriptType;
-begin
-  Running := True;
-//ShowWindow(ScreenWidth, ScreenHeight); with option to show window /w
-  if FileName <> '' then
-  begin
-    ScriptType := ScriptTypes.FindByExtension(ExtractFileExt(FileName));
-    if ScriptType <> nil then
-    begin
-      FScript := ScriptType.ScriptClass.Create;
-      if SysUtils.FileExists(FileName) then
-      begin
-        if LeftStr(FileName, 1) = '.' then
-          FileName := ExpandFileName(WorkSpace + FileName);
-        FScript.AssetsFolder := ExtractFilePath(FileName);
-        FScript.LoadFile(FileName);
-      end;
-    end
-    else
-      Log('Type of file not found: ' + FileName);
-  end;
-end;
-
-procedure TTyroMain.Run;
-var
-  t: TTexture2D;
-  //im: TImage;
-begin
-  if (FScript <> nil) and FScript.Suspended then
-    FScript.Start;
-
-  if WindowVisible then
-  begin
-    if WindowShouldClose() then
-    begin
-      Running := False;
-      if (FScript <> nil) then
-        FScript.Terminate;
-    end;
-
-    ProcessQueue;
-
-    CanvasLock.Enter;
-    try
-      BeginDrawing;
-      ClearBackground(DefaultBackground);
-
-      {if Board <> nil then
-      begin
-        t := Board.LoadTexture;
-        DrawTextureRec(t, TRectangle.Create(0, 0, t.width, t.height), TVector2.Create(0, 0), WHITE);
-        UnloadTexture(t);
-      end;}
-
-      with Canvas.FTexture do
-        DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), WHITE);
-
-      ThreadSwitch; //Yield
-    finally
-      CanvasLock.Leave;
-    end;
-    BeginDrawing;
-    Loop;
-    ThreadSwitch; //Yield
-    EndDrawing;
-    RayUpdates.Update;
-  end;
-end;
-
-procedure TTyroMain.Loop;
-begin
-end;
-
-procedure TTyroMain.RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
-var
-  Item: TScriptType;
-begin
-  Item := TScriptType.Create;
-  Item.Title := ATitle;
-  Item.Extention := AExtention;
-  Item.ScriptClass := AScriptClass;
-  FScriptTypes.Add(Item);
-end;
-
-procedure TTyroMain.Stop;
-begin
-  Running := False;
-  if FScript <> nil then
-  begin
-    FScript.Terminate;
-    FScript.WaitFor;
-    FreeAndNil(FScript);
-  end;
 end;
 
 { TTyroScript }

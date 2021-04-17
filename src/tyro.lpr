@@ -27,7 +27,7 @@ uses
   SysUtils, Classes, CustApp,
   TyroClasses, raylib3, RayClasses,
   TyroLua, TyroEditors,
-  TyroSounds, Melodies;  //Add all languages units here
+  TyroSounds, Melodies, TyroControls, TyroEngines;  //Add all languages units here
 
 
 type
