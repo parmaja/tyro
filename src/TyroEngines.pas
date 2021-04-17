@@ -23,7 +23,7 @@ type
     FCanvasLock: TCriticalSection;
     FCanvas: TTyroCanvas;
   protected
-    DefaultBackground: raylib3.TColor;
+    DefaultBackColor: raylib3.TColor;
 
   public
     Running: Boolean;
@@ -132,7 +132,7 @@ begin
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
-  DefaultBackground := TColor.Create(220, 230, 240, 0);
+  DefaultBackColor := TColor.Create(220, 230, 240, 0);
 end;
 
 destructor TTyroMain.Destroy;
@@ -194,7 +194,7 @@ begin
     CanvasLock.Enter;
     try
       BeginDrawing;
-      ClearBackground(DefaultBackground);
+      ClearBackground(DefaultBackColor);
 
       {if Board <> nil then
       begin

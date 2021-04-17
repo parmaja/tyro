@@ -14,7 +14,8 @@ unit TyroControls;
 interface
 
 uses
-  Classes, SysUtils, TyroClasses,
+  Classes, SysUtils,
+  TyroClasses, RayLib3,
   LazUTF8, LCLType;
 
 type
@@ -39,7 +40,9 @@ type
 
   TTyroControl = class(TObject)
   private
-    FBoundRect: TRect;
+    FBoundsRect: TRect;
+    FBackColor: TColor;
+    FTextColor: TColor;
   protected
     IsCreated: Boolean;
     Focused: Boolean;
@@ -62,24 +65,43 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
     procedure MouseMove(Shift: TShiftState; x, y: integer); virtual;
+
+    procedure Created; virtual;
   public
     constructor Create(AParent: TTyroControl); virtual;
     destructor Destroy; override;
-    property BoundRect: TRect read FBoundRect write FBoundRect;
+    property BoundsRect: TRect read FBoundsRect write FBoundsRect;
+    property BackColor: TColor read FBackColor write FBackColor;
+    property TextColor: TColor read FTextColor write FTextColor;
+  end;
+
+  { TTyroWindow }
+
+  TTyroWindow = class(TTyroControl)
+  public
+    procedure Paint(ACanvas: TTyroCanvas); override;
   end;
 
 implementation
+
+{ TTyroWindow }
+
+procedure TTyroWindow.Paint(ACanvas: TTyroCanvas);
+begin
+  inherited;
+  ACanvas.DrawRect(BoundsRect, BackColor, False);
+end;
 
 { TTyroControl }
 
 function TTyroControl.ClientWidth: Integer;
 begin
-  Result := BoundRect.Width;
+  Result := BoundsRect.Width;
 end;
 
 function TTyroControl.ClientHeight: Integer;
 begin
-  Result := BoundRect.Width;
+  Result := BoundsRect.Width;
 end;
 
 procedure TTyroControl.ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
@@ -99,7 +121,7 @@ end;
 
 procedure TTyroControl.SetBounds(Left, Top, Width, Height: Integer);
 begin
-  FBoundRect := Rect(Left, Top, Left + Width, Top + Height);
+  FBoundsRect := Rect(Left, Top, Left + Width, Top + Height);
 end;
 
 procedure TTyroControl.Invalidate;
@@ -147,9 +169,17 @@ begin
 
 end;
 
+procedure TTyroControl.Created;
+begin
+end;
+
 constructor TTyroControl.Create(AParent: TTyroControl);
 begin
-
+  inherited Create;
+  FTextColor := White;
+  FBackColor := Black;
+  Created;
+  IsCreated := True;
 end;
 
 destructor TTyroControl.Destroy;

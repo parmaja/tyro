@@ -113,7 +113,8 @@ type
     procedure DrawPixel(X, Y: Integer; Color: TColor);
     procedure DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
     procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
-    procedure DrawRect(Left: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
+    procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
+    procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean);
     procedure Print(S: string);
     procedure Clear;
     property TextColor: TColor read GetTextColor write SetTextColor;
@@ -773,9 +774,17 @@ begin
     Raylib3.DrawRectangleLines(X, Y, Width, Height, Color);
 end;
 
-procedure TTyroCanvas.DrawRect(Left: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
+procedure TTyroCanvas.DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
 begin
+  if Fill then
+    Raylib3.DrawRectangle(ALeft, ATop, ARight - ALeft, ATop - ABottom, Color)
+  else
+    Raylib3.DrawRectangleLines(ALeft, ATop, ARight - ALeft, ATop - ABottom, Color);
+end;
 
+procedure TTyroCanvas.DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean);
+begin
+  DrawRect(ARectangle.Left, ARectangle.Top, ARectangle.Right, ARectangle.Bottom, Color, Fill);
 end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
@@ -790,7 +799,7 @@ end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
 begin
-
+  RayLib3.DrawLine(X1, Y1, X2, Y2, Color);
 end;
 
 procedure TTyroCanvas.Print(S: string);
