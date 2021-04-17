@@ -1335,7 +1335,7 @@ var
   // Draw ring outline
   DrawRingLines: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
   // Draw a color-filled rectangle
-  DrawRectangle: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl;
+  DrawRectangle: procedure(posX: Integer; posY: Integer; Width: Integer; Height: Integer; Color: TColor); cdecl;
   // Draw a color-filled rectangle (Vector version)
   DrawRectangleV: procedure(position: TVector2; size: TVector2; color: TColor); cdecl;
   // Draw a color-filled rectangle

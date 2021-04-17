@@ -777,9 +777,9 @@ end;
 procedure TTyroCanvas.DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
 begin
   if Fill then
-    Raylib3.DrawRectangle(ALeft, ATop, ARight - ALeft, ATop - ABottom, Color)
+    Raylib3.DrawRectangle(ALeft, ATop, ARight - ALeft, ABottom - ATop, Color)
   else
-    Raylib3.DrawRectangleLines(ALeft, ATop, ARight - ALeft, ATop - ABottom, Color);
+    Raylib3.DrawRectangleLines(ALeft, ATop, ARight - ALeft, ABottom - ATop, Color);
 end;
 
 procedure TTyroCanvas.DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean);

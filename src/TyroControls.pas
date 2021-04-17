@@ -15,6 +15,7 @@ interface
 
 uses
   Classes, SysUtils,
+  mnUtils, mnClasses,
   TyroClasses, RayLib3,
   LazUTF8, LCLType;
 
@@ -38,7 +39,7 @@ type
 
   { TTyroControl }
 
-  TTyroControl = class(TObject)
+  TTyroControl = class abstract(TObject)
   private
     FBoundsRect: TRect;
     FBackColor: TColor;
@@ -56,6 +57,10 @@ type
     procedure SetBounds(Left, Top, Width, Height: Integer); virtual;
     procedure Resize; virtual;
 
+    procedure Created; virtual;
+  public
+    constructor Create(AParent: TTyroControl); virtual;
+    destructor Destroy; override;
     procedure Invalidate; virtual;
     procedure Paint(ACanvas: TTyroCanvas); virtual;
 
@@ -66,18 +71,18 @@ type
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
     procedure MouseMove(Shift: TShiftState; x, y: integer); virtual;
 
-    procedure Created; virtual;
-  public
-    constructor Create(AParent: TTyroControl); virtual;
-    destructor Destroy; override;
     property BoundsRect: TRect read FBoundsRect write FBoundsRect;
     property BackColor: TColor read FBackColor write FBackColor;
     property TextColor: TColor read FTextColor write FTextColor;
   end;
 
+  TTyroControls = class(specialize TmnObjectList<TTyroControl>)
+  public
+  end;
+
   { TTyroWindow }
 
-  TTyroWindow = class(TTyroControl)
+  TTyroForm = class(TTyroControl)
   public
     procedure Paint(ACanvas: TTyroCanvas); override;
   end;
@@ -86,7 +91,7 @@ implementation
 
 { TTyroWindow }
 
-procedure TTyroWindow.Paint(ACanvas: TTyroCanvas);
+procedure TTyroForm.Paint(ACanvas: TTyroCanvas);
 begin
   inherited;
   ACanvas.DrawRect(BoundsRect, BackColor, False);

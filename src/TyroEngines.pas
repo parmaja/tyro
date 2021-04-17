@@ -6,13 +6,34 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs, fgl,
-  RayLib3, RayClasses,
-  TyroClasses;
+  RayLib3, RayClasses, TyroClasses, TyroControls;
 
 type
+
+  { TTyroWindow }
+
+  TTyroWindow = class(TObject)
+  private
+    FCanvas: TTyroCanvas;
+    FControls: TTyroControls;
+  protected
+    DefaultBackColor: TColor;
+    WindowVisible: Boolean;
+  public
+    MyForm: TTyroForm;
+    Title: string;
+    constructor Create;
+    destructor Destroy; override;
+    procedure Paint;
+    procedure ShowWindow(W, H: Integer);
+    procedure HideWindow;
+    property Controls: TTyroControls read FControls;
+    property Canvas: TTyroCanvas read FCanvas;
+  end;
+
   { TTyroMain }
 
-  TTyroMain = class(TObject)
+  TTyroMain = class(TTyroWindow)
   private
     //FBoard: TTyroImage;
     function GetActive: Boolean;
@@ -21,14 +42,9 @@ type
     FScript: TTyroScript;
     FScriptTypes: TScriptTypes;
     FCanvasLock: TCriticalSection;
-    FCanvas: TTyroCanvas;
   protected
-    DefaultBackColor: raylib3.TColor;
-
   public
     Running: Boolean;
-    WindowVisible: Boolean;
-    Title: string;
     FileName: string;//that to run in script
     WorkSpace: string;
     constructor Create;
@@ -38,7 +54,6 @@ type
     procedure ProcessQueue;
     procedure Run;
     procedure Loop;
-    property Canvas: TTyroCanvas read FCanvas;
     //property Board: TTyroImage read FBoard;
     property Active: Boolean read GetActive;
 
@@ -46,8 +61,6 @@ type
 
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
-    procedure ShowWindow(W, H: Integer);
-    procedure HideWindow;
 
     property CanvasLock: TCriticalSection read FCanvasLock;
   end;
@@ -57,14 +70,53 @@ var
 
 implementation
 
-{ TTyroMain }
+{ TTyroWindow }
 
-function TTyroMain.GetActive: Boolean;
+constructor TTyroWindow.Create;
 begin
-  Result := Running or ((FScript <> nil) and FScript.Active);
+  inherited Create;
+  DefaultBackColor := TColor.Create(220, 230, 240, 0);
+  FControls := TTyroControls.Create;
+  MyForm := TTyroForm.Create(nil);
+  MyForm.BoundsRect := Rect(10, 10 , 100, 100);
+  Controls.Add(MyForm);
 end;
 
-procedure TTyroMain.ShowWindow(W, H: Integer);
+destructor TTyroWindow.Destroy;
+begin
+  FreeAndNil(FControls);
+  inherited Destroy;
+end;
+
+procedure TTyroWindow.Paint;
+var
+  aControl: TTyroControl;
+begin
+  BeginDrawing;
+  try
+    ClearBackground(DefaultBackColor);
+
+    {if Board <> nil then
+    begin
+      t := Board.LoadTexture;
+      DrawTextureRec(t, TRectangle.Create(0, 0, t.width, t.height), TVector2.Create(0, 0), WHITE);
+      UnloadTexture(t);
+    end;}
+
+    with Canvas.Texture do
+      DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), WHITE);
+
+    for aControl in Controls do
+    begin
+      aControl.Paint(Canvas);
+    end;
+
+  finally
+    EndDrawing;
+  end;
+end;
+
+procedure TTyroWindow.ShowWindow(W, H: Integer);
 begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(W, H, PChar(Title));
@@ -75,10 +127,17 @@ begin
   //FBoard := TTyroImage.Create(W, H);
 end;
 
-procedure TTyroMain.HideWindow;
+procedure TTyroWindow.HideWindow;
 begin
   if WindowVisible then
     CloseWindow;
+end;
+
+{ TTyroMain }
+
+function TTyroMain.GetActive: Boolean;
+begin
+  Result := Running or ((FScript <> nil) and FScript.Active);
 end;
 
 procedure TTyroMain.ProcessQueue;
@@ -122,9 +181,9 @@ end;
 
 constructor TTyroMain.Create;
 begin
+  RayLib.Load;
   inherited Create;
   FCanvasLock := TCriticalSection.Create;
-  RayLib.Load;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -132,7 +191,6 @@ begin
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
-  DefaultBackColor := TColor.Create(220, 230, 240, 0);
 end;
 
 destructor TTyroMain.Destroy;
@@ -193,19 +251,14 @@ begin
 
     CanvasLock.Enter;
     try
-      BeginDrawing;
-      ClearBackground(DefaultBackColor);
-
+      Paint;
       {if Board <> nil then
       begin
         t := Board.LoadTexture;
         DrawTextureRec(t, TRectangle.Create(0, 0, t.width, t.height), TVector2.Create(0, 0), WHITE);
         UnloadTexture(t);
       end;}
-
-      with Canvas.Texture do
-        DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), WHITE);
-
+      EndDrawing;
       ThreadSwitch; //Yield
     finally
       CanvasLock.Leave;
