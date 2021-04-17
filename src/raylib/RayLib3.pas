@@ -1,6 +1,8 @@
 unit RayLib3;
 {$IFDEF FPC}
 {$MODE delphi}
+{.$modeSwitch advancedrecords}
+{.$modeSwitch arrayOperators}
 {$ENDIF}
 {$M+}{$H+}
 
@@ -105,48 +107,68 @@ uses
 type
   PPUTF8Char = ^PUTF8Char;
 
+  { TRGBAColor }
+
+  TRGBAColor = record
+    Red, Green, Blue, Alpha: Byte;
+  end;
+
   { TColor }
 
   //AColor := TColor.Create($010203FF);
-
   TColor = record
-    constructor Create(ARed, AGreen, ABlue, AAlpha: Byte);overload;
-    constructor Create(AValue: Cardinal); overload;
-    constructor CreateRGBA(RGBA: Cardinal); overload; //stupid idea, but ok :P
+    class operator Implicit(a: Cardinal): TColor;
+    class operator Implicit(a: TRGBAColor): TColor;
+
+    class operator Explicit(a: TRGBAColor): TColor;
+    class operator Explicit(a: Cardinal): TColor;
+
+    class operator Equal(a, b: TColor) : Boolean;
+
     case Cardinal of
       0: (Value: Cardinal);
-      1: (Red, Green, Blue, Alpha: Byte);
+      1: (RGBA: TRGBAColor);
   end;
+
   PColor = ^TColor;
 
-const
-  Lightgray: TColor = (Red: 200; Green: 200; Blue: 200; Alpha: 255);   // Light Gray
-  Gray:      TColor = (Red: 130; Green: 130; Blue: 130; Alpha: 255);   // Gray
-  DarkGray:  TColor = (Red: 80; Green: 80; Blue: 80; Alpha: 255);      // Dark Gray
-  Yellow:    TColor = (Red: 253; Green: 249; Blue: 0; Alpha: 255);     // Yellow
-  Gold:      TColor = (Red: 255; Green: 203; Blue: 0; Alpha: 255);     // Gold
-  Orange:    TColor = (Red: 255; Green: 161; Blue: 0; Alpha: 255);     // Orange
-  Pink:      TColor = (Red: 255; Green: 109; Blue: 194; Alpha: 255);   // Pink
-  Red:       TColor = (Red: 230; Green: 41; Blue: 55; Alpha: 255);     // Red
-  Maroon:    TColor = (Red: 190; Green: 33; Blue: 55; Alpha: 255);     // Maroon
-  Green:     TColor = (Red: 0; Green: 228; Blue: 48; Alpha: 255);      // Green
-  Lime:      TColor = (Red: 0; Green: 158; Blue: 47; Alpha: 255);      // Lime
-  Darkgreen: TColor = (Red: 0; Green: 117; Blue: 44; Alpha: 255);      // Dark Green
-  SkyBlue:   TColor = (Red: 102; Green: 191; Blue: 255; Alpha: 255);   // Sky Blue
-  Blue:      TColor = (Red: 0; Green: 121; Blue: 241; Alpha: 255);     // Blue
-  Darkblue:  TColor = (Red: 0; Green: 82; Blue: 172; Alpha: 255);      // Dark Blue
-  Purple:    TColor = (Red: 200; Green: 122; Blue: 255; Alpha: 255);   // Purple
-  Violet:    TColor = (Red: 135; Green: 60; Blue: 190; Alpha: 255);    // Violet
-  Darkpurple:TColor = (Red: 112; Green: 31; Blue: 126; Alpha: 255);    // Dark Purple
-  Beige:     TColor = (Red: 211; Green: 176; Blue: 131; Alpha: 255);   // Beige
-  Brown:     TColor = (Red: 127; Green: 106; Blue: 79; Alpha: 255);    // Brown
-  Darkbrown: TColor = (Red: 76; Green: 63; Blue: 47; Alpha: 255);      // Dark Brown
+  { TColorHelper }
 
-  White:     TColor = (Red: 255; Green: 255; Blue: 255; Alpha: 255);   // White
-  Black:     TColor = (Red: 0; Green: 0; Blue: 0; Alpha: 255);         // Black
-  Blank:     TColor = (Red: 0; Green: 0; Blue: 0; Alpha: 0);           // Blank (Transparent)
-  Magenta:   TColor = (Red: 255; Green: 0; Blue: 255; Alpha: 255);     // Magenta
-  RayWhite:  TColor = (Red: 245; Green: 245; Blue: 245; Alpha: 255);   // My own White (raylib logo)
+  TColorHelper = record helper for TColor
+    constructor Create(ARed, AGreen, ABlue, AAlpha: Byte);overload;
+    constructor Create(RGBAColor: TRGBAColor); overload;
+    constructor Create(AValue: Cardinal); overload;
+    constructor CreateRGBA(RGBA: Cardinal); overload; //stupid idea, but ok :P
+  end;
+
+const
+  Lightgray: TRGBAColor = (Red: 200; Green: 200; Blue: 200; Alpha: 255);   // Light Gray
+  Gray:      TRGBAColor = (Red: 130; Green: 130; Blue: 130; Alpha: 255);   // Gray
+  DarkGray:  TRGBAColor = (Red: 80; Green: 80; Blue: 80; Alpha: 255);      // Dark Gray
+  Yellow:    TRGBAColor = (Red: 253; Green: 249; Blue: 0; Alpha: 255);     // Yellow
+  Gold:      TRGBAColor = (Red: 255; Green: 203; Blue: 0; Alpha: 255);     // Gold
+  Orange:    TRGBAColor = (Red: 255; Green: 161; Blue: 0; Alpha: 255);     // Orange
+  Pink:      TRGBAColor = (Red: 255; Green: 109; Blue: 194; Alpha: 255);   // Pink
+  Red:       TRGBAColor = (Red: 230; Green: 41; Blue: 55; Alpha: 255);     // Red
+  Maroon:    TRGBAColor = (Red: 190; Green: 33; Blue: 55; Alpha: 255);     // Maroon
+  Green:     TRGBAColor = (Red: 0; Green: 228; Blue: 48; Alpha: 255);      // Green
+  Lime:      TRGBAColor = (Red: 0; Green: 158; Blue: 47; Alpha: 255);      // Lime
+  Darkgreen: TRGBAColor = (Red: 0; Green: 117; Blue: 44; Alpha: 255);      // Dark Green
+  SkyBlue:   TRGBAColor = (Red: 102; Green: 191; Blue: 255; Alpha: 255);   // Sky Blue
+  Blue:      TRGBAColor = (Red: 0; Green: 121; Blue: 241; Alpha: 255);     // Blue
+  Darkblue:  TRGBAColor = (Red: 0; Green: 82; Blue: 172; Alpha: 255);      // Dark Blue
+  Purple:    TRGBAColor = (Red: 200; Green: 122; Blue: 255; Alpha: 255);   // Purple
+  Violet:    TRGBAColor = (Red: 135; Green: 60; Blue: 190; Alpha: 255);    // Violet
+  Darkpurple:TRGBAColor = (Red: 112; Green: 31; Blue: 126; Alpha: 255);    // Dark Purple
+  Beige:     TRGBAColor = (Red: 211; Green: 176; Blue: 131; Alpha: 255);   // Beige
+  Brown:     TRGBAColor = (Red: 127; Green: 106; Blue: 79; Alpha: 255);    // Brown
+  Darkbrown: TRGBAColor = (Red: 76; Green: 63; Blue: 47; Alpha: 255);      // Dark Brown
+
+  White:     TRGBAColor = (Red: 255; Green: 255; Blue: 255; Alpha: 255);   // White
+  Black:     TRGBAColor = (Red: 0; Green: 0; Blue: 0; Alpha: 255);         // Black
+  Blank:     TRGBAColor = (Red: 0; Green: 0; Blue: 0; Alpha: 0);           // Blank (Transparent)
+  Magenta:   TRGBAColor = (Red: 255; Green: 0; Blue: 255; Alpha: 255);     // Magenta
+  RayWhite:  TRGBAColor = (Red: 245; Green: 245; Blue: 245; Alpha: 255);   // My own White (raylib logo)
 
 type
   // Vector2 type
@@ -1486,7 +1508,7 @@ var
   // Draw line within an image (Vector version)
   ImageDrawLineV: procedure(dst: PImage; start: TVector2; &end: TVector2; color: TColor); cdecl;
   // Draw circle within an image
-  ImageDrawCircle: procedure(dst: PImage; centerX: Integer; centerY: Integer; radius: Integer; color: TColor); cdecl;
+  ImageDrawCircle: procedure(const dst: TImage; CenterX, CenterY, Radius: Integer; Color: TColor); cdecl;
   // Draw circle within an image (Vector version)
   ImageDrawCircleV: procedure(dst: PImage; center: TVector2; radius: Integer; color: TColor); cdecl;
   // Draw rectangle within an image
@@ -1618,7 +1640,7 @@ var
   // Draw text (using default font)
   DrawText: procedure(const Text: PUTF8Char; posX: Integer; posY: Integer; FontSize: Integer; Color: TColor); cdecl;
   // Draw text using font and additional parameters
-  DrawTextEx: procedure(font: TFont; const text: PUTF8Char; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl;
+  DrawTextEx: procedure(font: TFont; const text: Pointer; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl;
   // Draw text using font inside rectangle limits
   DrawTextRec: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: Boolean; tint: TColor); cdecl;
   DrawTextRecEx: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: Boolean; tint: TColor; selectStart: Integer; selectLength: Integer; selectTint: TColor; selectBackTint: TColor); cdecl;
@@ -2095,6 +2117,33 @@ begin
   Result.Y := Y;
 end;
 
+{ TColor }
+
+class operator TColor.Explicit(a: TRGBAColor): TColor;
+begin
+  Result.RGBA := a;
+end;
+
+class operator TColor.Explicit(a: Cardinal): TColor;
+begin
+  Result.Value := a;
+end;
+
+class operator TColor.Equal(a, b: TColor): Boolean;
+begin
+  Result := a.Value = b.Value;
+end;
+
+class operator TColor.Implicit(a: TRGBAColor): TColor;
+begin
+  Result.RGBA := a;
+end;
+
+class operator TColor.Implicit(a: Cardinal): TColor;
+begin
+  Result.Value := a;
+end;
+
 { TRectangle }
 
 constructor TRectangle.Create(AX, AY, AWidth, AHeight: Single);
@@ -2107,29 +2156,43 @@ end;
 
 { TColor }
 
-constructor TColor.Create(ARed, AGreen, ABlue, AAlpha: Byte);
+constructor TColorHelper.Create(ARed, AGreen, ABlue, AAlpha: Byte);
+var
+  aRGBAColor: TRGBAColor;
+  aColor: TColor absolute aRGBAColor;
 begin
-  Red := ARed;
-  Green := AGreen;
-  Blue := ABlue;
-  Alpha := AAlpha;
+  with aRGBAColor do
+  begin
+    Red := ARed;
+    Green := AGreen;
+    Blue := ABlue;
+    Alpha := AAlpha;
+  end;
+  Self := aColor;
 end;
 
-constructor TColor.Create(AValue: Cardinal);
+constructor TColorHelper.Create(RGBAColor: TRGBAColor);
+var
+  aColor: TColor absolute RGBAColor;
+begin
+  Self := aColor;
+end;
+
+constructor TColorHelper.Create(AValue: Cardinal);
 begin
   {$ifdef ENDIAN_LITTLE}
-  Value := AValue;
+  Self := AValue;
   {$else}
-  Value := AValue; //TODO Swap it SwapEndian()
+  Self := AValue; //TODO Swap it SwapEndian()
   {$endif}
 end;
 
-constructor TColor.CreateRGBA(RGBA: Cardinal);
+constructor TColorHelper.CreateRGBA(RGBA: Cardinal);
 begin
   {$ifdef ENDIAN_LITTLE}
-  Value := SwapEndian(RGBA);
+  Self := SwapEndian(RGBA);
   {$else}
-  Value := RGBA; //TODO Swap it SwapEndian()
+  Self := RGBA; //TODO Swap it SwapEndian()
   {$endif}
 end;
 

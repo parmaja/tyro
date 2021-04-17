@@ -67,39 +67,59 @@ type
     function FindByExtension(Extension: string): TScriptType;
   end;
 
+  { TTyroImage }
+
+  TTyroImage = class(TObject)
+  private
+    FImage: TImage;
+  protected
+    property Image: TImage read FImage;
+  public
+    constructor Create(AWidth, AHeight: Integer);
+    destructor Destroy; virtual;
+    procedure BeginDraw;
+    procedure EndDraw;
+    function LoadTexture: TTexture2D;
+    procedure Circle(X, Y, R: Integer; Color: TColor);
+  end;
+
   { TTyroCanvas }
 
   TTyroCanvas = class(TObject)
   private
-    FColor: TColor;
-    FBackgroundColor: TColor;
+    FTextColor: TColor;
+    FBackColor: TColor;
     FFontSize: Integer;
-    //FPImage: TMyFPMemoryImage;
-    //FPCanvas: TFPImageCanvas;
-    //FBoard: TRenderTexture2D;
     FTexture: TRenderTexture2D;
+    //FBoard: TRenderTexture2D;
     //FBoard: TImage;
-    Font: raylib3.TFont;
+    Font: RayLib3.TFont;
     function GetAlpha: Byte;
-    function GetColor: TColor;
+    function GetTextColor: TColor;
     procedure SetAlpha(AValue: Byte);
-    procedure SetBackgroundColor(AValue: TColor);
-    procedure SetColor(AValue: TColor);
+    procedure SetBackColor(AValue: TColor);
+    procedure SetTextColor(AValue: TColor);
   public
     Width, Height: Integer;
     LastX, LastY: Integer;
     constructor Create(AWidth, AHeight: Integer);
-    destructor Destroy; override;
+    destructor Destroy; virtual;
+    procedure BeginDraw;
+    procedure EndDraw;
     //property Board: TImage read FBoard;
-    procedure Circle(X, Y, R: Integer; Fill: Boolean = false);
-    procedure Rectangle(X, Y, W, H: Integer; Fill: Boolean = false);
+    procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
     //procedure PrintTest;
     procedure DrawText(X, Y: Integer; S: string);
+    procedure DrawPixel(X, Y: Integer; Color: TColor);
+    procedure DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
+    procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
+    procedure DrawRect(Left: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
     procedure Print(S: string);
     procedure Clear;
-    property Color: TColor read GetColor write SetColor;
+    property TextColor: TColor read GetTextColor write SetTextColor;
+    property PenColor: TColor read GetTextColor write SetTextColor;//temp trick
     property Alpha: Byte read GetAlpha write SetAlpha;
-    property BackgroundColor: TColor read FBackgroundColor write SetBackgroundColor;
+    property BackColor: TColor read FBackColor write SetBackColor;
     property FontSize: Integer read FFontSize write FFontSize;
   end;
 
@@ -107,8 +127,8 @@ type
 
   TQueueObject = class abstract(TObject)
   private
-    procedure DoExecute; virtual; abstract;
   protected
+    procedure DoExecute; virtual; abstract;
   public
     LineNo: Integer;
     procedure Execute; virtual;
@@ -128,7 +148,7 @@ type
   protected
     procedure Created; virtual;
   public
-    constructor Create(ACanvas: TTyroCanvas);
+    constructor Create(ACanvas: TTyroCanvas); virtual;
     procedure Execute; override;
     property Canvas: TTyroCanvas read FCanvas;
   end;
@@ -214,7 +234,7 @@ type
     fX, fY: Integer;
     fText: String;
     constructor Create(ACanvas: TTyroCanvas; X, Y: Integer; Text: String);
-    procedure DoExecute; override;
+    procedure DoExecute; virtual;
   end;
 
   { TPrintObject }
@@ -241,7 +261,7 @@ type
   public
     Freq, Period: Integer;
     constructor Create(AFreq, APeriod: Integer);
-    procedure DoExecute; override;
+    procedure DoExecute; virtual;
   end;
 
   { TPlayMusicFileObject }
@@ -250,7 +270,7 @@ type
   public
     FileName: string;
     constructor Create(AFileName: string);
-    procedure DoExecute; override;
+    procedure DoExecute; virtual;
   end;
 
   { TPlayMMLObject }
@@ -274,17 +294,17 @@ type
 
   TTyroMain = class(TObject)
   private
+    //FBoard: TTyroImage;
     function GetActive: Boolean;
   protected
     FQueue: TQueueObjects;
     FScript: TTyroScript;
     FScriptTypes: TScriptTypes;
-    //FLock: TCriticalSection;
+    FCanvasLock: TCriticalSection;
     FCanvas: TTyroCanvas;
   protected
     DefaultBackground: raylib3.TColor;
 
-    //property Lock: TCriticalSection read FLock;
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
     procedure ShowWindow(W, H: Integer);
@@ -296,16 +316,19 @@ type
     FileName: string;//that to run in script
     WorkSpace: string;
     constructor Create;
-    destructor Destroy; override;
+    destructor Destroy; virtual;
     procedure Start;
     procedure Stop;
     procedure ProcessQueue;
     procedure Run;
     procedure Loop;
     property Canvas: TTyroCanvas read FCanvas;
+    //property Board: TTyroImage read FBoard;
     property Active: Boolean read GetActive;
 
     procedure RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
+
+    property CanvasLock: TCriticalSection read FCanvasLock;
   end;
 
   function IntToFPColor(I: Integer): TFPColor;
@@ -326,10 +349,63 @@ var
   Lock: TCriticalSection = nil;
   Main : TTyroMain = nil;
 
+//Contros
+type
+  TUTF8Char = String[7]; // UTF-8 character is at most 6 bytes plus a #0
+
+  TScrollbarType = (sbtHorizontal, sbtVertical);
+  TScrollbarTypes = set of TScrollbarType;
+
+  TScrollCode = (
+    scrollTOP,
+    scrollBOTTOM,
+    scrollLINEDOWN,
+    scrollLINEUP,
+    scrollPAGEDOWN,
+    scrollPAGEUP,
+    scrollTHUMBPOSITION,
+    scrollTHUMBTRACK,
+    scrollENDSCROLL
+  );
+
+
+  { TTyroControl }
+
+  TTyroControl = class(TObject)
+  private
+  protected
+    IsCreated: Boolean;
+    Focused: Boolean;
+    function ClientWidth: Integer;
+    function ClientHeight: Integer;
+
+    procedure ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
+    procedure SetScrollRange(Which: TScrollbarType; AMin, AMax: Integer; APage: Integer);
+    procedure SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
+
+    procedure SetBounds(Left, Top, Width, Height: Integer); virtual;
+    procedure Invalidate; virtual;
+    procedure Paint(ACanvas: TTyroCanvas); virtual;
+    procedure Resize; virtual;
+    procedure KeyPress(var Key: TUTF8Char); virtual;
+    procedure KeyDown(var Key: word; Shift: TShiftState); virtual;
+    procedure KeyUp(var Key: word; Shift: TShiftState); virtual;
+    procedure CreateWnd; virtual;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
+    procedure MouseMove(Shift: TShiftState; x, y: integer); virtual;
+  public
+    constructor Create(AParent: TTyroControl); virtual;
+    destructor Destroy; override;
+  end;
+
 procedure Log(S: string);
-function RayColorOf(Color: TFPColor): raylib3.TColor;
+function RayColorOf(Color: TFPColor): TRGBAColor;
 
 implementation
+
+uses
+  minibidi;
 
 procedure Log(S: string);
 begin
@@ -337,7 +413,7 @@ begin
     WriteLn(S);
 end;
 
-function RayColorOf(Color: TFPColor): raylib3.TColor;
+function RayColorOf(Color: TFPColor): TRGBAColor;
 begin
   Result.Alpha := hi(Color.Alpha);
   Result.Red := hi(Color.Red);
@@ -372,26 +448,152 @@ begin
   Result := Result or hi(C.Alpha);
 end;
 
-function IntToColor(I: integer): TColor;
+function IntToColor(I: Integer): TColor;
 begin
-  Result.Red := I and $ff;
+  Result.RGBA.Red := I and $ff;
   I := I shr 8;
-  Result.Green := I and $ff;
+  Result.RGBA.Green := I and $ff;
   I := I shr 8;
-  Result.Blue := I and $ff;
+  Result.RGBA.Blue := I and $ff;
   I := I shr 8;
-  Result.Alpha := I and $ff;
+  Result.RGBA.Alpha := I and $ff;
 end;
 
 function ColorToInt(C: TColor): Integer;
 begin
-  Result := C.Alpha;
+  Result := C.RGBA.Alpha;
   Result := Result shl 8;
-  Result := Result or C.Blue;
+  Result := Result or C.RGBA.Blue;
   Result := Result shl 8;
-  Result := Result or C.Green;
+  Result := Result or C.RGBA.Green;
   Result := Result shl 8;
-  Result := Result or C.Red;
+  Result := Result or C.RGBA.Red;
+end;
+
+{ TTyroControl }
+
+function TTyroControl.ClientWidth: Integer;
+begin
+
+end;
+
+function TTyroControl.ClientHeight: Integer;
+begin
+
+end;
+
+procedure TTyroControl.ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
+begin
+
+end;
+
+procedure TTyroControl.SetScrollRange(Which: TScrollbarType; AMin, AMax: Integer; APage: Integer);
+begin
+
+end;
+
+procedure TTyroControl.SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
+begin
+
+end;
+
+procedure TTyroControl.SetBounds(Left, Top, Width, Height: Integer);
+begin
+
+end;
+
+procedure TTyroControl.Invalidate;
+begin
+
+end;
+
+procedure TTyroControl.Paint(ACanvas: TTyroCanvas);
+begin
+
+end;
+
+procedure TTyroControl.Resize;
+begin
+
+end;
+
+procedure TTyroControl.KeyPress(var Key: TUTF8Char);
+begin
+
+end;
+
+procedure TTyroControl.KeyDown(var Key: word; Shift: TShiftState);
+begin
+
+end;
+
+procedure TTyroControl.KeyUp(var Key: word; Shift: TShiftState);
+begin
+
+end;
+
+procedure TTyroControl.CreateWnd;
+begin
+
+end;
+
+procedure TTyroControl.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer);
+begin
+
+end;
+
+procedure TTyroControl.MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer);
+begin
+
+end;
+
+procedure TTyroControl.MouseMove(Shift: TShiftState; x, y: integer);
+begin
+
+end;
+
+constructor TTyroControl.Create(AParent: TTyroControl);
+begin
+
+end;
+
+destructor TTyroControl.Destroy;
+begin
+  inherited Destroy;
+end;
+
+{ TTyroImage }
+
+constructor TTyroImage.Create(AWidth, AHeight: Integer);
+begin
+  //FImage := GetTextureData(FTexture.texture);
+  FImage := GenImageColor(AWidth, AHeight, RED);
+end;
+
+destructor TTyroImage.Destroy;
+begin
+  UnloadImage(FImage);
+  inherited Destroy;
+end;
+
+procedure TTyroImage.BeginDraw;
+begin
+  //BeginTextureMode(FImage);
+end;
+
+procedure TTyroImage.EndDraw;
+begin
+  //EndTextureMode();
+end;
+
+function TTyroImage.LoadTexture: TTexture2D;
+begin
+  Result := LoadTextureFromImage(FImage);
+end;
+
+procedure TTyroImage.Circle(X, Y, R: Integer; Color: TColor);
+begin
+  ImageDrawCircle(FImage, X, Y, R, Color);
 end;
 
 { TBeepObject }
@@ -492,7 +694,7 @@ end;
 
 procedure TDrawSetColorObject.DoExecute;
 begin
-  Canvas.Color := fColor;
+  Canvas.TextColor := fColor;
 end;
 
 { TScriptTypes }
@@ -523,7 +725,7 @@ end;
 
 procedure TDrawPointObject.DoExecute;
 begin
-  DrawPixel(fX, fY, Canvas.Color);
+  DrawPixel(fX, fY, Canvas.TextColor);
   Canvas.LastX := fX;
   Canvas.LastY := fY;
 end;
@@ -539,7 +741,7 @@ end;
 
 procedure TDrawLineToObject.DoExecute;
 begin
-  DrawLine(Canvas.LastX, Canvas.LastY, fX, fY, Canvas.Color);
+  DrawLine(Canvas.LastX, Canvas.LastY, fX, fY, Canvas.TextColor);
   Canvas.LastX := fX;
   Canvas.LastY := fY;
 end;
@@ -557,7 +759,7 @@ end;
 
 procedure TDrawLineObject.DoExecute;
 begin
-  DrawLine(fX1, fY1, fX2, fY2, Canvas.Color);
+  DrawLine(fX1, fY1, fX2, fY2, Canvas.TextColor);
   Canvas.LastX := fX2;
   Canvas.LastY := fY2;
 end;
@@ -571,7 +773,7 @@ end;
 
 procedure TClearObject.DoExecute;
 begin
-  ClearBackground(Canvas.BackgroundColor);
+  ClearBackground(Canvas.BackColor);
 end;
 
 { TDrawRectangleObject }
@@ -589,9 +791,9 @@ end;
 procedure TDrawRectangleObject.DoExecute;
 begin
   if fFill then
-    DrawRectangle(fX, fY, fW, fH, Canvas.Color)
+    DrawRectangle(fX, fY, fW, fH, Canvas.TextColor)
   else
-    DrawRectangleLines(fX, fY, fW, fH, Canvas.Color);
+    DrawRectangleLines(fX, fY, fW, fH, Canvas.TextColor);
 end;
 
 { TPrintObject }
@@ -618,8 +820,17 @@ begin
 end;
 
 procedure TDrawTextObject.DoExecute;
+{var
+  s: unicodestring;
+  b: utf8string;
+  i:integer;}
 begin
-  DrawTextEx(Canvas.Font, PChar(fText), Vector2Of(fX, fY), Canvas.FontSize, 2, Canvas.Color);
+  {i:=ord(fText[1]);
+  s := UTF8Decode(fText);
+  s := BidiString(s);
+  b := UTF8Encode(s);
+  DrawTextEx(Canvas.Font, PUTF8Char(b), Vector2Of(fX, fY), Canvas.FontSize, 2, Canvas.Color);}
+  Canvas.DrawText(fX, fY, fText);
 end;
 
 { TDrawObject }
@@ -656,9 +867,9 @@ end;
 procedure TDrawCircleObject.DoExecute;
 begin
   if fFill then
-    DrawCircle(fX, fY, fR, Canvas.Color)
+    DrawCircle(fX, fY, fR, Canvas.TextColor)
   else
-    DrawCircleLines(fX, fY, fR, Canvas.Color);
+    DrawCircleLines(fX, fY, fR, Canvas.TextColor);
 end;
 
 { TTyroCanvas }
@@ -667,10 +878,10 @@ constructor TTyroCanvas.Create(AWidth, AHeight: Integer);
 begin
   Width := AWidth;
   Height := AHeight;
-  FColor := BLACK;
+  FTextColor := BLACK;
   //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
   //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
-  FBackgroundColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
+  FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
   //Font := GetFontDefault;
 
   //FPImage := TMyFPMemoryImage.Create(100,100);
@@ -692,6 +903,8 @@ begin
   //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/AnonymousPro-Regular.ttf'), 12, nil, 255);
   //Font := LoadFont(PChar('computer_pixel.fon.ttf'));
 
+  //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/tahoma.ttf'), ScreenFontSize, nil, $FFFF); //Good for arabic but it take huge memory
+
   Font := LoadFont(PChar(Main.WorkSpace + 'fonts/font.png'));
   SetTextureFilter(Font.texture, FILTER_POINT);
 
@@ -701,7 +914,7 @@ begin
   //FBoard := GetTextureData(FTexture.texture);
 
   BeginTextureMode(FTexture);
-  ClearBackground(BackgroundColor);
+  ClearBackground(BackColor);
   DrawText(10, 10, 'Ready!');
   EndTextureMode();
 end;
@@ -715,7 +928,17 @@ begin
   inherited;
 end;
 
-procedure TTyroCanvas.Circle(X, Y, R: Integer; Fill: Boolean);
+procedure TTyroCanvas.BeginDraw;
+begin
+  BeginTextureMode(FTexture);
+end;
+
+procedure TTyroCanvas.EndDraw;
+begin
+  EndTextureMode;
+end;
+
+procedure TTyroCanvas.DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
 begin
 //  BeginTextureMode(FBoard);
   if Fill then
@@ -725,18 +948,32 @@ begin
 //  EndTextureMode();
 end;
 
-procedure TTyroCanvas.Rectangle(X, Y, W, H: Integer; Fill: Boolean);
+procedure TTyroCanvas.DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
 begin
   if Fill then
-    DrawRectangle(X, Y, W, H, Color)
+    Raylib3.DrawRectangle(X, Y, Width, Height, Color)
   else
-    DrawRectangleLines(X, Y, W, H, Color);
+    Raylib3.DrawRectangleLines(X, Y, Width, Height, Color);
+end;
+
+procedure TTyroCanvas.DrawRect(Left: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
+begin
+
 end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
 begin
-  DrawTextEx(Font, PChar(S), Vector2Of(x, y), FontSize, 0, Color);
-  //ImageDrawTextEx(@FTexture, Vector2Create(x, y), Font, PChar(S), FontSize, 2, RayColorOf(Color));
+  RayLib3.DrawTextEx(Font, PChar(S), Vector2Of(x, y), FontSize, 0, TextColor);
+end;
+
+procedure TTyroCanvas.DrawPixel(X, Y: Integer; Color: TColor);
+begin
+  RayLib3.DrawPixel(X, Y, Color);
+end;
+
+procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
+begin
+
 end;
 
 procedure TTyroCanvas.Print(S: string);
@@ -746,34 +983,35 @@ end;
 
 procedure TTyroCanvas.Clear;
 begin
-  ClearBackground(BackgroundColor);
+  ClearBackground(BackColor);
 end;
 
-procedure TTyroCanvas.SetBackgroundColor(AValue: TColor);
+procedure TTyroCanvas.SetBackColor(AValue: TColor);
 begin
-  FBackgroundColor := AValue;
+  FBackColor := AValue;
 end;
 
 function TTyroCanvas.GetAlpha: Byte;
 begin
-  Result := FColor.Alpha;
+  Result := FTextColor.RGBA.Alpha;
 end;
 
-function TTyroCanvas.GetColor: TColor;
+function TTyroCanvas.GetTextColor: TColor;
 begin
-  Result := FColor;
+  Result := FTextColor;
 end;
 
 procedure TTyroCanvas.SetAlpha(AValue: Byte);
 begin
-  FColor.Alpha := AValue;
+  FTextColor.RGBA.Alpha := AValue;
 end;
 
-procedure TTyroCanvas.SetColor(AValue: TColor);
+procedure TTyroCanvas.SetTextColor(AValue: TColor);
 begin
-  FColor.Red := AValue.Red;
-  FColor.Green := AValue.Green;
-  FColor.Blue := AValue.Blue;
+  FTextColor.RGBA.Red := AValue.RGBA.Red;
+  FTextColor.RGBA.Green := AValue.RGBA.Green;
+  FTextColor.RGBA.Blue := AValue.RGBA.Blue;
+  //No alpha
 end;
 
 { TTyroMain }
@@ -791,6 +1029,7 @@ begin
   ShowCursor();
   WindowVisible := True;
   FCanvas := TTyroCanvas.Create(W, H);
+  //FBoard := TTyroImage.Create(W, H);
 end;
 
 procedure TTyroMain.HideWindow;
@@ -808,38 +1047,43 @@ var
 begin
   if Canvas <> nil then
   begin
-    ft := GetTime();
-    fpd := (1 / cFramePerSeconds);
-    BeginTextureMode(Canvas.FTexture);
-    c := 0;
-    while Queue.Count > 0 do
-    begin
-      Lock.Enter;
-      try
-        p := Queue.Extract(Queue[0]);
-      finally
-        Lock.Leave;
-      end;
-      p.Execute;
-      p.Free;
-      Inc(c);
-      ft2 := GetTime() - ft;
-      if ft2 >= fpd then
+    CanvasLock.Enter;
+    try
+      ft := GetTime();
+      fpd := (1 / cFramePerSeconds);
+      Canvas.BeginDraw;
+      c := 0;
+      while Queue.Count > 0 do
       begin
-        break;
+        Lock.Enter;
+        try
+          p := Queue.Extract(Queue[0]);
+        finally
+          Lock.Leave;
+        end;
+        p.Execute;
+        p.Free;
+        Inc(c);
+        ft2 := GetTime() - ft;
+        if ft2 >= fpd then
+        begin
+          break;
+        end;
       end;
+      Canvas.EndDraw;
+    finally
+      CanvasLock.Leave;
     end;
-    EndTextureMode;
   end;
 end;
 
 constructor TTyroMain.Create;
 begin
   inherited Create;
+  FCanvasLock := TCriticalSection.Create;
   RayLib.Load;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
-  //FLock := TCriticalSection.Create;
   FQueue := TQueueObjects.Create(True);
   FScriptTypes := TScriptTypes.Create(true);
   {$IFDEF DARWIN}
@@ -851,11 +1095,12 @@ end;
 destructor TTyroMain.Destroy;
 begin
   //Stop;
-  FreeAndNil(FCanvas);
   HideWindow;
+  FreeAndNil(FCanvas);
+  //FreeAndNil(FBoard);
   FreeAndNil(FQueue);
-  //FreeAndNil(FLock);
   FreeAndNil(FScriptTypes);
+  FreeAndNil(FCanvasLock);
   inherited Destroy;
 end;
 
@@ -885,8 +1130,8 @@ begin
 end;
 
 procedure TTyroMain.Run;
-//var
-  //t: TTexture2D;
+var
+  t: TTexture2D;
   //im: TImage;
 begin
   if (FScript <> nil) and FScript.Suspended then
@@ -903,26 +1148,30 @@ begin
 
     ProcessQueue;
 
-    BeginDrawing;
-    ClearBackground(DefaultBackground);
-
+    CanvasLock.Enter;
     try
-      {im := LoadImageEx(PColor(FScript.FPImage.Data), FScript.FPImage.Width, FScript.FPImage.Height);
-      t := LoadTextureFromImage(im);
-      DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);}
+      BeginDrawing;
+      ClearBackground(DefaultBackground);
 
-      //t := LoadTextureFromImage(FScript.Canvas.FTexture);
-      //DrawTextureRec(t, RectangleCreate(0, 0, t.width, t.height), Vector2Create(0, 0), WHITE);
+      {if Board <> nil then
+      begin
+        t := Board.LoadTexture;
+        DrawTextureRec(t, TRectangle.Create(0, 0, t.width, t.height), TVector2.Create(0, 0), WHITE);
+        UnloadTexture(t);
+      end;}
 
       with Canvas.FTexture do
         DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), WHITE);
 
+      ThreadSwitch; //Yield
     finally
+      CanvasLock.Leave;
     end;
-
-    RayUpdates.Update;
+    BeginDrawing;
     Loop;
+    ThreadSwitch; //Yield
     EndDrawing;
+    RayUpdates.Update;
   end;
 end;
 

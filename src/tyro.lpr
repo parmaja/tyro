@@ -26,7 +26,7 @@ uses
   {$ENDIF}
   SysUtils, Classes, CustApp,
   TyroClasses, raylib3, RayClasses,
-  TyroLua, TyroEditors, 
+  TyroLua, TyroEditors,
   TyroSounds, Melodies;  //Add all languages units here
 
 

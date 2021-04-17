@@ -92,6 +92,9 @@
     </RunParams>
     <RequiredPackages>
       <Item>
+        <PackageName Value="LCLBase"/>
+      </Item>
+      <Item>
         <PackageName Value="RayLib"/>
       </Item>
       <Item>

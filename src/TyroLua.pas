@@ -374,13 +374,13 @@ begin
   case field of
     'color':
     begin
-      i := ColorToInt(Main.Canvas.Color);
+      i := ColorToInt(Main.Canvas.TextColor);
       lua_pushinteger(L, i);
       Result := 1;
     end;
     'backcolor':
     begin
-      i := ColorToInt(Main.Canvas.BackgroundColor);
+      i := ColorToInt(Main.Canvas.BackColor);
       lua_pushinteger(L, i);
       Result := 1;
     end;
@@ -547,6 +547,12 @@ begin
   if c >= 4 then
     f := lua_toboolean(L, 4);
   AddQueueObject(TDrawCircleObject.Create(Main.Canvas, x, y, r, f));
+  {Main.CanvasLock.Enter;
+  try
+    Main.Board.Circle(x, y, r, f);
+  finally
+    Main.CanvasLock.Leave;
+  end;}
   Result := 0;
 end;
 
@@ -653,7 +659,7 @@ begin
     Song[i] := s;
   end;
   //AddQueueObject(TPlayMMLObject.Create(Song));
-  with TPlayMMLObject.Create(Song) do //using current lua thread
+  with TPlayMMLObject.Create(Song) do //using current lua thread to not block current thread, or maybe use a thread
   begin
     Execute;
     Free;
