@@ -1,12 +1,19 @@
 unit TyroEngines;
-
 {$mode ObjFPC}{$H+}
+ {**
+ *  This file is part of the "Tyro"
+ *
+ * @license   MIT
+ *
+ * @author    Zaher Dirkey <zaher at parmaja dot com>
+ *
+ *}
 
 interface
 
 uses
   Classes, SysUtils, SyncObjs, fgl,
-  RayLib3, RayClasses, TyroClasses, TyroControls;
+  RayLib3, RayClasses, TyroClasses, TyroControls, TyroConsoles;
 
 type
 
@@ -20,7 +27,6 @@ type
     DefaultBackColor: TColor;
     WindowVisible: Boolean;
   public
-    MyForm: TTyroForm;
     Title: string;
     constructor Create;
     destructor Destroy; override;
@@ -47,6 +53,7 @@ type
     Running: Boolean;
     FileName: string;//that to run in script
     WorkSpace: string;
+    Console: TTyroConsole;
     constructor Create;
     destructor Destroy; override;
     procedure Start;
@@ -77,9 +84,6 @@ begin
   inherited Create;
   DefaultBackColor := TColor.Create(220, 230, 240, 0);
   FControls := TTyroControls.Create;
-  MyForm := TTyroForm.Create(nil);
-  MyForm.BoundsRect := Rect(10, 10 , 100, 100);
-  Controls.Add(MyForm);
 end;
 
 destructor TTyroWindow.Destroy;
@@ -191,6 +195,12 @@ begin
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
+
+  Console := TTyroConsole.Create(nil);
+  Console.BoundsRect := Rect(10, 10 , 10 + 80 * 8, 10 + 80 * 8);
+  Controls.Add(Console);
+  Console.WriteLn('Hello World');
+  Console.WriteLn('Hello World Again');
 end;
 
 destructor TTyroMain.Destroy;
@@ -252,12 +262,6 @@ begin
     CanvasLock.Enter;
     try
       Paint;
-      {if Board <> nil then
-      begin
-        t := Board.LoadTexture;
-        DrawTextureRec(t, TRectangle.Create(0, 0, t.width, t.height), TVector2.Create(0, 0), WHITE);
-        UnloadTexture(t);
-      end;}
       EndDrawing;
       ThreadSwitch; //Yield
     finally

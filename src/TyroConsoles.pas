@@ -1,4 +1,12 @@
-unit TyroCMDs;
+unit TyroConsoles;
+{**
+ *  This file is part of the "Tyro", based on CMDLine (Julian Schutsch)
+ *
+ * @license   MIT/LGPL idk
+ *
+ * @author    Julian Schutsch, Zaher Dirkey
+ *
+ *}
 
 {$mode objfpc}{$H+}
 
@@ -76,7 +84,7 @@ interface
 
 uses
   Classes, SysUtils,
-  RayLib3, TyroClasses, LazUTF8,
+  RayLib3, TyroClasses, LazUTF8, LCLType,
   TyroControls,
   FPImage, FPCanvas;
 
@@ -93,16 +101,16 @@ type
   TCharAttrib = (charaUnderline, charaItalic, charaBold, charaBlink);
   TWrapMode = (wwmChar, wwmWord);
 
-  TCmdBox = class;
+  TTyroConsole = class;
 
   TColorstring = class;
 
-  EOnCmdBoxInput = procedure(ACmdBox: TCmdBox; Input: string) of object;
-  EOnCmdBoxInputChange = procedure(ACmdBox: TCmdBox; InputData: TColorstring) of object;
+  EOnCmdBoxInput = procedure(ACmdBox: TTyroConsole; Input: string) of object;
+  EOnCmdBoxInputChange = procedure(ACmdBox: TTyroConsole; InputData: TColorstring) of object;
 
-  { TCmdBox }
+  { TTyroConsole }
 
-  TCmdBox = class(TTyroControl)
+  TTyroConsole = class(TTyroControl)
   private
     FLock: System.TRTLCriticalSection;
     //FCaretTimer: TTimer;
@@ -116,7 +124,7 @@ type
     FVisibleLines: Integer;
     FVSBVisible: boolean;
     FVSBPos:    Integer;
-    FVSBWidth:  Integer;
+    //FVSBWidth:  Integer;
     FClientWidth: Integer;
     FClientHeight: Integer;
     FCaretX:    Integer;
@@ -206,8 +214,13 @@ type
     procedure SetWrapMode(AValue:TWrapMode);
 
   protected
-    procedure VScroll(ScrollCode: TScrollCode; Pos: Integer); //override;
-    procedure Paint(ACanvas: TTyroCanvas); override;
+    procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
+
+  public
+    constructor Create(AParent: TTyroControl); override;
+    destructor Destroy; override;
+
+    procedure DoPaint(ACanvas: TTyroCanvas); override;
     procedure Resize; override;
     procedure KeyPress(var Key: TUTF8Char); override;
     procedure KeyDown(var Key: word; Shift: TShiftState); override;
@@ -215,10 +228,6 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: Integer); override;
     procedure MouseMove(Shift: TShiftState; x, y: Integer); override;
-
-  public
-    constructor Create(AParent: TTyroControl); override;
-    destructor Destroy; override;
 
     procedure SaveToFile(AFileName: string);
     function HistoryHas(s: string): boolean;
@@ -247,6 +256,7 @@ type
   public
     property CharHeight: Integer read FCharHeight write FCharHeight;
     property CharWidth: Integer read FCharWidth write FCharWidth;
+
     property CaretColor: TColor Read FCaretColor Write FCaretColor;
     property CaretType: TCaretType Read FCaretType Write SetCaretType;
     property CaretWidth: Integer Read FCaretWidth Write SetCaretWidth;
@@ -333,7 +343,7 @@ implementation
 var
   AnsiColors: array[0..7] of TColor;
 
-procedure TCmdBox.SaveToFile(AFileName: string);
+procedure TTyroConsole.SaveToFile(AFileName: string);
 var
   Txt: System.Text;
   i:   Integer;
@@ -462,7 +472,7 @@ begin
   Result := System.Length(FChars);
 end;
 
-procedure TCmdBox.SetWrapMode(AValue:TWrapMode);
+procedure TTyroConsole.SetWrapMode(AValue:TWrapMode);
 var i:Integer;
 begin
   if AValue<>FWrapMode then
@@ -480,7 +490,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.SetTabWidth(AValue: Integer);
+procedure TTyroConsole.SetTabWidth(AValue: Integer);
 var
   i: Integer;
 begin
@@ -494,25 +504,25 @@ begin
   Invalidate;
 end;
 
-procedure TCmdBox.SetCaretWidth(AValue: Integer);
+procedure TTyroConsole.SetCaretWidth(AValue: Integer);
 begin
   FCaretWidth := AValue;
   FCaretType  := cartUser;
 end;
 
-procedure TCmdBox.SetCaretHeight(AValue: Integer);
+procedure TTyroConsole.SetCaretHeight(AValue: Integer);
 begin
   FCaretHeight := AValue;
   FCaretType   := cartUser;
 end;
 
-procedure TCmdBox.SetCaretYShift(AValue: Integer);
+procedure TTyroConsole.SetCaretYShift(AValue: Integer);
 begin
   FCaretYShift := AValue;
   FCaretType   := cartUser;
 end;
 
-procedure TCmdBox.SetCaretType(ACaretType: TCaretType);
+procedure TTyroConsole.SetCaretType(ACaretType: TCaretType);
 begin
   case ACaretType of
     cartLine:
@@ -575,7 +585,6 @@ var
     SameForeColor := Black;
     SameColorX := 0;
     SameColorWidth := 0;
-    //ACanvas.Brush.Style := bsClear;
     LP     := LineStart;
     CaretX := -1;
     while LineStart <> LineEnd + 1 do
@@ -796,8 +805,6 @@ var
     Inc(AY, ACH);
     if ADrawCaret and (CaretX >= 0) then
     begin
-      //ACanvas.Brush.Style := bsSolid;
-      //ACanvas.Brush.Color := ACC;
       if ACaretWidth >= 0 then
         CaretW := ACaretWidth;
       ACanvas.DrawRect(CaretX, AY - ACaretHeight - ACaretYShift, CaretX + CaretW, AY - ACaretYShift, ACC, True);
@@ -824,7 +831,6 @@ var
     SameBackColor := Black;
     SameColorX := 0;
     SameColorWidth := 0;
-    //ACanvas.Brush.Style := bsSolid;
     LP     := LineStart;
     while LineStart <> LineEnd + 1 do
     begin
@@ -835,14 +841,12 @@ var
         begin
           if SameColor <> '' then
           begin
-            //ACanvas.Brush.Color := SameBackColor;
             ACanvas.DrawRect(SameColorX, AY, SameColorX + SameColorWidth, Ay + ACH, SameBackColor, True);
             Inc(SameColorX, SameColorWidth);
             SameColor := '';
           end
           else
             SameColorX := AX;
-          //ACanvas.Brush.Color := FBackColor;
           ACanvas.DrawRect(SameColorX, AY, SameColorX + FCharWidth, AY + ACH, FBackColor, True);
         end
         else
@@ -850,7 +854,6 @@ var
         begin
           if SameColor <> '' then
           begin
-            //ACanvas.Brush.Color := SameBackColor;
             ACanvas.DrawRect(SameColorX, AY, SameColorX + SameColorWidth, Ay + ACH, SameBackColor, True);
             Inc(SameColorX, SameColorWidth);
             SameColor := '';
@@ -863,12 +866,10 @@ var
               case FChar[3] of
                 #46:
                 begin
-                  //ACanvas.Brush.Color := FBackColor;
                   ACanvas.DrawRect(SameColorX, AY, SameColorX + FCharWidth, AY + ACH, FBackColor, True);
                 end;
                 #196:
                 begin
-                  //ACanvas.Brush.Color := FBackColor;
                   ACanvas.DrawRect(SameColorX, AY, SameColorX + FCharWidth, AY + ACH, FBackColor, True);
                 end;
               end;
@@ -879,7 +880,6 @@ var
               case FChar[3] of
                 #179:
                 begin
-                  //ACanvas.Brush.Color := FBackColor;
                   ACanvas.DrawRect(SameColorX, AY, SameColorX + CW, AY + ACH, FBackColor, True);
                 end;
                 #180:
@@ -980,7 +980,6 @@ var
           end
           else
           begin
-            //ACanvas.Brush.Color := SameBackColor;
             ACanvas.DrawRect(SameColorX, Ay, SameColorX + SameColorWidth, Ay + ACH, SameBackColor, True);
             if (LP >= FPassWordStart) then
             begin
@@ -1004,7 +1003,6 @@ var
     end;
     if SameColor <> '' then
     begin
-      //ACanvas.Brush.Color := SameBackColor;
       ACanvas.DrawRect(SameColorX, Ay, SameColorX + SameColorWidth, Ay + ACH, SameBackColor, True);
     end;
     ACanvas.DrawRect(AX, AY, AWrapWidth, AY + ACH, SameBackColor, True);
@@ -1017,8 +1015,6 @@ begin
     AWrapWidth := 0;
   if System.Length(FChars) = 0 then
   begin
-    //ACanvas.Brush.Style := bsSolid;
-    //ACanvas.Brush.Color := ABC;
     ACanvas.DrawRect(AX, AY, AWrapWidth, AY + ACH, ABC, True);
     Exit;
   end;
@@ -1090,15 +1086,11 @@ begin
     if Ax + x > AWrapWidth then
     begin
       Ax := 0;
-      //ACanvas.Brush.Style := bsSolid;
-      //ACanvas.Brush.Color := ABC;
       ACanvas.DrawRect(0, AY, AWrapWidth, AY + ACH, ABC, True);
       Inc(Ay, ACH);
     end;
     if ADrawCaret then
     begin
-      //ACanvas.Brush.Style := bsSolid;
-      //ACanvas.Brush.Color := ACC;
       ACanvas.DrawRect(AX, AY - ACaretHeight - ACaretYShift, AX + x, AY - ACaretYShift, ACC, True);
     end;
   end;
@@ -1312,7 +1304,7 @@ begin
   pp := 1;
   for i := 0 to SLen - 1 do
   begin
-    l := UTF8CharacterLength(@C[Pp]);
+    l := UTF8CodepointSize(@C[Pp]);
     with FChars[Index + i] do
     begin
       FChar := Copy(C, Pp, l);
@@ -1509,7 +1501,7 @@ begin
   FChars := nil;
 end;
 
-procedure TCmdBox.ClearLine;
+procedure TTyroConsole.ClearLine;
 begin
   if FLines[FOutY].Length <> 0 then
   begin
@@ -1520,17 +1512,17 @@ begin
   end;
 end;
 
-{function TCmdBox.GetCaretInterval: Integer;
+{function TTyroConsole.GetCaretInterval: Integer;
 begin
   Result := FCaretTimer.Interval;
 end;
 
-procedure TCmdBox.SetCaretInterval(AValue: Integer);
+procedure TTyroConsole.SetCaretInterval(AValue: Integer);
 begin
   FCaretTimer.Interval := AValue;
 end;}
 
-procedure TCmdBox.MultiWrite;
+procedure TTyroConsole.MultiWrite;
 var
   DoWrite: boolean;
 begin
@@ -1548,7 +1540,7 @@ begin
   until not DoWrite;
 end;
 
-procedure TCmdBox.Write(s: string);
+procedure TTyroConsole.Write(s: string);
 begin
   if ThreadID = MainThreadId then
   begin
@@ -1566,7 +1558,7 @@ begin
   end;
 end;
 
-function TCmdBox.HistoryIndexOf(s: string): Integer;
+function TTyroConsole.HistoryIndexOf(s: string): Integer;
 begin
   for Result := 0 to HistoryCount - 1 do
     if History[Result] = s then
@@ -1574,7 +1566,7 @@ begin
   Result := -1;
 end;
 
-function TCmdBox.HistoryHas(s: string): boolean;
+function TTyroConsole.HistoryHas(s: string): boolean;
 var
   i: Integer;
 begin
@@ -1585,12 +1577,12 @@ begin
   Result := False;
 end;
 
-function TCmdBox.HistoryCount: Integer;
+function TTyroConsole.HistoryCount: Integer;
 begin
   HistoryCount := FHistoryLength - Ord(FInput);
 end;
 
-function TCmdBox.GetHistory(i: Integer): string;
+function TTyroConsole.GetHistory(i: Integer): string;
 begin
   Inc(i, Ord(FInput));
   if (i >= 0) and (i < FHistoryLength) then
@@ -1599,13 +1591,13 @@ begin
     GetHistory := '';
 end;
 
-procedure TCmdBox.ClearHistory;
+procedure TTyroConsole.ClearHistory;
 begin
   FHistoryLength := Ord(FInput);
   FHistoryPos    := 0;
 end;
 
-procedure TCmdBox.SetHistoryMax(v: Integer);
+procedure TTyroConsole.SetHistoryMax(v: Integer);
 var
   i: Integer;
 begin
@@ -1624,7 +1616,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.WriteStream(Stream: TStream);
+procedure TTyroConsole.WriteStream(Stream: TStream);
 var
   c: WideString;
 begin
@@ -1637,7 +1629,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.LeftSelection(Start, Ende: Integer);
+procedure TTyroConsole.LeftSelection(Start, Ende: Integer);
 begin
   if FSelStart = -1 then
   begin
@@ -1659,7 +1651,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.RightSelection(Start, Ende: Integer);
+procedure TTyroConsole.RightSelection(Start, Ende: Integer);
 begin
   if FSelStart = -1 then
   begin
@@ -1681,7 +1673,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.SetSelection(Start, Ende: Integer);
+procedure TTyroConsole.SetSelection(Start, Ende: Integer);
 begin
   if FSelStart <> -1 then
     FInputBuffer.ColorBlock(FSelStart, FSelEnd, FInputColor, FInputBackGround);
@@ -1704,7 +1696,7 @@ begin
     FInputBuffer.ColorBlock(FSelStart, FSelEnd, FInputSelColor, FInputSelBackGround);
 end;
 
-procedure TCmdBox.CopyToClipBoard;
+procedure TTyroConsole.CopyToClipBoard;
 begin
   if FSelStart <> -1 then
   begin
@@ -1712,7 +1704,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.PasteFromClipBoard;
+procedure TTyroConsole.PasteFromClipBoard;
 var
   s:     WideString;
   l, Pp: Integer;
@@ -1742,7 +1734,7 @@ begin
   end;}
 end;
 
-procedure TCmdBox.DeleteSelected;
+procedure TTyroConsole.DeleteSelected;
 begin
   if FSelStart <> -1 then
   begin
@@ -1753,7 +1745,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.CutToClipBoard;
+procedure TTyroConsole.CutToClipBoard;
 begin
   if FSelStart <> -1 then
   begin
@@ -1762,7 +1754,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.MouseMove(Shift: TShiftState; x, y: Integer);
+procedure TTyroConsole.MouseMove(Shift: TShiftState; x, y: Integer);
 begin
   if FMouseDown then
   begin
@@ -1772,7 +1764,7 @@ begin
   inherited MouseMove(Shift,x,y);
 end;
 
-function TCmdBox.MoveInputCaretTo(x, y: Integer; chl: boolean): boolean;
+function TTyroConsole.MoveInputCaretTo(x, y: Integer; chl: boolean): boolean;
 var
   h, sl, q: Integer;
 begin
@@ -1802,7 +1794,7 @@ begin
     Result := False;
 end;
 
-procedure TCmdBox.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: Integer);
+procedure TTyroConsole.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: Integer);
 begin
   MoveInputCaretTo(x, y, True);
   FMouseDown := True;
@@ -1812,7 +1804,7 @@ begin
   inherited MouseDown(Button,Shift,x,y);
 end;
 
-procedure TCmdBox.MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: Integer);
+procedure TTyroConsole.MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: Integer);
 begin
   FMouseDown := False;
   inherited MouseUp(Button,Shift,x,y);
@@ -1824,7 +1816,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TCmdBox.ScrollUp;
+procedure TTyroConsole.ScrollUp;
 var
   n: Integer;
   Firstwidestring: TColorString;
@@ -1837,23 +1829,23 @@ begin
   Flines[High(Flines)] := Firstwidestring;
 end;
 
-procedure TCmdBox.TextColors(FC, BC: TColor);
+procedure TTyroConsole.TextColors(FC, BC: TColor);
 begin
   FCurrentColor      := FC;
   FCurrentBackGround := BC;
 end;
 
-procedure TCmdBox.TextColor(C: TColor);
+procedure TTyroConsole.TextColor(C: TColor);
 begin
   FCurrentColor := C;
 end;
 
-procedure TCmdBox.TextBackground(C: TColor);
+procedure TTyroConsole.TextBackground(C: TColor);
 begin
   FCurrentBackGround := C;
 end;
 
-procedure TCmdBox.TranslateScrollBarPosition;
+procedure TTyroConsole.TranslateScrollBarPosition;
 var
   GLine, Line: Integer;
   He: Integer;
@@ -1876,7 +1868,7 @@ begin
   Invalidate;
 end;
 
-procedure TCmdBox.VScroll(ScrollCode: TScrollCode; Pos: Integer);
+procedure TTyroConsole.Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
 var
   CurrentPos: Integer;
 begin
@@ -1898,24 +1890,24 @@ begin
   else if Currentpos > FVisibleLineCount - FPageHeight then
     CurrentPos := FVisibleLineCount - FPageHeight;
  {$IFNDEF LCLGTK}
-  //ScrollBarPosition(SB_VERT, CurrentPos);
+  //ScrollBarPosition(sbtVertical, CurrentPos);
  {$ENDIF}
 
   FVSBPos := CurrentPos;
   TranslateScrollBarPosition;
 end;
 
-procedure TCmdBox.ScrollBarRange(Which: TScrollbarType; aRange, aPage: Integer);
+procedure TTyroConsole.ScrollBarRange(Which: TScrollbarType; aRange, aPage: Integer);
 begin
   SetScrollRange(Which, 0, aRange, aPage);
 end;
 
-procedure TCmdBox.ScrollBarPosition(Which: TScrollbarType; Value: Integer);
+procedure TTyroConsole.ScrollBarPosition(Which: TScrollbarType; Value: Integer);
 begin
   SetScrollPosition(Which, Value, FVSbVisible);
 end;
 
-function TCmdBox.GetSystemMetricsGapSize(const Index: Integer): Integer;
+function TTyroConsole.GetSystemMetricsGapSize(const Index: Integer): Integer;
 begin
  {$ifdef LCLWIN32}
   Result := 0;
@@ -1924,7 +1916,7 @@ begin
  {$endif}
 end;
 
-procedure TCmdBox.SetBackGroundColor(c: Tcolor);
+procedure TTyroConsole.SetBackGroundColor(c: Tcolor);
 begin
   if c <> FBackGroundColor then
   begin
@@ -1935,7 +1927,7 @@ end;
 
 // Still a Bug: Try having a cmdline with more lines than fit on screen : update doesn't work anymore...
 
-procedure TCmdBox.MakeInputVisible;
+procedure TTyroConsole.MakeInputVisible;
 var
   y: Integer;
 begin
@@ -1970,7 +1962,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.MakeOutVisible;
+procedure TTyroConsole.MakeOutVisible;
 var
   y: Integer;
 begin
@@ -2000,7 +1992,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.SetHistoryPos(v: Integer);
+procedure TTyroConsole.SetHistoryPos(v: Integer);
 begin
   if FInputIsPassWord then
     Exit;
@@ -2029,7 +2021,7 @@ begin
   Invalidate;
 end;
 
-procedure TCmdBox.KeyPress(var Key: TUTF8Char);
+procedure TTyroConsole.KeyPress(var Key: TUTF8Char);
 begin
   if not FInput then
     Exit;
@@ -2053,13 +2045,13 @@ begin
   inherited;
 end;
 
-procedure TCmdBox.KeyUp(var Key: word; Shift: TShiftState);
+procedure TTyroConsole.KeyUp(var Key: word; Shift: TShiftState);
 begin
   inherited KeyUp(key, shift);
   key:=0;
 end;
 
-procedure TCmdBox.KeyDown(var Key: word; Shift: TShiftState);
+procedure TTyroConsole.KeyDown(var Key: word; Shift: TShiftState);
 var
   s: string;
   i: Integer;
@@ -2303,7 +2295,7 @@ begin
   inherited KeyDown(Key,Shift);
 end;
 
-procedure TCmdBox.InsertHistory;
+procedure TTyroConsole.InsertHistory;
 var
   i: Integer;
   t: TColorString;
@@ -2319,7 +2311,7 @@ begin
     Inc(FHistoryLength);
 end;
 
-procedure TCmdBox.StartRead(DFC, DBC: TColor; const Desc: string; IFC, IBC: TColor);
+procedure TTyroConsole.StartRead(DFC, DBC: TColor; const Desc: string; IFC, IBC: TColor);
 var
   Pp, i, l: Integer;
 begin
@@ -2360,7 +2352,7 @@ begin
       end;
     end
     else
-      l := UTF8CharacterLength(@Desc[PP]);
+      l := UTF8CodepointSize(@Desc[PP]);
     FInputBuffer.OverWrite(Copy(Desc, Pp, l), i, DFC, DBC, FCurrentAttrib);
     Inc(i);
     Inc(Pp, l);
@@ -2376,7 +2368,7 @@ begin
   MakeInputVisible;
 end;
 
-procedure TCmdBox.StartReadPassWord(DFC, DBC: TColor; const Desc: string;
+procedure TTyroConsole.StartReadPassWord(DFC, DBC: TColor; const Desc: string;
   IFC, IBC: TColor);
 begin
   StartRead(DFC, DBC, Desc, IFC, IBC);
@@ -2385,12 +2377,12 @@ begin
   FInputIsPassWord := True;
 end;
 
-procedure TCmdBox.StopRead;
+procedure TTyroConsole.StopRead;
 begin
   FInput := False;
 end;
 
-procedure TCmdBox.DeleteHistoryEntry(i: Integer);
+procedure TTyroConsole.DeleteHistoryEntry(i: Integer);
 var
   j:    Integer;
   Temp: TColorString;
@@ -2404,7 +2396,7 @@ begin
     Dec(FHistoryPos);
 end;
 
-procedure TCmdBox.MakeFirstHistoryEntry(i: Integer);
+procedure TTyroConsole.MakeFirstHistoryEntry(i: Integer);
 var
   Temp: TColorString;
 begin
@@ -2417,7 +2409,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.Clear;
+procedure TTyroConsole.Clear;
 var
   i: Integer;
 begin
@@ -2432,12 +2424,12 @@ begin
   Invalidate;
 end;
 
-procedure TCmdBox.Writeln(s: string);
+procedure TTyroConsole.Writeln(s: string);
 begin
   Write(s + #13#10);
 end;
 
-procedure TCmdBox.IntWrite;
+procedure TTyroConsole.IntWrite;
 var
   Pp:     Integer;
   l:      Integer;
@@ -2474,7 +2466,7 @@ begin
         end
         else
         begin
-          l := UTF8CharacterLength(@S[Pp]);
+          l := UTF8CodepointSize(@S[Pp]);
           if l = 1 then
           begin
             case s[Pp] of
@@ -2642,20 +2634,20 @@ begin
   AdjustScrollBars;
 end;
 
-procedure TCmdBox.SetOutY(v: Integer);
+procedure TTyroConsole.SetOutY(v: Integer);
 begin
   if v > FLineCount - 1 then
     v   := FLineCount - 1;
   FOutY := v;
 end;
 
-procedure TCmdBox.Resize;
+procedure TTyroConsole.Resize;
 begin
   inherited Resize;
   AdjustScrollBars(True);
 end;
 
-function TCmdBox.AdjustLineHeight(i: Integer;const Recalc:Boolean=False): Integer;
+function TTyroConsole.AdjustLineHeight(i: Integer;const Recalc:Boolean=False): Integer;
 var
   LineC:  Integer;
   LineC2: Integer;
@@ -2685,7 +2677,7 @@ begin
   FLineHeights[i] := Result;
 end;
 
-function TCmdBox.UpdateLineHeights(const Recalc:Boolean=False): Integer;
+function TTyroConsole.UpdateLineHeights(const Recalc:Boolean=False): Integer;
 var
   i: Integer;
 begin
@@ -2697,7 +2689,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.AdjustScrollBars(const Recalc:Boolean);
+procedure TTyroConsole.AdjustScrollBars(const Recalc:Boolean);
 var
   LH: Integer;
 begin
@@ -2731,7 +2723,7 @@ begin
   Invalidate;
 end;
 
-procedure TCmdBox.SetTopLine(Nr: Integer);
+procedure TTyroConsole.SetTopLine(Nr: Integer);
 begin
   if Nr <> FTopLine then
   begin
@@ -2740,7 +2732,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.SetLineCount(c: Integer);
+procedure TTyroConsole.SetLineCount(c: Integer);
 var
   i: Integer;
 begin
@@ -2764,7 +2756,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.Paint(ACanvas: TTyroCanvas);
+procedure TTyroConsole.DoPaint(ACanvas: TTyroCanvas);
 var
   y : Integer;
   m : Integer;
@@ -2807,7 +2799,7 @@ begin
   end;
 end;
 
-procedure TCmdBox.CaretTimerExecute(Sender: TObject);
+procedure TTyroConsole.CaretTimerExecute(Sender: TObject);
 begin
   if Focused then
   begin
@@ -2818,14 +2810,15 @@ begin
   end;
 end;
 
-constructor TCmdBox.Create(AParent: TTyroControl);
+constructor TTyroConsole.Create(AParent: TTyroControl);
 var
   i: Integer;
 begin
   inherited;
   System.InitCriticalSection(FLock);
   FStringBuffer     := TStringList.Create;
-  FCharHeight       := 15; // Just a random value to prevent stupid exceptions
+  FCharHeight := 8;
+  FCharWidth := 8;
   FSelStart         := -1;
   FLineCount        := 1000;
   FInputVisible     := False;
@@ -2873,8 +2866,6 @@ begin
     FCaretHeight := FCharHeight;
   AdjustScrollBars;
 
-  FCharHeight := 8;
-  FCharWidth := 8;
   for i:=0 to FLineCount-1 do
   begin
     FLines[i].UpdateAll;
@@ -2883,7 +2874,7 @@ begin
   Invalidate;
 end;
 
-destructor TCmdBox.Destroy;
+destructor TTyroConsole.Destroy;
 var i : Integer;
 begin
   //FCaretTimer.Enabled := False;
