@@ -680,13 +680,6 @@ begin
   FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
   //Font := GetFontDefault;
 
-  //FPImage := TMyFPMemoryImage.Create(100,100);
-  //FPImage.LoadFromFile(Main.WorkSpace + 'richard-say.png');
-  //FPImage.UsePalette:=false;
-
-  //FPCanvas := TFPImageCanvas.Create(FPImage);
-  //FPCanvas.Pen.FPColor := colRed;
-  //FPCanvas.Rectangle(10, 10, 10 , 10);
   //Font := LoadFont(PChar(Main.WorkSpace + 'alpha_beta.png'));
   //Font := LoadFont(PChar(Main.WorkSpace + 'Terminess-Bold.ttf'));
   //Font := LoadFont(PChar(Main.WorkSpace + 'dejavu.fnt'));
@@ -702,10 +695,11 @@ begin
   //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/tahoma.ttf'), ScreenFontSize, nil, $FFFF); //Good for arabic but it take huge memory
 
   Font := LoadFont(PChar(Main.WorkSpace + 'fonts/font.png'));
+  //Font.BaseSize := 16;
+  //Font := GetFontDefault();
   SetTextureFilter(Font.texture, FILTER_POINT);
 
   FTexture := LoadRenderTexture(Width, Height);
-  //FBoard := GetTextureData(FTexture.texture);
 
   BeginTextureMode(FTexture);
   ClearBackground(BackColor);

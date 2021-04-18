@@ -19,7 +19,7 @@ type
 
   { TTyroWindow }
 
-  TTyroWindow = class(TTyroParentControl)
+  TTyroWindow = class(TTyroContainer)
   private
     FCanvas: TTyroCanvas;
     FTitle: string;

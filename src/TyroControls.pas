@@ -44,7 +44,7 @@ type
 
   { TTyroParentControl }
 
-  TTyroParentControl = class abstract(TObject)
+  TTyroContainer = class abstract(TObject)
   private
     FControls: TTyroControls;
   public
@@ -55,7 +55,7 @@ type
 
   { TTyroControl }
 
-  TTyroControl = class abstract(TTyroParentControl)
+  TTyroControl = class abstract(TTyroContainer)
   private
     FAlpha: Byte;
     FParent: TTyroControl;
@@ -118,8 +118,6 @@ type
     property TextColor: TColor read FTextColor write FTextColor;
   end;
 
-  { TTyroWindow }
-
   { TTyroForm }
 
   TTyroForm = class(TTyroControl)
@@ -130,15 +128,15 @@ type
 
 implementation
 
-{ TTyroParentControl }
+{ TTyroContainer }
 
-constructor TTyroParentControl.Create;
+constructor TTyroContainer.Create;
 begin
   inherited Create;
   FControls := TTyroControls.Create(True);
 end;
 
-destructor TTyroParentControl.Destroy;
+destructor TTyroContainer.Destroy;
 begin
   FreeAndNil(FControls);
   inherited Destroy;

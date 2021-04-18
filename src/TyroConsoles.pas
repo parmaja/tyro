@@ -26,59 +26,6 @@ unit TyroConsoles;
   at <http://www.gnu.org/copyleft/lgpl.html>. You can also obtain it by writing
   to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
   MA 02111-1307, USA.
-
-  Changelog:
-   09.27.2007 : Seperation from another Package, first Release under GPL
-                Version 0.1
-   10.02.2007 : Licence Changed to LGPL
-                Added   : History
-                Added   : Password Input mode
-                Fixed   : Blank Screen when Resizing so that TopLine disappears.
-                Added   : Fixed Prompt Description infront of Input, moves along with it
-                Etc     : Functions, minor Bugs
-                Missing : FreeLineWidth full support
-                Version 0.2
-   10.08.2007 : Removed : Fixed Line Width Support, Source now less complex
-                Added   : Paste/Copy/Cut Ability, Select with Mouse and Shift/Keys
-                Added   : TRTLCriticalsection called FLock to make Writeln/Write Threadsafe
-                Fixed   : GTK 1/2 Linux support, several changes to make that work...
-                Removed : LineWidth, can cause Property Loading Errors if used with old Apps !
-                Workarn : GTK Font height gets 2 added on all plattforms, means, win32 have two extra dots unecessarily, can't solve that !
-                Fixed   : Pos 1/End Key changes Scrollbar (Different GTK behaviour !)
-                Version 0.3
-   12.06.2008 : Optimized Color String output, still needs testing and PWD Strings are not
-                changed yet. Improvement visible on Win32, but still to slow, any hacks?
-   17.06.2008 : TColorString changed completly, now using Arrays instead of linked lists
-   25.06.2008 : Fixed everything for Multispace support
-                Added tabulator behaviour
-                Caret type and Color now customizable
-                Input Selection Colors published
-                Speed improvement using precalculated Sum-Widths for TColorString
-                Lots of minor UTF8 Bugs fixed
-   06.26.2008 : Escape Codes for some sort of Graphical output (Tables, lines, etc)
-                Better moving Input
-                Bug fixes in MakeInputVisible
-   06.27.2008 : Add FGraphicCharWidth
-   06.28.2008 : New Escape Code preprocessor
-                Support for different modes (ANSI color, CmdBox, None(ignore))
-   06.29.2008 : FStringBuffer added,Works without WakeMainThread now as well
-                Fixed LineOutAndFill
-                Added AutoFollow
-   03.25.2009 : Support for two different Wrap-Modes (wmmChar,wmmWord)
-                Buffered Linecounts for single TColorStrings
-	          Patched StartRead to correctly add Prompt String
-   08.04.2009 : Added commen properties
-                Seperate  Background and Forground Draw to respect kerning
-                Scrolling a bit more "normal"
-                Writing input now an option
-   02.25.2010 : Small changes to compile with FPC 2.4
-   01.12.2014 : Set key:=0 for arrow keys to prevent some interesting
-                component jumping behaviour.
-                Calculate the page height using "inherited height" now.
-
-   Todo    : Input Masks
-   Todo    : Docu
-
 }
 interface
 
@@ -195,9 +142,9 @@ type
     procedure DeleteHistoryEntry(i: Integer);
     procedure MakeFirstHistoryEntry(i: Integer);
     function MoveInputCaretTo(x, y: Integer; chl: boolean): boolean;
-    procedure SetSelection(Start, Ende: Integer);
-    procedure LeftSelection(Start, Ende: Integer);
-    procedure RightSelection(Start, Ende: Integer);
+    procedure SetSelection(Start, Stop: Integer);
+    procedure LeftSelection(Start, Stop: Integer);
+    procedure RightSelection(Start, Stop: Integer);
     procedure DeleteSelected;
     procedure SetOutY(v: Integer);
     procedure IntWrite;
@@ -289,7 +236,7 @@ type
 
   TColorString = class(TObject)
   private
-    FChars:    packed array of TColorChar;
+    FChars: packed array of TColorChar;
     FSumWidth: Integer;
     FPassWordStart: Integer;
     FPassWordChar: TUTF8Char;
@@ -310,13 +257,13 @@ type
     procedure OverWriteChar(s: TUTF8Char; Pos, ADefWidth: Integer; FC, BC: TColor; Attrib: TCharAttrib);
     procedure OverWrite(S: TColorString; Pos: Integer);
     procedure OverWritePW(S: TColorString; PWS, Pos: Integer; PWC: string);
-    procedure PartOverWrite(S: TColorString; Start, Ende, Pos: Integer);
+    procedure PartOverWrite(S: TColorString; Start, Stop, Pos: Integer);
     procedure LineOutAndFill(ACanvas: TTyroCanvas;
       AX, AY, ALeftX, AWrapWidth, ACH, ACB, ACaretPos: Integer;
       ABC, ACC: TColor; ACaretHeight, ACaretWidth, ACaretYShift: Integer;
       ADrawCaret: boolean);
-    function Getstring: string;
-    function GetPartString(Start, Ende: Integer): string;
+    function GetString: string;
+    function GetPartString(Start, Stop: Integer): string;
     procedure Delete(Index: Integer);
     procedure Delete(Index, Len: Integer);
     procedure Insert(Index: Integer; C: string; FC, BC: TColor; Attrib: TCharAttrib);
@@ -452,7 +399,8 @@ begin
                 end;
               end;
             end;
-            else if FChar = ' ' then LastWordStart := i + 1;
+            else
+              if FChar = ' ' then LastWordStart := i + 1;
           end;
           SumWidth  := SumWidth + FCharWidth;
           FSumWidth := SumWidth;
@@ -1341,21 +1289,21 @@ begin
   UpdateSum;
 end;
 
-function TColorString.GetPartString(Start, Ende: Integer): string;
+function TColorString.GetPartString(Start, Stop: Integer): string;
 var
   i, n: Integer;
   Len:  Integer;
 begin
   if Start < 0 then
     Start := 0;
-  if Ende > High(FChars) then
-    Ende := High(FChars);
+  if Stop > High(FChars) then
+    Stop := High(FChars);
   Len    := 0;
-  for i := Start to Ende do
+  for i := Start to Stop do
     Inc(Len, System.Length(FChars[i].FChar));
   SetLength(Result, Len);
   Len := 1;
-  for i := Start to Ende do
+  for i := Start to Stop do
   begin
     with FChars[i] do
     begin
@@ -1418,12 +1366,12 @@ begin
   UpdateSum;
 end;
 
-procedure TColorString.PartOverWrite(S: TColorString; Start, Ende, Pos: Integer);
+procedure TColorString.PartOverWrite(S: TColorString; Start, Stop, Pos: Integer);
 var
   i: Integer;
 begin
-  MinimumLength(Pos + Ende - Start, Lightgray, S.FDefaultBackGround);
-  for i := 0 to Ende - Start - 1 do
+  MinimumLength(Pos + Stop - Start, Lightgray, S.FDefaultBackGround);
+  for i := 0 to Stop - Start - 1 do
     FChars[i + Pos] := S.FChars[i + Start];
   UpdateSum;
 end;
@@ -1613,11 +1561,11 @@ begin
   end;
 end;
 
-procedure TTyroConsole.LeftSelection(Start, Ende: Integer);
+procedure TTyroConsole.LeftSelection(Start, Stop: Integer);
 begin
   if FSelStart = -1 then
   begin
-    SetSelection(Start, Ende);
+    SetSelection(Start, Stop);
   end
   else
   begin
@@ -1635,44 +1583,44 @@ begin
   end;
 end;
 
-procedure TTyroConsole.RightSelection(Start, Ende: Integer);
+procedure TTyroConsole.RightSelection(Start, Stop: Integer);
 begin
   if FSelStart = -1 then
   begin
-    SetSelection(Start, Ende);
+    SetSelection(Start, Stop);
   end
   else
   begin
-    if FSelEnd + 1 = Ende then
+    if FSelEnd + 1 = Stop then
       SetSelection(-1, 0)
     else
     begin
       if FSelstart < Start then
       begin
-        SetSelection(FSelStart, Ende);
+        SetSelection(FSelStart, Stop);
       end
       else
-        SetSelection(Ende, FSelEnd + 1);
+        SetSelection(Stop, FSelEnd + 1);
     end;
   end;
 end;
 
-procedure TTyroConsole.SetSelection(Start, Ende: Integer);
+procedure TTyroConsole.SetSelection(Start, Stop: Integer);
 begin
   if FSelStart <> -1 then
     FInputBuffer.ColorBlock(FSelStart, FSelEnd, FInputColor, FInputBackGround);
-  if Start = Ende then
+  if Start = Stop then
     FSelStart := -1
   else
   begin
-    if Start < Ende then
+    if Start < Stop then
     begin
       FSelStart := Start;
-      FSelEnd   := Ende - 1;
+      FSelEnd   := Stop - 1;
     end
     else
     begin
-      FSelStart := Ende;
+      FSelStart := Stop;
       FSelEnd   := Start - 1;
     end;
   end;
