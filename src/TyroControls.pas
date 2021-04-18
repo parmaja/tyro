@@ -15,7 +15,7 @@ interface
 uses
   Classes, SysUtils,
   mnUtils, mnClasses,
-  TyroClasses, RayLib3,
+  TyroClasses, RayLib,
   LazUTF8, LCLType;
 
 type

@@ -92,10 +92,10 @@
     </RunParams>
     <RequiredPackages>
       <Item>
-        <PackageName Value="LCLBase"/>
+        <PackageName Value="RayLibPkg"/>
       </Item>
       <Item>
-        <PackageName Value="RayLib"/>
+        <PackageName Value="LCLBase"/>
       </Item>
       <Item>
         <PackageName Value="MiniCommons"/>

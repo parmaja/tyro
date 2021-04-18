@@ -2,7 +2,7 @@
 <CONFIG>
   <Package Version="5">
     <PathDelim Value="\"/>
-    <Name Value="RayLib"/>
+    <Name Value="RayLibPkg"/>
     <AutoUpdate Value="OnRebuildingAll"/>
     <CompilerOptions>
       <Version Value="11"/>
@@ -14,15 +14,14 @@
     <Version Major="1" Minor="3" Release="1" Build="1"/>
     <Files>
       <Item>
-        <Filename Value="RayLib3.pas"/>
-        <UnitName Value="RayLib3"/>
+        <Filename Value="RayLib.pas"/>
+        <UnitName Value="RayLib"/>
       </Item>
       <Item>
         <Filename Value="RayClasses.pas"/>
         <UnitName Value="RayClasses"/>
       </Item>
     </Files>
-    <CompatibilityMode Value="False"/>
     <RequiredPkgs>
       <Item>
         <PackageName Value="FCL"/>

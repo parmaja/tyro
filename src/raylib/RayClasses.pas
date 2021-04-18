@@ -20,7 +20,7 @@ interface
 uses
   Classes, SysUtils, Contnrs, Math,
   mnClasses, mnUtils,
-  RayLib3;
+  RayLib;
 
 const
   cDefaultSampleRate = 44100;     // Default sample rate
@@ -49,7 +49,7 @@ type
 
   TRayImage = class(TRayObject)
   private
-    FImage: RayLib3.TImage;
+    FImage: RayLib.TImage;
   protected
   public
   end;
@@ -126,6 +126,22 @@ type
     procedure PlayMusicFile(FileName: string);
   end;
 
+  { TRayFont }
+
+  TRayFont = class(TRayObject)
+  public
+    Data: TFont;
+  public
+    RefCount: Boolean;
+    Width: Integer;
+    Height: Integer;
+    procedure Add;
+    procedure Release;
+    constructor Create;
+    destructor Destroy; override;
+    procedure LoadFromFile(FileName: string);
+  end;
+
 var
   RayLibSound: TRayLibSound = nil;
   RayUpdates: TRayUpdateList = nil; //move it to Tyro classes
@@ -134,6 +150,32 @@ implementation
 
 var
   FAudioDeviceInitialized: Integer = 0;
+
+{ TRayFont }
+
+procedure TRayFont.Add;
+begin
+end;
+
+procedure TRayFont.Release;
+begin
+end;
+
+constructor TRayFont.Create;
+begin
+
+end;
+
+destructor TRayFont.Destroy;
+begin
+  UnloadFont(Data);
+  inherited Destroy;
+end;
+
+procedure TRayFont.LoadFromFile(FileName: string);
+begin
+  Data := LoadFont(PChar(FileName));
+end;
 
 { TRayAudio }
 

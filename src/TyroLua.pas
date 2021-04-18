@@ -18,7 +18,7 @@ interface
 uses
   Classes, SysUtils,
   lua53, FPImage,
-  RayLib3, RayClasses, //remove it
+  RayLib, RayClasses, //remove it
   TyroSounds, TyroClasses, Melodies, TyroEngines;
 
 type

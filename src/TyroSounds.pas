@@ -32,7 +32,7 @@ interface
 uses
   Classes, SysUtils, mnClasses, mnUtils, Math,
   Melodies,
-  RayLib3, RayClasses;
+  RayLib, RayClasses;
 
 {$define FADE} //fadein fadeout generated sound to reduce tick at the end of sound
 
@@ -136,7 +136,7 @@ begin
   SampleCount := Round(Duration * SampleRate);
   SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
   aSize := SampleCount * Sizeof(Smallint);
-  Data := RayLib3.MemAlloc(aSize);
+  Data := RayLib.MemAlloc(aSize);
   if Frequency <> 0 then
   begin
     Amplitude := (Amplitude * ((Power(2, SampleSize) / 2) - 1) / 100) - 1;
@@ -164,7 +164,7 @@ begin
 
   if Data <> nil then //maybe move it to generate
   begin
-{    RayLib3.MemFree(Data);
+{    RayLib.MemFree(Data);
     Data := nil;}
   end;
 end;
@@ -217,7 +217,7 @@ begin
   Sound := LoadSoundFromWave(Wave);
   if Wave.Data <> nil then //maybe move it to generate
   begin
-    RayLib3.MemFree(Wave.Data);
+    RayLib.MemFree(Wave.Data);
     Wave.Data := nil;
     UnloadWave(Wave);
   end;

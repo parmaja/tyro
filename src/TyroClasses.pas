@@ -15,7 +15,7 @@ interface
 uses
   Classes, SysUtils, SyncObjs, fgl,
   FPImage, FPCanvas,
-  Melodies, RayClasses, TyroSounds, RayLib3;
+  Melodies, RayClasses, TyroSounds, RayLib;
 
 type
   TMyFPMemoryImage = class(TFPMemoryImage)
@@ -95,7 +95,7 @@ type
     FAlpha: Byte;
     //FBoard: TRenderTexture2D;
     //FBoard: TImage;
-    Font: RayLib3.TFont;
+    Font: TRayFont;
   public
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
@@ -103,9 +103,7 @@ type
     procedure ResetOrigin;
     procedure BeginDraw;
     procedure EndDraw;
-    //property Board: TImage read FBoard;
     procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
-    //procedure PrintTest;
     procedure DrawText(X, Y: Integer; S: string);
     procedure DrawPixel(X, Y: Integer; Color: TColor);
     procedure DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
@@ -672,6 +670,8 @@ end;
 
 constructor TTyroCanvas.Create(AWidth, AHeight: Integer);
 begin
+  inherited Create;
+  Font := TRayFont.Create;
   FWidth := AWidth;
   FHeight := AHeight;
   FTextColor := BLACK;
@@ -694,10 +694,10 @@ begin
 
   //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/tahoma.ttf'), ScreenFontSize, nil, $FFFF); //Good for arabic but it take huge memory
 
-  Font := LoadFont(PChar(Main.WorkSpace + 'fonts/font.png'));
-  //Font.BaseSize := 16;
+  Font.LoadFromFile(Main.WorkSpace + 'fonts/font.png');
+  Font.Height := 16;
   //Font := GetFontDefault();
-  SetTextureFilter(Font.texture, FILTER_POINT);
+  SetTextureFilter(Font.Data.texture, FILTER_POINT);
 
   FTexture := LoadRenderTexture(Width, Height);
 
@@ -709,10 +709,11 @@ end;
 
 destructor TTyroCanvas.Destroy;
 begin
-  UnloadFont(Font);
+  FreeAndNil(Font);
   //UnloadImage(FBoard);
   UnloadRenderTexture(FTexture);
   Finalize(FTexture);
+  FreeAndNil(Font);
   inherited;
 end;
 
@@ -741,9 +742,9 @@ end;
 procedure TTyroCanvas.DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
 begin
   if Fill then
-    Raylib3.DrawCircle(X + FOriginX, Y + FOriginY, R, Color.Alpha(Alpha))
+    RayLib.DrawCircle(X + FOriginX, Y + FOriginY, R, Color.Alpha(Alpha))
   else
-    Raylib3.DrawCircleLines(X + FOriginX, Y + FOriginY, R, Color.Alpha(Alpha));
+    RayLib.DrawCircleLines(X + FOriginX, Y + FOriginY, R, Color.Alpha(Alpha));
   FLastX := X;
   FLastY := Y;
 end;
@@ -751,9 +752,9 @@ end;
 procedure TTyroCanvas.DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
 begin
   if Fill then
-    Raylib3.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color.Alpha(Alpha))
+    RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color.Alpha(Alpha))
   else
-    Raylib3.DrawRectangleLines(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color.Alpha(Alpha));
+    RayLib.DrawRectangleLines(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color.Alpha(Alpha));
   FLastX := X + AWidth;
   FLastY := Y + AHeight;
 end;
@@ -770,19 +771,19 @@ end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
 begin
-  RayLib3.DrawTextEx(Font, PChar(S), Vector2Of(x + FOriginX, y + FOriginY), Font.BaseSize, 0, TextColor);
+  RayLib.DrawTextEx(Font.Data, PChar(S), Vector2Of(x + FOriginX, y + FOriginY), Font.Height, 0, TextColor);
 end;
 
 procedure TTyroCanvas.DrawPixel(X, Y: Integer; Color: TColor);
 begin
-  RayLib3.DrawPixel(X + FOriginX, Y + FOriginY, Color);
+  RayLib.DrawPixel(X + FOriginX, Y + FOriginY, Color);
   FLastX := X;
   FLastY := Y;
 end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
 begin
-  RayLib3.DrawLine(X1 + FOriginX, Y1 + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
+  RayLib.DrawLine(X1 + FOriginX, Y1 + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
   FLastX := X2;
   FLastY := Y2;
 end;

@@ -31,7 +31,7 @@ interface
 
 uses
   Classes, SysUtils,
-  RayLib3, TyroClasses, LazUTF8, LCLType,
+  RayLib, TyroClasses, LazUTF8, LCLType,
   TyroControls,
   FPImage, FPCanvas;
 

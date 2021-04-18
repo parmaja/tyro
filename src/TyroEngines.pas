@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs, fgl,
-  RayLib3, RayClasses, TyroClasses, TyroControls, TyroConsoles;
+  RayLib, RayClasses, TyroClasses, TyroControls, TyroConsoles;
 
 type
 
@@ -189,7 +189,7 @@ end;
 
 constructor TTyroMain.Create;
 begin
-  RayLib.Load;
+  RayLibrary.Load;
   inherited Create;
   FCanvasLock := TCriticalSection.Create;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
@@ -203,7 +203,9 @@ begin
   //Controls.Add(TTyroForm.Create(nil));
 
   Console := TTyroConsole.Create(nil);
-  Console.BoundsRect := Rect(10, 10 , 10 + 20 * 8, 10 + 20 * 8);
+  Console.BoundsRect := Rect(10, 10 , 10 + 40 * 8, 10 + 40 * 8);
+  Console.CharHeight := 16;
+  Console.CharWidth := 16;
   //Console.Visible := False;
   Console.Alpha := 128;
   Controls.Add(Console);
