@@ -135,6 +135,7 @@ type
   { TColorHelper }
 
   TColorHelper = record helper for TColor
+    function Alpha(AAlpha: Byte): TColor;
     constructor Create(ARed, AGreen, ABlue, AAlpha: Byte);overload;
     constructor Create(RGBAColor: TRGBAColor); overload;
     constructor Create(AValue: Cardinal); overload;
@@ -2155,6 +2156,12 @@ begin
 end;
 
 { TColor }
+
+function TColorHelper.Alpha(AAlpha: Byte): TColor;
+begin
+  Result := Self;
+  Result.RGBA.Alpha := AAlpha;
+end;
 
 constructor TColorHelper.Create(ARed, AGreen, ABlue, AAlpha: Byte);
 var

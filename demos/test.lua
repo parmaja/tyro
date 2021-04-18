@@ -2,6 +2,8 @@ window()
 log('start')
 i = 100000
 c = 0
+print('Hello World');
+print('Circle demo');
 canvas.alpha = 200
 while i > 0 do
     c = math.random(0, colors.count - 1)

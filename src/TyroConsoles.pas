@@ -125,8 +125,6 @@ type
     FVSBVisible: boolean;
     FVSBPos:    Integer;
     //FVSBWidth:  Integer;
-    FClientWidth: Integer;
-    FClientHeight: Integer;
     FCaretX:    Integer;
     FOutX, FOutY: Integer;
     FInputX, FInputY: Integer;
@@ -238,7 +236,6 @@ type
     procedure TextColors(FC, BC: TColor);
     procedure Write(s: string);
     procedure Writeln(s: string);
-    procedure WriteStream(Stream: TStream);
     procedure Clear;
     procedure StartRead(DFC, DBC: TColor; const Desc: string; IFC, IBC: TColor);
     procedure StartReadPassWord(DFC, DBC: TColor; const Desc: string; IFC, IBC: TColor);
@@ -319,7 +316,7 @@ type
       ABC, ACC: TColor; ACaretHeight, ACaretWidth, ACaretYShift: Integer;
       ADrawCaret: boolean);
     function Getstring: string;
-    function GetPartstring(Start, Ende: Integer): string;
+    function GetPartString(Start, Ende: Integer): string;
     procedure Delete(Index: Integer);
     procedure Delete(Index, Len: Integer);
     procedure Insert(Index: Integer; C: string; FC, BC: TColor; Attrib: TCharAttrib);
@@ -1344,7 +1341,7 @@ begin
   UpdateSum;
 end;
 
-function TColorString.GetPartstring(Start, Ende: Integer): string;
+function TColorString.GetPartString(Start, Ende: Integer): string;
 var
   i, n: Integer;
   Len:  Integer;
@@ -1371,7 +1368,7 @@ begin
   end;
 end;
 
-function TColorString.Getstring: string;
+function TColorString.GetString: string;
 var
   i, n: Integer;
   Len:  Integer;
@@ -1616,19 +1613,6 @@ begin
   end;
 end;
 
-procedure TTyroConsole.WriteStream(Stream: TStream);
-var
-  c: WideString;
-begin
-  c:='';
-  while Stream.Position < Stream.Size do
-  begin
-    // Not very efficient, but should work...
-    Stream.Read(c, 1);
-    Write(c);
-  end;
-end;
-
 procedure TTyroConsole.LeftSelection(Start, Ende: Integer);
 begin
   if FSelStart = -1 then
@@ -1778,7 +1762,7 @@ begin
   if (sl = FInputY) or (not chl) then
   begin
     Dec(h, FLineHeightSum[FInputY]);
-    q := FInputBuffer.GetCharPosition(FClientWidth, h, x);
+    q := FInputBuffer.GetCharPosition(ClientWidth, h, x);
     if (q < FInputMinPos) then
       q := FInputMinPos;
     if (q - FInputX > FInputBuffer.Length) then
@@ -1936,7 +1920,7 @@ begin
     Exit;
   end;
   UpdateLineHeights;
-  y := FLineHeightSum[FInputY] + FInputBuffer.GetLineOfCaret(FClientWidth, FCaretX, FCaretWidth);
+  y := FLineHeightSum[FInputY] + FInputBuffer.GetLineOfCaret(ClientWidth, FCaretX, FCaretWidth);
   if y >= FLineHeightSum[FTopLine] + FLineOfTopLine + FPageHeight - 1 then
   begin
     while y >= FLineHeightSum[FTopLine] + FLineHeights[FTopLine] + FPageHeight - 1 do
@@ -1969,7 +1953,7 @@ begin
   if not FAutoFollow then
     Exit;
   UpdateLineHeights;
-  y := FLineHeightSum[FOutY] + FLines[FOutY].GetLineOfCaret(FClientWidth,
+  y := FLineHeightSum[FOutY] + FLines[FOutY].GetLineOfCaret(ClientWidth,
     FOutX, FCaretWidth);
   if y >= FLineHeightSum[FTopLine] + FLineOfTopLine + FPageHeight then
   begin
@@ -2656,7 +2640,7 @@ begin
   begin
     if (not Recalc) and (FStoredLineCount>=0) then LineC:=FStoredLineCount else
     begin
-      LineC := LineCount(FClientWidth, -1, FCaretWidth);
+      LineC := LineCount(ClientWidth, -1, FCaretWidth);
       FStoredLineCount:=LineC;
     end;
   end;
@@ -2666,7 +2650,7 @@ begin
     begin
       if (not Recalc) and (FStoredLineCount>=0) then LineC2:=FStoredLineCount else
       begin
-        LineC2 := LineCount(FClientWidth, FCaretX, FCaretWidth);
+        LineC2 := LineCount(ClientWidth, FCaretX, FCaretWidth);
         FStoredLineCount:=LineC2;
       end;
     end;
@@ -2693,10 +2677,8 @@ procedure TTyroConsole.AdjustScrollBars(const Recalc:Boolean);
 var
   LH: Integer;
 begin
-  FClientWidth  := inherited ClientWidth;
-  FClientHeight := inherited ClientHeight;
-  FPageHeight   := FClientHeight div FCharHeight;
-  FVisibleLines := FPageHeight + Ord(FClientHeight mod FCharHeight <> 0);
+  FPageHeight   := ClientHeight div FCharHeight;
+  FVisibleLines := FPageHeight + Ord(ClientHeight mod FCharHeight <> 0);
   LH            := UpdateLineHeights(Recalc);
   if LH <> FVisibleLineCount then
   begin
@@ -2765,25 +2747,25 @@ begin
   inherited;
   with ACanvas do
   begin
-    m    := FVisibleLines - 1;
-    y    := -FLineOfTopLine;
+    m := FVisibleLines - 1;
+    y := -FLineOfTopLine;
     CurrentLine := FTopLine;
     while (y <= m) and (CurrentLine < LineCount) do
     begin
       FLines[CurrentLine].LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
-        FClientWidth, FCharHeight, FGraphicCharWidth, -1, FBackGroundColor, FCaretColor,
+        ClientWidth, FCharHeight, FGraphicCharWidth, -1, FBackGroundColor, FCaretColor,
         FCaretHeight, FCaretWidth, FCaretYShift, False);
       if (FInput) and (FInputY = CurrentLine) then
       begin
         if FInputIsPassWord then
         begin
-          FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0, FClientWidth,
+          FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0, ClientWidth,
             FCharHeight, FGraphicCharWidth, FCaretX, FBackGroundColor, FCaretColor,
             FCaretHeight, FCaretWidth, FCaretYShift, FCaretVisible and Focused);
         end
         else
         begin
-          FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0, FClientWidth,
+          FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0, ClientWidth,
             FCharHeight, FGraphicCharWidth, FCaretX, FBackGroundColor, FCaretColor,
             FCaretHeight, FCaretWidth, FCaretYShift, FCaretVisible and Focused);
         end;
@@ -2792,9 +2774,9 @@ begin
       Inc(CurrentLine);
     end;
     y := y * FCharHeight;
-    if y < FClientHeight then
+    if y < ClientHeight then
     begin
-      ACanvas.DrawRect(0, y, FClientWidth, FClientHeight, FBackGroundColor, True);
+      ACanvas.DrawRect(0, y, ClientWidth, ClientHeight, FBackGroundColor, True);
     end;
   end;
 end;

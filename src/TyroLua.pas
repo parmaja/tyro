@@ -413,7 +413,7 @@ begin
 
   lua_register(LuaState, 'log', @log_func);
   lua_register(LuaState, 'sleep', @sleep_func);
-  lua_register_method(LuaState, 'print', @DrawText_func);
+  lua_register_method(LuaState, 'print', @Print_func);
   lua_register_method(LuaState, 'window', @Window_func);
 
 //  lua_register_integer(LuaState, 'width', ScreenWidth));
@@ -605,15 +605,10 @@ end;
 
 function TLuaScript.Print_func(L: Plua_State): Integer; cdecl;
 var
-//  c: integer;
-  x, y: Integer;
   s: string;
 begin
-//  c := lua_gettop(L);
   s := lua_tostring(L, 1);
-  x := round(lua_tonumber(L, 2));
-  y := round(lua_tonumber(L, 3));
-  AddQueueObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  AddQueueObject(TPrintObject.Create(Main.Canvas, s));
   Result := 0;
 end;
 

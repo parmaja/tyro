@@ -19,22 +19,22 @@ type
 
   { TTyroWindow }
 
-  TTyroWindow = class(TObject)
+  TTyroWindow = class(TTyroParentControl)
   private
     FCanvas: TTyroCanvas;
-    FControls: TTyroControls;
+    FTitle: string;
+    procedure SetTitle(AValue: string);
   protected
     DefaultBackColor: TColor;
     WindowVisible: Boolean;
   public
-    Title: string;
     constructor Create;
     destructor Destroy; override;
     procedure Paint;
     procedure ShowWindow(W, H: Integer);
     procedure HideWindow;
-    property Controls: TTyroControls read FControls;
     property Canvas: TTyroCanvas read FCanvas;
+    property Title: string read FTitle write SetTitle;
   end;
 
   { TTyroMain }
@@ -79,16 +79,20 @@ implementation
 
 { TTyroWindow }
 
+procedure TTyroWindow.SetTitle(AValue: string);
+begin
+  if FTitle =AValue then Exit;
+  FTitle :=AValue;
+end;
+
 constructor TTyroWindow.Create;
 begin
   inherited Create;
   DefaultBackColor := TColor.Create(220, 230, 240, 0);
-  FControls := TTyroControls.Create;
 end;
 
 destructor TTyroWindow.Destroy;
 begin
-  FreeAndNil(FControls);
   inherited Destroy;
 end;
 
@@ -196,11 +200,13 @@ begin
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
 
+  //Controls.Add(TTyroForm.Create(nil));
+
   Console := TTyroConsole.Create(nil);
-  Console.BoundsRect := Rect(10, 10 , 10 + 80 * 8, 10 + 80 * 8);
+  Console.BoundsRect := Rect(10, 10 , 10 + 20 * 8, 10 + 20 * 8);
+  //Console.Visible := False;
+  Console.Alpha := 128;
   Controls.Add(Console);
-  Console.WriteLn('Hello World');
-  Console.WriteLn('Hello World Again');
 end;
 
 destructor TTyroMain.Destroy;

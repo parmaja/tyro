@@ -36,19 +36,41 @@ type
     scrollENDSCROLL
   );
 
+  TTyroControl = class;
+
+  TTyroControls = class(specialize TmnObjectList<TTyroControl>)
+  public
+  end;
+
+  { TTyroParentControl }
+
+  TTyroParentControl = class abstract(TObject)
+  private
+    FControls: TTyroControls;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    property Controls: TTyroControls read FControls;
+  end;
+
   { TTyroControl }
 
-  TTyroControl = class abstract(TObject)
+  TTyroControl = class abstract(TTyroParentControl)
   private
+    FAlpha: Byte;
+    FParent: TTyroControl;
     FBoundsRect: TRect;
     FBackColor: TColor;
     FTextColor: TColor;
+    FVisible: Boolean;
     function GetHeight: Integer;
     function GetWidth: Integer;
+    procedure SetAlpha(AValue: Byte);
     procedure SetBoundsRect(AValue: TRect);
     procedure SetHeight(AValue: Integer);
     procedure SetLeft(AValue: Integer);
     procedure SetTop(AValue: Integer);
+    procedure SetVisible(AValue: Boolean);
     procedure SetWidth(AValue: Integer);
   protected
     IsCreated: Boolean;
@@ -71,6 +93,7 @@ type
     constructor Create(AParent: TTyroControl); virtual;
     destructor Destroy; override;
     procedure Invalidate; virtual;
+
     procedure Paint(ACanvas: TTyroCanvas);
 
     procedure KeyPress(var Key: TUTF8Char); virtual;
@@ -80,6 +103,7 @@ type
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
     procedure MouseMove(Shift: TShiftState; x, y: integer); virtual;
 
+    property Parent: TTyroControl read FParent;
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
     property Left: Integer read FBoundsRect.Left write SetLeft;
     property Top: Integer read FBoundsRect.Top write SetTop;
@@ -87,30 +111,52 @@ type
     property Height: Integer read GetHeight write SetHeight;
     property ClientWidth: Integer read GetClientWidth;
     property ClientHeight: Integer read GetClientHeight;
+    property Visible: Boolean read FVisible write SetVisible;
+    property Alpha: Byte read FAlpha write SetAlpha;
 
     property BackColor: TColor read FBackColor write FBackColor;
     property TextColor: TColor read FTextColor write FTextColor;
   end;
 
-  TTyroControls = class(specialize TmnObjectList<TTyroControl>)
-  public
-  end;
-
   { TTyroWindow }
+
+  { TTyroForm }
 
   TTyroForm = class(TTyroControl)
   public
+    constructor Create(AParent: TTyroControl); override;
     procedure DoPaint(ACanvas: TTyroCanvas); override;
   end;
 
 implementation
 
+{ TTyroParentControl }
+
+constructor TTyroParentControl.Create;
+begin
+  inherited Create;
+  FControls := TTyroControls.Create(True);
+end;
+
+destructor TTyroParentControl.Destroy;
+begin
+  FreeAndNil(FControls);
+  inherited Destroy;
+end;
+
 { TTyroWindow }
+
+constructor TTyroForm.Create(AParent: TTyroControl);
+begin
+  inherited Create(AParent);
+  FBoundsRect.Right := 100;
+  FBoundsRect.Bottom := 100;
+end;
 
 procedure TTyroForm.DoPaint(ACanvas: TTyroCanvas);
 begin
   inherited;
-  ACanvas.DrawRect(BoundsRect, BackColor, False);
+  ACanvas.DrawRect(BoundsRect, BackColor, True);
 end;
 
 { TTyroControl }
@@ -132,6 +178,13 @@ begin
   Result := FBoundsRect.Width;
 end;
 
+procedure TTyroControl.SetAlpha(AValue: Byte);
+begin
+  if FAlpha =AValue then Exit;
+  FAlpha :=AValue;
+  Invalidate;
+end;
+
 procedure TTyroControl.SetHeight(AValue: Integer);
 begin
   FBoundsRect.Height := AValue;
@@ -148,6 +201,13 @@ procedure TTyroControl.SetTop(AValue: Integer);
 begin
   FBoundsRect.Top := AValue;
   Resize;
+end;
+
+procedure TTyroControl.SetVisible(AValue: Boolean);
+begin
+  if FVisible =AValue then Exit;
+  FVisible :=AValue;
+  Invalidate;
 end;
 
 procedure TTyroControl.SetWidth(AValue: Integer);
@@ -197,13 +257,21 @@ begin
 end;
 
 procedure TTyroControl.Paint(ACanvas: TTyroCanvas);
+var
+  aAlpha: Byte;
 begin
-  ACanvas.SetOrigin(Left, Top);
-  try
-    DoPaintBackground(ACanvas);
-    DoPaint(ACanvas)
-  finally
-    ACanvas.ResetOrigin;
+  if Visible then
+  begin
+    ACanvas.SetOrigin(Left, Top);
+    aAlpha := ACanvas.Alpha;
+    ACanvas.Alpha := Alpha;
+    try
+      DoPaintBackground(ACanvas);
+      DoPaint(ACanvas)
+    finally
+      ACanvas.ResetOrigin;
+      ACanvas.Alpha := aAlpha;
+    end;
   end;
 end;
 
@@ -259,6 +327,10 @@ end;
 constructor TTyroControl.Create(AParent: TTyroControl);
 begin
   inherited Create;
+  FParent := AParent;
+  if Parent <> nil then
+    Parent.Controls.Add(Self);
+  FVisible := True;
   FTextColor := White;
   FBackColor := Black;
   Created;
@@ -267,6 +339,9 @@ end;
 
 destructor TTyroControl.Destroy;
 begin
+  if Parent <> nil then
+    Parent.Controls.Extract(Self);
+  FParent := nil;
   inherited Destroy;
 end;
 
