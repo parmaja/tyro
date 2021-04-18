@@ -109,9 +109,9 @@ type
     procedure DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
     procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
+    procedure DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean);
     procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean);
-    procedure Print(S: string);
     procedure Clear;
     property TextColor: TColor read FTextColor write FTextColor;
     property PenColor: TColor read FTextColor write FTextColor;//temp trick
@@ -155,6 +155,15 @@ type
   { TWindowObject }
 
   TWindowObject = class(TQueueObject)
+  public
+    fW, fH: Integer;
+    constructor Create(W, H: Integer);
+    procedure DoExecute; override;
+  end;
+
+  { TShowConsoleObject }
+
+  TShowConsoleObject = class(TQueueObject)
   public
     fW, fH: Integer;
     constructor Create(W, H: Integer);
@@ -375,6 +384,20 @@ begin
   Result := Result or C.RGBA.Green;
   Result := Result shl 8;
   Result := Result or C.RGBA.Red;
+end;
+
+{ TShowConsoleObject }
+
+constructor TShowConsoleObject.Create(W, H: Integer);
+begin
+  inherited Create;
+  FW := W;
+  FH := H;
+end;
+
+procedure TShowConsoleObject.DoExecute;
+begin
+  Main.ShowConsole(FW, FH);
 end;
 
 { TTyroImage }
@@ -759,6 +782,11 @@ begin
   FLastY := Y + AHeight;
 end;
 
+procedure TTyroCanvas.DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean);
+begin
+  DrawRectangle(ARectangle.Left, ARectangle.Top, ARectangle.Right - ARectangle.Left, ARectangle.Bottom - ARectangle.Top, Color, Fill);
+end;
+
 procedure TTyroCanvas.DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
 begin
   DrawRectangle(ALeft, ATop, ARight - ALeft, ABottom - ATop, Color, Fill);
@@ -791,11 +819,6 @@ end;
 procedure TTyroCanvas.DrawLineTo(X2, Y2: Integer; Color: TColor);
 begin
   DrawLine(FLastX + FOriginX, FLastY + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
-end;
-
-procedure TTyroCanvas.Print(S: string);
-begin
-  //TODO
 end;
 
 procedure TTyroCanvas.Clear;

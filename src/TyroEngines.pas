@@ -17,26 +17,6 @@ uses
 
 type
 
-  { TTyroWindow }
-
-  TTyroWindow = class(TTyroContainer)
-  private
-    FCanvas: TTyroCanvas;
-    FTitle: string;
-    procedure SetTitle(AValue: string);
-  protected
-    DefaultBackColor: TColor;
-    WindowVisible: Boolean;
-  public
-    constructor Create;
-    destructor Destroy; override;
-    procedure Paint;
-    procedure ShowWindow(W, H: Integer);
-    procedure HideWindow;
-    property Canvas: TTyroCanvas read FCanvas;
-    property Title: string read FTitle write SetTitle;
-  end;
-
   { TTyroMain }
 
   TTyroMain = class(TTyroWindow)
@@ -66,6 +46,12 @@ type
 
     procedure RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
 
+    procedure ShowWindow(AWidth, AHeight: Integer);
+    procedure HideWindow;
+
+    procedure ShowConsole(AWidth, AHeight: Integer);
+    procedure HideConsole;
+
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
 
@@ -77,69 +63,6 @@ var
 
 implementation
 
-{ TTyroWindow }
-
-procedure TTyroWindow.SetTitle(AValue: string);
-begin
-  if FTitle =AValue then Exit;
-  FTitle :=AValue;
-end;
-
-constructor TTyroWindow.Create;
-begin
-  inherited Create;
-  DefaultBackColor := TColor.Create(220, 230, 240, 0);
-end;
-
-destructor TTyroWindow.Destroy;
-begin
-  inherited Destroy;
-end;
-
-procedure TTyroWindow.Paint;
-var
-  aControl: TTyroControl;
-begin
-  BeginDrawing;
-  try
-    ClearBackground(DefaultBackColor);
-
-    {if Board <> nil then
-    begin
-      t := Board.LoadTexture;
-      DrawTextureRec(t, TRectangle.Create(0, 0, t.width, t.height), TVector2.Create(0, 0), WHITE);
-      UnloadTexture(t);
-    end;}
-
-    with Canvas.Texture do
-      DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), WHITE);
-
-    for aControl in Controls do
-    begin
-      aControl.Paint(Canvas);
-    end;
-
-  finally
-    EndDrawing;
-  end;
-end;
-
-procedure TTyroWindow.ShowWindow(W, H: Integer);
-begin
-  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  InitWindow(W, H, PChar(Title));
-  SetTargetFPS(cFramePerSeconds);
-  ShowCursor();
-  WindowVisible := True;
-  FCanvas := TTyroCanvas.Create(W, H);
-  //FBoard := TTyroImage.Create(W, H);
-end;
-
-procedure TTyroWindow.HideWindow;
-begin
-  if WindowVisible then
-    CloseWindow;
-end;
 
 { TTyroMain }
 
@@ -191,6 +114,7 @@ constructor TTyroMain.Create;
 begin
   RayLibrary.Load;
   inherited Create;
+  Margin := 10;
   FCanvasLock := TCriticalSection.Create;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
@@ -200,22 +124,21 @@ begin
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
 
-  //Controls.Add(TTyroForm.Create(nil));
+  //TTyroPanel.Create(Self);
 
-  Console := TTyroConsole.Create(nil);
-  Console.BoundsRect := Rect(10, 10 , 10 + 40 * 8, 10 + 40 * 8);
+  Console := TTyroConsole.Create(Self);
+  Console.BoundsRect := Rect(Margin, Margin , 100, 100);
   Console.CharHeight := 16;
   Console.CharWidth := 16;
-  //Console.Visible := False;
+  Console.Visible := False;
   Console.Alpha := 128;
-  Controls.Add(Console);
+  Console.Focused := True;
 end;
 
 destructor TTyroMain.Destroy;
 begin
   //Stop;
   HideWindow;
-  FreeAndNil(FCanvas);
   //FreeAndNil(FBoard);
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
@@ -256,7 +179,7 @@ begin
   if (FScript <> nil) and FScript.Suspended then
     FScript.Start;
 
-  if WindowVisible then
+  if Visible then
   begin
     if WindowShouldClose() then
     begin
@@ -307,6 +230,34 @@ begin
     FScript.WaitFor;
     FreeAndNil(FScript);
   end;
+end;
+
+procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
+begin
+  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  InitWindow(AWidth, AHeight, PChar(Title));
+  Visible := True;
+  SetTargetFPS(cFramePerSeconds);
+  ShowCursor();
+  Canvas := TTyroCanvas.Create(AWidth, AHeight);
+  //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
+  Console.BoundsRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
+end;
+
+procedure TTyroMain.HideWindow;
+begin
+  if Visible then
+    CloseWindow;
+end;
+
+procedure TTyroMain.ShowConsole(AWidth, AHeight: Integer);
+begin
+  Console.Show;
+end;
+
+procedure TTyroMain.HideConsole;
+begin
+  Console.Hide;
 end;
 
 end.

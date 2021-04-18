@@ -48,6 +48,16 @@ type
     constructor Create(AScript: TLuaScript); override;
   end;
 
+  { TLuaConsole }
+
+  TLuaConsole = class(TLuaObject)
+  protected
+    function __setter(L: PLua_State): integer; cdecl; override;
+    function __getter(L: PLua_State): integer; cdecl; override;
+  public
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
   { TLuaColors }
 
   TLuaColors = class(TLuaObject)
@@ -74,6 +84,7 @@ type
     FQueueObject: TQueueObject;
     LuaState: Plua_State;
     LuaCanvas: TLuaCanvas;
+    LuaConsole: TLuaConsole;
     LuaColors: TLuaColors;
     procedure ExecuteQueueObject;
     procedure DoError(S: string);
@@ -83,6 +94,7 @@ type
     //canvas functions
     function Clear_func(L: Plua_State): Integer; cdecl;
     function Window_func(L: Plua_State): Integer; cdecl;
+    function ShowConsole_func(L: Plua_State): Integer; cdecl;
     function DrawText_func(L: Plua_State): Integer; cdecl;
     function DrawCircle_func(L: Plua_State): Integer; cdecl;
     function DrawRectangle_func(L: Plua_State): Integer; cdecl;
@@ -252,6 +264,37 @@ begin
   lua_setfield(L, -2, pchar(name));
 end;
 
+{ TLuaConsole }
+
+function TLuaConsole.__setter(L: PLua_State): integer; cdecl;
+var
+  i: integer;
+  field: string;
+begin
+  Result := 0;
+  field := lua_tostring(L, 2);
+{  if lua_isinteger(L, -1) then
+    case field of
+    end;}
+
+end;
+
+function TLuaConsole.__getter(L: PLua_State): integer; cdecl;
+var
+  i: integer;
+  field: string;
+begin
+  Result := 0;
+  field := lua_tostring(L, 2);
+  {case field of
+  end;}
+end;
+
+constructor TLuaConsole.Create(AScript: TLuaScript);
+begin
+  inherited Create(AScript);
+end;
+
 { TLuaObject }
 
 procedure TLuaObject.Created;
@@ -415,12 +458,18 @@ begin
   lua_register(LuaState, 'sleep', @sleep_func);
   lua_register_method(LuaState, 'print', @Print_func);
   lua_register_method(LuaState, 'window', @Window_func);
+  lua_register_method(LuaState, 'showconsole', @ShowConsole_func);
 
 //  lua_register_integer(LuaState, 'width', ScreenWidth));
 //  lua_register_integer(LuaState, 'heigh', ScreenHeight));
 
   LuaCanvas := TLuaCanvas.Create(Self);
+  LuaConsole := TLuaConsole.Create(Self);
   LuaColors := TLuaColors.Create(Self);
+
+  lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
+  lua_register_table_method(LuaState, 'console', self, 'show', @ShowConsole_func);
+  lua_register_table_index(LuaState, 'console', LuaConsole); //Should be last one
 
   //lua_register_table(LuaState, 'draw', LuaCanvas);
   lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
@@ -517,6 +566,23 @@ begin
   if c > 1 then
     h := round(lua_tonumber(L, 2));
   FQueueObject := TWindowObject.Create(w, h);
+  Synchronize(@ExecuteQueueObject);
+  Result := 0;
+end;
+
+function TLuaScript.ShowConsole_func(L: Plua_State): Integer; cdecl;
+var
+  c: integer;
+  w, h: integer;
+begin
+  c := lua_gettop(L);
+  w := 0;
+  h := 0;
+  if c > 0 then
+    w := round(lua_tonumber(L, 1));
+  if c > 1 then
+    h := round(lua_tonumber(L, 2));
+  FQueueObject := TShowConsoleObject.Create(w, h);
   Synchronize(@ExecuteQueueObject);
   Result := 0;
 end;

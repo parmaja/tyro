@@ -36,17 +36,21 @@ type
     scrollENDSCROLL
   );
 
+  TTyroContainer = class;
   TTyroControl = class;
+  TTyroWindow = class;
 
   TTyroControls = class(specialize TmnObjectList<TTyroControl>)
   public
   end;
 
-  { TTyroParentControl }
+  { TTyroContainer }
 
   TTyroContainer = class abstract(TObject)
   private
     FControls: TTyroControls;
+  protected
+    procedure AddControl(AControl: TTyroControl);
   public
     constructor Create;
     destructor Destroy; override;
@@ -58,23 +62,28 @@ type
   TTyroControl = class abstract(TTyroContainer)
   private
     FAlpha: Byte;
-    FParent: TTyroControl;
     FBoundsRect: TRect;
     FBackColor: TColor;
     FTextColor: TColor;
     FVisible: Boolean;
+    FWindow: TTyroWindow;
+    FParent: TTyroContainer;
     function GetHeight: Integer;
+    function GetFocused: Boolean;
     function GetWidth: Integer;
     procedure SetAlpha(AValue: Byte);
     procedure SetBoundsRect(AValue: TRect);
     procedure SetHeight(AValue: Integer);
+    procedure SetFocused(AValue: Boolean);
     procedure SetLeft(AValue: Integer);
     procedure SetTop(AValue: Integer);
     procedure SetVisible(AValue: Boolean);
     procedure SetWidth(AValue: Integer);
+    procedure SetWindow(AValue: TTyroWindow);
+    procedure SetParent(AValue: TTyroContainer);
   protected
     IsCreated: Boolean;
-    Focused: Boolean;
+    function GetClientRect: TRect;
     function GetClientWidth: Integer;
     function GetClientHeight: Integer;
 
@@ -89,12 +98,18 @@ type
     procedure DoPaint(ACanvas: TTyroCanvas); virtual;
 
     procedure Created; virtual;
+    property Window: TTyroWindow read FWindow write SetWindow;
   public
-    constructor Create(AParent: TTyroControl); virtual;
+    constructor Create(AParent: TTyroContainer); virtual;
     destructor Destroy; override;
     procedure Invalidate; virtual;
 
     procedure Paint(ACanvas: TTyroCanvas);
+
+    procedure FocusChanged; virtual;
+    property Parent: TTyroContainer read FParent write SetParent;
+    procedure Show;
+    procedure Hide;
 
     procedure KeyPress(var Key: TUTF8Char); virtual;
     procedure KeyDown(var Key: word; Shift: TShiftState); virtual;
@@ -103,8 +118,9 @@ type
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
     procedure MouseMove(Shift: TShiftState; x, y: integer); virtual;
 
-    property Parent: TTyroControl read FParent;
+    property Focused: Boolean read GetFocused write SetFocused;
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
+    property ClientRect: TRect read GetClientRect;
     property Left: Integer read FBoundsRect.Left write SetLeft;
     property Top: Integer read FBoundsRect.Top write SetTop;
     property Width: Integer read GetWidth write SetWidth;
@@ -118,17 +134,46 @@ type
     property TextColor: TColor read FTextColor write FTextColor;
   end;
 
-  { TTyroForm }
+  { TTyroPanel }
 
-  TTyroForm = class(TTyroControl)
+  TTyroPanel = class(TTyroControl)
   public
-    constructor Create(AParent: TTyroControl); override;
+    constructor Create(AParent: TTyroContainer); override;
     procedure DoPaint(ACanvas: TTyroCanvas); override;
+
+  end;
+
+  { TTyroWindow }
+
+  TTyroWindow = class(TTyroContainer)
+  private
+    FCanvas: TTyroCanvas;
+    FFocused: TTyroControl;
+    FTitle: string;
+    procedure SetCanvas(AValue: TTyroCanvas);
+    procedure SetFocused(AValue: TTyroControl);
+    procedure SetTitle(AValue: string);
+  protected
+    DefaultBackColor: TColor;
+    Margin: Integer;
+  public
+    Visible: Boolean;
+    constructor Create;
+    destructor Destroy; override;
+    procedure Paint;
+    property Canvas: TTyroCanvas read FCanvas write SetCanvas;
+    property Title: string read FTitle write SetTitle;
+    property Focused: TTyroControl read FFocused write SetFocused;
   end;
 
 implementation
 
 { TTyroContainer }
+
+procedure TTyroContainer.AddControl(AControl: TTyroControl);
+begin
+  Controls.Add(AControl);
+end;
 
 constructor TTyroContainer.Create;
 begin
@@ -137,24 +182,34 @@ begin
 end;
 
 destructor TTyroContainer.Destroy;
+var
+  aControl: TTyroControl;
 begin
+  aControl := Controls.Last;
+  while aControl <> nil do
+  begin
+    aControl.FParent := nil;
+    Controls.Extract(aControl);
+    aControl.Free;
+    aControl := Controls.Last;
+  end;
   FreeAndNil(FControls);
-  inherited Destroy;
+  inherited;
 end;
 
 { TTyroWindow }
 
-constructor TTyroForm.Create(AParent: TTyroControl);
+constructor TTyroPanel.Create(AParent: TTyroContainer);
 begin
-  inherited Create(AParent);
+  inherited;
   FBoundsRect.Right := 100;
   FBoundsRect.Bottom := 100;
 end;
 
-procedure TTyroForm.DoPaint(ACanvas: TTyroCanvas);
+procedure TTyroPanel.DoPaint(ACanvas: TTyroCanvas);
 begin
   inherited;
-  ACanvas.DrawRect(BoundsRect, BackColor, True);
+  ACanvas.DrawRectangle(ClientRect, BackColor, True);
 end;
 
 { TTyroControl }
@@ -169,6 +224,11 @@ end;
 function TTyroControl.GetHeight: Integer;
 begin
   Result := FBoundsRect.Height;
+end;
+
+function TTyroControl.GetFocused: Boolean;
+begin
+  Result := (Window <> nil) and (Window.Focused = Self);
 end;
 
 function TTyroControl.GetWidth: Integer;
@@ -187,6 +247,12 @@ procedure TTyroControl.SetHeight(AValue: Integer);
 begin
   FBoundsRect.Height := AValue;
   Resize;
+end;
+
+procedure TTyroControl.SetFocused(AValue: Boolean);
+begin
+  if Window <> nil then
+    Window.Focused := Self;
 end;
 
 procedure TTyroControl.SetLeft(AValue: Integer);
@@ -214,14 +280,36 @@ begin
   Resize;
 end;
 
+procedure TTyroControl.SetWindow(AValue: TTyroWindow);
+begin
+  if FWindow =AValue then Exit;
+  FWindow :=AValue;
+end;
+
+procedure TTyroControl.SetParent(AValue: TTyroContainer);
+begin
+  if FParent =AValue then
+    Exit;
+  if FParent <> nil then
+    FParent.Controls.Extract(Self);
+  FParent :=AValue;
+  if FParent <> nil then
+    FParent.AddControl(Self);
+end;
+
+function TTyroControl.GetClientRect: TRect;
+begin
+  Result := Rect(0, 0, Width, Height);
+end;
+
 function TTyroControl.GetClientWidth: Integer;
 begin
-  Result := BoundsRect.Width;
+  Result := ClientRect.Width;
 end;
 
 function TTyroControl.GetClientHeight: Integer;
 begin
-  Result := BoundsRect.Width;
+  Result := ClientRect.Height;
 end;
 
 procedure TTyroControl.ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
@@ -273,6 +361,20 @@ begin
   end;
 end;
 
+procedure TTyroControl.FocusChanged;
+begin
+end;
+
+procedure TTyroControl.Show;
+begin
+  Visible := True;
+end;
+
+procedure TTyroControl.Hide;
+begin
+  Visible := False;
+end;
+
 procedure TTyroControl.Resize;
 begin
 
@@ -322,12 +424,14 @@ procedure TTyroControl.Created;
 begin
 end;
 
-constructor TTyroControl.Create(AParent: TTyroControl);
+constructor TTyroControl.Create(AParent: TTyroContainer);
 begin
   inherited Create;
   FParent := AParent;
   if Parent <> nil then
-    Parent.Controls.Add(Self);
+    Parent.AddControl(Self);
+  if (Parent is TTyroWindow) then
+    FWindow := (Parent as TTyroWindow);
   FVisible := True;
   FTextColor := White;
   FBackColor := Black;
@@ -338,9 +442,75 @@ end;
 destructor TTyroControl.Destroy;
 begin
   if Parent <> nil then
-    Parent.Controls.Extract(Self);
-  FParent := nil;
+    Parent := nil;
+  inherited;
+end;
+
+{ TTyroWindow }
+
+procedure TTyroWindow.SetTitle(AValue: string);
+begin
+  if FTitle =AValue then Exit;
+  FTitle :=AValue;
+end;
+
+procedure TTyroWindow.SetFocused(AValue: TTyroControl);
+begin
+  if FFocused =AValue then Exit;
+  if FFocused <> nil then
+    FFocused.FocusChanged;
+  FFocused :=AValue;
+  if FFocused <> nil then
+    FFocused.FocusChanged;
+end;
+
+procedure TTyroWindow.SetCanvas(AValue: TTyroCanvas);
+begin
+  if FCanvas =AValue then Exit;
+  FCanvas :=AValue;
+end;
+
+constructor TTyroWindow.Create;
+begin
+  inherited Create;
+  DefaultBackColor := TColor.Create(220, 230, 240, 0);
+end;
+
+destructor TTyroWindow.Destroy;
+begin
+  FreeAndNil(FCanvas);
   inherited Destroy;
+end;
+
+procedure TTyroWindow.Paint;
+var
+  aControl: TTyroControl;
+begin
+  if Visible then
+  begin
+    BeginDrawing;
+    try
+      ClearBackground(DefaultBackColor);
+
+      {if Board <> nil then
+      begin
+        t := Board.LoadTexture;
+        DrawTextureRec(t, TRectangle.Create(0, 0, t.width, t.height), TVector2.Create(0, 0), WHITE);
+        UnloadTexture(t);
+      end;}
+
+      with Canvas.Texture do
+        DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), WHITE);
+
+      for aControl in Controls do
+      begin
+        aControl.Paint(Canvas);
+      end;
+
+    finally
+      EndDrawing;
+    end;
+  end;
 end;
 
 end.

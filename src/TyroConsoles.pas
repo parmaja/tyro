@@ -42,7 +42,7 @@ const
 type
 
   TCaretType = (cartLine, cartSubBar, cartBigBar, cartUser);
-  TEscapeCodeType = (esctCmdBox, esctAnsi, esctNone);
+  TEscapeCodeType = (esctConsole, esctAnsi, esctNone);
   TEscapeMode = (escmNone, escmOperation, escmData2, escmData1,
     escmAnsiOperation, escmAnsiSquare);
   TCharAttrib = (charaUnderline, charaItalic, charaBold, charaBlink);
@@ -52,8 +52,8 @@ type
 
   TColorstring = class;
 
-  EOnCmdBoxInput = procedure(ACmdBox: TTyroConsole; Input: string) of object;
-  EOnCmdBoxInputChange = procedure(ACmdBox: TTyroConsole; InputData: TColorstring) of object;
+  EOnConsoleInput = procedure(AConsole: TTyroConsole; Input: string) of object;
+  EOnConsoleInputChange = procedure(AConsole: TTyroConsole; InputData: TColorstring) of object;
 
   { TTyroConsole }
 
@@ -63,36 +63,36 @@ type
     //FCaretTimer: TTimer;
     FCaretVisible: boolean;
     FLineCount: Integer;
-    FLines:     array of TColorstring;
+    FLines: array of TColorString;
     FLineHeights: array of Integer;
     FLineHeightSum: array of Integer;
-    FTopLine:   Integer;
+    FTopLine: Integer;
     FPageHeight: Integer;
     FVisibleLines: Integer;
     FVSBVisible: boolean;
-    FVSBPos:    Integer;
+    FVSBPos: Integer;
     //FVSBWidth:  Integer;
     FCaretX:    Integer;
     FOutX, FOutY: Integer;
     FInputX, FInputY: Integer;
-    FInputPos:  Integer;
+    FInputPos: Integer;
     FCharHeight: Integer;
     FCharWidth: Integer;
     FLineOfTopLine: Integer;
     FVisibleLineCount: Integer;
-    FInput:     boolean;
+    FInput: Boolean;
     FInputBuffer: TColorstring;
-    FInputVisible: boolean;
+    FInputVisible: Boolean;
     FInputMinPos: Integer;
     FUTF8InputMinPos: Integer;
-    FOnInput:   EOnCmdBoxInput;
-    FOnAny:     EOnCmdBoxInputChange;
-    FOnInputChange: EOnCmdBoxInputChange;
+    FOnInput:   EOnConsoleInput;
+    FOnAny:     EOnConsoleInputChange;
+    FOnInputChange: EOnConsoleInputChange;
     FBackGroundColor: TColor;
     FCurrentColor: TColor;
     FCurrentBackGround: TColor;
     FPassWordChar: TUTF8Char;
-    FInputIsPassWord: boolean;
+    FInputIsPassWord: Boolean;
     FHistory:   array of TColorstring;
     FHistoryLength: Integer;
     FHistoryMax: Integer;
@@ -101,7 +101,7 @@ type
     FInputBackground: TColor;
     FInputSelColor: TColor;
     FInputSelBackGround: TColor;
-    FMouseDown: boolean;
+    FMouseDown: Boolean;
     FSelStart, FSelEnd: Integer;
     FMouseDownInputPos: Integer;
     FCurrentString: string;
@@ -111,12 +111,12 @@ type
     FCaretHeight: Integer;
     FCaretYShift: Integer;
     FTabWidth:  Integer;
-    FGraphicCharWidth: Integer;
+    FGraphicCharWidth: Integer;//Delete
     FEscapeCodeType: TEscapeCodeType;
     FEscapeMode: TEscapeMode;
     FEscapeData: string;
     FStringBuffer: TStringList;
-    FAutoFollow: boolean;
+    FAutoFollow: Boolean;
     FCurrentAttrib: TCharAttrib;
     FInputAttrib: TCharAttrib;
     FWrapMode:  TWrapMode;
@@ -141,7 +141,7 @@ type
     function GetHistory(i: Integer): string;
     procedure DeleteHistoryEntry(i: Integer);
     procedure MakeFirstHistoryEntry(i: Integer);
-    function MoveInputCaretTo(x, y: Integer; chl: boolean): boolean;
+    function MoveInputCaretTo(x, y: Integer; chl: Boolean): Boolean;
     procedure SetSelection(Start, Stop: Integer);
     procedure LeftSelection(Start, Stop: Integer);
     procedure RightSelection(Start, Stop: Integer);
@@ -162,7 +162,7 @@ type
     procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
 
   public
-    constructor Create(AParent: TTyroControl); override;
+    constructor Create(AParent: TTyroContainer); override;
     destructor Destroy; override;
 
     procedure DoPaint(ACanvas: TTyroCanvas); override;
@@ -175,7 +175,7 @@ type
     procedure MouseMove(Shift: TShiftState; x, y: Integer); override;
 
     procedure SaveToFile(AFileName: string);
-    function HistoryHas(s: string): boolean;
+    function HistoryHas(s: string): Boolean;
     function HistoryIndexOf(s: string): Integer;
     procedure ClearHistory;
     procedure TextColor(C: TColor);
@@ -206,9 +206,9 @@ type
     property CaretWidth: Integer Read FCaretWidth Write SetCaretWidth;
     property CaretHeight: Integer Read FCaretHeight Write SetCaretHeight;
     property CaretYShift: Integer Read FCaretYShift Write SetCaretYShift;
-    property OnInput: EOnCmdBoxInput Read FOnInput Write FOnInput;
-    property OnInputChange: EOnCmdBoxInputChange Read FOnInputChange Write FOnInputChange;
-    property OnAny: EOnCmdBoxInputChange Read FOnAny Write FOnAny;
+    property OnInput: EOnConsoleInput Read FOnInput Write FOnInput;
+    property OnInputChange: EOnConsoleInputChange Read FOnInputChange Write FOnInputChange;
+    property OnAny: EOnConsoleInputChange Read FOnAny Write FOnAny;
     property LineCount: Integer Read FLineCount Write SetLineCount;
     property BackGroundColor: TColor Read FBackgroundColor Write SetBackGroundColor;
     property TabWidth: Integer Read FTabWidth Write SetTabWidth;
@@ -219,7 +219,7 @@ type
     //property CaretInterval: Integer Read GetCaretInterval Write SetCaretInterval;
     property EscapeCodeType: TEscapeCodeType Read FEscapeCodeType Write FEscapeCodeType;
     property GraphicalCharacterWidth: Integer Read FGraphicCharWidth Write FGraphicCharWidth;
-    property AutoFollow: boolean Read FAutoFollow Write FAutoFollow default True;
+    property AutoFollow: Boolean Read FAutoFollow Write FAutoFollow default True;
     property WrapMode: TWrapMode Read FWrapMode Write SetWrapMode default wwmWord;
     property WriteInput:Boolean read FWriteInput write FWriteInput default True;
   end;
@@ -261,7 +261,7 @@ type
     procedure LineOutAndFill(ACanvas: TTyroCanvas;
       AX, AY, ALeftX, AWrapWidth, ACH, ACB, ACaretPos: Integer;
       ABC, ACC: TColor; ACaretHeight, ACaretWidth, ACaretYShift: Integer;
-      ADrawCaret: boolean);
+      ADrawCaret: Boolean);
     function GetString: string;
     function GetPartString(Start, Stop: Integer): string;
     procedure Delete(Index: Integer);
@@ -425,7 +425,7 @@ begin
     FWrapMode:=AValue;
     for i:=0 to FLineCount-1 do
     begin
-      FLines[i].FWrapMode:=AValue;
+      FLines[i].FWrapMode := AValue;
       FLines[i].UpdateSum;
     end;
     FInputBuffer.FWrapMode:=AValue;
@@ -494,7 +494,7 @@ end;
 // TOdo : Use string buffer instead of string (speed improvement expected)
 procedure TColorString.LineOutAndFill(ACanvas: TTyroCanvas;
   AX, AY, ALeftX, AWrapWidth, ACH, ACB, ACaretPos: Integer; ABC, ACC: TColor;
-  ACaretHeight, ACaretWidth, ACaretYShift: Integer; ADrawCaret: boolean);
+  ACaretHeight, ACaretWidth, ACaretYShift: Integer; ADrawCaret: Boolean);
 var
   LineStart         : Integer;
   LineEnd           : Integer;
@@ -1469,7 +1469,7 @@ end;}
 
 procedure TTyroConsole.MultiWrite;
 var
-  DoWrite: boolean;
+  DoWrite: Boolean;
 begin
   repeat
     System.EnterCriticalSection(FLock);
@@ -1511,7 +1511,7 @@ begin
   Result := -1;
 end;
 
-function TTyroConsole.HistoryHas(s: string): boolean;
+function TTyroConsole.HistoryHas(s: string): Boolean;
 var
   i: Integer;
 begin
@@ -1696,7 +1696,7 @@ begin
   inherited MouseMove(Shift,x,y);
 end;
 
-function TTyroConsole.MoveInputCaretTo(x, y: Integer; chl: boolean): boolean;
+function TTyroConsole.MoveInputCaretTo(x, y: Integer; chl: Boolean): Boolean;
 var
   h, sl, q: Integer;
 begin
@@ -1751,9 +1751,9 @@ end;
 procedure TTyroConsole.ScrollUp;
 var
   n: Integer;
-  Firstwidestring: TColorString;
+  FirstWideString: TColorString;
 begin
-  Firstwidestring := FLines[0];
+  FirstWideString := FLines[0];
   for n := 0 to Length(FLines) - 2 do
     Flines[n] := FLines[n + 1];
   Firstwidestring.Clear;
@@ -2380,7 +2380,7 @@ begin
         if S[Pp] = #27 then
         begin
           case FEscapeCodeType of
-            esctCmdBox:
+            esctConsole:
             begin
               FEscapeMode := escmOperation;
               FEscapeData := '';
@@ -2621,7 +2621,7 @@ begin
   end;
 end;
 
-procedure TTyroConsole.AdjustScrollBars(const Recalc:Boolean);
+procedure TTyroConsole.AdjustScrollBars(const Recalc: Boolean);
 var
   LH: Integer;
 begin
@@ -2688,7 +2688,7 @@ end;
 
 procedure TTyroConsole.DoPaint(ACanvas: TTyroCanvas);
 var
-  y : Integer;
+  y, t : Integer;
   m : Integer;
   CurrentLine : Integer;
 begin
@@ -2698,7 +2698,7 @@ begin
     m := FVisibleLines - 1;
     y := -FLineOfTopLine;
     CurrentLine := FTopLine;
-    while (y <= m) and (CurrentLine < LineCount) do
+    while (y <= m) and (CurrentLine < LineCount){ and (CurrentLine < Length(FLines))} do
     begin
       FLines[CurrentLine].LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
         ClientWidth, FCharHeight, FGraphicCharWidth, -1, FBackGroundColor, FCaretColor,
@@ -2740,7 +2740,7 @@ begin
   end;
 end;
 
-constructor TTyroConsole.Create(AParent: TTyroControl);
+constructor TTyroConsole.Create(AParent: TTyroContainer);
 var
   i: Integer;
 begin
@@ -2758,7 +2758,7 @@ begin
   FWrapMode         := wwmWord;
   FInputBuffer      := TColorString.Create(FCharWidth);
   FInputBuffer.FWrapMode := FWrapMode;
-  FEscapeCodeType   := esctCmdBox;
+  FEscapeCodeType   := esctConsole;
   FAutoFollow       := True;
   SetLength(FLines, FLineCount);
   SetLength(FLineHeights, FLineCount);

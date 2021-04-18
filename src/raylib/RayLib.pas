@@ -1085,7 +1085,7 @@ var
   { Misc. functions }
 
   // Setup window configuration flags (view FLAGS)
-  SetConfigFlags: procedure(flags: Cardinal); cdecl;
+  SetConfigFlags: procedure(flags: TConfigFlag); cdecl;
   // Set the current threshold (minimum) log level
   SetTraceLogLevel: procedure(logType: TTraceLogTypes); cdecl;
   // Set the exit threshold (minimum) log level
