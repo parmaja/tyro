@@ -527,7 +527,7 @@ var
       Exit;
     end;
     SameColor := '';
-    SameForeColor := Black;
+    SameForeColor := clBlack;
     SameColorX := 0;
     SameColorWidth := 0;
     LP     := LineStart;
@@ -773,7 +773,7 @@ var
       Exit;
     end;
     SameColor := '';
-    SameBackColor := Black;
+    SameBackColor := clBlack;
     SameColorX := 0;
     SameColorWidth := 0;
     LP     := LineStart;
@@ -1344,7 +1344,7 @@ var
   i: Integer;
   CPassWordStart: Integer;
 begin
-  MinimumLength(Pos + S.Length, Lightgray, S.FDefaultBackGround);
+  MinimumLength(Pos + S.Length, clLightgray, S.FDefaultBackGround);
   CPassWordStart := PWS;
   for i := 0 to S.Length - 1 do
   begin
@@ -1360,7 +1360,7 @@ procedure TColorString.OverWrite(S: TColorString; Pos: Integer);
 var
   i: Integer;
 begin
-  MinimumLength(Pos + S.Length, Lightgray, S.FDefaultBackGround);
+  MinimumLength(Pos + S.Length, clLightgray, S.FDefaultBackGround);
   for i := 0 to S.Length - 1 do
     FChars[i + Pos] := S.FChars[i];
   UpdateSum;
@@ -1370,7 +1370,7 @@ procedure TColorString.PartOverWrite(S: TColorString; Start, Stop, Pos: Integer)
 var
   i: Integer;
 begin
-  MinimumLength(Pos + Stop - Start, Lightgray, S.FDefaultBackGround);
+  MinimumLength(Pos + Stop - Start, clLightgray, S.FDefaultBackGround);
   for i := 0 to Stop - Start - 1 do
     FChars[i + Pos] := S.FChars[i + Start];
   UpdateSum;
@@ -2492,8 +2492,8 @@ begin
                     '0':
                     begin
                       // No Reset Values know here...just assume
-                      FCurrentColor      := Lightgray;
-                      FCurrentBackGround := Black;
+                      FCurrentColor      := clLightgray;
+                      FCurrentBackGround := clBlack;
                     end;
                     '7':
                     begin
@@ -2753,7 +2753,7 @@ begin
   FLineCount        := 1000;
   FInputVisible     := False;
   FWriteInput       := True;
-  FBackGroundColor  := Black;
+  FBackGroundColor  := clBlack;
   FGraphicCharWidth := 10;
   FWrapMode         := wwmWord;
   FInputBuffer      := TColorString.Create(FCharWidth);
@@ -2777,15 +2777,15 @@ begin
   FCaretTimer.Enabled  := True;}
   FCaretVisible        := True;
   FVSBVisible          := True;
-  FCurrentColor        := Lightgray;
-  FCurrentBackground   := Black;
-  FCaretColor          := White;
+  FCurrentColor        := clLightgray;
+  FCurrentBackground   := clBlack;
+  FCaretColor          := clWhite;
   FCaretType           := cartLine;
   FCaretWidth          := 1;
   FCaretHeight         := -1;
   FCaretYShift         := 3;
-  FInputSelBackground  := White;
-  FInputSelColor       := Blue;
+  FInputSelBackground  := clWhite;
+  FInputSelColor       := clBlue;
   FHistoryMax          := 10;
   FHistoryLength       := 0;
   SetBounds(0, 0, 200, 200);
@@ -2818,14 +2818,14 @@ end;
 
 procedure InitColors;
 begin
-  AnsiColors[0] := Black;
-  AnsiColors[1] := Red;
-  AnsiColors[2] := Green;
-  AnsiColors[3] := Yellow;
-  AnsiColors[4] := Blue;
-  AnsiColors[5] := Purple;//Fuchsia;
-  AnsiColors[6] := SkyBlue;//Aqua;
-  AnsiColors[7] := White;
+  AnsiColors[0] := clBlack;
+  AnsiColors[1] := clRed;
+  AnsiColors[2] := clGreen;
+  AnsiColors[3] := clYellow;
+  AnsiColors[4] := clBlue;
+  AnsiColors[5] := clPurple;//Fuchsia;
+  AnsiColors[6] := clSkyBlue;//Aqua;
+  AnsiColors[7] := clWhite;
 end;
 
 initialization

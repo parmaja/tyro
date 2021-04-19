@@ -405,7 +405,7 @@ end;
 constructor TTyroImage.Create(AWidth, AHeight: Integer);
 begin
   //FImage := GetTextureData(FTexture.texture);
-  FImage := GenImageColor(AWidth, AHeight, RED);
+  FImage := GenImageColor(AWidth, AHeight, clRed);
 end;
 
 destructor TTyroImage.Destroy;
@@ -697,7 +697,7 @@ begin
   Font := TRayFont.Create;
   FWidth := AWidth;
   FHeight := AHeight;
-  FTextColor := BLACK;
+  FTextColor := clBlack;
   //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
   //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
   FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue

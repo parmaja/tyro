@@ -144,33 +144,33 @@ type
   end;
 
 const
-  Lightgray: TRGBAColor = (Red: 200; Green: 200; Blue: 200; Alpha: 255);   // Light Gray
-  Gray:      TRGBAColor = (Red: 130; Green: 130; Blue: 130; Alpha: 255);   // Gray
-  DarkGray:  TRGBAColor = (Red: 80; Green: 80; Blue: 80; Alpha: 255);      // Dark Gray
-  Yellow:    TRGBAColor = (Red: 253; Green: 249; Blue: 0; Alpha: 255);     // Yellow
-  Gold:      TRGBAColor = (Red: 255; Green: 203; Blue: 0; Alpha: 255);     // Gold
-  Orange:    TRGBAColor = (Red: 255; Green: 161; Blue: 0; Alpha: 255);     // Orange
-  Pink:      TRGBAColor = (Red: 255; Green: 109; Blue: 194; Alpha: 255);   // Pink
-  Red:       TRGBAColor = (Red: 230; Green: 41; Blue: 55; Alpha: 255);     // Red
-  Maroon:    TRGBAColor = (Red: 190; Green: 33; Blue: 55; Alpha: 255);     // Maroon
-  Green:     TRGBAColor = (Red: 0; Green: 228; Blue: 48; Alpha: 255);      // Green
-  Lime:      TRGBAColor = (Red: 0; Green: 158; Blue: 47; Alpha: 255);      // Lime
-  Darkgreen: TRGBAColor = (Red: 0; Green: 117; Blue: 44; Alpha: 255);      // Dark Green
-  SkyBlue:   TRGBAColor = (Red: 102; Green: 191; Blue: 255; Alpha: 255);   // Sky Blue
-  Blue:      TRGBAColor = (Red: 0; Green: 121; Blue: 241; Alpha: 255);     // Blue
-  Darkblue:  TRGBAColor = (Red: 0; Green: 82; Blue: 172; Alpha: 255);      // Dark Blue
-  Purple:    TRGBAColor = (Red: 200; Green: 122; Blue: 255; Alpha: 255);   // Purple
-  Violet:    TRGBAColor = (Red: 135; Green: 60; Blue: 190; Alpha: 255);    // Violet
-  Darkpurple:TRGBAColor = (Red: 112; Green: 31; Blue: 126; Alpha: 255);    // Dark Purple
-  Beige:     TRGBAColor = (Red: 211; Green: 176; Blue: 131; Alpha: 255);   // Beige
-  Brown:     TRGBAColor = (Red: 127; Green: 106; Blue: 79; Alpha: 255);    // Brown
-  Darkbrown: TRGBAColor = (Red: 76; Green: 63; Blue: 47; Alpha: 255);      // Dark Brown
+  clLightgray: TRGBAColor = (Red: 200; Green: 200; Blue: 200; Alpha: 255);   // Light Gray
+  clGray:      TRGBAColor = (Red: 130; Green: 130; Blue: 130; Alpha: 255);   // Gray
+  clDarkGray:  TRGBAColor = (Red: 80; Green: 80; Blue: 80; Alpha: 255);      // Dark Gray
+  clYellow:    TRGBAColor = (Red: 253; Green: 249; Blue: 0; Alpha: 255);     // Yellow
+  clGold:      TRGBAColor = (Red: 255; Green: 203; Blue: 0; Alpha: 255);     // Gold
+  clOrange:    TRGBAColor = (Red: 255; Green: 161; Blue: 0; Alpha: 255);     // Orange
+  clPink:      TRGBAColor = (Red: 255; Green: 109; Blue: 194; Alpha: 255);   // Pink
+  clRed:       TRGBAColor = (Red: 230; Green: 41; Blue: 55; Alpha: 255);     // Red
+  clMaroon:    TRGBAColor = (Red: 190; Green: 33; Blue: 55; Alpha: 255);     // Maroon
+  clGreen:     TRGBAColor = (Red: 0; Green: 228; Blue: 48; Alpha: 255);      // Green
+  clLime:      TRGBAColor = (Red: 0; Green: 158; Blue: 47; Alpha: 255);      // Lime
+  clDarkgreen: TRGBAColor = (Red: 0; Green: 117; Blue: 44; Alpha: 255);      // Dark Green
+  clSkyBlue:   TRGBAColor = (Red: 102; Green: 191; Blue: 255; Alpha: 255);   // Sky Blue
+  clBlue:      TRGBAColor = (Red: 0; Green: 121; Blue: 241; Alpha: 255);     // Blue
+  clDarkblue:  TRGBAColor = (Red: 0; Green: 82; Blue: 172; Alpha: 255);      // Dark Blue
+  clPurple:    TRGBAColor = (Red: 200; Green: 122; Blue: 255; Alpha: 255);   // Purple
+  clViolet:    TRGBAColor = (Red: 135; Green: 60; Blue: 190; Alpha: 255);    // Violet
+  clDarkpurple:TRGBAColor = (Red: 112; Green: 31; Blue: 126; Alpha: 255);    // Dark Purple
+  clBeige:     TRGBAColor = (Red: 211; Green: 176; Blue: 131; Alpha: 255);   // Beige
+  clBrown:     TRGBAColor = (Red: 127; Green: 106; Blue: 79; Alpha: 255);    // Brown
+  clDarkbrown: TRGBAColor = (Red: 76; Green: 63; Blue: 47; Alpha: 255);      // Dark Brown
 
-  White:     TRGBAColor = (Red: 255; Green: 255; Blue: 255; Alpha: 255);   // White
-  Black:     TRGBAColor = (Red: 0; Green: 0; Blue: 0; Alpha: 255);         // Black
-  Blank:     TRGBAColor = (Red: 0; Green: 0; Blue: 0; Alpha: 0);           // Blank (Transparent)
-  Magenta:   TRGBAColor = (Red: 255; Green: 0; Blue: 255; Alpha: 255);     // Magenta
-  RayWhite:  TRGBAColor = (Red: 245; Green: 245; Blue: 245; Alpha: 255);   // My own White (raylib logo)
+  clWhite:     TRGBAColor = (Red: 255; Green: 255; Blue: 255; Alpha: 255);   // White
+  clBlack:     TRGBAColor = (Red: 0; Green: 0; Blue: 0; Alpha: 255);         // Black
+  clBlank:     TRGBAColor = (Red: 0; Green: 0; Blue: 0; Alpha: 0);           // Blank (Transparent)
+  clMagenta:   TRGBAColor = (Red: 255; Green: 0; Blue: 255; Alpha: 255);     // Magenta
+  clRayWhite:  TRGBAColor = (Red: 245; Green: 245; Blue: 245; Alpha: 255);   // My own White (raylib logo)
 
 type
   // Vector2 type

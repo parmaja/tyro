@@ -357,22 +357,22 @@ end;
 
 procedure TLuaColors.Created;
 begin
-  AddColor('white', WHITE);
-  AddColor('silver', LIGHTGRAY);
-  AddColor('gray' , Gray);
-  AddColor('black', Black);
-  AddColor('red'  , Red);
-  AddColor('maroon', Maroon);
-  AddColor('yellow', Yellow);
-  AddColor('olive', DARKGREEN);
-  AddColor('lime' , Lime);
-  AddColor('green', Green);
-  AddColor('aqua' , SKYBLUE);
-  AddColor('teal' , BROWN);
-  AddColor('blue' , Blue);
-  AddColor('navy' , VIOLET);
-  AddColor('fuchsia', MAGENTA);
-  AddColor('purple', Purple);
+  AddColor('white', clWhite);
+  AddColor('silver', clLightgray);
+  AddColor('gray' , clGray);
+  AddColor('black', clBlack);
+  AddColor('red'  , clRed);
+  AddColor('maroon', clMaroon);
+  AddColor('yellow', clYellow);
+  AddColor('olive', clDarkgreen);
+  AddColor('lime' , clLime);
+  AddColor('green', clGreen);
+  AddColor('aqua' , clSkyBlue);
+  AddColor('teal' , clBrown);
+  AddColor('blue' , clBlue);
+  AddColor('navy' , clViolet);
+  AddColor('fuchsia', clMagenta);
+  AddColor('purple', clPurple);
 end;
 
 { TLuaCanvas }

@@ -433,8 +433,8 @@ begin
   if (Parent is TTyroWindow) then
     FWindow := (Parent as TTyroWindow);
   FVisible := True;
-  FTextColor := White;
-  FBackColor := Black;
+  FTextColor := clWhite;
+  FBackColor := clBlack;
   Created;
   IsCreated := True;
 end;
@@ -500,7 +500,7 @@ begin
       end;}
 
       with Canvas.Texture do
-        DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), WHITE);
+        DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
 
       for aControl in Controls do
       begin
