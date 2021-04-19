@@ -449,7 +449,6 @@ var
   i: Integer;
 begin
   inherited;
-  WriteLn(ThreadID);
   LuaState := lua_newstate(@LuaAlloc, nil);
   lual_openlibs(LuaState);
   lua_sethook(LuaState, @HookCount, LUA_MASKCOUNT, 100);
@@ -520,7 +519,6 @@ var
   r: integer;
   Msg: string;
 begin
-  WriteLn(ThreadID);
   ThreadRunning := Self;
   //WriteLn('Run Script');
   //Sleep(1000);

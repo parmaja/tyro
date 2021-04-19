@@ -40,7 +40,7 @@ type
     procedure Stop;
     procedure ProcessQueue;
     procedure Run;
-    procedure Loop;
+    procedure Loop; virtual;
     //property Board: TTyroImage read FBoard;
     property Active: Boolean read GetActive;
 
@@ -190,15 +190,14 @@ begin
 
     ProcessQueue;
 
+    BeginDrawing;
     CanvasLock.Enter;
     try
       Paint;
-      EndDrawing;
       ThreadSwitch; //Yield
     finally
       CanvasLock.Leave;
     end;
-    BeginDrawing;
     Loop;
     ThreadSwitch; //Yield
     EndDrawing;

@@ -566,16 +566,8 @@ var
 begin
   if Visible then
   begin
-    BeginDrawing;
     try
       ClearBackground(DefaultBackColor);
-
-      {if Board <> nil then
-      begin
-        t := Board.LoadTexture;
-        DrawTextureRec(t, TRectangle.Create(0, 0, t.width, t.height), TVector2.Create(0, 0), WHITE);
-        UnloadTexture(t);
-      end;}
 
       with Canvas.Texture do
         DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
@@ -586,7 +578,6 @@ begin
       end;
 
     finally
-      EndDrawing;
     end;
   end;
 end;

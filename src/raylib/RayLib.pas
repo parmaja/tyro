@@ -1580,7 +1580,6 @@ var
 
   { Image/Texture misc functions }
 
-
   { Color-related functions }
 
   // Color fade-in or fade-out, alpha goes from 0.0f to 1.0f
