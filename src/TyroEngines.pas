@@ -235,11 +235,12 @@ end;
 procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
 begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  SetBounds(0, 0, AWidth, AHeight);
   InitWindow(AWidth, AHeight, PChar(Title));
   Visible := True;
   SetTargetFPS(cFramePerSeconds);
   ShowCursor();
-  Canvas := TTyroCanvas.Create(AWidth, AHeight);
+  NeedCanvas;
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
   Console.BoundsRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
 end;

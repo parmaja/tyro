@@ -36,6 +36,9 @@ type
     scrollENDSCROLL
   );
 
+  TTyroControlState = (csCreating, csCreated, csDestroying);
+  TTyroControlStates = set of TTyroControlState;
+
   TTyroContainer = class;
   TTyroControl = class;
   TTyroWindow = class;
@@ -57,32 +60,45 @@ type
     property Controls: TTyroControls read FControls;
   end;
 
-  { TTyroControl }
-
-  TTyroControl = class abstract(TTyroContainer)
+  TTyroSizable = class abstract(TTyroContainer)
   private
-    FAlpha: Byte;
     FBoundsRect: TRect;
-    FBackColor: TColor;
-    FTextColor: TColor;
-    FVisible: Boolean;
-    FWindow: TTyroWindow;
-    FParent: TTyroContainer;
-    function GetHeight: Integer;
-    function GetFocused: Boolean;
-    function GetWidth: Integer;
-    procedure SetAlpha(AValue: Byte);
+  protected
     procedure SetBoundsRect(AValue: TRect);
+    function GetHeight: Integer;
     procedure SetHeight(AValue: Integer);
-    procedure SetFocused(AValue: Boolean);
+    function GetWidth: Integer;
+    procedure SetWidth(AValue: Integer);
+    procedure SetBounds(Left, Top, Width, Height: Integer); virtual;
     procedure SetLeft(AValue: Integer);
     procedure SetTop(AValue: Integer);
+    procedure Resize; virtual;
+  public
+    property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
+    property Left: Integer read FBoundsRect.Left write SetLeft;
+    property Top: Integer read FBoundsRect.Top write SetTop;
+    property Width: Integer read GetWidth write SetWidth;
+    property Height: Integer read GetHeight write SetHeight;
+  end;
+
+  { TTyroControl }
+
+  TTyroControl = class abstract(TTyroSizable)
+  private
+    FAlpha: Byte;
+    FBackColor: TColor;
+    FTextColor: TColor;
+    FWindow: TTyroWindow;
+    FParent: TTyroContainer;
+    FVisible: Boolean;
+    function GetFocused: Boolean;
+    procedure SetAlpha(AValue: Byte);
+    procedure SetFocused(AValue: Boolean);
     procedure SetVisible(AValue: Boolean);
-    procedure SetWidth(AValue: Integer);
     procedure SetWindow(AValue: TTyroWindow);
     procedure SetParent(AValue: TTyroContainer);
   protected
-    IsCreated: Boolean;
+    State: TTyroControlStates;
     function GetClientRect: TRect;
     function GetClientWidth: Integer;
     function GetClientHeight: Integer;
@@ -92,8 +108,6 @@ type
     procedure SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
     procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); virtual;
 
-    procedure SetBounds(Left, Top, Width, Height: Integer); virtual;
-    procedure Resize; virtual;
     procedure DoPaintBackground(ACanvas: TTyroCanvas); virtual;
     procedure DoPaint(ACanvas: TTyroCanvas); virtual;
 
@@ -119,12 +133,7 @@ type
     procedure MouseMove(Shift: TShiftState; x, y: integer); virtual;
 
     property Focused: Boolean read GetFocused write SetFocused;
-    property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
     property ClientRect: TRect read GetClientRect;
-    property Left: Integer read FBoundsRect.Left write SetLeft;
-    property Top: Integer read FBoundsRect.Top write SetTop;
-    property Width: Integer read GetWidth write SetWidth;
-    property Height: Integer read GetHeight write SetHeight;
     property ClientWidth: Integer read GetClientWidth;
     property ClientHeight: Integer read GetClientHeight;
     property Visible: Boolean read FVisible write SetVisible;
@@ -140,12 +149,27 @@ type
   public
     constructor Create(AParent: TTyroContainer); override;
     procedure DoPaint(ACanvas: TTyroCanvas); override;
+  end;
 
+  { TTyroTexture }
+
+  TTyroTexture = class(TTyroControl) //Own a texture
+  private
+    FCanvas: TTyroCanvas;
+    procedure SetCanvas(AValue: TTyroCanvas);
+  public
+    //TODO
+    constructor Create(AParent: TTyroContainer); override;
+    destructor Destroy; override;
+    procedure Invalidate; override;
+    procedure Draw; virtual;
+    procedure Resize; override;
+    property Canvas: TTyroCanvas read FCanvas write SetCanvas;
   end;
 
   { TTyroWindow }
 
-  TTyroWindow = class(TTyroContainer)
+  TTyroWindow = class(TTyroSizable)
   private
     FCanvas: TTyroCanvas;
     FFocused: TTyroControl;
@@ -156,6 +180,7 @@ type
   protected
     DefaultBackColor: TColor;
     Margin: Integer;
+    procedure NeedCanvas;
   public
     Visible: Boolean;
     constructor Create;
@@ -167,6 +192,45 @@ type
   end;
 
 implementation
+
+{ TTyroTexture }
+
+procedure TTyroTexture.SetCanvas(AValue: TTyroCanvas);
+begin
+  if FCanvas =AValue then Exit;
+  FCanvas :=AValue;
+end;
+
+constructor TTyroTexture.Create(AParent: TTyroContainer);
+begin
+  inherited Create(AParent);
+  FCanvas := TTyroCanvas.Create(Width, Height);
+end;
+
+destructor TTyroTexture.Destroy;
+begin
+  FreeAndNil(FCanvas);
+  inherited Destroy;
+end;
+
+procedure TTyroTexture.Invalidate;
+begin
+  inherited Invalidate;
+  Paint(Canvas);
+end;
+
+procedure TTyroTexture.Draw;
+begin
+  with Canvas.Texture do
+    DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
+end;
+
+procedure TTyroTexture.Resize;
+begin
+  Canvas.Width := Width;
+  Canvas.Height := Height;
+  inherited Resize;
+end;
 
 { TTyroContainer }
 
@@ -214,26 +278,65 @@ end;
 
 { TTyroControl }
 
-procedure TTyroControl.SetBoundsRect(AValue: TRect);
+procedure TTyroSizable.SetBoundsRect(AValue: TRect);
 begin
   if FBoundsRect = AValue then Exit;
   FBoundsRect := AValue;
   Resize;
 end;
 
-function TTyroControl.GetHeight: Integer;
+function TTyroSizable.GetHeight: Integer;
 begin
   Result := FBoundsRect.Height;
 end;
 
+function TTyroSizable.GetWidth: Integer;
+begin
+  Result := FBoundsRect.Width;
+end;
+
+procedure TTyroSizable.SetHeight(AValue: Integer);
+begin
+  FBoundsRect.Height := AValue;
+  Resize;
+end;
+
+procedure TTyroSizable.SetLeft(AValue: Integer);
+begin
+  FBoundsRect.Left := AValue;
+  Resize;
+end;
+
+procedure TTyroSizable.SetTop(AValue: Integer);
+begin
+  FBoundsRect.Top := AValue;
+  Resize;
+end;
+
+procedure TTyroSizable.SetWidth(AValue: Integer);
+begin
+  FBoundsRect.Width := AValue;
+  Resize;
+end;
+
+procedure TTyroSizable.SetBounds(Left, Top, Width, Height: Integer);
+begin
+  FBoundsRect := Rect(Left, Top, Left + Width, Top + Height);
+end;
+
+procedure TTyroSizable.Resize;
+begin
+
+end;
+
+
+
+
+
+
 function TTyroControl.GetFocused: Boolean;
 begin
   Result := (Window <> nil) and (Window.Focused = Self);
-end;
-
-function TTyroControl.GetWidth: Integer;
-begin
-  Result := FBoundsRect.Width;
 end;
 
 procedure TTyroControl.SetAlpha(AValue: Byte);
@@ -243,41 +346,18 @@ begin
   Invalidate;
 end;
 
-procedure TTyroControl.SetHeight(AValue: Integer);
-begin
-  FBoundsRect.Height := AValue;
-  Resize;
-end;
-
 procedure TTyroControl.SetFocused(AValue: Boolean);
 begin
   if Window <> nil then
     Window.Focused := Self;
 end;
 
-procedure TTyroControl.SetLeft(AValue: Integer);
-begin
-  FBoundsRect.Left := AValue;
-  Resize;
-end;
-
-procedure TTyroControl.SetTop(AValue: Integer);
-begin
-  FBoundsRect.Top := AValue;
-  Resize;
-end;
 
 procedure TTyroControl.SetVisible(AValue: Boolean);
 begin
   if FVisible =AValue then Exit;
   FVisible :=AValue;
   Invalidate;
-end;
-
-procedure TTyroControl.SetWidth(AValue: Integer);
-begin
-  FBoundsRect.Width := AValue;
-  Resize;
 end;
 
 procedure TTyroControl.SetWindow(AValue: TTyroWindow);
@@ -332,11 +412,6 @@ begin
 
 end;
 
-procedure TTyroControl.SetBounds(Left, Top, Width, Height: Integer);
-begin
-  FBoundsRect := Rect(Left, Top, Left + Width, Top + Height);
-end;
-
 procedure TTyroControl.Invalidate;
 begin
 
@@ -373,11 +448,6 @@ end;
 procedure TTyroControl.Hide;
 begin
   Visible := False;
-end;
-
-procedure TTyroControl.Resize;
-begin
-
 end;
 
 procedure TTyroControl.DoPaintBackground(ACanvas: TTyroCanvas);
@@ -427,6 +497,7 @@ end;
 constructor TTyroControl.Create(AParent: TTyroContainer);
 begin
   inherited Create;
+  State := State + [csCreating];
   FParent := AParent;
   if Parent <> nil then
     Parent.AddControl(Self);
@@ -436,11 +507,12 @@ begin
   FTextColor := clWhite;
   FBackColor := clBlack;
   Created;
-  IsCreated := True;
+  State := State - [csCreating] + [csCreated];
 end;
 
 destructor TTyroControl.Destroy;
 begin
+  State := State - [csCreating, csCreated] + [csDestroying];
   if Parent <> nil then
     Parent := nil;
   inherited;
@@ -452,6 +524,12 @@ procedure TTyroWindow.SetTitle(AValue: string);
 begin
   if FTitle =AValue then Exit;
   FTitle :=AValue;
+end;
+
+procedure TTyroWindow.NeedCanvas;
+begin
+  if FCanvas = nil then
+    FCanvas := TTyroCanvas.Create(Width, Height);
 end;
 
 procedure TTyroWindow.SetFocused(AValue: TTyroControl);
@@ -500,7 +578,7 @@ begin
       end;}
 
       with Canvas.Texture do
-        DrawTextureRec(texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
+        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
 
       for aControl in Controls do
       begin

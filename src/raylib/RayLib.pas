@@ -1,8 +1,6 @@
 unit RayLib;
 {$IFDEF FPC}
 {$MODE delphi}
-{.$modeSwitch advancedrecords}
-{.$modeSwitch arrayOperators}
 {$ENDIF}
 {$M+}{$H+}
 
@@ -1038,15 +1036,15 @@ var
   // End canvas drawing and swap buffers (double buffering)
   EndDrawing: procedure; cdecl;
   // Initialize 2D mode with custom camera (2D)
-  BeginMode2D: procedure(camera: TCamera2D); cdecl;
+  BeginMode2D: procedure(Camera: TCamera2D); cdecl;
   // Ends 2D mode with custom camera
   EndMode2D: procedure; cdecl;
   // Initializes 3D mode with custom camera (3D)
-  BeginMode3D: procedure(camera: TCamera3D); cdecl;
+  BeginMode3D: procedure(Camera: TCamera3D); cdecl;
   // Ends 3D mode and returns to default 2D orthographic mode
   EndMode3D: procedure; cdecl;
   // Initializes render texture for drawing
-  BeginTextureMode: procedure(target: TRenderTexture2D); cdecl;
+  BeginTextureMode: procedure(Target: TRenderTexture2D); cdecl;
   // Ends drawing to render texture
   EndTextureMode: procedure; cdecl;
   // Begin scissor mode (define screen area for following drawing)
@@ -1538,17 +1536,17 @@ var
   // Load cubemap from image, multiple image cubemap layouts supported
   LoadTextureCubemap: function(image: TImage; layoutType: Integer): TTextureCubemap; cdecl;
   // Load texture for rendering (framebuffer)
-  LoadRenderTexture: function(width: Integer; height: Integer): TRenderTexture2D; cdecl;
+  LoadRenderTexture: function(Width: Integer; Height: Integer): TRenderTexture2D; cdecl;
   // Unload texture from GPU memory (VRAM)
-  UnloadTexture: procedure(texture: TTexture2D); cdecl;
+  UnloadTexture: procedure(Texture: TTexture2D); cdecl;
   // Unload render texture from GPU memory (VRAM)
-  UnloadRenderTexture: procedure(target: TRenderTexture2D); cdecl;
+  UnloadRenderTexture: procedure(Target: TRenderTexture2D); cdecl;
   // Update GPU texture with new data
-  UpdateTexture: procedure(texture: TTexture2D; const pixels: Pointer); cdecl;
+  UpdateTexture: procedure(Texture: TTexture2D; const pixels: Pointer); cdecl;
   // Update GPU texture rectangle with new data
-  UpdateTextureRec: procedure(texture: TTexture2D; rec: TRectangle; const pixels: Pointer); cdecl;
+  UpdateTextureRec: procedure(Texture: TTexture2D; rec: TRectangle; const pixels: Pointer); cdecl;
   // Get pixel data from GPU texture and return an Image
-  GetTextureData: function(texture: TTexture2D): TImage; cdecl;
+  GetTextureData: function(Texture: TTexture2D): TImage; cdecl;
   // Get pixel data from screen buffer and return an Image (screenshot)
   GetScreenData: function: TImage; cdecl;
 
@@ -1570,7 +1568,7 @@ var
   // Draw a Texture2D with extended parameters
   DrawTextureEx: procedure(texture: TTexture2D; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl;
   // Draw a part of a texture defined by a rectangle
-  DrawTextureRec: procedure(texture: TTexture2D; source: TRectangle; position: TVector2; tint: TColor); cdecl;
+  DrawTextureRec: procedure(Texture: TTexture2D; Source: TRectangle; Position: TVector2; tint: TColor); cdecl;
   // Draw texture quad with tiling and offset parameters
   DrawTextureQuad: procedure(texture: TTexture2D; tiling: TVector2; offset: TVector2; quad: TRectangle; tint: TColor); cdecl;
   // Draw part of a texture (defined by a rectangle) with rotation and scale tiled into dest.

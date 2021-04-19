@@ -96,6 +96,8 @@ type
     //FBoard: TRenderTexture2D;
     //FBoard: TImage;
     Font: TRayFont;
+    procedure SetHeight(AValue: Integer);
+    procedure SetWidth(AValue: Integer);
   public
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
@@ -118,8 +120,8 @@ type
     property Alpha: Byte read FAlpha write FAlpha;
     property BackColor: TColor read FBackColor write FBackColor;
     property Texture: TRenderTexture2D read FTexture;
-    property Width: Integer read FWidth;
-    property Height: Integer read FHeight;
+    property Width: Integer read FWidth write SetWidth;
+    property Height: Integer read FHeight write SetHeight;
   end;
 
   { TQueueObject }
@@ -690,6 +692,18 @@ begin
 end;
 
 { TTyroCanvas }
+
+procedure TTyroCanvas.SetHeight(AValue: Integer);
+begin
+  if FHeight =AValue then Exit;
+  FHeight :=AValue;
+end;
+
+procedure TTyroCanvas.SetWidth(AValue: Integer);
+begin
+  if FWidth =AValue then Exit;
+  FWidth :=AValue;
+end;
 
 constructor TTyroCanvas.Create(AWidth, AHeight: Integer);
 begin
