@@ -760,7 +760,6 @@ end;
 destructor TTyroCanvas.Destroy;
 begin
   FreeAndNil(Font);
-  //UnloadImage(FBoard);
   UnloadRenderTexture(FTexture);
   Finalize(FTexture);
   FreeAndNil(Font);
@@ -902,7 +901,6 @@ end;
 
 procedure TTyroScript.Execute;
 begin
-  //Board := LoadImage(PChar(Main.WorkSpace + 'richard-say.png'));
   BeforeRun;
   Run;
   AfterRun;

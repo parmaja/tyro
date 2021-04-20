@@ -87,7 +87,7 @@ type
   private
     FAlpha: Byte;
     FBackColor: TColor;
-    FTextColor: TColor;
+    FPenColor: TColor;
     FWindow: TTyroWindow;
     FParent: TTyroContainer;
     FVisible: Boolean;
@@ -138,7 +138,7 @@ type
     property Visible: Boolean read FVisible write SetVisible;
 
     property BackColor: TColor read FBackColor write FBackColor;
-    property TextColor: TColor read FTextColor write FTextColor;
+    property PenColor: TColor read FPenColor write FPenColor;
   end;
 
   { TTyroPanel }
@@ -488,7 +488,7 @@ begin
   if (Parent is TTyroWindow) then
     FWindow := (Parent as TTyroWindow);
   FVisible := True;
-  FTextColor := clWhite;
+  FPenColor := clWhite;
   FBackColor := clBlack;
   Created;
   State := State - [csCreating] + [csCreated];
@@ -553,13 +553,13 @@ begin
     try
       ClearBackground(DefaultBackColor);
 
-      with Canvas.Texture do
-        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite.SetAlpha(Canvas.Alpha));
-
       for aControl in Controls do
       begin
         aControl.Paint(Canvas);
       end;
+
+      with Canvas.Texture do
+        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite.SetAlpha(Canvas.Alpha));
 
     finally
     end;
