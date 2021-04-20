@@ -541,7 +541,7 @@ var
         begin
           if SameColor <> '' then
           begin
-            ACanvas.TextColor  := SameForeColor;
+            ACanvas.PenColor  := SameForeColor;
             ACanvas.DrawText(SameColorX, AY, SameColor);
             Inc(SameColorX, SameColorWidth);
             SameColor := '';
@@ -554,7 +554,7 @@ var
         begin
           if SameColor <> '' then
           begin
-            ACanvas.TextColor  := SameForeColor;
+            ACanvas.PenColor  := SameForeColor;
             ACanvas.DrawText(SameColorX, AY, SameColor);
             Inc(SameColorX, SameColorWidth);
             SameColor := '';
@@ -714,7 +714,7 @@ var
           end
           else
           begin
-            ACanvas.TextColor  := SameForeColor;
+            ACanvas.PenColor  := SameForeColor;
             ACanvas.DrawText(SameColorX, AY, SameColor);
             if (LP >= FPassWordStart) then
             begin
@@ -743,7 +743,7 @@ var
     end;
     if SameColor <> '' then
     begin
-      ACanvas.TextColor  := SameForeColor;
+      ACanvas.PenColor  := SameForeColor;
       ACanvas.DrawText(SameColorX, AY, SameColor);
     end;
     AX := ALeftX;

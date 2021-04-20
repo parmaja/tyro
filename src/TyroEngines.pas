@@ -131,7 +131,6 @@ begin
   Console.CharHeight := 16;
   Console.CharWidth := 16;
   Console.Visible := False;
-  Console.Alpha := 128;
   Console.Focused := True;
 end;
 

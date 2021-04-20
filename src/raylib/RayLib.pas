@@ -133,8 +133,14 @@ type
 
   { TColorHelper }
 
+  TRGBAColorHelper = record helper for TRGBAColor
+    function SetAlpha(AAlpha: Byte): TColor;
+  end;
+
+  { TColorHelper }
+
   TColorHelper = record helper for TColor
-    function Alpha(AAlpha: Byte): TColor;
+    function SetAlpha(AAlpha: Byte): TColor;
     constructor Create(ARed, AGreen, ABlue, AAlpha: Byte);overload;
     constructor Create(RGBAColor: TRGBAColor); overload;
     constructor Create(AValue: Cardinal); overload;
@@ -1562,21 +1568,21 @@ var
   { Texture drawing functions }
 
   // Draw a Texture2D
-  DrawTexture: procedure(texture: TTexture2D; posX: Integer; posY: Integer; tint: TColor); cdecl;
+  DrawTexture: procedure(Texture: TTexture2D; posX: Integer; posY: Integer; tint: TColor); cdecl;
   // Draw a Texture2D with position defined as Vector2
-  DrawTextureV: procedure(texture: TTexture2D; position: TVector2; tint: TColor); cdecl;
+  DrawTextureV: procedure(Texture: TTexture2D; position: TVector2; tint: TColor); cdecl;
   // Draw a Texture2D with extended parameters
-  DrawTextureEx: procedure(texture: TTexture2D; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl;
+  DrawTextureEx: procedure(Texture: TTexture2D; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl;
   // Draw a part of a texture defined by a rectangle
   DrawTextureRec: procedure(Texture: TTexture2D; Source: TRectangle; Position: TVector2; tint: TColor); cdecl;
   // Draw texture quad with tiling and offset parameters
-  DrawTextureQuad: procedure(texture: TTexture2D; tiling: TVector2; offset: TVector2; quad: TRectangle; tint: TColor); cdecl;
+  DrawTextureQuad: procedure(Texture: TTexture2D; tiling: TVector2; offset: TVector2; quad: TRectangle; tint: TColor); cdecl;
   // Draw part of a texture (defined by a rectangle) with rotation and scale tiled into dest.
-  DrawTextureTiled: procedure(texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; Scale: Single; tint: TColor); cdecl;
+  DrawTextureTiled: procedure(Texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; Scale: Single; tint: TColor); cdecl;
   // Draw a part of a texture defined by a rectangle with 'pro' parameters
-  DrawTexturePro: procedure(texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
+  DrawTexturePro: procedure(Texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
   // Draws a texture (or part of it) that stretches or shrinks nicely
-  DrawTextureNPatch: procedure(texture: TTexture2D; nPatchInfo: TNPatchInfo; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
+  DrawTextureNPatch: procedure(Texture: TTexture2D; nPatchInfo: TNPatchInfo; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
 
   { Image/Texture misc functions }
 
@@ -1595,7 +1601,7 @@ var
   // Returns a Color from HSV values
   ColorFromHSV: function(hsv: TVector3): TColor; cdecl;
   // Returns color with alpha applied, alpha goes from 0.0f to 1.0f
-  ColorAlpha: function(color: TColor; Alpha: Single): TColor; cdecl;
+  ColorAlpha: function(Color: TColor; Alpha: Single): TColor; cdecl;
   // Returns src alpha-blended into dst color with tint
   ColorAlphaBlend: function(dst, src, tint: TColor): TColor; cdecl;
   // Returns a Color struct from hexadecimal value
@@ -2116,6 +2122,12 @@ begin
   Result.Y := Y;
 end;
 
+function TColorHelper.SetAlpha(AAlpha: Byte): TColor;
+begin
+  Result := Self;
+  Result.RGBA.Alpha := AAlpha;
+end;
+
 { TColor }
 
 class operator TColor.Explicit(a: TRGBAColor): TColor;
@@ -2155,7 +2167,7 @@ end;
 
 { TColor }
 
-function TColorHelper.Alpha(AAlpha: Byte): TColor;
+function TRGBAColorHelper.SetAlpha(AAlpha: Byte): TColor;
 begin
   Result := Self;
   Result.RGBA.Alpha := AAlpha;

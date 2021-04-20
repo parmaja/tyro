@@ -417,7 +417,7 @@ begin
   case field of
     'color':
     begin
-      i := ColorToInt(Main.Canvas.TextColor);
+      i := ColorToInt(Main.Canvas.PenColor);
       lua_pushinteger(L, i);
       Result := 1;
     end;

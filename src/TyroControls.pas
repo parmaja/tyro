@@ -92,7 +92,6 @@ type
     FParent: TTyroContainer;
     FVisible: Boolean;
     function GetFocused: Boolean;
-    procedure SetAlpha(AValue: Byte);
     procedure SetFocused(AValue: Boolean);
     procedure SetVisible(AValue: Boolean);
     procedure SetWindow(AValue: TTyroWindow);
@@ -137,7 +136,6 @@ type
     property ClientWidth: Integer read GetClientWidth;
     property ClientHeight: Integer read GetClientHeight;
     property Visible: Boolean read FVisible write SetVisible;
-    property Alpha: Byte read FAlpha write SetAlpha;
 
     property BackColor: TColor read FBackColor write FBackColor;
     property TextColor: TColor read FTextColor write FTextColor;
@@ -329,21 +327,9 @@ begin
 
 end;
 
-
-
-
-
-
 function TTyroControl.GetFocused: Boolean;
 begin
   Result := (Window <> nil) and (Window.Focused = Self);
-end;
-
-procedure TTyroControl.SetAlpha(AValue: Byte);
-begin
-  if FAlpha =AValue then Exit;
-  FAlpha :=AValue;
-  Invalidate;
 end;
 
 procedure TTyroControl.SetFocused(AValue: Boolean);
@@ -351,7 +337,6 @@ begin
   if Window <> nil then
     Window.Focused := Self;
 end;
-
 
 procedure TTyroControl.SetVisible(AValue: Boolean);
 begin
@@ -425,7 +410,6 @@ begin
   begin
     ACanvas.SetOrigin(Left, Top);
     aAlpha := ACanvas.Alpha;
-    ACanvas.Alpha := Alpha;
     try
       DoPaintBackground(ACanvas);
       DoPaint(ACanvas)
@@ -570,7 +554,7 @@ begin
       ClearBackground(DefaultBackColor);
 
       with Canvas.Texture do
-        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
+        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite.SetAlpha(Canvas.Alpha));
 
       for aControl in Controls do
       begin
