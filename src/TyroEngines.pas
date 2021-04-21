@@ -13,6 +13,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs, fgl,
+  mnLogs,
   RayLib, RayClasses, TyroClasses, TyroControls, TyroConsoles;
 
 type
@@ -166,7 +167,7 @@ begin
       end;
     end
     else
-      Log('Type of file not found: ' + FileName);
+      Log.WriteLn('Type of file not found: ' + FileName);
   end;
 end;
 

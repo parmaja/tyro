@@ -45,7 +45,7 @@ unit Melodies;
 interface
 
 uses
-  Classes, SysUtils, mnClasses, Math;
+  Classes, SysUtils, mnClasses, Math, mnLogs;
 
 type
 
@@ -288,7 +288,7 @@ end;
 procedure TMelodyChannel.SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single);
 begin
   SoundDuration := Duration + Rest;
-  //WriteLn(Format('Frequency %f, Duration %f, Rest %f ', [Frequency, Duration, Rest]));
+  //Log.WriteLn(Format('Frequency %f, Duration %f, Rest %f ', [Frequency, Duration, Rest]));
 end;
 
 function TMelodyChannel.PlaySound: Boolean;
@@ -308,7 +308,7 @@ end;
 
 procedure TMelodyChannel.SetInstrument(Instrument: String);
 begin
-  WriteLn('SetInstrument(' + Instrument + ')');
+  Log.WriteLn('SetInstrument(' + Instrument + ')');
 end;
 
 function TMelodyChannel.Next: Boolean;
@@ -819,7 +819,7 @@ begin
           Channel.StopSound;//no if we like to make some waves say playing
           if Channel.Next then //SetSound will be in Next function
           begin
-            //WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
+            //Log.WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
             Channel.PlaySound;
             SoundDurationMS := Round(Channel.SoundDuration * 1000);
             Channel.SoundExpired := SoundDurationMS + GetTickCount64 + 1; //after playsound to take of full time

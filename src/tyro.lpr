@@ -26,7 +26,7 @@ uses
   {$ENDIF}
   SysUtils, Classes, CustApp,
   TyroClasses, RayLib, RayClasses,
-  TyroLua, TyroEditors,
+  TyroLua, TyroEditors, mnLogs,
   TyroSounds, Melodies, TyroControls, TyroEngines;  //Add all languages units here
 
 
@@ -98,6 +98,7 @@ end;
 procedure TTyroApplication.DoRun;
 begin
   inherited;
+  InstallConsoleLog;
   CheckSynchronize;
   Main.Run;
   if not Main.Active then

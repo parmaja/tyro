@@ -13,7 +13,7 @@ unit TyroClasses;
 interface
 
 uses
-  Classes, SysUtils, SyncObjs, fgl,
+  Classes, SysUtils, SyncObjs, fgl, mnLogs,
   FPImage, FPCanvas,
   Melodies, RayClasses, TyroSounds, RayLib;
 
@@ -34,7 +34,6 @@ type
     FAssetsFolder: string;
     function GetActive: Boolean;
   protected
-    //Canvas: TTyroCanvas;
     ScriptText: TStringList;
     procedure BeforeRun; virtual;
     procedure Run; virtual; abstract;
@@ -76,8 +75,6 @@ type
   public
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
-    procedure BeginDraw;
-    procedure EndDraw;
     function LoadTexture: TTexture2D;
     procedure Circle(X, Y, R: Integer; Color: TColor);
   end;
@@ -93,8 +90,6 @@ type
     FWidth, FHeight: Integer;
     FTexture: TRenderTexture2D;
     FAlpha: Byte;
-    //FBoard: TRenderTexture2D;
-    //FBoard: TImage;
     Font: TRayFont;
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
@@ -319,19 +314,12 @@ const
 var
   Lock: TCriticalSection = nil;
 
-procedure Log(S: string);
 function RayColorOf(Color: TFPColor): TRGBAColor;
 
 implementation
 
 uses
   TyroEngines, minibidi;
-
-procedure Log(S: string);
-begin
-  if IsConsole then
-    WriteLn(S);
-end;
 
 function RayColorOf(Color: TFPColor): TRGBAColor;
 begin
@@ -416,16 +404,6 @@ destructor TTyroImage.Destroy;
 begin
   UnloadImage(FImage);
   inherited Destroy;
-end;
-
-procedure TTyroImage.BeginDraw;
-begin
-  //BeginTextureMode(FImage);
-end;
-
-procedure TTyroImage.EndDraw;
-begin
-  //EndTextureMode();
 end;
 
 function TTyroImage.LoadTexture: TTexture2D;
@@ -672,7 +650,7 @@ end;
 procedure TDrawObject.Execute;
 begin
   if (Canvas = nil) then
-    Log('You need to init window to use this command, ' + ClassName + ' line: ' + IntToStr(LineNo))
+    Log.WriteLn('You need to init window to use this command, ' + ClassName + ' line: ' + IntToStr(LineNo))
   else
     inherited Execute;
 end;

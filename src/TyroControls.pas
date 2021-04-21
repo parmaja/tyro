@@ -553,13 +553,13 @@ begin
     try
       ClearBackground(DefaultBackColor);
 
+      with Canvas.Texture do
+        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite.SetAlpha(Canvas.Alpha));
+
       for aControl in Controls do
       begin
         aControl.Paint(Canvas);
       end;
-
-      with Canvas.Texture do
-        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite.SetAlpha(Canvas.Alpha));
 
     finally
     end;
