@@ -4,8 +4,8 @@ unit RayLib;
 {$ENDIF}
 {$M+}{$H+}
 
-{$MINENUMSIZE 4} //All enum must be sized as Integer
-{$Z4}{$A8}
+{$MINENUMSIZE 4} //{$Z4} All enum must be sized as Integer
+{$A8}
 
 {**
  *  RayLib 3.5
@@ -2715,4 +2715,3 @@ initialization
 finalization
   FreeAndNil(RayLibrary);
 end.
-

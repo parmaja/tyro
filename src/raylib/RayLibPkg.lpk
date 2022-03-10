@@ -24,10 +24,10 @@
     </Files>
     <RequiredPkgs>
       <Item>
-        <PackageName Value="FCL"/>
+        <PackageName Value="MiniLib"/>
       </Item>
       <Item>
-        <PackageName Value="MiniCommons"/>
+        <PackageName Value="FCL"/>
       </Item>
     </RequiredPkgs>
     <UsageOptions>

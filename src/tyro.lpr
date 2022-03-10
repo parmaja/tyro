@@ -24,10 +24,9 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils, Classes, CustApp,
-  TyroClasses, RayLib, RayClasses,
-  TyroLua, TyroEditors, mnLogs,
-  TyroSounds, Melodies, TyroControls, TyroEngines;  //Add all languages units here
+  SysUtils, Classes, CustApp, TyroClasses, RayLib, RayClasses,
+  TyroEditors, mnLogs, TyroSounds, Melodies, TyroControls, TyroEngines,
+  TyroLua, TyroPascal;  //Add all languages units here
 
 
 type

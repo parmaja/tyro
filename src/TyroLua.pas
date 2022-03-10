@@ -4,7 +4,7 @@ unit TyroLua;
  *
  * @license   MIT
  *
- * @author    Zaher Dirkey <zaher at parmaja dot com>
+ * @author    Zaher Dirkey
  *
  *
  *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
@@ -81,8 +81,9 @@ type
   TLuaScript = class(TTyroScript)
   private
   protected
-    FQueueObject: TQueueObject;
     LuaState: Plua_State;
+
+    FQueueObject: TQueueObject;
     LuaCanvas: TLuaCanvas;
     LuaConsole: TLuaConsole;
     LuaColors: TLuaColors;

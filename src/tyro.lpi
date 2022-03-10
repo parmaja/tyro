@@ -97,13 +97,16 @@
     </RunParams>
     <RequiredPackages>
       <Item>
+        <PackageName Value="pascalscript"/>
+      </Item>
+      <Item>
+        <PackageName Value="MiniLib"/>
+      </Item>
+      <Item>
         <PackageName Value="RayLibPkg"/>
       </Item>
       <Item>
         <PackageName Value="LCLBase"/>
-      </Item>
-      <Item>
-        <PackageName Value="MiniCommons"/>
       </Item>
     </RequiredPackages>
     <Units>
@@ -145,6 +148,10 @@
       </Unit>
       <Unit>
         <Filename Value="TyroEngines.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="TyroPascal.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
