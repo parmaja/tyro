@@ -49,6 +49,8 @@ type
   TPasConsole = class(TPasObject)
   protected
   public
+    procedure Print(s: string);
+    procedure Show;
     constructor Create(AScript: TPasScript); override;
   end;
 
@@ -73,12 +75,12 @@ type
   TPasScript = class(TTyroScript)
   private
   protected
-    CompExec: TPSScript;
+    PS: TPSScript;
 
     FQueueObject: TQueueObject;
-    PasCanvas: TPasCanvas;
-    PasConsole: TPasConsole;
-    PasColors: TPasColors;
+    Canvas: TPasCanvas;
+    Console: TPasConsole;
+    Colors: TPasColors;
 
     procedure Compile(script: string);
     procedure CompileRun(Script: string);
@@ -94,8 +96,8 @@ type
   protected
     procedure AddQueueObject(AQueueObject: TQueueObject); override;
     //canvas functions
-    function Clear_func: Integer; cdecl;
-    function Window_func(w, h: integer): Integer;
+    function Clear_func: Integer;
+    procedure Window_func(w, h: integer);
     function ShowConsole_func(w, h: integer): Integer;
     function DrawText_func(x, y: Integer; s: string): Integer;
     function DrawCircle_func(x, y, r: integer; f: Boolean): Integer;
@@ -108,7 +110,7 @@ type
 
     function Beep_func: Integer;
     function PlaySound_func(Freq, Period: integer): Integer;
-    function PlayMusic_func(s: string): Integer; cdecl;
+    function PlayMusic_func(s: string): Integer;
     function PlayMML_func(Songs: TmmlSong): Integer;
   public
     constructor Create; override;
@@ -117,7 +119,7 @@ type
 
 implementation
 
-function PasAlloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t) : Pointer; cdecl;
+function PasAlloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t) : Pointer;
 begin
   try
     Result:= ptr;
@@ -128,22 +130,30 @@ begin
 end;
 
 //global functions
-function sleep_func(n: Integer) : Integer; cdecl;
+function sleep_func(n: Integer) : Integer;
 begin
   sleep(n);
   Result := 0;
 end;
 
-function log_func(s: string) : Integer; cdecl;
+function log_func(s: string) : Integer;
 begin
   if IsConsole then
     WriteLn(s);
   Result := 0;
 end;
 
-{ TPasScript }
-
 { TPasConsole }
+
+procedure TPasConsole.Print(s: string);
+begin
+  FScript.Print_func(s);
+end;
+
+procedure TPasConsole.Show;
+begin
+  FScript.ShowConsole_func(0, 0);
+end;
 
 constructor TPasConsole.Create(AScript: TPasScript);
 begin
@@ -208,60 +218,27 @@ threadvar
 constructor TPasScript.Create;
 begin
   inherited;
-  CompExec := TPSScript.Create(nil);
-  CompExec.OnCompile := {$IFDEF FPC}@{$ENDIF}OnCompile;
-  CompExec.OnExecute := {$IFDEF FPC}@{$ENDIF}OnExecute;
-  CompExec.OnCompImport := {$IFDEF FPC}@{$ENDIF}OnCompImport;
-  CompExec.OnExecImport := {$IFDEF FPC}@{$ENDIF}OnExecImport;
+  PS := TPSScript.Create(nil);
+  PS.CompilerOptions := [icAllowNoBegin, icAllowUnit, icAllowNoEnd, icBooleanShortCircuit];
+  PS.OnCompile := @OnCompile;
+  PS.OnExecute := @OnExecute;
+  PS.OnCompImport := @OnCompImport;
+  PS.OnExecImport := @OnExecImport;
 
-{  Pas_register(PasState, 'log', @log_func);
-  Pas_register(PasState, 'sleep', @sleep_func);
-  Pas_register_method(PasState, 'print', @Print_func);
-  Pas_register_method(PasState, 'window', @Window_func);
-  Pas_register_method(PasState, 'showconsole', @ShowConsole_func);
-
-//  Pas_register_integer(PasState, 'width', ScreenWidth));
-//  Pas_register_integer(PasState, 'heigh', ScreenHeight));
-
-  PasCanvas := TPasCanvas.Create(Self);
-  PasConsole := TPasConsole.Create(Self);
-  PasColors := TPasColors.Create(Self);
-
-  Pas_register_table_method(PasState, 'console', self, 'print', @Print_func);
-  Pas_register_table_method(PasState, 'console', self, 'show', @ShowConsole_func);
-  Pas_register_table_index(PasState, 'console', PasConsole); //Should be last one
-
-  //Pas_register_table(PasState, 'draw', PasCanvas);
-  Pas_register_table_method(PasState, 'canvas', self, 'clear', @Clear_func);
-  Pas_register_table_method(PasState, 'canvas', self, 'text', @DrawText_func);
-  Pas_register_table_method(PasState, 'canvas', self, 'circle', @DrawCircle_func);
-  Pas_register_table_method(PasState, 'canvas', self, 'rectangle', @DrawRectangle_func);
-  Pas_register_table_method(PasState, 'canvas', self, 'line', @DrawLine_func);
-  Pas_register_table_method(PasState, 'canvas', self, 'point', @DrawPoint_func);
-
-  Pas_register_table_value(PasState, 'canvas', 'width', ScreenWidth);
-  Pas_register_table_value(PasState, 'canvas', 'height', ScreenHeight);
-
-  Pas_register_table_index(PasState, 'canvas', PasCanvas); //Should be last one
-
-  Pas_register_table_method(PasState, 'music', self, 'beep', @Beep_func);
-  Pas_register_table_method(PasState, 'music', self, 'sound', @PlaySound_func);
-  Pas_register_table_method(PasState, 'music', self, 'play', @PlayMusic_func);
-  Pas_register_table_method(PasState, 'music', self, 'mml', @PlayMML_func);
-
-  Pas_newtable(PasState);
-  for i := 0 to Length(PasColors.Colors) -1 do
-    Pas_register_color(PasState, PasColors.Colors[i].Name, PasColors.Colors[i].Color);
-  Pas_setglobal(PasState, 'colors');
-  Pas_register_table_index(PasState, 'colors', PasColors); //Should be last one
-  //Pas_register_table(PasState, 'color', PasCanvas);}
+  Canvas := TPasCanvas.Create(Self);
+  Console := TPasConsole.Create(Self);
+  Colors := TPasColors.Create(Self);
 end;
 
 destructor TPasScript.Destroy;
 begin
-  CompExec.Free;
+  PS.Free;
   //Compiler.Free;
   //Exec.Free;
+
+  Canvas.Free;
+  Console.Free;
+  Colors.Free;
 
   inherited;
 end;
@@ -274,59 +251,79 @@ end;
 
 procedure TPasScript.Compile(script: string);
 var
-    OutputMessages: string;
-    ok: Boolean;
-    i: Longint;
+  i: Longint;
 begin
 
-    CompExec.Script.Clear;
-    CompExec.Script.Add(Script);
+  PS.Script.Clear;
+  PS.Script.Add(Script);
 
-    OutputMessages := '';
-    ok := CompExec.Compile;
-    if (NOT ok) then
-    begin
-        //Get Compiler Messages now.
-        for i := 0 to CompExec.CompilerMessageCount - 1 do
-          OutputMessages := OutputMessages + CompExec.CompilerErrorToStr(i);
-    end;
-    //Check(ok, 'Compiling failed:' + Script + #13#10 + OutputMessages);
+  if (not PS.Compile) then
+  begin
+      for i := 0 to PS.CompilerMessageCount - 1 do
+        WriteLn(PS.CompilerErrorToStr(i));
+  end;
 end;
 
 procedure TPasScript.CompileRun(Script: string);
-var
-    ok: boolean;
 begin
     Compile(script);
 
-    ok := CompExec.Execute;
-
-    {Check(ok, 'Exec Error:' + Script + #13#10 +
-            CompExec.ExecErrorToString + ' at ' +
-            Inttostr(CompExec.ExecErrorProcNo) + '.' +
-            Inttostr(CompExec.ExecErrorByteCodePosition));}
+    if not PS.Execute then
+    begin
+      WriteLn('Exec Error:'+
+            PS.ExecErrorToString + ' at ' +
+            Inttostr(PS.ExecErrorProcNo) + '.' +
+            IntToStr(PS.ExecErrorByteCodePosition));
+    end;
 end;
 
 procedure TPasScript.OnCompile(Sender: TPSScript);
 begin
-  Sender.AddFunction(@MyFormat, 'function Format(const Format: string; const Args: array of const): string;');
+  (Sender as TPSScript).AddFunction(@MyFormat, 'function Format(const Format: string; const Args: array of const): string;');
+
+  (Sender as TPSScript).AddFunction(@Log_func, 'procedure log(s: string);');
+  (Sender as TPSScript).AddMethod(Self, @TPasScript.Window_func, 'procedure Window(w, h: integer);');
+  (Sender as TPSScript).AddMethod(Self, @TPasScript.Print_func, 'procedure Print(s: string);');
+
+  (Sender as TPSScript).AddRegisteredVariable('Version', 'String');
+  (Sender as TPSScript).AddRegisteredVariable('Console', 'TConsole');
 end;
 
 procedure TPasScript.OnExecute(Sender: TPSScript);
+var
+  v: PIFVariant;
 begin
-  //Sender.SetVarToInstance('SELF', Self);
+  //(Sender as TPSScript).AddRegisteredVariable('Console', 'TConsole');
+
+  v := Sender.GetVariable('version');
+  if v <> nil then
+    VSetString(v, '0.1');
+
+
+  Sender.SetVarToInstance('Console', Console);
 end;
 
 procedure TPasScript.OnCompImport(Sender: TObject; x: TIFPSPascalCompiler);
 begin
   SIRegister_Std(x);
   SIRegister_Classes(x, true);
+
+  with x.AddClassN(x.FindClass('TObject'), 'TConsole') do
+  begin
+    RegisterMethod('procdure Print(s: string);');
+    RegisterMethod('procdure Show();');
+  end;
 end;
 
 procedure TPasScript.OnExecImport(Sender: TObject; se: TIFPSExec; x: TIFPSRuntimeClassImporter);
 begin
   RIRegister_Std(x);
   RIRegister_Classes(x, True);
+  with x.Add2(TPasConsole, 'TConsole') do
+  begin
+    RegisterMethod(@TPasConsole.Print, 'Print');
+    RegisterMethod(@TPasConsole.Show, 'Show');
+  end;
 end;
 
 procedure TPasScript.ExecuteQueueObject;
@@ -342,8 +339,6 @@ begin
 end;
 
 procedure TPasScript.Run;
-var
-  Msg: string;
 begin
   ThreadRunning := Self;
   //WriteLn('Run Script');
@@ -357,17 +352,16 @@ begin
   inherited AddQueueObject(AQueueObject);
 end;
 
-function TPasScript.Clear_func: Integer; cdecl;
+function TPasScript.Clear_func: Integer;
 begin
   AddQueueObject(TClearObject.Create(Main.Canvas));
   Result := 0;
 end;
 
-function TPasScript.Window_func(w, h: integer): Integer;
+procedure TPasScript.Window_func(w, h: integer);
 begin
   FQueueObject := TWindowObject.Create(w, h);
   Synchronize(@ExecuteQueueObject);
-  Result := 0;
 end;
 
 function TPasScript.ShowConsole_func(w, h: integer): Integer;
@@ -437,7 +431,7 @@ begin
   Result := 0;
 end;
 
-function TPasScript.PlayMusic_func(s: string): Integer; cdecl;
+function TPasScript.PlayMusic_func(s: string): Integer;
 begin
   if ExtractFileDir(s) = '' then
     s := AssetsFolder + s;

@@ -84,9 +84,9 @@ type
     LuaState: Plua_State;
 
     FQueueObject: TQueueObject;
-    LuaCanvas: TLuaCanvas;
-    LuaConsole: TLuaConsole;
-    LuaColors: TLuaColors;
+    Canvas: TLuaCanvas;
+    Console: TLuaConsole;
+    Colors: TLuaColors;
     procedure ExecuteQueueObject;
     procedure DoError(S: string);
     procedure Run; override;
@@ -461,17 +461,17 @@ begin
   lua_register_method(LuaState, 'showconsole', @ShowConsole_func);
 
 //  lua_register_integer(LuaState, 'width', ScreenWidth));
-//  lua_register_integer(LuaState, 'heigh', ScreenHeight));
+//  lua_register_integer(LuaState, 'height', ScreenHeight));
 
-  LuaCanvas := TLuaCanvas.Create(Self);
-  LuaConsole := TLuaConsole.Create(Self);
-  LuaColors := TLuaColors.Create(Self);
+  Canvas := TLuaCanvas.Create(Self);
+  Console := TLuaConsole.Create(Self);
+  Colors := TLuaColors.Create(Self);
 
   lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
   lua_register_table_method(LuaState, 'console', self, 'show', @ShowConsole_func);
-  lua_register_table_index(LuaState, 'console', LuaConsole); //Should be last one
+  lua_register_table_index(LuaState, 'console', Console); //Should be last one
 
-  //lua_register_table(LuaState, 'draw', LuaCanvas);
+  //lua_register_table(LuaState, 'draw', Canvas);
   lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
   lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
   lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
@@ -482,7 +482,7 @@ begin
   lua_register_table_value(LuaState, 'canvas', 'width', ScreenWidth);
   lua_register_table_value(LuaState, 'canvas', 'height', ScreenHeight);
 
-  lua_register_table_index(LuaState, 'canvas', LuaCanvas); //Should be last one
+  lua_register_table_index(LuaState, 'canvas', Canvas); //Should be last one
 
   lua_register_table_method(LuaState, 'music', self, 'beep', @Beep_func);
   lua_register_table_method(LuaState, 'music', self, 'sound', @PlaySound_func);
@@ -490,11 +490,11 @@ begin
   lua_register_table_method(LuaState, 'music', self, 'mml', @PlayMML_func);
 
   lua_newtable(LuaState);
-  for i := 0 to Length(LuaColors.Colors) -1 do
-    lua_register_color(LuaState, LuaColors.Colors[i].Name, LuaColors.Colors[i].Color);
+  for i := 0 to Length(Colors.Colors) -1 do
+    lua_register_color(LuaState, Colors.Colors[i].Name, Colors.Colors[i].Color);
   lua_setglobal(LuaState, 'colors');
-  lua_register_table_index(LuaState, 'colors', LuaColors); //Should be last one
-  //lua_register_table(LuaState, 'color', LuaCanvas);
+  lua_register_table_index(LuaState, 'colors', Colors); //Should be last one
+  //lua_register_table(LuaState, 'color', Canvas);
 end;
 
 destructor TLuaScript.Destroy;
