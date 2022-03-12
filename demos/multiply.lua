@@ -1,6 +1,6 @@
 window(400, 200)
---console.show()
---print("How are you?")
+console.show()
+print("How are you?")
 canvas.circle(100,100, 50)
 music.mml("cdba")
 canvas.circle(100,100, 50)

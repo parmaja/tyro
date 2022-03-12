@@ -67,10 +67,12 @@ type
         Name: string;
         Color: TColor;
       end;
+
     var
       Colors: array of TLuaColor;
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
+
     procedure Created; override;
   public
     procedure AddColor(Name: string; AColor: TColor);

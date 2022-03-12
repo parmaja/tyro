@@ -18,7 +18,8 @@ interface
 uses
   Classes, SysUtils,
   RayLib, RayClasses, //remove it
-  uPSCompiler, uPSComponent, uPSRuntime, uPSC_classes, uPSR_classes, uPSC_std, uPSR_std,
+  uPSCompiler, uPSComponent, uPSRuntime,
+  uPSC_classes, uPSR_classes, uPSC_std, uPSR_std,
   TyroSounds, TyroClasses, Melodies, TyroEngines;
 
 type
@@ -82,8 +83,8 @@ type
     Console: TPasConsole;
     Colors: TPasColors;
 
-    procedure Compile(script: string);
-    procedure CompileRun(Script: string);
+    function Compile(script: string): Boolean;
+    function CompileRun(Script: string): Boolean;
 
     procedure OnCompile(Sender: TPSScript); virtual;
     procedure OnExecute(Sender: TPSScript); virtual;
@@ -249,7 +250,7 @@ begin
   Result := SysUtils.Format(Format, Args);
 end;
 
-procedure TPasScript.Compile(script: string);
+function TPasScript.Compile(script: string): Boolean;
 var
   i: Longint;
 begin
@@ -257,48 +258,49 @@ begin
   PS.Script.Clear;
   PS.Script.Add(Script);
 
-  if (not PS.Compile) then
+  Result := PS.Compile;
+  if (not Result) then
   begin
-      for i := 0 to PS.CompilerMessageCount - 1 do
-        WriteLn(PS.CompilerErrorToStr(i));
+    for i := 0 to PS.CompilerMessageCount - 1 do
+      WriteLn(PS.CompilerErrorToStr(i));
   end;
 end;
 
-procedure TPasScript.CompileRun(Script: string);
+function TPasScript.CompileRun(Script: string): Boolean;
 begin
-    Compile(script);
-
-    if not PS.Execute then
+  Result := Compile(script);
+  if Result then
+  begin
+    Result := PS.Execute;
+    if not Result then
     begin
       WriteLn('Exec Error:'+
             PS.ExecErrorToString + ' at ' +
             Inttostr(PS.ExecErrorProcNo) + '.' +
             IntToStr(PS.ExecErrorByteCodePosition));
     end;
+  end;
 end;
 
 procedure TPasScript.OnCompile(Sender: TPSScript);
 begin
-  (Sender as TPSScript).AddFunction(@MyFormat, 'function Format(const Format: string; const Args: array of const): string;');
+  Sender.AddFunction(@MyFormat, 'function Format(const Format: string; const Args: array of const): string;');
 
-  (Sender as TPSScript).AddFunction(@Log_func, 'procedure log(s: string);');
-  (Sender as TPSScript).AddMethod(Self, @TPasScript.Window_func, 'procedure Window(w, h: integer);');
-  (Sender as TPSScript).AddMethod(Self, @TPasScript.Print_func, 'procedure Print(s: string);');
+  Sender.AddFunction(@Log_func, 'procedure log(s: string);');
+  Sender.AddMethod(Self, @TPasScript.Window_func, 'procedure Window(w, h: integer);');
+  Sender.AddMethod(Self, @TPasScript.Print_func, 'procedure Print(s: string);');
 
-  (Sender as TPSScript).AddRegisteredVariable('Version', 'String');
-  (Sender as TPSScript).AddRegisteredVariable('Console', 'TConsole');
+  Sender.AddRegisteredVariable('Version', 'String');
+  Sender.AddRegisteredVariable('Console', 'TConsole');
 end;
 
 procedure TPasScript.OnExecute(Sender: TPSScript);
 var
   v: PIFVariant;
 begin
-  //(Sender as TPSScript).AddRegisteredVariable('Console', 'TConsole');
-
-  v := Sender.GetVariable('version');
+  v := Sender.GetVariable('Version');
   if v <> nil then
     VSetString(v, '0.1');
-
 
   Sender.SetVarToInstance('Console', Console);
 end;
@@ -310,8 +312,8 @@ begin
 
   with x.AddClassN(x.FindClass('TObject'), 'TConsole') do
   begin
-    RegisterMethod('procdure Print(s: string);');
-    RegisterMethod('procdure Show();');
+    RegisterMethod('procedure Print(s: string)');
+    RegisterMethod('procedure Show');
   end;
 end;
 
@@ -319,6 +321,7 @@ procedure TPasScript.OnExecImport(Sender: TObject; se: TIFPSExec; x: TIFPSRuntim
 begin
   RIRegister_Std(x);
   RIRegister_Classes(x, True);
+
   with x.Add2(TPasConsole, 'TConsole') do
   begin
     RegisterMethod(@TPasConsole.Print, 'Print');

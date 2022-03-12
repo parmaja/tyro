@@ -1,13 +1,14 @@
 window()
-log('start')
+log('start' + version)
 i = 100000
 c = 0
 print('Hello World');
 print('Circle demo');
-canvas.alpha = 200
+canvas.alpha = 100
 while i > 0 do
     c = math.random(0, colors.count - 1)
     canvas.color = colors[c]
+    canvas.alpha = 100
     r = math.random(5, 20) --size of circle
     x = math.random(canvas.width)
     y = math.random(canvas.height)
@@ -17,5 +18,3 @@ while i > 0 do
     sleep(1)
     i = i - 1
 end
-
-
