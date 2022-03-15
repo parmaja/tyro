@@ -300,7 +300,7 @@ var
 begin
   v := Sender.GetVariable('Version');
   if v <> nil then
-    VSetString(v, '0.1');
+    VSetInt(v, TyroVersion);
 
   Sender.SetVarToInstance('Console', Console);
 end;
@@ -455,5 +455,5 @@ end;
 
 initialization
   ThreadRunning := nil;
-  Main.RegisterLanguage('Pascal', '.ps', TPasScript);
+  Main.RegisterLanguage('Pascal', ['.ps'], TPasScript);
 end.

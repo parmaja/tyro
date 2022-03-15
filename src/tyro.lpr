@@ -20,6 +20,7 @@ program tyro;
 //ref https://github.com/raysan5/raylib/blob/master/examples/textures/textures_mouse_painting.c
 
 uses
+  Windows,
   cmem, math,
   {$IFDEF UNIX}
   cthreads,
@@ -52,6 +53,62 @@ begin
   Main.Title := AValue;
 end;
 
+var
+  OwnConsole: Boolean = False;
+  OwnConsoleAllocated: Boolean = False;
+
+function OpenConsole(Force: Boolean): Boolean;
+begin
+  if not IsConsole then
+  begin
+    if AttachConsole(ATTACH_PARENT_PROCESS) then
+    begin
+      OwnConsole := True;
+      StdOutputHandle := THandle(GetStdHandle(cardinal(STD_OUTPUT_HANDLE)));
+      Assign(Output, '');
+      Rewrite(Output);
+      TextRec(Output).Handle := StdOutputHandle;
+
+      StdErrorHandle := THandle(GetStdHandle(cardinal(STD_ERROR_HANDLE)));
+      Assign(ErrOutput, '');
+      Rewrite(ErrOutput);
+      TextRec(ErrOutput).Handle := StdErrorHandle;
+
+      IsConsole := True;
+    end
+    else if Force then
+    begin
+      OwnConsole := True;
+      OwnConsoleAllocated := AllocConsole;
+
+      StdOutputHandle := THandle(GetStdHandle(cardinal(STD_OUTPUT_HANDLE)));
+      Assign(Output, '');
+      Rewrite(Output);
+      TextRec(Output).Handle := StdOutputHandle;
+
+      StdErrorHandle := THandle(GetStdHandle(cardinal(STD_ERROR_HANDLE)));
+      Assign(ErrOutput, '');
+      Rewrite(ErrOutput);
+      TextRec(ErrOutput).Handle := StdErrorHandle;
+
+      IsConsole := True;
+    end;
+  end;
+  Result := IsConsole;
+end;
+
+procedure CloseConsole;
+begin
+  if OwnConsole then
+  begin
+    Flush(Output);
+    Close(Output);
+    Close(ErrOutput);
+  end;
+  if OwnConsoleAllocated then
+    FreeConsole;
+end;
+
 //-w my_workpath ../demos/sin.lua
 
 constructor TTyroApplication.Create(AOwner: TComponent);
@@ -59,13 +116,17 @@ var
   WorkPaths: TStringArray;
   err: string;
 const
-  cShortOptions = 'w:d';
-  cLongOptions = 'workpath: debug';
+  cShortOptions = 'w:d:c';
+  cLongOptions = 'workpath:debug:console';
 begin
   inherited Create(AOwner);
   Files := TStringList.Create;
-
   err := CheckOptions(cShortOptions, cLongOptions);
+
+  OpenConsole(HasOption('c', 'console'));
+  if IsConsole then
+    WriteLn('Starting');
+
   if err <> '' then
   begin
     if IsConsole then
@@ -77,7 +138,7 @@ begin
   Main.Title := 'Tyro';
 
   //w workpath, d socket
-  GetNonOptions(cShortOptions, ['workpath:', 'debug'], Files);
+  GetNonOptions(cShortOptions, ['workpath:', 'debug', 'console'], Files);
   if Files.Count > 0 then
     Main.FileName := Files[0];
   WorkPaths := GetOptionValues('w', 'workpath');
@@ -85,25 +146,30 @@ begin
     Main.WorkSpace := WorkPaths[0]
   else
     Main.WorkSpace := Location;
+
+  InstallConsoleLog;
   Main.Start;
 end;
 
 destructor TTyroApplication.Destroy;
 begin
   FreeAndNil(Files);
+  CloseConsole;
   inherited;
 end;
 
 procedure TTyroApplication.DoRun;
 begin
   inherited;
-  InstallConsoleLog;
-  CheckSynchronize;
-  Main.Run;
-  if not Main.Active then
-  begin
-    Main.Stop;
-    Terminate;
+  try
+    CheckSynchronize;
+    Main.Run;
+    if not Main.Active then
+    begin
+      Main.Stop;
+      Terminate;
+    end;
+  finally
   end;
 end;
 

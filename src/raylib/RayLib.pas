@@ -124,6 +124,8 @@ type
 
     class operator Equal(a, b: TColor) : Boolean;
 
+    procedure SetRGB(AColor: TColor);
+
     case Cardinal of
       0: (Value: Cardinal);
       1: (RGBA: TRGBAColor);
@@ -133,8 +135,11 @@ type
 
   { TColorHelper }
 
+  { TRGBAColorHelper }
+
   TRGBAColorHelper = record helper for TRGBAColor
-    function SetAlpha(AAlpha: Byte): TColor;
+    function ReplaceAlpha(AAlpha: Byte): TColor;
+    function ReplaceRGB(AColor: TColor): TColor; //without alpha
   end;
 
   { TColorHelper }
@@ -2145,6 +2150,13 @@ begin
   Result := a.Value = b.Value;
 end;
 
+procedure TColor.SetRGB(AColor: TColor);
+begin
+  RGBA.Red := AColor.RGBA.Red;
+  RGBA.Green := AColor.RGBA.Green;
+  RGBA.Blue := AColor.RGBA.Blue;
+end;
+
 class operator TColor.Implicit(a: TRGBAColor): TColor;
 begin
   Result.RGBA := a;
@@ -2167,10 +2179,18 @@ end;
 
 { TColor }
 
-function TRGBAColorHelper.SetAlpha(AAlpha: Byte): TColor;
+function TRGBAColorHelper.ReplaceAlpha(AAlpha: Byte): TColor;
 begin
   Result := Self;
   Result.RGBA.Alpha := AAlpha;
+end;
+
+function TRGBAColorHelper.ReplaceRGB(AColor: TColor): TColor;
+begin
+  Result := Self;
+  Result.RGBA.Red := AColor.RGBA.Red;
+  Result.RGBA.Green := AColor.RGBA.Green;
+  Result.RGBA.Blue := AColor.RGBA.Blue;
 end;
 
 constructor TColorHelper.Create(ARed, AGreen, ABlue, AAlpha: Byte);

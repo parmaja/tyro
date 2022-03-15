@@ -54,7 +54,7 @@ type
   TScriptType = class(TObject)
   public
     Title: string;
-    Extention: string;
+    Extentions: TStringArray;
     ScriptClass: TTyroScriptClass;
   end;
 
@@ -89,11 +89,11 @@ type
     FBackColor: TColor;
     FWidth, FHeight: Integer;
     FTexture: TRenderTexture2D;
-    FAlpha: Byte;
     Font: TRayFont;
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
     procedure SetHeight(AValue: Integer);
+    procedure SetPenColor(AValue: TColor);
     procedure SetWidth(AValue: Integer);
   public
     constructor Create(AWidth, AHeight: Integer);
@@ -113,8 +113,7 @@ type
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean);
     procedure Clear;
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
-    property PenColor: TColor read FPenColor write FPenColor;
-    property Alpha: Byte read FAlpha write FAlpha;
+    property PenColor: TColor read FPenColor write SetPenColor;
     property BackColor: TColor read FBackColor write FBackColor;
     property Texture: TRenderTexture2D read FTexture;
     property Width: Integer read FWidth write SetWidth;
@@ -522,15 +521,17 @@ end;
 function TScriptTypes.FindByExtension(Extension: string): TScriptType;
 var
   itm: TScriptType;
+  s: string;
 begin
   Result := nil;
   for itm in Self do
   begin
-    if SameText(itm.Extention, Extension) then
-    begin
-      Result := itm;
-      break;
-    end;
+    for s in itm.Extentions do
+      if SameText(s, Extension) then
+      begin
+        Result := itm;
+        break;
+      end;
   end;
 end;
 
@@ -679,6 +680,11 @@ begin
   FHeight :=AValue;
 end;
 
+procedure TTyroCanvas.SetPenColor(AValue: TColor);
+begin
+  FPenColor.SetRGB(AValue);
+end;
+
 function TTyroCanvas.GetPenAlpha: Byte;
 begin
   Result := FPenColor.RGBA.Alpha;
@@ -699,7 +705,6 @@ constructor TTyroCanvas.Create(AWidth, AHeight: Integer);
 begin
   inherited Create;
   Font := TRayFont.Create;
-  FAlpha := 255;
   FWidth := AWidth;
   FHeight := AHeight;
   FPenColor := clBlack;
@@ -769,9 +774,9 @@ end;
 procedure TTyroCanvas.DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
 begin
   if Fill then
-    RayLib.DrawCircle(X + FOriginX, Y + FOriginY, R, Color.SetAlpha(Alpha))
+    RayLib.DrawCircle(X + FOriginX, Y + FOriginY, R, Color)
   else
-    RayLib.DrawCircleLines(X + FOriginX, Y + FOriginY, R, Color.SetAlpha(Alpha));
+    RayLib.DrawCircleLines(X + FOriginX, Y + FOriginY, R, Color);
   FLastX := X;
   FLastY := Y;
 end;
@@ -779,9 +784,9 @@ end;
 procedure TTyroCanvas.DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
 begin
   if Fill then
-    RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color.SetAlpha(Alpha))
+    RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color)
   else
-    RayLib.DrawRectangleLines(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color.SetAlpha(Alpha));
+    RayLib.DrawRectangleLines(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color);
   FLastX := X + AWidth;
   FLastY := Y + AHeight;
 end;

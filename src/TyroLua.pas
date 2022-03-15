@@ -255,10 +255,22 @@ begin
   //end metatable
 end;
 
+procedure lua_register_string(L : Plua_State; name: string; value: string);
+begin
+  lua_pushstring(L, value);
+  lua_setfield(L, -2, pchar(name));
+end;
+
 procedure lua_register_integer(L : Plua_State; name: string; value: integer);
 begin
   lua_pushinteger(L, value);
   lua_setfield(L, -2, pchar(name));
+end;
+
+procedure lua_register_global_integer(L : Plua_State; name: string; value: integer);
+begin
+  lua_pushinteger(L, value);
+  lua_setglobal(L, pchar(name));
 end;
 
 procedure lua_register_color(L : Plua_State; name: string; value: TColor);
@@ -456,6 +468,7 @@ begin
   lual_openlibs(LuaState);
   lua_sethook(LuaState, @HookCount, LUA_MASKCOUNT, 100);
 
+  lua_register_global_integer(LuaState, 'version', TyroVersion);
   lua_register(LuaState, 'log', @log_func);
   lua_register(LuaState, 'sleep', @sleep_func);
   lua_register_method(LuaState, 'print', @Print_func);
@@ -731,6 +744,6 @@ end;
 
 initialization
   ThreadRunning := nil;
-  Main.RegisterLanguage('Lua', '.lua', TLuaScript);
+  Main.RegisterLanguage('Lua', ['.lua', '.ls'], TLuaScript);
 end.
 

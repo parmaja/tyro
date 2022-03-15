@@ -409,13 +409,11 @@ begin
   if Visible then
   begin
     ACanvas.SetOrigin(Left, Top);
-    aAlpha := ACanvas.Alpha;
     try
       DoPaintBackground(ACanvas);
       DoPaint(ACanvas)
     finally
       ACanvas.ResetOrigin;
-      ACanvas.Alpha := aAlpha;
     end;
   end;
 end;
@@ -554,7 +552,7 @@ begin
       ClearBackground(DefaultBackColor);
 
       with Canvas.Texture do
-        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite.SetAlpha(Canvas.Alpha));
+        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
 
       for aControl in Controls do
       begin

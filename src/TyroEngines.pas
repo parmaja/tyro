@@ -16,6 +16,10 @@ uses
   mnLogs,
   RayLib, RayClasses, TyroClasses, TyroControls, TyroConsoles;
 
+const
+  TyroVersion = 1;
+  TyroVersionString = '0.1';
+
 type
 
   { TTyroMain }
@@ -45,7 +49,7 @@ type
     //property Board: TTyroImage read FBoard;
     property Active: Boolean read GetActive;
 
-    procedure RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
+    procedure RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 
     procedure ShowWindow(AWidth, AHeight: Integer);
     procedure HideWindow;
@@ -151,9 +155,10 @@ var
   ScriptType: TScriptType;
 begin
   Running := True;
-//ShowWindow(ScreenWidth, ScreenHeight); with option to show window /w
+  ShowWindow(ScreenWidth, ScreenHeight); //with option to show window /w
   if FileName <> '' then
   begin
+    Log.WriteLn('File: ' + FileName);
     ScriptType := ScriptTypes.FindByExtension(ExtractFileExt(FileName));
     if ScriptType <> nil then
     begin
@@ -209,13 +214,13 @@ procedure TTyroMain.Loop;
 begin
 end;
 
-procedure TTyroMain.RegisterLanguage(ATitle: string; AExtention: string; AScriptClass: TTyroScriptClass);
+procedure TTyroMain.RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 var
   Item: TScriptType;
 begin
   Item := TScriptType.Create;
   Item.Title := ATitle;
-  Item.Extention := AExtention;
+  Item.Extentions := AExtentions;
   Item.ScriptClass := AScriptClass;
   FScriptTypes.Add(Item);
 end;
@@ -233,15 +238,23 @@ end;
 
 procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
 begin
-  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  SetBounds(0, 0, AWidth, AHeight);
-  InitWindow(AWidth, AHeight, PChar(Title));
-  Visible := True;
-  SetTargetFPS(cFramePerSeconds);
-  ShowCursor();
-  NeedCanvas;
+  if Visible then
+  begin
+    SetBounds(0, 0, AWidth, AHeight);
+    SetWindowSize(AWidth, AHeight);
+  end
+  else
+  begin
+    //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    SetBounds(0, 0, AWidth, AHeight);
+    InitWindow(AWidth, AHeight, PChar(Title));
+    SetTargetFPS(cFramePerSeconds);
+    ShowCursor();
+    NeedCanvas;
+  end;
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
   Console.BoundsRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
+  Visible := True;
 end;
 
 procedure TTyroMain.HideWindow;
