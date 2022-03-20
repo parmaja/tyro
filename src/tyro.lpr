@@ -26,9 +26,9 @@ uses
   cthreads,
   {$ENDIF}
   SysUtils, Classes, CustApp, TyroClasses, RayLib, RayClasses,
+  mnUtils,
   TyroEditors, mnLogs, TyroSounds, Melodies, TyroControls, TyroEngines,
-  TyroLua, TyroPascal;  //Add all languages units here
-
+  TyroLua, TyroPascal, TyroScripts;  //Add all languages units here
 
 type
 
@@ -109,28 +109,71 @@ begin
     FreeConsole;
 end;
 
+procedure PrintList;
+var
+  item: TScriptType;
+begin
+  WriteLn('Languages:');
+  for item in Main.ScriptTypes do
+  begin
+    WriteLn(item.Title + ': ' + item.CollectExtentions);
+  end;
+end;
+
+procedure PrintHelp;
+begin
+  WriteLn('Tyro to run script in graphical mode with media function, using RayLib library, for learning proramming languages students and kids.');
+  WriteLn('usage: tyro [<script>] [--workpath=<workpath>] [<options>]');
+  WriteLn('');
+  WriteLn('--help -h              Show this help page');
+  WriteLn('--console -c           Force to show command prompt');
+  WriteLn('--debug -d             Run in debug mode');
+  WriteLn('--lint -l              Lint to check errors only in script do not run');
+  WriteLn('--main -m              Execute first script in main loop thread');
+  WriteLn('--exit -x              Exit after finish execute');
+  WriteLn('--show=true/false -s   Force to show main graphic window');
+  WriteLn('--list                 List of programming language supported');
+end;
+
 //-w my_workpath ../demos/sin.lua
 
 constructor TTyroApplication.Create(AOwner: TComponent);
 var
   WorkPaths: TStringArray;
   err: string;
+  RunConsole: Boolean;
 const
-  cShortOptions = 'w:d:c';
-  cLongOptions = 'workpath:debug:console';
+  cShortOptions = 'w: m e l d c s: h t';
+  cLongOptions = 'workpath: main execute lint debug console show: help list';
 begin
   inherited Create(AOwner);
   Files := TStringList.Create;
   err := CheckOptions(cShortOptions, cLongOptions);
 
-  OpenConsole(HasOption('c', 'console'));
-  if IsConsole then
-    WriteLn('Starting');
+  RunConsole := HasOption('c', 'console');
+  OpenConsole((err <> '') or RunConsole);
 
   if err <> '' then
   begin
     if IsConsole then
       WriteLn(err);
+    PrintHelp;
+    Terminate;
+    exit;
+  end;
+
+  InstallConsoleLog;
+
+  if HasOption('h', 'help') then
+  begin
+    PrintHelp;
+    Terminate;
+    exit;
+  end;
+
+  if HasOption(#0, 'list') then
+  begin
+    PrintList;
     Terminate;
     exit;
   end;
@@ -138,16 +181,23 @@ begin
   Main.Title := 'Tyro';
 
   //w workpath, d socket
-  GetNonOptions(cShortOptions, ['workpath:', 'debug', 'console'], Files);
+  GetNonOptions(cShortOptions, [], Files);
   if Files.Count > 0 then
-    Main.FileName := Files[0];
+    Main.RunFile := Files[0];
   WorkPaths := GetOptionValues('w', 'workpath');
   if Length(WorkPaths) > 0  then
     Main.WorkSpace := WorkPaths[0]
   else
     Main.WorkSpace := Location;
 
-  InstallConsoleLog;
+  if IsConsole then
+  begin
+    Write('Starting');
+    Write(' ' + CollectStrings(Files));
+    Write(' ' + CollectStrings(WorkPaths));
+    WriteLn();
+  end;
+  Main.RunInMain := HasOption('m', 'main');
   Main.Start;
 end;
 
@@ -180,7 +230,7 @@ var
 
 begin
   Application := TTyroApplication.Create(nil);
-  Application.Title :='Tyro';
+  Application.Title := 'Tyro';
   Application.Run;
   Application.Free;
 end.

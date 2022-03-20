@@ -10,24 +10,34 @@ unit TyroPascal;
  *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
  *}
 
-{$mode objfpc}{$H+}
+{$mode objfpc}
+{$H+}{$M+}
 {$WARN 5024 off : Parameter "$1" not used}
 
 interface
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, Rtti,
+  mnRTTIUtils, mnUtils,
   RayLib, RayClasses, //remove it
   uPSCompiler, uPSComponent, uPSRuntime,
   uPSC_classes, uPSR_classes, uPSC_std, uPSR_std,
-  TyroSounds, TyroClasses, Melodies, TyroEngines;
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines;
 
 type
   TPasScript = class;
 
+  { TPasRttiObject }
+
+  TPasRttiObject = class(TRttiObject)
+  public
+    procedure RegisterMethod(Sender: TObject; Flag: Integer; AName: string; AParams: TStringList); override;
+    procedure RegisterProperty(Sender: TObject; Flag: Integer; AName: string; AType: string); override;
+  end;
+
   { TPasObject }
 
-  TPasObject = class abstract(TObject)
+  TPasObject = class abstract(TInterfacedObject)
   private
     FScript: TPasScript;
   protected
@@ -47,12 +57,16 @@ type
 
   { TPasConsole }
 
-  TPasConsole = class(TPasObject)
+  TPasConsole = class(TPasObject, IConsole)
+  private
+    FVisible: Boolean;
   protected
   public
     procedure Print(s: string);
     procedure Show;
     constructor Create(AScript: TPasScript); override;
+  published
+    property Visible: Boolean read FVisible write FVisible;
   end;
 
   { TPasColors }
@@ -142,6 +156,52 @@ begin
   if IsConsole then
     WriteLn(s);
   Result := 0;
+end;
+
+{ TRttiObject }
+
+procedure TPasRttiObject.RegisterMethod(Sender: TObject; Flag: Integer; AName: string; AParams: TStringList);
+var
+  s: string;
+  aMethodName, aMethodReturn: string;
+  c: Integer;
+  aParam,
+  aParamName, aType, aParamType, aParamDefault: string;
+begin
+  SpliteStr(AName, ':', aMethodName, aMethodReturn);
+  if aMethodReturn <> '' then
+    s := 'function '
+  else
+    s := 'procedure ';
+  s := s + aMethodName;
+  c := 0;
+  if AParams.Count > 0 then
+  begin
+    s := s + '(';
+    for aParam in AParams do
+    begin
+      if c > 0 then
+        s := s + ', ';
+      SpliteStr(aParam, ':', aParamName, aType);
+      SpliteStr(aType, '=', aParamType, aParamDefault);
+      s := s + aParamName + ': ' + aParamType + ConcatString(aParamDefault, '=');
+      Inc(c);
+    end;
+    s := s + ')';
+  end;
+
+  if aMethodReturn <> '' then
+     s := s + ': ' + aMethodReturn;
+  s := s + ';';
+
+  (Sender as TPSCompileTimeClass).RegisterMethod(s);
+  //RegisterMethod('procedure Print(s: string)');
+  //RegisterMethod('procedure Show');
+end;
+
+procedure TPasRttiObject.RegisterProperty(Sender: TObject; Flag: Integer; AName: string; AType: string);
+begin
+  //
 end;
 
 { TPasConsole }
@@ -306,15 +366,24 @@ begin
 end;
 
 procedure TPasScript.OnCompImport(Sender: TObject; x: TIFPSPascalCompiler);
+var
+  r: TPasRttiObject;
+  psc: TPSCompileTimeClass;
 begin
   SIRegister_Std(x);
   SIRegister_Classes(x, true);
 
-  with x.AddClassN(x.FindClass('TObject'), 'TConsole') do
+  psc := x.AddClassN(x.FindClass('TObject'), 'TConsole');
+  r := TPasRttiObject.Create;
+  r.EnumProperties(Console, psc,  0);
+  r.EnumMethods(TypeInfo(IConsole), psc,  0);
+  r.Free;
+
+{  with x.AddClassN(x.FindClass('TObject'), 'TConsole') do
   begin
     RegisterMethod('procedure Print(s: string)');
     RegisterMethod('procedure Show');
-  end;
+  end;}
 end;
 
 procedure TPasScript.OnExecImport(Sender: TObject; se: TIFPSExec; x: TIFPSRuntimeClassImporter);
@@ -363,14 +432,12 @@ end;
 
 procedure TPasScript.Window_func(w, h: integer);
 begin
-  FQueueObject := TWindowObject.Create(w, h);
-  Synchronize(@ExecuteQueueObject);
+  RunQueueObject(TWindowObject.Create(w, h));
 end;
 
 function TPasScript.ShowConsole_func(w, h: integer): Integer;
 begin
-  FQueueObject := TShowConsoleObject.Create(w, h);
-  Synchronize(@ExecuteQueueObject);
+  RunQueueObject(TShowConsoleObject.Create(w, h));
   Result := 0;
 end;
 

@@ -4,7 +4,7 @@ unit TyroControls;
  *
  * @license   MIT
  *
- * @author    Zaher Dirkey <zaher at parmaja dot com>
+ * @author    Zaher Dirkey 
  *
  *}
 

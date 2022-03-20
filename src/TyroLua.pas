@@ -19,7 +19,7 @@ uses
   Classes, SysUtils,
   lua53, FPImage,
   RayLib, RayClasses, //remove it
-  TyroSounds, TyroClasses, Melodies, TyroEngines;
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines;
 
 type
   TLuaScript = class;
@@ -520,8 +520,6 @@ end;
 
 procedure TLuaScript.ExecuteQueueObject;
 begin
-  FQueueObject.Execute;
-  FreeAndNil(FQueueObject);
 end;
 
 procedure TLuaScript.DoError(S: string);
@@ -579,8 +577,7 @@ begin
     w := round(lua_tonumber(L, 1));
   if c > 1 then
     h := round(lua_tonumber(L, 2));
-  FQueueObject := TWindowObject.Create(w, h);
-  Synchronize(@ExecuteQueueObject);
+  RunQueueObject(TWindowObject.Create(w, h));
   Result := 0;
 end;
 
@@ -596,8 +593,7 @@ begin
     w := round(lua_tonumber(L, 1));
   if c > 1 then
     h := round(lua_tonumber(L, 2));
-  FQueueObject := TShowConsoleObject.Create(w, h);
-  Synchronize(@ExecuteQueueObject);
+  RunQueueObject(TShowConsoleObject.Create(w, h));
   Result := 0;
 end;
 

@@ -5,7 +5,7 @@ unit TyroEngines;
  *
  * @license   MIT
  *
- * @author    Zaher Dirkey <zaher at parmaja dot com>
+ * @author    Zaher Dirkey 
  *
  *}
 
@@ -22,6 +22,13 @@ const
 
 type
 
+  TRunHow = (
+    runLint,
+    runCompile,
+    //runLink,
+    runExecute
+  );
+
   { TTyroMain }
 
   TTyroMain = class(TTyroWindow)
@@ -30,13 +37,16 @@ type
     function GetActive: Boolean;
   protected
     FQueue: TQueueObjects;
-    FScript: TTyroScript;
+    FScriptThread: TTyroScriptThread;
+    FScriptMain: TTyroScript; //only if we have main loop
     FScriptTypes: TScriptTypes;
     FCanvasLock: TCriticalSection;
   protected
   public
+    RunInMain: Boolean;
     Running: Boolean;
-    FileName: string;//that to run in script
+    How: TRunHow;
+    RunFile: string;//that to run in script
     WorkSpace: string;
     Console: TTyroConsole;
     constructor Create;
@@ -73,7 +83,7 @@ implementation
 
 function TTyroMain.GetActive: Boolean;
 begin
-  Result := Running or ((FScript <> nil) and FScript.Active);
+  Result := Running or ((FScriptThread <> nil) and FScriptThread.Active) or ((FScriptMain <> nil) and (FScriptMain.Active));
 end;
 
 procedure TTyroMain.ProcessQueue;
@@ -152,27 +162,32 @@ end;
 
 procedure TTyroMain.Start;
 var
-  ScriptType: TScriptType;
+  aScriptType: TScriptType;
+  aScript: TTyroScript;
 begin
   Running := True;
   ShowWindow(ScreenWidth, ScreenHeight); //with option to show window /w
-  if FileName <> '' then
+  if RunFile <> '' then
   begin
-    Log.WriteLn('File: ' + FileName);
-    ScriptType := ScriptTypes.FindByExtension(ExtractFileExt(FileName));
-    if ScriptType <> nil then
+    Log.WriteLn('File: ' + RunFile);
+    aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(RunFile));
+    if aScriptType <> nil then
     begin
-      FScript := ScriptType.ScriptClass.Create;
-      if SysUtils.FileExists(FileName) then
+      aScript := aScriptType.ScriptClass.Create;
+      if SysUtils.FileExists(RunFile) then
       begin
-        if LeftStr(FileName, 1) = '.' then
-          FileName := ExpandFileName(WorkSpace + FileName);
-        FScript.AssetsFolder := ExtractFilePath(FileName);
-        FScript.LoadFile(FileName);
+        if LeftStr(RunFile, 1) = '.' then
+          RunFile := ExpandFileName(WorkSpace + RunFile);
+        aScript.AssetsFolder := ExtractFilePath(RunFile);
+        aScript.LoadFile(RunFile);
+        if RunInMain then
+          FScriptMain := aScript
+        else
+          FScriptThread := TTyroScriptThread.Create(aScript);
       end;
     end
     else
-      Log.WriteLn('Type of file not found: ' + FileName);
+      Log.WriteLn('Type of file not found: ' + RunFile);
   end;
 end;
 
@@ -181,16 +196,23 @@ var
   t: TTexture2D;
   //im: TImage;
 begin
-  if (FScript <> nil) and FScript.Suspended then
-    FScript.Start;
+  if (FScriptThread <> nil) and not FScriptThread.Started then
+    FScriptThread.Start;
 
+  //if (FScriptMain <> nil) and not FScriptMain.Started then
+  if (FScriptMain <> nil) then
+    FScriptMain.Start;
+
+  //
   if Visible then
   begin
     if WindowShouldClose() then
     begin
       Running := False;
-      if (FScript <> nil) then
-        FScript.Terminate;
+      if (FScriptThread <> nil) then
+        FScriptThread.Terminate;
+      if (FScriptMain <> nil) then
+        FScriptMain.Stop;
     end;
 
     ProcessQueue;
@@ -228,11 +250,17 @@ end;
 procedure TTyroMain.Stop;
 begin
   Running := False;
-  if FScript <> nil then
+  if FScriptThread <> nil then
   begin
-    FScript.Terminate;
-    FScript.WaitFor;
-    FreeAndNil(FScript);
+    FScriptThread.Terminate;
+    FScriptThread.WaitFor;
+    FreeAndNil(FScriptThread);
+  end;
+
+  if FScriptMain <> nil then
+  begin
+    FScriptMain.Stop;
+    FreeAndNil(FScriptMain);
   end;
 end;
 

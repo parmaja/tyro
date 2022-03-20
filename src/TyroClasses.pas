@@ -4,16 +4,17 @@ unit TyroClasses;
  *
  * @license   MIT
  *
- * @author    Zaher Dirkey <zaher at parmaja dot com>
+ * @author    Zaher Dirkey 
  *
  *}
 
-{$mode objfpc}{$H+}
+{$mode objfpc}
+{$H+}{$M+}
 
 interface
 
 uses
-  Classes, SysUtils, SyncObjs, fgl, mnLogs,
+  Classes, SysUtils, SyncObjs, fgl, mnLogs, mnUtils,
   FPImage, FPCanvas,
   Melodies, RayClasses, TyroSounds, RayLib;
 
@@ -25,37 +26,67 @@ type
 
   TQueueObject = class;
   TTyroCanvas = class;
+  TTyroScriptThread = class;
 
   { TTyroScript }
 
-  TTyroScript = class abstract(TThread)
+  TTyroScript = class abstract(TObject)
   private
     FActive: Boolean;
+    FStarted: Boolean;
     FAssetsFolder: string;
     function GetActive: Boolean;
+    procedure ExecuteQueueObject; //this for sync do not call it
   protected
+    QueueObject: TQueueObject;
+    ScriptThread: TTyroScriptThread;
     ScriptText: TStringList;
+
+    procedure RunQueueObject(AQueueObject: TQueueObject);
+    procedure AddQueueObject(AQueueObject: TQueueObject); virtual;
+
     procedure BeforeRun; virtual;
     procedure Run; virtual; abstract;
     procedure AfterRun; virtual;
-    procedure AddQueueObject(AQueueObject: TQueueObject); virtual;
-    procedure TerminatedSet; override;
   public
     constructor Create; virtual;
     destructor Destroy; override;
-    procedure Execute; override;
+    procedure Stop; virtual;
+    procedure Start; virtual;
     procedure LoadFile(FileName: string); overload;
     property AssetsFolder: string read FAssetsFolder write FAssetsFolder;
+    property Active: Boolean read GetActive;
+    property Started: Boolean read FStarted; //started true even after stopped
+  end;
+
+  { TTyroScriptThread }
+
+  TTyroScriptThread = class(TThread)
+  private
+    FStarted: Boolean;
+    function GetActive: Boolean;
+  protected
+    Script: TTyroScript;
+    procedure TerminatedSet; override;
+  public
+    procedure Execute; override;
+    constructor Create(AScript: TTyroScript); virtual;
+    destructor Destroy; override;
+    procedure Stop;
+    property Started: Boolean read FStarted;
     property Active: Boolean read GetActive;
   end;
 
   TTyroScriptClass = class of TTyroScript;
+
+  { TScriptType }
 
   TScriptType = class(TObject)
   public
     Title: string;
     Extentions: TStringArray;
     ScriptClass: TTyroScriptClass;
+    function CollectExtentions: string;
   end;
 
   { TScriptTypes }
@@ -375,6 +406,52 @@ begin
   Result := Result or C.RGBA.Green;
   Result := Result shl 8;
   Result := Result or C.RGBA.Red;
+end;
+
+{ TTyroScriptThread }
+
+function TTyroScriptThread.GetActive: Boolean;
+begin
+  Result := (Script <> nil) and Script.Active;
+end;
+
+procedure TTyroScriptThread.TerminatedSet;
+begin
+  Script.Stop;
+  inherited;
+end;
+
+procedure TTyroScriptThread.Execute;
+begin
+  FStarted := True;
+  Script.Start;
+end;
+
+constructor TTyroScriptThread.Create(AScript: TTyroScript);
+begin
+  inherited Create(True);
+  Script := AScript;
+  Script.ScriptThread := Self;
+  FreeOnTerminate := False;
+  Priority := tpLower; //hmmm
+end;
+
+destructor TTyroScriptThread.Destroy;
+begin
+  FreeAndNil(Script);
+  inherited Destroy;
+end;
+
+procedure TTyroScriptThread.Stop;
+begin
+  Terminate;
+end;
+
+{ TScriptType }
+
+function TScriptType.CollectExtentions: string;
+begin
+  Result := CollectStrings(Extentions, ',');
 end;
 
 { TShowConsoleObject }
@@ -842,6 +919,21 @@ begin
   Result := FActive;
 end;
 
+procedure TTyroScript.ExecuteQueueObject;
+begin
+  QueueObject.Execute;
+  FreeAndNil(QueueObject);
+end;
+
+procedure TTyroScript.RunQueueObject(AQueueObject: TQueueObject);
+begin
+  QueueObject := AQueueObject;
+  if ScriptThread <> nil then
+    ScriptThread.Synchronize(@ExecuteQueueObject)
+  else
+    ExecuteQueueObject;
+end;
+
 procedure TTyroScript.BeforeRun;
 begin
 end;
@@ -858,15 +950,14 @@ begin
   finally
     Lock.Leave;
   end;
-  Yield;
+  if ScriptThread <> nil then
+    ScriptThread.Yield;
 end;
 
 constructor TTyroScript.Create;
 begin
-  inherited Create(True);
+  inherited Create;
   FActive := True;
-  FreeOnTerminate := False;
-  Priority := tpLower; //hmmm
   ScriptText := TStringList.Create;
 end;
 
@@ -876,14 +967,15 @@ begin
   inherited Destroy;
 end;
 
-procedure TTyroScript.TerminatedSet;
+procedure TTyroScript.Stop;
 begin
-  inherited TerminatedSet;
   FActive := False;
 end;
 
-procedure TTyroScript.Execute;
+procedure TTyroScript.Start;
 begin
+  FStarted := True;
+  FActive := True;
   BeforeRun;
   Run;
   AfterRun;
