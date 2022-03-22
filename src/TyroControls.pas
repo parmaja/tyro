@@ -15,10 +15,18 @@ interface
 uses
   Classes, SysUtils,
   mnUtils, mnClasses,
-  TyroClasses, RayLib,
-  LazUTF8, LCLType;
+  {$ifdef FPC}
+  LCLType,
+  {$endif}
+  TyroClasses, RayLib;
+
 
 type
+  {$ifdef FPC}
+  {$else}
+  TUTF8Char = String[7]; ported from LCLType;
+  {$endif}
+
   TMouseButton = (mbLeft, mbRight, mbMiddle);
 
   TScrollbarType = (sbtHorizontal, sbtVertical);
