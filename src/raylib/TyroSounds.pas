@@ -118,17 +118,22 @@ function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
+type
+  TSmallIntArray = array[0..0] of SmallInt;
+  PSmallIntArray = ^TSmallIntArray;
+
 { TTyroRayAudio }
 
 procedure TTyroRayAudio.Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single; SampleRate: Integer; BitRate: Integer);
 var
   Data: Pointer;
-  SampleCount, SampleSize: Cardinal;
-  i: Cardinal;
+  //Data: array of Smallint;
+  SampleCount, SampleSize: Integer;
+  i: Integer;
   v: Smallint;
   {$ifdef FADE}
-  WaveSamples: Cardinal;
-  Starting, Ending: Cardinal;
+  WaveSamples: Integer;
+  Starting, Ending: Integer;
   Delta: Single;
   {$endif}
   aSize: Integer;
@@ -137,6 +142,7 @@ begin
   SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
   aSize := SampleCount * Sizeof(Smallint);
   Data := RayLib.MemAlloc(aSize);
+  //SetLength(Data, aSize);
   if Frequency <> 0 then
   begin
     Amplitude := (Amplitude * ((Power(2, SampleSize) / 2) - 1) / 100) - 1;
@@ -155,11 +161,17 @@ begin
       if i > Ending then
         v := Round(v * (SampleCount - i) * Delta / 100);
       {$endif}
-      PSmallInt(Data)[i] := v;
+      //PSmallInt(Data)[i] := v;
+      PSmallIntArray(Data)[i] := v;
+      //Data[i] := v;
     end;
   end
   else
+  begin
     FillChar(Data^, aSize, #0);
+{    for i := 0 to aSize -1 do
+      Data[i] := 0;}
+  end;
   UpdateData(Data, SampleCount);
 
   if Data <> nil then //maybe move it to generate
@@ -188,7 +200,7 @@ begin
   Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
   Wave.Channels := 1;                  // By default 1 channel (mono)
   aSize := Wave.SampleCount * Sizeof(Smallint);
-  Wave.Data := GetMem(aSize);
+  Wave.Data := RayLib.MemAlloc(aSize);
   if Frequency <> 0 then
   begin
     Amplitude := (Amplitude * ((Power(2, Wave.SampleSize) / 2) - 1) / 100) - 1;
@@ -207,7 +219,7 @@ begin
       if i > Ending then
         v := Round(v * (Wave.SampleCount - i) * Delta / 100);
       {$endif}
-      PSmallInt(Wave.Data)[i] := v;
+      PSmallIntArray(Wave.Data)[i] := v;
     end;
   end
   else
@@ -337,7 +349,7 @@ begin
   FWaveForms := TWaveForms.Create;
   //Default one is the first one
   Waveforms.Add('Sin', Sin_Waveform);
-  Waveforms.Add('Noise', Noise_Waveform());
+  Waveforms.Add('Noise', @Noise_Waveform);
 end;
 
 destructor TRayMelody.Destroy;
@@ -375,7 +387,7 @@ begin
     WaveSamples := SampleRate / Frequency;
     if WaveSamples > 0 then
     begin
-      Sample := Index mod WaveSamples;
+      Sample := Index mod Round(WaveSamples);
       Result := Sin(2*Pi * (Sample / WaveSamples));
     end
     else

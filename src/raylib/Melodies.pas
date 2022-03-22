@@ -67,7 +67,7 @@ type
   private
     FVolume: Single;
   private
-    Chr: Char;
+    Chr: Utf8Char;
     Line, Current: Integer; //For Parser
   protected
     Melody: TMelody; //Parent
@@ -86,7 +86,7 @@ type
     Octave: Integer; //current octave
 
     Instrument: String; //for waveform
-    SoundExpired: QWord; //When the note should be end, by milliseconds
+    SoundExpired: UInt64; //When the note should be end, by milliseconds
     SoundDuration: Single; //Duration and Rest by second
     constructor Create(AMelody: TMelody); virtual;
     procedure Update; virtual;
@@ -216,7 +216,7 @@ var
 
 implementation
 
-function CharToStr(C: Char):String;
+function CharToStr(C: UTF8Char):String;
 begin
   if C <= #32 then
     Result := '#' + IntToStr(Ord(C))
@@ -440,9 +440,9 @@ function TMelodyChannel.Next: Boolean;
       Result := Default;
   end;
 
-  function Check(c: Char; t: array of Char): Boolean;
+  function Check(c: UTF8Char; t: array of UTF8Char): Boolean;
   var
-    v: Char;
+    v: UTF8Char;
   begin
     for v in t do
     begin
@@ -455,7 +455,7 @@ function TMelodyChannel.Next: Boolean;
     Result := False;
   end;
 
-  function Scan(t: array of Char): String;
+  function Scan(t: array of UTF8Char): String;
   var
     r: String;
   begin
@@ -471,7 +471,7 @@ function TMelodyChannel.Next: Boolean;
     Result := r;
   end;
 
-  function ScanTo(c: Char): String;
+  function ScanTo(c: UTF8Char): String;
   begin
     Result := '';
     while Current <= Length(Notes) do
@@ -812,7 +812,7 @@ begin
       begin
         //Sleep(1); //make other thread breathing
         //Channel.Update;
-        if Channel.IsPlaying or (Channel.SoundExpired > GetTickCount64) then //Still waiting to finish playing
+        if Channel.IsPlaying or (Channel.SoundExpired > TThread.GetTickCount) then //Still waiting to finish playing
           Busy := True
         else
         begin
@@ -822,7 +822,7 @@ begin
             //Log.WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
             Channel.PlaySound;
             SoundDurationMS := Round(Channel.SoundDuration * 1000);
-            Channel.SoundExpired := SoundDurationMS + GetTickCount64 + 1; //after playsound to take of full time
+            Channel.SoundExpired := SoundDurationMS + TThread.GetTickCount + 1; //after playsound to take of full time
             Busy := True;
           end
           else

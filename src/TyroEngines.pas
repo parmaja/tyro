@@ -12,16 +12,17 @@ unit TyroEngines;
 interface
 
 uses
-  Classes, SysUtils, SyncObjs, fgl,
-  mnLogs,
-  RayLib, RayClasses, TyroClasses, TyroControls, TyroConsoles;
+  Classes, SysUtils, SyncObjs,
+  fgl,
+  mnLogs, FPCanvas, FPImage,
+  RayLib, RayClasses, TyroScripts,
+  TyroClasses, TyroControls, TyroConsoles;
 
 const
   TyroVersion = 1;
   TyroVersionString = '0.1';
 
 type
-
   TRunHow = (
     runLint,
     runCompile,
@@ -47,7 +48,6 @@ type
     Running: Boolean;
     How: TRunHow;
     RunFile: string;//that to run in script
-    WorkSpace: string;
     Console: TTyroConsole;
     constructor Create;
     destructor Destroy; override;
@@ -73,11 +73,49 @@ type
     property CanvasLock: TCriticalSection read FCanvasLock;
   end;
 
+  function IntToFPColor(I: Integer): TFPColor;
+  function FPColorToInt(C: TFPColor): Integer;
+  function RayColorOf(Color: TFPColor): TRGBAColor;
+
 var
   Main : TTyroMain = nil;
 
 implementation
 
+function IntToFPColor(I: Integer): TFPColor;
+begin
+  Result.Alpha := I and $ff;
+  Result.Alpha := Result.Alpha + (Result.Alpha shl 8);
+
+  I := I shr 8;
+  Result.Blue := I and $ff;
+  Result.Blue := Result.Blue + (Result.Blue shl 8);
+  I := I shr 8;
+  Result.Green := I and $ff;
+  Result.Green := Result.Green + (Result.Green shl 8);
+  I := I shr 8;
+  Result.Red := I and $ff;
+  Result.Red := Result.Red + (Result.Red shl 8);
+end;
+
+function FPColorToInt(C: TFPColor): Integer;
+begin
+  Result := hi(C.Red);
+  Result := Result shl 8;
+  Result := Result or hi(C.Green);
+  Result := Result shl 8;
+  Result := Result or hi(C.Blue);
+  Result := Result shl 8;
+  Result := Result or hi(C.Alpha);
+end;
+
+function RayColorOf(Color: TFPColor): TRGBAColor;
+begin
+  Result.Alpha := hi(Color.Alpha);
+  Result.Red := hi(Color.Red);
+  Result.Green := hi(Color.Green);
+  Result.Blue := hi(Color.Blue);
+end;
 
 { TTyroMain }
 
@@ -301,5 +339,10 @@ begin
   Console.Hide;
 end;
 
+initialization
+  Main := TTyroMain.Create;
+finalization
+  FreeAndNil(Main);
 end.
+
 

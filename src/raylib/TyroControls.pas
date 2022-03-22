@@ -8,12 +8,15 @@ unit TyroControls;
  *
  *}
 
-{$mode objfpc}{$H+}
+{$ifdef FPC}
+{$mode delphi}
+{$H+}{$M+}
+{$endif}
 
 interface
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, Types,
   mnUtils, mnClasses,
   {$ifdef FPC}
   LCLType,
@@ -24,7 +27,7 @@ uses
 type
   {$ifdef FPC}
   {$else}
-  TUTF8Char = String[7]; ported from LCLType;
+  TUTF8Char = String[7]; //* ported from LCLType;
   {$endif}
 
   TMouseButton = (mbLeft, mbRight, mbMiddle);
@@ -51,7 +54,7 @@ type
   TTyroControl = class;
   TTyroWindow = class;
 
-  TTyroControls = class(specialize TmnObjectList<TTyroControl>)
+  TTyroControls = class(TmnObjectList<TTyroControl>)
   public
   end;
 

@@ -174,7 +174,7 @@ end;
 
 procedure TRayFont.LoadFromFile(FileName: string);
 begin
-  Data := LoadFont(PChar(FileName));
+  Data := LoadFont(PAnsiChar(FileName));
 end;
 
 { TRayAudio }
@@ -344,7 +344,8 @@ begin
   if FAudioDeviceInitialized = 0 then
     if not IsAudioDeviceReady then
       InitAudioDevice;
-  InterlockedIncrement(FAudioDeviceInitialized);
+
+  //InterlockedIncrement(FAudioDeviceInitialized);
 end;
 
 procedure TRayLibSound.Close;
@@ -353,7 +354,11 @@ begin
   begin
     {if FAudioDeviceInitialized = 0 then
       CloseAudioDevice;} //leave it open
+    {$ifdef FPC}
     InterlockedDecrement(FAudioDeviceInitialized);
+    {$else}
+    AtomicIncrement(FAudioDeviceInitialized, 1);
+    {$endif}
   end;
 end;
 
