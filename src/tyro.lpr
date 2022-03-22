@@ -211,16 +211,8 @@ end;
 procedure TTyroApplication.DoRun;
 begin
   inherited;
-  try
-    CheckSynchronize;
-    Main.Run;
-    if not Main.Active then
-    begin
-      Main.Stop;
-      Terminate;
-    end;
-  finally
-  end;
+  Main.Run;
+  Terminate;
 end;
 
 var

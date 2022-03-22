@@ -32,7 +32,9 @@ type
 
   { TTyroMain }
 
-  TTyroMain = class(TTyroWindow)
+  { TTyroEngine }
+
+  TTyroEngine = class(TyroControls.TTyroMain)
   private
     //FBoard: TTyroImage;
     function GetActive: Boolean;
@@ -53,9 +55,11 @@ type
     destructor Destroy; override;
     procedure Start;
     procedure Stop;
+    procedure Terminate; override;
     procedure ProcessQueue;
-    procedure Run;
-    procedure Loop; virtual;
+    procedure Setup; override;
+    procedure Draw; override;
+    procedure Loop; override;
     //property Board: TTyroImage read FBoard;
     property Active: Boolean read GetActive;
 
@@ -78,7 +82,7 @@ type
   function RayColorOf(Color: TFPColor): TRGBAColor;
 
 var
-  Main : TTyroMain = nil;
+  Main : TTyroEngine = nil;
 
 implementation
 
@@ -117,14 +121,14 @@ begin
   Result.Blue := hi(Color.Blue);
 end;
 
-{ TTyroMain }
+{ TTyroEngine }
 
-function TTyroMain.GetActive: Boolean;
+function TTyroEngine.GetActive: Boolean;
 begin
   Result := Running or ((FScriptThread <> nil) and FScriptThread.Active) or ((FScriptMain <> nil) and (FScriptMain.Active));
 end;
 
-procedure TTyroMain.ProcessQueue;
+procedure TTyroEngine.ProcessQueue;
 var
   p: TQueueObject;
   c: Integer;
@@ -163,7 +167,18 @@ begin
   end;
 end;
 
-constructor TTyroMain.Create;
+procedure TTyroEngine.Setup;
+begin
+  inherited;
+  if (FScriptThread <> nil) and not FScriptThread.Started then
+    FScriptThread.Start;
+
+  //if (FScriptMain <> nil) and not FScriptMain.Started then
+  if (FScriptMain <> nil) then
+    FScriptMain.Start;
+end;
+
+constructor TTyroEngine.Create;
 begin
   RayLibrary.Load;
   inherited Create;
@@ -187,7 +202,7 @@ begin
   Console.Focused := True;
 end;
 
-destructor TTyroMain.Destroy;
+destructor TTyroEngine.Destroy;
 begin
   //Stop;
   HideWindow;
@@ -198,7 +213,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TTyroMain.Start;
+procedure TTyroEngine.Start;
 var
   aScriptType: TScriptType;
   aScript: TTyroScript;
@@ -229,19 +244,11 @@ begin
   end;
 end;
 
-procedure TTyroMain.Run;
+procedure TTyroEngine.Draw;
 var
   t: TTexture2D;
   //im: TImage;
-begin
-  if (FScriptThread <> nil) and not FScriptThread.Started then
-    FScriptThread.Start;
-
-  //if (FScriptMain <> nil) and not FScriptMain.Started then
-  if (FScriptMain <> nil) then
-    FScriptMain.Start;
-
-  //
+begin  //
   if Visible then
   begin
     if WindowShouldClose() then
@@ -263,18 +270,20 @@ begin
     finally
       CanvasLock.Leave;
     end;
-    Loop;
     ThreadSwitch; //Yield
     EndDrawing;
     RayUpdates.Update;
   end;
 end;
 
-procedure TTyroMain.Loop;
+procedure TTyroEngine.Loop;
 begin
+  inherited;
+  if not Active then
+    Terminate;
 end;
 
-procedure TTyroMain.RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
+procedure TTyroEngine.RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 var
   Item: TScriptType;
 begin
@@ -285,7 +294,7 @@ begin
   FScriptTypes.Add(Item);
 end;
 
-procedure TTyroMain.Stop;
+procedure TTyroEngine.Stop;
 begin
   Running := False;
   if FScriptThread <> nil then
@@ -302,7 +311,13 @@ begin
   end;
 end;
 
-procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
+procedure TTyroEngine.Terminate;
+begin
+  Stop;
+  inherited;
+end;
+
+procedure TTyroEngine.ShowWindow(AWidth, AHeight: Integer);
 begin
   if Visible then
   begin
@@ -323,24 +338,24 @@ begin
   Visible := True;
 end;
 
-procedure TTyroMain.HideWindow;
+procedure TTyroEngine.HideWindow;
 begin
   if Visible then
     CloseWindow;
 end;
 
-procedure TTyroMain.ShowConsole(AWidth, AHeight: Integer);
+procedure TTyroEngine.ShowConsole(AWidth, AHeight: Integer);
 begin
   Console.Show;
 end;
 
-procedure TTyroMain.HideConsole;
+procedure TTyroEngine.HideConsole;
 begin
   Console.Hide;
 end;
 
 initialization
-  Main := TTyroMain.Create;
+  Main := TTyroEngine.Create;
 finalization
   FreeAndNil(Main);
 end.

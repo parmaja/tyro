@@ -200,7 +200,74 @@ type
     property Focused: TTyroControl read FFocused write SetFocused;
   end;
 
+  { TTyroMain }
+
+  TTyroMain = class(TTyroWindow)
+  private
+  protected
+    IsTerminated: Boolean;
+  public
+    function Terminated: Boolean;
+    procedure Preload; virtual;
+    procedure Setup; virtual;
+    procedure Draw; virtual;
+    procedure Loop; virtual;
+    procedure Terminate; virtual;
+    procedure Unload; virtual;
+    procedure Run;
+  end;
+
 implementation
+
+{ TTyroMain }
+
+function TTyroMain.Terminated: Boolean;
+begin
+  Result := IsTerminated;
+end;
+
+procedure TTyroMain.Preload;
+begin
+end;
+
+procedure TTyroMain.Setup;
+begin
+
+end;
+
+procedure TTyroMain.Draw;
+begin
+
+end;
+
+procedure TTyroMain.Loop;
+begin
+end;
+
+procedure TTyroMain.Run;
+begin
+  Preload;
+  Setup;
+  repeat
+    try
+      CheckSynchronize;
+      Draw;
+      Loop;
+    finally
+    end;
+  until Terminated;
+  Unload;
+end;
+
+procedure TTyroMain.Terminate;
+begin
+  IsTerminated := True;
+end;
+
+procedure TTyroMain.Unload;
+begin
+
+end;
 
 { TTyroTexture }
 
