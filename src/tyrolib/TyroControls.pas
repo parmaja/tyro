@@ -99,7 +99,6 @@ type
 
   TTyroControl = class abstract(TTyroSizable)
   private
-    FAlpha: Byte;
     FWindow: TTyroCustomWindow;
     FParent: TTyroContainer;
     FVisible: Boolean;
@@ -207,7 +206,6 @@ type
   TTyroMainOption = (moWindow, moOpaque, moShowFPS);
   TTyroMainOptions= set of TTyroMainOption;
 
-
   { TTyroMain }
 
   TTyroMain = class(TTyroCustomWindow)
@@ -222,6 +220,7 @@ type
     destructor Destroy; override;
 
     procedure ShowWindow(AWidth, AHeight: Integer); virtual;
+    procedure SetFPS(FPS: Integer); virtual;
     procedure HideWindow; virtual;
 
     procedure Init; virtual;
@@ -245,9 +244,19 @@ const
   cDefaultWindowWidth = 640;
   cDefaultWindowHeight = 480;
 
+var
+  Main: TTyroMain = nil;
+
+function Canvas: TTyroCanvas; inline;
+
 implementation
 
 { TTyroMain }
+
+function Canvas: TTyroCanvas;
+begin
+  Result := Main.Canvas;
+end;
 
 constructor TTyroMain.Create;
 begin
@@ -278,6 +287,11 @@ procedure TTyroMain.Preload;
 begin
 end;
 
+procedure TTyroMain.SetFPS(FPS: Integer);
+begin
+  SetTargetFPS(FPS);
+end;
+
 procedure TTyroMain.Setup;
 begin
 
@@ -306,7 +320,11 @@ procedure TTyroMain.Run;
 begin
   Init;
   if not Visible and (moWindow in Options) then
+  begin
     ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
+    SetTargetFPS(cFramePerSeconds);
+  end;
+
   Preload;
   Setup;
   repeat
@@ -356,7 +374,6 @@ begin
     //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     SetBounds(0, 0, AWidth, AHeight);
     InitWindow(AWidth, AHeight, PUTF8Char(Title));
-    SetTargetFPS(cFramePerSeconds);
     ShowCursor();
     PrepareCanvas;
   end;
@@ -596,8 +613,6 @@ begin
 end;
 
 procedure TTyroControl.Paint(ACanvas: TTyroCanvas);
-var
-  aAlpha: Byte;
 begin
   if Visible then
   begin
@@ -756,5 +771,8 @@ begin
   Result := TTyroTextureCanvas.Create(Width, Height);
 end;
 
+initialization
+finalization
+  FreeAndNil(Main);
 end.
 

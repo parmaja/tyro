@@ -67,7 +67,8 @@ type
     procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
     procedure DrawText(X, Y: Integer; S: utf8string; Color: TColor);
     procedure DrawPixel(X, Y: Integer; Color: TColor);
-    procedure DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
+    procedure DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor); overload;
+    procedure DrawLine(X1, Y1, X2, Y2: Integer); overload;
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
     procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
@@ -186,7 +187,7 @@ end;
 
 procedure TTyroCanvas.SetPenColor(AValue: TColor);
 begin
-  FPenColor.SetRGB(AValue);
+  FPenColor := AValue;
 end;
 
 function TTyroCanvas.GetPenAlpha: Byte;
@@ -214,7 +215,8 @@ begin
   FPenColor := clBlack;
   //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
   //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
-  FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
+//  FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
+  FBackColor := TColor.Create($77, $B5, $FE, $FF); //French Sky Blue
 
   //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'alpha_beta.png'));
   //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'Terminess-Bold.ttf'));
@@ -324,6 +326,11 @@ begin
   RayLib.DrawLine(X1 + FOriginX, Y1 + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
   FLastX := X2;
   FLastY := Y2;
+end;
+
+procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer);
+begin
+  DrawLine(X1, Y1, X2, Y2, PenColor);
 end;
 
 procedure TTyroCanvas.DrawLineTo(X2, Y2: Integer; Color: TColor);

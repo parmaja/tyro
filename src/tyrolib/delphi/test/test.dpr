@@ -1,13 +1,16 @@
 program test;
 
-{.$APPTYPE CONSOLE}
+{$APPTYPE CONSOLE}
 
 {$R *.res}
 
 uses
   System.SysUtils,
   RayLib,
-  TyroClasses, TyroControls;
+  TyroClasses,
+  TyroControls,
+  Generics.Collections,
+  TestMaze in 'TestMaze.pas';
 
 type
   TMyMain = class(TTyroMain)
@@ -15,34 +18,61 @@ type
     procedure Init; override;
     procedure Setup; override;
     procedure Draw; override;
+    procedure Unload; override;
   end;
-
-var
-  Main: TMyMain;
 
 { TMyMain }
 
 procedure TMyMain.Draw;
 begin
   inherited;
-//  Canvas.Clear;
   Canvas.PenAlpha := 0;
   Canvas.PenColor := clBlack;
   Canvas.DrawText(30, 30, 'Ready!', clBlack);
-  Canvas.DrawCircle(150, 150 , 50, clBlack, true);
+
+  for var aCell in Cells do
+    aCell.Show;
+
+  FCurrent.FHit := True;
+  FNext := FCurrent.Check;
+  if FNext<>nil then
+  begin
+    FNext.FHit := True;
+    FCurrent := FNext;
+  end;
 end;
 
 procedure TMyMain.Init;
+var
+  x: Integer;
+  y: Integer;
+  c: TCell;
 begin
   inherited;
-  //ShowWindow(400, 400);
+  FCW := FWidth div FCols;
+  Cells := TObjectList<TCell>.Create;
+
+  ShowWindow(FWidth, FHeight);
+  for y:=0 to FRows-1 do
+    for x:=0 to FCols-1 do
+      Cells.Add(TCell.Create(x, y, FCW));
+
+  FCurrent := Cells[15];
 end;
 
 procedure TMyMain.Setup;
 begin
   inherited;
+  SetTargetFPS(5);
   Options := Options + [moShowFPS];
+
 //  Canvas.BackColor := ;
+end;
+
+procedure TMyMain.Unload;
+begin
+  inherited;
+  FreeAndNil(Cells);
 end;
 
 begin

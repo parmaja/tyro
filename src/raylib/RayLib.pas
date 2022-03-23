@@ -148,7 +148,7 @@ type
     function SetAlpha(AAlpha: Byte): TColor;
     constructor Create(ARed, AGreen, ABlue, AAlpha: Byte);overload;
     constructor Create(RGBAColor: TRGBAColor); overload;
-    constructor Create(AValue: Cardinal); overload;
+    //constructor Create(AValue: Cardinal); overload;
     constructor CreateRGBA(RGBA: Cardinal); overload; //stupid idea, but ok :P
   end;
 
@@ -216,10 +216,10 @@ type
 
   // Matrix type (OpenGL style 4x4 - right handed, column major)
   TMatrix = record
-      m0, m4, m8, m12: Single;
-      m1, m5, m9, m13: Single;
-      m2, m6, m10, m14: Single;
-      m3, m7, m11, m15: Single;
+    m0, m4, m8, m12: Single;
+    m1, m5, m9, m13: Single;
+    m2, m6, m10, m14: Single;
+    m3, m7, m11, m15: Single;
   end;
 
   // Rectangle type
@@ -2213,15 +2213,6 @@ var
   aColor: TColor absolute RGBAColor;
 begin
   Self := aColor;
-end;
-
-constructor TColorHelper.Create(AValue: Cardinal);
-begin
-  {$ifdef ENDIAN_LITTLE}
-  Self := AValue;
-  {$else}
-  Self := AValue; //TODO Swap it SwapEndian()
-  {$endif}
 end;
 
 constructor TColorHelper.CreateRGBA(RGBA: Cardinal);
