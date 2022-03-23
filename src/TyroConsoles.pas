@@ -8,7 +8,10 @@ unit TyroConsoles;
  *
  *}
 
-{$mode objfpc}{$H+}
+{$ifdef FPC}
+{$mode delphi}
+{$endif}
+{$H+}{$M+}
 
 { Copyright (C) 2007 Julian Schutsch
 
@@ -31,9 +34,9 @@ interface
 
 uses
   Classes, SysUtils, Contnrs,
-  RayLib, TyroClasses, LazUTF8, LCLType,
-  TyroControls,
-  FPImage, FPCanvas;
+  LazUTF8, LCLType,
+  RayLib,
+  TyroClasses, TyroControls;
 
 const
   SB_HORZ = 0;
@@ -459,7 +462,7 @@ var
           if SameColor <> '' then
           begin
             ACanvas.PenColor  := SameForeColor;
-            ACanvas.DrawText(SameColorX, AY, SameColor);
+            ACanvas.DrawText(SameColorX, AY, SameColor, SameForeColor);
             Inc(SameColorX, SameColorWidth);
             SameColor := '';
           end
@@ -472,7 +475,7 @@ var
           if SameColor <> '' then
           begin
             ACanvas.PenColor  := SameForeColor;
-            ACanvas.DrawText(SameColorX, AY, SameColor);
+            ACanvas.DrawText(SameColorX, AY, SameColor, SameForeColor);
             Inc(SameColorX, SameColorWidth);
             SameColor := '';
           end
@@ -632,7 +635,7 @@ var
           else
           begin
             ACanvas.PenColor  := SameForeColor;
-            ACanvas.DrawText(SameColorX, AY, SameColor);
+            ACanvas.DrawText(SameColorX, AY, SameColor, SameForeColor);
             if (LP >= FPassWordStart) then
             begin
               SameColor      := FPassWordChar;
@@ -661,7 +664,7 @@ var
     if SameColor <> '' then
     begin
       ACanvas.PenColor  := SameForeColor;
-      ACanvas.DrawText(SameColorX, AY, SameColor);
+      ACanvas.DrawText(SameColorX, AY, SameColor, SameForeColor);
     end;
     AX := ALeftX;
     Inc(AY, ACH);

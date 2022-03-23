@@ -24,6 +24,7 @@ uses
 type
 
   TTyroCanvas = class;
+
   { TTyroImage }
 
   TTyroImage = class(TObject)
@@ -40,29 +41,31 @@ type
 
   { TTyroCanvas }
 
-  TTyroCanvas = class(TObject)
+  TTyroCanvas = class abstract(TObject)
   private
     FOriginX, FOriginY: Integer;
     FLastX, FLastY: Integer;
     FPenColor: TColor;
     FBackColor: TColor;
     FWidth, FHeight: Integer;
-    FTexture: TRenderTexture2D;
     Font: TRayFont;
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
     procedure SetHeight(AValue: Integer);
     procedure SetPenColor(AValue: TColor);
     procedure SetWidth(AValue: Integer);
+    procedure SetBackColor(const Value: TColor);
   public
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
+
     procedure SetOrigin(X, Y: Integer);
     procedure ResetOrigin;
-    procedure BeginDraw;
-    procedure EndDraw;
+    procedure BeginDraw; virtual;
+    procedure EndDraw; virtual;
+
     procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
-    procedure DrawText(X, Y: Integer; S: string);
+    procedure DrawText(X, Y: Integer; S: utf8string; Color: TColor);
     procedure DrawPixel(X, Y: Integer; Color: TColor);
     procedure DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
@@ -70,13 +73,36 @@ type
     procedure DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
     procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
+
+    procedure DrawOn; virtual;
     procedure Clear;
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
     property PenColor: TColor read FPenColor write SetPenColor;
-    property BackColor: TColor read FBackColor write FBackColor;
-    property Texture: TRenderTexture2D read FTexture;
+    property BackColor: TColor read FBackColor write SetBackColor;
     property Width: Integer read FWidth write SetWidth;
     property Height: Integer read FHeight write SetHeight;
+  end;
+
+  TTyroTextureCanvas = class(TTyroCanvas)
+  private
+    FTexture: TRenderTexture2D;
+  public
+    constructor Create(AWidth, AHeight: Integer);
+    destructor Destroy; override;
+    procedure BeginDraw; override;
+    procedure DrawOn; override;
+    procedure EndDraw; override;
+    property Texture: TRenderTexture2D read FTexture;
+  end;
+
+  TTyroMainCanvas = class(TTyroCanvas)
+  private
+  public
+    constructor Create(AWidth, AHeight: Integer);
+    destructor Destroy; override;
+    procedure BeginDraw; override;
+    procedure DrawOn; override;
+    procedure EndDraw; override;
   end;
 
   function IntToColor(I: integer): TColor;
@@ -91,7 +117,7 @@ const
   cFramePerSeconds = 60;
 
 var
-  WorkSpace: string;
+  WorkSpace: utf8string;
   Lock: TCriticalSection = nil;
 
 implementation
@@ -147,6 +173,11 @@ end;
 
 { TTyroCanvas }
 
+procedure TTyroCanvas.SetBackColor(const Value: TColor);
+begin
+  FBackColor := Value;
+end;
+
 procedure TTyroCanvas.SetHeight(AValue: Integer);
 begin
   if FHeight =AValue then Exit;
@@ -184,40 +215,39 @@ begin
   //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
   //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
   FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
-  //Font := GetFontDefault;
 
-  //Font := LoadFont(PChar(Main.WorkSpace + 'alpha_beta.png'));
-  //Font := LoadFont(PChar(Main.WorkSpace + 'Terminess-Bold.ttf'));
-  //Font := LoadFont(PChar(Main.WorkSpace + 'dejavu.fnt'));
-  //Font := LoadFont(PChar(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
-  //Font := LoadFont(PChar(Main.WorkSpace + 'terminus.ttf'));
-  //Font := LoadFont(PChar(Main.WorkSpace + 'fonts/Chroma.png'));
-  //Font := LoadFont(PChar(Main.WorkSpace + 'fonts/alpha_beta.png'));
-  //Font := LoadFont(PChar(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
-  //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/terminus.ttf'), 12, nil, 255);
-  //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/AnonymousPro-Regular.ttf'), 12, nil, 255);
-  //Font := LoadFont(PChar('computer_pixel.fon.ttf'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'alpha_beta.png'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'Terminess-Bold.ttf'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'dejavu.fnt'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'terminus.ttf'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/Chroma.png'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/alpha_beta.png'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
+  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/terminus.ttf'), 12, nil, 255);
+  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/AnonymousPro-Regular.ttf'), 12, nil, 255);
+  //Font := LoadFont(PUTF8Char('computer_pixel.fon.ttf'));
 
-  //Font := LoadFontEx(PChar(Main.WorkSpace + 'fonts/tahoma.ttf'), ScreenFontSize, nil, $FFFF); //Good for arabic but it take huge memory
+  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/tahoma.ttf'), ScreenFontSize, nil, $FFFF); //Good for arabic but it take huge memory
 
-  Font.LoadFromFile(WorkSpace + 'fonts/font.png');
-  Font.Height := 16;
-  //Font := GetFontDefault();
+  if SysUtils.FileExists(WorkSpace + 'font.png') then
+  begin
+    Font.LoadFromFile(WorkSpace + 'font.png');
+    Font.Height := 16;
+  end
+  else
+    Font.LoadDefault;
+
   SetTextureFilter(Font.Data.texture, FILTER_POINT);
 
-  FTexture := LoadRenderTexture(Width, Height);
-
-  BeginTextureMode(FTexture);
+  {BeginTextureMode(FTexture);
   ClearBackground(BackColor);
   DrawText(10, 10, 'Ready!');
-  EndTextureMode();
+  EndTextureMode();}
 end;
 
 destructor TTyroCanvas.Destroy;
 begin
-  FreeAndNil(Font);
-  UnloadRenderTexture(FTexture);
-  Finalize(FTexture);
   FreeAndNil(Font);
   inherited;
 end;
@@ -236,12 +266,10 @@ end;
 
 procedure TTyroCanvas.BeginDraw;
 begin
-  BeginTextureMode(FTexture);
 end;
 
 procedure TTyroCanvas.EndDraw;
 begin
-  EndTextureMode;
 end;
 
 procedure TTyroCanvas.DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
@@ -279,9 +307,9 @@ begin
   DrawRect(ARectangle.Left, ARectangle.Top, ARectangle.Right, ARectangle.Bottom, Color, Fill);
 end;
 
-procedure TTyroCanvas.DrawText(X, Y: Integer; S: string);
+procedure TTyroCanvas.DrawText(X, Y: Integer; S: utf8string; Color: TColor);
 begin
-  RayLib.DrawTextEx(Font.Data, PChar(S), Vector2Of(x + FOriginX, y + FOriginY), Font.Height, 0, PenColor);
+  RayLib.DrawTextEx(Font.Data, PUTF8Char(S), Vector2Of(x + FOriginX, y + FOriginY), Font.Height, 0, Color);
 end;
 
 procedure TTyroCanvas.DrawPixel(X, Y: Integer; Color: TColor);
@@ -303,9 +331,78 @@ begin
   DrawLine(FLastX + FOriginX, FLastY + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
 end;
 
+procedure TTyroCanvas.DrawOn;
+begin
+
+end;
+
 procedure TTyroCanvas.Clear;
 begin
   ClearBackground(BackColor);
+end;
+
+{ TTyroTextureCanvas }
+
+procedure TTyroTextureCanvas.BeginDraw;
+begin
+  inherited;
+  BeginTextureMode(FTexture);
+end;
+
+constructor TTyroTextureCanvas.Create(AWidth, AHeight: Integer);
+begin
+  inherited;
+  FTexture := LoadRenderTexture(Width, Height);
+end;
+
+destructor TTyroTextureCanvas.Destroy;
+begin
+  UnloadRenderTexture(FTexture);
+  //Finalize(FTexture);
+  inherited;
+end;
+
+procedure TTyroTextureCanvas.DrawOn;
+begin
+  inherited;
+  with Texture do
+    DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.Width, -texture.height), Vector2Of(0, 0), clWhite);
+end;
+
+procedure TTyroTextureCanvas.EndDraw;
+begin
+  inherited;
+  EndTextureMode;
+end;
+
+{ TTyroMainCanvas }
+
+procedure TTyroMainCanvas.BeginDraw;
+begin
+  inherited;
+  BeginDrawing();
+end;
+
+constructor TTyroMainCanvas.Create(AWidth, AHeight: Integer);
+begin
+  inherited;
+end;
+
+destructor TTyroMainCanvas.Destroy;
+begin
+
+  inherited;
+end;
+
+procedure TTyroMainCanvas.DrawOn;
+begin
+  inherited;
+end;
+
+procedure TTyroMainCanvas.EndDraw;
+begin
+  EndDrawing();
+  inherited;
 end;
 
 initialization

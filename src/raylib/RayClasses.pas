@@ -123,7 +123,7 @@ type
     procedure Close;
     constructor Create;
     destructor Destroy; override;
-    procedure PlayMusicFile(FileName: string);
+    procedure PlayMusicFile(FileName: utf8string);
   end;
 
   { TRayFont }
@@ -139,7 +139,8 @@ type
     procedure Release;
     constructor Create;
     destructor Destroy; override;
-    procedure LoadFromFile(FileName: string);
+    procedure LoadFromFile(FileName: utf8string);
+    procedure LoadDefault;
   end;
 
 var
@@ -172,9 +173,14 @@ begin
   inherited Destroy;
 end;
 
-procedure TRayFont.LoadFromFile(FileName: string);
+procedure TRayFont.LoadDefault;
 begin
-  Data := LoadFont(PAnsiChar(FileName));
+  Data := GetFontDefault();
+end;
+
+procedure TRayFont.LoadFromFile(FileName: utf8string);
+begin
+  Data := LoadFont(PUTF8Char(FileName));
 end;
 
 { TRayAudio }
@@ -376,7 +382,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TRayLibSound.PlayMusicFile(FileName: string);
+procedure TRayLibSound.PlayMusicFile(FileName: utf8string);
 var
   Music: TRayMusic;
 begin

@@ -21,11 +21,14 @@ uses
   {$ifdef FPC}
   LCLType,
   {$endif}
-  TyroClasses, RayLib;
+  SyncObjs, //after LCLType
+  RayLib, RayClasses,
+  TyroClasses;
 
 
 type
   {$ifdef FPC}
+  TUTF8Char = LCLType.TUTF8Char;
   {$else}
   TUTF8Char = String[7]; //* ported from LCLType;
   {$endif}
@@ -52,7 +55,7 @@ type
 
   TTyroContainer = class;
   TTyroControl = class;
-  TTyroWindow = class;
+  TTyroCustomWindow = class;
 
   TTyroControls = class(TmnObjectList<TTyroControl>)
   public
@@ -97,15 +100,13 @@ type
   TTyroControl = class abstract(TTyroSizable)
   private
     FAlpha: Byte;
-    FBackColor: TColor;
-    FPenColor: TColor;
-    FWindow: TTyroWindow;
+    FWindow: TTyroCustomWindow;
     FParent: TTyroContainer;
     FVisible: Boolean;
     function GetFocused: Boolean;
     procedure SetFocused(AValue: Boolean);
     procedure SetVisible(AValue: Boolean);
-    procedure SetWindow(AValue: TTyroWindow);
+    procedure SetWindow(AValue: TTyroCustomWindow);
     procedure SetParent(AValue: TTyroContainer);
   protected
     State: TTyroControlStates;
@@ -122,7 +123,7 @@ type
     procedure DoPaint(ACanvas: TTyroCanvas); virtual;
 
     procedure Created; virtual;
-    property Window: TTyroWindow read FWindow write SetWindow;
+    property Window: TTyroCustomWindow read FWindow write SetWindow;
   public
     constructor Create(AParent: TTyroContainer); virtual;
     destructor Destroy; override;
@@ -147,9 +148,6 @@ type
     property ClientWidth: Integer read GetClientWidth;
     property ClientHeight: Integer read GetClientHeight;
     property Visible: Boolean read FVisible write SetVisible;
-
-    property BackColor: TColor read FBackColor write FBackColor;
-    property PenColor: TColor read FPenColor write FPenColor;
   end;
 
   { TTyroPanel }
@@ -162,10 +160,10 @@ type
 
   { TTyroTexture }
 
-  TTyroTexture = class(TTyroControl) //Own a texture
+  TTyroTextureControl = class(TTyroControl) //Own a texture
   private
-    FCanvas: TTyroCanvas;
-    procedure SetCanvas(AValue: TTyroCanvas);
+    FCanvas: TTyroTextureCanvas;
+    procedure SetCanvas(AValue: TTyroTextureCanvas);
   public
     //TODO
     constructor Create(AParent: TTyroContainer); override;
@@ -173,53 +171,103 @@ type
     procedure Invalidate; override;
     procedure Draw; virtual;
     procedure Resize; override;
-    property Canvas: TTyroCanvas read FCanvas write SetCanvas;
+    property Canvas: TTyroTextureCanvas read FCanvas write SetCanvas;
   end;
 
-  { TTyroWindow }
+  { TTyroCustomWindow }
 
-  TTyroWindow = class(TTyroSizable)
+  TTyroCustomWindow = class abstract(TTyroSizable)
   private
     FCanvas: TTyroCanvas;
     FFocused: TTyroControl;
-    FTitle: string;
+    FTitle: utf8string;
     procedure SetCanvas(AValue: TTyroCanvas);
     procedure SetFocused(AValue: TTyroControl);
-    procedure SetTitle(AValue: string);
+    procedure SetTitle(AValue: utf8string);
   protected
-    DefaultBackColor: TColor;
     Margin: Integer;
-    procedure NeedCanvas;
+    procedure PrepareCanvas; virtual;
+    function CreateCanvas: TTyroCanvas; virtual; abstract;
   public
     Visible: Boolean;
     constructor Create;
     destructor Destroy; override;
     procedure Paint;
     property Canvas: TTyroCanvas read FCanvas write SetCanvas;
-    property Title: string read FTitle write SetTitle;
+    property Title: utf8string read FTitle write SetTitle;
     property Focused: TTyroControl read FFocused write SetFocused;
   end;
 
+  TTyroWindow = class(TTyroCustomWindow)
+  protected
+    function CreateCanvas: TTyroCanvas; override;
+  public
+  end;
+
+  TTyroMainOption = (moWindow, moOpaque, moShowFPS);
+  TTyroMainOptions= set of TTyroMainOption;
+
+
   { TTyroMain }
 
-  TTyroMain = class(TTyroWindow)
+  TTyroMain = class(TTyroCustomWindow)
   private
+    FOptions: TTyroMainOptions;
   protected
     IsTerminated: Boolean;
+    FCanvasLock: TCriticalSection;
+    function CreateCanvas: TTyroCanvas; override;
   public
-    function Terminated: Boolean;
+    constructor Create;
+    destructor Destroy; override;
+
+    procedure ShowWindow(AWidth, AHeight: Integer); virtual;
+    procedure HideWindow; virtual;
+
+    procedure Init; virtual;
     procedure Preload; virtual;
+    function Terminated: Boolean;
     procedure Setup; virtual;
+    procedure Shutdown; virtual;
+    procedure PrepareDraw; virtual;
     procedure Draw; virtual;
     procedure Loop; virtual;
     procedure Terminate; virtual;
     procedure Unload; virtual;
+
     procedure Run;
+
+    property CanvasLock: TCriticalSection read FCanvasLock;
+    property Options: TTyroMainOptions read FOptions write FOptions;
   end;
+
+const
+  cDefaultWindowWidth = 640;
+  cDefaultWindowHeight = 480;
 
 implementation
 
 { TTyroMain }
+
+constructor TTyroMain.Create;
+begin
+  inherited;
+  FOptions := [moWindow, moOpaque];
+  WorkSpace := ExtractFilePath(ParamStr(0));
+  RayLibrary.Load;
+  FCanvasLock := TCriticalSection.Create;
+end;
+
+function TTyroMain.CreateCanvas: TTyroCanvas;
+begin
+  Result := TTyroMainCanvas.Create(Width, Height);
+end;
+
+destructor TTyroMain.Destroy;
+begin
+  FreeAndNil(FCanvasLock);
+  inherited;
+end;
 
 function TTyroMain.Terminated: Boolean;
 begin
@@ -235,6 +283,16 @@ begin
 
 end;
 
+procedure TTyroMain.Shutdown;
+begin
+
+end;
+
+procedure TTyroMain.PrepareDraw;
+begin
+
+end;
+
 procedure TTyroMain.Draw;
 begin
 
@@ -246,17 +304,74 @@ end;
 
 procedure TTyroMain.Run;
 begin
+  Init;
+  if not Visible and (moWindow in Options) then
+    ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
   Preload;
   Setup;
   repeat
     try
       CheckSynchronize;
-      Draw;
+      if WindowShouldClose() then
+      begin
+        Shutdown;
+        Terminate;
+      end
+      else
+      begin
+        if Visible then
+        begin
+          PrepareDraw;
+          Canvas.BeginDraw;
+          if moOpaque in Options then
+            Canvas.Clear;
+
+          try
+            Paint;
+            Draw;
+            if moShowFPS in Options then
+              RayLib.DrawFPS(10, 10);
+          finally
+            Canvas.EndDraw;
+          end;
+        end;
+      end;
       Loop;
+      RayUpdates.Update;
     finally
     end;
   until Terminated;
   Unload;
+end;
+
+procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
+begin
+  if Visible then
+  begin
+    SetBounds(0, 0, AWidth, AHeight);
+    SetWindowSize(AWidth, AHeight);
+  end
+  else
+  begin
+    //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    SetBounds(0, 0, AWidth, AHeight);
+    InitWindow(AWidth, AHeight, PUTF8Char(Title));
+    SetTargetFPS(cFramePerSeconds);
+    ShowCursor();
+    PrepareCanvas;
+  end;
+  Visible := True;
+end;
+
+procedure TTyroMain.HideWindow;
+begin
+  if Visible then
+    CloseWindow;
+end;
+
+procedure TTyroMain.Init;
+begin
+
 end;
 
 procedure TTyroMain.Terminate;
@@ -269,39 +384,39 @@ begin
 
 end;
 
-{ TTyroTexture }
+{ TTyroTextureControl }
 
-procedure TTyroTexture.SetCanvas(AValue: TTyroCanvas);
+procedure TTyroTextureControl.SetCanvas(AValue: TTyroTextureCanvas);
 begin
   if FCanvas =AValue then Exit;
   FCanvas :=AValue;
 end;
 
-constructor TTyroTexture.Create(AParent: TTyroContainer);
+constructor TTyroTextureControl.Create(AParent: TTyroContainer);
 begin
   inherited Create(AParent);
-  FCanvas := TTyroCanvas.Create(Width, Height);
+  FCanvas := TTyroTextureCanvas.Create(Width, Height);
 end;
 
-destructor TTyroTexture.Destroy;
+destructor TTyroTextureControl.Destroy;
 begin
   FreeAndNil(FCanvas);
   inherited Destroy;
 end;
 
-procedure TTyroTexture.Invalidate;
+procedure TTyroTextureControl.Invalidate;
 begin
   inherited Invalidate;
   Paint(Canvas);
 end;
 
-procedure TTyroTexture.Draw;
+procedure TTyroTextureControl.Draw;
 begin
   with Canvas.Texture do
     DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
 end;
 
-procedure TTyroTexture.Resize;
+procedure TTyroTextureControl.Resize;
 begin
   Canvas.Width := Width;
   Canvas.Height := Height;
@@ -337,7 +452,7 @@ begin
   inherited;
 end;
 
-{ TTyroWindow }
+{ TTyroCustomWindow }
 
 constructor TTyroPanel.Create(AParent: TTyroContainer);
 begin
@@ -349,7 +464,7 @@ end;
 procedure TTyroPanel.DoPaint(ACanvas: TTyroCanvas);
 begin
   inherited;
-  ACanvas.DrawRectangle(ClientRect, BackColor, True);
+  ACanvas.DrawRectangle(ClientRect, ACanvas.BackColor, True);
 end;
 
 { TTyroControl }
@@ -423,7 +538,7 @@ begin
   Invalidate;
 end;
 
-procedure TTyroControl.SetWindow(AValue: TTyroWindow);
+procedure TTyroControl.SetWindow(AValue: TTyroCustomWindow);
 begin
   if FWindow =AValue then Exit;
   FWindow :=AValue;
@@ -561,11 +676,9 @@ begin
   FParent := AParent;
   if Parent <> nil then
     Parent.AddControl(Self);
-  if (Parent is TTyroWindow) then
-    FWindow := (Parent as TTyroWindow);
+  if (Parent is TTyroCustomWindow) then
+    FWindow := (Parent as TTyroCustomWindow);
   FVisible := True;
-  FPenColor := clWhite;
-  FBackColor := clBlack;
   Created;
   State := State - [csCreating] + [csCreated];
 end;
@@ -578,21 +691,21 @@ begin
   inherited;
 end;
 
-{ TTyroWindow }
+{ TTyroCustomWindow }
 
-procedure TTyroWindow.SetTitle(AValue: string);
+procedure TTyroCustomWindow.SetTitle(AValue: utf8string);
 begin
   if FTitle =AValue then Exit;
   FTitle :=AValue;
 end;
 
-procedure TTyroWindow.NeedCanvas;
+procedure TTyroCustomWindow.PrepareCanvas;
 begin
   if FCanvas = nil then
-    FCanvas := TTyroCanvas.Create(Width, Height);
+    FCanvas := CreateCanvas;
 end;
 
-procedure TTyroWindow.SetFocused(AValue: TTyroControl);
+procedure TTyroCustomWindow.SetFocused(AValue: TTyroControl);
 begin
   if FFocused =AValue then Exit;
   if FFocused <> nil then
@@ -602,36 +715,30 @@ begin
     FFocused.FocusChanged;
 end;
 
-procedure TTyroWindow.SetCanvas(AValue: TTyroCanvas);
+procedure TTyroCustomWindow.SetCanvas(AValue: TTyroCanvas);
 begin
   if FCanvas =AValue then Exit;
   FCanvas :=AValue;
 end;
 
-constructor TTyroWindow.Create;
+constructor TTyroCustomWindow.Create;
 begin
   inherited Create;
-  DefaultBackColor := TColor.Create(220, 230, 240, 0);
 end;
 
-destructor TTyroWindow.Destroy;
+destructor TTyroCustomWindow.Destroy;
 begin
   FreeAndNil(FCanvas);
   inherited Destroy;
 end;
 
-procedure TTyroWindow.Paint;
+procedure TTyroCustomWindow.Paint;
 var
   aControl: TTyroControl;
 begin
   if Visible then
   begin
     try
-      ClearBackground(DefaultBackColor);
-
-      with Canvas.Texture do
-        DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
-
       for aControl in Controls do
       begin
         aControl.Paint(Canvas);
@@ -640,6 +747,13 @@ begin
     finally
     end;
   end;
+end;
+
+{ TTyroWindow }
+
+function TTyroWindow.CreateCanvas: TTyroCanvas;
+begin
+  Result := TTyroTextureCanvas.Create(Width, Height);
 end;
 
 end.

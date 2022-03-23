@@ -223,6 +223,7 @@ type
     destructor Destroy; override;
     procedure Stop; virtual;
     procedure Start; virtual;
+    procedure Terminate;
     procedure LoadFile(FileName: string); overload;
     property AssetsFolder: string read FAssetsFolder write FAssetsFolder;
     property Active: Boolean read GetActive;
@@ -548,7 +549,7 @@ end;
 
 procedure TDrawTextObject.DoExecute;
 begin
-  Canvas.DrawText(fX, fY, fText);
+  Canvas.DrawText(fX, fY, fText, Canvas.PenColor);
 end;
 
 { TDrawObject }
@@ -655,6 +656,11 @@ begin
   Run;
   AfterRun;
   FActive := False;
+end;
+
+procedure TTyroScript.Terminate;
+begin
+  Stop;
 end;
 
 procedure TTyroScript.LoadFile(FileName: string);

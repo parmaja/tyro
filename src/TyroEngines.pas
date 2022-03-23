@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs,
-  fgl,
-  mnLogs, FPCanvas, FPImage,
+  mnLogs,
+//  FPCanvas, FPImage,
   RayLib, RayClasses, TyroScripts,
   TyroClasses, TyroControls, TyroConsoles;
 
@@ -34,7 +34,7 @@ type
 
   { TTyroEngine }
 
-  TTyroEngine = class(TyroControls.TTyroMain)
+  TTyroEngine = class(TTyroMain)
   private
     //FBoard: TTyroImage;
     function GetActive: Boolean;
@@ -43,7 +43,6 @@ type
     FScriptThread: TTyroScriptThread;
     FScriptMain: TTyroScript; //only if we have main loop
     FScriptTypes: TScriptTypes;
-    FCanvasLock: TCriticalSection;
   protected
   public
     RunInMain: Boolean;
@@ -58,6 +57,8 @@ type
     procedure Terminate; override;
     procedure ProcessQueue;
     procedure Setup; override;
+    procedure Shutdown; override;
+    procedure PrepareDraw; override;
     procedure Draw; override;
     procedure Loop; override;
     //property Board: TTyroImage read FBoard;
@@ -65,27 +66,25 @@ type
 
     procedure RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 
-    procedure ShowWindow(AWidth, AHeight: Integer);
-    procedure HideWindow;
-
+    procedure ShowWindow(AWidth, AHeight: Integer); override;
     procedure ShowConsole(AWidth, AHeight: Integer);
     procedure HideConsole;
 
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
 
-    property CanvasLock: TCriticalSection read FCanvasLock;
   end;
-
+{
   function IntToFPColor(I: Integer): TFPColor;
   function FPColorToInt(C: TFPColor): Integer;
   function RayColorOf(Color: TFPColor): TRGBAColor;
-
+}
 var
   Main : TTyroEngine = nil;
 
 implementation
 
+{
 function IntToFPColor(I: Integer): TFPColor;
 begin
   Result.Alpha := I and $ff;
@@ -120,6 +119,7 @@ begin
   Result.Green := hi(Color.Green);
   Result.Blue := hi(Color.Blue);
 end;
+}
 
 { TTyroEngine }
 
@@ -178,12 +178,24 @@ begin
     FScriptMain.Start;
 end;
 
+procedure TTyroEngine.Shutdown;
+begin
+  Running := False;
+  if (FScriptThread <> nil) then
+    FScriptThread.Terminate;
+  if (FScriptMain <> nil) then
+    FScriptMain.Terminate;
+end;
+
+procedure TTyroEngine.PrepareDraw;
+begin
+  ProcessQueue;
+end;
+
 constructor TTyroEngine.Create;
 begin
-  RayLibrary.Load;
   inherited Create;
   Margin := 10;
-  FCanvasLock := TCriticalSection.Create;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -205,12 +217,10 @@ end;
 destructor TTyroEngine.Destroy;
 begin
   //Stop;
-  HideWindow;
   //FreeAndNil(FBoard);
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
-  FreeAndNil(FCanvasLock);
-  inherited Destroy;
+  inherited;
 end;
 
 procedure TTyroEngine.Start;
@@ -245,40 +255,14 @@ begin
 end;
 
 procedure TTyroEngine.Draw;
-var
-  t: TTexture2D;
-  //im: TImage;
-begin  //
-  if Visible then
-  begin
-    if WindowShouldClose() then
-    begin
-      Running := False;
-      if (FScriptThread <> nil) then
-        FScriptThread.Terminate;
-      if (FScriptMain <> nil) then
-        FScriptMain.Stop;
-    end;
-
-    ProcessQueue;
-
-    BeginDrawing;
-    CanvasLock.Enter;
-    try
-      Paint;
-      ThreadSwitch; //Yield
-    finally
-      CanvasLock.Leave;
-    end;
-    ThreadSwitch; //Yield
-    EndDrawing;
-    RayUpdates.Update;
-  end;
+begin
+  ThreadSwitch; //Yield
 end;
 
 procedure TTyroEngine.Loop;
 begin
   inherited;
+  ThreadSwitch; //Yield
   if not Active then
     Terminate;
 end;
@@ -292,6 +276,13 @@ begin
   Item.Extentions := AExtentions;
   Item.ScriptClass := AScriptClass;
   FScriptTypes.Add(Item);
+end;
+
+procedure TTyroEngine.ShowWindow(AWidth, AHeight: Integer);
+begin
+  inherited;
+  //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
+  Console.BoundsRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
 end;
 
 procedure TTyroEngine.Stop;
@@ -313,35 +304,9 @@ end;
 
 procedure TTyroEngine.Terminate;
 begin
+  HideWindow;
   Stop;
   inherited;
-end;
-
-procedure TTyroEngine.ShowWindow(AWidth, AHeight: Integer);
-begin
-  if Visible then
-  begin
-    SetBounds(0, 0, AWidth, AHeight);
-    SetWindowSize(AWidth, AHeight);
-  end
-  else
-  begin
-    //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    SetBounds(0, 0, AWidth, AHeight);
-    InitWindow(AWidth, AHeight, PChar(Title));
-    SetTargetFPS(cFramePerSeconds);
-    ShowCursor();
-    NeedCanvas;
-  end;
-  //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
-  Console.BoundsRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
-  Visible := True;
-end;
-
-procedure TTyroEngine.HideWindow;
-begin
-  if Visible then
-    CloseWindow;
 end;
 
 procedure TTyroEngine.ShowConsole(AWidth, AHeight: Integer);
