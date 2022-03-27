@@ -25,6 +25,7 @@ type
 
     constructor Create(i, j, w: Integer);
     procedure Show;
+    procedure RemoveWalls(vCell: TCell);
     function Check: TCell;
   end;
 
@@ -38,6 +39,7 @@ var
   FCW: Integer;
   FCurrent: TCell = nil;
   FNext: TCell;
+  Stack: TStack<TCell>;
 //  Stack: TCells;
 
 implementation
@@ -102,6 +104,31 @@ begin
   FHit := False;
 end;
 
+procedure TCell.RemoveWalls(vCell: TCell);
+begin
+  if (vCell.i-Self.i)=1 then
+  begin
+    Edges := Edges - [egRight];
+    vCell.Edges := vCell.Edges - [egLeft];
+  end
+  else if (vCell.i-Self.i)=-1 then
+  begin
+    Edges := Edges - [egLeft];
+    vCell.Edges := vCell.Edges - [egRight];
+  end;
+
+  if (vCell.j-Self.j)=1 then
+  begin
+    Edges := Edges - [egBottom];
+    vCell.Edges := vCell.Edges - [egTop];
+  end
+  else if (vCell.j-Self.j)=-1 then
+  begin
+    Edges := Edges - [egTop];
+    vCell.Edges := vCell.Edges - [egBottom];
+  end;
+end;
+
 procedure TCell.Show;
 var
   c: TColor;
@@ -126,7 +153,11 @@ begin
 
     if FHit then
     begin
-      c := TColor.Create(100, 200, 77, 100);
+      if Self=FCurrent then
+        c := TColor.Create(200, 100, 77, 100)
+      else
+        c := TColor.Create(100, 200, 77, 100);
+
       DrawRectangle(x, y, w, w, c, True);
     end;
   end;

@@ -38,7 +38,14 @@ begin
   if FNext<>nil then
   begin
     FNext.FHit := True;
+    Stack.Push(FCurrent);
+    FCurrent.RemoveWalls(FNext);
     FCurrent := FNext;
+  end
+  else
+  begin
+    if Stack.Count<>0 then
+      FCurrent := Stack.Pop;
   end;
 end;
 
@@ -51,6 +58,7 @@ begin
   inherited;
   FCW := FWidth div FCols;
   Cells := TObjectList<TCell>.Create;
+  Stack := TStack<TCell>.Create;
 
   ShowWindow(FWidth, FHeight);
   for y:=0 to FRows-1 do
@@ -73,6 +81,7 @@ procedure TMyMain.Unload;
 begin
   inherited;
   FreeAndNil(Cells);
+  FreeAndNil(Stack);
 end;
 
 begin
