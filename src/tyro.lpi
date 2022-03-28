@@ -113,10 +113,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="TyroClasses.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="TyroLua.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
@@ -134,14 +130,6 @@
       </Unit>
       <Unit>
         <Filename Value="raylib\RayClasses.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="Melodies.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="TyroControls.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>

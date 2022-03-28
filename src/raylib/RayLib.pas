@@ -195,10 +195,14 @@ type
   PVector2 = ^TVector2;
 
   // Vector3 type
+
+  { TVector3 }
+
   TVector3 = packed record
     x: Single;
     y: Single;
     z: Single;
+    constructor Create(AX, AY, AZ: Single); overload;
   end;
   PVector3 = ^TVector3;
 
@@ -2118,13 +2122,18 @@ var
   RayLibrary: TmncRayLib = nil;
 
 function Vector2Of(X, Y: Single): TVector2;
+function RectangleOf(X, Y, W, H: Single): TRectangle;
 
 implementation
 
 function Vector2Of(X, Y: Single): TVector2;
 begin
-  Result.X := X;
-  Result.Y := Y;
+  Result := TVector2.Create(X, Y);
+end;
+
+function RectangleOf(X, Y, W, H: Single): TRectangle;
+begin
+  Result := TRectangle.Create(X, Y, W, H);
 end;
 
 function TColorHelper.SetAlpha(AAlpha: Byte): TColor;
@@ -2235,6 +2244,13 @@ end;
 constructor TVector2.Create(I: Int64);
 begin
   Self := TVector2(i);
+end;
+
+constructor TVector3.Create(AX, AY, AZ: Single);
+begin
+  X := AX;
+  Y := AY;
+  Z := AZ;
 end;
 
 { TmncRayLib }

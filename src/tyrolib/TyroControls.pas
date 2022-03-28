@@ -189,7 +189,8 @@ type
     function CreateCanvas: TTyroCanvas; virtual; abstract;
   public
     Visible: Boolean;
-    constructor Create;
+    constructor Create; overload;
+    constructor Create(AWidth, AHeight: Integer); overload;
     destructor Destroy; override;
     procedure Paint;
     property Canvas: TTyroCanvas read FCanvas write SetCanvas;
@@ -210,6 +211,7 @@ type
 
   TTyroMain = class(TTyroCustomWindow)
   private
+    FFPS: Integer;
     FOptions: TTyroMainOptions;
   protected
     IsTerminated: Boolean;
@@ -238,6 +240,7 @@ type
 
     property CanvasLock: TCriticalSection read FCanvasLock;
     property Options: TTyroMainOptions read FOptions write FOptions;
+    property FPS: Integer read FFPS write SetFPS;
   end;
 
 const
@@ -289,6 +292,7 @@ end;
 
 procedure TTyroMain.SetFPS(FPS: Integer);
 begin
+  FFPS := FPS;
   SetTargetFPS(FPS);
 end;
 
@@ -309,7 +313,6 @@ end;
 
 procedure TTyroMain.Draw;
 begin
-
 end;
 
 procedure TTyroMain.Loop;
@@ -322,11 +325,13 @@ begin
   if not Visible and (moWindow in Options) then
   begin
     ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
-    SetTargetFPS(cFramePerSeconds);
+    SetFPS(cFramePerSeconds);
   end;
 
   Preload;
   Setup;
+  if FPS = 0 then
+    SetFPS(cFramePerSeconds);
   repeat
     try
       CheckSynchronize;
@@ -349,6 +354,9 @@ begin
             Draw;
             if moShowFPS in Options then
               RayLib.DrawFPS(10, 10);
+            //Canvas.DrawLine(10, 10, 100, 10, clRed);
+            //Canvas.DrawText(2, 2, 'Test', clRed);
+
           finally
             Canvas.EndDraw;
           end;
@@ -360,6 +368,8 @@ begin
     end;
   until Terminated;
   Unload;
+  if Visible then
+    RayLib.CloseWindow();
 end;
 
 procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
@@ -718,6 +728,13 @@ procedure TTyroCustomWindow.PrepareCanvas;
 begin
   if FCanvas = nil then
     FCanvas := CreateCanvas;
+end;
+
+constructor TTyroCustomWindow.Create(AWidth, AHeight: Integer);
+begin
+  Create;
+  Width := AWidth;
+  Height := AHeight;
 end;
 
 procedure TTyroCustomWindow.SetFocused(AValue: TTyroControl);
