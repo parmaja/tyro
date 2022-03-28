@@ -65,14 +65,14 @@ begin
     for x:=0 to FCols-1 do
       Cells.Add(TCell.Create(x, y, FCW));
 
-  FCurrent := Cells[15];
+  FCurrent := Cells[0];
 end;
 
 procedure TMyMain.Setup;
 begin
   inherited;
-  SetTargetFPS(5);
-  Options := Options + [moShowFPS];
+  SetTargetFPS(30);
+  //Options := Options + [moShowFPS];
 
 //  Canvas.BackColor := ;
 end;
@@ -85,6 +85,7 @@ begin
 end;
 
 begin
+  Randomize;
   Main := TMyMain.Create;
   try
     Main.Run;

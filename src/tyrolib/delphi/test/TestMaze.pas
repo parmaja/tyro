@@ -1,3 +1,5 @@
+//check: https://www.youtube.com/watch?v=HyK_Q5rrcr4
+
 unit TestMaze;
 
 interface
@@ -34,8 +36,8 @@ var
 
   FWidth: Integer = 400;
   FHeight: Integer = 400;
-  FCols: Integer = 10;
-  FRows: Integer = 10;
+  FCols: Integer = 30;
+  FRows: Integer = 30;
   FCW: Integer;
   FCurrent: TCell = nil;
   FNext: TCell;
