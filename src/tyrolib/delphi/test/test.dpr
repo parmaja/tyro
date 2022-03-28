@@ -67,7 +67,7 @@ end;
 procedure TMyMain.Setup;
 begin
   inherited;
-  SetTargetFPS(10);
+  SetFPS(10);
   //Options := Options + [moShowFPS];
 
 //  Canvas.BackColor := ;

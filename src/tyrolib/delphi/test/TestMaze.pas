@@ -28,11 +28,11 @@ type
   public
     Row: Integer;
     Col: Integer;
-    Width: Single;
+    Width: Integer;
     Edges: TEdges;
     FHit: Boolean;
 
-    constructor Create(vRow, vCol: Integer; AWidth: Single);
+    constructor Create(vRow, vCol: Integer; AWidth: Integer);
     procedure Show;
     procedure RemoveWalls(vCell: TCell);
     function Check: TCell;
@@ -104,7 +104,7 @@ begin
   end;
 end;
 
-constructor TCell.Create(vRow, vCol: Integer; AWidth: Single);
+constructor TCell.Create(vRow, vCol: Integer; AWidth: Integer);
 begin
   Self.Row := vRow;
   Self.Col := vCol;

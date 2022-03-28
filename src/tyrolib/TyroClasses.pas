@@ -77,6 +77,9 @@ type
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
     procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
+    procedure DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor; Fill: Boolean); overload;
+    procedure DrawRectangle(ARectangle: TRectangle; Color: TColor; Fill: Boolean); overload;
+
     procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
 
@@ -322,6 +325,19 @@ begin
   DrawRect(ARectangle.Left, ARectangle.Top, ARectangle.Right, ARectangle.Bottom, Color, Fill);
 end;
 
+procedure TTyroCanvas.DrawRectangle(ARectangle: TRectangle; Color: TColor; Fill: Boolean);
+begin
+  if Fill then
+    RayLib.DrawRectangleRec(ARectangle, Color);
+
+  RayLib.DrawRectangleLinesEx(ARectangle, PenWidth, Color);
+end;
+
+procedure TTyroCanvas.DrawRectangle(X, Y, AWidth, AHeight: Single; Color: TColor; Fill: Boolean);
+begin
+  DrawRectangle(RectangleOf(X, Y, AWidth, AHeight), Color, Fill)
+end;
+
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: utf8string; Color: TColor);
 begin
   RayLib.DrawTextEx(Font.Data, PUTF8Char(S), Vector2Of(x + FOriginX, y + FOriginY), Font.Height, 0, Color);
@@ -353,7 +369,7 @@ end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Single; Color: TColor);
 begin
-  DrawLineV(TVector2.Create(X1, Y1), TVector2.Create(X2, Y2), Color);
+  DrawLineEx(TVector2.Create(X1 + FOriginX, Y1 + FOriginY), TVector2.Create(X2 + FOriginX, Y2 + FOriginY), PenWidth, Color);
 end;
 
 procedure TTyroCanvas.DrawLineTo(X2, Y2: Integer; Color: TColor);
