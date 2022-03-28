@@ -147,6 +147,9 @@ var
   RayLibSound: TRayLibSound = nil;
   RayUpdates: TRayUpdateList = nil; //move it to Tyro classes
 
+function MouseX: Integer;
+function MouseY: Integer;
+
 implementation
 
 var
@@ -392,6 +395,16 @@ begin
   Playing.Add(Music);
   RayUpdates.Add(Music);
   Music.Play;
+end;
+
+function MouseX: Integer;
+begin
+  Result := RayLib.GetMouseX;
+end;
+
+function MouseY: Integer;
+begin
+  Result := RayLib.GetMouseY;
 end;
 
 initialization

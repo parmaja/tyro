@@ -1,7 +1,14 @@
-//check: https://www.youtube.com/watch?v=HyK_Q5rrcr4
-
 unit TestMaze;
-
+{**
+ *  This file is part of the "Tyro"
+ *
+ * @license   MIT
+ *
+ * @author    belalhamed.
+ *
+ * //check: https://www.youtube.com/watch?v=HyK_Q5rrcr4
+ *
+ *}
 interface
 
 uses
@@ -19,13 +26,13 @@ type
 
   TCell = class
   public
-    i: Integer;
-    j: Integer;
-    w: Integer;
+    Row: Integer;
+    Col: Integer;
+    Width: Single;
     Edges: TEdges;
     FHit: Boolean;
 
-    constructor Create(i, j, w: Integer);
+    constructor Create(vRow, vCol: Integer; AWidth: Single);
     procedure Show;
     procedure RemoveWalls(vCell: TCell);
     function Check: TCell;
@@ -36,8 +43,8 @@ var
 
   FWidth: Integer = 400;
   FHeight: Integer = 400;
-  FCols: Integer = 30;
-  FRows: Integer = 30;
+  FCols: Integer = 10;
+  FRows: Integer = 10;
   FCW: Integer;
   FCurrent: TCell = nil;
   FNext: TCell;
@@ -49,16 +56,16 @@ implementation
 
 { TCell }
 
-function GetIndex(I, J: Integer): Integer;
+function GetIndex(vRow, vCol: Integer): Integer;
 begin
-  Result := i + j * FCols;
+  Result := vCol + vRow * FCols;
 end;
 
-function GetCell(I, J: Integer): TCell;
+function GetCell(vRow, vCol: Integer): TCell;
 var
   idx: Integer;
 begin
-  idx := GetIndex(i, j);
+  idx := GetIndex(vRow, vCol);
   if (idx>=0) and (idx<Cells.Count) then
     Result := Cells[idx]
   else
@@ -69,11 +76,11 @@ function TCell.Check: TCell;
 var
   aCells: TCells;
 
-  procedure _Add(I, J: Integer);
+  procedure _Add(vRow, vCol: Integer);
   var
     t: TCell;
   begin
-    t := GetCell(i, j);
+    t := GetCell(vRow, vCol);
     if (t <> nil)and(not t.FHit) then
       aCells.Add(t);
   end;
@@ -83,10 +90,10 @@ begin
   try
     aCells.OwnsObjects := False;
 
-    _Add(i, j-1);
-    _Add(i + 1, j);
-    _Add(i, j+1);
-    _Add(i-1, j);
+    if Row>0 then _Add(Row-1, Col); //top
+    if Col<FCols then _Add(Row, Col+1); //right
+    if Row<FRows then _Add(Row + 1, Col); //bottom
+    if Col>0 then _Add(Row, Col-1); //left
 
     if aCells.Count = 0 then
       Result := nil
@@ -97,34 +104,34 @@ begin
   end;
 end;
 
-constructor TCell.Create(i, j, w: Integer);
+constructor TCell.Create(vRow, vCol: Integer; AWidth: Single);
 begin
-  Self.i := i;
-  Self.j := j;
-  Self.w := w;
+  Self.Row := vRow;
+  Self.Col := vCol;
+  Self.Width := AWidth;
   Edges := [egLeft, egTop, egRight, egBottom];
   FHit := False;
 end;
 
 procedure TCell.RemoveWalls(vCell: TCell);
 begin
-  if (vCell.i-Self.i)=1 then
+  if (vCell.Col-Self.Col)=1 then
   begin
     Edges := Edges - [egRight];
     vCell.Edges := vCell.Edges - [egLeft];
   end
-  else if (vCell.i-Self.i)=-1 then
+  else if (vCell.Col-Self.Col)=-1 then
   begin
     Edges := Edges - [egLeft];
     vCell.Edges := vCell.Edges - [egRight];
   end;
 
-  if (vCell.j-Self.j)=1 then
+  if (vCell.Row-Self.Row)=1 then
   begin
     Edges := Edges - [egBottom];
     vCell.Edges := vCell.Edges - [egTop];
   end
-  else if (vCell.j-Self.j)=-1 then
+  else if (vCell.Row-Self.Row)=-1 then
   begin
     Edges := Edges - [egTop];
     vCell.Edges := vCell.Edges - [egBottom];
@@ -134,12 +141,13 @@ end;
 procedure TCell.Show;
 var
   c: TColor;
-  x, y: Integer;
+  x, y, w: Single;
 begin
   with Canvas do
   begin
-    x := i*w;
-    y := j*w;
+    w := Self.Width;
+    x := Col*w;
+    y := Row*w;
 
     PenColor := clWhite;
 

@@ -50,10 +50,6 @@ begin
 end;
 
 procedure TMyMain.Init;
-var
-  x: Integer;
-  y: Integer;
-  c: TCell;
 begin
   inherited;
   FCW := FWidth div FCols;
@@ -61,9 +57,9 @@ begin
   Stack := TStack<TCell>.Create;
 
   ShowWindow(FWidth, FHeight);
-  for y:=0 to FRows-1 do
-    for x:=0 to FCols-1 do
-      Cells.Add(TCell.Create(x, y, FCW));
+  for var row in [0..FRows-1] do
+    for var col in [0..FCols-1] do
+      Cells.Add(TCell.Create(row, col, FCW));
 
   FCurrent := Cells[0];
 end;
@@ -71,7 +67,7 @@ end;
 procedure TMyMain.Setup;
 begin
   inherited;
-  SetTargetFPS(30);
+  SetTargetFPS(10);
   //Options := Options + [moShowFPS];
 
 //  Canvas.BackColor := ;

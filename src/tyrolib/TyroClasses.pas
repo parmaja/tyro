@@ -69,6 +69,9 @@ type
     procedure DrawPixel(X, Y: Integer; Color: TColor);
     procedure DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor); overload;
     procedure DrawLine(X1, Y1, X2, Y2: Integer); overload;
+    procedure DrawLine(X1, Y1, X2, Y2: Single; Color: TColor); overload;
+    procedure DrawLine(X1, Y1, X2, Y2: Single); overload;
+
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
     procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
@@ -331,6 +334,16 @@ end;
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer);
 begin
   DrawLine(X1, Y1, X2, Y2, PenColor);
+end;
+
+procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Single);
+begin
+  DrawLine(X1, Y1, X2, Y2, PenColor);
+end;
+
+procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Single; Color: TColor);
+begin
+  DrawLineV(TVector2.Create(X1, Y1), TVector2.Create(X2, Y2), Color);
 end;
 
 procedure TTyroCanvas.DrawLineTo(X2, Y2: Integer; Color: TColor);
