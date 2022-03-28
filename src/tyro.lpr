@@ -25,9 +25,9 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils, Classes, CustApp, TyroClasses, RayLib, RayClasses,
-  mnUtils,
-  TyroEditors, mnLogs, TyroSounds, Melodies, TyroControls, TyroEngines,
+  SysUtils, Classes, CustApp, RayLib, RayClasses,
+  mnUtils, Melodies, TyroControls, TyroClasses,
+  TyroEditors, mnLogs, TyroSounds, TyroEngines,
   TyroLua, TyroPascal, TyroScripts;  //Add all languages units here
 
 type
@@ -198,7 +198,6 @@ begin
     WriteLn();
   end;
   Main.RunInMain := HasOption('m', 'main');
-  Main.Start;
 end;
 
 destructor TTyroApplication.Destroy;
@@ -211,8 +210,11 @@ end;
 procedure TTyroApplication.DoRun;
 begin
   inherited;
-  Main.Run;
-  Terminate;
+  try
+    Main.Run;
+    Terminate;
+  except
+  end;
 end;
 
 var

@@ -118,16 +118,11 @@ function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
-type
-  TSmallIntArray = array[0..0] of SmallInt;
-  PSmallIntArray = ^TSmallIntArray;
-
 { TTyroRayAudio }
 
 procedure TTyroRayAudio.Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single; SampleRate: Integer; BitRate: Integer);
 var
-  Data: Pointer;
-  //Data: array of Smallint;
+  aData: array of SmallInt;
   SampleCount, SampleSize: Integer;
   i: Integer;
   v: Smallint;
@@ -136,13 +131,11 @@ var
   Starting, Ending: Integer;
   Delta: Single;
   {$endif}
-  aSize: Integer;
 begin
+  aData := nil;
   SampleCount := Round(Duration * SampleRate);
   SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
-  aSize := SampleCount * Sizeof(Smallint);
-  Data := RayLib.MemAlloc(aSize);
-  //SetLength(Data, aSize);
+  SetLength(aData, SampleCount);
   if Frequency <> 0 then
   begin
     Amplitude := (Amplitude * ((Power(2, SampleSize) / 2) - 1) / 100) - 1;
@@ -161,24 +154,15 @@ begin
       if i > Ending then
         v := Round(v * (SampleCount - i) * Delta / 100);
       {$endif}
-      //PSmallInt(Data)[i] := v;
-      PSmallIntArray(Data)[i] := v;
-      //Data[i] := v;
+      aData[i] := v;
     end;
   end
   else
   begin
-    FillChar(Data^, aSize, #0);
-{    for i := 0 to aSize -1 do
-      Data[i] := 0;}
+    for i := 0 to Length(aData) -1 do
+      aData[i] := 0;
   end;
-  UpdateData(Data, SampleCount);
-
-  if Data <> nil then //maybe move it to generate
-  begin
-{    RayLib.MemFree(Data);
-    Data := nil;}
-  end;
+  UpdateData(@aData[0], SampleCount);
 end;
 
 { TTyroRayWave }
@@ -186,21 +170,22 @@ end;
 procedure TTyroRayWave.Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single; SampleRate: Integer; BitRate: Integer);
 var
   Wave: TWave;
-  i: Cardinal;
+  i: Integer;
   v: Smallint;
   {$ifdef FADE}
-  WaveSamples: Cardinal;
-  Starting, Ending: Cardinal;
+  WaveSamples: Integer;
+  Starting, Ending: Integer;
   Delta: Single;
   {$endif}
-  aSize: Integer;
+  aData: array of SmallInt;
 begin
   Wave.SampleCount := Round(Duration * SampleRate);
   Wave.SampleRate := SampleRate; // By default 44100 Hz
   Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
   Wave.Channels := 1;                  // By default 1 channel (mono)
-  aSize := Wave.SampleCount * Sizeof(Smallint);
-  Wave.Data := RayLib.MemAlloc(aSize);
+  aData := nil;
+  SetLength(aData, Wave.SampleCount);
+  Wave.Data := @aData[0];
   if Frequency <> 0 then
   begin
     Amplitude := (Amplitude * ((Power(2, Wave.SampleSize) / 2) - 1) / 100) - 1;
@@ -219,11 +204,12 @@ begin
       if i > Ending then
         v := Round(v * (Wave.SampleCount - i) * Delta / 100);
       {$endif}
-      PSmallIntArray(Wave.Data)[i] := v;
+      aData[i] := v;
     end;
   end
   else
-    FillChar(Wave.Data^, aSize, #0);
+    for i := 0 to Length(aData) -1 do
+      aData[i] := 0;
   //ExportWave(Wave, PChar('c:\temp\'+IntTOStr(round(Frequency))+'.wav'));
   UnloadSound(Sound);
   Sound := LoadSoundFromWave(Wave);

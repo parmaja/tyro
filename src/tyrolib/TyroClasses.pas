@@ -47,12 +47,14 @@ type
     FLastX, FLastY: Integer;
     FPenColor: TColor;
     FBackColor: TColor;
+    FPenWidth: Integer;
     FWidth, FHeight: Integer;
     Font: TRayFont;
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
     procedure SetHeight(AValue: Integer);
     procedure SetPenColor(AValue: TColor);
+    procedure SetPenWidth(AValue: Integer);
     procedure SetWidth(AValue: Integer);
     procedure SetBackColor(const Value: TColor);
   public
@@ -75,9 +77,10 @@ type
     procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
 
-    procedure DrawOn; virtual;
+    procedure Draw; virtual;
     procedure Clear;
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
+    property PenWidth: Integer read FPenWidth write SetPenWidth;
     property PenColor: TColor read FPenColor write SetPenColor;
     property BackColor: TColor read FBackColor write SetBackColor;
     property Width: Integer read FWidth write SetWidth;
@@ -91,7 +94,7 @@ type
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
     procedure BeginDraw; override;
-    procedure DrawOn; override;
+    procedure Draw; override;
     procedure EndDraw; override;
     property Texture: TRenderTexture2D read FTexture;
   end;
@@ -102,7 +105,7 @@ type
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
     procedure BeginDraw; override;
-    procedure DrawOn; override;
+    procedure Draw; override;
     procedure EndDraw; override;
   end;
 
@@ -190,6 +193,13 @@ begin
   FPenColor := AValue;
 end;
 
+procedure TTyroCanvas.SetPenWidth(AValue: Integer);
+begin
+  if FPenWidth =AValue then
+    Exit;
+  FPenWidth :=AValue;
+end;
+
 function TTyroCanvas.GetPenAlpha: Byte;
 begin
   Result := FPenColor.RGBA.Alpha;
@@ -212,6 +222,7 @@ begin
   Font := TRayFont.Create;
   FWidth := AWidth;
   FHeight := AHeight;
+  FPenWidth := 1;
   FPenColor := clBlack;
   //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
   //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
@@ -287,9 +298,8 @@ end;
 procedure TTyroCanvas.DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
 begin
   if Fill then
-    RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color)
-  else
-    RayLib.DrawRectangleLines(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color);
+    RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color);
+  RayLib.DrawRectangleLinesEx(RectangleOf(X + FOriginX, Y + FOriginY, AWidth, AHeight), PenWidth, Color);
   FLastX := X + AWidth;
   FLastY := Y + AHeight;
 end;
@@ -323,7 +333,7 @@ end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
 begin
-  RayLib.DrawLine(X1 + FOriginX, Y1 + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
+  RayLib.DrawLineEx(Vector2Of(X1 + FOriginX, Y1 + FOriginY), Vector2Of(X2 + FOriginX, Y2 + FOriginY), PenWidth, Color);
   FLastX := X2;
   FLastY := Y2;
 end;
@@ -338,14 +348,14 @@ begin
   DrawLine(FLastX + FOriginX, FLastY + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
 end;
 
-procedure TTyroCanvas.DrawOn;
+procedure TTyroCanvas.Draw;
 begin
 
 end;
 
 procedure TTyroCanvas.Clear;
 begin
-  ClearBackground(BackColor);
+  ClearBackground(FBackColor);
 end;
 
 { TTyroTextureCanvas }
@@ -369,7 +379,7 @@ begin
   inherited;
 end;
 
-procedure TTyroTextureCanvas.DrawOn;
+procedure TTyroTextureCanvas.Draw;
 begin
   inherited;
   with Texture do
@@ -401,7 +411,7 @@ begin
   inherited;
 end;
 
-procedure TTyroMainCanvas.DrawOn;
+procedure TTyroMainCanvas.Draw;
 begin
   inherited;
 end;

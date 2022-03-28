@@ -30,8 +30,6 @@ type
     runExecute
   );
 
-  { TTyroMain }
-
   { TTyroEngine }
 
   TTyroEngine = class(TTyroMain)
@@ -50,10 +48,11 @@ type
     How: TRunHow;
     RunFile: string;//that to run in script
     Console: TTyroConsole;
+    Graphic: TTyroCanvas;
     constructor Create;
     destructor Destroy; override;
-    procedure Start;
-    procedure Stop;
+    procedure Stop; //and wait
+    procedure Init; override;
     procedure Terminate; override;
     procedure ProcessQueue;
     procedure Setup; override;
@@ -135,13 +134,13 @@ var
   fpd: Double;
   ft, ft2: Double;
 begin
-  if Canvas <> nil then
+  if Graphic <> nil then
   begin
     CanvasLock.Enter;
     try
       ft := GetTime();
       fpd := (1 / cFramePerSeconds);
-      Canvas.BeginDraw;
+      Graphic.BeginDraw;
       c := 0;
       while Queue.Count > 0 do
       begin
@@ -160,7 +159,7 @@ begin
           break;
         end;
       end;
-      Canvas.EndDraw;
+      Graphic.EndDraw;
     finally
       CanvasLock.Leave;
     end;
@@ -176,6 +175,7 @@ begin
   //if (FScriptMain <> nil) and not FScriptMain.Started then
   if (FScriptMain <> nil) then
     FScriptMain.Start;
+  Options := Options + [moShowFPS];
 end;
 
 procedure TTyroEngine.Shutdown;
@@ -217,13 +217,13 @@ end;
 destructor TTyroEngine.Destroy;
 begin
   //Stop;
-  //FreeAndNil(FBoard);
+  FreeAndNil(Graphic);
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
   inherited;
 end;
 
-procedure TTyroEngine.Start;
+procedure TTyroEngine.Init;
 var
   aScriptType: TScriptType;
   aScript: TTyroScript;
@@ -256,6 +256,8 @@ end;
 
 procedure TTyroEngine.Draw;
 begin
+  if Graphic <> nil then
+    Graphic.Draw;
   ThreadSwitch; //Yield
 end;
 
@@ -281,6 +283,7 @@ end;
 procedure TTyroEngine.ShowWindow(AWidth, AHeight: Integer);
 begin
   inherited;
+  Graphic := TTyroTextureCanvas.Create(AWidth, AHeight);
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
   Console.BoundsRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
 end;
