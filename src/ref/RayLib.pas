@@ -1371,8 +1371,6 @@ var
   IsGestureDetected: function(gesture: Integer): Boolean; cdecl;
   // Get latest detected gesture
   GetGestureDetected: function: Integer; cdecl;
-  // Get touch points count
-  GetTouchPointsCount: function: Integer; cdecl;
   // Get gesture hold time in milliseconds
   GetGestureHoldDuration: function: Single; cdecl;
   // Get gesture drag vector
@@ -1877,9 +1875,6 @@ var
   DrawRay: procedure(ray: TRay; color: TColor); cdecl;
   // Draw a grid (centered at (0, 0, 0))
   DrawGrid: procedure(slices: Integer; spacing: Single); cdecl;
-  // Draw simple gizmo
-  DrawGizmo: procedure(position: TVector3); cdecl;
-//DrawTorus(), DrawTeapot() could be useful?
 
 //------------------------------------------------------------------------------------
 // Model 3d Loading and Drawing Functions (Module: models)
@@ -1999,11 +1994,11 @@ var
   // Get collision info between ray and box
   GetRayCollisionBox: function(ray: TRay; box: TBoundingBox): TRayCollision; cdecl;
   // Get collision info between ray and model
-  GetRayCollisionRayModel: function(ray: TRay; model: TModel): TRayCollision; cdecl;
+  GetRayCollisionModel: function(ray: TRay; model: TModel): TRayCollision; cdecl;
   // Get collision info between ray and mesh
-  GetRayCollisionRayMesh: function(ray: TRay; mesh: TMesh; transform: TMatrix): TRayCollision; cdecl;
+  GetRayCollisionMesh: function(ray: TRay; mesh: TMesh; transform: TMatrix): TRayCollision; cdecl;
   // Get collision info between ray and triangle
-  GetRayCollisionRayTriangle: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3): TRayCollision; cdecl;
+  GetRayCollisionTriangle: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3): TRayCollision; cdecl;
   // Get collision info between ray and quad
   GetRayCollisionQuad: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3; p4: TVector3): TRayCollision;  cdecl;
 
@@ -2471,7 +2466,6 @@ begin
   SetGesturesEnabled := GetAddress('SetGesturesEnabled');
   IsGestureDetected := GetAddress('IsGestureDetected');
   GetGestureDetected := GetAddress('GetGestureDetected');
-  GetTouchPointsCount := GetAddress('GetTouchPointsCount');
   GetGestureHoldDuration := GetAddress('GetGestureHoldDuration');
   GetGestureDragVector := GetAddress('GetGestureDragVector');
   GetGestureDragAngle := GetAddress('GetGestureDragAngle');
@@ -2678,7 +2672,7 @@ begin
   DrawPlane := GetAddress('DrawPlane');
   DrawRay := GetAddress('DrawRay');
   DrawGrid := GetAddress('DrawGrid');
-  DrawGizmo := GetAddress('DrawGizmo');
+
   LoadModel := GetAddress('LoadModel');
   LoadModelFromMesh := GetAddress('LoadModelFromMesh');
   UnloadModel := GetAddress('UnloadModel');
@@ -2730,9 +2724,9 @@ begin
   CheckCollisionBoxSphere := GetAddress('CheckCollisionBoxSphere');
   GetRayCollisionSphere := GetAddress('GetRayCollisionSphere');
   GetRayCollisionBox := GetAddress('GetRayCollisionBox');
-  GetRayCollisionRayMesh := GetAddress('GetRayCollisionRayMesh');
-  GetRayCollisionRayModel := GetAddress('GetRayCollisionRayModel');
-  GetRayCollisionRayTriangle := GetAddress('GetRayCollisionRayTriangle');
+  GetRayCollisionMesh := GetAddress('GetRayCollisionMesh');
+  GetRayCollisionModel := GetAddress('GetRayCollisionModel');
+  GetRayCollisionTriangle := GetAddress('GetRayCollisionTriangle');
   GetRayCollisionQuad := GetAddress('GetRayCollisionQuad');
 
   InitAudioDevice := GetAddress('InitAudioDevice');
