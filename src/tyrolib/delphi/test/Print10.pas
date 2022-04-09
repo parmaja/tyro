@@ -57,10 +57,8 @@ begin
   X := 0;
   Y := 0;
   Spacing := 10;
-  Width := 400;
-  Height := 400;
-  ShowWindow(Width, Height, 0, True);
   MarginSize := 10;
+  ShowWindow(400, 400, True);
 end;
 
 procedure TMain.Setup;

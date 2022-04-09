@@ -21,6 +21,9 @@ uses
   RayLib, RayClasses,
   Melodies, TyroSounds;
 
+const
+  clFrenchSkyBlue : TRGBAColor = (Red: $77; Green: $B5; Blue: $FE; Alpha: $FF);   //* French Sky Blue
+
 type
 
   TTyroCanvas = class;
@@ -224,7 +227,7 @@ begin
   //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
   //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
 //  FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
-  FBackColor := TColor.Create($77, $B5, $FE, $FF); //French Sky Blue
+  FBackColor := clFrenchSkyBlue;
 
   //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'alpha_beta.png'));
   //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'Terminess-Bold.ttf'));

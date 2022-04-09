@@ -216,7 +216,7 @@ begin
   Cells := TObjectList<TCell>.Create;
   Stack := TStack<TCell>.Create;
 
-  ShowWindow(FWidth + 10, FHeight + 10, 10);
+  ShowWindow(FWidth + MarginSize * 2, FHeight + MarginSize * 2);
   for var row in [0..FRows-1] do
     for var col in [0..FCols-1] do
       Cells.Add(TCell.Create(row, col, FCW));
@@ -228,7 +228,7 @@ procedure TMain.Setup;
 begin
   inherited;
   SetFPS(10);
-  //Options := Options + [moShowFPS];
+  Options := Options + [moShowFPS];
 end;
 
 procedure TMain.Unload;
