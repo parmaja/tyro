@@ -253,6 +253,7 @@ type
     m2, m6, m10, m14: Single; // Matrix third row (4 components)
     m3, m7, m11, m15: Single; // Matrix fourth row (4 components)
   end;
+  PMatrix = ^TMatrix;
 
   { TRectangle }
 
@@ -406,7 +407,7 @@ type
   TMaterial = packed record
     Shader: TShader;        // Material shader
     Maps: PMaterialMap;     // Material maps array (MAX_MATERIAL_MAPS)
-    Params[0..3]: Single;   // Material generic parameters (if required)
+    Params: array[0..3] of Single;   // Material generic parameters (if required)
   end;
   PMaterial = ^TMaterial;
 
@@ -546,7 +547,7 @@ type
       Scale: array[0..1] of Single;                 // VR distortion scale
       ScaleIn: array[0..1] of Single;               // VR distortion scale in
   end;
-  TVrStereoConfig = ^TVrStereoConfig;
+  PVrStereoConfig = ^TVrStereoConfig;
 
 
   //----------------------------------------------------------------------------------
@@ -584,123 +585,125 @@ type
     LOG_FATAL,          // Fatal logging, used to abort program: exit(EXIT_FAILURE)
     LOG_NONE            // Disable logging
   );
-  PTraceLogLevel = set of TTraceLogLevel;
+  TTraceLogLevels = set of TTraceLogLevel;
+  PTraceLogLevels = ^TTraceLogLevels;
 
 //TODO zaher, convert to set, TKeyboardKey
-const
-  KEY_NULL            = 0,        // Key: NULL, used for no key pressed
-  KEY_APOSTROPHE      = 39,       // Key: '
-  KEY_COMMA           = 44,       // Key: ,
-  KEY_MINUS           = 45,       // Key: -
-  KEY_PERIOD          = 46,       // Key: .
-  KEY_SLASH           = 47,       // Key: /
-  KEY_ZERO            = 48,       // Key: 0
-  KEY_ONE             = 49,       // Key: 1
-  KEY_TWO             = 50,       // Key: 2
-  KEY_THREE           = 51,       // Key: 3
-  KEY_FOUR            = 52,       // Key: 4
-  KEY_FIVE            = 53,       // Key: 5
-  KEY_SIX             = 54,       // Key: 6
-  KEY_SEVEN           = 55,       // Key: 7
-  KEY_EIGHT           = 56,       // Key: 8
-  KEY_NINE            = 57,       // Key: 9
-  KEY_SEMICOLON       = 59,       // Key: ;
-  KEY_EQUAL           = 61,       // Key: =
-  KEY_A               = 65,       // Key: A | a
-  KEY_B               = 66,       // Key: B | b
-  KEY_C               = 67,       // Key: C | c
-  KEY_D               = 68,       // Key: D | d
-  KEY_E               = 69,       // Key: E | e
-  KEY_F               = 70,       // Key: F | f
-  KEY_G               = 71,       // Key: G | g
-  KEY_H               = 72,       // Key: H | h
-  KEY_I               = 73,       // Key: I | i
-  KEY_J               = 74,       // Key: J | j
-  KEY_K               = 75,       // Key: K | k
-  KEY_L               = 76,       // Key: L | l
-  KEY_M               = 77,       // Key: M | m
-  KEY_N               = 78,       // Key: N | n
-  KEY_O               = 79,       // Key: O | o
-  KEY_P               = 80,       // Key: P | p
-  KEY_Q               = 81,       // Key: Q | q
-  KEY_R               = 82,       // Key: R | r
-  KEY_S               = 83,       // Key: S | s
-  KEY_T               = 84,       // Key: T | t
-  KEY_U               = 85,       // Key: U | u
-  KEY_V               = 86,       // Key: V | v
-  KEY_W               = 87,       // Key: W | w
-  KEY_X               = 88,       // Key: X | x
-  KEY_Y               = 89,       // Key: Y | y
-  KEY_Z               = 90,       // Key: Z | z
-  KEY_LEFT_BRACKET    = 91,       // Key: [
-  KEY_BACKSLASH       = 92,       // Key: '\'
-  KEY_RIGHT_BRACKET   = 93,       // Key: ]
-  KEY_GRAVE           = 96,       // Key: `
-  // Function keys
-  KEY_SPACE           = 32,       // Key: Space
-  KEY_ESCAPE          = 256,      // Key: Esc
-  KEY_ENTER           = 257,      // Key: Enter
-  KEY_TAB             = 258,      // Key: Tab
-  KEY_BACKSPACE       = 259,      // Key: Backspace
-  KEY_INSERT          = 260,      // Key: Ins
-  KEY_DELETE          = 261,      // Key: Del
-  KEY_RIGHT           = 262,      // Key: Cursor right
-  KEY_LEFT            = 263,      // Key: Cursor left
-  KEY_DOWN            = 264,      // Key: Cursor down
-  KEY_UP              = 265,      // Key: Cursor up
-  KEY_PAGE_UP         = 266,      // Key: Page up
-  KEY_PAGE_DOWN       = 267,      // Key: Page down
-  KEY_HOME            = 268,      // Key: Home
-  KEY_END             = 269,      // Key: End
-  KEY_CAPS_LOCK       = 280,      // Key: Caps lock
-  KEY_SCROLL_LOCK     = 281,      // Key: Scroll down
-  KEY_NUM_LOCK        = 282,      // Key: Num lock
-  KEY_PRINT_SCREEN    = 283,      // Key: Print screen
-  KEY_PAUSE           = 284,      // Key: Pause
-  KEY_F1              = 290,      // Key: F1
-  KEY_F2              = 291,      // Key: F2
-  KEY_F3              = 292,      // Key: F3
-  KEY_F4              = 293,      // Key: F4
-  KEY_F5              = 294,      // Key: F5
-  KEY_F6              = 295,      // Key: F6
-  KEY_F7              = 296,      // Key: F7
-  KEY_F8              = 297,      // Key: F8
-  KEY_F9              = 298,      // Key: F9
-  KEY_F10             = 299,      // Key: F10
-  KEY_F11             = 300,      // Key: F11
-  KEY_F12             = 301,      // Key: F12
-  KEY_LEFT_SHIFT      = 340,      // Key: Shift left
-  KEY_LEFT_CONTROL    = 341,      // Key: Control left
-  KEY_LEFT_ALT        = 342,      // Key: Alt left
-  KEY_LEFT_SUPER      = 343,      // Key: Super left
-  KEY_RIGHT_SHIFT     = 344,      // Key: Shift right
-  KEY_RIGHT_CONTROL   = 345,      // Key: Control right
-  KEY_RIGHT_ALT       = 346,      // Key: Alt right
-  KEY_RIGHT_SUPER     = 347,      // Key: Super right
-  KEY_KB_MENU         = 348,      // Key: KB menu
-  // Keypad keys
-  KEY_KP_0            = 320,      // Key: Keypad 0
-  KEY_KP_1            = 321,      // Key: Keypad 1
-  KEY_KP_2            = 322,      // Key: Keypad 2
-  KEY_KP_3            = 323,      // Key: Keypad 3
-  KEY_KP_4            = 324,      // Key: Keypad 4
-  KEY_KP_5            = 325,      // Key: Keypad 5
-  KEY_KP_6            = 326,      // Key: Keypad 6
-  KEY_KP_7            = 327,      // Key: Keypad 7
-  KEY_KP_8            = 328,      // Key: Keypad 8
-  KEY_KP_9            = 329,      // Key: Keypad 9
-  KEY_KP_DECIMAL      = 330,      // Key: Keypad .
-  KEY_KP_DIVIDE       = 331,      // Key: Keypad /
-  KEY_KP_MULTIPLY     = 332,      // Key: Keypad *
-  KEY_KP_SUBTRACT     = 333,      // Key: Keypad -
-  KEY_KP_ADD          = 334,      // Key: Keypad +
-  KEY_KP_ENTER        = 335,      // Key: Keypad Enter
-  KEY_KP_EQUAL        = 336,      // Key: Keypad =
-  // Android key buttons
-  KEY_BACK            = 4,        // Key: Android back button
-  KEY_MENU            = 82,       // Key: Android menu button
-  KEY_VOLUME_UP       = 24,       // Key: Android volume up button
-  KEY_VOLUME_DOWN     = 25        // Key: Android volume down button
+  TKeyboardKey = (
+    KEY_NULL            = 0,        // Key: NULL, used for no key pressed
+    KEY_APOSTROPHE      = 39,       // Key: '
+    KEY_COMMA           = 44,       // Key: ,
+    KEY_MINUS           = 45,       // Key: -
+    KEY_PERIOD          = 46,       // Key: .
+    KEY_SLASH           = 47,       // Key: /
+    KEY_ZERO            = 48,       // Key: 0
+    KEY_ONE             = 49,       // Key: 1
+    KEY_TWO             = 50,       // Key: 2
+    KEY_THREE           = 51,       // Key: 3
+    KEY_FOUR            = 52,       // Key: 4
+    KEY_FIVE            = 53,       // Key: 5
+    KEY_SIX             = 54,       // Key: 6
+    KEY_SEVEN           = 55,       // Key: 7
+    KEY_EIGHT           = 56,       // Key: 8
+    KEY_NINE            = 57,       // Key: 9
+    KEY_SEMICOLON       = 59,       // Key: ;
+    KEY_EQUAL           = 61,       // Key: =
+    KEY_A               = 65,       // Key: A | a
+    KEY_B               = 66,       // Key: B | b
+    KEY_C               = 67,       // Key: C | c
+    KEY_D               = 68,       // Key: D | d
+    KEY_E               = 69,       // Key: E | e
+    KEY_F               = 70,       // Key: F | f
+    KEY_G               = 71,       // Key: G | g
+    KEY_H               = 72,       // Key: H | h
+    KEY_I               = 73,       // Key: I | i
+    KEY_J               = 74,       // Key: J | j
+    KEY_K               = 75,       // Key: K | k
+    KEY_L               = 76,       // Key: L | l
+    KEY_M               = 77,       // Key: M | m
+    KEY_N               = 78,       // Key: N | n
+    KEY_O               = 79,       // Key: O | o
+    KEY_P               = 80,       // Key: P | p
+    KEY_Q               = 81,       // Key: Q | q
+    KEY_R               = 82,       // Key: R | r
+    KEY_S               = 83,       // Key: S | s
+    KEY_T               = 84,       // Key: T | t
+    KEY_U               = 85,       // Key: U | u
+    KEY_V               = 86,       // Key: V | v
+    KEY_W               = 87,       // Key: W | w
+    KEY_X               = 88,       // Key: X | x
+    KEY_Y               = 89,       // Key: Y | y
+    KEY_Z               = 90,       // Key: Z | z
+    KEY_LEFT_BRACKET    = 91,       // Key: [
+    KEY_BACKSLASH       = 92,       // Key: '\'
+    KEY_RIGHT_BRACKET   = 93,       // Key: ]
+    KEY_GRAVE           = 96,       // Key: `
+    // Function keys
+    KEY_SPACE           = 32,       // Key: Space
+    KEY_ESCAPE          = 256,      // Key: Esc
+    KEY_ENTER           = 257,      // Key: Enter
+    KEY_TAB             = 258,      // Key: Tab
+    KEY_BACKSPACE       = 259,      // Key: Backspace
+    KEY_INSERT          = 260,      // Key: Ins
+    KEY_DELETE          = 261,      // Key: Del
+    KEY_RIGHT           = 262,      // Key: Cursor right
+    KEY_LEFT            = 263,      // Key: Cursor left
+    KEY_DOWN            = 264,      // Key: Cursor down
+    KEY_UP              = 265,      // Key: Cursor up
+    KEY_PAGE_UP         = 266,      // Key: Page up
+    KEY_PAGE_DOWN       = 267,      // Key: Page down
+    KEY_HOME            = 268,      // Key: Home
+    KEY_END             = 269,      // Key: End
+    KEY_CAPS_LOCK       = 280,      // Key: Caps lock
+    KEY_SCROLL_LOCK     = 281,      // Key: Scroll down
+    KEY_NUM_LOCK        = 282,      // Key: Num lock
+    KEY_PRINT_SCREEN    = 283,      // Key: Print screen
+    KEY_PAUSE           = 284,      // Key: Pause
+    KEY_F1              = 290,      // Key: F1
+    KEY_F2              = 291,      // Key: F2
+    KEY_F3              = 292,      // Key: F3
+    KEY_F4              = 293,      // Key: F4
+    KEY_F5              = 294,      // Key: F5
+    KEY_F6              = 295,      // Key: F6
+    KEY_F7              = 296,      // Key: F7
+    KEY_F8              = 297,      // Key: F8
+    KEY_F9              = 298,      // Key: F9
+    KEY_F10             = 299,      // Key: F10
+    KEY_F11             = 300,      // Key: F11
+    KEY_F12             = 301,      // Key: F12
+    KEY_LEFT_SHIFT      = 340,      // Key: Shift left
+    KEY_LEFT_CONTROL    = 341,      // Key: Control left
+    KEY_LEFT_ALT        = 342,      // Key: Alt left
+    KEY_LEFT_SUPER      = 343,      // Key: Super left
+    KEY_RIGHT_SHIFT     = 344,      // Key: Shift right
+    KEY_RIGHT_CONTROL   = 345,      // Key: Control right
+    KEY_RIGHT_ALT       = 346,      // Key: Alt right
+    KEY_RIGHT_SUPER     = 347,      // Key: Super right
+    KEY_KB_MENU         = 348,      // Key: KB menu
+    // Keypad keys
+    KEY_KP_0            = 320,      // Key: Keypad 0
+    KEY_KP_1            = 321,      // Key: Keypad 1
+    KEY_KP_2            = 322,      // Key: Keypad 2
+    KEY_KP_3            = 323,      // Key: Keypad 3
+    KEY_KP_4            = 324,      // Key: Keypad 4
+    KEY_KP_5            = 325,      // Key: Keypad 5
+    KEY_KP_6            = 326,      // Key: Keypad 6
+    KEY_KP_7            = 327,      // Key: Keypad 7
+    KEY_KP_8            = 328,      // Key: Keypad 8
+    KEY_KP_9            = 329,      // Key: Keypad 9
+    KEY_KP_DECIMAL      = 330,      // Key: Keypad .
+    KEY_KP_DIVIDE       = 331,      // Key: Keypad /
+    KEY_KP_MULTIPLY     = 332,      // Key: Keypad *
+    KEY_KP_SUBTRACT     = 333,      // Key: Keypad -
+    KEY_KP_ADD          = 334,      // Key: Keypad +
+    KEY_KP_ENTER        = 335,      // Key: Keypad Enter
+    KEY_KP_EQUAL        = 336,      // Key: Keypad =
+    // Android key buttons
+    KEY_BACK            = 4,        // Key: Android back button
+    KEY_MENU            = 82,       // Key: Android menu button
+    KEY_VOLUME_UP       = 24,       // Key: Android volume up button
+    KEY_VOLUME_DOWN     = 25        // Key: Android volume down button
+  );
 
 type
   // Mouse buttons
@@ -711,7 +714,7 @@ type
     MOUSE_BUTTON_SIDE    = 3,       // Mouse button side (advanced mouse device)
     MOUSE_BUTTON_EXTRA   = 4,       // Mouse button extra (advanced mouse device)
     MOUSE_BUTTON_FORWARD = 5,       // Mouse button fordward (advanced mouse device)
-    MOUSE_BUTTON_BACK    = 6,       // Mouse button back (advanced mouse device)
+    MOUSE_BUTTON_BACK    = 6       // Mouse button back (advanced mouse device)
   );
 
   // Mouse cursor
@@ -762,8 +765,8 @@ type
   );
 
   // Material map index
-  TMaterialMapIndex = packed record
-      MATERIAL_MAP_ALBEDO    = 0,     // Albedo material (same as: MATERIAL_MAP_DIFFUSE)
+  TMaterialMapIndex = (
+      MATERIAL_MAP_ALBEDO  = 0,     // Albedo material (same as: MATERIAL_MAP_DIFFUSE)
       MATERIAL_MAP_METALNESS,         // Metalness material (same as: MATERIAL_MAP_SPECULAR)
       MATERIAL_MAP_NORMAL,            // Normal material
       MATERIAL_MAP_ROUGHNESS,         // Roughness material
@@ -774,7 +777,7 @@ type
       MATERIAL_MAP_IRRADIANCE,        // Irradiance material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
       MATERIAL_MAP_PREFILTER,         // Prefilter material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
       MATERIAL_MAP_BRDF               // Brdf material
-  end;
+  );
 
   //MATERIAL_MAP_DIFFUSE  =    MATERIAL_MAP_ALBEDO;
   //MATERIAL_MAP_SPECULAR =    MATERIAL_MAP_METALNESS;
@@ -827,12 +830,12 @@ type
   );
 
   // Shader attribute data types
-  TShaderAttributeDataType = packed record
+  TShaderAttributeDataType = (
       SHADER_ATTRIB_FLOAT = 0,        // Shader attribute type: float
       SHADER_ATTRIB_VEC2,             // Shader attribute type: vec2 (2 float)
       SHADER_ATTRIB_VEC3,             // Shader attribute type: vec3 (3 float)
       SHADER_ATTRIB_VEC4              // Shader attribute type: vec4 (4 float)
-  end;
+  );
 
   // Pixel formats
   // NOTE: Support depends on OpenGL version and platform
@@ -869,7 +872,7 @@ type
     TEXTURE_FILTER_TRILINEAR,               // Trilinear filtering (linear with mipmaps)
     TEXTURE_FILTER_ANISOTROPIC_4X,          // Anisotropic filtering 4x
     TEXTURE_FILTER_ANISOTROPIC_8X,          // Anisotropic filtering 8x
-    TEXTURE_FILTER_ANISOTROPIC_16X,         // Anisotropic filtering 16x
+    TEXTURE_FILTER_ANISOTROPIC_16X         // Anisotropic filtering 16x
   );
 
   // Texture parameters: wrap mode
@@ -948,11 +951,11 @@ type
   //TODO zaher, check params/arg please
   // Callbacks to hook some internal functions
   // WARNING: This callbacks are intended for advance users
-  TTraceLogCallback = procedure(LogType: Integer; Text: PAnsiChar; Args: Pointer); cdecl;
-  LoadFileDataCallback = function(FileName: PAnsiChar, bytesRead: PUInt): PByte; cdecl;      // FileIO: Load binary data
-  SaveFileDataCallback = function (FileName: PAnsiChar, var data, bytesToWrite: UInt): Boolean; cdecl;  // FileIO: Save binary data
-  LoadFileTextCallback = function (FileName: PAnsiChar): PUTF8Char; cdecl;      // FileIO: Load text data
-  SaveFileTextCallback = function (FileName: PAnsiChar, text: PAnsiChar); cdecl;    // FileIO: Save text data
+  TTraceLogCallback = procedure(LogType: Integer; Text: PUTF8Char; Args: Pointer); cdecl;
+  TLoadFileDataCallback = function(FileName: PUTF8Char; var bytesRead: Cardinal): PByte; cdecl;      // FileIO: Load binary data
+  TSaveFileDataCallback = function(FileName: PUTF8Char; var data; var bytesToWrite: Cardinal): Boolean; cdecl;  // FileIO: Save binary data
+  TLoadFileTextCallback = function(FileName: PUTF8Char): PUTF8Char; cdecl;      // FileIO: Load text data
+  TSaveFileTextCallback = procedure(FileName: PUTF8Char; text: PUTF8Char); cdecl;    // FileIO: Save text data
 
 //------------------------------------------------------------------------------------
 // Global Variables Definition
@@ -967,11 +970,11 @@ var
   { Window-related functions }
 
   // Initialize window and OpenGL context
-  InitWindow: procedure(Width: Integer; Height: Integer; const Title: PUTF8Char); cdecl;
+  InitWindow: procedure(Width: Integer; Height: Integer; const Title: PUTF8Char); cdecl = nil;
   // Check if KEY_ESCAPE pressed or Close icon pressed
-  WindowShouldClose: function: Boolean; cdecl;
+  WindowShouldClose: function: Boolean; cdecl = nil;
   // Close window and unload OpenGL context
-  CloseWindow: procedure; cdecl;
+  CloseWindow: procedure; cdecl = nil;
   // Check if window has been initialized successfully
   IsWindowReady: function: Boolean; cdecl;
   // Check if window is currently fullscreen
@@ -1108,22 +1111,22 @@ var
   // Load VR stereo config for VR simulator device parameters
   LoadVrStereoConfig: function(Device: TVrDeviceInfo): TVrStereoConfig; cdecl;
   // Unload VR stereo config
-  UnloadVrStereoConfig: procedure(Config: VrStereoConfig); cdecl;
+  UnloadVrStereoConfig: procedure(Config: TVrStereoConfig); cdecl;
 
   // Shader management functions
   // NOTE: Shader functionality is not available on OpenGL 1.1
   // Load shader from files and bind default locations
   LoadShader: function(vsFileName: PUTF8Char; fsFileName: PUTF8Char): TShader; cdecl;
   // Load shader from code strings and bind default locations
-  LoadShaderFromMemory: function(vsCode: PUTF8Char, fsCode: PUTF8Char): TShader; cdecl;
+  LoadShaderFromMemory: function(vsCode: PUTF8Char; fsCode: PUTF8Char): TShader; cdecl;
   // Get shader uniform location
-  GetShaderLocation: function(Shader: TShader, UniformName: PUTF8Char): integer; cdecl;
+  GetShaderLocation: function(Shader: TShader; UniformName: PUTF8Char): integer; cdecl;
   // Get shader attribute location
-  GetShaderLocationAttrib(Shader: TShader; AttribName: PUTF8Char): integer; cdecl;
+  GetShaderLocationAttrib: function(Shader: TShader; AttribName: PUTF8Char): integer; cdecl;
   // Set shader uniform value
   SetShaderValue: procedure(Shader: TShader; LocIndex: Integer; Value: PUTF8Char; uniformType: Integer); cdecl;
   // Set shader uniform value vector
-  SetShaderValueV: procedure(Shader: TShader; LocIndex: Integer, var Value, UniformType: Integer; Count: Integer); cdecl;
+  SetShaderValueV: procedure(Shader: TShader; LocIndex: Integer; var Value, UniformType: Integer; Count: Integer); cdecl;
   // Set shader uniform value (matrix 4x4)
   SetShaderValueMatrix: procedure(Shader: TShader; locIndex: Integer; mat: TMatrix); cdecl;
   // Set shader uniform value for texture (sampler2d)
@@ -1164,16 +1167,16 @@ var
   // Get a random value between min and max (both included)
   GetRandomValue: function(min: Integer; max: Integer): Integer; cdecl;
   // Set the seed for the random number generator
-  SetRandomSeed: procedure(Seed: UInt); cdecl;
+  SetRandomSeed: procedure(Seed: Cardinal); cdecl;
   // Takes a screenshot of current screen (filename extension defines format)
   TakeScreenshot: procedure(const fileName: PUTF8Char); cdecl;
 
   // Setup window configuration flags (view FLAGS)
-  SetConfigFlags: procedure(flags: TConfigFlag); cdecl;
+  SetConfigFlags: procedure(flags: TConfigFlags); cdecl;
   // Show trace log messages (LOG_DEBUG, LOG_INFO, LOG_WARNING, LOG_ERROR)
   TraceLog: procedure(logType: Integer; const text: PUTF8Char) varargs; cdecl;
   // Set the current threshold (minimum) log level
-  SetTraceLogLevel: procedure(logType: TTraceLogTypes); cdecl;
+  SetTraceLogLevel: procedure(logType: TTraceLogLevels); cdecl;
 
   // Internal memory allocator
   MemAlloc: function(Size: Integer): Pointer; cdecl;
@@ -1250,7 +1253,7 @@ var
   // Encode data to Base64 string
   EncodeDataBase64: function(Data: PByte; dataLength: Integer; OutputLength: PInteger): PByte; cdecl;  //TODO zaher, check it by example please
   // Decode Base64 string data
-  DecodeDataBase64(Data: PByte; outputLength: PInteger): PByte;  //TODO zaher, check it by example please
+  DecodeDataBase64: function(Data: PByte; outputLength: PInteger): PByte;  //TODO zaher, check it by example please
 
   { Persistent storage management }
 
@@ -1354,9 +1357,9 @@ var
   // Get touch position XY for a touch point index (relative to screen size)
   GetTouchPosition: function(index: Integer): TVector2; cdecl;
   // Get touch point identifier for given index
-  GetTouchPointId(index: Integer): Integer; cdecl;
+  GetTouchPointId: function(index: Integer): Integer; cdecl;
   // Get number of touch points
-  GetTouchPointCount: function(): Integer; cdecl;
+  GetTouchPointCount: function: Integer; cdecl;
 
 //------------------------------------------------------------------------------------
 // Gestures and Touch Handling Functions (Module: rgestures)
@@ -1407,7 +1410,7 @@ var
   // defining a font char white rectangle would allow drawing everything in a single draw call
 
   // Set texture and rectangle to be used on shapes drawing
-  SetShapesTexture: procedure(texture: TTexture2D, Source: TRectangle); cdecl;
+  SetShapesTexture: procedure(texture: TTexture2D; Source: TRectangle); cdecl;
 
   { Basic shapes drawing functions }
 
@@ -1424,9 +1427,9 @@ var
   // Draw a line using cubic-bezier curves in-out
   DrawLineBezier: procedure(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl;
   // Draw line using quadratic bezier curves with a control point
-  DrawLineBezierQuad(startPos: TVector2; endPos: TVector2, controlPos: TVector2; thick: Single; Color: TColor); cdecl;
+  DrawLineBezierQuad: procedure(startPos: TVector2; endPos: TVector2; controlPos: TVector2; thick: Single; Color: TColor); cdecl;
   // Draw line using cubic bezier curves with 2 control points
-  DrawLineBezierCubic(startPos: TVector2; endPos: TVector2; startControlPos: TVector2; endControlPos: TVector2; thick: Single; Color TColor); cdecl;
+  DrawLineBezierCubic: procedure(startPos: TVector2; endPos: TVector2; startControlPos: TVector2; endControlPos: TVector2; thick: Single; Color: TColor); cdecl;
   // Draw a color-filled circle
   DrawCircle: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl;
   // Draw a piece of a circle
@@ -1482,7 +1485,7 @@ var
   // Draw a polygon outline of n sides
   DrawPolyLines: procedure(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl;
   // Draw a polygon outline of n sides with extended parameters
-  DrawPolyLinesEx(center: TVector2, Sides: Integer; Radius: Single; Rotation: Single, lineThick: Single; Color: TColor); cdecl;
+  DrawPolyLinesEx: procedure(center: TVector2; Sides: Integer; Radius: Single; Rotation: Single; lineThick: Single; Color: TColor); cdecl;
 
   { Basic shapes collision detection functions }
 
@@ -1501,7 +1504,7 @@ var
   // Check the collision between two lines defined by two points each, returns collision point by reference
   CheckCollisionLines: function(startPos1, endPos1, startPos2, endPos2: TVector2; collisionPoint: PVector2): Boolean; cdecl;
   // Check if point belongs to line created between two points [p1] and [p2] with defined margin in pixels [threshold]
-  CheckCollisionPointLine: function(point: TVector2; p1: TVector2, p2: TVector2; threshold: Integer); cdecl;
+  CheckCollisionPointLine: function(point: TVector2; p1: TVector2; p2: TVector2; threshold: Integer): Boolean; cdecl;
   // Get collision rectangle for two rectangles collision
   GetCollisionRec: function(rec1: TRectangle; rec2: TRectangle): TRectangle; cdecl;
 
@@ -1613,7 +1616,7 @@ var
   // Get image alpha border rectangle
   GetImageAlphaBorder: function(image: TImage; threshold: Single): TRectangle; cdecl;
   // Get image pixel color at (x, y) position
-  GetImageColor: function(Image: TImage, x, y: Integer): TColor; cdecl;
+  GetImageColor: function(Image: TImage; x, y: Integer): TColor; cdecl;
 
   { Image drawing functions }
   // NOTE: Image software-rendering functions (CPU)
@@ -1672,7 +1675,7 @@ var
   // Generate GPU mipmaps for a texture
   GenTextureMipmaps: procedure(texture: PTexture2D); cdecl;
   // Set texture scaling filter mode
-  SetTextureFilter: procedure(texture: TTexture2D; Filter: TTextureFilterMode); cdecl;
+  SetTextureFilter: procedure(texture: TTexture2D; Filter: TTextureFilter); cdecl;
   // Set texture wrapping mode
   SetTextureWrap: procedure(texture: TTexture2D; Wrap: Integer); cdecl;
 
@@ -1718,7 +1721,7 @@ var
   // Get src alpha-blended into dst color with tint
   ColorAlphaBlend: function(dst, src, tint: TColor): TColor; cdecl;
   // Get a Color struct from hexadecimal value
-  GetColor: function(hexValue: UInt): TColor; cdecl;
+  GetColor: function(hexValue: Cardinal): TColor; cdecl;
   // Get Color from a source pixel pointer of certain format
   GetPixelColor: function(srcPtr: Pointer; format: Integer): TColor; cdecl;
   // Set color formatted into destination pixel pointer
@@ -1745,7 +1748,7 @@ var
   // Load font data for further use
   LoadFontData: function(fileData: PByte; dataSize, fontSize: Integer; fontChars: PInteger; glyphCount: Integer; &type: Integer): PGlyphInfo; cdecl;
   // Generate image font atlas using chars info
-  GenImageFontAtlas: function(const chars: PCharInfo; recs: PPRectangle; glyphCount: Integer; fontSize: Integer; padding: Integer; packMethod: Integer): TImage; cdecl;
+  GenImageFontAtlas: function(const chars: PGlyphInfo; recs: PPRectangle; glyphCount: Integer; fontSize: Integer; padding: Integer; packMethod: Integer): TImage; cdecl;
   // Unload font chars info data (RAM)
   UnloadFontData: procedure(fileData: PGlyphInfo; glyphCount: Integer); cdecl;
   // Unload Font from GPU memory (VRAM)
@@ -1776,7 +1779,7 @@ var
   // Get glyph font info data for a codepoint (unicode character), fallback to '?' if not found
   GetGlyphInfo: function(Font: TFont; codepoint: Integer): TGlyphInfo; cdecl;
   // Get glyph rectangle in font atlas for a codepoint (unicode character), fallback to '?' if not found
-  GetGlyphAtlasRec: function(Font: TFont, codepoint: integer); TRectangle; cdecl;
+  GetGlyphAtlasRec: function(Font: TFont; codepoint: integer): TRectangle; cdecl;
 
   // Text codepoints management functions (unicode characters)
   // Load all codepoints from a UTF-8 text string, codepoints count returned by parameter
@@ -1786,7 +1789,7 @@ var
   // Get total number of codepoints in a UTF-8 encoded string
   GetCodepointCount: function(text: PUTF8Char): Integer; cdecl;
   // Get next codepoint in a UTF-8 encoded string, 0x3f('?') is returned on failure
-  int GetCodepoint: function(text: PUTF8Char; bytesProcessed: PInteger): Integer; cdecl;
+  GetCodepoint: function(text: PUTF8Char; bytesProcessed: PInteger): Integer; cdecl;
   // Encode one codepoint into UTF-8 byte array (array length returned as parameter)
   CodepointToUTF8: function(codepoint: Integer; byteSize: PInteger): PUtf8Char; cdecl;
   // Encode text as codepoints array into UTF-8 text string (WARNING: memory must be freed!)
@@ -1853,7 +1856,7 @@ var
   // Draw cube textured
   DrawCubeTexture: procedure(texture: TTexture2D; position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
   // Draw cube with a region of a texture
-  DrawCubeTextureRec: procedure(Texture: TTexture2D; source: TRectangle; position: TVector3; width; height: Single; length: Single; Color: TColor); cdecl;
+  DrawCubeTextureRec: procedure(Texture: TTexture2D; source: TRectangle; position: TVector3; width: Single; height: Single; length: Single; Color: TColor); cdecl;
   // Draw sphere
   DrawSphere: procedure(centerPos: TVector3; radius: Single; color: TColor); cdecl;
   // Draw sphere with extended parameters
@@ -1912,23 +1915,23 @@ var
   // Draw a billboard texture defined by sourceRec
   DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; source: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl;
   // Draw a billboard texture defined by source and rotation
-  DrawBillboardPro: procedure(camera: TCamera; Texture: TTexture2D; source: TRectangle; position: tVector3; up: TVector3; size: TVector2; origin: TVector2; Rotation: Single, tint: TColor); cdecl;
+  DrawBillboardPro: procedure(camera: TCamera; Texture: TTexture2D; source: TRectangle; position: tVector3; up: TVector3; size: TVector2; origin: TVector2; Rotation: Single; tint: TColor); cdecl;
 
   // Mesh management functions
   // Upload mesh vertex data in GPU and provide VAO/VBO ids
-  UploadMesh: procedure(mesh: PMesh, Dynamic: Boolean); cdecl;
+  UploadMesh: procedure(mesh: PMesh; Dynamic: Boolean); cdecl;
   // Update mesh vertex data in GPU for a specific buffer index
-  UpdateMeshBuffer: procedure(mesh: TMesh, index: Integer, data: PByte, dataSize: Integer; offset: Integer); cdecl;
+  UpdateMeshBuffer: procedure(mesh: TMesh; index: Integer; data: PByte; dataSize: Integer; offset: Integer); cdecl;
   // Unload mesh data from CPU and GPU
   UnloadMesh: procedure(mesh: TMesh); cdecl;
   // Draw a 3d mesh with material and transform
-  DrawMesh: procedure(mesh: TMesh, material: TMaterial, transform: TMatrix); cdecl;
+  DrawMesh: procedure(mesh: TMesh; material: TMaterial; transform: TMatrix); cdecl;
   // Draw multiple mesh instances with material and different transforms
-  DrawMeshInstanced: procedure(Mesh: TMesh, Material: TMaterial, transforms: PMatrix, instances: Integer); cdecl;
+  DrawMeshInstanced: procedure(Mesh: TMesh; Material: TMaterial; transforms: PMatrix; instances: Integer); cdecl;
   // Export mesh data to file, returns true on success
-  ExportMesh: function(Mesh: TMesh, fileName: PUTF8Char): Boolean; cdecl;
+  ExportMesh: function(Mesh: TMesh; fileName: PUTF8Char): Boolean; cdecl;
   // Compute mesh bounding box limits
-  GetMeshBoundingBox(Mesh: TMesh): TBoundingBox; cdecl;
+  GetMeshBoundingBox: function(Mesh: TMesh): TBoundingBox; cdecl;
   // Compute mesh tangents
   GenMeshTangents: procedure(Mesh: PMesh); cdecl;
   // Compute mesh binormals
@@ -1949,7 +1952,7 @@ var
   // Generate cylinder mesh
   GenMeshCylinder: function(radius: Single; height: Single; slices: Integer): TMesh; cdecl;
   // Generate cone/pyramid mesh
-  GenMeshCone: function(radius: Single, height: Single, slices: Integer): TMesh; cdecl;
+  GenMeshCone: function(radius: Single; height: Single; slices: Integer): TMesh; cdecl;
   // Generate torus mesh
   GenMeshTorus: function(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl;
   // Generate trefoil knot mesh
@@ -1992,17 +1995,17 @@ var
   // Check collision between box and sphere
   CheckCollisionBoxSphere: function(box: TBoundingBox; center: TVector3; radius: Single): Boolean; cdecl;
   // Get collision info between ray and sphere
-  GetRayCollisionSphere: function(ray: TRay, center: TVector3, radius: Single): TRayCollision; cdecl;
+  GetRayCollisionSphere: function(ray: TRay; center: TVector3; radius: Single): TRayCollision; cdecl;
   // Get collision info between ray and box
-  GetRayCollisionBox: function(ray: TRay, box: TBoundingBox): TRayCollision; cdecl;
+  GetRayCollisionBox: function(ray: TRay; box: TBoundingBox): TRayCollision; cdecl;
   // Get collision info between ray and model
-  GetCollisionRayModel: function(ray: TRay; model: TModel): TRayHitInfo; cdecl;
+  GetRayCollisionRayModel: function(ray: TRay; model: TModel): TRayCollision; cdecl;
   // Get collision info between ray and mesh
-  GetCollisionRayMesh: function(ray: TRay; mesh: TMesh; transform: TMatrix): TRayHitInfo; cdecl;
+  GetRayCollisionRayMesh: function(ray: TRay; mesh: TMesh; transform: TMatrix): TRayCollision; cdecl;
   // Get collision info between ray and triangle
-  GetCollisionRayTriangle: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3): TRayHitInfo; cdecl;
+  GetRayCollisionRayTriangle: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3): TRayCollision; cdecl;
   // Get collision info between ray and quad
-  GetRayCollisionQuad: function(ray: TRay, p1: TVector3, p2: TVector3, p3: TVector3, p4: TVector3): TRayCollision;  cdecl;
+  GetRayCollisionQuad: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3; p4: TVector3): TRayCollision;  cdecl;
 
 //------------------------------------------------------------------------------------
 // Audio Loading and Playing Functions (Module: audio)
@@ -2078,13 +2081,13 @@ var
   // Load music stream from file
   LoadMusicStream: function(const FileName: PUTF8Char): TMusic; cdecl;
   // Load music stream from data
-  LoadMusicStreamFromMemory: function(const char *fileType, unsigned char *data, int dataSize): TMusic; cdecl;
+  LoadMusicStreamFromMemory: function(fileType: PUTF8Char; data:PByte; dataSize: Integer): TMusic; cdecl;
   // Unload music stream
   UnloadMusicStream: procedure(Music: TMusic); cdecl;
   // Start music playing
   PlayMusicStream: procedure(Music: TMusic); cdecl;
   // Check if music is playing
-  IsMusicStreamPlaying:(music: TMusic); cdecl;
+  IsMusicStreamPlaying:function(music: TMusic): Boolean; cdecl;
   // Updates buffers for music streaming
   UpdateMusicStream: procedure(Music: TMusic); cdecl;
   // Stop music playing
@@ -2459,7 +2462,6 @@ begin
   SetMouseOffset := GetAddress('SetMouseOffset');
   SetMouseScale := GetAddress('SetMouseScale');
   GetMouseWheelMove := GetAddress('GetMouseWheelMove');
-  GetMouseCursor := GetAddress('GetMouseCursor');
   SetMouseCursor := GetAddress('SetMouseCursor');
   GetTouchX := GetAddress('GetTouchX');
   GetTouchY := GetAddress('GetTouchY');
@@ -2490,7 +2492,6 @@ begin
   DrawLineBezier := GetAddress('DrawLineBezier');
   DrawLineBezierQuad := GetAddress('DrawLineBezierQuad');
   DrawLineBezierCubic := GetAddress('DrawLineBezierCubic');
-  DrawLineStrip := GetAddress('DrawLineStrip');
   DrawCircle := GetAddress('DrawCircle');
   DrawCircleSector := GetAddress('DrawCircleSector');
   DrawCircleSectorLines := GetAddress('DrawCircleSectorLines');
@@ -2548,7 +2549,6 @@ begin
   GenImageGradientRadial := GetAddress('GenImageGradientRadial');
   GenImageChecked := GetAddress('GenImageChecked');
   GenImageWhiteNoise := GetAddress('GenImageWhiteNoise');
-  GenImagePerlinNoise := GetAddress('GenImagePerlinNoise');
   GenImageCellular := GetAddress('GenImageCellular');
   ImageCopy := GetAddress('ImageCopy');
   ImageFromImage := GetAddress('ImageFromImage');
@@ -2639,7 +2639,7 @@ begin
   LoadCodepoints := GetAddress('LoadCodepoints');
   UnloadCodepoints := GetAddress('UnloadCodepoints');
   GetCodepointCount := GetAddress('GetCodepointCount');
-  int GetCodepoint := GetAddress('int ');
+  GetCodepoint := GetAddress('GetCodepoint');
   CodepointToUTF8 := GetAddress('CodepointToUTF8');
   TextCodepointsToUTF8 := GetAddress('TextCodepointsToUTF8');
   TextCopy := GetAddress('TextCopy');
@@ -2698,23 +2698,10 @@ begin
   DrawMesh := GetAddress('DrawMesh');
   DrawMeshInstanced := GetAddress('DrawMeshInstanced');
   ExportMesh := GetAddress('ExportMesh');
-  BoundingBox := GetAddress('BoundingBox');
   GetMeshBoundingBox := GetAddress('GetMeshBoundingBox');
   GenMeshTangents := GetAddress('GenMeshTangents');
   GenMeshBinormals := GetAddress('GenMeshBinormals');
 
-  LoadMeshes := GetAddress('LoadMeshes');
-  ExportMesh := GetAddress('ExportMesh');
-  UnloadMesh := GetAddress('UnloadMesh');
-  LoadMaterials := GetAddress('LoadMaterials');
-  LoadMaterialDefault := GetAddress('LoadMaterialDefault');
-  UnloadMaterial := GetAddress('UnloadMaterial');
-  SetMaterialTexture := GetAddress('SetMaterialTexture');
-  SetModelMeshMaterial := GetAddress('SetModelMeshMaterial');
-  LoadModelAnimations := GetAddress('LoadModelAnimations');
-  UpdateModelAnimation := GetAddress('UpdateModelAnimation');
-  UnloadModelAnimation := GetAddress('UnloadModelAnimation');
-  IsModelAnimationValid := GetAddress('IsModelAnimationValid');
   GenMeshPoly := GetAddress('GenMeshPoly');
   GenMeshPlane := GetAddress('GenMeshPlane');
   GenMeshCube := GetAddress('GenMeshCube');
@@ -2726,19 +2713,26 @@ begin
   GenMeshKnot := GetAddress('GenMeshKnot');
   GenMeshHeightmap := GetAddress('GenMeshHeightmap');
   GenMeshCubicmap := GetAddress('GenMeshCubicmap');
-  MeshBoundingBox := GetAddress('MeshBoundingBox');
-  MeshTangents := GetAddress('MeshTangents');
-  MeshBinormals := GetAddress('MeshBinormals');
-  MeshNormalsSmooth := GetAddress('MeshNormalsSmooth');
+
+  LoadMaterials := GetAddress('LoadMaterials');
+  LoadMaterialDefault := GetAddress('LoadMaterialDefault');
+  UnloadMaterial := GetAddress('UnloadMaterial');
+  SetMaterialTexture := GetAddress('SetMaterialTexture');
+  SetModelMeshMaterial := GetAddress('SetModelMeshMaterial');
+
+  LoadModelAnimations := GetAddress('LoadModelAnimations');
+  UpdateModelAnimation := GetAddress('UpdateModelAnimation');
+  UnloadModelAnimation := GetAddress('UnloadModelAnimation');
+  IsModelAnimationValid := GetAddress('IsModelAnimationValid');
 
   CheckCollisionSpheres := GetAddress('CheckCollisionSpheres');
   CheckCollisionBoxes := GetAddress('CheckCollisionBoxes');
   CheckCollisionBoxSphere := GetAddress('CheckCollisionBoxSphere');
   GetRayCollisionSphere := GetAddress('GetRayCollisionSphere');
   GetRayCollisionBox := GetAddress('GetRayCollisionBox');
-  GetCollisionRayMesh := GetAddress('GetCollisionRayMesh');
-  GetCollisionRayModel := GetAddress('GetCollisionRayModel');
-  GetCollisionRayTriangle := GetAddress('GetCollisionRayTriangle');
+  GetRayCollisionRayMesh := GetAddress('GetRayCollisionRayMesh');
+  GetRayCollisionRayModel := GetAddress('GetRayCollisionRayModel');
+  GetRayCollisionRayTriangle := GetAddress('GetRayCollisionRayTriangle');
   GetRayCollisionQuad := GetAddress('GetRayCollisionQuad');
 
   InitAudioDevice := GetAddress('InitAudioDevice');
@@ -2798,7 +2792,7 @@ begin
 end;
 
 initialization
-  RayLibrary := TmncRayLib.Create('raylib');
+  RayLibrary := TmncRayLib.Create('raylib4');
 finalization
   FreeAndNil(RayLibrary);
 end.
