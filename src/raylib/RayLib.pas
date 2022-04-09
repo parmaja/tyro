@@ -1391,7 +1391,7 @@ var
 //------------------------------------------------------------------------------------
 
   // Set camera mode (multiple camera modes available)
-  SetCameraMode: procedure(camera: TCamera; mode: Integer); cdecl = nil;
+  SetCameraMode: procedure(camera: TCamera; mode: TCameraMode); cdecl = nil;
   // Update camera position for selected mode
   UpdateCamera: procedure(camera: PCamera); cdecl = nil;
 

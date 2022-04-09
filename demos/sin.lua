@@ -5,7 +5,7 @@ canvas.color = colors.white
 m = canvas.height / 2
 x = 0
 music.mml("abc");
-canvas.clear()
+--canvas.clear()
 canvas.point(x, m)
 while x < canvas.width do
      y = math.sin(math.rad(x)) * 100

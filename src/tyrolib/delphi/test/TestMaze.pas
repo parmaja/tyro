@@ -216,7 +216,7 @@ begin
   Cells := TObjectList<TCell>.Create;
   Stack := TStack<TCell>.Create;
 
-  ShowWindow(FWidth, FHeight);
+  ShowWindow(FWidth + 10, FHeight + 10, 10);
   for var row in [0..FRows-1] do
     for var col in [0..FCols-1] do
       Cells.Add(TCell.Create(row, col, FCW));

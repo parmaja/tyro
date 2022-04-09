@@ -127,7 +127,7 @@ type
     destructor Destroy; override;
     procedure Invalidate; virtual;
 
-    procedure Paint(ACanvas: TTyroCanvas);
+    procedure Paint(ACanvas: TTyroCanvas); virtual;
 
     procedure FocusChanged; virtual;
     property Parent: TTyroContainer read FParent write SetParent;
@@ -161,15 +161,15 @@ type
   TTyroTextureControl = class(TTyroControl) //Own a texture
   private
     FCanvas: TTyroCanvas;
-    procedure SetCanvas(AValue: TTyroCanvas);
+//    procedure SetCanvas(AValue: TTyroCanvas);
   public
     //TODO
     constructor Create(AParent: TTyroContainer); override;
     destructor Destroy; override;
     procedure Invalidate; override;
-    procedure PostDraw; virtual;
+    procedure Paint(ACanvas: TTyroCanvas); override;
     procedure Resize; override;
-    property Canvas: TTyroCanvas read FCanvas write SetCanvas;
+    property Canvas: TTyroCanvas read FCanvas write FCanvas;
   end;
 
   { TTyroCustomWindow }
@@ -212,17 +212,26 @@ type
   private
     FFPS: Integer;
     FOptions: TTyroMainOptions;
+    FMarginSize: Integer;
+    FMarginColor: TColor;
+    FBorderSize: Integer;
+    FBorderColor: TColor;
+    procedure SetMarginSize(const Value: Integer);
+    procedure SetBorderSize(const Value: Integer);
+    procedure SetMarginColor(const Value: TColor);
+    procedure SetBorderColor(const Value: TColor);
   protected
     FTextureMode: Boolean;
     IsTerminated: Boolean;
     FCanvasLock: TCriticalSection;
+    Camera2D: TCamera2D;
     function CreateCanvas: TTyroCanvas; override;
   public
     constructor Create;
     destructor Destroy; override;
 
     //* TextureMode create texture with canvas
-    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); virtual;
+    procedure ShowWindow(AWidth, AHeight: Integer; Margin: Integer = 0; ATextureMode: Boolean = False); virtual;
     procedure SetFPS(FPS: Integer); virtual;
     procedure HideWindow; virtual;
 
@@ -238,7 +247,10 @@ type
     procedure Unload; virtual;
 
     procedure Run;
-
+    property MarginColor: TColor read FMarginColor write SetMarginColor;
+    property MarginSize: Integer read FMarginSize write SetMarginSize;
+    property BorderColor: TColor read FBorderColor write SetBorderColor;
+    property BorderSize: Integer read FBorderSize write SetBorderSize;
     property CanvasLock: TCriticalSection read FCanvasLock;
     property Options: TTyroMainOptions read FOptions write FOptions;
     property FPS: Integer read FFPS write SetFPS;
@@ -269,6 +281,7 @@ begin
   WorkSpace := ExtractFilePath(ParamStr(0));
   RayLibrary.Load;
   FCanvasLock := TCriticalSection.Create;
+  MarginSize := 10;
 end;
 
 function TTyroMain.CreateCanvas: TTyroCanvas;
@@ -289,6 +302,26 @@ end;
 
 procedure TTyroMain.Preload;
 begin
+end;
+
+procedure TTyroMain.SetMarginColor(const Value: TColor);
+begin
+  FMarginColor := Value;
+end;
+
+procedure TTyroMain.SetMarginSize(const Value: Integer);
+begin
+  FMarginSize := Value;
+end;
+
+procedure TTyroMain.SetBorderColor(const Value: TColor);
+begin
+  FBorderColor := Value;
+end;
+
+procedure TTyroMain.SetBorderSize(const Value: Integer);
+begin
+  FBorderSize := Value;
 end;
 
 procedure TTyroMain.SetFPS(FPS: Integer);
@@ -351,16 +384,23 @@ begin
             Canvas.Clear;
 
           try
+            Camera2D.Target := Vector2Of(-MarginSize, -MarginSize);
+            Camera2D.Offset := Vector2Of(0, 0);
+            Camera2D.Zoom := 1;
+            Camera2D.Rotation := 0;
+//            Camera2D.Target := Vector2Of(MarginSize, MarginSize);
+//            Camera2D.Target := Vector2Of(MarginSize, MarginSize);
+//            Camera2D.Offset := Vector2Of(Width div 2, Height div 2);
+
             Paint;
             Canvas.BeginDraw;
+            BeginMode2D(Camera2D);
             Draw;
+            EndMode2D();
             Canvas.EndDraw;
             Canvas.PostDraw;
             if moShowFPS in Options then
               RayLib.DrawFPS(10, 10);
-            //Canvas.DrawLine(10, 10, 100, 10, clRed);
-            //Canvas.DrawText(2, 2, 'Test', clRed);
-
           finally
             RayLib.EndDrawing();
           end;
@@ -376,9 +416,10 @@ begin
     RayLib.CloseWindow();
 end;
 
-procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
+procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer; Margin: Integer; ATextureMode: Boolean);
 begin
   FTextureMode := ATextureMode;
+  MarginSize := Margin;
   if Visible then
   begin
     SetBounds(0, 0, AWidth, AHeight);
@@ -418,12 +459,6 @@ end;
 
 { TTyroTextureControl }
 
-procedure TTyroTextureControl.SetCanvas(AValue: TTyroCanvas);
-begin
-  if FCanvas <> AValue then
-    FCanvas :=AValue;
-end;
-
 constructor TTyroTextureControl.Create(AParent: TTyroContainer);
 begin
   inherited Create(AParent);
@@ -439,11 +474,12 @@ end;
 procedure TTyroTextureControl.Invalidate;
 begin
   inherited Invalidate;
-  Paint(Canvas);
+//  Paint(Canvas);
 end;
 
-procedure TTyroTextureControl.PostDraw;
+procedure TTyroTextureControl.Paint(ACanvas: TTyroCanvas);
 begin
+  inherited;
   Canvas.PostDraw;
 end;
 
@@ -495,7 +531,7 @@ end;
 procedure TTyroPanel.DoPaint(ACanvas: TTyroCanvas);
 begin
   inherited;
-  ACanvas.DrawRectangle(ClientRect, ACanvas.BackColor, True);
+  ACanvas.DrawRectangle(ClientRect, ACanvas.PenColor, False);
 end;
 
 { TTyroControl }

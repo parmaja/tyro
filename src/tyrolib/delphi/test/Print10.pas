@@ -35,13 +35,13 @@ implementation
 procedure TMain.Draw;
 begin
   inherited;
-  Canvas.PenAlpha := 0;
   Canvas.PenColor := clBlack;
+//  Canvas.PenAlpha := 128;
   Canvas.DrawText(30, 30, 'Ready!', clRed);
   if Random(10)<5 then
-    DrawLine(X, y, X+Spacing, Y+Spacing, clBlue)
+    DrawLine(X, y, X+Spacing, Y+Spacing, Canvas.PenColor)
   else
-    DrawLine(X, y+Spacing, X+Spacing, Y, clBlue);
+    DrawLine(X, y+Spacing, X+Spacing, Y, Canvas.PenColor);
 
   Inc(X, Spacing);
   if x>Width then
@@ -49,8 +49,6 @@ begin
     X := 0;
     Inc(Y, Spacing);
   end;
-
-
 end;
 
 procedure TMain.Init;
@@ -61,15 +59,16 @@ begin
   Spacing := 10;
   Width := 400;
   Height := 400;
-  ShowWindow(Width, Height, True);
+  ShowWindow(Width, Height, 0, True);
+  MarginSize := 10;
 end;
 
 procedure TMain.Setup;
 begin
   inherited;
+  Randomize;
   SetFPS(10);
   //Options := Options - [moOpaque];
-  Randomize;
   Canvas.BackColor := clWhite;
   Canvas.PenColor := clBlack;
   //Options := Options + [moShowFPS];
