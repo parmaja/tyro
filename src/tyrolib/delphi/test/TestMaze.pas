@@ -38,7 +38,7 @@ type
     function Check: TCell;
   end;
 
-  TMazeMain = class(TTyroMain)
+  TMain = class(TTyroMain)
   public
     procedure Init; override;
     procedure Setup; override;
@@ -181,9 +181,9 @@ begin
   end;
 end;
 
-{ TMazeMain }
+{ TMain }
 
-procedure TMazeMain.Draw;
+procedure TMain.Draw;
 begin
   inherited;
   Canvas.PenAlpha := 0;
@@ -209,7 +209,7 @@ begin
   end;
 end;
 
-procedure TMazeMain.Init;
+procedure TMain.Init;
 begin
   inherited;
   FCW := FWidth div FCols;
@@ -224,14 +224,14 @@ begin
   FCurrent := Cells[0];
 end;
 
-procedure TMazeMain.Setup;
+procedure TMain.Setup;
 begin
   inherited;
   SetFPS(10);
   //Options := Options + [moShowFPS];
 end;
 
-procedure TMazeMain.Unload;
+procedure TMain.Unload;
 begin
   inherited;
   FreeAndNil(Cells);

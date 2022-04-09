@@ -10,11 +10,13 @@ uses
   TyroClasses,
   TyroControls,
   Generics.Collections,
+  Print10 in 'Print10.pas',
   TestMaze in 'TestMaze.pas';
 
 begin
   Randomize;
-  Main := TMazeMain.Create;
+  //Main := TestMaze.TMain.Create;
+  Main := Print10.TMain.Create;
   try
     Main.Run;
   except
