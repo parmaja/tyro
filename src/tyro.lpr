@@ -25,10 +25,9 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils, Classes, CustApp, RayLib, RayClasses,
-  mnUtils, Melodies, TyroControls, TyroClasses,
-  TyroEditors, mnLogs, TyroSounds, TyroEngines,
-  TyroLua, TyroPascal, TyroScripts;  //Add all languages units here
+  SysUtils, Classes, CustApp, RayLib, RayClasses, mnUtils, Melodies,
+  TyroControls, TyroClasses, TyroEditors, mnLogs, TyroSounds, TyroEngines,
+  TyroLua, TyroPascal, TyroScripts, TyroConsoles;  //Add all languages units here
 
 type
 
@@ -211,9 +210,17 @@ procedure TTyroApplication.DoRun;
 begin
   inherited;
   try
-    Main.Run;
+    try
+      Main.Run;
+    except
+      on E:Exception do
+      begin
+        if IsConsole then
+          WriteLn(E.Message);
+      end;
+    end;
+  finally
     Terminate;
-  except
   end;
 end;
 

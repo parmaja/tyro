@@ -485,7 +485,7 @@ end;
 
 function TPasScript.Print_func(s: string): Integer;
 begin
-  AddQueueObject(TPrintObject.Create(Main.Canvas, s));
+  AddQueueObject(TPrintObject.Create(Main.Canvas, s, False));
   Result := 0;
 end;
 

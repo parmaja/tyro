@@ -105,6 +105,7 @@ type
     function DrawPoint_func(L: Plua_State): Integer; cdecl;
     //global functions
     function Print_func(L: Plua_State): Integer; cdecl;
+    function PrintLn_func(L: Plua_State): Integer; cdecl;
 
     function Beep_func(L: Plua_State): Integer; cdecl;
     function PlaySound_func(L: Plua_State): Integer; cdecl;
@@ -472,6 +473,7 @@ begin
   lua_register(LuaState, 'log', @log_func);
   lua_register(LuaState, 'sleep', @sleep_func);
   lua_register_method(LuaState, 'print', @Print_func);
+  lua_register_method(LuaState, 'println', @PrintLn_func);
   lua_register_method(LuaState, 'window', @Window_func);
   lua_register_method(LuaState, 'showconsole', @ShowConsole_func);
 
@@ -684,7 +686,16 @@ var
   s: string;
 begin
   s := lua_tostring(L, 1);
-  AddQueueObject(TPrintObject.Create(Main.Canvas, s));
+  AddQueueObject(TPrintObject.Create(Main.Canvas, s, False));
+  Result := 0;
+end;
+
+function TLuaScript.PrintLn_func(L: Plua_State): Integer; cdecl;
+var
+  s: string;
+begin
+  s := lua_tostring(L, 1);
+  AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
   Result := 0;
 end;
 

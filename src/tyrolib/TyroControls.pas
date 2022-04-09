@@ -788,8 +788,8 @@ begin
 end;
 
 initialization
-finalization
   Randomize;
+finalization
   FreeAndNil(Main);
 end.
 

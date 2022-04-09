@@ -143,7 +143,8 @@ type
   TPrintObject = class(TDrawObject)
   public
     FText: String;
-    constructor Create(ACanvas: TTyroCanvas; Text: String);
+    FNewLine: Boolean;
+    constructor Create(ACanvas: TTyroCanvas; Text: String; NewLine: Boolean);
     procedure DoExecute; override;
   end;
 
@@ -526,15 +527,19 @@ end;
 
 { TPrintObject }
 
-constructor TPrintObject.Create(ACanvas: TTyroCanvas; Text: String);
+constructor TPrintObject.Create(ACanvas: TTyroCanvas; Text: String; NewLine: Boolean);
 begin
   inherited Create(ACanvas);
   fText := Text;
+  fNewLine := NewLine;
 end;
 
 procedure TPrintObject.DoExecute;
 begin
-  Main.Console.Writeln(fText);
+  if FNewLine then
+    Main.Console.Writeln(fText)
+  else
+    Main.Console.Write(fText);
 end;
 
 { TDrawTextObject }
