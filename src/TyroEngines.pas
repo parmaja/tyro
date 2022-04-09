@@ -65,7 +65,7 @@ type
 
     procedure RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 
-    procedure ShowWindow(AWidth, AHeight: Integer); override;
+    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); override;
     procedure ShowConsole(AWidth, AHeight: Integer);
     procedure HideConsole;
 
@@ -257,7 +257,7 @@ end;
 procedure TTyroEngine.Draw;
 begin
   if Graphic <> nil then
-    Graphic.Draw;
+    Graphic.PostDraw;
   ThreadSwitch; //Yield
 end;
 
@@ -280,10 +280,10 @@ begin
   FScriptTypes.Add(Item);
 end;
 
-procedure TTyroEngine.ShowWindow(AWidth, AHeight: Integer);
+procedure TTyroEngine.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
 begin
   inherited;
-  Graphic := TTyroTextureCanvas.Create(AWidth, AHeight);
+  Graphic := TTyroTextureCanvas.Create(AWidth, AHeight, True);
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
   Console.BoundsRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
 end;

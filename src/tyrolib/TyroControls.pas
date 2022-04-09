@@ -160,16 +160,16 @@ type
 
   TTyroTextureControl = class(TTyroControl) //Own a texture
   private
-    FCanvas: TTyroTextureCanvas;
-    procedure SetCanvas(AValue: TTyroTextureCanvas);
+    FCanvas: TTyroCanvas;
+    procedure SetCanvas(AValue: TTyroCanvas);
   public
     //TODO
     constructor Create(AParent: TTyroContainer); override;
     destructor Destroy; override;
     procedure Invalidate; override;
-    procedure Draw; virtual;
+    procedure PostDraw; virtual;
     procedure Resize; override;
-    property Canvas: TTyroTextureCanvas read FCanvas write SetCanvas;
+    property Canvas: TTyroCanvas read FCanvas write SetCanvas;
   end;
 
   { TTyroCustomWindow }
@@ -213,6 +213,7 @@ type
     FFPS: Integer;
     FOptions: TTyroMainOptions;
   protected
+    FTextureMode: Boolean;
     IsTerminated: Boolean;
     FCanvasLock: TCriticalSection;
     function CreateCanvas: TTyroCanvas; override;
@@ -220,7 +221,8 @@ type
     constructor Create;
     destructor Destroy; override;
 
-    procedure ShowWindow(AWidth, AHeight: Integer); virtual;
+    //* TextureMode create texture with canvas
+    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); virtual;
     procedure SetFPS(FPS: Integer); virtual;
     procedure HideWindow; virtual;
 
@@ -271,7 +273,7 @@ end;
 
 function TTyroMain.CreateCanvas: TTyroCanvas;
 begin
-  Result := TTyroMainCanvas.Create(Width, Height);
+  Result := TTyroTextureCanvas.Create(Width, Height, FTextureMode);
 end;
 
 destructor TTyroMain.Destroy;
@@ -344,20 +346,23 @@ begin
         if Visible then
         begin
           PrepareDraw;
-          Canvas.BeginDraw;
+          RayLib.BeginDrawing();
           if moOpaque in Options then
             Canvas.Clear;
 
           try
             Paint;
+            Canvas.BeginDraw;
             Draw;
+            Canvas.EndDraw;
+            Canvas.PostDraw;
             if moShowFPS in Options then
               RayLib.DrawFPS(10, 10);
             //Canvas.DrawLine(10, 10, 100, 10, clRed);
             //Canvas.DrawText(2, 2, 'Test', clRed);
 
           finally
-            Canvas.EndDraw;
+            RayLib.EndDrawing();
           end;
         end;
       end;
@@ -371,8 +376,9 @@ begin
     RayLib.CloseWindow();
 end;
 
-procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
+procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
 begin
+  FTextureMode := ATextureMode;
   if Visible then
   begin
     SetBounds(0, 0, AWidth, AHeight);
@@ -412,16 +418,16 @@ end;
 
 { TTyroTextureControl }
 
-procedure TTyroTextureControl.SetCanvas(AValue: TTyroTextureCanvas);
+procedure TTyroTextureControl.SetCanvas(AValue: TTyroCanvas);
 begin
-  if FCanvas =AValue then Exit;
-  FCanvas :=AValue;
+  if FCanvas <> AValue then
+    FCanvas :=AValue;
 end;
 
 constructor TTyroTextureControl.Create(AParent: TTyroContainer);
 begin
   inherited Create(AParent);
-  FCanvas := TTyroTextureCanvas.Create(Width, Height);
+  FCanvas := TTyroTextureCanvas.Create(Width, Height, True);
 end;
 
 destructor TTyroTextureControl.Destroy;
@@ -436,10 +442,9 @@ begin
   Paint(Canvas);
 end;
 
-procedure TTyroTextureControl.Draw;
+procedure TTyroTextureControl.PostDraw;
 begin
-  with Canvas.Texture do
-    DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.width, -texture.height), Vector2Of(0, 0), clWhite);
+  Canvas.PostDraw;
 end;
 
 procedure TTyroTextureControl.Resize;
@@ -774,7 +779,6 @@ begin
       begin
         aControl.Paint(Canvas);
       end;
-
     finally
     end;
   end;
@@ -784,7 +788,7 @@ end;
 
 function TTyroWindow.CreateCanvas: TTyroCanvas;
 begin
-  Result := TTyroTextureCanvas.Create(Width, Height);
+  Result := TTyroTextureCanvas.Create(Width, Height, True);
 end;
 
 initialization

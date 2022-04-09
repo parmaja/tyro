@@ -65,6 +65,7 @@ type
     procedure ResetOrigin;
     procedure BeginDraw; virtual;
     procedure EndDraw; virtual;
+    procedure PostDraw; virtual;
 
     procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
     procedure DrawText(X, Y: Integer; S: utf8string; Color: TColor);
@@ -83,7 +84,6 @@ type
     procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
 
-    procedure Draw; virtual;
     procedure Clear;
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
     property PenWidth: Integer read FPenWidth write SetPenWidth;
@@ -95,24 +95,15 @@ type
 
   TTyroTextureCanvas = class(TTyroCanvas)
   private
+    FTextureMode: Boolean;
     FTexture: TRenderTexture2D;
   public
-    constructor Create(AWidth, AHeight: Integer);
+    constructor Create(AWidth, AHeight: Integer; ATextureMode: Boolean = False);
     destructor Destroy; override;
     procedure BeginDraw; override;
-    procedure Draw; override;
     procedure EndDraw; override;
+    procedure PostDraw; override;
     property Texture: TRenderTexture2D read FTexture;
-  end;
-
-  TTyroMainCanvas = class(TTyroCanvas)
-  private
-  public
-    constructor Create(AWidth, AHeight: Integer);
-    destructor Destroy; override;
-    procedure BeginDraw; override;
-    procedure Draw; override;
-    procedure EndDraw; override;
   end;
 
   function IntToColor(I: integer): TColor;
@@ -377,9 +368,8 @@ begin
   DrawLine(FLastX + FOriginX, FLastY + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
 end;
 
-procedure TTyroCanvas.Draw;
+procedure TTyroCanvas.PostDraw;
 begin
-
 end;
 
 procedure TTyroCanvas.Clear;
@@ -389,65 +379,42 @@ end;
 
 { TTyroTextureCanvas }
 
+{ TTyroTextureCanvas }
+
 procedure TTyroTextureCanvas.BeginDraw;
 begin
   inherited;
-  BeginTextureMode(FTexture);
+  if FTextureMode then
+    RayLib.BeginTextureMode(FTexture);
 end;
 
-constructor TTyroTextureCanvas.Create(AWidth, AHeight: Integer);
+constructor TTyroTextureCanvas.Create(AWidth, AHeight: Integer; ATextureMode: Boolean);
 begin
-  inherited;
-  FTexture := LoadRenderTexture(Width, Height);
+  inherited Create(AWidth, AHeight);
+  FTextureMode := ATextureMode;
+  if FTextureMode then
+    FTexture := LoadRenderTexture(Width, Height);
 end;
 
 destructor TTyroTextureCanvas.Destroy;
 begin
-  UnloadRenderTexture(FTexture);
-  //Finalize(FTexture);
+  if FTextureMode then
+    UnloadRenderTexture(FTexture);
   inherited;
 end;
 
-procedure TTyroTextureCanvas.Draw;
+procedure TTyroTextureCanvas.PostDraw;
 begin
   inherited;
-  with Texture do
-    DrawTextureRec(Texture, TRectangle.Create(0, 0, texture.Width, -texture.height), Vector2Of(0, 0), clWhite);
+  if FTextureMode then
+    with FTexture do
+      RayLib.DrawTextureRec(Texture, TRectangle.Create(0, 0, Texture.Width, -Texture.height), Vector2Of(0, 0), clWhite);
 end;
 
 procedure TTyroTextureCanvas.EndDraw;
 begin
-  inherited;
-  EndTextureMode;
-end;
-
-{ TTyroMainCanvas }
-
-procedure TTyroMainCanvas.BeginDraw;
-begin
-  inherited;
-  BeginDrawing();
-end;
-
-constructor TTyroMainCanvas.Create(AWidth, AHeight: Integer);
-begin
-  inherited;
-end;
-
-destructor TTyroMainCanvas.Destroy;
-begin
-
-  inherited;
-end;
-
-procedure TTyroMainCanvas.Draw;
-begin
-  inherited;
-end;
-
-procedure TTyroMainCanvas.EndDraw;
-begin
-  EndDrawing();
+  if FTextureMode then
+    RayLib.EndTextureMode();
   inherited;
 end;
 

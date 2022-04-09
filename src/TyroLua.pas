@@ -485,6 +485,7 @@ begin
   Colors := TLuaColors.Create(Self);
 
   lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
+  lua_register_table_method(LuaState, 'console', self, 'println', @PrintLn_func);
   lua_register_table_method(LuaState, 'console', self, 'show', @ShowConsole_func);
   lua_register_table_index(LuaState, 'console', Console); //Should be last one
 

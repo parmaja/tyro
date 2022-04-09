@@ -28,9 +28,7 @@ type
     procedure Unload; override;
   end;
 
-
 implementation
-
 
 { TMain }
 
@@ -39,11 +37,11 @@ begin
   inherited;
   Canvas.PenAlpha := 0;
   Canvas.PenColor := clBlack;
-  Canvas.DrawText(30, 30, 'Ready!', clBlack);
+  Canvas.DrawText(30, 30, 'Ready!', clRed);
   if Random(10)<5 then
-    DrawLine(X, y, X+Spacing, Y+Spacing, clWhite)
+    DrawLine(X, y, X+Spacing, Y+Spacing, clBlue)
   else
-    DrawLine(X, y+Spacing, X+Spacing, Y, clWhite);
+    DrawLine(X, y+Spacing, X+Spacing, Y, clBlue);
 
   Inc(X, Spacing);
   if x>Width then
@@ -63,15 +61,17 @@ begin
   Spacing := 10;
   Width := 400;
   Height := 400;
-  ShowWindow(Width, Height);
+  ShowWindow(Width, Height, True);
 end;
 
 procedure TMain.Setup;
 begin
   inherited;
   SetFPS(10);
-  Options := Options - [moOpaque];
+  //Options := Options - [moOpaque];
   Randomize;
+  Canvas.BackColor := clWhite;
+  Canvas.PenColor := clBlack;
   //Options := Options + [moShowFPS];
 end;
 
