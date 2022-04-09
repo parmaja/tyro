@@ -179,12 +179,12 @@ var
   {$endif}
   aData: array of SmallInt;
 begin
-  Wave.SampleCount := Round(Duration * SampleRate);
+  Wave.FrameCount := Round(Duration * SampleRate);
   Wave.SampleRate := SampleRate; // By default 44100 Hz
   Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
   Wave.Channels := 1;                  // By default 1 channel (mono)
   aData := nil;
-  SetLength(aData, Wave.SampleCount);
+  SetLength(aData, Wave.FrameCount);
   Wave.Data := @aData[0];
   if Frequency <> 0 then
   begin
@@ -192,17 +192,17 @@ begin
     {$ifdef FADE}
     WaveSamples := SampleRate div round(Frequency);
     Starting := WaveSamples * 3;
-    Ending := Wave.SampleCount - WaveSamples * 3;
+    Ending := Wave.FrameCount - WaveSamples * 3;
     Delta := 100 / (WaveSamples * 3);
     {$endif}
-    for i := 0 to Wave.SampleCount -1 do
+    for i := 0 to Wave.FrameCount -1 do
     begin
       v := Round(Proc(i, SampleRate, Frequency) * Amplitude);
       {$ifdef FADE}
       if i < Starting then
         v := Round(v * i * Delta / 100);
       if i > Ending then
-        v := Round(v * (Wave.SampleCount - i) * Delta / 100);
+        v := Round(v * (Wave.FrameCount - i) * Delta / 100);
       {$endif}
       aData[i] := v;
     end;

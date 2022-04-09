@@ -25,7 +25,6 @@ uses
   RayLib, RayClasses,
   TyroClasses;
 
-
 type
   {$ifdef FPC}
   TUTF8Char = LCLType.TUTF8Char;
@@ -136,8 +135,8 @@ type
     procedure Hide;
 
     procedure KeyPress(var Key: TUTF8Char); virtual;
-    procedure KeyDown(var Key: word; Shift: TShiftState); virtual;
-    procedure KeyUp(var Key: word; Shift: TShiftState); virtual;
+    procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); virtual;
+    procedure KeyUp(var Key: TKeyboardKey; Shift: TShiftState); virtual;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer); virtual;
     procedure MouseMove(Shift: TShiftState; x, y: integer); virtual;
@@ -665,12 +664,12 @@ begin
 
 end;
 
-procedure TTyroControl.KeyDown(var Key: word; Shift: TShiftState);
+procedure TTyroControl.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
 begin
 
 end;
 
-procedure TTyroControl.KeyUp(var Key: word; Shift: TShiftState);
+procedure TTyroControl.KeyUp(var Key: TKeyboardKey; Shift: TShiftState);
 begin
 
 end;
@@ -790,6 +789,7 @@ end;
 
 initialization
 finalization
+  Randomize;
   FreeAndNil(Main);
 end.
 

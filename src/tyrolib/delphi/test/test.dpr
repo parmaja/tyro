@@ -69,8 +69,6 @@ begin
   inherited;
   SetFPS(10);
   //Options := Options + [moShowFPS];
-
-//  Canvas.BackColor := ;
 end;
 
 procedure TMyMain.Unload;

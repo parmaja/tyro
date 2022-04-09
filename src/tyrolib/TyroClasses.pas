@@ -257,7 +257,7 @@ begin
   else
     Font.LoadDefault;
 
-  SetTextureFilter(Font.Data.texture, FILTER_POINT);
+  SetTextureFilter(Font.Data.texture, TEXTURE_FILTER_POINT);
 
   {BeginTextureMode(FTexture);
   ClearBackground(BackColor);

@@ -191,7 +191,7 @@ end;
 constructor TRayAudio.Create(SampleRate: Cardinal; BitRate: Cardinal; Channels: Cardinal);
 begin
   inherited Create;
-  AudioStream := InitAudioStream(SampleRate, BitRate, Channels);
+  AudioStream := LoadAudioStream(SampleRate, BitRate, Channels);
   Play;
 end;
 
@@ -232,7 +232,7 @@ end;
 destructor TRayAudio.Destroy;
 begin
   inherited Destroy;
-  CloseAudioStream(AudioStream);
+  UnloadAudioStream(AudioStream);
 end;
 
 procedure TRaySound.UpdateData(Data: Pointer; SampleCount: Cardinal);
@@ -309,7 +309,7 @@ end;
 
 function TRayMusic.IsPlaying: Boolean;
 begin
-  Result := IsMusicPlaying(Music);
+  Result := IsMusicStreamPlaying(Music);
 end;
 
 procedure TRayMusic.Stop;

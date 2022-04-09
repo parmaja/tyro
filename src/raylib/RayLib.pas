@@ -8,7 +8,7 @@ unit RayLib;
 {$A8}
 
 {**
- *  RayLib 3.5
+ *  RayLib 4
  *
  *  This file is part of Tyro project, ported from C header raylib.h
  *
@@ -23,19 +23,20 @@ unit RayLib;
 
 {**********************************************************************************************
 *
-*   raylib - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
+*   raylib v4.0 - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
 *
 *   FEATURES:
 *       - NO external dependencies, all required libraries included with raylib
-*       - Multiplatform: Windows, Linux, FreeBSD, OpenBSD, NetBSD, DragonFly, MacOS, UWP, Android, Raspberry Pi, HTML5.
+*       - Multiplatform: Windows, Linux, FreeBSD, OpenBSD, NetBSD, DragonFly,
+*                        MacOS, Haiku, Android, Raspberry Pi, DRM native, HTML5.
 *       - Written in plain C code (C99) in PascalCase/camelCase notation
-*       - Hardware accelerated with OpenGL (1.1, 2.1, 3.3 or ES2 - choose at compile)
+*       - Hardware accelerated with OpenGL (1.1, 2.1, 3.3, 4.3 or ES2 - choose at compile)
 *       - Unique OpenGL abstraction layer (usable as standalone module): [rlgl]
 *       - Multiple Fonts formats supported (TTF, XNA fonts, AngelCode fonts)
 *       - Outstanding texture formats support, including compressed formats (DXT, ETC, ASTC)
 *       - Full 3d support for 3d Shapes, Models, Billboards, Heightmaps and more!
 *       - Flexible Materials system, supporting classic maps and PBR maps
-*       - Skeletal Animation support (CPU bones-based animation)
+*       - Animated 3D models supported (skeletal bones animation) (IQM)
 *       - Shaders support, including Model shaders and Postprocessing shaders
 *       - Powerful math module for Vector, Matrix and Quaternion operations: [raymath]
 *       - Audio loading and playing with streaming support (WAV, OGG, MP3, FLAC, XM, MOD)
@@ -43,29 +44,32 @@ unit RayLib;
 *       - Bindings to multiple programming languages available!
 *
 *   NOTES:
-*       One custom font is loaded by default when InitWindow() [core]
-*       If using OpenGL 3.3 or ES2, one default shader is loaded automatically (internally defined) [rlgl]
-*       If using OpenGL 3.3 or ES2, several vertex buffers (VAO/VBO) are created to manage lines-triangles-quads
+*       - One default Font is loaded on InitWindow()->LoadFontDefault() [core, text]
+*       - One default Texture2D is loaded on rlglInit(), 1x1 white pixel R8G8B8A8 [rlgl] (OpenGL 3.3 or ES2)
+*       - One default Shader is loaded on rlglInit()->rlLoadShaderDefault() [rlgl] (OpenGL 3.3 or ES2)
+*       - One default RenderBatch is loaded on rlglInit()->rlLoadRenderBatch() [rlgl] (OpenGL 3.3 or ES2)
 *
 *   DEPENDENCIES (included):
-*       [core] rglfw (github.com/glfw/glfw) for window/context management and input (only PLATFORM_DESKTOP)
-*       [rlgl] glad (github.com/Dav1dde/glad) for OpenGL 3.3 extensions loading (only PLATFORM_DESKTOP)
-*       [raudio] miniaudio (github.com/dr-soft/miniaudio) for audio device/context management
+*       [rcore] rglfw (Camilla Löwy - github.com/glfw/glfw) for window/context management and input (PLATFORM_DESKTOP)
+*       [rlgl] glad (David Herberth - github.com/Dav1dde/glad) for OpenGL 3.3 extensions loading (PLATFORM_DESKTOP)
+*       [raudio] miniaudio (David Reid - github.com/mackron/miniaudio) for audio device/context management
 *
 *   OPTIONAL DEPENDENCIES (included):
-*       [core] rgif (Charlie Tangora, Ramon Santamaria) for GIF recording
-*       [textures] stb_image (Sean Barret) for images loading (BMP, TGA, PNG, JPEG, HDR...)
-*       [textures] stb_image_write (Sean Barret) for image writting (BMP, TGA, PNG, JPG)
-*       [textures] stb_image_resize (Sean Barret) for image resizing algorithms
-*       [textures] stb_perlin (Sean Barret) for Perlin noise image generation
-*       [text] stb_truetype (Sean Barret) for ttf fonts loading
-*       [text] stb_rect_pack (Sean Barret) for rectangles packing
-*       [models] par_shapes (Philip Rideout) for parametric 3d shapes generation
-*       [models] tinyobj_loader_c (Syoyo Fujita) for models loading (OBJ, MTL)
-*       [models] cgltf (Johannes Kuhlmann) for models loading (glTF)
-*       [raudio] stb_vorbis (Sean Barret) for OGG audio loading
+*       [rcore] msf_gif (Miles Fogle) for GIF recording
+*       [rcore] sinfl (Micha Mettke) for DEFLATE decompression algorythm
+*       [rcore] sdefl (Micha Mettke) for DEFLATE compression algorythm
+*       [rtextures] stb_image (Sean Barret) for images loading (BMP, TGA, PNG, JPEG, HDR...)
+*       [rtextures] stb_image_write (Sean Barret) for image writing (BMP, TGA, PNG, JPG)
+*       [rtextures] stb_image_resize (Sean Barret) for image resizing algorithms
+*       [rtext] stb_truetype (Sean Barret) for ttf fonts loading
+*       [rtext] stb_rect_pack (Sean Barret) for rectangles packing
+*       [rmodels] par_shapes (Philip Rideout) for parametric 3d shapes generation
+*       [rmodels] tinyobj_loader_c (Syoyo Fujita) for models loading (OBJ, MTL)
+*       [rmodels] cgltf (Johannes Kuhlmann) for models loading (glTF)
+*       [raudio] dr_wav (David Reid) for WAV audio file loading
 *       [raudio] dr_flac (David Reid) for FLAC audio file loading
 *       [raudio] dr_mp3 (David Reid) for MP3 audio file loading
+*       [raudio] stb_vorbis (Sean Barret) for OGG audio loading
 *       [raudio] jar_xm (Joshua Reisenauer) for XM audio module loading
 *       [raudio] jar_mod (Joshua Reisenauer) for MOD audio module loading
 *
@@ -75,11 +79,11 @@ unit RayLib;
 *   raylib is licensed under an unmodified zlib/libpng license, which is an OSI-certified,
 *   BSD-like license that allows static linking with closed source software:
 *
-*   Copyright (c) 2013-2020 Ramon Santamaria (@raysan5)
+*   Copyright (c) 2013-2021 Ramon Santamaria (@raysan5)
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
-  *
+*
 *   Permission is granted to anyone to use this software for any purpose, including commercial
 *   applications, and to alter it and redistribute it freely, subject to the following restrictions:
 *
@@ -103,17 +107,25 @@ uses
   Types, Classes, SysUtils,
   mnLibraries; // take it from github/parmaja/minilib
 
+const
+  RAYLIB_VERSION = '4.0';
+
 type
   PPUTF8Char = ^PUTF8Char;
 
   { TRGBAColor }
 
+  // Color, 4 components, R8G8B8A8 (32bit)
   TRGBAColor = record
-    Red, Green, Blue, Alpha: Byte;
+    Red: Byte; // Color red value
+    Green: Byte; // Color green value
+    Blue: Byte; // Color blue value
+    Alpha: Byte; // Color alpha value
   end;
 
   { TColor }
 
+  // Color, 4 components, R8G8B8A8 (32bit)
   //AColor := TColor.Create($010203FF);
   TColor = record
     class operator Implicit(a: Cardinal): TColor;
@@ -153,6 +165,20 @@ type
   end;
 
 const
+  // NOTE: We set some defines with some data types declared by raylib
+  // Other modules (raymath, rlgl) also require some of those types, so,
+  // to be able to use those other modules as standalone (not depending on raylib)
+  // this defines are very useful for internal check and avoid type (re)definitions
+{
+  RL_COLOR_TYPE
+  RL_RECTANGLE_TYPE
+  RL_VECTOR2_TYPE
+  RL_VECTOR3_TYPE
+  RL_VECTOR4_TYPE
+  RL_QUATERNION_TYPE
+  RL_MATRIX_TYPE
+}
+
   clLightgray: TRGBAColor = (Red: 200; Green: 200; Blue: 200; Alpha: 255);   // Light Gray
   clGray:      TRGBAColor = (Red: 130; Green: 130; Blue: 130; Alpha: 255);   // Gray
   clDarkGray:  TRGBAColor = (Red: 80; Green: 80; Blue: 80; Alpha: 255);      // Dark Gray
@@ -186,62 +212,63 @@ type
 
   { TVector2 }
 
+  // Vector2, 2 components
   TVector2 = packed record
-    X: Single;
-    Y: Single;
+    X: Single; // Vector x component
+    Y: Single; // Vector y component
     constructor Create(AX, AY: Single); overload;
     constructor Create(I: Int64); overload;
   end;
   PVector2 = ^TVector2;
 
-  // Vector3 type
-
   { TVector3 }
 
+  // Vector3, 3 components
   TVector3 = packed record
-    x: Single;
-    y: Single;
-    z: Single;
+    x: Single; // Vector x component
+    y: Single; // Vector y component
+    z: Single; // Vector z component
     constructor Create(AX, AY, AZ: Single); overload;
   end;
   PVector3 = ^TVector3;
 
-  // Vector4 type
+  { TVector4 }
+
+  // Vector4, 4 components
   TVector4 = packed record
-    x: Single;
-    y: Single;
-    z: Single;
-    w: Single;
+    x: Single; // Vector x component
+    y: Single; // Vector y component
+    z: Single; // Vector z component
+    w: Single; // Vector w component
   end;
   PVector4 = ^TVector4;
 
-  // Quaternion type, same as Vector4
+  // Quaternion, 4 components (Vector4 alias)
   TQuaternion = PVector4;
 
-  // Matrix type (OpenGL style 4x4 - right handed, column major)
+  // Matrix, 4x4 components, column major, OpenGL style, right handed
   TMatrix = record
-    m0, m4, m8, m12: Single;
-    m1, m5, m9, m13: Single;
-    m2, m6, m10, m14: Single;
-    m3, m7, m11, m15: Single;
+    m0, m4, m8, m12: Single; // Matrix first row (4 components)
+    m1, m5, m9, m13: Single; // Matrix second row (4 components)
+    m2, m6, m10, m14: Single; // Matrix third row (4 components)
+    m3, m7, m11, m15: Single; // Matrix fourth row (4 components)
   end;
-
-  // Rectangle type
+  PMatrix = ^TMatrix;
 
   { TRectangle }
 
+  // Rectangle, 4 components
   TRectangle = packed record
-    X: Single;
-    Y: Single;
-    Width: Single;
-    Height: Single;
+    X: Single;       // Rectangle top-left corner position x
+    Y: Single;       // Rectangle top-left corner position y
+    Width: Single;   // Rectangle width
+    Height: Single;  // Rectangle height
     constructor Create(AX, AY, AWidth, AHeight: Single);
   end;
   PRectangle = ^TRectangle;
   PPRectangle = ^PRectangle;
 
-  // Image type, bpp always RGBA (32bit)
-  // NOTE: Data stored in CPU memory (RAM)
+  // Image, pixel data stored in CPU memory (RAM)
   TImage = packed record
     Data: Pointer;     // Image raw data
     Width: Integer;    // Image base width
@@ -251,8 +278,7 @@ type
   end;
   PImage = ^TImage;
 
-  // Texture type
-  // NOTE: Data stored in GPU memory
+  // Texture, tex data stored in GPU memory (VRAM)
   TTexture = packed record
     ID: Cardinal;      // OpenGL texture id
     Width: Integer;    // Texture base width
@@ -262,91 +288,86 @@ type
   end;
   PTexture = ^TTexture;
 
-  // Texture type, same as Texture2D
+  // Texture2D, same as Texture
   TTexture2D = TTexture;
   PTexture2D = ^PTexture;
 
-  // TextureCubemap type, actually, same as Texture2D
+  // TextureCubemap, same as Texture
   TTextureCubemap = TTexture;
   PTextureCubemap = ^PTexture;
 
-  // RenderTexture type, for texture rendering
-  // RenderTexture type, for texture rendering
+  // RenderTexture, fbo for texture rendering
   TRenderTexture = packed record
-    ID: Cardinal;          // OpenGL Framebuffer Object (FBO) id
+    ID: Cardinal;        // OpenGL Framebuffer Object (FBO) id
     Texture: TTexture;   // Color buffer attachment texture
     Depth: TTexture;     // Depth buffer attachment texture
   end;
   PRenderTexture = ^TRenderTexture;
 
-  // RenderTexture type, same as RenderTexture2D
+  // RenderTexture2D, same as RenderTexture
   TRenderTexture2D = TRenderTexture;
   PRenderTexture2D = ^TRenderTexture;
 
-  // N-Patch layout info
+  // NPatchInfo, n-patch layout info
   TNPatchInfo = packed record
-    Source: TRectangle; // Region in the texture
-    Left: Integer;         // left border offset
-    Top: Integer;          // top border offset
-    Right: Integer;        // right border offset
-    Bottom: Integer;       // bottom border offset
-    AType: Integer;        // layout of the n-patch: 3x3, 1x3 or 3x1
+    Source: TRectangle; // Texture source rectangle
+    Left: Integer;         // Left border offset
+    Top: Integer;          // Top border offset
+    Right: Integer;        // Right border offset
+    Bottom: Integer;       // Bottom border offset
+    AType: Integer;        // Layout of the n-patch: 3x3, 1x3 or 3x1
   end;
   PNPatchInfo = ^TNPatchInfo;
 
-// Font character info
-  TCharInfo = packed record
+  // GlyphInfo, font characters glyphs info
+  TGlyphInfo = packed record
     Value: Integer;    // Character value (Unicode)
     OffsetX: Integer;  // Character offset X when drawing
     OffsetY: Integer;  // Character offset Y when drawing
     AdvanceX: Integer; // Character advance position X
     Image: TImage;     // Character image data
   end;
-  PCharInfo = ^TCharInfo;
+  PGlyphInfo = ^TGlyphInfo;
 
-  // Font type, includes texture and charSet array data
+  // Font, font texture and GlyphInfo array data
   TFont = packed record
-    BaseSize: Integer;
-    CharsCount: Integer;
-    CharsPadding: Integer;
-    Texture: TTexture2D;
-    Recs: PRectangle;
-    Chars: PCharInfo;
+    BaseSize: Integer;       // Base size (default chars height)
+    GlyphCount: Integer;     // Number of glyph characters
+    GlyphPadding: Integer;   // Padding around the glyph characters
+    Texture: TTexture2D;     // Texture atlas containing the glyphs
+    Recs: PRectangle;        // Rectangles in texture for the glyphs
+    Glyphs: PGlyphInfo;      // Glyphs info data
   end;
   PFont = ^TFont;
 
-  TSpriteFont = TFont; // SpriteFont type fallback, defaults to Font
-  PSpriteFont = ^TSpriteFont;
-
-  // Camera type, defines a camera position/orientation in 3d space
+  // Camera, defines position/orientation in 3d space
   TCamera3D = packed record
     Position: TVector3;    // Camera position
     Target: TVector3;      // Camera target it looks-at
     Up: TVector3;          // Camera up vector (rotation over its axis)
     Fovy: Single;          // Camera field-of-view apperture in Y (degrees) in perspective, used as near plane width in orthographic
-    AType: Integer;        // Camera type, defines projection type: TCamera_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
+    Projection: Integer;   // Camera projection: CAMERA_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
   end;
   PCamera3D = ^TCamera3D;
 
   TCamera = TCamera3D;      // Camera type fallback, defaults to Camera3D
   PCamera = ^TCamera;
 
-  // Camera2D type, defines a 2d camera
+  // Camera2D, defines position/orientation in 2d space
   TCamera2D = packed record
-    Offset: TVector2;
-    Target: TVector2;
-    Rotation: Single;
-    Zoom: Single;
+    Offset: TVector2;       // Camera offset (displacement from target)
+    Target: TVector2;       // Camera target (rotation and zoom origin)
+    Rotation: Single;       // Camera rotation in degrees
+    Zoom: Single;           // Camera zoom (scaling), should be 1.0f by default
   end;
   PCamera2D = ^TCamera2D;
 
-  // Vertex data definning a mesh
-  // NOTE: Data stored in CPU memory (and GPU)
+  // Mesh, vertex data and vao/vbo
   TMesh = packed record
       VertexCount: Integer;        // Number of vertices stored in arrays
       TriangleCount: integer;      // Number of triangles stored (indexed or not)
 
-      // Default vertex data
+      // Vertex attributes data
       Vertices: PSingle;        // Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
       Texcoords: PSingle;       // Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
       Texcoords2: PSingle;      // Vertex second texture coordinates (useful for lightmaps) (shader-location = 5)
@@ -367,15 +388,14 @@ type
   end;
   PMesh = TMesh;
 
-  // Shader type (generic)
+  // Shader
   TShader = packed record
     ID: Cardinal;         // Shader program id
-    Locs: PInteger;       // Shader locations array (MAX_SHADER_LOCATIONS)
+    Locs: PInteger;       // Shader locations array (RL_MAX_SHADER_LOCATIONS)
   end;
   PShader = ^TShader;
 
-
-  // Material texture map
+  // MaterialMap
   TMaterialMap = packed record
     Texture: TTexture2D;   // Material map texture
     Color: TColor;         // Material map color
@@ -383,15 +403,15 @@ type
   end;
   PMaterialMap = ^TMaterialMap;
 
-  // Material type (generic)
+  // Material, includes shader and maps
   TMaterial = packed record
-    Shader: TShader;         // Material shader
+    Shader: TShader;        // Material shader
     Maps: PMaterialMap;     // Material maps array (MAX_MATERIAL_MAPS)
-    Params: PSingle;         // Material generic parameters (if required)
+    Params: array[0..3] of Single;   // Material generic parameters (if required)
   end;
   PMaterial = ^TMaterial;
 
-  // Transformation properties
+  // Transform, vectex transformation data
   TTransform = packed record
     Translation: TVector3;   // Translation
     Rotation: TQuaternion;   // Rotation
@@ -400,14 +420,14 @@ type
   PTransform = ^TTransform;
   PPTransform = ^PTransform;
 
-  // Bone information
+  // Bone, skeletal animation bone
   TBoneInfo = packed record
-    Name: array[0..31] of AnsiChar;
-    Parent: Integer;
+    Name: array[0..31] of AnsiChar;  // Bone name
+    Parent: Integer;                 // Bone parent
   end;
   PBoneInfo = ^TBoneInfo;
 
-  // Model type
+  // Model, meshes, materials and animation data
   TModel = packed record
     Transform: TMatrix;        // Local transform matrix
 
@@ -425,7 +445,7 @@ type
   end;
   PModel = ^TModel;
 
-  // Model animation
+  // ModelAnimation
   TModelAnimation = packed record
     BoneCount: Integer;        // Number of bones
     FrameCount: Integer;       // Number of animation frames
@@ -435,35 +455,35 @@ type
   end;
   PModelAnimation = ^TModelAnimation;
 
-  // Ray type (useful for raycast)
+  // Ray, ray for raycasting
   TRay = packed record
     Position: TVector3;        // Ray position (origin)
     Direction: TVector3;       // Ray direction
   end;
   PRay = ^TRay;
 
-  // Raycast hit information
-  TRayHitInfo = packed record
+  // RayCollision, ray hit information
+  TRayCollision = packed record
     Hit: Boolean;              // Did the ray hit something?
     Distance: Single;          // Distance to nearest hit
-    position: TVector3;        // Position of nearest hit
-    normal: TVector3;          // Surface normal of hit
+    Point: TVector3;           // Point of nearest hit
+    Normal: TVector3;          // Surface normal of hit
   end;
-  PRayHitInfo = ^TRayHitInfo;
+  PRayCollision = ^TRayCollision;
 
-  // Bounding box type
+  // BoundingBox
   TBoundingBox = packed record
     Min: TVector3;             // Minimum vertex box-corner
     Max: TVector3;             // Maximum vertex box-corner
   end;
   PBoundingBox = ^TBoundingBox;
 
-  // Wave type, defines audio wave data
+  // Wave, audio wave data
   TWave = packed record
-    SampleCount: Cardinal;     // Total number of samples
+    FrameCount: Cardinal;      // Total number of frames (considering channels)
     SampleRate: Cardinal;      // Frequency (samples per second)
     SampleSize: Cardinal;      // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
-    Channels: Cardinal;        // Number of channels (1-mono, 2-stereo)
+    Channels: Cardinal;        // Number of channels (1-mono, 2-stereo, ...)
     Data: Pointer;             // Buffer data pointer
   end;
   PWave = ^TWave;
@@ -473,50 +493,62 @@ type
   end;
   PrAudioBuffer = ^TrAudioBuffer;
 
-  // Audio stream type
-  // NOTE: Useful to create custom audio streams not bound to a specific file
+  // AudioStream, custom audio stream
   TAudioStream = packed record
     Buffer: PrAudioBuffer;     // Pointer to internal data used by the audio system
 
     SampleRate: Cardinal;       // Frequency (samples per second)
     SampleSize: Cardinal;       // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
-    Channels: Cardinal;         // Number of channels (1-mono, 2-stereo)
+    Channels: Cardinal;         // Number of channels (1-mono, 2-stereo, ...)
   end;
   PAudioStream = ^TAudioStream;
 
-  // Sound source type
+  // Sound
   TSound = packed record
     Stream: TAudioStream;       // Audio stream
-    SampleCount: Cardinal;     // Total number of samples
+    FrameCount: Cardinal;       // Total number of frames (considering channels)
   end;
   PSound = ^TSound;
 
-  // Music stream type (audio file streaming from memory)
-  // NOTE: Anything longer than ~10 seconds should be streamed
+  // Music, audio stream, anything longer than ~10 seconds should be streamed
   TMusic = packed record
     Stream: TAudioStream;      // Audio stream
-    SampleCount: Cardinal;     // Total number of samples
-    Looping: Boolean;           // Music looping enable
+    FrameCount: Cardinal;      // Total number of frames (considering channels)
+    Looping: Boolean;          // Music looping enable
 
     CtxType: Integer;          // Type of music context (audio filetype)
     CtxData: Pointer;          // Audio context data, depends on type
   end;
   PMusic = ^TMusic;
 
-  // Head-Mounted-Display device parameters
+  // VrDeviceInfo, Head-Mounted-Display device parameters
   TVrDeviceInfo = packed record
-    hResolution: Integer;                            // HMD horizontal resolution in pixels
-    vResolution: Integer;                            // HMD vertical resolution in pixels
-    hScreenSize: Single;                             // HMD horizontal size in meters
-    vScreenSize: Single;                             // HMD vertical size in meters
-    vScreenCenter: Single;                           // HMD screen center in meters
-    EyeToScreenDistance: Single;                     // HMD distance between eye and display in meters
-    LensSeparationDistance: Single;                  // HMD lens separation distance in meters
-    InterpupillaryDistance: Single;                  // HMD IPD (distance between pupils) in meters
-    LensDistortionValues: array[0..3] of Single;     // HMD lens distortion constant parameters
-    ChromaAbCorrection: array[0..3] of Single;       // HMD chromatic aberration correction parameters
+    hResolution: Integer;                            // Horizontal resolution in pixels
+    vResolution: Integer;                            // Vertical resolution in pixels
+    hScreenSize: Single;                             // Horizontal size in meters
+    vScreenSize: Single;                             // Vertical size in meters
+    vScreenCenter: Single;                           // Screen center in meters
+    EyeToScreenDistance: Single;                     // Distance between eye and display in meters
+    LensSeparationDistance: Single;                  // Lens separation distance in meters
+    InterpupillaryDistance: Single;                  // IPD (distance between pupils) in meters
+    LensDistortionValues: array[0..3] of Single;     // Lens distortion constant parameters
+    ChromaAbCorrection: array[0..3] of Single;       // Chromatic aberration correction parameters
   end;
   PVrDeviceInfo = ^TVrDeviceInfo;
+
+  // VrStereoConfig, VR stereo rendering configuration for simulator
+  TVrStereoConfig = packed record
+      projection: array[0..1] of TMatrix;           // VR projection matrices (per eye)
+      ViewOffset: array[0..1] of TMatrix;           // VR view offset matrices (per eye)
+      LeftLensCenter: array[0..1] of Single;        // VR left lens center
+      RightLensCenter: array[0..1] of Single;       // VR right lens center
+      LeftScreenCenter: array[0..1] of Single;      // VR left screen center
+      RightScreenCenter: array[0..1] of Single;     // VR right screen center
+      Scale: array[0..1] of Single;                 // VR distortion scale
+      ScaleIn: array[0..1] of Single;               // VR distortion scale in
+  end;
+  PVrStereoConfig = ^TVrStereoConfig;
+
 
   //----------------------------------------------------------------------------------
   // Enumerators Definition
@@ -524,7 +556,7 @@ type
   // System/Window config flags
   // NOTE: Every bit registers one state (use it with bit masks)
   // By default all flags are set to 0
-  TConfigFlag = (
+  TConfigFlags = (
     FLAG_FULLSCREEN_MODE    = $00000002,   // Set to run program in fullscreen
     FLAG_WINDOW_RESIZABLE   = $00000004,   // Set to allow resizable window
     FLAG_WINDOW_UNDECORATED = $00000008,   // Set to disable window decoration (frame and buttons)
@@ -541,253 +573,243 @@ type
     FLAG_INTERLACED_HINT    = $00010000    // Set to try enabling interlaced video format (for V3D)
   );
 
-  // Trace log type
-  TTraceLogType = (
+  // Trace log level
+  // NOTE: Organized by priority level
+  TTraceLogLevel = (
     LOG_ALL = 0,        // Display all logs
-    LOG_TRACE,
-    LOG_DEBUG,
-    LOG_INFO,
-    LOG_WARNING,
-    LOG_ERROR,
-    LOG_FATAL,
+    LOG_TRACE,          // Trace logging, intended for internal use only
+    LOG_DEBUG,          // Debug logging, used for internal debugging, it should be disabled on release builds
+    LOG_INFO,           // Info logging, used for program execution info
+    LOG_WARNING,        // Warning logging, used on recoverable failures
+    LOG_ERROR,          // Error logging, used on unrecoverable failures
+    LOG_FATAL,          // Fatal logging, used to abort program: exit(EXIT_FAILURE)
     LOG_NONE            // Disable logging
   );
-  TTraceLogTypes = set of TTraceLogType;
+  TTraceLogLevels = set of TTraceLogLevel;
+  PTraceLogLevels = ^TTraceLogLevels;
 
-const
-  // Keyboard keys (US keyboard layout)
-  // NOTE: Use GetKeyPressed() to allow redefining
-  // required keys for alternative layouts
-  KEY_APOSTROPHE      = 39;
-  KEY_COMMA           = 44;
-  KEY_MINUS           = 45;
-  KEY_PERIOD          = 46;
-  KEY_SLASH           = 47;
-  KEY_ZERO            = 48;
-  KEY_ONE             = 49;
-  KEY_TWO             = 50;
-  KEY_THREE           = 51;
-  KEY_FOUR            = 52;
-  KEY_FIVE            = 53;
-  KEY_SIX             = 54;
-  KEY_SEVEN           = 55;
-  KEY_EIGHT           = 56;
-  KEY_NINE            = 57;
-  KEY_SEMICOLON       = 59;
-  KEY_EQUAL           = 61;
-  KEY_A               = 65;
-  KEY_B               = 66;
-  KEY_C               = 67;
-  KEY_D               = 68;
-  KEY_E               = 69;
-  KEY_F               = 70;
-  KEY_G               = 71;
-  KEY_H               = 72;
-  KEY_I               = 73;
-  KEY_J               = 74;
-  KEY_K               = 75;
-  KEY_L               = 76;
-  KEY_M               = 77;
-  KEY_N               = 78;
-  KEY_O               = 79;
-  KEY_P               = 80;
-  KEY_Q               = 81;
-  KEY_R               = 82;
-  KEY_S               = 83;
-  KEY_T               = 84;
-  KEY_U               = 85;
-  KEY_V               = 86;
-  KEY_W               = 87;
-  KEY_X               = 88;
-  KEY_Y               = 89;
-  KEY_Z               = 90;
-
-  // Function keys
-  KEY_SPACE           = 32;
-  KEY_ESCAPE          = 256;
-  KEY_ENTER           = 257;
-  KEY_TAB             = 258;
-  KEY_BACKSPACE       = 259;
-  KEY_INSERT          = 260;
-  KEY_DELETE          = 261;
-  KEY_RIGHT           = 262;
-  KEY_LEFT            = 263;
-  KEY_DOWN            = 264;
-  KEY_UP              = 265;
-  KEY_PAGE_UP         = 266;
-  KEY_PAGE_DOWN       = 267;
-  KEY_HOME            = 268;
-  KEY_END             = 269;
-  KEY_CAPS_LOCK       = 280;
-  KEY_SCROLL_LOCK     = 281;
-  KEY_NUM_LOCK        = 282;
-  KEY_PRINT_SCREEN    = 283;
-  KEY_PAUSE           = 284;
-  KEY_F1              = 290;
-  KEY_F2              = 291;
-  KEY_F3              = 292;
-  KEY_F4              = 293;
-  KEY_F5              = 294;
-  KEY_F6              = 295;
-  KEY_F7              = 296;
-  KEY_F8              = 297;
-  KEY_F9              = 298;
-  KEY_F10             = 299;
-  KEY_F11             = 300;
-  KEY_F12             = 301;
-  KEY_LEFT_SHIFT      = 340;
-  KEY_LEFT_CONTROL    = 341;
-  KEY_LEFT_ALT        = 342;
-  KEY_LEFT_SUPER      = 343;
-  KEY_RIGHT_SHIFT     = 344;
-  KEY_RIGHT_CONTROL   = 345;
-  KEY_RIGHT_ALT       = 346;
-  KEY_RIGHT_SUPER     = 347;
-  KEY_KB_MENU         = 348;
-  KEY_LEFT_BRACKET    = 91;
-  KEY_BACKSLASH       = 92;
-  KEY_RIGHT_BRACKET   = 93;
-  KEY_GRAVE           = 96;
-
-  // Keypad keys
-  KEY_KP_0            = 320;
-  KEY_KP_1            = 321;
-  KEY_KP_2            = 322;
-  KEY_KP_3            = 323;
-  KEY_KP_4            = 324;
-  KEY_KP_5            = 325;
-  KEY_KP_6            = 326;
-  KEY_KP_7            = 327;
-  KEY_KP_8            = 328;
-  KEY_KP_9            = 329;
-  KEY_KP_DECIMAL      = 330;
-  KEY_KP_DIVIDE       = 331;
-  KEY_KP_MULTIPLY     = 332;
-  KEY_KP_SUBTRACT     = 333;
-  KEY_KP_ADD          = 334;
-  KEY_KP_ENTER        = 335;
-  KEY_KP_EQUAL        = 336;
+//TODO zaher, convert to set, TKeyboardKey
+  TKeyboardKey = (
+    KEY_NULL            = 0,        // Key: NULL, used for no key pressed
+    KEY_APOSTROPHE      = 39,       // Key: '
+    KEY_COMMA           = 44,       // Key: ,
+    KEY_MINUS           = 45,       // Key: -
+    KEY_PERIOD          = 46,       // Key: .
+    KEY_SLASH           = 47,       // Key: /
+    KEY_ZERO            = 48,       // Key: 0
+    KEY_ONE             = 49,       // Key: 1
+    KEY_TWO             = 50,       // Key: 2
+    KEY_THREE           = 51,       // Key: 3
+    KEY_FOUR            = 52,       // Key: 4
+    KEY_FIVE            = 53,       // Key: 5
+    KEY_SIX             = 54,       // Key: 6
+    KEY_SEVEN           = 55,       // Key: 7
+    KEY_EIGHT           = 56,       // Key: 8
+    KEY_NINE            = 57,       // Key: 9
+    KEY_SEMICOLON       = 59,       // Key: ;
+    KEY_EQUAL           = 61,       // Key: =
+    KEY_A               = 65,       // Key: A | a
+    KEY_B               = 66,       // Key: B | b
+    KEY_C               = 67,       // Key: C | c
+    KEY_D               = 68,       // Key: D | d
+    KEY_E               = 69,       // Key: E | e
+    KEY_F               = 70,       // Key: F | f
+    KEY_G               = 71,       // Key: G | g
+    KEY_H               = 72,       // Key: H | h
+    KEY_I               = 73,       // Key: I | i
+    KEY_J               = 74,       // Key: J | j
+    KEY_K               = 75,       // Key: K | k
+    KEY_L               = 76,       // Key: L | l
+    KEY_M               = 77,       // Key: M | m
+    KEY_N               = 78,       // Key: N | n
+    KEY_O               = 79,       // Key: O | o
+    KEY_P               = 80,       // Key: P | p
+    KEY_Q               = 81,       // Key: Q | q
+    KEY_R               = 82,       // Key: R | r
+    KEY_S               = 83,       // Key: S | s
+    KEY_T               = 84,       // Key: T | t
+    KEY_U               = 85,       // Key: U | u
+    KEY_V               = 86,       // Key: V | v
+    KEY_W               = 87,       // Key: W | w
+    KEY_X               = 88,       // Key: X | x
+    KEY_Y               = 89,       // Key: Y | y
+    KEY_Z               = 90,       // Key: Z | z
+    KEY_LEFT_BRACKET    = 91,       // Key: [
+    KEY_BACKSLASH       = 92,       // Key: '\'
+    KEY_RIGHT_BRACKET   = 93,       // Key: ]
+    KEY_GRAVE           = 96,       // Key: `
+    // Function keys
+    KEY_SPACE           = 32,       // Key: Space
+    KEY_ESCAPE          = 256,      // Key: Esc
+    KEY_ENTER           = 257,      // Key: Enter
+    KEY_TAB             = 258,      // Key: Tab
+    KEY_BACKSPACE       = 259,      // Key: Backspace
+    KEY_INSERT          = 260,      // Key: Ins
+    KEY_DELETE          = 261,      // Key: Del
+    KEY_RIGHT           = 262,      // Key: Cursor right
+    KEY_LEFT            = 263,      // Key: Cursor left
+    KEY_DOWN            = 264,      // Key: Cursor down
+    KEY_UP              = 265,      // Key: Cursor up
+    KEY_PAGE_UP         = 266,      // Key: Page up
+    KEY_PAGE_DOWN       = 267,      // Key: Page down
+    KEY_HOME            = 268,      // Key: Home
+    KEY_END             = 269,      // Key: End
+    KEY_CAPS_LOCK       = 280,      // Key: Caps lock
+    KEY_SCROLL_LOCK     = 281,      // Key: Scroll down
+    KEY_NUM_LOCK        = 282,      // Key: Num lock
+    KEY_PRINT_SCREEN    = 283,      // Key: Print screen
+    KEY_PAUSE           = 284,      // Key: Pause
+    KEY_F1              = 290,      // Key: F1
+    KEY_F2              = 291,      // Key: F2
+    KEY_F3              = 292,      // Key: F3
+    KEY_F4              = 293,      // Key: F4
+    KEY_F5              = 294,      // Key: F5
+    KEY_F6              = 295,      // Key: F6
+    KEY_F7              = 296,      // Key: F7
+    KEY_F8              = 297,      // Key: F8
+    KEY_F9              = 298,      // Key: F9
+    KEY_F10             = 299,      // Key: F10
+    KEY_F11             = 300,      // Key: F11
+    KEY_F12             = 301,      // Key: F12
+    KEY_LEFT_SHIFT      = 340,      // Key: Shift left
+    KEY_LEFT_CONTROL    = 341,      // Key: Control left
+    KEY_LEFT_ALT        = 342,      // Key: Alt left
+    KEY_LEFT_SUPER      = 343,      // Key: Super left
+    KEY_RIGHT_SHIFT     = 344,      // Key: Shift right
+    KEY_RIGHT_CONTROL   = 345,      // Key: Control right
+    KEY_RIGHT_ALT       = 346,      // Key: Alt right
+    KEY_RIGHT_SUPER     = 347,      // Key: Super right
+    KEY_KB_MENU         = 348,      // Key: KB menu
+    // Keypad keys
+    KEY_KP_0            = 320,      // Key: Keypad 0
+    KEY_KP_1            = 321,      // Key: Keypad 1
+    KEY_KP_2            = 322,      // Key: Keypad 2
+    KEY_KP_3            = 323,      // Key: Keypad 3
+    KEY_KP_4            = 324,      // Key: Keypad 4
+    KEY_KP_5            = 325,      // Key: Keypad 5
+    KEY_KP_6            = 326,      // Key: Keypad 6
+    KEY_KP_7            = 327,      // Key: Keypad 7
+    KEY_KP_8            = 328,      // Key: Keypad 8
+    KEY_KP_9            = 329,      // Key: Keypad 9
+    KEY_KP_DECIMAL      = 330,      // Key: Keypad .
+    KEY_KP_DIVIDE       = 331,      // Key: Keypad /
+    KEY_KP_MULTIPLY     = 332,      // Key: Keypad *
+    KEY_KP_SUBTRACT     = 333,      // Key: Keypad -
+    KEY_KP_ADD          = 334,      // Key: Keypad +
+    KEY_KP_ENTER        = 335,      // Key: Keypad Enter
+    KEY_KP_EQUAL        = 336,      // Key: Keypad =
+    // Android key buttons
+    KEY_BACK            = 4,        // Key: Android back button
+    KEY_MENU            = 82,       // Key: Android menu button
+    KEY_VOLUME_UP       = 24,       // Key: Android volume up button
+    KEY_VOLUME_DOWN     = 25        // Key: Android volume down button
+  );
 
 type
-  // Android buttons
-  TAndroidButton = (
-    KEY_BACK            = 4,
-    KEY_VOLUME_UP       = 24,
-    KEY_VOLUME_DOWN     = 25,
-    KEY_MENU            = 82
-  );
-
   // Mouse buttons
   TMouseButton = (
-    MOUSE_LEFT_BUTTON   = 0,
-    MOUSE_RIGHT_BUTTON  = 1,
-    MOUSE_MIDDLE_BUTTON = 2
+    MOUSE_BUTTON_LEFT    = 0,       // Mouse button left
+    MOUSE_BUTTON_RIGHT   = 1,       // Mouse button right
+    MOUSE_BUTTON_MIDDLE  = 2,       // Mouse button middle (pressed wheel)
+    MOUSE_BUTTON_SIDE    = 3,       // Mouse button side (advanced mouse device)
+    MOUSE_BUTTON_EXTRA   = 4,       // Mouse button extra (advanced mouse device)
+    MOUSE_BUTTON_FORWARD = 5,       // Mouse button fordward (advanced mouse device)
+    MOUSE_BUTTON_BACK    = 6       // Mouse button back (advanced mouse device)
   );
 
-  // Mouse cursor types
+  // Mouse cursor
   TMouseCursor = (
-    MOUSE_CURSOR_DEFAULT       = 0,
-    MOUSE_CURSOR_ARROW         = 1,
-    MOUSE_CURSOR_IBEAM         = 2,
-    MOUSE_CURSOR_CROSSHAIR     = 3,
-    MOUSE_CURSOR_POINTING_HAND = 4,
-    MOUSE_CURSOR_RESIZE_EW     = 5,     // The horizontal resize/move arrow shape
-    MOUSE_CURSOR_RESIZE_NS     = 6,     // The vertical resize/move arrow shape
-    MOUSE_CURSOR_RESIZE_NWSE   = 7,     // The top-left to bottom-right diagonal resize/move arrow shape
+    MOUSE_CURSOR_DEFAULT       = 0,     // Default pointer shape
+    MOUSE_CURSOR_ARROW         = 1,     // Arrow shape
+    MOUSE_CURSOR_IBEAM         = 2,     // Text writing cursor shape
+    MOUSE_CURSOR_CROSSHAIR     = 3,     // Cross shape
+    MOUSE_CURSOR_POINTING_HAND = 4,     // Pointing hand cursor
+    MOUSE_CURSOR_RESIZE_EW     = 5,     // Horizontal resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NS     = 6,     // Vertical resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NWSE   = 7,     // Top-left to bottom-right diagonal resize/move arrow shape
     MOUSE_CURSOR_RESIZE_NESW   = 8,     // The top-right to bottom-left diagonal resize/move arrow shape
     MOUSE_CURSOR_RESIZE_ALL    = 9,     // The omni-directional resize/move cursor shape
     MOUSE_CURSOR_NOT_ALLOWED   = 10     // The operation-not-allowed shape
   );
 
-  // Gamepad number
-  TGamepadNumber = (
-      GAMEPAD_PLAYER1     = 0,
-      GAMEPAD_PLAYER2     = 1,
-      GAMEPAD_PLAYER3     = 2,
-      GAMEPAD_PLAYER4     = 3
-  );
-
   // Gamepad Buttons
-  TGamepadButto = (
-      // This is here just for error checking
-      GAMEPAD_BUTTON_UNKNOWN = 0,
-
-      // This is normally a DPAD
-      GAMEPAD_BUTTON_LEFT_FACE_UP,
-      GAMEPAD_BUTTON_LEFT_FACE_RIGHT,
-      GAMEPAD_BUTTON_LEFT_FACE_DOWN,
-      GAMEPAD_BUTTON_LEFT_FACE_LEFT,
-
-      // This normally corresponds with PlayStation and Xbox controllers
-      // XBOX: [Y,X,A,B]
-      // PS3: [Triangle,Square,Cross,Circle]
-      // No support for 6 button controllers though..
-      GAMEPAD_BUTTON_RIGHT_FACE_UP,
-      GAMEPAD_BUTTON_RIGHT_FACE_RIGHT,
-      GAMEPAD_BUTTON_RIGHT_FACE_DOWN,
-      GAMEPAD_BUTTON_RIGHT_FACE_LEFT,
-
-      // Triggers
-      GAMEPAD_BUTTON_LEFT_TRIGGER_1,
-      GAMEPAD_BUTTON_LEFT_TRIGGER_2,
-      GAMEPAD_BUTTON_RIGHT_TRIGGER_1,
-      GAMEPAD_BUTTON_RIGHT_TRIGGER_2,
-
-      // These are buttons in the center of the gamepad
-      GAMEPAD_BUTTON_MIDDLE_LEFT,     //PS3 Select
-      GAMEPAD_BUTTON_MIDDLE,          //PS Button/XBOX Button
-      GAMEPAD_BUTTON_MIDDLE_RIGHT,    //PS3 Start
-
-      // These are the joystick press in buttons
-      GAMEPAD_BUTTON_LEFT_THUMB,
-      GAMEPAD_BUTTON_RIGHT_THUMB
+  TGamepadButton = (
+    GAMEPAD_BUTTON_UNKNOWN = 0,         // Unknown button, just for error checking
+    GAMEPAD_BUTTON_LEFT_FACE_UP,        // Gamepad left DPAD up button
+    GAMEPAD_BUTTON_LEFT_FACE_RIGHT,     // Gamepad left DPAD right button
+    GAMEPAD_BUTTON_LEFT_FACE_DOWN,      // Gamepad left DPAD down button
+    GAMEPAD_BUTTON_LEFT_FACE_LEFT,      // Gamepad left DPAD left button
+    GAMEPAD_BUTTON_RIGHT_FACE_UP,       // Gamepad right button up (i.e. PS3: Triangle, Xbox: Y)
+    GAMEPAD_BUTTON_RIGHT_FACE_RIGHT,    // Gamepad right button right (i.e. PS3: Square, Xbox: X)
+    GAMEPAD_BUTTON_RIGHT_FACE_DOWN,     // Gamepad right button down (i.e. PS3: Cross, Xbox: A)
+    GAMEPAD_BUTTON_RIGHT_FACE_LEFT,     // Gamepad right button left (i.e. PS3: Circle, Xbox: B)
+    GAMEPAD_BUTTON_LEFT_TRIGGER_1,      // Gamepad top/back trigger left (first), it could be a trailing button
+    GAMEPAD_BUTTON_LEFT_TRIGGER_2,      // Gamepad top/back trigger left (second), it could be a trailing button
+    GAMEPAD_BUTTON_RIGHT_TRIGGER_1,     // Gamepad top/back trigger right (one), it could be a trailing button
+    GAMEPAD_BUTTON_RIGHT_TRIGGER_2,     // Gamepad top/back trigger right (second), it could be a trailing button
+    GAMEPAD_BUTTON_MIDDLE_LEFT,         // Gamepad center buttons, left one (i.e. PS3: Select)
+    GAMEPAD_BUTTON_MIDDLE,              // Gamepad center buttons, middle one (i.e. PS3: PS, Xbox: XBOX)
+    GAMEPAD_BUTTON_MIDDLE_RIGHT,        // Gamepad center buttons, right one (i.e. PS3: Start)
+    GAMEPAD_BUTTON_LEFT_THUMB,          // Gamepad joystick pressed button left
+    GAMEPAD_BUTTON_RIGHT_THUMB          // Gamepad joystick pressed button right
   );
 
   // Gamepad axis
   TGamepadAxis = (
-    // This is here just for error checking
-    GAMEPAD_AXIS_UNKNOWN = 0,
-
-    // Left stick
-    GAMEPAD_AXIS_LEFT_X,
-    GAMEPAD_AXIS_LEFT_Y,
-
-    // Right stick
-    GAMEPAD_AXIS_RIGHT_X,
-    GAMEPAD_AXIS_RIGHT_Y,
-
-    // Pressure levels for the back triggers
-    GAMEPAD_AXIS_LEFT_TRIGGER,      // [1..-1] (pressure-level)
-    GAMEPAD_AXIS_RIGHT_TRIGGER      // [1..-1] (pressure-level)
+    GAMEPAD_AXIS_LEFT_X        = 0,     // Gamepad left stick X axis
+    GAMEPAD_AXIS_LEFT_Y        = 1,     // Gamepad left stick Y axis
+    GAMEPAD_AXIS_RIGHT_X       = 2,     // Gamepad right stick X axis
+    GAMEPAD_AXIS_RIGHT_Y       = 3,     // Gamepad right stick Y axis
+    GAMEPAD_AXIS_LEFT_TRIGGER  = 4,     // Gamepad back trigger left, pressure level: [1..-1]
+    GAMEPAD_AXIS_RIGHT_TRIGGER = 5      // Gamepad back trigger right, pressure level: [1..-1]
   );
 
-  // Shader location point
+  // Material map index
+  TMaterialMapIndex = (
+      MATERIAL_MAP_ALBEDO  = 0,     // Albedo material (same as: MATERIAL_MAP_DIFFUSE)
+      MATERIAL_MAP_METALNESS,         // Metalness material (same as: MATERIAL_MAP_SPECULAR)
+      MATERIAL_MAP_NORMAL,            // Normal material
+      MATERIAL_MAP_ROUGHNESS,         // Roughness material
+      MATERIAL_MAP_OCCLUSION,         // Ambient occlusion material
+      MATERIAL_MAP_EMISSION,          // Emission material
+      MATERIAL_MAP_HEIGHT,            // Heightmap material
+      MATERIAL_MAP_CUBEMAP,           // Cubemap material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+      MATERIAL_MAP_IRRADIANCE,        // Irradiance material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+      MATERIAL_MAP_PREFILTER,         // Prefilter material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+      MATERIAL_MAP_BRDF               // Brdf material
+  );
+
+  //MATERIAL_MAP_DIFFUSE  =    MATERIAL_MAP_ALBEDO;
+  //MATERIAL_MAP_SPECULAR =    MATERIAL_MAP_METALNESS;
+
+  // Shader location index
   TShaderLocationIndex = (
-    LOC_VERTEX_POSITION = 0,
-    LOC_VERTEX_TEXCOORD01,
-    LOC_VERTEX_TEXCOORD02,
-    LOC_VERTEX_NORMAL,
-    LOC_VERTEX_TANGENT,
-    LOC_VERTEX_COLOR,
-    LOC_MATRIX_MVP,
-    LOC_MATRIX_MODEL,
-    LOC_MATRIX_VIEW,
-    LOC_MATRIX_PROJECTION,
-    LOC_VECTOR_VIEW,
-    LOC_COLOR_DIFFUSE,
-    LOC_COLOR_SPECULAR,
-    LOC_COLOR_AMBIENT,
-    LOC_MAP_ALBEDO,          // LOC_MAP_DIFFUSE
-    LOC_MAP_METALNESS,       // LOC_MAP_SPECULAR
-    LOC_MAP_NORMAL,
-    LOC_MAP_ROUGHNESS,
-    LOC_MAP_OCCLUSION,
-    LOC_MAP_EMISSION,
-    LOC_MAP_HEIGHT,
-    LOC_MAP_CUBEMAP,
-    LOC_MAP_IRRADIANCE,
-    LOC_MAP_PREFILTER,
-    LOC_MAP_BRDF
+    SHADER_LOC_VERTEX_POSITION = 0, // Shader location: vertex attribute: position
+    SHADER_LOC_VERTEX_TEXCOORD01,   // Shader location: vertex attribute: texcoord01
+    SHADER_LOC_VERTEX_TEXCOORD02,   // Shader location: vertex attribute: texcoord02
+    SHADER_LOC_VERTEX_NORMAL,       // Shader location: vertex attribute: normal
+    SHADER_LOC_VERTEX_TANGENT,      // Shader location: vertex attribute: tangent
+    SHADER_LOC_VERTEX_COLOR,        // Shader location: vertex attribute: color
+    SHADER_LOC_MATRIX_MVP,          // Shader location: matrix uniform: model-view-projection
+    SHADER_LOC_MATRIX_VIEW,         // Shader location: matrix uniform: view (camera transform)
+    SHADER_LOC_MATRIX_PROJECTION,   // Shader location: matrix uniform: projection
+    SHADER_LOC_MATRIX_MODEL,        // Shader location: matrix uniform: model (transform)
+    SHADER_LOC_MATRIX_NORMAL,       // Shader location: matrix uniform: normal
+    SHADER_LOC_VECTOR_VIEW,         // Shader location: vector uniform: view
+    SHADER_LOC_COLOR_DIFFUSE,       // Shader location: vector uniform: diffuse color
+    SHADER_LOC_COLOR_SPECULAR,      // Shader location: vector uniform: specular color
+    SHADER_LOC_COLOR_AMBIENT,       // Shader location: vector uniform: ambient color
+    SHADER_LOC_MAP_ALBEDO,          // Shader location: sampler2d texture: albedo (same as: SHADER_LOC_MAP_DIFFUSE)
+    SHADER_LOC_MAP_METALNESS,       // Shader location: sampler2d texture: metalness (same as: SHADER_LOC_MAP_SPECULAR)
+    SHADER_LOC_MAP_NORMAL,          // Shader location: sampler2d texture: normal
+    SHADER_LOC_MAP_ROUGHNESS,       // Shader location: sampler2d texture: roughness
+    SHADER_LOC_MAP_OCCLUSION,       // Shader location: sampler2d texture: occlusion
+    SHADER_LOC_MAP_EMISSION,        // Shader location: sampler2d texture: emission
+    SHADER_LOC_MAP_HEIGHT,          // Shader location: sampler2d texture: height
+    SHADER_LOC_MAP_CUBEMAP,         // Shader location: samplerCube texture: cubemap
+    SHADER_LOC_MAP_IRRADIANCE,      // Shader location: samplerCube texture: irradiance
+    SHADER_LOC_MAP_PREFILTER,       // Shader location: samplerCube texture: prefilter
+    SHADER_LOC_MAP_BRDF             // Shader location: sampler2d texture: brdf
   );
 
 {const
@@ -796,89 +818,79 @@ type
 
   // Shader uniform data types
   TShaderUniformDataType = (
-    UNIFORM_FLOAT = 0,
-    UNIFORM_VEC2,
-    UNIFORM_VEC3,
-    UNIFORM_VEC4,
-    UNIFORM_INT,
-    UNIFORM_IVEC2,
-    UNIFORM_IVEC3,
-    UNIFORM_IVEC4,
-    UNIFORM_SAMPLER2D
+    SHADER_UNIFORM_FLOAT = 0,       // Shader uniform type: float
+    SHADER_UNIFORM_VEC2,            // Shader uniform type: vec2 (2 float)
+    SHADER_UNIFORM_VEC3,            // Shader uniform type: vec3 (3 float)
+    SHADER_UNIFORM_VEC4,            // Shader uniform type: vec4 (4 float)
+    SHADER_UNIFORM_INT,             // Shader uniform type: int
+    SHADER_UNIFORM_IVEC2,           // Shader uniform type: ivec2 (2 int)
+    SHADER_UNIFORM_IVEC3,           // Shader uniform type: ivec3 (3 int)
+    SHADER_UNIFORM_IVEC4,           // Shader uniform type: ivec4 (4 int)
+    SHADER_UNIFORM_SAMPLER2D        // Shader uniform type: sampler2d
   );
 
-  // Material map
-  TMaterialMapType = (
-    MAP_ALBEDO    = 0,       // MAP_DIFFUSE
-    MAP_METALNESS = 1,       // MAP_SPECULAR
-    MAP_NORMAL    = 2,
-    MAP_ROUGHNESS = 3,
-    MAP_OCCLUSION,
-    MAP_EMISSION,
-    MAP_HEIGHT,
-    MAP_CUBEMAP,             // NOTE: Uses GL_TEXTURE_CUBE_MAP
-    MAP_IRRADIANCE,          // NOTE: Uses GL_TEXTURE_CUBE_MAP
-    MAP_PREFILTER,           // NOTE: Uses GL_TEXTURE_CUBE_MAP
-    MAP_BRDF
+  // Shader attribute data types
+  TShaderAttributeDataType = (
+      SHADER_ATTRIB_FLOAT = 0,        // Shader attribute type: float
+      SHADER_ATTRIB_VEC2,             // Shader attribute type: vec2 (2 float)
+      SHADER_ATTRIB_VEC3,             // Shader attribute type: vec3 (3 float)
+      SHADER_ATTRIB_VEC4              // Shader attribute type: vec4 (4 float)
   );
-
-{  MAP_DIFFUSE    =  MAP_ALBEDO
-  MAP_SPECULAR   =  MAP_METALNESS} //TODO
 
   // Pixel formats
   // NOTE: Support depends on OpenGL version and platform
   TPixelFormat = (
-    UNCOMPRESSED_GRAYSCALE = 1,     // 8 bit per pixel (no alpha)
-    UNCOMPRESSED_GRAY_ALPHA,        // 8*2 bpp (2 channels)
-    UNCOMPRESSED_R5G6B5,            // 16 bpp
-    UNCOMPRESSED_R8G8B8,            // 24 bpp
-    UNCOMPRESSED_R5G5B5A1,          // 16 bpp (1 bit alpha)
-    UNCOMPRESSED_R4G4B4A4,          // 16 bpp (4 bit alpha)
-    UNCOMPRESSED_R8G8B8A8,          // 32 bpp
-    UNCOMPRESSED_R32,               // 32 bpp (1 channel - float)
-    UNCOMPRESSED_R32G32B32,         // 32*3 bpp (3 channels - float)
-    UNCOMPRESSED_R32G32B32A32,      // 32*4 bpp (4 channels - float)
-    COMPRESSED_DXT1_RGB,            // 4 bpp (no alpha)
-    COMPRESSED_DXT1_RGBA,           // 4 bpp (1 bit alpha)
-    COMPRESSED_DXT3_RGBA,           // 8 bpp
-    COMPRESSED_DXT5_RGBA,           // 8 bpp
-    COMPRESSED_ETC1_RGB,            // 4 bpp
-    COMPRESSED_ETC2_RGB,            // 4 bpp
-    COMPRESSED_ETC2_EAC_RGBA,       // 8 bpp
-    COMPRESSED_PVRT_RGB,            // 4 bpp
-    COMPRESSED_PVRT_RGBA,           // 4 bpp
-    COMPRESSED_ASTC_4x4_RGBA,       // 8 bpp
-    COMPRESSED_ASTC_8x8_RGBA        // 2 bpp
+    PIXELFORMAT_UNCOMPRESSED_GRAYSCALE = 1, // 8 bit per pixel (no alpha)
+    PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA,    // 8*2 bpp (2 channels)
+    PIXELFORMAT_UNCOMPRESSED_R5G6B5,        // 16 bpp
+    PIXELFORMAT_UNCOMPRESSED_R8G8B8,        // 24 bpp
+    PIXELFORMAT_UNCOMPRESSED_R5G5B5A1,      // 16 bpp (1 bit alpha)
+    PIXELFORMAT_UNCOMPRESSED_R4G4B4A4,      // 16 bpp (4 bit alpha)
+    PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,      // 32 bpp
+    PIXELFORMAT_UNCOMPRESSED_R32,           // 32 bpp (1 channel - float)
+    PIXELFORMAT_UNCOMPRESSED_R32G32B32,     // 32*3 bpp (3 channels - float)
+    PIXELFORMAT_UNCOMPRESSED_R32G32B32A32,  // 32*4 bpp (4 channels - float)
+    PIXELFORMAT_COMPRESSED_DXT1_RGB,        // 4 bpp (no alpha)
+    PIXELFORMAT_COMPRESSED_DXT1_RGBA,       // 4 bpp (1 bit alpha)
+    PIXELFORMAT_COMPRESSED_DXT3_RGBA,       // 8 bpp
+    PIXELFORMAT_COMPRESSED_DXT5_RGBA,       // 8 bpp
+    PIXELFORMAT_COMPRESSED_ETC1_RGB,        // 4 bpp
+    PIXELFORMAT_COMPRESSED_ETC2_RGB,        // 4 bpp
+    PIXELFORMAT_COMPRESSED_ETC2_EAC_RGBA,   // 8 bpp
+    PIXELFORMAT_COMPRESSED_PVRT_RGB,        // 4 bpp
+    PIXELFORMAT_COMPRESSED_PVRT_RGBA,       // 4 bpp
+    PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA,   // 8 bpp
+    PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA    // 2 bpp
   );
 
   // Texture parameters: filter mode
   // NOTE 1: Filtering considers mipmaps if available in the texture
   // NOTE 2: Filter is accordingly set for minification and magnification
-  TTextureFilterMode = (
-    FILTER_POINT = 0,               // No filter, just pixel aproximation
-    FILTER_BILINEAR,                // Linear filtering
-    FILTER_TRILINEAR,               // Trilinear filtering (linear with mipmaps)
-    FILTER_ANISOTROPIC_4X,          // Anisotropic filtering 4x
-    FILTER_ANISOTROPIC_8X,          // Anisotropic filtering 8x
-    FILTER_ANISOTROPIC_16X         // Anisotropic filtering 16x
+  TTextureFilter = (
+    TEXTURE_FILTER_POINT = 0,               // No filter, just pixel aproximation
+    TEXTURE_FILTER_BILINEAR,                // Linear filtering
+    TEXTURE_FILTER_TRILINEAR,               // Trilinear filtering (linear with mipmaps)
+    TEXTURE_FILTER_ANISOTROPIC_4X,          // Anisotropic filtering 4x
+    TEXTURE_FILTER_ANISOTROPIC_8X,          // Anisotropic filtering 8x
+    TEXTURE_FILTER_ANISOTROPIC_16X         // Anisotropic filtering 16x
   );
 
   // Texture parameters: wrap mode
-  TTextureWrapMode = (
-    WRAP_REPEAT = 0,        // Repeats texture in tiled mode
-    WRAP_CLAMP,             // Clamps texture to edge pixel in tiled mode
-    WRAP_MIRROR_REPEAT,     // Mirrors and repeats the texture in tiled mode
-    WRAP_MIRROR_CLAMP       // Mirrors and clamps to border the texture in tiled mode
+  TTextureWrap = (
+    TEXTURE_WRAP_REPEAT = 0,                // Repeats texture in tiled mode
+    TEXTURE_WRAP_CLAMP,                     // Clamps texture to edge pixel in tiled mode
+    TEXTURE_WRAP_MIRROR_REPEAT,             // Mirrors and repeats the texture in tiled mode
+    TEXTURE_WRAP_MIRROR_CLAMP               // Mirrors and clamps to border the texture in tiled mode
   );
 
   // Cubemap layout
-  TCubemapLayoutType = (
-    CUBEMAP_AUTO_DETECT = 0,        // Automatically detect layout type
-    CUBEMAP_LINE_VERTICAL,          // Layout is defined by a vertical line with faces
-    CUBEMAP_LINE_HORIZONTAL,        // Layout is defined by an horizontal line with faces
-    CUBEMAP_CROSS_THREE_BY_FOUR,    // Layout is defined by a 3x4 cross with cubemap faces
-    CUBEMAP_CROSS_FOUR_BY_THREE,    // Layout is defined by a 4x3 cross with cubemap faces
-    CUBEMAP_PANORAMA                // Layout is defined by a panorama image (equirectangular map)
+  TCubemapLayout = (
+    CUBEMAP_LAYOUT_AUTO_DETECT = 0,         // Automatically detect layout type
+    CUBEMAP_LAYOUT_LINE_VERTICAL,           // Layout is defined by a vertical line with faces
+    CUBEMAP_LAYOUT_LINE_HORIZONTAL,         // Layout is defined by an horizontal line with faces
+    CUBEMAP_LAYOUT_CROSS_THREE_BY_FOUR,     // Layout is defined by a 3x4 cross with cubemap faces
+    CUBEMAP_LAYOUT_CROSS_FOUR_BY_THREE,     // Layout is defined by a 4x3 cross with cubemap faces
+    CUBEMAP_LAYOUT_PANORAMA                 // Layout is defined by a panorama image (equirectangular map)
   );
 
   // Font type, defines generation method
@@ -892,53 +904,58 @@ type
   TBlendMode = (
     BLEND_ALPHA = 0,        // Blend textures considering alpha (default)
     BLEND_ADDITIVE,         // Blend textures adding colors
-    BLEND_MULTIPLIED,        // Blend textures multiplying colors
+    BLEND_MULTIPLIED,       // Blend textures multiplying colors
     BLEND_ADD_COLORS,       // Blend textures adding colors (alternative)
     BLEND_SUBTRACT_COLORS,  // Blend textures subtracting colors (alternative)
-    BLEND_CUSTOM            // Belnd textures using custom src/dst factors (use SetBlendModeCustom())
+    BLEND_CUSTOM            // Belnd textures using custom src/dst factors (use rlSetBlendMode())
   );
 
-  // Gestures type
+  // Gesture
   // NOTE: It could be used as flags to enable only some gestures
   TGestureType = (
-    GESTURE_NONE        = 0,
-    GESTURE_TAP         = 1,
-    GESTURE_DOUBLETAP   = 2,
-    GESTURE_HOLD        = 4,
-    GESTURE_DRAG        = 8,
-    GESTURE_SWIPE_RIGHT = 16,
-    GESTURE_SWIPE_LEFT  = 32,
-    GESTURE_SWIPE_UP    = 64,
-    GESTURE_SWIPE_DOWN  = 128,
-    GESTURE_PINCH_IN    = 256,
-    GESTURE_PINCH_OUT   = 512
+    GESTURE_NONE        = 0,        // No gesture
+    GESTURE_TAP         = 1,        // Tap gesture
+    GESTURE_DOUBLETAP   = 2,        // Double tap gesture
+    GESTURE_HOLD        = 4,        // Hold gesture
+    GESTURE_DRAG        = 8,        // Drag gesture
+    GESTURE_SWIPE_RIGHT = 16,       // Swipe right gesture
+    GESTURE_SWIPE_LEFT  = 32,       // Swipe left gesture
+    GESTURE_SWIPE_UP    = 64,       // Swipe up gesture
+    GESTURE_SWIPE_DOWN  = 128,      // Swipe down gesture
+    GESTURE_PINCH_IN    = 256,      // Pinch in gesture
+    GESTURE_PINCH_OUT   = 512       // Pinch out gesture
   );
 
   // Camera system modes
   TCameraMode = (
-    CAMERA_CUSTOM = 0,
-    CAMERA_FREE,
-    CAMERA_ORBITAL,
-    CAMERA_FIRST_PERSON,
-    CAMERA_THIRD_PERSON
+    CAMERA_CUSTOM = 0,              // Custom camera
+    CAMERA_FREE,                    // Free camera
+    CAMERA_ORBITAL,                 // Orbital camera
+    CAMERA_FIRST_PERSON,            // First person camera
+    CAMERA_THIRD_PERSON             // Third person camera
   );
 
-  // Camera projection modes
-  TCameraType = (
-    CAMERA_PERSPECTIVE = 0,
-    CAMERA_ORTHOGRAPHIC
+  // Camera projection
+  TCameraProjection = (
+    CAMERA_PERSPECTIVE = 0,         // Perspective projection
+    CAMERA_ORTHOGRAPHIC             // Orthographic projection
   );
 
-  // N-patch types
-  TNPatchType = (
-    NPT_9PATCH = 0,         // Npatch defined by 3x3 tiles
-    NPT_3PATCH_VERTICAL,    // Npatch defined by 1x3 tiles
-    NPT_3PATCH_HORIZONTAL   // Npatch defined by 3x1 tiles
+  // N-patch layout
+  TNPatchLayout = (
+    NPATCH_NINE_PATCH = 0,          // Npatch layout: 3x3 tiles
+    NPATCH_THREE_PATCH_VERTICAL,    // Npatch layout: 1x3 tiles
+    NPATCH_THREE_PATCH_HORIZONTAL   // Npatch layout: 3x1 tiles
   );
 
-  // Callbacks to be implemented by users
-type
-  TTraceLogCallback = procedure(LogType: Integer; Text: PAnsiChar; Args: Pointer); cdecl; //TODO check Args
+  //TODO zaher, check params/arg please
+  // Callbacks to hook some internal functions
+  // WARNING: This callbacks are intended for advance users
+  TTraceLogCallback = procedure(LogType: Integer; Text: PUTF8Char; Args: Pointer); cdecl;
+  TLoadFileDataCallback = function(FileName: PUTF8Char; var bytesRead: Cardinal): PByte; cdecl;      // FileIO: Load binary data
+  TSaveFileDataCallback = function(FileName: PUTF8Char; var data; var bytesToWrite: Cardinal): Boolean; cdecl;  // FileIO: Save binary data
+  TLoadFileTextCallback = function(FileName: PUTF8Char): PUTF8Char; cdecl;      // FileIO: Load text data
+  TSaveFileTextCallback = procedure(FileName: PUTF8Char; text: PUTF8Char); cdecl;    // FileIO: Save text data
 
 //------------------------------------------------------------------------------------
 // Global Variables Definition
@@ -953,11 +970,11 @@ var
   { Window-related functions }
 
   // Initialize window and OpenGL context
-  InitWindow: procedure(Width: Integer; Height: Integer; const Title: PUTF8Char); cdecl;
+  InitWindow: procedure(Width: Integer; Height: Integer; const Title: PUTF8Char); cdecl = nil;
   // Check if KEY_ESCAPE pressed or Close icon pressed
-  WindowShouldClose: function: Boolean; cdecl;
+  WindowShouldClose: function: Boolean; cdecl = nil;
   // Close window and unload OpenGL context
-  CloseWindow: procedure; cdecl;
+  CloseWindow: procedure; cdecl = nil;
   // Check if window has been initialized successfully
   IsWindowReady: function: Boolean; cdecl;
   // Check if window is currently fullscreen
@@ -1004,6 +1021,8 @@ var
   GetScreenHeight: function: Integer; cdecl;
   // Get number of connected monitors
   GetMonitorCount: function: Integer; cdecl;
+  // Get current connected monitor
+  GetCurrentMonitor: function(): Integer; cdecl;
   // Get specified monitor position
   GetMonitorPosition: function(monitor: Integer): TVector2; cdecl;
   // Get primary monitor width
@@ -1026,6 +1045,14 @@ var
   SetClipboardText: procedure(const text: PUTF8Char); cdecl;
   // Get clipboard text content
   GetClipboardText: function: PUTF8Char; cdecl;
+
+  // Custom frame control functions
+  // NOTE: Those functions are intended for advance users that want full control over the frame processing
+  // By default EndDrawing() does this job: draws everything + SwapScreenBuffer() + manage frame timming + PollInputEvents()
+  // To avoid that behaviour and control frame processes manually, enable in config.h: SUPPORT_CUSTOM_FRAME_CONTROL
+  SwapScreenBuffer: procedure; cdecl;                               // Swap back buffer with front buffer (screen drawing)
+  PollInputEvents: procedure; cdecl;                                // Register all input events
+  WaitTime: procedure(ms: Single); cdecl;                           // Wait for some milliseconds (halt program execution)
 
   { Cursor-related functions }
 
@@ -1050,24 +1077,64 @@ var
   BeginDrawing: procedure; cdecl;
   // End canvas drawing and swap buffers (double buffering)
   EndDrawing: procedure; cdecl;
-  // Initialize 2D mode with custom camera (2D)
+  // Begin 2D mode with custom camera (2D)
   BeginMode2D: procedure(Camera: TCamera2D); cdecl;
   // Ends 2D mode with custom camera
   EndMode2D: procedure; cdecl;
-  // Initializes 3D mode with custom camera (3D)
+  // Begin 3D mode with custom camera (3D)
   BeginMode3D: procedure(Camera: TCamera3D); cdecl;
   // Ends 3D mode and returns to default 2D orthographic mode
   EndMode3D: procedure; cdecl;
-  // Initializes render texture for drawing
+  // Begin drawing to render texture
   BeginTextureMode: procedure(Target: TRenderTexture2D); cdecl;
   // Ends drawing to render texture
   EndTextureMode: procedure; cdecl;
+
+  // Begin custom shader drawing
+  BeginShaderMode: procedure(Shader: TShader); cdecl;
+  // End custom shader drawing (use default shader)
+  EndShaderMode: procedure; cdecl;
+  // Begin blending mode (alpha, additive, multiplied, subtract, custom)
+  BeginBlendMode: procedure(mode: integer); cdecl;
+  // End blending mode (reset to default: alpha blending)
+  EndBlendMode: procedure; cdecl;
   // Begin scissor mode (define screen area for following drawing)
   BeginScissorMode: procedure(x: Integer; y: Integer; width: Integer; height: Integer); cdecl;
   // End scissor mode
   EndScissorMode: procedure; cdecl;
+  // Begin stereo rendering (requires VR simulator)
+  BeginVrStereoMode: procedure(Config: TVrStereoConfig); cdecl;
+  // End stereo rendering (requires VR simulator)
+  EndVrStereoMode: procedure; cdecl;
 
-  { Screen-space-related functions }
+  // VR stereo config functions for VR simulator
+  // Load VR stereo config for VR simulator device parameters
+  LoadVrStereoConfig: function(Device: TVrDeviceInfo): TVrStereoConfig; cdecl;
+  // Unload VR stereo config
+  UnloadVrStereoConfig: procedure(Config: TVrStereoConfig); cdecl;
+
+  // Shader management functions
+  // NOTE: Shader functionality is not available on OpenGL 1.1
+  // Load shader from files and bind default locations
+  LoadShader: function(vsFileName: PUTF8Char; fsFileName: PUTF8Char): TShader; cdecl;
+  // Load shader from code strings and bind default locations
+  LoadShaderFromMemory: function(vsCode: PUTF8Char; fsCode: PUTF8Char): TShader; cdecl;
+  // Get shader uniform location
+  GetShaderLocation: function(Shader: TShader; UniformName: PUTF8Char): integer; cdecl;
+  // Get shader attribute location
+  GetShaderLocationAttrib: function(Shader: TShader; AttribName: PUTF8Char): integer; cdecl;
+  // Set shader uniform value
+  SetShaderValue: procedure(Shader: TShader; LocIndex: Integer; Value: PUTF8Char; uniformType: Integer); cdecl;
+  // Set shader uniform value vector
+  SetShaderValueV: procedure(Shader: TShader; LocIndex: Integer; var Value, UniformType: Integer; Count: Integer); cdecl;
+  // Set shader uniform value (matrix 4x4)
+  SetShaderValueMatrix: procedure(Shader: TShader; locIndex: Integer; mat: TMatrix); cdecl;
+  // Set shader uniform value for texture (sampler2d)
+  SetShaderValueTexture: procedure(Shader: TShader; LocIndex: Integer; Texture: TTexture2D); cdecl;
+  // Unload shader from GPU memory (VRAM)
+  UnloadShader: procedure(Shader: TShader); cdecl;
+
+  // Screen-space-related functions
 
   // Returns a ray trace from mouse position
   GetMouseRay: function(mousePosition: TVector2; camera: TCamera): TRay; cdecl;
@@ -1088,34 +1155,48 @@ var
 
   // Set target FPS (maximum)
   SetTargetFPS: procedure(fps: Integer); cdecl;
-  // Returns current FPS
+  // Get current FPS
   GetFPS: function: Integer; cdecl;
-  // Returns time in seconds for last frame drawn
+  // Get time in seconds for last frame drawn (delta time)
   GetFrameTime: function: Single; cdecl;
-  // Returns elapsed time in seconds since InitWindow()
+  // Get elapsed time in seconds since InitWindow()
   GetTime: function: Double; cdecl;
 
   { Misc. functions }
 
+  // Get a random value between min and max (both included)
+  GetRandomValue: function(min: Integer; max: Integer): Integer; cdecl;
+  // Set the seed for the random number generator
+  SetRandomSeed: procedure(Seed: Cardinal); cdecl;
+  // Takes a screenshot of current screen (filename extension defines format)
+  TakeScreenshot: procedure(const fileName: PUTF8Char); cdecl;
+
   // Setup window configuration flags (view FLAGS)
-  SetConfigFlags: procedure(flags: TConfigFlag); cdecl;
-  // Set the current threshold (minimum) log level
-  SetTraceLogLevel: procedure(logType: TTraceLogTypes); cdecl;
-  // Set the exit threshold (minimum) log level
-  SetTraceLogExit: procedure(logType: Integer); cdecl;
-  // Set a trace log callback to enable custom logging
-  SetTraceLogCallback: procedure(callback: TTraceLogCallback); cdecl;
+  SetConfigFlags: procedure(flags: TConfigFlags); cdecl;
   // Show trace log messages (LOG_DEBUG, LOG_INFO, LOG_WARNING, LOG_ERROR)
   TraceLog: procedure(logType: Integer; const text: PUTF8Char) varargs; cdecl;
+  // Set the current threshold (minimum) log level
+  SetTraceLogLevel: procedure(logType: TTraceLogLevels); cdecl;
 
   // Internal memory allocator
   MemAlloc: function(Size: Integer): Pointer; cdecl;
+  // Internal memory reallocator
+  MemRealloc: procedure(Ptr: Pointer; Size: Integer); cdecl;
   // Internal memory free
   MemFree: procedure(ptr: Pointer); cdecl;
-  // Takes a screenshot of current screen (saved a .png)
-  TakeScreenshot: procedure(const fileName: PUTF8Char); cdecl;
-  // Returns a random value between min and max (both included)
-  GetRandomValue: function(min: Integer; max: Integer): Integer; cdecl;
+
+  // Set custom callbacks
+  // WARNING: Callbacks setup is intended for advance users
+  // Set custom trace log
+  SetTraceLogCallback: procedure(callback: TTraceLogCallback); cdecl;
+  // Set custom file binary data loader
+  SetLoadFileDataCallback: procedure(callback: TLoadFileDataCallback); cdecl;
+  // Set custom file binary data saver
+  SetSaveFileDataCallback: procedure(callback: TSaveFileDataCallback); cdecl;
+  // Set custom file text data loader
+  SetLoadFileTextCallback: procedure(callback: TLoadFileTextCallback); cdecl;
+  // Set custom file text data saver
+  SetSaveFileTextCallback: procedure(callback: TSaveFileTextCallback); cdecl;
 
   { Files management functions }
 
@@ -1137,7 +1218,7 @@ var
   DirectoryExists: function(const dirPath: PUTF8Char): Boolean; cdecl;
   // Check file extension
   IsFileExtension: function(const fileName: PUTF8Char; const ext: PUTF8Char): Boolean; cdecl;
-  // Get pointer to extension for a filename string
+  // Get pointer to extension for a filename string (includes dot: '.png')
   GetFileExtension: function(const fileName: PUTF8Char): PUTF8Char; cdecl;
   // Get pointer to filename for a path string
   GetFileName: function(const filePath: PUTF8Char): PUTF8Char; cdecl;
@@ -1164,10 +1245,15 @@ var
   // Get file modification time (last write time)
   GetFileModTime: function(const fileName: PUTF8Char): Integer; cdecl;
 
+  // Compression/Encoding functionality
   // Compress data (DEFLATE algorythm)
   CompressData: function(data: PByte; dataLength: Integer; compDataLength: PInteger): PByte; cdecl;
   // Decompress data (DEFLATE algorythm)
   DecompressData: function(compData: PByte; compDataLength: Integer; dataLength: PInteger): PByte; cdecl;
+  // Encode data to Base64 string
+  EncodeDataBase64: function(Data: PByte; dataLength: Integer; OutputLength: PInteger): PByte; cdecl;  //TODO zaher, check it by example please
+  // Decode Base64 string data
+  DecodeDataBase64: function(Data: PByte; outputLength: PInteger): PByte;  //TODO zaher, check it by example please
 
   { Persistent storage management }
 
@@ -1185,11 +1271,11 @@ var
 
   { Input-related functions: keyboard }
 
-  // Detect if a key has been pressed once
+  // Check if a key has been pressed once
   IsKeyPressed: function(key: Integer): Boolean; cdecl;
-  // Detect if a key is being pressed
+  // Check if a key is being pressed
   IsKeyDown: function(key: Integer): Boolean; cdecl;
-  // Detect if a key has been released once
+  // Check if a key has been released once
   IsKeyReleased: function(key: Integer): Boolean; cdecl;
 
   { Input-related functions: gamepads }
@@ -1198,26 +1284,24 @@ var
   IsKeyUp: function(key: Integer): Boolean; cdecl;
   // Set a custom key to exit program (default is ESC)
   SetExitKey: procedure(key: Integer); cdecl;
-  // Get key pressed, call it multiple times for chars queued
+  // Get key pressed, call it multiple times for chars queued, returns 0 when the queue is empty
   GetKeyPressed: function: Integer; cdecl;
-  // Get char pressed (unicode), call it multiple times for chars queued
+  // Get char pressed (unicode), call it multiple times for chars queued, returns 0 when the queue is empty
   GetCharPressed: function: Integer; cdecl;
 
   // Input-related functions: gamepads
 
-  // Detect if a gamepad is available
+  // Check if a gamepad is available
   IsGamepadAvailable: function(gamepad: Integer): Boolean; cdecl;
-  // Check gamepad name (if available)
-  IsGamepadName: function(gamepad: Integer; const name: PUTF8Char): Boolean; cdecl;
-  // Return gamepad internal name id
+  // Get gamepad internal name id
   GetGamepadName: function(gamepad: Integer): PUTF8Char; cdecl;
-  // Detect if a gamepad button has been pressed once
+  // Check if a gamepad button has been pressed once
   IsGamepadButtonPressed: function(gamepad: Integer; button: Integer): Boolean; cdecl;
-  // Detect if a gamepad button is being pressed
+   // Check if a gamepad button is being pressed
   IsGamepadButtonDown: function(gamepad: Integer; button: Integer): Boolean; cdecl;
-  // Detect if a gamepad button has been released once
+  // Check if a gamepad button has been released once
   IsGamepadButtonReleased: function(gamepad: Integer; button: Integer): Boolean; cdecl;
-  // Detect if a gamepad button is NOT being pressed
+  // Check if a gamepad button is NOT being pressed
   IsGamepadButtonUp: function(gamepad: Integer; button: Integer): Boolean; cdecl;
   // Get the last gamepad button pressed
   GetGamepadButtonPressed: function: Integer; cdecl;
@@ -1225,26 +1309,33 @@ var
   GetGamepadAxisCount: function(gamepad: Integer): Integer; cdecl;
   // Return axis movement value for a gamepad axis
   GetGamepadAxisMovement: function(gamepad: Integer; axis: Integer): Single; cdecl;
+  // Set internal gamepad mappings (SDL_GameControllerDB)
+  SetGamepadMappings: function(mappings: PUTF8Char): Integer; cdecl;
 
   { Input-related functions: mouse }
 
-  // Detect if a mouse button has been pressed once
+  // Check if a mouse button has been pressed once
   IsMouseButtonPressed: function(button: TMouseButton): Boolean; cdecl;
-  // Detect if a mouse button is being pressed
+  // Check if a mouse button is being pressed
   IsMouseButtonDown: function(button: TMouseButton): Boolean; cdecl;
-  // Detect if a mouse button has been released once
+  // Check if a mouse button has been released once
   IsMouseButtonReleased: function(button: TMouseButton): Boolean; cdecl;
-  // Detect if a mouse button is NOT being pressed
+  // Check if a mouse button is NOT being pressed
   IsMouseButtonUp: function(button: TMouseButton): Boolean; cdecl;
-  // Returns mouse position X
+  // Get mouse position X
   GetMouseX: function: Integer; cdecl;
-  // Returns mouse position Y
+  // Get mouse position Y
   GetMouseY: function: Integer; cdecl;
-  // Returns mouse position XY
   {$ifdef FPC}
+  // Get mouse position XY
   GetMousePosition: function: TVector2; cdecl;
-  {$else}
-  GetMousePosition: function: Int64; cdecl; //Stupid Delphi
+  // Get mouse delta between frames
+  GetMouseDelta: function: TVector2; cdecl;
+  {$else} //Stupid Delphi
+  // Get mouse position XY
+  GetMousePosition: function: Int64; cdecl;
+  // Get mouse delta between frames
+  GetMouseDelta: function: Int64; cdecl;
   {$endif}
   // Set mouse position XY
   SetMousePosition: procedure(x: Integer; y: Integer); cdecl;
@@ -1252,34 +1343,34 @@ var
   SetMouseOffset: procedure(offsetX: Integer; offsetY: Integer); cdecl;
   // Set mouse scaling
   SetMouseScale: procedure(scaleX: Single; scaleY: Single); cdecl;
-  // Returns mouse wheel movement Y
+  // Get mouse wheel movement Y
   GetMouseWheelMove: function: Single; cdecl;
-  // Returns mouse cursor if (MouseCursor enum)
-  GetMouseCursor: function: Integer; cdecl;
   // Set mouse cursor
   SetMouseCursor: procedure(Cursor: Integer); cdecl;
 
   { Input-related functions: touch }
 
-  // Returns touch position X for touch point 0 (relative to screen size)
+  // Get touch position X for touch point 0 (relative to screen size)
   GetTouchX: function: Integer; cdecl;
-  // Returns touch position Y for touch point 0 (relative to screen size)
+  // Get touch position Y for touch point 0 (relative to screen size)
   GetTouchY: function: Integer; cdecl;
-  // Returns touch position XY for a touch point index (relative to screen size)
+  // Get touch position XY for a touch point index (relative to screen size)
   GetTouchPosition: function(index: Integer): TVector2; cdecl;
+  // Get touch point identifier for given index
+  GetTouchPointId: function(index: Integer): Integer; cdecl;
+  // Get number of touch points
+  GetTouchPointCount: function: Integer; cdecl;
 
 //------------------------------------------------------------------------------------
-// Gestures and Touch Handling Functions (Module: gestures)
+// Gestures and Touch Handling Functions (Module: rgestures)
 //------------------------------------------------------------------------------------
 
   // Enable a set of gestures using flags
-  SetGesturesEnabled: procedure(gestureFlags: Cardinal); cdecl;
+  SetGesturesEnabled: procedure(Flags: Cardinal); cdecl;
   // Check if a gesture have been detected
   IsGestureDetected: function(gesture: Integer): Boolean; cdecl;
   // Get latest detected gesture
   GetGestureDetected: function: Integer; cdecl;
-  // Get touch points count
-  GetTouchPointsCount: function: Integer; cdecl;
   // Get gesture hold time in milliseconds
   GetGestureHoldDuration: function: Single; cdecl;
   // Get gesture drag vector
@@ -1292,7 +1383,7 @@ var
   GetGesturePinchAngle: function: Single; cdecl;
 
 //------------------------------------------------------------------------------------
-// Camera System Functions (Module: camera)
+// Camera System Functions (Module: rcamera)
 //------------------------------------------------------------------------------------
 
   // Set camera mode (multiple camera modes available)
@@ -1312,6 +1403,12 @@ var
 //------------------------------------------------------------------------------------
 // Basic Shapes Drawing Functions (Module: shapes)
 //------------------------------------------------------------------------------------
+  // Set texture and rectangle to be used on shapes drawing
+  // NOTE: It can be useful when using basic shapes and one single font,
+  // defining a font char white rectangle would allow drawing everything in a single draw call
+
+  // Set texture and rectangle to be used on shapes drawing
+  SetShapesTexture: procedure(texture: TTexture2D; Source: TRectangle); cdecl;
 
   { Basic shapes drawing functions }
 
@@ -1327,14 +1424,16 @@ var
   DrawLineEx: procedure(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl;
   // Draw a line using cubic-bezier curves in-out
   DrawLineBezier: procedure(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl;
-  // Draw lines sequence
-  DrawLineStrip: procedure(points: PVector2; pointsCount: Integer; color: TColor); cdecl;
+  // Draw line using quadratic bezier curves with a control point
+  DrawLineBezierQuad: procedure(startPos: TVector2; endPos: TVector2; controlPos: TVector2; thick: Single; Color: TColor); cdecl;
+  // Draw line using cubic bezier curves with 2 control points
+  DrawLineBezierCubic: procedure(startPos: TVector2; endPos: TVector2; startControlPos: TVector2; endControlPos: TVector2; thick: Single; Color: TColor); cdecl;
   // Draw a color-filled circle
   DrawCircle: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl;
   // Draw a piece of a circle
-  DrawCircleSector: procedure(center: TVector2; radius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
+  DrawCircleSector: procedure(center: TVector2; radius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl;
   // Draw circle sector outline
-  DrawCircleSectorLines: procedure(center: TVector2; radius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
+  DrawCircleSectorLines: procedure(center: TVector2; radius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl;
   // Draw a gradient-filled circle
   DrawCircleGradient: procedure(centerX: Integer; centerY: Integer; radius: Single; color1: TColor; color2: TColor); cdecl;
   // Draw a color-filled circle (Vector version)
@@ -1346,9 +1445,9 @@ var
   // Draw ellipse outline
   DrawEllipseLines: procedure(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl;
   // Draw ring
-  DrawRing: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
+  DrawRing: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl;
   // Draw ring outline
-  DrawRingLines: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Integer; endAngle: Integer; segments: Integer; color: TColor); cdecl;
+  DrawRingLines: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl;
   // Draw a color-filled rectangle
   DrawRectangle: procedure(posX: Integer; posY: Integer; Width: Integer; Height: Integer; Color: TColor); cdecl;
   // Draw a color-filled rectangle (Vector version)
@@ -1366,23 +1465,25 @@ var
   // Draw rectangle outline
   DrawRectangleLines: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl;
   // Draw rectangle outline with extended parameters
-  DrawRectangleLinesEx: procedure(rec: TRectangle; lineThick: Integer; color: TColor); cdecl;
+  DrawRectangleLinesEx: procedure(rec: TRectangle; lineThick: Single; color: TColor); cdecl;
   // Draw rectangle with rounded edges
   DrawRectangleRounded: procedure(rec: TRectangle; roundness: Single; segments: Integer; color: TColor); cdecl;
   // Draw rectangle with rounded edges outline
-  DrawRectangleRoundedLines: procedure(rec: TRectangle; roundness: Single; segments: Integer; lineThick: Integer; color: TColor); cdecl;
+  DrawRectangleRoundedLines: procedure(rec: TRectangle; roundness: Single; segments: Integer; lineThick: Single; color: TColor); cdecl;
   // Draw a color-filled triangle (vertex in counter-clockwise order!)
   DrawTriangle: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl;
   // Draw triangle outline (vertex in counter-clockwise order!)
   DrawTriangleLines: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl;
   // Draw a triangle fan defined by points (first vertex is the center)
-  DrawTriangleFan: procedure(points: PVector2; numPoints: Integer; color: TColor); cdecl;
+  DrawTriangleFan: procedure(points: PVector2; PointCount: Integer; color: TColor); cdecl;
   // Draw a triangle strip defined by points
-  DrawTriangleStrip: procedure(points: PVector2; pointsCount: Integer; color: TColor); cdecl;
+  DrawTriangleStrip: procedure(points: PVector2; pointCount: Integer; color: TColor); cdecl;
   // Draw a regular polygon (Vector version)
   DrawPoly: procedure(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl;
   // Draw a polygon outline of n sides
   DrawPolyLines: procedure(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl;
+  // Draw a polygon outline of n sides with extended parameters
+  DrawPolyLinesEx: procedure(center: TVector2; Sides: Integer; Radius: Single; Rotation: Single; lineThick: Single; Color: TColor); cdecl;
 
   { Basic shapes collision detection functions }
 
@@ -1400,6 +1501,8 @@ var
   CheckCollisionPointTriangle: function(point: TVector2; p1: TVector2; p2: TVector2; p3: TVector2): Boolean; cdecl;
   // Check the collision between two lines defined by two points each, returns collision point by reference
   CheckCollisionLines: function(startPos1, endPos1, startPos2, endPos2: TVector2; collisionPoint: PVector2): Boolean; cdecl;
+  // Check if point belongs to line created between two points [p1] and [p2] with defined margin in pixels [threshold]
+  CheckCollisionPointLine: function(point: TVector2; p1: TVector2; p2: TVector2; threshold: Integer): Boolean; cdecl;
   // Get collision rectangle for two rectangles collision
   GetCollisionRec: function(rec1: TRectangle; rec2: TRectangle): TRectangle; cdecl;
 
@@ -1418,6 +1521,10 @@ var
   LoadImageAnim: function(const fileName: PUTF8Char; frames: Integer): TImage; cdecl;
   // Load image from memory buffer, fileType refers to extension: i.e. "png"
   LoadImageFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer): TImage; cdecl;
+  // Load image from GPU texture data
+  LoadImageFromTexture: function(texture: TTexture2D): TImage; cdecl;
+  // Load image from screen buffer and (screenshot)
+  LoadImageFromScreen: function(): TImage; cdecl;
   // Unload image from CPU memory (RAM)
   UnloadImage: procedure(image: TImage); cdecl;
   // Export image data to file
@@ -1439,9 +1546,7 @@ var
   GenImageChecked: function(width: Integer; height: Integer; checksX: Integer; checksY: Integer; col1: TColor; col2: TColor): TImage; cdecl;
   // Generate image: white noise
   GenImageWhiteNoise: function(width: Integer; height: Integer; factor: Single): TImage; cdecl;
-  // Generate image: perlin noise
-  GenImagePerlinNoise: function(width: Integer; height: Integer; offsetX: Integer; offsetY: Integer; scale: Single): TImage; cdecl;
-  // Generate image: cellular algorithm. Bigger tileSize means bigger cells
+  // Generate image: cellular algorithm, bigger tileSize means bigger cells
   GenImageCellular: function(width: Integer; height: Integer; tileSize: Integer): TImage; cdecl;
 
   { Image manipulation functions }
@@ -1474,7 +1579,7 @@ var
   ImageResizeNN: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl;
   // Resize canvas and fill with color
   ImageResizeCanvas: procedure(image: PImage; newWidth: Integer; newHeight: Integer; offsetX: Integer; offsetY: Integer; color: TColor); cdecl;
-  // Generate all mipmap levels for a provided image
+  // Compute all mipmap levels for a provided image
   ImageMipmaps: procedure(image: PImage); cdecl;
   // Dither image data to 16bpp or lower (Floyd-Steinberg dithering)
   ImageDither: procedure(image: PImage; rBpp: Integer; gBpp: Integer; bBpp: Integer; aBpp: Integer); cdecl;
@@ -1501,13 +1606,15 @@ var
   // Get pixel data from image as a Color struct array
   LoadImageColors: function(image: TImage): PColor; cdecl;
   // Extract color palette from image to maximum size (memory should be freed)
-  LoadImagePalette: function(image: TImage; maxPaletteSize: Integer; colorsCount: PInteger): PColor; cdecl;
-  // Get image alpha border rectangle
-  GetImageAlphaBorder: function(image: TImage; threshold: Single): TRectangle; cdecl;
+  LoadImagePalette: function(image: TImage; maxPaletteSize: Integer; colorCount: PInteger): PColor; cdecl;
   // Unload color data loaded with LoadImageColors()
   UnloadImageColors: procedure(Colors: PColor); cdecl;
   // Unload colors palette loaded with LoadImagePalette()
   UnloadImagePalette: procedure(Colors: PColor); cdecl;
+  // Get image alpha border rectangle
+  GetImageAlphaBorder: function(image: TImage; threshold: Single): TRectangle; cdecl;
+  // Get image pixel color at (x, y) position
+  GetImageColor: function(Image: TImage; x, y: Integer): TColor; cdecl;
 
   { Image drawing functions }
   // NOTE: Image software-rendering functions (CPU)
@@ -1549,7 +1656,7 @@ var
   // Load texture from image data
   LoadTextureFromImage: function(image: TImage): TTexture2D; cdecl;
   // Load cubemap from image, multiple image cubemap layouts supported
-  LoadTextureCubemap: function(image: TImage; layoutType: Integer): TTextureCubemap; cdecl;
+  LoadTextureCubemap: function(image: TImage; Layout: Integer): TTextureCubemap; cdecl;
   // Load texture for rendering (framebuffer)
   LoadRenderTexture: function(Width: Integer; Height: Integer): TRenderTexture2D; cdecl;
   // Unload texture from GPU memory (VRAM)
@@ -1560,19 +1667,15 @@ var
   UpdateTexture: procedure(Texture: TTexture2D; const pixels: Pointer); cdecl;
   // Update GPU texture rectangle with new data
   UpdateTextureRec: procedure(Texture: TTexture2D; rec: TRectangle; const pixels: Pointer); cdecl;
-  // Get pixel data from GPU texture and return an Image
-  GetTextureData: function(Texture: TTexture2D): TImage; cdecl;
-  // Get pixel data from screen buffer and return an Image (screenshot)
-  GetScreenData: function: TImage; cdecl;
 
   { Texture configuration functions }
 
   // Generate GPU mipmaps for a texture
   GenTextureMipmaps: procedure(texture: PTexture2D); cdecl;
   // Set texture scaling filter mode
-  SetTextureFilter: procedure(texture: TTexture2D; FilterMode: TTextureFilterMode); cdecl;
+  SetTextureFilter: procedure(texture: TTexture2D; Filter: TTextureFilter); cdecl;
   // Set texture wrapping mode
-  SetTextureWrap: procedure(texture: TTexture2D; wrapMode: Integer); cdecl;
+  SetTextureWrap: procedure(texture: TTexture2D; Wrap: Integer); cdecl;
 
   { Texture drawing functions }
 
@@ -1592,6 +1695,8 @@ var
   DrawTexturePro: procedure(Texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
   // Draws a texture (or part of it) that stretches or shrinks nicely
   DrawTextureNPatch: procedure(Texture: TTexture2D; nPatchInfo: TNPatchInfo; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl;
+  // Draw a textured polygon
+  DrawTexturePoly: procedure(texture: TTexture2D; center: TVector2; points: PVector2; texcoords: PVector2; pointCount: Integer; tint: TColor); cdecl;
 
   { Image/Texture misc functions }
 
@@ -1599,22 +1704,22 @@ var
 
   // Color fade-in or fade-out, alpha goes from 0.0f to 1.0f
   Fade: function(color: TColor; Alpha: Single): TColor; cdecl;
-  // Returns hexadecimal value for a Color
+  // Get hexadecimal value for a Color
   ColorToInt: function(color: TColor): Integer; cdecl;
-  // Returns color normalized as float [0..1]
+  // Get color normalized as float [0..1]
   ColorNormalize: function(color: TColor): TVector4; cdecl;
-  // Returns color from normalized values [0..1]
+  // Get color from normalized values [0..1]
   ColorFromNormalized: function(normalized: TVector4): TColor; cdecl;
-  // Returns HSV values for a Color
+  // Get HSV values for a Color, hue [0..360], saturation/value [0..1]
   ColorToHSV: function(color: TColor): TVector3; cdecl;
-  // Returns a Color from HSV values
+  // Get a Color from HSV values, hue [0..360], saturation/value [0..1]
   ColorFromHSV: function(hsv: TVector3): TColor; cdecl;
-  // Returns color with alpha applied, alpha goes from 0.0f to 1.0f
+  // Get color with alpha applied, alpha goes from 0.0f to 1.0f
   ColorAlpha: function(Color: TColor; Alpha: Single): TColor; cdecl;
-  // Returns src alpha-blended into dst color with tint
+  // Get src alpha-blended into dst color with tint
   ColorAlphaBlend: function(dst, src, tint: TColor): TColor; cdecl;
-  // Returns a Color struct from hexadecimal value
-  GetColor: function(hexValue: Integer): TColor; cdecl;
+  // Get a Color struct from hexadecimal value
+  GetColor: function(hexValue: Cardinal): TColor; cdecl;
   // Get Color from a source pixel pointer of certain format
   GetPixelColor: function(srcPtr: Pointer; format: Integer): TColor; cdecl;
   // Set color formatted into destination pixel pointer
@@ -1633,45 +1738,62 @@ var
   // Load font from file into GPU memory (VRAM)
   LoadFont: function(const fileName: PUTF8Char): TFont; cdecl;
   // Load font from file with extended parameters
-  LoadFontEx: function(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; charsCount: Integer): TFont; cdecl;
+  LoadFontEx: function(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; glyphCount: Integer): TFont; cdecl;
   // Load font from Image (XNA style)
   LoadFontFromImage: function(image: TImage; key: TColor; firstChar: Integer): TFont; cdecl;
   // Load font from memory buffer, fileType refers to extension: i.e. "ttf"
-  LoadFontFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer; fontSize: Integer; fontChars: PInteger; charsCount: Integer): TFont; cdecl;
+  LoadFontFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer; fontSize: Integer; fontChars: PInteger; glyphCount: Integer): TFont; cdecl;
   // Load font data for further use
-  LoadFontData: function(fileData: PByte; dataSize, fontSize: Integer; fontChars: PInteger; charsCount: Integer; &type: Integer): PCharInfo; cdecl;
+  LoadFontData: function(fileData: PByte; dataSize, fontSize: Integer; fontChars: PInteger; glyphCount: Integer; &type: Integer): PGlyphInfo; cdecl;
   // Generate image font atlas using chars info
-  GenImageFontAtlas: function(const chars: PCharInfo; recs: PPRectangle; charsCount: Integer; fontSize: Integer; padding: Integer; packMethod: Integer): TImage; cdecl;
+  GenImageFontAtlas: function(const chars: PGlyphInfo; recs: PPRectangle; glyphCount: Integer; fontSize: Integer; padding: Integer; packMethod: Integer): TImage; cdecl;
   // Unload font chars info data (RAM)
-  UnloadFontData: procedure(fileData: PByte; charsCount: Integer); cdecl;
+  UnloadFontData: procedure(fileData: PGlyphInfo; glyphCount: Integer); cdecl;
   // Unload Font from GPU memory (VRAM)
   UnloadFont: procedure(font: TFont); cdecl;
 
   { Text drawing functions }
 
-  // Shows current FPS
+  // Draw current FPS
   DrawFPS: procedure(posX: Integer; posY: Integer); cdecl;
   // Draw text (using default font)
   DrawText: procedure(const Text: PUTF8Char; posX: Integer; posY: Integer; FontSize: Integer; Color: TColor); cdecl;
   // Draw text using font and additional parameters
   DrawTextEx: procedure(font: TFont; const text: Pointer; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl;
-  // Draw text using font inside rectangle limits
-  DrawTextRec: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: Boolean; tint: TColor); cdecl;
-  DrawTextRecEx: procedure(font: TFont; const text: PUTF8Char; rec: TRectangle; fontSize: Single; spacing: Single; wordWrap: Boolean; tint: TColor; selectStart: Integer; selectLength: Integer; selectTint: TColor; selectBackTint: TColor); cdecl;
+  // Draw text using Font and pro parameters (rotation)
+  DrawTextPro: procedure(Font: TFont; const text: PUTF8Char; Position: TVector2; origin: TVector2; Rotation: Single; fontSize: Single; spacing: Single; tint: TColor);
 
   // Draw text using font inside rectangle limits with support for text selection
   DrawTextCodepoint: procedure(font: TFont; codepoint: Integer; position: TVector2; fontSize: Single; tint: TColor); cdecl;
 
-  { Text misc. functions }
+  // Text font info functions
 
   // Measure string width for default font
   MeasureText: function(const text: PUTF8Char; fontSize: Integer): Integer; cdecl;
   // Measure string size for Font
   MeasureTextEx: function(font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single): TVector2; cdecl;
-  // Get index position for a unicode character on font
+  // Get glyph index position in font for a codepoint (unicode character), fallback to '?' if not found
   GetGlyphIndex: function(font: TFont; codepoint: Integer): Integer; cdecl;
+  // Get glyph font info data for a codepoint (unicode character), fallback to '?' if not found
+  GetGlyphInfo: function(Font: TFont; codepoint: Integer): TGlyphInfo; cdecl;
+  // Get glyph rectangle in font atlas for a codepoint (unicode character), fallback to '?' if not found
+  GetGlyphAtlasRec: function(Font: TFont; codepoint: integer): TRectangle; cdecl;
 
-  { Text strings management functions (no utf8 strings, only byte chars) }
+  // Text codepoints management functions (unicode characters)
+  // Load all codepoints from a UTF-8 text string, codepoints count returned by parameter
+  LoadCodepoints: function(text: PUtf8Char; count: PInteger): PInteger; cdecl;
+  // Unload codepoints data from memory
+  UnloadCodepoints: procedure(codepoints: PInteger); cdecl;
+  // Get total number of codepoints in a UTF-8 encoded string
+  GetCodepointCount: function(text: PUTF8Char): Integer; cdecl;
+  // Get next codepoint in a UTF-8 encoded string, 0x3f('?') is returned on failure
+  GetCodepoint: function(text: PUTF8Char; bytesProcessed: PInteger): Integer; cdecl;
+  // Encode one codepoint into UTF-8 byte array (array length returned as parameter)
+  CodepointToUTF8: function(codepoint: Integer; byteSize: PInteger): PUtf8Char; cdecl;
+  // Encode text as codepoints array into UTF-8 text string (WARNING: memory must be freed!)
+  TextCodepointsToUTF8: function(codepoints: PInteger; length: Integer): PUTf8Char; cdecl;
+
+  // Text strings management functions (no UTF-8 strings, only byte chars)
   // NOTE: Some strings allocate memory internally for returned strings, just be careful!
 
   // Copy one string to another, returns bytes copied
@@ -1680,13 +1802,13 @@ var
   TextIsEqual: function(const text1: PUTF8Char; const text2: PUTF8Char): Boolean; cdecl;
   // Get text length, checks for '\0' ending
   TextLength: function(const text: PUTF8Char): Cardinal; cdecl;
-  // Text formatting with variables (sprintf style)
+  // Text formatting with variables (sprintf() style)
   TextFormat: function(const text: PUTF8Char): PUTF8Char varargs; cdecl;
   // Get a piece of a text string
   TextSubtext: function(const text: PUTF8Char; position: Integer; length: Integer): PUTF8Char; cdecl;
-  // Replace text string (memory must be freed!)
+  // WARNING: Replace text string (memory must be freed!)
   TextReplace: function(text: PUTF8Char; const replace: PUTF8Char; const by: PUTF8Char): PUTF8Char; cdecl;
-  // Insert text in a position (memory must be freed!)
+  // WARNING: Insert text in a position (memory must be freed!)
   TextInsert: function(const text: PUTF8Char; const insert: PUTF8Char; position: Integer): PUTF8Char; cdecl;
   // Join text strings with delimiter
   TextJoin: function(textList: PPUTF8Char; count: Integer; const delimiter: PUTF8Char): PUTF8Char; cdecl;
@@ -1704,19 +1826,6 @@ var
   TextToPascal: function(const text: PUTF8Char): PUTF8Char; cdecl;
   // Get integer value from text (negative values not supported)
   TextToInteger: function(const text: PUTF8Char): Integer; cdecl;
-  // Encode text codepoint into utf8 text (memory must be freed!)
-  TextToUtf8: function(codepoints: PInteger; length: Integer): PUTF8Char; cdecl;
-
-  { UTF8 text strings management functions }
-
-  // Get all codepoints in a string, codepoints count returned by parameters
-  GetCodepoints: function(const text: PUTF8Char; count: PInteger): PInteger; cdecl;
-  // Get total number of characters (codepoints) in a UTF8 encoded string
-  GetCodepointsCount: function(const text: PUTF8Char): Integer; cdecl;
-  // Returns next codepoint in a UTF8 encoded string; 0x3f('?') is returned on failure
-  GetNextCodepoint: function(const text: PUTF8Char; bytesProcessed: PInteger): Integer; cdecl;
-  // Encode codepoint into utf8 text (char array length returned as parameter)
-  CodepointToUtf8: function(codepoint: Integer; byteLength: PInteger): PUTF8Char; cdecl;
 
 //------------------------------------------------------------------------------------
 // Basic 3d Shapes Drawing Functions (Module: models)
@@ -1733,7 +1842,7 @@ var
   // Draw a color-filled triangle (vertex in counter-clockwise order!)
   DrawTriangle3D: procedure(v1: TVector3; v2: TVector3; v3: TVector3; color: TColor); cdecl;
   // Draw a triangle strip defined by points
-  DrawTriangleStrip3D: procedure(Points: PVector3; pointsCount: integer; Color: TColor); cdecl;
+  DrawTriangleStrip3D: procedure(Points: PVector3; pointCount: integer; Color: TColor); cdecl;
   // Draw cube
   DrawCube: procedure(position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
   // Draw cube (Vector version)
@@ -1744,6 +1853,8 @@ var
   DrawCubeWiresV: procedure(position: TVector3; size: TVector3; color: TColor); cdecl;
   // Draw cube textured
   DrawCubeTexture: procedure(texture: TTexture2D; position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl;
+  // Draw cube with a region of a texture
+  DrawCubeTextureRec: procedure(Texture: TTexture2D; source: TRectangle; position: TVector3; width: Single; height: Single; length: Single; Color: TColor); cdecl;
   // Draw sphere
   DrawSphere: procedure(centerPos: TVector3; radius: Single; color: TColor); cdecl;
   // Draw sphere with extended parameters
@@ -1752,17 +1863,18 @@ var
   DrawSphereWires: procedure(centerPos: TVector3; radius: Single; rings: Integer; slices: Integer; color: TColor); cdecl;
   // Draw a cylinder/cone
   DrawCylinder: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl;
+  // Draw a cylinder with base at startPos and top at endPos
+  DrawCylinderEx: procedure(startPos: TVector3; endPos: TVector3; startRadius: Single; endRadius: Single; sides: Integer; Color: TColor); cdecl;
   // Draw a cylinder/cone wires
   DrawCylinderWires: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl;
+  // Draw a cylinder wires with base at startPos and top at endPos
+  DrawCylinderWiresEx: procedure(startPos: TVector3; endPos: TVector3; startRadius: Single; endRadius: Single; sides: Integer; Color: TColor); cdecl;
   // Draw a plane XZ
   DrawPlane: procedure(centerPos: TVector3; size: TVector2; color: TColor); cdecl;
   // Draw a ray line
   DrawRay: procedure(ray: TRay; color: TColor); cdecl;
   // Draw a grid (centered at (0, 0, 0))
   DrawGrid: procedure(slices: Integer; spacing: Single); cdecl;
-  // Draw simple gizmo
-  DrawGizmo: procedure(position: TVector3); cdecl;
-//DrawTorus(), DrawTeapot() could be useful?
 
 //------------------------------------------------------------------------------------
 // Model 3d Loading and Drawing Functions (Module: models)
@@ -1778,15 +1890,72 @@ var
   UnloadModel: procedure(model: TModel); cdecl;
   // Unload model (but not meshes) from memory (RAM and/or VRAM)
   UnloadModelKeepMeshes: procedure(model: TModel); cdecl;
+  // Compute model bounding box limits (considers all meshes)
+  GetModelBoundingBox: function(Model: TModel): TBoundingBox; cdecl;
 
-  { Mesh loading/unloading functions }
+  { Model drawing functions }
 
-  // Load meshes from model file
-  LoadMeshes: function(const fileName: PUTF8Char; meshCount: PInteger): PMesh; cdecl;
-  // Unload mesh from memory (RAM and/or VRAM)
+  // Draw a model (with texture if set)
+  DrawModel: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl;
+  // Draw a model with extended parameters
+  DrawModelEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl;
+  // Draw a model wires (with texture if set)
+  DrawModelWires: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl;
+  // Draw a model wires (with texture if set) with extended parameters
+  DrawModelWiresEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl;
+  // Draw bounding box (wires)
+  DrawBoundingBox: procedure(box: TBoundingBox; color: TColor); cdecl;
+  // Draw a billboard texture
+  DrawBillboard: procedure(camera: TCamera; texture: TTexture2D; center: TVector3; size: Single; tint: TColor); cdecl;
+  // Draw a billboard texture defined by sourceRec
+  DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; source: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl;
+  // Draw a billboard texture defined by source and rotation
+  DrawBillboardPro: procedure(camera: TCamera; Texture: TTexture2D; source: TRectangle; position: tVector3; up: TVector3; size: TVector2; origin: TVector2; Rotation: Single; tint: TColor); cdecl;
+
+  // Mesh management functions
+  // Upload mesh vertex data in GPU and provide VAO/VBO ids
+  UploadMesh: procedure(mesh: PMesh; Dynamic: Boolean); cdecl;
+  // Update mesh vertex data in GPU for a specific buffer index
+  UpdateMeshBuffer: procedure(mesh: TMesh; index: Integer; data: PByte; dataSize: Integer; offset: Integer); cdecl;
+  // Unload mesh data from CPU and GPU
   UnloadMesh: procedure(mesh: TMesh); cdecl;
-  // Export mesh data to file
-  ExportMesh: procedure(mesh: TMesh; const fileName: PUTF8Char); cdecl;
+  // Draw a 3d mesh with material and transform
+  DrawMesh: procedure(mesh: TMesh; material: TMaterial; transform: TMatrix); cdecl;
+  // Draw multiple mesh instances with material and different transforms
+  DrawMeshInstanced: procedure(Mesh: TMesh; Material: TMaterial; transforms: PMatrix; instances: Integer); cdecl;
+  // Export mesh data to file, returns true on success
+  ExportMesh: function(Mesh: TMesh; fileName: PUTF8Char): Boolean; cdecl;
+  // Compute mesh bounding box limits
+  GetMeshBoundingBox: function(Mesh: TMesh): TBoundingBox; cdecl;
+  // Compute mesh tangents
+  GenMeshTangents: procedure(Mesh: PMesh); cdecl;
+  // Compute mesh binormals
+  GenMeshBinormals: procedure(Mesh: PMesh); cdecl;
+
+  { Mesh generation functions }
+
+  // Generate polygonal mesh
+  GenMeshPoly: function(sides: Integer; radius: Single): TMesh; cdecl;
+  // Generate plane mesh (with subdivisions)
+  GenMeshPlane: function(width: Single; length: Single; resX: Integer; resZ: Integer): TMesh; cdecl;
+  // Generate cuboid mesh
+  GenMeshCube: function(width: Single; height: Single; length: Single): TMesh; cdecl;
+  // Generate sphere mesh (standard sphere)
+  GenMeshSphere: function(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl;
+  // Generate half-sphere mesh (no bottom cap)
+  GenMeshHemiSphere: function(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl;
+  // Generate cylinder mesh
+  GenMeshCylinder: function(radius: Single; height: Single; slices: Integer): TMesh; cdecl;
+  // Generate cone/pyramid mesh
+  GenMeshCone: function(radius: Single; height: Single; slices: Integer): TMesh; cdecl;
+  // Generate torus mesh
+  GenMeshTorus: function(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl;
+  // Generate trefoil knot mesh
+  GenMeshKnot: function(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl;
+  // Generate heightmap mesh from image data
+  GenMeshHeightmap: function(heightmap: TImage; size: TVector3): TMesh; cdecl;
+  // Generate cubes-based map mesh from image data
+  GenMeshCubicmap: function(cubicmap: TImage; cubeSize: TVector3): TMesh; cdecl;
 
   { Material loading/unloading functions }
 
@@ -1812,168 +1981,26 @@ var
   // Check model animation skeleton match
   IsModelAnimationValid: function(model: TModel; anim: TModelAnimation): Boolean; cdecl;
 
-  { Mesh generation functions }
-
-  // Generate polygonal mesh
-  GenMeshPoly: function(sides: Integer; radius: Single): TMesh; cdecl;
-  // Generate plane mesh (with subdivisions)
-  GenMeshPlane: function(width: Single; length: Single; resX: Integer; resZ: Integer): TMesh; cdecl;
-  // Generate cuboid mesh
-  GenMeshCube: function(width: Single; height: Single; length: Single): TMesh; cdecl;
-  // Generate sphere mesh (standard sphere)
-  GenMeshSphere: function(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl;
-  // Generate half-sphere mesh (no bottom cap)
-  GenMeshHemiSphere: function(radius: Single; rings: Integer; slices: Integer): TMesh; cdecl;
-  // Generate cylinder mesh
-  GenMeshCylinder: function(radius: Single; height: Single; slices: Integer): TMesh; cdecl;
-  // Generate torus mesh
-  GenMeshTorus: function(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl;
-  // Generate trefoil knot mesh
-  GenMeshKnot: function(radius: Single; size: Single; radSeg: Integer; sides: Integer): TMesh; cdecl;
-  // Generate heightmap mesh from image data
-  GenMeshHeightmap: function(heightmap: TImage; size: TVector3): TMesh; cdecl;
-  // Generate cubes-based map mesh from image data
-  GenMeshCubicmap: function(cubicmap: TImage; cubeSize: TVector3): TMesh; cdecl;
-
-  { Mesh manipulation functions }
-
-  // Compute mesh bounding box limits
-  MeshBoundingBox: function(mesh: TMesh): TBoundingBox; cdecl;
-  // Compute mesh tangents
-  MeshTangents: procedure(mesh: PMesh); cdecl;
-  // Compute mesh binormals
-  MeshBinormals: procedure(mesh: PMesh); cdecl;
-  // Smooth (average) vertex normals
-  MeshNormalsSmooth: procedure(mesh: PMesh); cdecl;
-
-  { Model drawing functions }
-
-  // Draw a model (with texture if set)
-  DrawModel: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl;
-  // Draw a model with extended parameters
-  DrawModelEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl;
-  // Draw a model wires (with texture if set)
-  DrawModelWires: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl;
-  // Draw a model wires (with texture if set) with extended parameters
-  DrawModelWiresEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl;
-  // Draw bounding box (wires)
-  DrawBoundingBox: procedure(box: TBoundingBox; color: TColor); cdecl;
-  // Draw a billboard texture
-  DrawBillboard: procedure(camera: TCamera; texture: TTexture2D; center: TVector3; size: Single; tint: TColor); cdecl;
-  // Draw a billboard texture defined by sourceRec
-  DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; source: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl;
-
   { Collision detection functions }
 
-  // Detect collision between two spheres
+  // Check collision between two spheres
   CheckCollisionSpheres: function(centerA: TVector3; radiusA: Single; centerB: TVector3; radiusB: Single): Boolean; cdecl;
-  // Detect collision between two bounding boxes
+  // Check collision between two bounding boxes
   CheckCollisionBoxes: function(box1: TBoundingBox; box2: TBoundingBox): Boolean; cdecl;
-  // Detect collision between box and sphere
+  // Check collision between box and sphere
   CheckCollisionBoxSphere: function(box: TBoundingBox; center: TVector3; radius: Single): Boolean; cdecl;
-  // Detect collision between ray and sphere
-  CheckCollisionRaySphere: function(ray: TRay; center: TVector3; radius: Single): Boolean; cdecl;
-  // Detect collision between ray and sphere, returns collision point
-  CheckCollisionRaySphereEx: function(ray: TRay; center: TVector3; radius: Single; collisionPoint: PVector3): Boolean; cdecl;
-  // Detect collision between ray and box
-  CheckCollisionRayBox: function(ray: TRay; box: TBoundingBox): Boolean; cdecl;
-  // Get collision info between ray and mesh
-  GetCollisionRayMesh: function(ray: TRay; mesh: TMesh; transform: TMatrix): TRayHitInfo; cdecl;
+  // Get collision info between ray and sphere
+  GetRayCollisionSphere: function(ray: TRay; center: TVector3; radius: Single): TRayCollision; cdecl;
+  // Get collision info between ray and box
+  GetRayCollisionBox: function(ray: TRay; box: TBoundingBox): TRayCollision; cdecl;
   // Get collision info between ray and model
-  GetCollisionRayModel: function(ray: TRay; model: TModel): TRayHitInfo; cdecl;
+  GetRayCollisionModel: function(ray: TRay; model: TModel): TRayCollision; cdecl;
+  // Get collision info between ray and mesh
+  GetRayCollisionMesh: function(ray: TRay; mesh: TMesh; transform: TMatrix): TRayCollision; cdecl;
   // Get collision info between ray and triangle
-  GetCollisionRayTriangle: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3): TRayHitInfo; cdecl;
-  // Get collision info between ray and ground plane (Y-normal plane)
-  GetCollisionRayGround: function(ray: TRay; groundHeight: Single): TRayHitInfo; cdecl;
-
-//------------------------------------------------------------------------------------
-// Shaders System Functions (Module: rlgl)
-// NOTE: This functions are useless when using OpenGL 1.1
-//------------------------------------------------------------------------------------
-
-  { Shader loading/unloading functions }
-
-  // Load shader from files and bind default locations
-  LoadShader: function(const vsFileName: PUTF8Char; const fsFileName: PUTF8Char): TShader; cdecl;
-  // Load shader from code strings and bind default locations
-  LoadShaderCode: function(const vsCode: PUTF8Char; const fsCode: PUTF8Char): TShader; cdecl;
-  // Unload shader from GPU memory (VRAM)
-  UnloadShader: procedure(shader: TShader); cdecl;
-
-  // Get default shader
-  GetShaderDefault: function: TShader; cdecl;
-  // Get default texture
-  GetTextureDefault: function: TTexture2D; cdecl;
-  // Get texture to draw shapes
-  GetShapesTexture: function: TTexture2D; cdecl;
-  // Get texture rectangle to draw shapes
-  GetShapesTextureRec: function: TRectangle; cdecl;
-  // Define default texture used to draw shapes
-  SetShapesTexture: procedure(texture: TTexture2D; source: TRectangle); cdecl;
-
-  { Shader configuration functions }
-
-  // Get shader uniform location
-  GetShaderLocation: function(shader: TShader; const uniformName: PUTF8Char): Integer; cdecl;
-  GetShaderLocationAttrib: function(shader: TShader; const attribName: PUTF8Char): Integer; cdecl;
-  // Set shader uniform value
-  SetShaderValue: procedure(shader: TShader; uniformLoc: Integer; const value: Pointer; uniformType: Integer); cdecl;
-  // Set shader uniform value vector
-  SetShaderValueV: procedure(shader: TShader; uniformLoc: Integer; const value: Pointer; uniformType: Integer; count: Integer); cdecl;
-  // Set shader uniform value (matrix 4x4)
-  SetShaderValueMatrix: procedure(shader: TShader; uniformLoc: Integer; mat: TMatrix); cdecl;
-  // Set shader uniform value for texture
-  SetShaderValueTexture: procedure(shader: TShader; uniformLoc: Integer; texture: TTexture2D); cdecl;
-  // Set a custom projection matrix (replaces internal projection matrix)
-  SetMatrixProjection: procedure(proj: TMatrix); cdecl;
-  // Set a custom modelview matrix (replaces internal modelview matrix)
-  SetMatrixModelview: procedure(view: TMatrix); cdecl;
-  // Get internal modelview matrix
-  GetMatrixModelview: function: TMatrix; cdecl;
-  // Get internal projection matrix
-  GetMatrixProjection: function: TMatrix; cdecl;
-
-  { Texture maps generation (PBR) }
-  // NOTE: Required shaders should be provided
-
-  // Generate cubemap texture from 2D panorama texture
-  GenTextureCubemap: function(shader: TShader; map: TTexture2D; size: Integer): TTextureCubemap; cdecl;
-  // Generate irradiance texture using cubemap data
-  GenTextureIrradiance: function(shader: TShader; cubemap: TTextureCubemap; size: Integer): TTextureCubemap; cdecl;
-  // Generate prefilter texture using cubemap data
-  GenTexturePrefilter: function(shader: TShader; cubemap: TTextureCubemap; size: Integer): TTextureCubemap; cdecl;
-  // Generate BRDF texture
-  GenTextureBRDF: function(shader: TShader; size: Integer): TTexture2D; cdecl;
-
-  { Shading begin/end functions }
-
-  // Begin custom shader drawing
-  BeginShaderMode: procedure(shader: TShader); cdecl;
-  // End custom shader drawing (use default shader)
-  EndShaderMode: procedure; cdecl;
-  // Begin blending mode (alpha, additive, multiplied)
-  BeginBlendMode: procedure(mode: Integer); cdecl;
-  // End blending mode (reset to default: alpha blending)
-  EndBlendMode: procedure; cdecl;
-
-  { VR control functions }
-
-  // Init VR simulator for selected device parameters
-  InitVrSimulator: procedure; cdecl;
-  // Close VR simulator for current device
-  CloseVrSimulator: procedure; cdecl;
-  // Update VR tracking (position and orientation) and camera
-  UpdateVrTracking: procedure(camera: PCamera); cdecl;
-  // Set stereo rendering configuration parameters
-  SetVrConfiguration: procedure(info: TVrDeviceInfo; distortion: TShader); cdecl;
-  // Detect if VR simulator is ready
-  IsVrSimulatorReady: function: Boolean; cdecl;
-  // Enable/Disable VR experience
-  ToggleVrMode: procedure; cdecl;
-  // Begin VR simulator stereo rendering
-  BeginVrDrawing: procedure; cdecl;
-  // End VR simulator stereo rendering
-  EndVrDrawing: procedure; cdecl;
+  GetRayCollisionTriangle: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3): TRayCollision; cdecl;
+  // Get collision info between ray and quad
+  GetRayCollisionQuad: function(ray: TRay; p1: TVector3; p2: TVector3; p3: TVector3; p4: TVector3): TRayCollision;  cdecl;
 
 //------------------------------------------------------------------------------------
 // Audio Loading and Playing Functions (Module: audio)
@@ -2001,7 +2028,7 @@ var
   // Load sound from wave data
   LoadSoundFromWave: function(wave: TWave): TSound; cdecl;
   // Update sound buffer with new data
-  UpdateSound: procedure(sound: TSound; const data: Pointer; samplesCount: Integer); cdecl;
+  UpdateSound: procedure(sound: TSound; const data: Pointer; sampleCount: Integer); cdecl;
   // Unload wave data
   UnloadWave: procedure(wave: TWave); cdecl;
   // Unload sound
@@ -2048,10 +2075,14 @@ var
 
   // Load music stream from file
   LoadMusicStream: function(const FileName: PUTF8Char): TMusic; cdecl;
+  // Load music stream from data
+  LoadMusicStreamFromMemory: function(fileType: PUTF8Char; data:PByte; dataSize: Integer): TMusic; cdecl;
   // Unload music stream
   UnloadMusicStream: procedure(Music: TMusic); cdecl;
   // Start music playing
   PlayMusicStream: procedure(Music: TMusic); cdecl;
+  // Check if music is playing
+  IsMusicStreamPlaying:function(music: TMusic): Boolean; cdecl;
   // Updates buffers for music streaming
   UpdateMusicStream: procedure(Music: TMusic); cdecl;
   // Stop music playing
@@ -2060,8 +2091,8 @@ var
   PauseMusicStream: procedure(Music: TMusic); cdecl;
   // Resume playing paused music
   ResumeMusicStream: procedure(Music: TMusic); cdecl;
-  // Check if music is playing
-  IsMusicPlaying: function(Music: TMusic): Boolean; cdecl;
+  // Seek music to a position (in seconds)
+  SeekMusicStream: procedure(music:TMusic; position: Single);
   // Set volume for music (1.0 is max level)
   SetMusicVolume: procedure(Music: TMusic; volume: Single); cdecl;
   // Set pitch for a music (1.0 is base level)
@@ -2073,12 +2104,12 @@ var
 
   { AudioStream management functions }
 
-  // Init audio stream (to stream raw audio pcm data)
-  InitAudioStream: function(SampleRate: Cardinal; SampleSize: Cardinal; Channels: Cardinal): TAudioStream; cdecl;
+  // Load audio stream (to stream raw audio pcm data)
+  LoadAudioStream: function(SampleRate: Cardinal; SampleSize: Cardinal; Channels: Cardinal): TAudioStream; cdecl;
+  // Unload audio stream and free memory
+  UnloadAudioStream: procedure(stream: TAudioStream); cdecl;
   // Update audio stream buffers with data
-  UpdateAudioStream: procedure(Stream: TAudioStream; const Data: Pointer; SamplesCount: Integer); cdecl;
-  // Close audio stream and free memory
-  CloseAudioStream: procedure(stream: TAudioStream); cdecl;
+  UpdateAudioStream: procedure(Stream: TAudioStream; const Data: Pointer; FrameCount: Integer); cdecl;
   // Check if any audio stream buffers requires refill
   IsAudioStreamProcessed: function(Stream: TAudioStream): Boolean; cdecl;
   // Play audio stream
@@ -2284,6 +2315,7 @@ begin
   GetScreenWidth := GetAddress('GetScreenWidth');
   GetScreenHeight := GetAddress('GetScreenHeight');
   GetMonitorCount := GetAddress('GetMonitorCount');
+  GetCurrentMonitor := GetAddress('GetCurrentMonitor');
   GetMonitorPosition := GetAddress('GetMonitorPosition');
   GetMonitorWidth := GetAddress('GetMonitorWidth');
   GetMonitorHeight := GetAddress('GetMonitorHeight');
@@ -2295,6 +2327,9 @@ begin
   GetWindowScaleDPI := GetAddress('GetWindowScaleDPI');
   SetClipboardText := GetAddress('SetClipboardText');
   GetClipboardText := GetAddress('GetClipboardText');
+  SwapScreenBuffer := GetAddress('SwapScreenBuffer');
+  PollInputEvents := GetAddress('PollInputEvents');
+  WaitTime := GetAddress('WaitTime');
   ShowCursor := GetAddress('ShowCursor');
   HideCursor := GetAddress('HideCursor');
   IsCursorHidden := GetAddress('IsCursorHidden');
@@ -2310,8 +2345,23 @@ begin
   EndMode3D := GetAddress('EndMode3D');
   BeginTextureMode := GetAddress('BeginTextureMode');
   EndTextureMode := GetAddress('EndTextureMode');
+  BeginShaderMode := GetAddress('BeginShaderMode');
+  EndShaderMode := GetAddress('EndShaderMode');
+  BeginBlendMode := GetAddress('BeginBlendMode');
+  EndBlendMode := GetAddress('EndBlendMode');
   BeginScissorMode := GetAddress('BeginScissorMode');
   EndScissorMode := GetAddress('EndScissorMode');
+  LoadVrStereoConfig := GetAddress('LoadVrStereoConfig');
+  UnloadVrStereoConfig := GetAddress('UnloadVrStereoConfig');
+  LoadShader := GetAddress('LoadShader');
+  LoadShaderFromMemory := GetAddress('LoadShaderFromMemory');
+  GetShaderLocation := GetAddress('GetShaderLocation');
+  GetShaderLocationAttrib := GetAddress('GetShaderLocationAttrib');
+  SetShaderValue := GetAddress('SetShaderValue');
+  SetShaderValueV := GetAddress('SetShaderValueV');
+  SetShaderValueMatrix := GetAddress('SetShaderValueMatrix');
+  SetShaderValueTexture := GetAddress('SetShaderValueTexture');
+  UnloadShader := GetAddress('UnloadShader');
   GetMouseRay := GetAddress('GetMouseRay');
   GetCameraMatrix := GetAddress('GetCameraMatrix');
   GetCameraMatrix2D := GetAddress('GetCameraMatrix2D');
@@ -2323,6 +2373,23 @@ begin
   GetFPS := GetAddress('GetFPS');
   GetFrameTime := GetAddress('GetFrameTime');
   GetTime := GetAddress('GetTime');
+
+  GetRandomValue := GetAddress('GetRandomValue');
+  SetRandomSeed := GetAddress('SetRandomSeed');
+  TakeScreenshot := GetAddress('TakeScreenshot');
+  SetConfigFlags := GetAddress('SetConfigFlags');
+  TraceLog := GetAddress('TraceLog');
+  SetTraceLogLevel := GetAddress('SetTraceLogLevel');
+  MemAlloc := GetAddress('MemAlloc');
+  MemRealloc := GetAddress('MemRealloc');
+  MemFree := GetAddress('MemFree');
+
+  SetTraceLogCallback := GetAddress('SetTraceLogCallback');
+  SetLoadFileDataCallback := GetAddress('SetLoadFileDataCallback');
+  SetSaveFileDataCallback := GetAddress('SetSaveFileDataCallback');
+  SetLoadFileTextCallback := GetAddress('SetLoadFileTextCallback');
+  SetSaveFileTextCallback := GetAddress('SetSaveFileTextCallback');
+
   ColorToInt := GetAddress('ColorToInt');
   ColorNormalize := GetAddress('ColorNormalize');
   ColorFromNormalized := GetAddress('ColorFromNormalized');
@@ -2332,15 +2399,6 @@ begin
   ColorAlphaBlend := GetAddress('ColorAlphaBlend');
   GetColor := GetAddress('GetColor');
   Fade := GetAddress('Fade');
-  SetConfigFlags := GetAddress('SetConfigFlags');
-  SetTraceLogLevel := GetAddress('SetTraceLogLevel');
-  SetTraceLogExit := GetAddress('SetTraceLogExit');
-  SetTraceLogCallback := GetAddress('SetTraceLogCallback');
-  TraceLog := GetAddress('TraceLog');
-  MemAlloc := GetAddress('MemAlloc');
-  MemFree := GetAddress('MemFree');
-  TakeScreenshot := GetAddress('TakeScreenshot');
-  GetRandomValue := GetAddress('GetRandomValue');
   LoadFileData := GetAddress('LoadFileData');
   UnloadFileData := GetAddress('UnloadFileData');
   SaveFileData := GetAddress('SaveFileData');
@@ -2365,6 +2423,8 @@ begin
   GetFileModTime := GetAddress('GetFileModTime');
   CompressData := GetAddress('CompressData');
   DecompressData := GetAddress('DecompressData');
+  EncodeDataBase64 := GetAddress('EncodeDataBase64');
+  DecodeDataBase64 := GetAddress('DecodeDataBase64');
   SaveStorageValue := GetAddress('SaveStorageValue');
   LoadStorageValue := GetAddress('LoadStorageValue');
   OpenURL := GetAddress('OpenURL');
@@ -2376,7 +2436,6 @@ begin
   GetKeyPressed := GetAddress('GetKeyPressed');
   GetCharPressed := GetAddress('GetCharPressed');
   IsGamepadAvailable := GetAddress('IsGamepadAvailable');
-  IsGamepadName := GetAddress('IsGamepadName');
   GetGamepadName := GetAddress('GetGamepadName');
   IsGamepadButtonPressed := GetAddress('IsGamepadButtonPressed');
   IsGamepadButtonDown := GetAddress('IsGamepadButtonDown');
@@ -2385,6 +2444,7 @@ begin
   GetGamepadButtonPressed := GetAddress('GetGamepadButtonPressed');
   GetGamepadAxisCount := GetAddress('GetGamepadAxisCount');
   GetGamepadAxisMovement := GetAddress('GetGamepadAxisMovement');
+  SetGamepadMappings := GetAddress('SetGamepadMappings');
   IsMouseButtonPressed := GetAddress('IsMouseButtonPressed');
   IsMouseButtonDown := GetAddress('IsMouseButtonDown');
   IsMouseButtonReleased := GetAddress('IsMouseButtonReleased');
@@ -2392,19 +2452,20 @@ begin
   GetMouseX := GetAddress('GetMouseX');
   GetMouseY := GetAddress('GetMouseY');
   GetMousePosition := GetAddress('GetMousePosition');
+  GetMouseDelta := GetAddress('GetMouseDelta');
   SetMousePosition := GetAddress('SetMousePosition');
   SetMouseOffset := GetAddress('SetMouseOffset');
   SetMouseScale := GetAddress('SetMouseScale');
   GetMouseWheelMove := GetAddress('GetMouseWheelMove');
-  GetMouseCursor := GetAddress('GetMouseCursor');
   SetMouseCursor := GetAddress('SetMouseCursor');
   GetTouchX := GetAddress('GetTouchX');
   GetTouchY := GetAddress('GetTouchY');
   GetTouchPosition := GetAddress('GetTouchPosition');
+  GetTouchPointId := GetAddress('GetTouchPointId');
+  GetTouchPointCount := GetAddress('GetTouchPointCount');
   SetGesturesEnabled := GetAddress('SetGesturesEnabled');
   IsGestureDetected := GetAddress('IsGestureDetected');
   GetGestureDetected := GetAddress('GetGestureDetected');
-  GetTouchPointsCount := GetAddress('GetTouchPointsCount');
   GetGestureHoldDuration := GetAddress('GetGestureHoldDuration');
   GetGestureDragVector := GetAddress('GetGestureDragVector');
   GetGestureDragAngle := GetAddress('GetGestureDragAngle');
@@ -2416,13 +2477,15 @@ begin
   SetCameraAltControl := GetAddress('SetCameraAltControl');
   SetCameraSmoothZoomControl := GetAddress('SetCameraSmoothZoomControl');
   SetCameraMoveControls := GetAddress('SetCameraMoveControls');
+  SetShapesTexture := GetAddress('SetShapesTexture');
   DrawPixel := GetAddress('DrawPixel');
   DrawPixelV := GetAddress('DrawPixelV');
   DrawLine := GetAddress('DrawLine');
   DrawLineV := GetAddress('DrawLineV');
   DrawLineEx := GetAddress('DrawLineEx');
   DrawLineBezier := GetAddress('DrawLineBezier');
-  DrawLineStrip := GetAddress('DrawLineStrip');
+  DrawLineBezierQuad := GetAddress('DrawLineBezierQuad');
+  DrawLineBezierCubic := GetAddress('DrawLineBezierCubic');
   DrawCircle := GetAddress('DrawCircle');
   DrawCircleSector := GetAddress('DrawCircleSector');
   DrawCircleSectorLines := GetAddress('DrawCircleSectorLines');
@@ -2450,6 +2513,7 @@ begin
   DrawTriangleStrip := GetAddress('DrawTriangleStrip');
   DrawPoly := GetAddress('DrawPoly');
   DrawPolyLines := GetAddress('DrawPolyLines');
+  DrawPolyLinesEx := GetAddress('DrawPolyLinesEx');
   CheckCollisionRecs := GetAddress('CheckCollisionRecs');
   CheckCollisionCircles := GetAddress('CheckCollisionCircles');
   CheckCollisionCircleRec := GetAddress('CheckCollisionCircleRec');
@@ -2458,11 +2522,14 @@ begin
   CheckCollisionPointCircle := GetAddress('CheckCollisionPointCircle');
   CheckCollisionPointTriangle := GetAddress('CheckCollisionPointTriangle');
   CheckCollisionLines := GetAddress('CheckCollisionLines');
+  CheckCollisionPointLine := GetAddress('CheckCollisionPointLine');
   GetCollisionRec := GetAddress('GetCollisionRec');
   LoadImage := GetAddress('LoadImage');
   LoadImageRaw := GetAddress('LoadImageRaw');
   LoadImageAnim := GetAddress('LoadImageAnim');
   LoadImageFromMemory := GetAddress('LoadImageFromMemory');
+  LoadImageFromTexture := GetAddress('LoadImageFromTexture');
+  LoadImageFromScreen := GetAddress('LoadImageFromScreen');
   UnloadImage := GetAddress('UnloadImage');
   ExportImage := GetAddress('ExportImage');
   ExportImageAsCode := GetAddress('ExportImageAsCode');
@@ -2476,7 +2543,6 @@ begin
   GenImageGradientRadial := GetAddress('GenImageGradientRadial');
   GenImageChecked := GetAddress('GenImageChecked');
   GenImageWhiteNoise := GetAddress('GenImageWhiteNoise');
-  GenImagePerlinNoise := GetAddress('GenImagePerlinNoise');
   GenImageCellular := GetAddress('GenImageCellular');
   ImageCopy := GetAddress('ImageCopy');
   ImageFromImage := GetAddress('ImageFromImage');
@@ -2507,6 +2573,7 @@ begin
   ImageColorBrightness := GetAddress('ImageColorBrightness');
   ImageColorReplace := GetAddress('ImageColorReplace');
   GetImageAlphaBorder := GetAddress('GetImageAlphaBorder');
+  GetImageColor := GetAddress('GetImageColor');
   ImageClearBackground := GetAddress('ImageClearBackground');
   ImageDrawPixel := GetAddress('ImageDrawPixel');
   ImageDrawPixelV := GetAddress('ImageDrawPixelV');
@@ -2529,8 +2596,6 @@ begin
   UnloadRenderTexture := GetAddress('UnloadRenderTexture');
   UpdateTexture := GetAddress('UpdateTexture');
   UpdateTextureRec := GetAddress('UpdateTextureRec');
-  GetTextureData := GetAddress('GetTextureData');
-  GetScreenData := GetAddress('GetScreenData');
   GenTextureMipmaps := GetAddress('GenTextureMipmaps');
   SetTextureFilter := GetAddress('SetTextureFilter');
   SetTextureWrap := GetAddress('SetTextureWrap');
@@ -2542,6 +2607,7 @@ begin
   DrawTextureTiled := GetAddress('DrawTextureTiled');
   DrawTexturePro := GetAddress('DrawTexturePro');
   DrawTextureNPatch := GetAddress('DrawTextureNPatch');
+  DrawTexturePoly := GetAddress('DrawTexturePoly');
   GetPixelColor := GetAddress('GetPixelColor');
   SetPixelColor := GetAddress('SetPixelColor');
   GetPixelDataSize := GetAddress('GetPixelDataSize');
@@ -2557,12 +2623,19 @@ begin
   DrawFPS := GetAddress('DrawFPS');
   DrawText := GetAddress('DrawText');
   DrawTextEx := GetAddress('DrawTextEx');
-  DrawTextRec := GetAddress('DrawTextRec');
-  DrawTextRecEx := GetAddress('DrawTextRecEx');
+  DrawTextPro := GetAddress('DrawTextPro');
   DrawTextCodepoint := GetAddress('DrawTextCodepoint');
   MeasureText := GetAddress('MeasureText');
   MeasureTextEx := GetAddress('MeasureTextEx');
   GetGlyphIndex := GetAddress('GetGlyphIndex');
+  GetGlyphInfo := GetAddress('GetGlyphInfo');
+  GetGlyphAtlasRec := GetAddress('GetGlyphAtlasRec');
+  LoadCodepoints := GetAddress('LoadCodepoints');
+  UnloadCodepoints := GetAddress('UnloadCodepoints');
+  GetCodepointCount := GetAddress('GetCodepointCount');
+  GetCodepoint := GetAddress('GetCodepoint');
+  CodepointToUTF8 := GetAddress('CodepointToUTF8');
+  TextCodepointsToUTF8 := GetAddress('TextCodepointsToUTF8');
   TextCopy := GetAddress('TextCopy');
   TextIsEqual := GetAddress('TextIsEqual');
   TextLength := GetAddress('TextLength');
@@ -2578,11 +2651,7 @@ begin
   TextToLower := GetAddress('TextToLower');
   TextToPascal := GetAddress('TextToPascal');
   TextToInteger := GetAddress('TextToInteger');
-  TextToUtf8 := GetAddress('TextToUtf8');
-  GetCodepoints := GetAddress('GetCodepoints');
-  GetCodepointsCount := GetAddress('GetCodepointsCount');
-  GetNextCodepoint := GetAddress('GetNextCodepoint');
-  CodepointToUtf8 := GetAddress('CodepointToUtf8');
+
   DrawLine3D := GetAddress('DrawLine3D');
   DrawPoint3D := GetAddress('DrawPoint3D');
   DrawCircle3D := GetAddress('DrawCircle3D');
@@ -2593,45 +2662,22 @@ begin
   DrawCubeWires := GetAddress('DrawCubeWires');
   DrawCubeWiresV := GetAddress('DrawCubeWiresV');
   DrawCubeTexture := GetAddress('DrawCubeTexture');
+  DrawCubeTextureRec := GetAddress('DrawCubeTextureRec');
   DrawSphere := GetAddress('DrawSphere');
   DrawSphereEx := GetAddress('DrawSphereEx');
   DrawSphereWires := GetAddress('DrawSphereWires');
   DrawCylinder := GetAddress('DrawCylinder');
   DrawCylinderWires := GetAddress('DrawCylinderWires');
+  DrawCylinderWiresEx := GetAddress('DrawCylinderWiresEx');
   DrawPlane := GetAddress('DrawPlane');
   DrawRay := GetAddress('DrawRay');
   DrawGrid := GetAddress('DrawGrid');
-  DrawGizmo := GetAddress('DrawGizmo');
+
   LoadModel := GetAddress('LoadModel');
   LoadModelFromMesh := GetAddress('LoadModelFromMesh');
   UnloadModel := GetAddress('UnloadModel');
   UnloadModelKeepMeshes := GetAddress('UnloadModelKeepMeshes');
-  LoadMeshes := GetAddress('LoadMeshes');
-  ExportMesh := GetAddress('ExportMesh');
-  UnloadMesh := GetAddress('UnloadMesh');
-  LoadMaterials := GetAddress('LoadMaterials');
-  LoadMaterialDefault := GetAddress('LoadMaterialDefault');
-  UnloadMaterial := GetAddress('UnloadMaterial');
-  SetMaterialTexture := GetAddress('SetMaterialTexture');
-  SetModelMeshMaterial := GetAddress('SetModelMeshMaterial');
-  LoadModelAnimations := GetAddress('LoadModelAnimations');
-  UpdateModelAnimation := GetAddress('UpdateModelAnimation');
-  UnloadModelAnimation := GetAddress('UnloadModelAnimation');
-  IsModelAnimationValid := GetAddress('IsModelAnimationValid');
-  GenMeshPoly := GetAddress('GenMeshPoly');
-  GenMeshPlane := GetAddress('GenMeshPlane');
-  GenMeshCube := GetAddress('GenMeshCube');
-  GenMeshSphere := GetAddress('GenMeshSphere');
-  GenMeshHemiSphere := GetAddress('GenMeshHemiSphere');
-  GenMeshCylinder := GetAddress('GenMeshCylinder');
-  GenMeshTorus := GetAddress('GenMeshTorus');
-  GenMeshKnot := GetAddress('GenMeshKnot');
-  GenMeshHeightmap := GetAddress('GenMeshHeightmap');
-  GenMeshCubicmap := GetAddress('GenMeshCubicmap');
-  MeshBoundingBox := GetAddress('MeshBoundingBox');
-  MeshTangents := GetAddress('MeshTangents');
-  MeshBinormals := GetAddress('MeshBinormals');
-  MeshNormalsSmooth := GetAddress('MeshNormalsSmooth');
+  GetModelBoundingBox := GetAddress('GetModelBoundingBox');
   DrawModel := GetAddress('DrawModel');
   DrawModelEx := GetAddress('DrawModelEx');
   DrawModelWires := GetAddress('DrawModelWires');
@@ -2639,50 +2685,50 @@ begin
   DrawBoundingBox := GetAddress('DrawBoundingBox');
   DrawBillboard := GetAddress('DrawBillboard');
   DrawBillboardRec := GetAddress('DrawBillboardRec');
+  DrawBillboardPro := GetAddress('DrawBillboardPro');
+  UploadMesh := GetAddress('UploadMesh');
+  UpdateMeshBuffer := GetAddress('UpdateMeshBuffer');
+  UnloadMesh := GetAddress('UnloadMesh');
+  DrawMesh := GetAddress('DrawMesh');
+  DrawMeshInstanced := GetAddress('DrawMeshInstanced');
+  ExportMesh := GetAddress('ExportMesh');
+  GetMeshBoundingBox := GetAddress('GetMeshBoundingBox');
+  GenMeshTangents := GetAddress('GenMeshTangents');
+  GenMeshBinormals := GetAddress('GenMeshBinormals');
+
+  GenMeshPoly := GetAddress('GenMeshPoly');
+  GenMeshPlane := GetAddress('GenMeshPlane');
+  GenMeshCube := GetAddress('GenMeshCube');
+  GenMeshSphere := GetAddress('GenMeshSphere');
+  GenMeshHemiSphere := GetAddress('GenMeshHemiSphere');
+  GenMeshCylinder := GetAddress('GenMeshCylinder');
+  GenMeshCone := GetAddress('GenMeshCone');
+  GenMeshTorus := GetAddress('GenMeshTorus');
+  GenMeshKnot := GetAddress('GenMeshKnot');
+  GenMeshHeightmap := GetAddress('GenMeshHeightmap');
+  GenMeshCubicmap := GetAddress('GenMeshCubicmap');
+
+  LoadMaterials := GetAddress('LoadMaterials');
+  LoadMaterialDefault := GetAddress('LoadMaterialDefault');
+  UnloadMaterial := GetAddress('UnloadMaterial');
+  SetMaterialTexture := GetAddress('SetMaterialTexture');
+  SetModelMeshMaterial := GetAddress('SetModelMeshMaterial');
+
+  LoadModelAnimations := GetAddress('LoadModelAnimations');
+  UpdateModelAnimation := GetAddress('UpdateModelAnimation');
+  UnloadModelAnimation := GetAddress('UnloadModelAnimation');
+  IsModelAnimationValid := GetAddress('IsModelAnimationValid');
+
   CheckCollisionSpheres := GetAddress('CheckCollisionSpheres');
   CheckCollisionBoxes := GetAddress('CheckCollisionBoxes');
   CheckCollisionBoxSphere := GetAddress('CheckCollisionBoxSphere');
-  CheckCollisionRaySphere := GetAddress('CheckCollisionRaySphere');
-  CheckCollisionRaySphereEx := GetAddress('CheckCollisionRaySphereEx');
-  CheckCollisionRayBox := GetAddress('CheckCollisionRayBox');
-  GetCollisionRayMesh := GetAddress('GetCollisionRayMesh');
-  GetCollisionRayModel := GetAddress('GetCollisionRayModel');
-  GetCollisionRayTriangle := GetAddress('GetCollisionRayTriangle');
-  GetCollisionRayGround := GetAddress('GetCollisionRayGround');
-  LoadShader := GetAddress('LoadShader');
-  LoadShaderCode := GetAddress('LoadShaderCode');
-  UnloadShader := GetAddress('UnloadShader');
-  GetShaderDefault := GetAddress('GetShaderDefault');
-  GetTextureDefault := GetAddress('GetTextureDefault');
-  GetShapesTexture := GetAddress('GetShapesTexture');
-  GetShapesTextureRec := GetAddress('GetShapesTextureRec');
-  SetShapesTexture := GetAddress('SetShapesTexture');
-  GetShaderLocation := GetAddress('GetShaderLocation');
-  GetShaderLocationAttrib := GetAddress('GetShaderLocationAttrib');
-  SetShaderValue := GetAddress('SetShaderValue');
-  SetShaderValueV := GetAddress('SetShaderValueV');
-  SetShaderValueMatrix := GetAddress('SetShaderValueMatrix');
-  SetShaderValueTexture := GetAddress('SetShaderValueTexture');
-  SetMatrixProjection := GetAddress('SetMatrixProjection');
-  SetMatrixModelview := GetAddress('SetMatrixModelview');
-  GetMatrixModelview := GetAddress('GetMatrixModelview');
-  GetMatrixProjection := GetAddress('GetMatrixProjection');
-  GenTextureCubemap := GetAddress('GenTextureCubemap');
-  GenTextureIrradiance := GetAddress('GenTextureIrradiance');
-  GenTexturePrefilter := GetAddress('GenTexturePrefilter');
-  GenTextureBRDF := GetAddress('GenTextureBRDF');
-  BeginShaderMode := GetAddress('BeginShaderMode');
-  EndShaderMode := GetAddress('EndShaderMode');
-  BeginBlendMode := GetAddress('BeginBlendMode');
-  EndBlendMode := GetAddress('EndBlendMode');
-  InitVrSimulator := GetAddress('InitVrSimulator');
-  CloseVrSimulator := GetAddress('CloseVrSimulator');
-  UpdateVrTracking := GetAddress('UpdateVrTracking');
-  SetVrConfiguration := GetAddress('SetVrConfiguration');
-  IsVrSimulatorReady := GetAddress('IsVrSimulatorReady');
-  ToggleVrMode := GetAddress('ToggleVrMode');
-  BeginVrDrawing := GetAddress('BeginVrDrawing');
-  EndVrDrawing := GetAddress('EndVrDrawing');
+  GetRayCollisionSphere := GetAddress('GetRayCollisionSphere');
+  GetRayCollisionBox := GetAddress('GetRayCollisionBox');
+  GetRayCollisionMesh := GetAddress('GetRayCollisionMesh');
+  GetRayCollisionModel := GetAddress('GetRayCollisionModel');
+  GetRayCollisionTriangle := GetAddress('GetRayCollisionTriangle');
+  GetRayCollisionQuad := GetAddress('GetRayCollisionQuad');
+
   InitAudioDevice := GetAddress('InitAudioDevice');
   CloseAudioDevice := GetAddress('CloseAudioDevice');
   IsAudioDeviceReady := GetAddress('IsAudioDeviceReady');
@@ -2712,20 +2758,22 @@ begin
   LoadWaveSamples := GetAddress('LoadWaveSamples');
   UnloadWaveSamples := GetAddress('UnloadWaveSamples');
   LoadMusicStream := GetAddress('LoadMusicStream');
+  LoadMusicStreamFromMemory := GetAddress('LoadMusicStreamFromMemory');
   UnloadMusicStream := GetAddress('UnloadMusicStream');
   PlayMusicStream := GetAddress('PlayMusicStream');
+  IsMusicStreamPlaying := GetAddress('IsMusicStreamPlaying');
   UpdateMusicStream := GetAddress('UpdateMusicStream');
   StopMusicStream := GetAddress('StopMusicStream');
   PauseMusicStream := GetAddress('PauseMusicStream');
   ResumeMusicStream := GetAddress('ResumeMusicStream');
-  IsMusicPlaying := GetAddress('IsMusicPlaying');
+  SeekMusicStream := GetAddress('SeekMusicStream');
   SetMusicVolume := GetAddress('SetMusicVolume');
   SetMusicPitch := GetAddress('SetMusicPitch');
   GetMusicTimeLength := GetAddress('GetMusicTimeLength');
   GetMusicTimePlayed := GetAddress('GetMusicTimePlayed');
-  InitAudioStream := GetAddress('InitAudioStream');
+  LoadAudioStream := GetAddress('LoadAudioStream');
+  UnloadAudioStream := GetAddress('UnloadAudioStream');
   UpdateAudioStream := GetAddress('UpdateAudioStream');
-  CloseAudioStream := GetAddress('CloseAudioStream');
   IsAudioStreamProcessed := GetAddress('IsAudioStreamProcessed');
   PlayAudioStream := GetAddress('PlayAudioStream');
   PauseAudioStream := GetAddress('PauseAudioStream');
@@ -2738,7 +2786,7 @@ begin
 end;
 
 initialization
-  RayLibrary := TmncRayLib.Create('raylib');
+  RayLibrary := TmncRayLib.Create('raylib4');
 finalization
   FreeAndNil(RayLibrary);
 end.

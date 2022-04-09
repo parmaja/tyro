@@ -168,8 +168,8 @@ type
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     procedure Resize; override;
     procedure KeyPress(var Key: TUTF8Char); override;
-    procedure KeyDown(var Key: word; Shift: TShiftState); override;
-    procedure KeyUp(var Key: word; Shift: TShiftState); override;
+    procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
+    procedure KeyUp(var Key: TKeyboardKey; Shift: TShiftState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: Integer); override;
     procedure MouseMove(Shift: TShiftState; x, y: Integer); override;
@@ -1882,13 +1882,13 @@ begin
   inherited;
 end;
 
-procedure TTyroConsole.KeyUp(var Key: word; Shift: TShiftState);
+procedure TTyroConsole.KeyUp(var Key: TKeyboardKey; Shift: TShiftState);
 begin
   inherited KeyUp(key, shift);
-  key:=0;
+  key:= KEY_NULL;
 end;
 
-procedure TTyroConsole.KeyDown(var Key: word; Shift: TShiftState);
+procedure TTyroConsole.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
 var
   s: string;
   i: Integer;
@@ -1898,7 +1898,7 @@ begin
   case Key of
     Key_END:
     begin
-      key := 0;
+      key := KEY_NULL;
       if (not (ssAlt in Shift)) and FInput and (FInputPos <> FInputBuffer.Count) then
       begin
         if not (ssShift in Shift) then
@@ -1913,7 +1913,7 @@ begin
     end;
     Key_HOME:
     begin
-      key := 0;
+      key := KEY_NULL;
       if (not (ssAlt in Shift)) and FInput and (FInputPos <> FInputMinPos) then
       begin
         if not (ssShift in Shift) then
@@ -1928,7 +1928,7 @@ begin
     end;
     Key_LEFT:
     begin
-      key:=0;
+      key:=KEY_NULL;
       if (not (ssAlt in Shift)) and (FInput and (FInputPos > FInputMinPos)) then
       begin
         if not (ssShift in Shift) then
@@ -1943,7 +1943,7 @@ begin
     end;
     Key_UP:
     begin
-      key:=0;
+      key:=KEY_NULL;
       if (not (ssAlt in Shift)) and FInput then
       begin
         SetSelection(-1, 0);
@@ -1952,7 +1952,7 @@ begin
     end;
     Key_DOWN:
     begin
-      key:=0;
+      key:=KEY_NULL;
       if (not (ssAlt in Shift)) and FInput then
       begin
         SetSelection(-1, 0);
@@ -1961,7 +1961,7 @@ begin
     end;
     Key_RIGHT:
     begin
-      key:=0;
+      key:=KEY_NULL;
       if (not (ssAlt in Shift)) and FInput and (FInputPos < FInputBuffer.Count) then
       begin
         if not (ssShift in Shift) then

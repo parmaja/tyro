@@ -1,6 +1,11 @@
 ### Interduce ###
 
-Header translation of [raylib 3.5](https://www.raylib.com/) for videogames programming, compiled in FPC and Delphi, Dynamic loading dll, with wrapping classes to make it easy to use.
+Header translation of [raylib 4](https://www.raylib.com/) for videogames programming, compiled in FPC and Delphi, Dynamic loading dll, with wrapping classes to make it easy to use.
+
+### Install ###
+
+Get the right version of raylib [raylib 4](https://github.com/raysan5/raylib/releases)
+Rename dll/so file to raylib4.dll put it in path or bin folder
 
 ### Compile ###
 
@@ -17,4 +22,3 @@ https://github.com/GuvaCode/Ray4Laz
 https://github.com/tazdij/raylib-pas
 
 https://github.com/drezgames/raylib-pascal
-
