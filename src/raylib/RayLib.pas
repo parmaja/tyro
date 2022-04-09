@@ -2159,6 +2159,8 @@ var
 function Vector2Of(X, Y: Single): TVector2;
 function RectangleOf(X, Y, W, H: Single): TRectangle;
 
+procedure InitLibrary;
+
 implementation
 
 function Vector2Of(X, Y: Single): TVector2;
@@ -2784,6 +2786,11 @@ begin
   GetAddress(@SetAudioStreamVolume, 'SetAudioStreamVolume');
   GetAddress(@SetAudioStreamPitch, 'SetAudioStreamPitch');
   GetAddress(@SetAudioStreamBufferSizeDefault, 'SetAudioStreamBufferSizeDefault');
+end;
+
+procedure InitLibrary;
+begin
+  RayLibrary.Load;
 end;
 
 initialization
