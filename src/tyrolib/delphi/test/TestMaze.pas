@@ -38,6 +38,14 @@ type
     function Check: TCell;
   end;
 
+  TMazeMain = class(TTyroMain)
+  public
+    procedure Init; override;
+    procedure Setup; override;
+    procedure Draw; override;
+    procedure Unload; override;
+  end;
+
 var
   Cells:TCells;
 
@@ -171,6 +179,63 @@ begin
       DrawRectangle(x, y, w, w, c, True);
     end;
   end;
+end;
+
+{ TMazeMain }
+
+procedure TMazeMain.Draw;
+begin
+  inherited;
+  Canvas.PenAlpha := 0;
+  Canvas.PenColor := clBlack;
+  Canvas.DrawText(30, 30, 'Ready!', clBlack);
+
+  for var aCell in Cells do
+    aCell.Show;
+
+  FCurrent.FHit := True;
+  FNext := FCurrent.Check;
+  if FNext<>nil then
+  begin
+    FNext.FHit := True;
+    Stack.Push(FCurrent);
+    FCurrent.RemoveWalls(FNext);
+    FCurrent := FNext;
+  end
+  else
+  begin
+    if Stack.Count<>0 then
+      FCurrent := Stack.Pop;
+  end;
+end;
+
+procedure TMazeMain.Init;
+begin
+  inherited;
+  FCW := FWidth div FCols;
+  Cells := TObjectList<TCell>.Create;
+  Stack := TStack<TCell>.Create;
+
+  ShowWindow(FWidth, FHeight);
+  for var row in [0..FRows-1] do
+    for var col in [0..FCols-1] do
+      Cells.Add(TCell.Create(row, col, FCW));
+
+  FCurrent := Cells[0];
+end;
+
+procedure TMazeMain.Setup;
+begin
+  inherited;
+  SetFPS(10);
+  //Options := Options + [moShowFPS];
+end;
+
+procedure TMazeMain.Unload;
+begin
+  inherited;
+  FreeAndNil(Cells);
+  FreeAndNil(Stack);
 end;
 
 end.
