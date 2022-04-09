@@ -207,7 +207,7 @@ begin
   //TTyroPanel.Create(Self);
 
   Console := TTyroConsole.Create(Self);
-  Console.BoundsRect := Rect(Margin, Margin , 100, 100);
+  Console.WindowRect := Rect(Margin, Margin , 100, 100);
   Console.CharHeight := 16;
   Console.CharWidth := 16;
   Console.Visible := False;
@@ -285,7 +285,7 @@ begin
   inherited;
   Graphic := TTyroTextureCanvas.Create(AWidth, AHeight, True);
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
-  Console.BoundsRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
+  Console.WindowRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
 end;
 
 procedure TTyroEngine.Stop;

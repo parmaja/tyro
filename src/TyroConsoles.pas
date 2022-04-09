@@ -2678,7 +2678,7 @@ begin
   FInputSelColor       := clBlue;
   FHistoryMax          := 10;
   FHistoryLength       := 0;
-  SetBounds(0, 0, 200, 200);
+  SetWindowBounds(0, 0, 200, 200);
   FHistory := TColorStrings.Create(Self);
 
   if FCaretHeight = -1 then
