@@ -8,7 +8,7 @@ unit RayLib;
 {$A8}
 
 {**
- *  RayLib 3.5
+ *  RayLib 4
  *
  *  This file is part of Tyro project, ported from C header raylib.h
  *
@@ -23,19 +23,20 @@ unit RayLib;
 
 {**********************************************************************************************
 *
-*   raylib - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
+*   raylib v4.0 - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
 *
 *   FEATURES:
 *       - NO external dependencies, all required libraries included with raylib
-*       - Multiplatform: Windows, Linux, FreeBSD, OpenBSD, NetBSD, DragonFly, MacOS, UWP, Android, Raspberry Pi, HTML5.
+*       - Multiplatform: Windows, Linux, FreeBSD, OpenBSD, NetBSD, DragonFly,
+*                        MacOS, Haiku, Android, Raspberry Pi, DRM native, HTML5.
 *       - Written in plain C code (C99) in PascalCase/camelCase notation
-*       - Hardware accelerated with OpenGL (1.1, 2.1, 3.3 or ES2 - choose at compile)
+*       - Hardware accelerated with OpenGL (1.1, 2.1, 3.3, 4.3 or ES2 - choose at compile)
 *       - Unique OpenGL abstraction layer (usable as standalone module): [rlgl]
 *       - Multiple Fonts formats supported (TTF, XNA fonts, AngelCode fonts)
 *       - Outstanding texture formats support, including compressed formats (DXT, ETC, ASTC)
 *       - Full 3d support for 3d Shapes, Models, Billboards, Heightmaps and more!
 *       - Flexible Materials system, supporting classic maps and PBR maps
-*       - Skeletal Animation support (CPU bones-based animation)
+*       - Animated 3D models supported (skeletal bones animation) (IQM)
 *       - Shaders support, including Model shaders and Postprocessing shaders
 *       - Powerful math module for Vector, Matrix and Quaternion operations: [raymath]
 *       - Audio loading and playing with streaming support (WAV, OGG, MP3, FLAC, XM, MOD)
@@ -43,29 +44,32 @@ unit RayLib;
 *       - Bindings to multiple programming languages available!
 *
 *   NOTES:
-*       One custom font is loaded by default when InitWindow() [core]
-*       If using OpenGL 3.3 or ES2, one default shader is loaded automatically (internally defined) [rlgl]
-*       If using OpenGL 3.3 or ES2, several vertex buffers (VAO/VBO) are created to manage lines-triangles-quads
+*       - One default Font is loaded on InitWindow()->LoadFontDefault() [core, text]
+*       - One default Texture2D is loaded on rlglInit(), 1x1 white pixel R8G8B8A8 [rlgl] (OpenGL 3.3 or ES2)
+*       - One default Shader is loaded on rlglInit()->rlLoadShaderDefault() [rlgl] (OpenGL 3.3 or ES2)
+*       - One default RenderBatch is loaded on rlglInit()->rlLoadRenderBatch() [rlgl] (OpenGL 3.3 or ES2)
 *
 *   DEPENDENCIES (included):
-*       [core] rglfw (github.com/glfw/glfw) for window/context management and input (only PLATFORM_DESKTOP)
-*       [rlgl] glad (github.com/Dav1dde/glad) for OpenGL 3.3 extensions loading (only PLATFORM_DESKTOP)
-*       [raudio] miniaudio (github.com/dr-soft/miniaudio) for audio device/context management
+*       [rcore] rglfw (Camilla Löwy - github.com/glfw/glfw) for window/context management and input (PLATFORM_DESKTOP)
+*       [rlgl] glad (David Herberth - github.com/Dav1dde/glad) for OpenGL 3.3 extensions loading (PLATFORM_DESKTOP)
+*       [raudio] miniaudio (David Reid - github.com/mackron/miniaudio) for audio device/context management
 *
 *   OPTIONAL DEPENDENCIES (included):
-*       [core] rgif (Charlie Tangora, Ramon Santamaria) for GIF recording
-*       [textures] stb_image (Sean Barret) for images loading (BMP, TGA, PNG, JPEG, HDR...)
-*       [textures] stb_image_write (Sean Barret) for image writting (BMP, TGA, PNG, JPG)
-*       [textures] stb_image_resize (Sean Barret) for image resizing algorithms
-*       [textures] stb_perlin (Sean Barret) for Perlin noise image generation
-*       [text] stb_truetype (Sean Barret) for ttf fonts loading
-*       [text] stb_rect_pack (Sean Barret) for rectangles packing
-*       [models] par_shapes (Philip Rideout) for parametric 3d shapes generation
-*       [models] tinyobj_loader_c (Syoyo Fujita) for models loading (OBJ, MTL)
-*       [models] cgltf (Johannes Kuhlmann) for models loading (glTF)
-*       [raudio] stb_vorbis (Sean Barret) for OGG audio loading
+*       [rcore] msf_gif (Miles Fogle) for GIF recording
+*       [rcore] sinfl (Micha Mettke) for DEFLATE decompression algorythm
+*       [rcore] sdefl (Micha Mettke) for DEFLATE compression algorythm
+*       [rtextures] stb_image (Sean Barret) for images loading (BMP, TGA, PNG, JPEG, HDR...)
+*       [rtextures] stb_image_write (Sean Barret) for image writing (BMP, TGA, PNG, JPG)
+*       [rtextures] stb_image_resize (Sean Barret) for image resizing algorithms
+*       [rtext] stb_truetype (Sean Barret) for ttf fonts loading
+*       [rtext] stb_rect_pack (Sean Barret) for rectangles packing
+*       [rmodels] par_shapes (Philip Rideout) for parametric 3d shapes generation
+*       [rmodels] tinyobj_loader_c (Syoyo Fujita) for models loading (OBJ, MTL)
+*       [rmodels] cgltf (Johannes Kuhlmann) for models loading (glTF)
+*       [raudio] dr_wav (David Reid) for WAV audio file loading
 *       [raudio] dr_flac (David Reid) for FLAC audio file loading
 *       [raudio] dr_mp3 (David Reid) for MP3 audio file loading
+*       [raudio] stb_vorbis (Sean Barret) for OGG audio loading
 *       [raudio] jar_xm (Joshua Reisenauer) for XM audio module loading
 *       [raudio] jar_mod (Joshua Reisenauer) for MOD audio module loading
 *
@@ -75,11 +79,11 @@ unit RayLib;
 *   raylib is licensed under an unmodified zlib/libpng license, which is an OSI-certified,
 *   BSD-like license that allows static linking with closed source software:
 *
-*   Copyright (c) 2013-2020 Ramon Santamaria (@raysan5)
+*   Copyright (c) 2013-2021 Ramon Santamaria (@raysan5)
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
-  *
+*
 *   Permission is granted to anyone to use this software for any purpose, including commercial
 *   applications, and to alter it and redistribute it freely, subject to the following restrictions:
 *
@@ -103,17 +107,25 @@ uses
   Types, Classes, SysUtils,
   mnLibraries; // take it from github/parmaja/minilib
 
+const
+  RAYLIB_VERSION = '4.0';
+
 type
   PPUTF8Char = ^PUTF8Char;
 
   { TRGBAColor }
 
+  // Color, 4 components, R8G8B8A8 (32bit)
   TRGBAColor = record
-    Red, Green, Blue, Alpha: Byte;
+    Red: Byte; // Color red value
+    Green: Byte; // Color green value
+    Blue: Byte; // Color blue value
+    Alpha: Byte; // Color alpha value
   end;
 
   { TColor }
 
+  // Color, 4 components, R8G8B8A8 (32bit)
   //AColor := TColor.Create($010203FF);
   TColor = record
     class operator Implicit(a: Cardinal): TColor;
@@ -153,6 +165,20 @@ type
   end;
 
 const
+  // NOTE: We set some defines with some data types declared by raylib
+  // Other modules (raymath, rlgl) also require some of those types, so,
+  // to be able to use those other modules as standalone (not depending on raylib)
+  // this defines are very useful for internal check and avoid type (re)definitions
+{
+  RL_COLOR_TYPE
+  RL_RECTANGLE_TYPE
+  RL_VECTOR2_TYPE
+  RL_VECTOR3_TYPE
+  RL_VECTOR4_TYPE
+  RL_QUATERNION_TYPE
+  RL_MATRIX_TYPE
+}
+
   clLightgray: TRGBAColor = (Red: 200; Green: 200; Blue: 200; Alpha: 255);   // Light Gray
   clGray:      TRGBAColor = (Red: 130; Green: 130; Blue: 130; Alpha: 255);   // Gray
   clDarkGray:  TRGBAColor = (Red: 80; Green: 80; Blue: 80; Alpha: 255);      // Dark Gray
@@ -186,62 +212,62 @@ type
 
   { TVector2 }
 
+  // Vector2, 2 components
   TVector2 = packed record
-    X: Single;
-    Y: Single;
+    X: Single; // Vector x component
+    Y: Single; // Vector y component
     constructor Create(AX, AY: Single); overload;
     constructor Create(I: Int64); overload;
   end;
   PVector2 = ^TVector2;
 
-  // Vector3 type
-
   { TVector3 }
 
+  // Vector3, 3 components
   TVector3 = packed record
-    x: Single;
-    y: Single;
-    z: Single;
+    x: Single; // Vector x component
+    y: Single; // Vector y component
+    z: Single; // Vector z component
     constructor Create(AX, AY, AZ: Single); overload;
   end;
   PVector3 = ^TVector3;
 
-  // Vector4 type
+  { TVector4 }
+
+  // Vector4, 4 components
   TVector4 = packed record
-    x: Single;
-    y: Single;
-    z: Single;
-    w: Single;
+    x: Single; // Vector x component
+    y: Single; // Vector y component
+    z: Single; // Vector z component
+    w: Single; // Vector w component
   end;
   PVector4 = ^TVector4;
 
-  // Quaternion type, same as Vector4
+  // Quaternion, 4 components (Vector4 alias)
   TQuaternion = PVector4;
 
-  // Matrix type (OpenGL style 4x4 - right handed, column major)
+  // Matrix, 4x4 components, column major, OpenGL style, right handed
   TMatrix = record
-    m0, m4, m8, m12: Single;
-    m1, m5, m9, m13: Single;
-    m2, m6, m10, m14: Single;
-    m3, m7, m11, m15: Single;
+    m0, m4, m8, m12: Single; // Matrix first row (4 components)
+    m1, m5, m9, m13: Single; // Matrix second row (4 components)
+    m2, m6, m10, m14: Single; // Matrix third row (4 components)
+    m3, m7, m11, m15: Single; // Matrix fourth row (4 components)
   end;
-
-  // Rectangle type
 
   { TRectangle }
 
+  // Rectangle, 4 components
   TRectangle = packed record
-    X: Single;
-    Y: Single;
-    Width: Single;
-    Height: Single;
+    X: Single;       // Rectangle top-left corner position x
+    Y: Single;       // Rectangle top-left corner position y
+    Width: Single;   // Rectangle width
+    Height: Single;  // Rectangle height
     constructor Create(AX, AY, AWidth, AHeight: Single);
   end;
   PRectangle = ^TRectangle;
   PPRectangle = ^PRectangle;
 
-  // Image type, bpp always RGBA (32bit)
-  // NOTE: Data stored in CPU memory (RAM)
+  // Image, pixel data stored in CPU memory (RAM)
   TImage = packed record
     Data: Pointer;     // Image raw data
     Width: Integer;    // Image base width
@@ -251,8 +277,7 @@ type
   end;
   PImage = ^TImage;
 
-  // Texture type
-  // NOTE: Data stored in GPU memory
+  // Texture, tex data stored in GPU memory (VRAM)
   TTexture = packed record
     ID: Cardinal;      // OpenGL texture id
     Width: Integer;    // Texture base width
@@ -262,91 +287,86 @@ type
   end;
   PTexture = ^TTexture;
 
-  // Texture type, same as Texture2D
+  // Texture2D, same as Texture
   TTexture2D = TTexture;
   PTexture2D = ^PTexture;
 
-  // TextureCubemap type, actually, same as Texture2D
+  // TextureCubemap, same as Texture
   TTextureCubemap = TTexture;
   PTextureCubemap = ^PTexture;
 
-  // RenderTexture type, for texture rendering
-  // RenderTexture type, for texture rendering
+  // RenderTexture, fbo for texture rendering
   TRenderTexture = packed record
-    ID: Cardinal;          // OpenGL Framebuffer Object (FBO) id
+    ID: Cardinal;        // OpenGL Framebuffer Object (FBO) id
     Texture: TTexture;   // Color buffer attachment texture
     Depth: TTexture;     // Depth buffer attachment texture
   end;
   PRenderTexture = ^TRenderTexture;
 
-  // RenderTexture type, same as RenderTexture2D
+  // RenderTexture2D, same as RenderTexture
   TRenderTexture2D = TRenderTexture;
   PRenderTexture2D = ^TRenderTexture;
 
-  // N-Patch layout info
+  // NPatchInfo, n-patch layout info
   TNPatchInfo = packed record
-    Source: TRectangle; // Region in the texture
-    Left: Integer;         // left border offset
-    Top: Integer;          // top border offset
-    Right: Integer;        // right border offset
-    Bottom: Integer;       // bottom border offset
-    AType: Integer;        // layout of the n-patch: 3x3, 1x3 or 3x1
+    Source: TRectangle; // Texture source rectangle
+    Left: Integer;         // Left border offset
+    Top: Integer;          // Top border offset
+    Right: Integer;        // Right border offset
+    Bottom: Integer;       // Bottom border offset
+    AType: Integer;        // Layout of the n-patch: 3x3, 1x3 or 3x1
   end;
   PNPatchInfo = ^TNPatchInfo;
 
-// Font character info
-  TCharInfo = packed record
+  // GlyphInfo, font characters glyphs info
+  TGlyphInfo = packed record
     Value: Integer;    // Character value (Unicode)
     OffsetX: Integer;  // Character offset X when drawing
     OffsetY: Integer;  // Character offset Y when drawing
     AdvanceX: Integer; // Character advance position X
     Image: TImage;     // Character image data
   end;
-  PCharInfo = ^TCharInfo;
+  PGlyphInfo = ^TGlyphInfo;
 
-  // Font type, includes texture and charSet array data
+  // Font, font texture and GlyphInfo array data
   TFont = packed record
-    BaseSize: Integer;
-    CharsCount: Integer;
-    CharsPadding: Integer;
-    Texture: TTexture2D;
-    Recs: PRectangle;
-    Chars: PCharInfo;
+    BaseSize: Integer;       // Base size (default chars height)
+    GlyphCount: Integer;     // Number of glyph characters
+    GlyphPadding: Integer;   // Padding around the glyph characters
+    Texture: TTexture2D;     // Texture atlas containing the glyphs
+    Recs: PRectangle;        // Rectangles in texture for the glyphs
+    Glyphs: PGlyphInfo;      // Glyphs info data
   end;
   PFont = ^TFont;
 
-  TSpriteFont = TFont; // SpriteFont type fallback, defaults to Font
-  PSpriteFont = ^TSpriteFont;
-
-  // Camera type, defines a camera position/orientation in 3d space
+  // Camera, defines position/orientation in 3d space
   TCamera3D = packed record
     Position: TVector3;    // Camera position
     Target: TVector3;      // Camera target it looks-at
     Up: TVector3;          // Camera up vector (rotation over its axis)
     Fovy: Single;          // Camera field-of-view apperture in Y (degrees) in perspective, used as near plane width in orthographic
-    AType: Integer;        // Camera type, defines projection type: TCamera_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
+    Projection: Integer;   // Camera projection: CAMERA_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
   end;
   PCamera3D = ^TCamera3D;
 
   TCamera = TCamera3D;      // Camera type fallback, defaults to Camera3D
   PCamera = ^TCamera;
 
-  // Camera2D type, defines a 2d camera
+  // Camera2D, defines position/orientation in 2d space
   TCamera2D = packed record
-    Offset: TVector2;
-    Target: TVector2;
-    Rotation: Single;
-    Zoom: Single;
+    Offset: TVector2;       // Camera offset (displacement from target)
+    Target: TVector2;       // Camera target (rotation and zoom origin)
+    Rotation: Single;       // Camera rotation in degrees
+    Zoom: Single;           // Camera zoom (scaling), should be 1.0f by default
   end;
   PCamera2D = ^TCamera2D;
 
-  // Vertex data definning a mesh
-  // NOTE: Data stored in CPU memory (and GPU)
+  // Mesh, vertex data and vao/vbo
   TMesh = packed record
       VertexCount: Integer;        // Number of vertices stored in arrays
       TriangleCount: integer;      // Number of triangles stored (indexed or not)
 
-      // Default vertex data
+      // Vertex attributes data
       Vertices: PSingle;        // Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
       Texcoords: PSingle;       // Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
       Texcoords2: PSingle;      // Vertex second texture coordinates (useful for lightmaps) (shader-location = 5)
@@ -367,15 +387,14 @@ type
   end;
   PMesh = TMesh;
 
-  // Shader type (generic)
+  // Shader
   TShader = packed record
     ID: Cardinal;         // Shader program id
-    Locs: PInteger;       // Shader locations array (MAX_SHADER_LOCATIONS)
+    Locs: PInteger;       // Shader locations array (RL_MAX_SHADER_LOCATIONS)
   end;
   PShader = ^TShader;
 
-
-  // Material texture map
+  // MaterialMap
   TMaterialMap = packed record
     Texture: TTexture2D;   // Material map texture
     Color: TColor;         // Material map color
@@ -383,15 +402,15 @@ type
   end;
   PMaterialMap = ^TMaterialMap;
 
-  // Material type (generic)
+  // Material, includes shader and maps
   TMaterial = packed record
-    Shader: TShader;         // Material shader
+    Shader: TShader;        // Material shader
     Maps: PMaterialMap;     // Material maps array (MAX_MATERIAL_MAPS)
-    Params: PSingle;         // Material generic parameters (if required)
+    Params[0..3]: Single;   // Material generic parameters (if required)
   end;
   PMaterial = ^TMaterial;
 
-  // Transformation properties
+  // Transform, vectex transformation data
   TTransform = packed record
     Translation: TVector3;   // Translation
     Rotation: TQuaternion;   // Rotation
@@ -400,14 +419,14 @@ type
   PTransform = ^TTransform;
   PPTransform = ^PTransform;
 
-  // Bone information
+  // Bone, skeletal animation bone
   TBoneInfo = packed record
-    Name: array[0..31] of AnsiChar;
-    Parent: Integer;
+    Name: array[0..31] of AnsiChar;  // Bone name
+    Parent: Integer;                 // Bone parent
   end;
   PBoneInfo = ^TBoneInfo;
 
-  // Model type
+  // Model, meshes, materials and animation data
   TModel = packed record
     Transform: TMatrix;        // Local transform matrix
 
@@ -425,7 +444,7 @@ type
   end;
   PModel = ^TModel;
 
-  // Model animation
+  // ModelAnimation
   TModelAnimation = packed record
     BoneCount: Integer;        // Number of bones
     FrameCount: Integer;       // Number of animation frames
@@ -435,35 +454,35 @@ type
   end;
   PModelAnimation = ^TModelAnimation;
 
-  // Ray type (useful for raycast)
+  // Ray, ray for raycasting
   TRay = packed record
     Position: TVector3;        // Ray position (origin)
     Direction: TVector3;       // Ray direction
   end;
   PRay = ^TRay;
 
-  // Raycast hit information
-  TRayHitInfo = packed record
+  // RayCollision, ray hit information
+  TRayCollision = packed record
     Hit: Boolean;              // Did the ray hit something?
     Distance: Single;          // Distance to nearest hit
-    position: TVector3;        // Position of nearest hit
-    normal: TVector3;          // Surface normal of hit
+    Point: TVector3;           // Point of nearest hit
+    Normal: TVector3;          // Surface normal of hit
   end;
-  PRayHitInfo = ^TRayHitInfo;
+  PRayCollision = ^TRayCollision;
 
-  // Bounding box type
+  // BoundingBox
   TBoundingBox = packed record
     Min: TVector3;             // Minimum vertex box-corner
     Max: TVector3;             // Maximum vertex box-corner
   end;
   PBoundingBox = ^TBoundingBox;
 
-  // Wave type, defines audio wave data
+  // Wave, audio wave data
   TWave = packed record
-    SampleCount: Cardinal;     // Total number of samples
+    FrameCount: Cardinal;      // Total number of frames (considering channels)
     SampleRate: Cardinal;      // Frequency (samples per second)
     SampleSize: Cardinal;      // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
-    Channels: Cardinal;        // Number of channels (1-mono, 2-stereo)
+    Channels: Cardinal;        // Number of channels (1-mono, 2-stereo, ...)
     Data: Pointer;             // Buffer data pointer
   end;
   PWave = ^TWave;
@@ -473,50 +492,62 @@ type
   end;
   PrAudioBuffer = ^TrAudioBuffer;
 
-  // Audio stream type
-  // NOTE: Useful to create custom audio streams not bound to a specific file
+  // AudioStream, custom audio stream
   TAudioStream = packed record
     Buffer: PrAudioBuffer;     // Pointer to internal data used by the audio system
 
     SampleRate: Cardinal;       // Frequency (samples per second)
     SampleSize: Cardinal;       // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
-    Channels: Cardinal;         // Number of channels (1-mono, 2-stereo)
+    Channels: Cardinal;         // Number of channels (1-mono, 2-stereo, ...)
   end;
   PAudioStream = ^TAudioStream;
 
-  // Sound source type
+  // Sound
   TSound = packed record
     Stream: TAudioStream;       // Audio stream
-    SampleCount: Cardinal;     // Total number of samples
+    FrameCount: Cardinal;       // Total number of frames (considering channels)
   end;
   PSound = ^TSound;
 
-  // Music stream type (audio file streaming from memory)
-  // NOTE: Anything longer than ~10 seconds should be streamed
+  // Music, audio stream, anything longer than ~10 seconds should be streamed
   TMusic = packed record
     Stream: TAudioStream;      // Audio stream
-    SampleCount: Cardinal;     // Total number of samples
-    Looping: Boolean;           // Music looping enable
+    FrameCount: Cardinal;      // Total number of frames (considering channels)
+    Looping: Boolean;          // Music looping enable
 
     CtxType: Integer;          // Type of music context (audio filetype)
     CtxData: Pointer;          // Audio context data, depends on type
   end;
   PMusic = ^TMusic;
 
-  // Head-Mounted-Display device parameters
+  // VrDeviceInfo, Head-Mounted-Display device parameters
   TVrDeviceInfo = packed record
-    hResolution: Integer;                            // HMD horizontal resolution in pixels
-    vResolution: Integer;                            // HMD vertical resolution in pixels
-    hScreenSize: Single;                             // HMD horizontal size in meters
-    vScreenSize: Single;                             // HMD vertical size in meters
-    vScreenCenter: Single;                           // HMD screen center in meters
-    EyeToScreenDistance: Single;                     // HMD distance between eye and display in meters
-    LensSeparationDistance: Single;                  // HMD lens separation distance in meters
-    InterpupillaryDistance: Single;                  // HMD IPD (distance between pupils) in meters
-    LensDistortionValues: array[0..3] of Single;     // HMD lens distortion constant parameters
-    ChromaAbCorrection: array[0..3] of Single;       // HMD chromatic aberration correction parameters
+    hResolution: Integer;                            // Horizontal resolution in pixels
+    vResolution: Integer;                            // Vertical resolution in pixels
+    hScreenSize: Single;                             // Horizontal size in meters
+    vScreenSize: Single;                             // Vertical size in meters
+    vScreenCenter: Single;                           // Screen center in meters
+    EyeToScreenDistance: Single;                     // Distance between eye and display in meters
+    LensSeparationDistance: Single;                  // Lens separation distance in meters
+    InterpupillaryDistance: Single;                  // IPD (distance between pupils) in meters
+    LensDistortionValues: array[0..3] of Single;     // Lens distortion constant parameters
+    ChromaAbCorrection: array[0..3] of Single;       // Chromatic aberration correction parameters
   end;
   PVrDeviceInfo = ^TVrDeviceInfo;
+
+  // VrStereoConfig, VR stereo rendering configuration for simulator
+  TVrStereoConfig = packed record
+      projection: array[0..1] of TMatrix;           // VR projection matrices (per eye)
+      ViewOffset: array[0..1] of TMatrix;           // VR view offset matrices (per eye)
+      LeftLensCenter: array[0..1] of Single;        // VR left lens center
+      RightLensCenter: array[0..1] of Single;       // VR right lens center
+      LeftScreenCenter: array[0..1] of Single;      // VR left screen center
+      RightScreenCenter: array[0..1] of Single;     // VR right screen center
+      Scale: array[0..1] of Single;                 // VR distortion scale
+      ScaleIn: array[0..1] of Single;               // VR distortion scale in
+  end;
+  TVrStereoConfig = ^TVrStereoConfig;
+
 
   //----------------------------------------------------------------------------------
   // Enumerators Definition
@@ -524,7 +555,7 @@ type
   // System/Window config flags
   // NOTE: Every bit registers one state (use it with bit masks)
   // By default all flags are set to 0
-  TConfigFlag = (
+  TConfigFlags = (
     FLAG_FULLSCREEN_MODE    = $00000002,   // Set to run program in fullscreen
     FLAG_WINDOW_RESIZABLE   = $00000004,   // Set to allow resizable window
     FLAG_WINDOW_UNDECORATED = $00000008,   // Set to disable window decoration (frame and buttons)
@@ -541,253 +572,241 @@ type
     FLAG_INTERLACED_HINT    = $00010000    // Set to try enabling interlaced video format (for V3D)
   );
 
-  // Trace log type
-  TTraceLogType = (
+  // Trace log level
+  // NOTE: Organized by priority level
+  TTraceLogLevel = (
     LOG_ALL = 0,        // Display all logs
-    LOG_TRACE,
-    LOG_DEBUG,
-    LOG_INFO,
-    LOG_WARNING,
-    LOG_ERROR,
-    LOG_FATAL,
+    LOG_TRACE,          // Trace logging, intended for internal use only
+    LOG_DEBUG,          // Debug logging, used for internal debugging, it should be disabled on release builds
+    LOG_INFO,           // Info logging, used for program execution info
+    LOG_WARNING,        // Warning logging, used on recoverable failures
+    LOG_ERROR,          // Error logging, used on unrecoverable failures
+    LOG_FATAL,          // Fatal logging, used to abort program: exit(EXIT_FAILURE)
     LOG_NONE            // Disable logging
   );
-  TTraceLogTypes = set of TTraceLogType;
+  PTraceLogLevel = set of TTraceLogLevel;
 
+//TODO zaher, convert to set, TKeyboardKey
 const
-  // Keyboard keys (US keyboard layout)
-  // NOTE: Use GetKeyPressed() to allow redefining
-  // required keys for alternative layouts
-  KEY_APOSTROPHE      = 39;
-  KEY_COMMA           = 44;
-  KEY_MINUS           = 45;
-  KEY_PERIOD          = 46;
-  KEY_SLASH           = 47;
-  KEY_ZERO            = 48;
-  KEY_ONE             = 49;
-  KEY_TWO             = 50;
-  KEY_THREE           = 51;
-  KEY_FOUR            = 52;
-  KEY_FIVE            = 53;
-  KEY_SIX             = 54;
-  KEY_SEVEN           = 55;
-  KEY_EIGHT           = 56;
-  KEY_NINE            = 57;
-  KEY_SEMICOLON       = 59;
-  KEY_EQUAL           = 61;
-  KEY_A               = 65;
-  KEY_B               = 66;
-  KEY_C               = 67;
-  KEY_D               = 68;
-  KEY_E               = 69;
-  KEY_F               = 70;
-  KEY_G               = 71;
-  KEY_H               = 72;
-  KEY_I               = 73;
-  KEY_J               = 74;
-  KEY_K               = 75;
-  KEY_L               = 76;
-  KEY_M               = 77;
-  KEY_N               = 78;
-  KEY_O               = 79;
-  KEY_P               = 80;
-  KEY_Q               = 81;
-  KEY_R               = 82;
-  KEY_S               = 83;
-  KEY_T               = 84;
-  KEY_U               = 85;
-  KEY_V               = 86;
-  KEY_W               = 87;
-  KEY_X               = 88;
-  KEY_Y               = 89;
-  KEY_Z               = 90;
-
+  KEY_NULL            = 0,        // Key: NULL, used for no key pressed
+  KEY_APOSTROPHE      = 39,       // Key: '
+  KEY_COMMA           = 44,       // Key: ,
+  KEY_MINUS           = 45,       // Key: -
+  KEY_PERIOD          = 46,       // Key: .
+  KEY_SLASH           = 47,       // Key: /
+  KEY_ZERO            = 48,       // Key: 0
+  KEY_ONE             = 49,       // Key: 1
+  KEY_TWO             = 50,       // Key: 2
+  KEY_THREE           = 51,       // Key: 3
+  KEY_FOUR            = 52,       // Key: 4
+  KEY_FIVE            = 53,       // Key: 5
+  KEY_SIX             = 54,       // Key: 6
+  KEY_SEVEN           = 55,       // Key: 7
+  KEY_EIGHT           = 56,       // Key: 8
+  KEY_NINE            = 57,       // Key: 9
+  KEY_SEMICOLON       = 59,       // Key: ;
+  KEY_EQUAL           = 61,       // Key: =
+  KEY_A               = 65,       // Key: A | a
+  KEY_B               = 66,       // Key: B | b
+  KEY_C               = 67,       // Key: C | c
+  KEY_D               = 68,       // Key: D | d
+  KEY_E               = 69,       // Key: E | e
+  KEY_F               = 70,       // Key: F | f
+  KEY_G               = 71,       // Key: G | g
+  KEY_H               = 72,       // Key: H | h
+  KEY_I               = 73,       // Key: I | i
+  KEY_J               = 74,       // Key: J | j
+  KEY_K               = 75,       // Key: K | k
+  KEY_L               = 76,       // Key: L | l
+  KEY_M               = 77,       // Key: M | m
+  KEY_N               = 78,       // Key: N | n
+  KEY_O               = 79,       // Key: O | o
+  KEY_P               = 80,       // Key: P | p
+  KEY_Q               = 81,       // Key: Q | q
+  KEY_R               = 82,       // Key: R | r
+  KEY_S               = 83,       // Key: S | s
+  KEY_T               = 84,       // Key: T | t
+  KEY_U               = 85,       // Key: U | u
+  KEY_V               = 86,       // Key: V | v
+  KEY_W               = 87,       // Key: W | w
+  KEY_X               = 88,       // Key: X | x
+  KEY_Y               = 89,       // Key: Y | y
+  KEY_Z               = 90,       // Key: Z | z
+  KEY_LEFT_BRACKET    = 91,       // Key: [
+  KEY_BACKSLASH       = 92,       // Key: '\'
+  KEY_RIGHT_BRACKET   = 93,       // Key: ]
+  KEY_GRAVE           = 96,       // Key: `
   // Function keys
-  KEY_SPACE           = 32;
-  KEY_ESCAPE          = 256;
-  KEY_ENTER           = 257;
-  KEY_TAB             = 258;
-  KEY_BACKSPACE       = 259;
-  KEY_INSERT          = 260;
-  KEY_DELETE          = 261;
-  KEY_RIGHT           = 262;
-  KEY_LEFT            = 263;
-  KEY_DOWN            = 264;
-  KEY_UP              = 265;
-  KEY_PAGE_UP         = 266;
-  KEY_PAGE_DOWN       = 267;
-  KEY_HOME            = 268;
-  KEY_END             = 269;
-  KEY_CAPS_LOCK       = 280;
-  KEY_SCROLL_LOCK     = 281;
-  KEY_NUM_LOCK        = 282;
-  KEY_PRINT_SCREEN    = 283;
-  KEY_PAUSE           = 284;
-  KEY_F1              = 290;
-  KEY_F2              = 291;
-  KEY_F3              = 292;
-  KEY_F4              = 293;
-  KEY_F5              = 294;
-  KEY_F6              = 295;
-  KEY_F7              = 296;
-  KEY_F8              = 297;
-  KEY_F9              = 298;
-  KEY_F10             = 299;
-  KEY_F11             = 300;
-  KEY_F12             = 301;
-  KEY_LEFT_SHIFT      = 340;
-  KEY_LEFT_CONTROL    = 341;
-  KEY_LEFT_ALT        = 342;
-  KEY_LEFT_SUPER      = 343;
-  KEY_RIGHT_SHIFT     = 344;
-  KEY_RIGHT_CONTROL   = 345;
-  KEY_RIGHT_ALT       = 346;
-  KEY_RIGHT_SUPER     = 347;
-  KEY_KB_MENU         = 348;
-  KEY_LEFT_BRACKET    = 91;
-  KEY_BACKSLASH       = 92;
-  KEY_RIGHT_BRACKET   = 93;
-  KEY_GRAVE           = 96;
-
+  KEY_SPACE           = 32,       // Key: Space
+  KEY_ESCAPE          = 256,      // Key: Esc
+  KEY_ENTER           = 257,      // Key: Enter
+  KEY_TAB             = 258,      // Key: Tab
+  KEY_BACKSPACE       = 259,      // Key: Backspace
+  KEY_INSERT          = 260,      // Key: Ins
+  KEY_DELETE          = 261,      // Key: Del
+  KEY_RIGHT           = 262,      // Key: Cursor right
+  KEY_LEFT            = 263,      // Key: Cursor left
+  KEY_DOWN            = 264,      // Key: Cursor down
+  KEY_UP              = 265,      // Key: Cursor up
+  KEY_PAGE_UP         = 266,      // Key: Page up
+  KEY_PAGE_DOWN       = 267,      // Key: Page down
+  KEY_HOME            = 268,      // Key: Home
+  KEY_END             = 269,      // Key: End
+  KEY_CAPS_LOCK       = 280,      // Key: Caps lock
+  KEY_SCROLL_LOCK     = 281,      // Key: Scroll down
+  KEY_NUM_LOCK        = 282,      // Key: Num lock
+  KEY_PRINT_SCREEN    = 283,      // Key: Print screen
+  KEY_PAUSE           = 284,      // Key: Pause
+  KEY_F1              = 290,      // Key: F1
+  KEY_F2              = 291,      // Key: F2
+  KEY_F3              = 292,      // Key: F3
+  KEY_F4              = 293,      // Key: F4
+  KEY_F5              = 294,      // Key: F5
+  KEY_F6              = 295,      // Key: F6
+  KEY_F7              = 296,      // Key: F7
+  KEY_F8              = 297,      // Key: F8
+  KEY_F9              = 298,      // Key: F9
+  KEY_F10             = 299,      // Key: F10
+  KEY_F11             = 300,      // Key: F11
+  KEY_F12             = 301,      // Key: F12
+  KEY_LEFT_SHIFT      = 340,      // Key: Shift left
+  KEY_LEFT_CONTROL    = 341,      // Key: Control left
+  KEY_LEFT_ALT        = 342,      // Key: Alt left
+  KEY_LEFT_SUPER      = 343,      // Key: Super left
+  KEY_RIGHT_SHIFT     = 344,      // Key: Shift right
+  KEY_RIGHT_CONTROL   = 345,      // Key: Control right
+  KEY_RIGHT_ALT       = 346,      // Key: Alt right
+  KEY_RIGHT_SUPER     = 347,      // Key: Super right
+  KEY_KB_MENU         = 348,      // Key: KB menu
   // Keypad keys
-  KEY_KP_0            = 320;
-  KEY_KP_1            = 321;
-  KEY_KP_2            = 322;
-  KEY_KP_3            = 323;
-  KEY_KP_4            = 324;
-  KEY_KP_5            = 325;
-  KEY_KP_6            = 326;
-  KEY_KP_7            = 327;
-  KEY_KP_8            = 328;
-  KEY_KP_9            = 329;
-  KEY_KP_DECIMAL      = 330;
-  KEY_KP_DIVIDE       = 331;
-  KEY_KP_MULTIPLY     = 332;
-  KEY_KP_SUBTRACT     = 333;
-  KEY_KP_ADD          = 334;
-  KEY_KP_ENTER        = 335;
-  KEY_KP_EQUAL        = 336;
+  KEY_KP_0            = 320,      // Key: Keypad 0
+  KEY_KP_1            = 321,      // Key: Keypad 1
+  KEY_KP_2            = 322,      // Key: Keypad 2
+  KEY_KP_3            = 323,      // Key: Keypad 3
+  KEY_KP_4            = 324,      // Key: Keypad 4
+  KEY_KP_5            = 325,      // Key: Keypad 5
+  KEY_KP_6            = 326,      // Key: Keypad 6
+  KEY_KP_7            = 327,      // Key: Keypad 7
+  KEY_KP_8            = 328,      // Key: Keypad 8
+  KEY_KP_9            = 329,      // Key: Keypad 9
+  KEY_KP_DECIMAL      = 330,      // Key: Keypad .
+  KEY_KP_DIVIDE       = 331,      // Key: Keypad /
+  KEY_KP_MULTIPLY     = 332,      // Key: Keypad *
+  KEY_KP_SUBTRACT     = 333,      // Key: Keypad -
+  KEY_KP_ADD          = 334,      // Key: Keypad +
+  KEY_KP_ENTER        = 335,      // Key: Keypad Enter
+  KEY_KP_EQUAL        = 336,      // Key: Keypad =
+  // Android key buttons
+  KEY_BACK            = 4,        // Key: Android back button
+  KEY_MENU            = 82,       // Key: Android menu button
+  KEY_VOLUME_UP       = 24,       // Key: Android volume up button
+  KEY_VOLUME_DOWN     = 25        // Key: Android volume down button
 
 type
-  // Android buttons
-  TAndroidButton = (
-    KEY_BACK            = 4,
-    KEY_VOLUME_UP       = 24,
-    KEY_VOLUME_DOWN     = 25,
-    KEY_MENU            = 82
-  );
-
   // Mouse buttons
   TMouseButton = (
-    MOUSE_LEFT_BUTTON   = 0,
-    MOUSE_RIGHT_BUTTON  = 1,
-    MOUSE_MIDDLE_BUTTON = 2
+    MOUSE_BUTTON_LEFT    = 0,       // Mouse button left
+    MOUSE_BUTTON_RIGHT   = 1,       // Mouse button right
+    MOUSE_BUTTON_MIDDLE  = 2,       // Mouse button middle (pressed wheel)
+    MOUSE_BUTTON_SIDE    = 3,       // Mouse button side (advanced mouse device)
+    MOUSE_BUTTON_EXTRA   = 4,       // Mouse button extra (advanced mouse device)
+    MOUSE_BUTTON_FORWARD = 5,       // Mouse button fordward (advanced mouse device)
+    MOUSE_BUTTON_BACK    = 6,       // Mouse button back (advanced mouse device)
   );
 
-  // Mouse cursor types
+  // Mouse cursor
   TMouseCursor = (
-    MOUSE_CURSOR_DEFAULT       = 0,
-    MOUSE_CURSOR_ARROW         = 1,
-    MOUSE_CURSOR_IBEAM         = 2,
-    MOUSE_CURSOR_CROSSHAIR     = 3,
-    MOUSE_CURSOR_POINTING_HAND = 4,
-    MOUSE_CURSOR_RESIZE_EW     = 5,     // The horizontal resize/move arrow shape
-    MOUSE_CURSOR_RESIZE_NS     = 6,     // The vertical resize/move arrow shape
-    MOUSE_CURSOR_RESIZE_NWSE   = 7,     // The top-left to bottom-right diagonal resize/move arrow shape
+    MOUSE_CURSOR_DEFAULT       = 0,     // Default pointer shape
+    MOUSE_CURSOR_ARROW         = 1,     // Arrow shape
+    MOUSE_CURSOR_IBEAM         = 2,     // Text writing cursor shape
+    MOUSE_CURSOR_CROSSHAIR     = 3,     // Cross shape
+    MOUSE_CURSOR_POINTING_HAND = 4,     // Pointing hand cursor
+    MOUSE_CURSOR_RESIZE_EW     = 5,     // Horizontal resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NS     = 6,     // Vertical resize/move arrow shape
+    MOUSE_CURSOR_RESIZE_NWSE   = 7,     // Top-left to bottom-right diagonal resize/move arrow shape
     MOUSE_CURSOR_RESIZE_NESW   = 8,     // The top-right to bottom-left diagonal resize/move arrow shape
     MOUSE_CURSOR_RESIZE_ALL    = 9,     // The omni-directional resize/move cursor shape
     MOUSE_CURSOR_NOT_ALLOWED   = 10     // The operation-not-allowed shape
   );
 
-  // Gamepad number
-  TGamepadNumber = (
-      GAMEPAD_PLAYER1     = 0,
-      GAMEPAD_PLAYER2     = 1,
-      GAMEPAD_PLAYER3     = 2,
-      GAMEPAD_PLAYER4     = 3
-  );
-
   // Gamepad Buttons
-  TGamepadButto = (
-      // This is here just for error checking
-      GAMEPAD_BUTTON_UNKNOWN = 0,
-
-      // This is normally a DPAD
-      GAMEPAD_BUTTON_LEFT_FACE_UP,
-      GAMEPAD_BUTTON_LEFT_FACE_RIGHT,
-      GAMEPAD_BUTTON_LEFT_FACE_DOWN,
-      GAMEPAD_BUTTON_LEFT_FACE_LEFT,
-
-      // This normally corresponds with PlayStation and Xbox controllers
-      // XBOX: [Y,X,A,B]
-      // PS3: [Triangle,Square,Cross,Circle]
-      // No support for 6 button controllers though..
-      GAMEPAD_BUTTON_RIGHT_FACE_UP,
-      GAMEPAD_BUTTON_RIGHT_FACE_RIGHT,
-      GAMEPAD_BUTTON_RIGHT_FACE_DOWN,
-      GAMEPAD_BUTTON_RIGHT_FACE_LEFT,
-
-      // Triggers
-      GAMEPAD_BUTTON_LEFT_TRIGGER_1,
-      GAMEPAD_BUTTON_LEFT_TRIGGER_2,
-      GAMEPAD_BUTTON_RIGHT_TRIGGER_1,
-      GAMEPAD_BUTTON_RIGHT_TRIGGER_2,
-
-      // These are buttons in the center of the gamepad
-      GAMEPAD_BUTTON_MIDDLE_LEFT,     //PS3 Select
-      GAMEPAD_BUTTON_MIDDLE,          //PS Button/XBOX Button
-      GAMEPAD_BUTTON_MIDDLE_RIGHT,    //PS3 Start
-
-      // These are the joystick press in buttons
-      GAMEPAD_BUTTON_LEFT_THUMB,
-      GAMEPAD_BUTTON_RIGHT_THUMB
+  TGamepadButton = (
+    GAMEPAD_BUTTON_UNKNOWN = 0,         // Unknown button, just for error checking
+    GAMEPAD_BUTTON_LEFT_FACE_UP,        // Gamepad left DPAD up button
+    GAMEPAD_BUTTON_LEFT_FACE_RIGHT,     // Gamepad left DPAD right button
+    GAMEPAD_BUTTON_LEFT_FACE_DOWN,      // Gamepad left DPAD down button
+    GAMEPAD_BUTTON_LEFT_FACE_LEFT,      // Gamepad left DPAD left button
+    GAMEPAD_BUTTON_RIGHT_FACE_UP,       // Gamepad right button up (i.e. PS3: Triangle, Xbox: Y)
+    GAMEPAD_BUTTON_RIGHT_FACE_RIGHT,    // Gamepad right button right (i.e. PS3: Square, Xbox: X)
+    GAMEPAD_BUTTON_RIGHT_FACE_DOWN,     // Gamepad right button down (i.e. PS3: Cross, Xbox: A)
+    GAMEPAD_BUTTON_RIGHT_FACE_LEFT,     // Gamepad right button left (i.e. PS3: Circle, Xbox: B)
+    GAMEPAD_BUTTON_LEFT_TRIGGER_1,      // Gamepad top/back trigger left (first), it could be a trailing button
+    GAMEPAD_BUTTON_LEFT_TRIGGER_2,      // Gamepad top/back trigger left (second), it could be a trailing button
+    GAMEPAD_BUTTON_RIGHT_TRIGGER_1,     // Gamepad top/back trigger right (one), it could be a trailing button
+    GAMEPAD_BUTTON_RIGHT_TRIGGER_2,     // Gamepad top/back trigger right (second), it could be a trailing button
+    GAMEPAD_BUTTON_MIDDLE_LEFT,         // Gamepad center buttons, left one (i.e. PS3: Select)
+    GAMEPAD_BUTTON_MIDDLE,              // Gamepad center buttons, middle one (i.e. PS3: PS, Xbox: XBOX)
+    GAMEPAD_BUTTON_MIDDLE_RIGHT,        // Gamepad center buttons, right one (i.e. PS3: Start)
+    GAMEPAD_BUTTON_LEFT_THUMB,          // Gamepad joystick pressed button left
+    GAMEPAD_BUTTON_RIGHT_THUMB          // Gamepad joystick pressed button right
   );
 
   // Gamepad axis
   TGamepadAxis = (
-    // This is here just for error checking
-    GAMEPAD_AXIS_UNKNOWN = 0,
-
-    // Left stick
-    GAMEPAD_AXIS_LEFT_X,
-    GAMEPAD_AXIS_LEFT_Y,
-
-    // Right stick
-    GAMEPAD_AXIS_RIGHT_X,
-    GAMEPAD_AXIS_RIGHT_Y,
-
-    // Pressure levels for the back triggers
-    GAMEPAD_AXIS_LEFT_TRIGGER,      // [1..-1] (pressure-level)
-    GAMEPAD_AXIS_RIGHT_TRIGGER      // [1..-1] (pressure-level)
+    GAMEPAD_AXIS_LEFT_X        = 0,     // Gamepad left stick X axis
+    GAMEPAD_AXIS_LEFT_Y        = 1,     // Gamepad left stick Y axis
+    GAMEPAD_AXIS_RIGHT_X       = 2,     // Gamepad right stick X axis
+    GAMEPAD_AXIS_RIGHT_Y       = 3,     // Gamepad right stick Y axis
+    GAMEPAD_AXIS_LEFT_TRIGGER  = 4,     // Gamepad back trigger left, pressure level: [1..-1]
+    GAMEPAD_AXIS_RIGHT_TRIGGER = 5      // Gamepad back trigger right, pressure level: [1..-1]
   );
 
-  // Shader location point
+  // Material map index
+  TMaterialMapIndex = packed record
+      MATERIAL_MAP_ALBEDO    = 0,     // Albedo material (same as: MATERIAL_MAP_DIFFUSE)
+      MATERIAL_MAP_METALNESS,         // Metalness material (same as: MATERIAL_MAP_SPECULAR)
+      MATERIAL_MAP_NORMAL,            // Normal material
+      MATERIAL_MAP_ROUGHNESS,         // Roughness material
+      MATERIAL_MAP_OCCLUSION,         // Ambient occlusion material
+      MATERIAL_MAP_EMISSION,          // Emission material
+      MATERIAL_MAP_HEIGHT,            // Heightmap material
+      MATERIAL_MAP_CUBEMAP,           // Cubemap material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+      MATERIAL_MAP_IRRADIANCE,        // Irradiance material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+      MATERIAL_MAP_PREFILTER,         // Prefilter material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+      MATERIAL_MAP_BRDF               // Brdf material
+  end;
+
+  //MATERIAL_MAP_DIFFUSE  =    MATERIAL_MAP_ALBEDO;
+  //MATERIAL_MAP_SPECULAR =    MATERIAL_MAP_METALNESS;
+
+  // Shader location index
   TShaderLocationIndex = (
-    LOC_VERTEX_POSITION = 0,
-    LOC_VERTEX_TEXCOORD01,
-    LOC_VERTEX_TEXCOORD02,
-    LOC_VERTEX_NORMAL,
-    LOC_VERTEX_TANGENT,
-    LOC_VERTEX_COLOR,
-    LOC_MATRIX_MVP,
-    LOC_MATRIX_MODEL,
-    LOC_MATRIX_VIEW,
-    LOC_MATRIX_PROJECTION,
-    LOC_VECTOR_VIEW,
-    LOC_COLOR_DIFFUSE,
-    LOC_COLOR_SPECULAR,
-    LOC_COLOR_AMBIENT,
-    LOC_MAP_ALBEDO,          // LOC_MAP_DIFFUSE
-    LOC_MAP_METALNESS,       // LOC_MAP_SPECULAR
-    LOC_MAP_NORMAL,
-    LOC_MAP_ROUGHNESS,
-    LOC_MAP_OCCLUSION,
-    LOC_MAP_EMISSION,
-    LOC_MAP_HEIGHT,
-    LOC_MAP_CUBEMAP,
-    LOC_MAP_IRRADIANCE,
-    LOC_MAP_PREFILTER,
-    LOC_MAP_BRDF
+    SHADER_LOC_VERTEX_POSITION = 0, // Shader location: vertex attribute: position
+    SHADER_LOC_VERTEX_TEXCOORD01,   // Shader location: vertex attribute: texcoord01
+    SHADER_LOC_VERTEX_TEXCOORD02,   // Shader location: vertex attribute: texcoord02
+    SHADER_LOC_VERTEX_NORMAL,       // Shader location: vertex attribute: normal
+    SHADER_LOC_VERTEX_TANGENT,      // Shader location: vertex attribute: tangent
+    SHADER_LOC_VERTEX_COLOR,        // Shader location: vertex attribute: color
+    SHADER_LOC_MATRIX_MVP,          // Shader location: matrix uniform: model-view-projection
+    SHADER_LOC_MATRIX_VIEW,         // Shader location: matrix uniform: view (camera transform)
+    SHADER_LOC_MATRIX_PROJECTION,   // Shader location: matrix uniform: projection
+    SHADER_LOC_MATRIX_MODEL,        // Shader location: matrix uniform: model (transform)
+    SHADER_LOC_MATRIX_NORMAL,       // Shader location: matrix uniform: normal
+    SHADER_LOC_VECTOR_VIEW,         // Shader location: vector uniform: view
+    SHADER_LOC_COLOR_DIFFUSE,       // Shader location: vector uniform: diffuse color
+    SHADER_LOC_COLOR_SPECULAR,      // Shader location: vector uniform: specular color
+    SHADER_LOC_COLOR_AMBIENT,       // Shader location: vector uniform: ambient color
+    SHADER_LOC_MAP_ALBEDO,          // Shader location: sampler2d texture: albedo (same as: SHADER_LOC_MAP_DIFFUSE)
+    SHADER_LOC_MAP_METALNESS,       // Shader location: sampler2d texture: metalness (same as: SHADER_LOC_MAP_SPECULAR)
+    SHADER_LOC_MAP_NORMAL,          // Shader location: sampler2d texture: normal
+    SHADER_LOC_MAP_ROUGHNESS,       // Shader location: sampler2d texture: roughness
+    SHADER_LOC_MAP_OCCLUSION,       // Shader location: sampler2d texture: occlusion
+    SHADER_LOC_MAP_EMISSION,        // Shader location: sampler2d texture: emission
+    SHADER_LOC_MAP_HEIGHT,          // Shader location: sampler2d texture: height
+    SHADER_LOC_MAP_CUBEMAP,         // Shader location: samplerCube texture: cubemap
+    SHADER_LOC_MAP_IRRADIANCE,      // Shader location: samplerCube texture: irradiance
+    SHADER_LOC_MAP_PREFILTER,       // Shader location: samplerCube texture: prefilter
+    SHADER_LOC_MAP_BRDF             // Shader location: sampler2d texture: brdf
   );
 
 {const
@@ -796,89 +815,79 @@ type
 
   // Shader uniform data types
   TShaderUniformDataType = (
-    UNIFORM_FLOAT = 0,
-    UNIFORM_VEC2,
-    UNIFORM_VEC3,
-    UNIFORM_VEC4,
-    UNIFORM_INT,
-    UNIFORM_IVEC2,
-    UNIFORM_IVEC3,
-    UNIFORM_IVEC4,
-    UNIFORM_SAMPLER2D
+    SHADER_UNIFORM_FLOAT = 0,       // Shader uniform type: float
+    SHADER_UNIFORM_VEC2,            // Shader uniform type: vec2 (2 float)
+    SHADER_UNIFORM_VEC3,            // Shader uniform type: vec3 (3 float)
+    SHADER_UNIFORM_VEC4,            // Shader uniform type: vec4 (4 float)
+    SHADER_UNIFORM_INT,             // Shader uniform type: int
+    SHADER_UNIFORM_IVEC2,           // Shader uniform type: ivec2 (2 int)
+    SHADER_UNIFORM_IVEC3,           // Shader uniform type: ivec3 (3 int)
+    SHADER_UNIFORM_IVEC4,           // Shader uniform type: ivec4 (4 int)
+    SHADER_UNIFORM_SAMPLER2D        // Shader uniform type: sampler2d
   );
 
-  // Material map
-  TMaterialMapType = (
-    MAP_ALBEDO    = 0,       // MAP_DIFFUSE
-    MAP_METALNESS = 1,       // MAP_SPECULAR
-    MAP_NORMAL    = 2,
-    MAP_ROUGHNESS = 3,
-    MAP_OCCLUSION,
-    MAP_EMISSION,
-    MAP_HEIGHT,
-    MAP_CUBEMAP,             // NOTE: Uses GL_TEXTURE_CUBE_MAP
-    MAP_IRRADIANCE,          // NOTE: Uses GL_TEXTURE_CUBE_MAP
-    MAP_PREFILTER,           // NOTE: Uses GL_TEXTURE_CUBE_MAP
-    MAP_BRDF
-  );
-
-{  MAP_DIFFUSE    =  MAP_ALBEDO
-  MAP_SPECULAR   =  MAP_METALNESS} //TODO
+  // Shader attribute data types
+  TShaderAttributeDataType = packed record
+      SHADER_ATTRIB_FLOAT = 0,        // Shader attribute type: float
+      SHADER_ATTRIB_VEC2,             // Shader attribute type: vec2 (2 float)
+      SHADER_ATTRIB_VEC3,             // Shader attribute type: vec3 (3 float)
+      SHADER_ATTRIB_VEC4              // Shader attribute type: vec4 (4 float)
+  end;
 
   // Pixel formats
   // NOTE: Support depends on OpenGL version and platform
   TPixelFormat = (
-    UNCOMPRESSED_GRAYSCALE = 1,     // 8 bit per pixel (no alpha)
-    UNCOMPRESSED_GRAY_ALPHA,        // 8*2 bpp (2 channels)
-    UNCOMPRESSED_R5G6B5,            // 16 bpp
-    UNCOMPRESSED_R8G8B8,            // 24 bpp
-    UNCOMPRESSED_R5G5B5A1,          // 16 bpp (1 bit alpha)
-    UNCOMPRESSED_R4G4B4A4,          // 16 bpp (4 bit alpha)
-    UNCOMPRESSED_R8G8B8A8,          // 32 bpp
-    UNCOMPRESSED_R32,               // 32 bpp (1 channel - float)
-    UNCOMPRESSED_R32G32B32,         // 32*3 bpp (3 channels - float)
-    UNCOMPRESSED_R32G32B32A32,      // 32*4 bpp (4 channels - float)
-    COMPRESSED_DXT1_RGB,            // 4 bpp (no alpha)
-    COMPRESSED_DXT1_RGBA,           // 4 bpp (1 bit alpha)
-    COMPRESSED_DXT3_RGBA,           // 8 bpp
-    COMPRESSED_DXT5_RGBA,           // 8 bpp
-    COMPRESSED_ETC1_RGB,            // 4 bpp
-    COMPRESSED_ETC2_RGB,            // 4 bpp
-    COMPRESSED_ETC2_EAC_RGBA,       // 8 bpp
-    COMPRESSED_PVRT_RGB,            // 4 bpp
-    COMPRESSED_PVRT_RGBA,           // 4 bpp
-    COMPRESSED_ASTC_4x4_RGBA,       // 8 bpp
-    COMPRESSED_ASTC_8x8_RGBA        // 2 bpp
+    PIXELFORMAT_UNCOMPRESSED_GRAYSCALE = 1, // 8 bit per pixel (no alpha)
+    PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA,    // 8*2 bpp (2 channels)
+    PIXELFORMAT_UNCOMPRESSED_R5G6B5,        // 16 bpp
+    PIXELFORMAT_UNCOMPRESSED_R8G8B8,        // 24 bpp
+    PIXELFORMAT_UNCOMPRESSED_R5G5B5A1,      // 16 bpp (1 bit alpha)
+    PIXELFORMAT_UNCOMPRESSED_R4G4B4A4,      // 16 bpp (4 bit alpha)
+    PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,      // 32 bpp
+    PIXELFORMAT_UNCOMPRESSED_R32,           // 32 bpp (1 channel - float)
+    PIXELFORMAT_UNCOMPRESSED_R32G32B32,     // 32*3 bpp (3 channels - float)
+    PIXELFORMAT_UNCOMPRESSED_R32G32B32A32,  // 32*4 bpp (4 channels - float)
+    PIXELFORMAT_COMPRESSED_DXT1_RGB,        // 4 bpp (no alpha)
+    PIXELFORMAT_COMPRESSED_DXT1_RGBA,       // 4 bpp (1 bit alpha)
+    PIXELFORMAT_COMPRESSED_DXT3_RGBA,       // 8 bpp
+    PIXELFORMAT_COMPRESSED_DXT5_RGBA,       // 8 bpp
+    PIXELFORMAT_COMPRESSED_ETC1_RGB,        // 4 bpp
+    PIXELFORMAT_COMPRESSED_ETC2_RGB,        // 4 bpp
+    PIXELFORMAT_COMPRESSED_ETC2_EAC_RGBA,   // 8 bpp
+    PIXELFORMAT_COMPRESSED_PVRT_RGB,        // 4 bpp
+    PIXELFORMAT_COMPRESSED_PVRT_RGBA,       // 4 bpp
+    PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA,   // 8 bpp
+    PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA    // 2 bpp
   );
 
   // Texture parameters: filter mode
   // NOTE 1: Filtering considers mipmaps if available in the texture
   // NOTE 2: Filter is accordingly set for minification and magnification
-  TTextureFilterMode = (
-    FILTER_POINT = 0,               // No filter, just pixel aproximation
-    FILTER_BILINEAR,                // Linear filtering
-    FILTER_TRILINEAR,               // Trilinear filtering (linear with mipmaps)
-    FILTER_ANISOTROPIC_4X,          // Anisotropic filtering 4x
-    FILTER_ANISOTROPIC_8X,          // Anisotropic filtering 8x
-    FILTER_ANISOTROPIC_16X         // Anisotropic filtering 16x
+  TTextureFilter = (
+    TEXTURE_FILTER_POINT = 0,               // No filter, just pixel aproximation
+    TEXTURE_FILTER_BILINEAR,                // Linear filtering
+    TEXTURE_FILTER_TRILINEAR,               // Trilinear filtering (linear with mipmaps)
+    TEXTURE_FILTER_ANISOTROPIC_4X,          // Anisotropic filtering 4x
+    TEXTURE_FILTER_ANISOTROPIC_8X,          // Anisotropic filtering 8x
+    TEXTURE_FILTER_ANISOTROPIC_16X,         // Anisotropic filtering 16x
   );
 
   // Texture parameters: wrap mode
-  TTextureWrapMode = (
-    WRAP_REPEAT = 0,        // Repeats texture in tiled mode
-    WRAP_CLAMP,             // Clamps texture to edge pixel in tiled mode
-    WRAP_MIRROR_REPEAT,     // Mirrors and repeats the texture in tiled mode
-    WRAP_MIRROR_CLAMP       // Mirrors and clamps to border the texture in tiled mode
+  TTextureWrap = (
+    TEXTURE_WRAP_REPEAT = 0,                // Repeats texture in tiled mode
+    TEXTURE_WRAP_CLAMP,                     // Clamps texture to edge pixel in tiled mode
+    TEXTURE_WRAP_MIRROR_REPEAT,             // Mirrors and repeats the texture in tiled mode
+    TEXTURE_WRAP_MIRROR_CLAMP               // Mirrors and clamps to border the texture in tiled mode
   );
 
   // Cubemap layout
-  TCubemapLayoutType = (
-    CUBEMAP_AUTO_DETECT = 0,        // Automatically detect layout type
-    CUBEMAP_LINE_VERTICAL,          // Layout is defined by a vertical line with faces
-    CUBEMAP_LINE_HORIZONTAL,        // Layout is defined by an horizontal line with faces
-    CUBEMAP_CROSS_THREE_BY_FOUR,    // Layout is defined by a 3x4 cross with cubemap faces
-    CUBEMAP_CROSS_FOUR_BY_THREE,    // Layout is defined by a 4x3 cross with cubemap faces
-    CUBEMAP_PANORAMA                // Layout is defined by a panorama image (equirectangular map)
+  TCubemapLayout = (
+    CUBEMAP_LAYOUT_AUTO_DETECT = 0,         // Automatically detect layout type
+    CUBEMAP_LAYOUT_LINE_VERTICAL,           // Layout is defined by a vertical line with faces
+    CUBEMAP_LAYOUT_LINE_HORIZONTAL,         // Layout is defined by an horizontal line with faces
+    CUBEMAP_LAYOUT_CROSS_THREE_BY_FOUR,     // Layout is defined by a 3x4 cross with cubemap faces
+    CUBEMAP_LAYOUT_CROSS_FOUR_BY_THREE,     // Layout is defined by a 4x3 cross with cubemap faces
+    CUBEMAP_LAYOUT_PANORAMA                 // Layout is defined by a panorama image (equirectangular map)
   );
 
   // Font type, defines generation method
@@ -892,53 +901,58 @@ type
   TBlendMode = (
     BLEND_ALPHA = 0,        // Blend textures considering alpha (default)
     BLEND_ADDITIVE,         // Blend textures adding colors
-    BLEND_MULTIPLIED,        // Blend textures multiplying colors
+    BLEND_MULTIPLIED,       // Blend textures multiplying colors
     BLEND_ADD_COLORS,       // Blend textures adding colors (alternative)
     BLEND_SUBTRACT_COLORS,  // Blend textures subtracting colors (alternative)
-    BLEND_CUSTOM            // Belnd textures using custom src/dst factors (use SetBlendModeCustom())
+    BLEND_CUSTOM            // Belnd textures using custom src/dst factors (use rlSetBlendMode())
   );
 
-  // Gestures type
+  // Gesture
   // NOTE: It could be used as flags to enable only some gestures
   TGestureType = (
-    GESTURE_NONE        = 0,
-    GESTURE_TAP         = 1,
-    GESTURE_DOUBLETAP   = 2,
-    GESTURE_HOLD        = 4,
-    GESTURE_DRAG        = 8,
-    GESTURE_SWIPE_RIGHT = 16,
-    GESTURE_SWIPE_LEFT  = 32,
-    GESTURE_SWIPE_UP    = 64,
-    GESTURE_SWIPE_DOWN  = 128,
-    GESTURE_PINCH_IN    = 256,
-    GESTURE_PINCH_OUT   = 512
+    GESTURE_NONE        = 0,        // No gesture
+    GESTURE_TAP         = 1,        // Tap gesture
+    GESTURE_DOUBLETAP   = 2,        // Double tap gesture
+    GESTURE_HOLD        = 4,        // Hold gesture
+    GESTURE_DRAG        = 8,        // Drag gesture
+    GESTURE_SWIPE_RIGHT = 16,       // Swipe right gesture
+    GESTURE_SWIPE_LEFT  = 32,       // Swipe left gesture
+    GESTURE_SWIPE_UP    = 64,       // Swipe up gesture
+    GESTURE_SWIPE_DOWN  = 128,      // Swipe down gesture
+    GESTURE_PINCH_IN    = 256,      // Pinch in gesture
+    GESTURE_PINCH_OUT   = 512       // Pinch out gesture
   );
 
   // Camera system modes
   TCameraMode = (
-    CAMERA_CUSTOM = 0,
-    CAMERA_FREE,
-    CAMERA_ORBITAL,
-    CAMERA_FIRST_PERSON,
-    CAMERA_THIRD_PERSON
+    CAMERA_CUSTOM = 0,              // Custom camera
+    CAMERA_FREE,                    // Free camera
+    CAMERA_ORBITAL,                 // Orbital camera
+    CAMERA_FIRST_PERSON,            // First person camera
+    CAMERA_THIRD_PERSON             // Third person camera
   );
 
-  // Camera projection modes
-  TCameraType = (
-    CAMERA_PERSPECTIVE = 0,
-    CAMERA_ORTHOGRAPHIC
+  // Camera projection
+  TCameraProjection = (
+    CAMERA_PERSPECTIVE = 0,         // Perspective projection
+    CAMERA_ORTHOGRAPHIC             // Orthographic projection
   );
 
-  // N-patch types
-  TNPatchType = (
-    NPT_9PATCH = 0,         // Npatch defined by 3x3 tiles
-    NPT_3PATCH_VERTICAL,    // Npatch defined by 1x3 tiles
-    NPT_3PATCH_HORIZONTAL   // Npatch defined by 3x1 tiles
+  // N-patch layout
+  TNPatchLayout = (
+    NPATCH_NINE_PATCH = 0,          // Npatch layout: 3x3 tiles
+    NPATCH_THREE_PATCH_VERTICAL,    // Npatch layout: 1x3 tiles
+    NPATCH_THREE_PATCH_HORIZONTAL   // Npatch layout: 3x1 tiles
   );
 
-  // Callbacks to be implemented by users
-type
-  TTraceLogCallback = procedure(LogType: Integer; Text: PAnsiChar; Args: Pointer); cdecl; //TODO check Args
+  //TODO zaher, check params/arg please
+  // Callbacks to hook some internal functions
+  // WARNING: This callbacks are intended for advance users
+  TTraceLogCallback = procedure(LogType: Integer; Text: PAnsiChar; Args: Pointer); cdecl;
+  LoadFileDataCallback = function(FileName: PAnsiChar, bytesRead: PUInt): PByte; cdecl;      // FileIO: Load binary data
+  SaveFileDataCallback = function (FileName: PAnsiChar, var data, bytesToWrite: UInt): Boolean; cdecl;  // FileIO: Save binary data
+  LoadFileTextCallback = function (FileName: PAnsiChar): PChar; cdecl;      // FileIO: Load text data
+  SaveFileTextCallback = function (FileName: PAnsiChar, text: PAnsiChar); cdecl;    // FileIO: Save text data
 
 //------------------------------------------------------------------------------------
 // Global Variables Definition
@@ -1004,6 +1018,8 @@ var
   GetScreenHeight: function: Integer; cdecl;
   // Get number of connected monitors
   GetMonitorCount: function: Integer; cdecl;
+  // Get current connected monitor
+  GetCurrentMonitor: function(): Integer; cdecl;
   // Get specified monitor position
   GetMonitorPosition: function(monitor: Integer): TVector2; cdecl;
   // Get primary monitor width
@@ -1026,6 +1042,14 @@ var
   SetClipboardText: procedure(const text: PUTF8Char); cdecl;
   // Get clipboard text content
   GetClipboardText: function: PUTF8Char; cdecl;
+
+  // Custom frame control functions
+  // NOTE: Those functions are intended for advance users that want full control over the frame processing
+  // By default EndDrawing() does this job: draws everything + SwapScreenBuffer() + manage frame timming + PollInputEvents()
+  // To avoid that behaviour and control frame processes manually, enable in config.h: SUPPORT_CUSTOM_FRAME_CONTROL
+  SwapScreenBuffer: procedure; cdecl;                               // Swap back buffer with front buffer (screen drawing)
+  PollInputEvents: procedure; cdecl;                                // Register all input events
+  WaitTime: procedure(ms: Single); cdecl;                           // Wait for some milliseconds (halt program execution)
 
   { Cursor-related functions }
 
@@ -1050,22 +1074,62 @@ var
   BeginDrawing: procedure; cdecl;
   // End canvas drawing and swap buffers (double buffering)
   EndDrawing: procedure; cdecl;
-  // Initialize 2D mode with custom camera (2D)
+  // Begin 2D mode with custom camera (2D)
   BeginMode2D: procedure(Camera: TCamera2D); cdecl;
   // Ends 2D mode with custom camera
   EndMode2D: procedure; cdecl;
-  // Initializes 3D mode with custom camera (3D)
+  // Begin 3D mode with custom camera (3D)
   BeginMode3D: procedure(Camera: TCamera3D); cdecl;
   // Ends 3D mode and returns to default 2D orthographic mode
   EndMode3D: procedure; cdecl;
-  // Initializes render texture for drawing
+  // Begin drawing to render texture
   BeginTextureMode: procedure(Target: TRenderTexture2D); cdecl;
   // Ends drawing to render texture
   EndTextureMode: procedure; cdecl;
+
+  // Begin custom shader drawing
+  BeginShaderMode: procedure(Shader: TShader); cdecl;
+  // End custom shader drawing (use default shader)
+  EndShaderMode: procedure; cdecl;
+  // Begin blending mode (alpha, additive, multiplied, subtract, custom)
+  BeginBlendMode: procedure(mode: integer); cdecl;
+  // End blending mode (reset to default: alpha blending)
+  EndBlendMode: procedure; cdecl;
   // Begin scissor mode (define screen area for following drawing)
   BeginScissorMode: procedure(x: Integer; y: Integer; width: Integer; height: Integer); cdecl;
   // End scissor mode
   EndScissorMode: procedure; cdecl;
+  // Begin stereo rendering (requires VR simulator)
+  BeginVrStereoMode: procedure(Config: TVrStereoConfig); cdecl;
+  // End stereo rendering (requires VR simulator)
+  EndVrStereoMode: procedure; cdecl;
+
+  // VR stereo config functions for VR simulator
+  // Load VR stereo config for VR simulator device parameters
+  LoadVrStereoConfig: function(Device: TVrDeviceInfo): TVrStereoConfig; cdecl;
+  // Unload VR stereo config
+  UnloadVrStereoConfig: procedure(Config: VrStereoConfig); cdecl;
+
+  // Shader management functions
+  // NOTE: Shader functionality is not available on OpenGL 1.1
+  // Load shader from files and bind default locations
+  LoadShader: function(vsFileName: PUTF8Char; fsFileName: PUTF8Char): TShader; cdecl;
+  // Load shader from code strings and bind default locations
+  LoadShaderFromMemory: function(vsCode: PUTF8Char, fsCode: PUTF8Char): TShader; cdecl;
+  // Get shader uniform location
+  GetShaderLocation: function(Shader: TShader, UniformName: PUTF8Char): integer; cdecl;
+  // Get shader attribute location
+  GetShaderLocationAttrib(Shader: TShader; AttribName: PUTF8Char): integer; cdecl;
+  // Set shader uniform value
+  SetShaderValue: procedure(Shader: TShader; LocIndex: Integer; Value: PUTF8Char; uniformType: Integer); cdecl;
+  // Set shader uniform value vector
+  SetShaderValueV: procedure(Shader: TShader; LocIndex: Integer, var Value, UniformType: Integer; Count: Integer); cdecl;
+  // Set shader uniform value (matrix 4x4)
+  SetShaderValueMatrix: procedure(Shader: TShader; locIndex: Integer; mat: TMatrix); cdecl;
+  // Set shader uniform value for texture (sampler2d)
+  SetShaderValueTexture: procedure(Shader: TShader; LocIndex: Integer; Texture: TTexture2D); cdecl;
+  // Unload shader from GPU memory (VRAM)
+  UnloadShader: procedure(Shader: TShader); cdecl;
 
   { Screen-space-related functions }
 
@@ -2284,6 +2348,7 @@ begin
   GetScreenWidth := GetAddress('GetScreenWidth');
   GetScreenHeight := GetAddress('GetScreenHeight');
   GetMonitorCount := GetAddress('GetMonitorCount');
+  GetCurrentMonitor := GetAddress('GetCurrentMonitor');
   GetMonitorPosition := GetAddress('GetMonitorPosition');
   GetMonitorWidth := GetAddress('GetMonitorWidth');
   GetMonitorHeight := GetAddress('GetMonitorHeight');
@@ -2295,6 +2360,9 @@ begin
   GetWindowScaleDPI := GetAddress('GetWindowScaleDPI');
   SetClipboardText := GetAddress('SetClipboardText');
   GetClipboardText := GetAddress('GetClipboardText');
+  SwapScreenBuffer := GetAddress('SwapScreenBuffer');
+  PollInputEvents := GetAddress('PollInputEvents');
+  WaitTime := GetAddress('WaitTime');
   ShowCursor := GetAddress('ShowCursor');
   HideCursor := GetAddress('HideCursor');
   IsCursorHidden := GetAddress('IsCursorHidden');
@@ -2310,8 +2378,23 @@ begin
   EndMode3D := GetAddress('EndMode3D');
   BeginTextureMode := GetAddress('BeginTextureMode');
   EndTextureMode := GetAddress('EndTextureMode');
+  BeginShaderMode := GetAddress('BeginShaderMode');
+  EndShaderMode := GetAddress('EndShaderMode');
+  BeginBlendMode := GetAddress('BeginBlendMode');
+  EndBlendMode := GetAddress('EndBlendMode');
   BeginScissorMode := GetAddress('BeginScissorMode');
   EndScissorMode := GetAddress('EndScissorMode');
+  LoadVrStereoConfig := GetAddress('LoadVrStereoConfig');
+  UnloadVrStereoConfig := GetAddress('UnloadVrStereoConfig');
+  LoadShader := GetAddress('LoadShader');
+  LoadShaderFromMemory := GetAddress('LoadShaderFromMemory');
+  GetShaderLocation := GetAddress('GetShaderLocation');
+  GetShaderLocationAttrib := GetAddress('GetShaderLocationAttrib');
+  SetShaderValue := GetAddress('SetShaderValue');
+  SetShaderValueV := GetAddress('SetShaderValueV');
+  SetShaderValueMatrix := GetAddress('SetShaderValueMatrix');
+  SetShaderValueTexture := GetAddress('SetShaderValueTexture');
+  UnloadShader := GetAddress('UnloadShader');
   GetMouseRay := GetAddress('GetMouseRay');
   GetCameraMatrix := GetAddress('GetCameraMatrix');
   GetCameraMatrix2D := GetAddress('GetCameraMatrix2D');
