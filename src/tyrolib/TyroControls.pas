@@ -239,7 +239,8 @@ type
     destructor Destroy; override;
 
     //* TextureMode create texture with canvas
-    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); virtual;
+    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); overload; virtual;
+    procedure ShowWindow; overload;
     procedure SetFPS(FPS: Integer); virtual;
     procedure HideWindow; virtual;
 
@@ -346,6 +347,11 @@ end;
 procedure TTyroMain.Setup;
 begin
 
+end;
+
+procedure TTyroMain.ShowWindow;
+begin
+  ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
 end;
 
 procedure TTyroMain.Shutdown;

@@ -15,8 +15,8 @@ uses
 
 begin
   Randomize;
-  Main := TestMaze.TMain.Create;
-  //Main := Print10.TMain.Create;
+  //Main := TestMaze.TMain.Create;
+  Main := Print10.TMain.Create;
   try
     Main.Run;
   except

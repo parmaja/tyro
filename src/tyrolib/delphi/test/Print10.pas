@@ -14,6 +14,7 @@ interface
 uses
   Classes, SysUtils,
   RayLib, Generics.Collections,
+  Melodies,
   TyroControls, TyroClasses;
 
 type
@@ -65,7 +66,8 @@ procedure TMain.Setup;
 begin
   inherited;
   Randomize;
-  SetFPS(10);
+  SetFPS(20);
+
   //Options := Options - [moOpaque];
   Canvas.BackColor := clWhite;
   Canvas.PenColor := clBlack;

@@ -1,4 +1,18 @@
 program audio_raw_stream;
+{*******************************************************************************************
+*
+*   raylib [audio] example - Raw audio streaming
+*
+*   This example has been created using raylib 1.6 (www.raylib.com)
+*   raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
+*
+*   Example created by Ramon Santamaria (@raysan5) and reviewed by James Hofmann (@triplefox)
+*
+*   Copyright (c) 2015-2019 Ramon Santamaria (@raysan5) and James Hofmann (@triplefox)
+*
+*   Ported to Pascal: Zaher Dirkey (@zaher)
+*
+********************************************************************************************}
 
 {$APPTYPE CONSOLE}
 {$MINENUMSIZE 4} //All enum must be sized as Integer

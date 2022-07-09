@@ -7,19 +7,19 @@
 {$MINENUMSIZE 4} //{$Z4} All enum must be sized as Integer
 {$A8}
 
-{**
- *  RayLib 4
- *
- *  This file is part of Tyro project, ported from C header raylib.h
- *
- * @project   https://www.github.com/parmaja/tyro
- *
- * @license   MIT (https://opensource.org/licenses/MIT)
- *
- * @author    Zaher Dirkey zaherdirkey on internet
- *
- * This library not really tested as it, I just used some functions, please be patient and report any but you find.
- *}
+{**********************************************************************************************
+*  RayLib 4
+*
+*  This file is part of Tyro project, ported from C header raylib.h
+*
+*  @project   https://www.github.com/parmaja/tyro
+*
+*  @license   MIT (https://opensource.org/licenses/MIT)
+*
+*  @author    Zaher Dirkey (@zaher)
+*
+*  This library not really tested as it, I just used some functions, please be patient and report any bug you find.
+*}
 
 {**********************************************************************************************
 *
@@ -1391,7 +1391,7 @@ var
 //------------------------------------------------------------------------------------
 
   // Set camera mode (multiple camera modes available)
-  SetCameraMode: procedure(camera: TCamera; mode: TCameraMode); cdecl = nil;
+  SetCameraMode: procedure(Camera: TCamera; Mode: TCameraMode); cdecl = nil;
   // Update camera position for selected mode
   UpdateCamera: procedure(camera: PCamera); cdecl = nil;
 
@@ -2157,6 +2157,7 @@ var
   RayLibrary: TmncRayLib = nil;
 
 function Vector2Of(X, Y: Single): TVector2;
+function Vector3Of(X, Y, Z: Single): TVector3;
 function RectangleOf(X, Y, W, H: Single): TRectangle;
 
 procedure InitLibrary;
@@ -2166,6 +2167,11 @@ implementation
 function Vector2Of(X, Y: Single): TVector2;
 begin
   Result := TVector2.Create(X, Y);
+end;
+
+function Vector3Of(X, Y, Z: Single): TVector3;
+begin
+  Result := TVector3.Create(X, Y, Z);
 end;
 
 function RectangleOf(X, Y, W, H: Single): TRectangle;

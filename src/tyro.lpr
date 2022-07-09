@@ -8,16 +8,25 @@ program tyro;
  *
  *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
  *
- *  Fonts
- *   https://opengameart.org/content/the-collection-of-8-bit-fonts-for-grafx2
+    Fonts
+    https://opengameart.org/content/the-collection-of-8-bit-fonts-for-grafx2
      http://www.pentacom.jp/pentacom/bitfontmaker2/gallery/?page=1&order=&
      http://orangetide.com/OLD/fonts/DOS/
+
+
+   For Sound
+     https://sourceforge.net/projects/tralala/
+     https://sourceforge.net/projects/mytralala/
+
+   //ref https://github.com/raysan5/raylib/blob/master/examples/textures/textures_mouse_painting.c
+
+   Console
+    https://kriscode.blogspot.com/2018/02/console-vs-gui-application-in-op.html
  *}
 
 {$mode objfpc}
 {$H+}
 
-//ref https://github.com/raysan5/raylib/blob/master/examples/textures/textures_mouse_painting.c
 
 uses
   Windows,
