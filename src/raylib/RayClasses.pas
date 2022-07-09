@@ -179,6 +179,7 @@ end;
 procedure TRayFont.LoadDefault;
 begin
   Data := GetFontDefault();
+  Height := Data.BaseSize;
 end;
 
 procedure TRayFont.LoadFromFile(FileName: utf8string);

@@ -249,7 +249,9 @@ begin
     Font.Height := 16;
   end
   else
+  begin
     Font.LoadDefault;
+  end;
 
   SetTextureFilter(Font.Data.texture, TEXTURE_FILTER_POINT);
 

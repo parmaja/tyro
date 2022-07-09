@@ -11,12 +11,14 @@ uses
   TyroControls,
   Generics.Collections,
   Print10 in 'Print10.pas',
+  Perceptron in 'Perceptron.pas',
   TestMaze in 'TestMaze.pas';
 
 begin
   Randomize;
   //Main := TestMaze.TMain.Create;
-  Main := Print10.TMain.Create;
+  //Main := Print10.TMain.Create;
+  Main := Perceptron.TMain.Create;
   try
     Main.Run;
   except

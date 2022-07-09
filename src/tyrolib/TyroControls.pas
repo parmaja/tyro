@@ -220,12 +220,8 @@ type
     FOptions: TTyroMainOptions;
     FMarginSize: Integer;
     FMarginColor: TColor;
-    FBorderSize: Integer;
-    FBorderColor: TColor;
     procedure SetMarginSize(const Value: Integer);
-    procedure SetBorderSize(const Value: Integer);
     procedure SetMarginColor(const Value: TColor);
-    procedure SetBorderColor(const Value: TColor);
     function GetHeight: Integer;
     function GetWidth: Integer;
   protected
@@ -258,8 +254,6 @@ type
     procedure Run;
     property MarginColor: TColor read FMarginColor write SetMarginColor;
     property MarginSize: Integer read FMarginSize write SetMarginSize;
-    property BorderColor: TColor read FBorderColor write SetBorderColor;
-    property BorderSize: Integer read FBorderSize write SetBorderSize;
     property Width: Integer read GetWidth;
     property Height: Integer read GetHeight;
     property CanvasLock: TCriticalSection read FCanvasLock;
@@ -293,9 +287,7 @@ begin
   RayLibrary.Load;
   FCanvasLock := TCriticalSection.Create;
   MarginSize := cMarginSize;
-  BorderSize := 1;
   MarginColor := clFrenchSkyBlue;
-  BorderColor := clBlack;
 end;
 
 function TTyroMain.CreateCanvas: TTyroCanvas;
@@ -326,16 +318,6 @@ end;
 procedure TTyroMain.SetMarginSize(const Value: Integer);
 begin
   FMarginSize := Value;
-end;
-
-procedure TTyroMain.SetBorderColor(const Value: TColor);
-begin
-  FBorderColor := Value;
-end;
-
-procedure TTyroMain.SetBorderSize(const Value: Integer);
-begin
-  FBorderSize := Value;
 end;
 
 procedure TTyroMain.SetFPS(FPS: Integer);
@@ -370,12 +352,12 @@ end;
 
 function TTyroMain.GetHeight: Integer;
 begin
-  Result := WindowHeight - MarginSize * 2 - BorderSize * 2;
+  Result := WindowHeight - MarginSize * 2;
 end;
 
 function TTyroMain.GetWidth: Integer;
 begin
-  Result := WindowWidth - MarginSize * 2 - BorderSize * 2;
+  Result := WindowWidth - MarginSize * 2;
 end;
 
 procedure TTyroMain.Loop;
