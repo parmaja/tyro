@@ -24,6 +24,7 @@ uses
   SyncObjs, //after LCLType
   RayLib, RayClasses,
   TyroClasses;
+
 const
   cMarginSize = 32;
 
@@ -219,9 +220,9 @@ type
     FFPS: Integer;
     FOptions: TTyroMainOptions;
     FMarginSize: Integer;
-    FMarginColor: TColor;
+    //FMarginColor: TColor;
     procedure SetMarginSize(const Value: Integer);
-    procedure SetMarginColor(const Value: TColor);
+    //procedure SetMarginColor(const Value: TColor);
     function GetHeight: Integer;
     function GetWidth: Integer;
   protected
@@ -230,6 +231,7 @@ type
     FCanvasLock: TCriticalSection;
     Camera2D: TCamera2D;
     function CreateCanvas: TTyroCanvas; override;
+    procedure Terminate; virtual;
   public
     constructor Create;
     destructor Destroy; override;
@@ -240,19 +242,23 @@ type
     procedure SetFPS(FPS: Integer); virtual;
     procedure HideWindow; virtual;
 
+    //* Before Show window
     procedure Init; virtual;
-    procedure Preload; virtual;
-    function Terminated: Boolean;
-    procedure Setup; virtual;
-    procedure Shutdown; virtual;
+    //* After window initialized and other resource, load your resources here
+    procedure Load; virtual;
+    procedure Loop; virtual;
     procedure PrepareDraw; virtual;
     procedure Draw; virtual;
-    procedure Loop; virtual;
-    procedure Terminate; virtual;
+
+    //When application exit, unload your resources
     procedure Unload; virtual;
 
+    function Terminated: Boolean; virtual;
+
     procedure Run;
-    property MarginColor: TColor read FMarginColor write SetMarginColor;
+    procedure Shutdown; virtual;
+
+    //property MarginColor: TColor read FMarginColor write SetMarginColor;
     property MarginSize: Integer read FMarginSize write SetMarginSize;
     property Width: Integer read GetWidth;
     property Height: Integer read GetHeight;
@@ -287,7 +293,7 @@ begin
   RayLibrary.Load;
   FCanvasLock := TCriticalSection.Create;
   MarginSize := cMarginSize;
-  MarginColor := clFrenchSkyBlue;
+  //MarginColor := clCornflowerBlue;
 end;
 
 function TTyroMain.CreateCanvas: TTyroCanvas;
@@ -306,14 +312,14 @@ begin
   Result := IsTerminated;
 end;
 
-procedure TTyroMain.Preload;
+procedure TTyroMain.Load;
 begin
 end;
 
-procedure TTyroMain.SetMarginColor(const Value: TColor);
+{procedure TTyroMain.SetMarginColor(const Value: TColor);
 begin
   FMarginColor := Value;
-end;
+end;}
 
 procedure TTyroMain.SetMarginSize(const Value: Integer);
 begin
@@ -324,11 +330,6 @@ procedure TTyroMain.SetFPS(FPS: Integer);
 begin
   FFPS := FPS;
   SetTargetFPS(FPS);
-end;
-
-procedure TTyroMain.Setup;
-begin
-
 end;
 
 procedure TTyroMain.ShowWindow;
@@ -373,8 +374,7 @@ begin
     SetFPS(cFramePerSeconds);
   end;
 
-  Preload;
-  Setup;
+  Load;
   if FPS = 0 then
     SetFPS(cFramePerSeconds);
   repeat
@@ -395,7 +395,6 @@ begin
             Canvas.Clear;
 
           try
-            //Camera2D.Target := Vector2Of(-MarginSize, -MarginSize);
             Camera2D.Target := Vector2Of(0, 0);
             Camera2D.Offset := Vector2Of(MarginSize, MarginSize);
             Camera2D.Zoom := 1;

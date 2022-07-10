@@ -24,7 +24,7 @@ type
     X, Y: Integer;
     Spacing: Integer;
     procedure Init; override;
-    procedure Setup; override;
+    procedure Load; override;
     procedure Draw; override;
     procedure Unload; override;
   end;
@@ -62,7 +62,7 @@ begin
   ShowWindow(400, 400, True);
 end;
 
-procedure TMain.Setup;
+procedure TMain.Load;
 begin
   inherited;
   Randomize;

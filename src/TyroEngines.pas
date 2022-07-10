@@ -55,7 +55,7 @@ type
     procedure Init; override;
     procedure Terminate; override;
     procedure ProcessQueue;
-    procedure Setup; override;
+    procedure Load; override;
     procedure Shutdown; override;
     procedure PrepareDraw; override;
     procedure Draw; override;
@@ -166,7 +166,7 @@ begin
   end;
 end;
 
-procedure TTyroEngine.Setup;
+procedure TTyroEngine.Load;
 begin
   inherited;
   if (FScriptThread <> nil) and not FScriptThread.Started then

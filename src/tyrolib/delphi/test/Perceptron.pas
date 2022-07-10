@@ -48,7 +48,7 @@ type
     Perceptron: TPerceptron;
     Points: TPoints;
     procedure Init; override;
-    procedure Setup; override;
+    procedure Load; override;
     procedure Draw; override;
     procedure Unload; override;
 
@@ -65,7 +65,7 @@ begin
 //  Canvas.PenAlpha := 128;
 
   DrawLine(0, 0, Canvas.Width, Canvas.Height, Canvas.PenColor);
-  Canvas.DrawText(60, 60, w.ToString, Canvas.PenColor);
+  Canvas.DrawText(10, 10, 'Ready '+ w.ToString, Canvas.PenColor);
 
   for var p in Points do
   begin
@@ -102,14 +102,14 @@ begin
 
 end;
 
-procedure TMain.Setup;
+procedure TMain.Load;
 begin
   inherited;
   Randomize;
   SetFPS(10);
 
-  Canvas.BackColor := clWhite;
-  Canvas.PenColor := clBlack;
+//  Canvas.BackColor := clWhite;
+//  Canvas.PenColor := clBlack;
 end;
 
 procedure TMain.Unload;

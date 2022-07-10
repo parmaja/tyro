@@ -22,7 +22,8 @@ uses
   Melodies, TyroSounds;
 
 const
-  clFrenchSkyBlue : TRGBAColor = (Red: $77; Green: $B5; Blue: $FE; Alpha: $FF);   //* French Sky Blue
+  clFrenchSkyBlue: TRGBAColor = (Red: $77; Green: $B5; Blue: $FE; Alpha: $FF);
+  clCornflowerBlue: TRGBAColor = (Red: $5d; Green: $9f; Blue: $f9; Alpha: $FF);
 
 type
 
@@ -246,7 +247,7 @@ begin
   if SysUtils.FileExists(WorkSpace + 'font.png') then
   begin
     Font.LoadFromFile(WorkSpace + 'font.png');
-    Font.Height := 16;
+    Font.Height := Font.Data.BaseSize;
   end
   else
   begin
@@ -381,8 +382,6 @@ procedure TTyroCanvas.Clear;
 begin
   ClearBackground(FBackColor);
 end;
-
-{ TTyroTextureCanvas }
 
 { TTyroTextureCanvas }
 

@@ -41,7 +41,7 @@ type
   TMain = class(TTyroMain)
   public
     procedure Init; override;
-    procedure Setup; override;
+    procedure Load; override;
     procedure Draw; override;
     procedure Unload; override;
   end;
@@ -224,7 +224,7 @@ begin
   FCurrent := Cells[0];
 end;
 
-procedure TMain.Setup;
+procedure TMain.Load;
 begin
   inherited;
   SetFPS(10);
