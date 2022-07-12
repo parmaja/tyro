@@ -588,7 +588,7 @@ type
   TTraceLogLevels = set of TTraceLogLevel;
   PTraceLogLevels = ^TTraceLogLevels;
 
-//TODO zaher, convert to set, TKeyboardKey
+//TKeyboardKey
   TKeyboardKey = (
     KEY_NULL            = 0,        // Key: NULL, used for no key pressed
     KEY_APOSTROPHE      = 39,       // Key: '
