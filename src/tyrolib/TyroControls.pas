@@ -289,7 +289,6 @@ constructor TTyroMain.Create;
 begin
   inherited;
   FOptions := [moWindow, moOpaque];
-  WorkSpace := ExtractFilePath(ParamStr(0));
   RayLibrary.Load;
   FCanvasLock := TCriticalSection.Create;
   MarginSize := cMarginSize;
@@ -367,12 +366,18 @@ end;
 
 procedure TTyroMain.Run;
 begin
+  Resources := TTyroResources.Create;
+  Resources.WorkSpace := ExtractFilePath(ParamStr(0));
+
   Init;
+
   if not Visible and (moWindow in Options) then
   begin
     ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
     SetFPS(cFramePerSeconds);
   end;
+
+  Resources.Load;
 
   Load;
   if FPS = 0 then

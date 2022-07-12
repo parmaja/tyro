@@ -217,6 +217,7 @@ begin
   Stack := TStack<TCell>.Create;
 
   ShowWindow(FWidth + MarginSize * 2, FHeight + MarginSize * 2);
+
   for var row in [0..FRows-1] do
     for var col in [0..FCols-1] do
       Cells.Add(TCell.Create(row, col, FCW));

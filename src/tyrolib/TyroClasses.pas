@@ -53,7 +53,6 @@ type
     FBackColor: TColor;
     FPenWidth: Integer;
     FWidth, FHeight: Integer;
-    Font: TRayFont;
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
     procedure SetHeight(AValue: Integer);
@@ -110,6 +109,24 @@ type
     property Texture: TRenderTexture2D read FTexture;
   end;
 
+  TTyroResource = class(TmnNamedObject)
+  public
+    ResType: string;
+    ResData: rawbytestring;
+    constructor Create(const AResName, AResType: string; const AResData: rawbytestring);
+  end;
+
+  TTyroResources = class(TmnNamedObjectList<TTyroResource>)
+  public
+    Font: TRayFont;
+    WorkSpace: utf8string;
+    function Find(const ResName, ResType: string): TTyroResource; overload;
+    procedure Load; virtual;
+    procedure Add(const ResName, ResType: string; const ResData: rawbytestring); overload;
+    constructor Create; virtual;
+    destructor Destroy; override;
+  end;
+
   function IntToColor(I: integer): TColor;
   function ColorToInt(C: TColor): integer;
 
@@ -122,7 +139,7 @@ const
   cFramePerSeconds = 60;
 
 var
-  WorkSpace: utf8string;
+  Resources: TTyroResources = nil;
   Lock: TCriticalSection = nil;
 
 implementation
@@ -220,7 +237,6 @@ end;
 constructor TTyroCanvas.Create(AWidth, AHeight: Integer);
 begin
   inherited Create;
-  Font := TRayFont.Create;
   FWidth := AWidth;
   FHeight := AHeight;
   FPenWidth := 1;
@@ -230,32 +246,6 @@ begin
 //  FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
   FBackColor := clFrenchSkyBlue;
 
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'alpha_beta.png'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'Terminess-Bold.ttf'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'dejavu.fnt'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'terminus.ttf'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/Chroma.png'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/alpha_beta.png'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
-  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/terminus.ttf'), 12, nil, 255);
-  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/AnonymousPro-Regular.ttf'), 12, nil, 255);
-  //Font := LoadFont(PUTF8Char('computer_pixel.fon.ttf'));
-
-  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/tahoma.ttf'), ScreenFontSize, nil, $FFFF); //Good for arabic but it take huge memory
-
-  if SysUtils.FileExists(WorkSpace + 'font.png') then
-  begin
-    Font.LoadFromFile(WorkSpace + 'font.png');
-    Font.Height := Font.Data.BaseSize;
-  end
-  else
-  begin
-    Font.LoadDefault;
-  end;
-
-  SetTextureFilter(Font.Data.texture, TEXTURE_FILTER_POINT);
-
   {BeginTextureMode(FTexture);
   ClearBackground(BackColor);
   DrawText(10, 10, 'Ready!');
@@ -264,7 +254,6 @@ end;
 
 destructor TTyroCanvas.Destroy;
 begin
-  FreeAndNil(Font);
   inherited;
 end;
 
@@ -337,7 +326,7 @@ end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: utf8string; Color: TColor);
 begin
-  RayLib.DrawTextEx(Font.Data, PUTF8Char(S), Vector2Of(x + FOriginX, y + FOriginY), Font.Height, 0, Color);
+  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginX, y + FOriginY), Resources.Font.Height, 0, Color);
 end;
 
 procedure TTyroCanvas.DrawPixel(X, Y: Integer; Color: TColor);
@@ -420,6 +409,92 @@ begin
   if FTextureMode then
     RayLib.EndTextureMode();
   inherited;
+end;
+
+{ TTyroResources }
+
+procedure TTyroResources.Add(const ResName, ResType: string; const ResData: rawbytestring);
+begin
+  Add(TTyroResource.Create(ResName, ResType, ResData));
+end;
+
+constructor TTyroResources.Create;
+begin
+  inherited;
+  Font := TRayFont.Create;
+end;
+
+destructor TTyroResources.Destroy;
+begin
+  FreeAndNil(Font);
+  if Resources = Self then
+    Resources := nil;
+  inherited;
+end;
+
+function TTyroResources.Find(const ResName, ResType: string): TTyroResource;
+var
+  i: Integer;
+begin
+  Result := nil;
+  for i := 0 to Count - 1 do
+  begin
+    if SameText(Items[i].Name, ResName) and SameText(Items[i].ResType, ResType)  then
+    begin
+      Result := Items[i];
+      break;
+    end;
+  end;
+end;
+
+procedure TTyroResources.Load;
+var
+  res: TTyroResource;
+begin
+  {$include 'font.inc'}
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'alpha_beta.png'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'Terminess-Bold.ttf'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'dejavu.fnt'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'terminus.ttf'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/Chroma.png'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/alpha_beta.png'));
+  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
+  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/terminus.ttf'), 12, nil, 255);
+  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/AnonymousPro-Regular.ttf'), 12, nil, 255);
+  //Font := LoadFont(PUTF8Char('computer_pixel.fon.ttf'));
+
+  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/tahoma.ttf'), ScreenFontSize, nil, $FFFF); //Good for arabic but it take huge memory
+
+  res := Find('font', 'png');
+  if res <> nil then
+  begin
+    Font.LoadFromString(res.ResData, 16);
+    Font.Height := Font.Data.BaseSize * 2;
+  end
+  else if SysUtils.FileExists(WorkSpace + 'font.png') then
+  begin
+    Font.LoadFromFile(WorkSpace + 'font.png');
+    Font.Height := Font.Data.BaseSize * 2;
+  end
+  else
+  begin
+    Font.LoadDefault;
+  end;
+
+  SetTextureFilter(Font.Data.texture, TEXTURE_FILTER_POINT);
+end;
+
+{ TTyroResource }
+
+
+{ TTyroResource }
+
+constructor TTyroResource.Create(const AResName, AResType: string; const AResData: rawbytestring);
+begin
+  Name := AResName;
+  ResType := AResType;
+  ResData := AResData;
 end;
 
 initialization

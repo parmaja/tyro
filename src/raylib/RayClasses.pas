@@ -140,6 +140,7 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure LoadFromFile(FileName: utf8string);
+    procedure LoadFromString(const DataString: rawbytestring; fontSize: Integer);
     procedure LoadDefault;
   end;
 
@@ -185,6 +186,17 @@ end;
 procedure TRayFont.LoadFromFile(FileName: utf8string);
 begin
   Data := LoadFont(PUTF8Char(FileName));
+end;
+
+procedure TRayFont.LoadFromString(const DataString: rawbytestring; fontSize: Integer);
+var
+  img: TImage;
+const
+  DEFAULT_FIRST_CHAR = 32;
+begin
+  img := LoadImageFromMemory('.png', PByte(DataString), Length(DataString));
+  Data := LoadFontFromImage(img, clMagenta, 32);
+  UnloadImage(img);
 end;
 
 { TRayAudio }

@@ -1524,7 +1524,7 @@ var
   // Load image sequence from file (frames appended to image.data)
   LoadImageAnim: function(const fileName: PUTF8Char; frames: Integer): TImage; cdecl = nil;
   // Load image from memory buffer, fileType refers to extension: i.e. "png"
-  LoadImageFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer): TImage; cdecl = nil;
+  LoadImageFromMemory: function(const fileType: PUTF8Char; fileData: Pointer; dataSize: Integer): TImage; cdecl = nil;
   // Load image from GPU texture data
   LoadImageFromTexture: function(texture: TTexture2D): TImage; cdecl = nil;
   // Load image from screen buffer and (screenshot)

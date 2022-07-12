@@ -240,7 +240,7 @@ begin
       if SysUtils.FileExists(RunFile) then
       begin
         if LeftStr(RunFile, 1) = '.' then
-          RunFile := ExpandFileName(WorkSpace + RunFile);
+          RunFile := ExpandFileName(Resources.WorkSpace + RunFile);
         aScript.AssetsFolder := ExtractFilePath(RunFile);
         aScript.LoadFile(RunFile);
         if RunInMain then

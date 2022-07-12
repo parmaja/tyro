@@ -194,9 +194,9 @@ begin
     Main.RunFile := Files[0];
   WorkPaths := GetOptionValues('w', 'workpath');
   if Length(WorkPaths) > 0  then
-    WorkSpace := WorkPaths[0]
+    Resources.WorkSpace := WorkPaths[0]
   else
-    WorkSpace := Location;
+    Resources.WorkSpace := Location;
 
   if IsConsole then
   begin
