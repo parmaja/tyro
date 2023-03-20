@@ -3,14 +3,19 @@
 {$MODE delphi}
 {$ENDIF}
 {$M+}{$H+}
-
+{
+  NOTICES: C to Pas
+    float = single
+    double = double
+    const Title: PUTF8Char = const char *
+}
 {$MINENUMSIZE 4} //{$Z4} All enum must be sized as Integer
 {$A8}
 
 {**********************************************************************************************
 *  RayLib 4
 *
-*  This file is part of Tyro project, ported from C header raylib.h
+*   raylib v4.5 - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
 *
 *  @project   https://www.github.com/parmaja/tyro
 *
@@ -56,6 +61,8 @@
 *
 *   OPTIONAL DEPENDENCIES (included):
 *       [rcore] msf_gif (Miles Fogle) for GIF recording
+*       [rcore] sinfl (Micha Mettke) for DEFLATE decompression algorithm
+*       [rcore] sdefl (Micha Mettke) for DEFLATE compression algorithm
 *       [rcore] sinfl (Micha Mettke) for DEFLATE decompression algorythm
 *       [rcore] sdefl (Micha Mettke) for DEFLATE compression algorythm
 *       [rtextures] stb_image (Sean Barret) for images loading (BMP, TGA, PNG, JPEG, HDR...)
@@ -66,6 +73,7 @@
 *       [rmodels] par_shapes (Philip Rideout) for parametric 3d shapes generation
 *       [rmodels] tinyobj_loader_c (Syoyo Fujita) for models loading (OBJ, MTL)
 *       [rmodels] cgltf (Johannes Kuhlmann) for models loading (glTF)
+*       [rmodels] Model3D (bzt) for models loading (M3D, https://bztsrc.gitlab.io/model3d)
 *       [raudio] dr_wav (David Reid) for WAV audio file loading
 *       [raudio] dr_flac (David Reid) for FLAC audio file loading
 *       [raudio] dr_mp3 (David Reid) for MP3 audio file loading
@@ -79,7 +87,7 @@
 *   raylib is licensed under an unmodified zlib/libpng license, which is an OSI-certified,
 *   BSD-like license that allows static linking with closed source software:
 *
-*   Copyright (c) 2013-2021 Ramon Santamaria (@raysan5)
+*   Copyright (c) 2013-2023 Ramon Santamaria (@raysan5)
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
@@ -108,7 +116,10 @@ uses
   mnLibraries; // take it from github/parmaja/minilib
 
 const
-  RAYLIB_VERSION = '4.0';
+  RAYLIB_VERSION_MAJOR = 4;
+  RAYLIB_VERSION_MINOR = 5;
+  RAYLIB_VERSION_PATCH = 0;
+	RAYLIB_VERSION = '4.0';
 
 type
   PPUTF8Char = ^PUTF8Char;
@@ -246,7 +257,7 @@ type
   // Quaternion, 4 components (Vector4 alias)
   TQuaternion = PVector4;
 
-  // Matrix, 4x4 components, column major, OpenGL style, right handed
+  // Matrix, 4x4 components, column major, OpenGL style, right-handed
   TMatrix = record
     m0, m4, m8, m12: Single; // Matrix first row (4 components)
     m1, m5, m9, m13: Single; // Matrix second row (4 components)
@@ -345,7 +356,7 @@ type
     Position: TVector3;    // Camera position
     Target: TVector3;      // Camera target it looks-at
     Up: TVector3;          // Camera up vector (rotation over its axis)
-    Fovy: Single;          // Camera field-of-view apperture in Y (degrees) in perspective, used as near plane width in orthographic
+    Fovy: Single;          // Camera field-of-view aperture in Y (degrees) in perspective, used as near plane width in orthographic
     Projection: Integer;   // Camera projection: CAMERA_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
   end;
   PCamera3D = ^TCamera3D;
@@ -370,7 +381,7 @@ type
       // Vertex attributes data
       Vertices: PSingle;        // Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
       Texcoords: PSingle;       // Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
-      Texcoords2: PSingle;      // Vertex second texture coordinates (useful for lightmaps) (shader-location = 5)
+      Texcoords2: PSingle;      // Vertex texture second coordinates (UV - 2 components per vertex) (shader-location = 5)
       Normals: PSingle;         // Vertex normals (XYZ - 3 components per vertex) (shader-location = 2)
       Tangents: PSingle;        // Vertex tangents (XYZW - 4 components per vertex) (shader-location = 4)
       Colors: PByte;            // Vertex colors (RGBA - 4 components per vertex) (shader-location = 3)
@@ -411,7 +422,7 @@ type
   end;
   PMaterial = ^TMaterial;
 
-  // Transform, vectex transformation data
+  // Transform, vertex transformation data
   TTransform = packed record
     Translation: TVector3;   // Translation
     Rotation: TQuaternion;   // Rotation
@@ -465,8 +476,8 @@ type
   // RayCollision, ray hit information
   TRayCollision = packed record
     Hit: Boolean;              // Did the ray hit something?
-    Distance: Single;          // Distance to nearest hit
-    Point: TVector3;           // Point of nearest hit
+    Distance: Single;          // Distance to the nearest hit
+    Point: TVector3;           // Point of the nearest hit
     Normal: TVector3;          // Surface normal of hit
   end;
   PRayCollision = ^TRayCollision;
@@ -488,14 +499,20 @@ type
   end;
   PWave = ^TWave;
 
-  //
+  // Opaque structs declaration
+  // NOTE: Actual structs are defined internally in raudio module
   TrAudioBuffer = packed record
   end;
   PrAudioBuffer = ^TrAudioBuffer;
 
+	TrAudioProcessor = packed record
+  end;
+	PrAudioProcessor = TrAudioProcessor;
+
   // AudioStream, custom audio stream
   TAudioStream = packed record
     Buffer: PrAudioBuffer;     // Pointer to internal data used by the audio system
+    Processor: PrAudioProcessor; // Pointer to internal data processor, useful for audio effects
 
     SampleRate: Cardinal;       // Frequency (samples per second)
     SampleSize: Cardinal;       // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
@@ -549,6 +566,13 @@ type
   end;
   PVrStereoConfig = ^TVrStereoConfig;
 
+  // File path list
+  TFilePathList = packed record
+      Capacity: Cardinal;          // Filepaths max entries
+      Count: Cardinal;             // Filepaths entries count
+      Paths: PUTF8Char;                   // Filepaths entries
+  end;
+	PFilePathList = ^TFilePathList;
 
   //----------------------------------------------------------------------------------
   // Enumerators Definition
@@ -556,22 +580,24 @@ type
   // System/Window config flags
   // NOTE: Every bit registers one state (use it with bit masks)
   // By default all flags are set to 0
-  TConfigFlags = (
-    FLAG_FULLSCREEN_MODE    = $00000002,   // Set to run program in fullscreen
-    FLAG_WINDOW_RESIZABLE   = $00000004,   // Set to allow resizable window
-    FLAG_WINDOW_UNDECORATED = $00000008,   // Set to disable window decoration (frame and buttons)
-    FLAG_WINDOW_TRANSPARENT = $00000010,   // Set to allow transparent framebuffer
-    FLAG_MSAA_4X_HINT       = $00000020,   // Set to try enabling MSAA 4X
-    FLAG_VSYNC_HINT         = $00000040,   // Set to try enabling V-Sync on GPU
-    FLAG_WINDOW_HIDDEN      = $00000080,   // Set to hide window
-    FLAG_WINDOW_ALWAYS_RUN  = $00000100,   // Set to allow windows running while minimized
-    FLAG_WINDOW_MINIMIZED   = $00000200,   // Set to minimize window (iconify)
-    FLAG_WINDOW_MAXIMIZED   = $00000400,   // Set to maximize window (expanded to monitor)
-    FLAG_WINDOW_UNFOCUSED   = $00000800,   // Set to window non focused
-    FLAG_WINDOW_TOPMOST     = $00001000,   // Set to window always on top
-    FLAG_WINDOW_HIGHDPI     = $00002000,   // Set to support HighDPI
-    FLAG_INTERLACED_HINT    = $00010000    // Set to try enabling interlaced video format (for V3D)
+  TConfigFlag = (
+    FLAG_FULLSCREEN_MODE    = 1,  //$00000002,   // Set to run program in fullscreen
+    FLAG_WINDOW_RESIZABLE   = 2,  //$00000004,   // Set to allow resizable window
+    FLAG_WINDOW_UNDECORATED = 3,  //$00000008,   // Set to disable window decoration (frame and buttons)
+    FLAG_WINDOW_TRANSPARENT = 4,  //$00000010,   // Set to allow transparent framebuffer
+    FLAG_MSAA_4X_HINT       = 5,  //$00000020,   // Set to try enabling MSAA 4X
+    FLAG_VSYNC_HINT         = 6,  //$00000040,   // Set to try enabling V-Sync on GPU
+    FLAG_WINDOW_HIDDEN      = 7,  //$00000080,   // Set to hide window
+    FLAG_WINDOW_ALWAYS_RUN  = 8,  //$00000100,   // Set to allow windows running while minimized
+    FLAG_WINDOW_MINIMIZED   = 9,  //$00000200,   // Set to minimize window (iconify)
+    FLAG_WINDOW_MAXIMIZED   = 10, //$00000400,   // Set to maximize window (expanded to monitor)
+    FLAG_WINDOW_UNFOCUSED   = 11, //$00000800,   // Set to window non focused
+    FLAG_WINDOW_TOPMOST     = 12, //$00001000,   // Set to window always on top
+    FLAG_WINDOW_HIGHDPI     = 13, //$00002000,   // Set to support HighDPI
+    FLAG_WINDOW_MOUSE_PASSTHROUGH = 14, //$00004000, // Set to support mouse passthrough, only supported when FLAG_WINDOW_UNDECORATED
+    FLAG_INTERLACED_HINT    = 15 //$00010000    // Set to try enabling interlaced video format (for V3D)
   );
+  TConfigFlags = set of TConfigFlag;
 
   // Trace log level
   // NOTE: Organized by priority level
@@ -713,7 +739,7 @@ type
     MOUSE_BUTTON_MIDDLE  = 2,       // Mouse button middle (pressed wheel)
     MOUSE_BUTTON_SIDE    = 3,       // Mouse button side (advanced mouse device)
     MOUSE_BUTTON_EXTRA   = 4,       // Mouse button extra (advanced mouse device)
-    MOUSE_BUTTON_FORWARD = 5,       // Mouse button fordward (advanced mouse device)
+    MOUSE_BUTTON_FORWARD = 5,       // Mouse button forward (advanced mouse device)
     MOUSE_BUTTON_BACK    = 6       // Mouse button back (advanced mouse device)
   );
 
@@ -728,7 +754,7 @@ type
     MOUSE_CURSOR_RESIZE_NS     = 6,     // Vertical resize/move arrow shape
     MOUSE_CURSOR_RESIZE_NWSE   = 7,     // Top-left to bottom-right diagonal resize/move arrow shape
     MOUSE_CURSOR_RESIZE_NESW   = 8,     // The top-right to bottom-left diagonal resize/move arrow shape
-    MOUSE_CURSOR_RESIZE_ALL    = 9,     // The omni-directional resize/move cursor shape
+    MOUSE_CURSOR_RESIZE_ALL    = 9,     // The omnidirectional resize/move cursor shape
     MOUSE_CURSOR_NOT_ALLOWED   = 10     // The operation-not-allowed shape
   );
 
@@ -766,7 +792,7 @@ type
 
   // Material map index
   TMaterialMapIndex = (
-      MATERIAL_MAP_ALBEDO  = 0,     // Albedo material (same as: MATERIAL_MAP_DIFFUSE)
+      MATERIAL_MAP_ALBEDO = 0,        // Albedo material (same as: MATERIAL_MAP_DIFFUSE)
       MATERIAL_MAP_METALNESS,         // Metalness material (same as: MATERIAL_MAP_SPECULAR)
       MATERIAL_MAP_NORMAL,            // Normal material
       MATERIAL_MAP_ROUGHNESS,         // Roughness material
@@ -867,7 +893,7 @@ type
   // NOTE 1: Filtering considers mipmaps if available in the texture
   // NOTE 2: Filter is accordingly set for minification and magnification
   TTextureFilter = (
-    TEXTURE_FILTER_POINT = 0,               // No filter, just pixel aproximation
+    TEXTURE_FILTER_POINT = 0,               // No filter, just pixel approximation
     TEXTURE_FILTER_BILINEAR,                // Linear filtering
     TEXTURE_FILTER_TRILINEAR,               // Trilinear filtering (linear with mipmaps)
     TEXTURE_FILTER_ANISOTROPIC_4X,          // Anisotropic filtering 4x
@@ -887,10 +913,10 @@ type
   TCubemapLayout = (
     CUBEMAP_LAYOUT_AUTO_DETECT = 0,         // Automatically detect layout type
     CUBEMAP_LAYOUT_LINE_VERTICAL,           // Layout is defined by a vertical line with faces
-    CUBEMAP_LAYOUT_LINE_HORIZONTAL,         // Layout is defined by an horizontal line with faces
+    CUBEMAP_LAYOUT_LINE_HORIZONTAL,         // Layout is defined by a horizontal line with faces
     CUBEMAP_LAYOUT_CROSS_THREE_BY_FOUR,     // Layout is defined by a 3x4 cross with cubemap faces
     CUBEMAP_LAYOUT_CROSS_FOUR_BY_THREE,     // Layout is defined by a 4x3 cross with cubemap faces
-    CUBEMAP_LAYOUT_PANORAMA                 // Layout is defined by a panorama image (equirectangular map)
+    CUBEMAP_LAYOUT_PANORAMA                 // Layout is defined by a panorama image (equirrectangular map)
   );
 
   // Font type, defines generation method
@@ -907,11 +933,13 @@ type
     BLEND_MULTIPLIED,       // Blend textures multiplying colors
     BLEND_ADD_COLORS,       // Blend textures adding colors (alternative)
     BLEND_SUBTRACT_COLORS,  // Blend textures subtracting colors (alternative)
-    BLEND_CUSTOM            // Belnd textures using custom src/dst factors (use rlSetBlendMode())
+    BLEND_ALPHA_PREMULTIPLY,// Blend premultiplied textures considering alpha
+    BLEND_CUSTOM,           // Blend textures using custom src/dst factors (use rlSetBlendFactors())
+    BLEND_CUSTOM_SEPARATE   // Blend textures using custom rgb/alpha separate src/dst factors (use rlSetBlendFactorsSeparate())
   );
 
   // Gesture
-  // NOTE: It could be used as flags to enable only some gestures
+  // NOTE: Provided as bit-wise flags to enable only desired gestures
   TGestureType = (
     GESTURE_NONE        = 0,        // No gesture
     GESTURE_TAP         = 1,        // Tap gesture
@@ -950,7 +978,7 @@ type
 
   //TODO zaher, check params/arg please
   // Callbacks to hook some internal functions
-  // WARNING: This callbacks are intended for advance users
+  // WARNING: These callbacks are intended for advance users
   TTraceLogCallback = procedure(LogType: Integer; Text: PUTF8Char; Args: Pointer); cdecl;
   // FileIO: Load binary data
   TLoadFileDataCallback = function(FileName: PUTF8Char; var bytesRead: Cardinal): PByte; cdecl;
@@ -992,11 +1020,11 @@ var
   // Check if window has been resized
   IsWindowResized: function: Boolean; cdecl = nil;
   // Check if one specific window flag is enabled
-  IsWindowState: function(flag: Cardinal): Boolean; cdecl = nil;
-  // Set window configuration state using flags
-  SetWindowState: procedure(flag: Cardinal); cdecl = nil;
+  IsWindowState: function(flag: TConfigFlags): Boolean; cdecl = nil;
+  // Set window configuration state using flags (only PLATFORM_DESKTOP)
+  SetWindowState: procedure(flag: TConfigFlags); cdecl = nil;
   // Clear window configuration state flags
-  ClearWindowState: procedure(flag: Cardinal); cdecl = nil;
+  ClearWindowState: procedure(flag: TConfigFlags); cdecl = nil;
   // Toggle window state: fullscreen/windowed (only PLATFORM_DESKTOP)
   ToggleFullscreen: procedure; cdecl = nil;
   // Set window state: maximized, if resizable (only PLATFORM_DESKTOP)
@@ -1005,8 +1033,10 @@ var
   MinimizeWindow: procedure; cdecl = nil;
   // Set window state: not minimized/maximized (only PLATFORM_DESKTOP)
   RestoreWindow : procedure; cdecl = nil;
-  // Set icon for window (only PLATFORM_DESKTOP)
+  // Set icon for window (single image, RGBA 32bit, only PLATFORM_DESKTOP)
   SetWindowIcon: procedure(image: TImage); cdecl = nil;
+  // Set icon for window (multiple images, RGBA 32bit, only PLATFORM_DESKTOP)
+  SetWindowIcons: procedure(images: PImage; Count: Integer); cdecl = nil;
   // Set title for window (only PLATFORM_DESKTOP)
   SetWindowTitle: procedure(const title: PUTF8Char); cdecl = nil;
   // Set window position on screen (only PLATFORM_DESKTOP)
@@ -1017,21 +1047,27 @@ var
   SetWindowMinSize: procedure(width: Integer; height: Integer); cdecl = nil;
   // Set window dimensions
   SetWindowSize: procedure(width: Integer; height: Integer); cdecl = nil;
+  // Set window opacity [0.0f..1.0f] (only PLATFORM_DESKTOP)
+  SetWindowOpacity: procedure(Opacity: Single); cdecl = nil;
   // Get native window handle
   GetWindowHandle: function: Pointer; cdecl = nil;
   // Get current screen width
   GetScreenWidth: function: Integer; cdecl = nil;
   // Get current screen height
   GetScreenHeight: function: Integer; cdecl = nil;
+  // Get current render width (it considers HiDPI)
+  GetRenderWidth: function: Integer; cdecl = nil;
+  // Get current render height (it considers HiDPI)
+  GetRenderHeight: function: Integer; cdecl = nil;
   // Get number of connected monitors
   GetMonitorCount: function: Integer; cdecl = nil;
   // Get current connected monitor
   GetCurrentMonitor: function(): Integer; cdecl = nil;
   // Get specified monitor position
   GetMonitorPosition: function(monitor: Integer): TVector2; cdecl = nil;
-  // Get primary monitor width
+  // Get specified monitor width (current video mode used by monitor)
   GetMonitorWidth: function(monitor: Integer): Integer; cdecl = nil;
-  // Get primary monitor height
+  // Get specified monitor height (current video mode used by monitor)
   GetMonitorHeight: function(monitor: Integer): Integer; cdecl = nil;
   // Get primary monitor physical width in millimetres
   GetMonitorPhysicalWidth: function(monitor: Integer): Integer; cdecl = nil;
@@ -1050,13 +1086,18 @@ var
   // Get clipboard text content
   GetClipboardText: function: PUTF8Char; cdecl = nil;
 
+  // Enable waiting for events on EndDrawing(), no automatic event polling
+  EnableEventWaiting: procedure(); cdecl = nil;
+  // Disable waiting for events on EndDrawing(), automatic events polling
+  DisableEventWaiting: procedure(); cdecl = nil;
+
   // Custom frame control functions
   // NOTE: Those functions are intended for advance users that want full control over the frame processing
-  // By default EndDrawing() does this job: draws everything + SwapScreenBuffer() + manage frame timming + PollInputEvents()
+  // By default EndDrawing() does this job: draws everything + SwapScreenBuffer() + manage frame timing + PollInputEvents()
   // To avoid that behaviour and control frame processes manually, enable in config.h: SUPPORT_CUSTOM_FRAME_CONTROL
   SwapScreenBuffer: procedure; cdecl = nil;                               // Swap back buffer with front buffer (screen drawing)
   PollInputEvents: procedure; cdecl = nil;                                // Register all input events
-  WaitTime: procedure(ms: Single); cdecl = nil;                           // Wait for some milliseconds (halt program execution)
+  WaitTime: procedure(seconds: Double); cdecl = nil;                      // Wait for some time (halt program execution)
 
   { Cursor-related functions }
 
@@ -1123,6 +1164,8 @@ var
   LoadShader: function(vsFileName: PUTF8Char; fsFileName: PUTF8Char): TShader; cdecl = nil;
   // Load shader from code strings and bind default locations
   LoadShaderFromMemory: function(vsCode: PUTF8Char; fsCode: PUTF8Char): TShader; cdecl = nil;
+  // Check if a shader is ready
+  IsShaderReady: function(Shader: TShader): Boolean; cdecl = nil;
   // Get shader uniform location
   GetShaderLocation: function(Shader: TShader; UniformName: PUTF8Char): integer; cdecl = nil;
   // Get shader attribute location
@@ -1143,17 +1186,17 @@ var
   // Returns a ray trace from mouse position
   GetMouseRay: function(mousePosition: TVector2; camera: TCamera): TRay; cdecl = nil;
   // Returns camera transform matrix (view matrix)
-  GetCameraMatrix: function(camera: TCamera): TMatrix; cdecl = nil;
+  GetCameraMatrix: function(Camera: TCamera): TMatrix; cdecl = nil;
   // Returns camera 2d transform matrix
-  GetCameraMatrix2D: function(camera: TCamera2D): TMatrix; cdecl = nil;
+  GetCameraMatrix2D: function(Camera: TCamera2D): TMatrix; cdecl = nil;
   // Returns the screen space position for a 3d world space position
-  GetWorldToScreen: function(position: TVector3; camera: TCamera): TVector2; cdecl = nil;
+  GetWorldToScreen: function(Position: TVector3; camera: TCamera): TVector2; cdecl = nil;
+  // Get the world space position for a 2d camera screen space position
+  GetScreenToWorld2D: function(Position: TVector3; Camera: TCamera): TVector2; cdecl = nil;
   // Returns size position for a 3d world space position
   GetWorldToScreenEx: function(position: TVector3; camera: TCamera; width: Integer; height: Integer): TVector2; cdecl = nil;
   // Returns the screen space position for a 2d camera world space position
   GetWorldToScreen2D: function(position: TVector2; camera: TCamera2D): TVector2; cdecl = nil;
-  // Returns the world space position for a 2d camera screen space position
-  GetScreenToWorld2D: function(position: TVector2; camera: TCamera2D): TVector2; cdecl = nil;
 
   { Timing-related functions }
 
@@ -1174,20 +1217,23 @@ var
   SetRandomSeed: procedure(Seed: Cardinal); cdecl = nil;
   // Takes a screenshot of current screen (filename extension defines format)
   TakeScreenshot: procedure(const fileName: PUTF8Char); cdecl = nil;
-
   // Setup window configuration flags (view FLAGS)
   SetConfigFlags: procedure(flags: TConfigFlags); cdecl = nil;
+
   // Show trace log messages (LOG_DEBUG, LOG_INFO, LOG_WARNING, LOG_ERROR)
   TraceLog: procedure(logType: Integer; const text: PUTF8Char) varargs; cdecl = nil;
   // Set the current threshold (minimum) log level
   SetTraceLogLevel: procedure(logType: TTraceLogLevels); cdecl = nil;
 
   // Internal memory allocator
-  MemAlloc: function(Size: Integer): Pointer; cdecl = nil;
+  MemAlloc: function(Size: Cardinal): Pointer; cdecl = nil;
   // Internal memory reallocator
-  MemRealloc: procedure(Ptr: Pointer; Size: Integer); cdecl = nil;
+  MemRealloc: procedure(Ptr: Pointer; Size: Cardinal); cdecl = nil;
   // Internal memory free
   MemFree: procedure(ptr: Pointer); cdecl = nil;
+
+	// Open URL with default system browser (if available)
+  OpenURL: procedure(url: PUtf8Char); cdecl = nil;
 
   // Set custom callbacks
   // WARNING: Callbacks setup is intended for advance users
@@ -1210,6 +1256,8 @@ var
   UnloadFileData: procedure(Data: PByte); cdecl = nil;
   // Save data to file from byte array (write)
   SaveFileData: procedure(const fileName: PUTF8Char; data: Pointer; bytesToWrite: Cardinal); cdecl = nil;
+  // Export data to code (.h), returns true on success
+  ExportDataAsCode: function(Data: PByte; Size: Cardinal; const fileName: PUTF8Char): Boolean; cdecl = nil;
   // Load text data from file (read), returns a '\0' terminated string
   LoadFileText: function(const fileName: PUTF8Char): PUTF8Char; cdecl = nil;
   // Unload file text data allocated by LoadFileText()
@@ -1222,6 +1270,8 @@ var
   DirectoryExists: function(const dirPath: PUTF8Char): Boolean; cdecl = nil;
   // Check file extension
   IsFileExtension: function(const fileName: PUTF8Char; const ext: PUTF8Char): Boolean; cdecl = nil;
+  // Get file length in bytes (NOTE: GetFileSize() conflicts with windows.h)
+  GetFileLength: function(const fileName: PUTF8Char): Integer; cdecl = nil;
   // Get pointer to extension for a filename string (includes dot: '.png')
   GetFileExtension: function(const fileName: PUTF8Char): PUTF8Char; cdecl = nil;
   // Get pointer to filename for a path string
@@ -1234,40 +1284,36 @@ var
   GetPrevDirectoryPath: function(const dirPath: PUTF8Char): PUTF8Char; cdecl = nil;
   // Get current working directory (uses static string)
   GetWorkingDirectory: function: PUTF8Char; cdecl = nil;
-  // Get filenames in a directory path (memory should be freed)
-  GetDirectoryFiles: function(const dirPath: PUTF8Char; count: PInteger): PPUTF8Char; cdecl = nil;
-  // Clear directory files paths buffers (free memory)
-  ClearDirectoryFiles: procedure; cdecl = nil;
+  // Get the directory if the running application (uses static string)
+  GetApplicationDirectory: function: PUTF8Char; cdecl = nil;
   // Change working directory, returns true if success
   ChangeDirectory: function(const dir: PUTF8Char): Boolean; cdecl = nil;
+	// Check if a given path is a file or a directory
+  IsPathFile: function(const dir: PUTF8Char): Boolean; cdecl = nil;
+  // Load directory filepaths
+  LoadDirectoryFiles: function(const dirPath: PUTF8Char): TFilePathList; cdecl = nil;
+  // Load directory filepaths with extension filtering and recursive directory scan
+  LoadDirectoryFilesEx: function(const basePath:PUTF8Char; const filter: PUTF8Char; scanSubdirs: Boolean): TFilePathList; cdecl = nil;
+  // Unload filepaths
+  UnloadDirectoryFiles: procedure(files: TFilePathList); cdecl = nil;
   // Check if a file has been dropped into window
   IsFileDropped: function: Boolean; cdecl = nil;
-  // Get dropped files names (memory should be freed)
-  GetDroppedFiles: function(count: PInteger): PPUTF8Char; cdecl = nil;
-  // Clear dropped files paths buffer (free memory)
-  ClearDroppedFiles: procedure; cdecl = nil;
+  // Load dropped filepaths
+  LoadDroppedFiles: function: TFilePathList; cdecl = nil;
+  // Unload dropped filepaths
+  UnloadDroppedFiles: procedure(files: TFilePathList); cdecl = nil;
   // Get file modification time (last write time)
   GetFileModTime: function(const fileName: PUTF8Char): Integer; cdecl = nil;
 
   // Compression/Encoding functionality
-  // Compress data (DEFLATE algorythm)
-  CompressData: function(data: PByte; dataLength: Integer; compDataLength: PInteger): PByte; cdecl = nil;
-  // Decompress data (DEFLATE algorythm)
-  DecompressData: function(compData: PByte; compDataLength: Integer; dataLength: PInteger): PByte; cdecl = nil;
-  // Encode data to Base64 string
-  EncodeDataBase64: function(Data: PByte; dataLength: Integer; OutputLength: PInteger): PByte; cdecl = nil;  //TODO zaher, check it by example please
-  // Decode Base64 string data
-  DecodeDataBase64: function(Data: PByte; outputLength: PInteger): PByte;  //TODO zaher, check it by example please
-
-  { Persistent storage management }
-
-  // Save integer value to storage file (to defined position)
-  SaveStorageValue: function(position: Cardinal; value: Integer): Boolean; cdecl = nil;
-  // Load integer value from storage file (from defined position)
-  LoadStorageValue: function(position: Cardinal): Integer; cdecl = nil;
-
-  // Open URL with default system browser (if available)
-  OpenURL: procedure(const url: PUTF8Char); cdecl = nil;
+  // Compress data (DEFLATE algorithm), memory must be MemFree()
+  CompressData: function(data: PByte; dataSize: Integer; compDataSize: PInteger): PByte; cdecl = nil;
+  // Decompress data (DEFLATE algorithm), memory must be MemFree()
+  DecompressData: function(compData: PByte; compDataSize: Integer; dataSize: PInteger): PByte; cdecl = nil;
+  // Encode data to Base64 string, memory must be MemFree()
+  EncodeDataBase64: function(Data: PByte; dataSize: Integer; OutputSize: PInteger): PByte; cdecl = nil;  //TODO zaher, check it by example please
+  // Decode Base64 string data, memory must be MemFree()
+  DecodeDataBase64: function(Data: PByte; outputSize: PInteger): PByte;  //TODO zaher, check it by example please
 
 //------------------------------------------------------------------------------------
 // Input Handling Functions (Module: core)
@@ -1347,8 +1393,10 @@ var
   SetMouseOffset: procedure(offsetX: Integer; offsetY: Integer); cdecl = nil;
   // Set mouse scaling
   SetMouseScale: procedure(scaleX: Single; scaleY: Single); cdecl = nil;
-  // Get mouse wheel movement Y
+  // Get mouse wheel movement for X or Y, whichever is larger
   GetMouseWheelMove: function: Single; cdecl = nil;
+  // Get mouse wheel movement for both X and Y
+  GetMouseWheelMoveV: function: TVector2; cdecl = nil;
   // Set mouse cursor
   SetMouseCursor: procedure(Cursor: Integer); cdecl = nil;
 
@@ -1390,19 +1438,10 @@ var
 // Camera System Functions (Module: rcamera)
 //------------------------------------------------------------------------------------
 
-  // Set camera mode (multiple camera modes available)
-  SetCameraMode: procedure(Camera: TCamera; Mode: TCameraMode); cdecl = nil;
   // Update camera position for selected mode
   UpdateCamera: procedure(camera: PCamera); cdecl = nil;
-
-  // Set camera pan key to combine with mouse movement (free camera)
-  SetCameraPanControl: procedure(KeyPan: Integer); cdecl = nil;
-  // Set camera alt key to combine with mouse movement (free camera)
-  SetCameraAltControl: procedure(Keylt: Integer); cdecl = nil;
-  // Set camera smooth zoom key to combine with mouse (free camera)
-  SetCameraSmoothZoomControl: procedure(keySmoothZoom: Integer); cdecl = nil;
-  // Set camera move controls (1st person and 3rd person cameras)
-  SetCameraMoveControls: procedure(KeyFront: Integer; KeyBack: Integer; KeyRight: Integer; KeyLeft: Integer; KeyUp: Integer; KeyDown: Integer); cdecl = nil;
+  // Update camera movement/rotation
+  UpdateCameraPro: procedure(Camera: PCamera; movement, rotation: TVector3; Zoom: Single); cdecl = nil;
 
 //------------------------------------------------------------------------------------
 // Basic Shapes Drawing Functions (Module: shapes)
@@ -1503,6 +1542,8 @@ var
   CheckCollisionPointCircle: function(point: TVector2; center: TVector2; radius: Single): Boolean; cdecl = nil;
   // Check if point is inside a triangle
   CheckCollisionPointTriangle: function(point: TVector2; p1: TVector2; p2: TVector2; p3: TVector2): Boolean; cdecl = nil;
+  // Check if point is within a polygon described by array of vertices
+  CheckCollisionPointPoly: function(point: TVector2; points: PVector2; PointCount: integer): Boolean; cdecl = nil;
   // Check the collision between two lines defined by two points each, returns collision point by reference
   CheckCollisionLines: function(startPos1, endPos1, startPos2, endPos2: TVector2; collisionPoint: PVector2): Boolean; cdecl = nil;
   // Check if point belongs to line created between two points [p1] and [p2] with defined margin in pixels [threshold]
@@ -1515,7 +1556,7 @@ var
 //------------------------------------------------------------------------------------
 
   { Image loading functions }
-  // NOTE: This functions do not require GPU access
+  // NOTE: These functions do not require GPU access
 
   // Load image from file into CPU memory (RAM)
   LoadImage: function(const fileName: PUTF8Char): TImage; cdecl = nil;
@@ -1529,6 +1570,8 @@ var
   LoadImageFromTexture: function(texture: TTexture2D): TImage; cdecl = nil;
   // Load image from screen buffer and (screenshot)
   LoadImageFromScreen: function(): TImage; cdecl = nil;
+  // Check if an image is ready
+  IsImageReady: function(image: TImage): Boolean; cdecl = nil;
   // Unload image from CPU memory (RAM)
   UnloadImage: procedure(image: TImage); cdecl = nil;
   // Export image data to file
@@ -1550,8 +1593,12 @@ var
   GenImageChecked: function(width: Integer; height: Integer; checksX: Integer; checksY: Integer; col1: TColor; col2: TColor): TImage; cdecl = nil;
   // Generate image: white noise
   GenImageWhiteNoise: function(width: Integer; height: Integer; factor: Single): TImage; cdecl = nil;
+  // Generate image: perlin noise
+  GenImagePerlinNoise: function(width, height, offsetX, offsetY: Integer; scale: Single): TImage; cdecl = nil;
   // Generate image: cellular algorithm, bigger tileSize means bigger cells
   GenImageCellular: function(width: Integer; height: Integer; tileSize: Integer): TImage; cdecl = nil;
+  // Generate image: grayscale image from text data
+  GenImageText: function(width: Integer; height: Integer; text: PUTF8Char): TImage; cdecl = nil;
 
   { Image manipulation functions }
 
@@ -1577,6 +1624,8 @@ var
   ImageAlphaMask: procedure(image: PImage; alphaMask: TImage); cdecl = nil;
   // Premultiply alpha channel
   ImageAlphaPremultiply: procedure(image: PImage); cdecl = nil;
+  // Apply Gaussian blur using a box blur approximation
+  ImageBlurGaussian: procedure(image: PImage; blurSize: integer); cdecl = nil;
   // Resize image (Bicubic scaling algorithm)
   ImageResize: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl = nil;
   // Resize image (Nearest-Neighbor scaling algorithm)
@@ -1633,10 +1682,14 @@ var
   ImageDrawLine: procedure(dst: PImage; startPosX: Integer; startPosY: Integer; endPosX: Integer; endPosY: Integer; color: TColor); cdecl = nil;
   // Draw line within an image (Vector version)
   ImageDrawLineV: procedure(dst: PImage; start: TVector2; &end: TVector2; color: TColor); cdecl = nil;
-  // Draw circle within an image
+  // Draw a filled circle within an image
   ImageDrawCircle: procedure(const dst: TImage; CenterX, CenterY, Radius: Integer; Color: TColor); cdecl = nil;
-  // Draw circle within an image (Vector version)
-  ImageDrawCircleV: procedure(dst: PImage; center: TVector2; radius: Integer; color: TColor); cdecl = nil;
+  // Draw a filled circle within an image (Vector version)
+  ImageDrawCircleV: procedure(dst: PImage; Center: TVector2; Radius: Integer; Color: TColor); cdecl = nil;
+  // Draw circle outline within an image
+  ImageDrawCircleLines: procedure(dst: PImage; CenterX, CenterY, Radius: Integer; Color: TColor); cdecl = nil;
+  // Draw circle outline within an image (Vector version)
+  ImageDrawCircleLinesV: procedure (dst: PImage; Center: TVector2; Radius: Integer; Color: TColor); cdecl = nil;
   // Draw rectangle within an image
   ImageDrawRectangle: procedure(dst: PImage; posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl = nil;
   // Draw rectangle within an image (Vector version)
@@ -1663,8 +1716,12 @@ var
   LoadTextureCubemap: function(image: TImage; Layout: Integer): TTextureCubemap; cdecl = nil;
   // Load texture for rendering (framebuffer)
   LoadRenderTexture: function(Width: Integer; Height: Integer): TRenderTexture2D; cdecl = nil;
+  // Check if a texture is ready
+  IsTextureReady: function(Texture: TTexture2D): Boolean; cdecl = nil;
   // Unload texture from GPU memory (VRAM)
   UnloadTexture: procedure(Texture: TTexture2D); cdecl = nil;
+  // Check if a render texture is ready
+  IsRenderTextureReady: function(Target: TRenderTexture2D): Boolean; cdecl = nil;
   // Unload render texture from GPU memory (VRAM)
   UnloadRenderTexture: procedure(Target: TRenderTexture2D); cdecl = nil;
   // Update GPU texture with new data
@@ -1691,16 +1748,10 @@ var
   DrawTextureEx: procedure(Texture: TTexture2D; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl = nil;
   // Draw a part of a texture defined by a rectangle
   DrawTextureRec: procedure(Texture: TTexture2D; Source: TRectangle; Position: TVector2; tint: TColor); cdecl = nil;
-  // Draw texture quad with tiling and offset parameters
-  DrawTextureQuad: procedure(Texture: TTexture2D; tiling: TVector2; offset: TVector2; quad: TRectangle; tint: TColor); cdecl = nil;
-  // Draw part of a texture (defined by a rectangle) with rotation and scale tiled into dest.
-  DrawTextureTiled: procedure(Texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; Scale: Single; tint: TColor); cdecl = nil;
   // Draw a part of a texture defined by a rectangle with 'pro' parameters
   DrawTexturePro: procedure(Texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl = nil;
   // Draws a texture (or part of it) that stretches or shrinks nicely
   DrawTextureNPatch: procedure(Texture: TTexture2D; nPatchInfo: TNPatchInfo; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl = nil;
-  // Draw a textured polygon
-  DrawTexturePoly: procedure(texture: TTexture2D; center: TVector2; points: PVector2; texcoords: PVector2; pointCount: Integer; tint: TColor); cdecl = nil;
 
   { Image/Texture misc functions }
 
@@ -1718,6 +1769,12 @@ var
   ColorToHSV: function(color: TColor): TVector3; cdecl = nil;
   // Get a Color from HSV values, hue [0..360], saturation/value [0..1]
   ColorFromHSV: function(hsv: TVector3): TColor; cdecl = nil;
+  // Get color multiplied with another color
+  ColorTint: function(Color: TColor; tint: TColor): TColor; cdecl = nil;
+  // Get color with brightness correction, brightness factor goes from -1.0f to 1.0f
+  ColorBrightness: function(Color: TColor; factor: Single): TColor; cdecl = nil;
+  // Get color with contrast correction, contrast values between -1.0f and 1.0f
+  ColorContrast: function(Color: TColor; contrast: Single): TColor; cdecl = nil;
   // Get color with alpha applied, alpha goes from 0.0f to 1.0f
   ColorAlpha: function(Color: TColor; Alpha: Single): TColor; cdecl = nil;
   // Get src alpha-blended into dst color with tint
@@ -1741,12 +1798,14 @@ var
   GetFontDefault: function: TFont; cdecl = nil;
   // Load font from file into GPU memory (VRAM)
   LoadFont: function(const fileName: PUTF8Char): TFont; cdecl = nil;
-  // Load font from file with extended parameters
+  // Load font from file with extended parameters, use NULL for fontChars and 0 for glyphCount to load the default character set
   LoadFontEx: function(const fileName: PUTF8Char; fontSize: Integer; fontChars: PInteger; glyphCount: Integer): TFont; cdecl = nil;
   // Load font from Image (XNA style)
   LoadFontFromImage: function(image: TImage; key: TColor; firstChar: Integer): TFont; cdecl = nil;
   // Load font from memory buffer, fileType refers to extension: i.e. "ttf"
   LoadFontFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer; fontSize: Integer; fontChars: PInteger; glyphCount: Integer): TFont; cdecl = nil;
+  // Check if a font is ready
+  IsFontReady: function(Font: TFont): Boolean; cdecl = nil;
   // Load font data for further use
   LoadFontData: function(fileData: PByte; dataSize, fontSize: Integer; fontChars: PInteger; glyphCount: Integer; &type: Integer): PGlyphInfo; cdecl = nil;
   // Generate image font atlas using chars info
@@ -1755,6 +1814,8 @@ var
   UnloadFontData: procedure(fileData: PGlyphInfo; glyphCount: Integer); cdecl = nil;
   // Unload Font from GPU memory (VRAM)
   UnloadFont: procedure(font: TFont); cdecl = nil;
+  // Export font as code file, returns true on success
+  ExportFontAsCode: function(Font: TFont; const FileName: PUTF8Char): Boolean; cdecl = nil;
 
   { Text drawing functions }
 
@@ -1769,6 +1830,8 @@ var
 
   // Draw text using font inside rectangle limits with support for text selection
   DrawTextCodepoint: procedure(font: TFont; codepoint: Integer; position: TVector2; fontSize: Single; tint: TColor); cdecl = nil;
+  // Draw multiple character (codepoint)
+  DrawTextCodepoints: procedure(Font: TFont; const codepoints: PInteger; count: integer; position: TVector2; fontSize, spacing: Single; tint: TColor); cdecl = nil;
 
   // Text font info functions
 
@@ -1784,6 +1847,10 @@ var
   GetGlyphAtlasRec: function(Font: TFont; codepoint: integer): TRectangle; cdecl = nil;
 
   // Text codepoints management functions (unicode characters)
+  // Load UTF-8 text encoded from codepoints array
+  LoadUTF8: function(const codepoints: PInteger; length: Integer): PUTF8Char; cdecl = nil;
+  // Unload UTF-8 text encoded from codepoints array
+  UnloadUTF8: procedure(text: PUTF8Char); cdecl = nil;
   // Load all codepoints from a UTF-8 text string, codepoints count returned by parameter
   LoadCodepoints: function(text: PUtf8Char; count: PInteger): PInteger; cdecl = nil;
   // Unload codepoints data from memory
@@ -1792,10 +1859,12 @@ var
   GetCodepointCount: function(text: PUTF8Char): Integer; cdecl = nil;
   // Get next codepoint in a UTF-8 encoded string, 0x3f('?') is returned on failure
   GetCodepoint: function(text: PUTF8Char; bytesProcessed: PInteger): Integer; cdecl = nil;
+  // Get next codepoint in a UTF-8 encoded string, 0x3f('?') is returned on failure
+  GetCodepointNext: function(const Text: PUTF8Char; codepointSize: PInteger): Integer; cdecl = nil;
+  // Get previous codepoint in a UTF-8 encoded string, 0x3f('?') is returned on failure
+  GetCodepointPrevious: function(const Text: PUTF8Char; codepointSize: PInteger): Integer; cdecl = nil;
   // Encode one codepoint into UTF-8 byte array (array length returned as parameter)
   CodepointToUTF8: function(codepoint: Integer; byteSize: PInteger): PUtf8Char; cdecl = nil;
-  // Encode text as codepoints array into UTF-8 text string (WARNING: memory must be freed!)
-  TextCodepointsToUTF8: function(codepoints: PInteger; length: Integer): PUTf8Char; cdecl = nil;
 
   // Text strings management functions (no UTF-8 strings, only byte chars)
   // NOTE: Some strings allocate memory internally for returned strings, just be careful!
@@ -1855,10 +1924,6 @@ var
   DrawCubeWires: procedure(position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl = nil;
   // Draw cube wires (Vector version)
   DrawCubeWiresV: procedure(position: TVector3; size: TVector3; color: TColor); cdecl = nil;
-  // Draw cube textured
-  DrawCubeTexture: procedure(texture: TTexture2D; position: TVector3; width: Single; height: Single; length: Single; color: TColor); cdecl = nil;
-  // Draw cube with a region of a texture
-  DrawCubeTextureRec: procedure(Texture: TTexture2D; source: TRectangle; position: TVector3; width: Single; height: Single; length: Single; Color: TColor); cdecl = nil;
   // Draw sphere
   DrawSphere: procedure(centerPos: TVector3; radius: Single; color: TColor); cdecl = nil;
   // Draw sphere with extended parameters
@@ -1873,6 +1938,10 @@ var
   DrawCylinderWires: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl = nil;
   // Draw a cylinder wires with base at startPos and top at endPos
   DrawCylinderWiresEx: procedure(startPos: TVector3; endPos: TVector3; startRadius: Single; endRadius: Single; sides: Integer; Color: TColor); cdecl = nil;
+  // Draw a capsule with the center of its sphere caps at startPos and endPos
+  DrawCapsule: procedure(startPos: TVector3; endPos: TVector3; Radius: Single; slices, rings: Integer; Color: TColor); cdecl = nil;
+  // Draw capsule wireframe with the center of its sphere caps at startPos and endPos
+  DrawCapsuleWires: procedure(startPos: TVector3; endPos: TVector3; radius: Single; slices, rings: Integer; Color: TColor); cdecl = nil;
   // Draw a plane XZ
   DrawPlane: procedure(centerPos: TVector3; size: TVector2; color: TColor); cdecl = nil;
   // Draw a ray line
@@ -1888,12 +1957,12 @@ var
 
   // Load model from files (meshes and materials)
   LoadModel: function(const fileName: PUTF8Char): TModel; cdecl = nil;
+  // Check if a model is ready
+  IsModelReady: function(Model: TModel): Boolean; cdecl = nil;
   // Load model from generated mesh (default material)
   LoadModelFromMesh: function(mesh: TMesh): TModel; cdecl = nil;
   // Unload model from memory (RAM and/or VRAM)
   UnloadModel: procedure(model: TModel); cdecl = nil;
-  // Unload model (but not meshes) from memory (RAM and/or VRAM)
-  UnloadModelKeepMeshes: procedure(model: TModel); cdecl = nil;
   // Compute model bounding box limits (considers all meshes)
   GetModelBoundingBox: function(Model: TModel): TBoundingBox; cdecl = nil;
 
@@ -1933,8 +2002,6 @@ var
   GetMeshBoundingBox: function(Mesh: TMesh): TBoundingBox; cdecl = nil;
   // Compute mesh tangents
   GenMeshTangents: procedure(Mesh: PMesh); cdecl = nil;
-  // Compute mesh binormals
-  GenMeshBinormals: procedure(Mesh: PMesh); cdecl = nil;
 
   { Mesh generation functions }
 
@@ -1965,6 +2032,8 @@ var
 
   // Load materials from model file
   LoadMaterials: function(const fileName: PUTF8Char; materialCount: PInteger): PMaterial; cdecl = nil;
+  // Check if a material is ready
+  IsMaterialReady: function(Material: TMaterial): Boolean; cdecl = nil;
   // Load default material (Supports: DIFFUSE, SPECULAR, NORMAL maps)
   LoadMaterialDefault: function: TMaterial; cdecl = nil;
   // Unload material from GPU memory (VRAM)
@@ -1997,8 +2066,6 @@ var
   GetRayCollisionSphere: function(ray: TRay; center: TVector3; radius: Single): TRayCollision; cdecl = nil;
   // Get collision info between ray and box
   GetRayCollisionBox: function(ray: TRay; box: TBoundingBox): TRayCollision; cdecl = nil;
-  // Get collision info between ray and model
-  GetRayCollisionModel: function(ray: TRay; model: TModel): TRayCollision; cdecl = nil;
   // Get collision info between ray and mesh
   GetRayCollisionMesh: function(ray: TRay; mesh: TMesh; transform: TMatrix): TRayCollision; cdecl = nil;
   // Get collision info between ray and triangle
@@ -2010,6 +2077,11 @@ var
 // Audio Loading and Playing Functions (Module: audio)
 //------------------------------------------------------------------------------------
 
+type
+  //typedef void (*AudioCallback)(void *bufferData, unsigned int frames); //zaher
+  TAudioCallback = procedure(var bufferData; frames: Cardinal); cdecl;
+
+var
   { Audio device management functions }
 
   // Initialize audio device and context
@@ -2027,10 +2099,14 @@ var
   LoadWave: function(const fileName: PUTF8Char): TWave; cdecl = nil;
   // Load wave from memory buffer, fileType refers to extension: i.e. "wav"
   LoadWaveFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer): TImage; cdecl = nil;
+  // Checks if wave data is ready
+  IsWaveReady: function(Wave: TWave): Boolean; cdecl = nil;
   // Load sound from file
   LoadSound: function(const fileName: PUTF8Char): TSound; cdecl = nil;
   // Load sound from wave data
   LoadSoundFromWave: function(wave: TWave): TSound; cdecl = nil;
+  // Checks if a sound is ready
+  IsSoundReady: function(Sound: TSound): Boolean; cdecl = nil;
   // Update sound buffer with new data
   UpdateSound: procedure(sound: TSound; const data: Pointer; sampleCount: Integer); cdecl = nil;
   // Unload wave data
@@ -2052,25 +2128,21 @@ var
   PauseSound: procedure(Sound: TSound); cdecl = nil;
   // Resume a paused sound
   ResumeSound: procedure(Sound: TSound); cdecl = nil;
-  // Play a sound (using multichannel buffer pool)
-  PlaySoundMulti: procedure(Sound: TSound); cdecl = nil;
-  // Stop any sound playing (using multichannel buffer pool)
-  StopSoundMulti: procedure; cdecl = nil;
-  // Get number of sounds playing in the multichannel
-  GetSoundsPlaying: function: Integer; cdecl = nil;
   // Check if a sound is currently playing
   IsSoundPlaying: function(Sound: TSound): Boolean; cdecl = nil;
   // Set volume for a sound (1.0 is max level)
   SetSoundVolume: procedure(Sound: TSound; volume: Single); cdecl = nil;
   // Set pitch for a sound (1.0 is base level)
   SetSoundPitch: procedure(Sound: TSound; pitch: Single); cdecl = nil;
-  // Convert wave data to desired format
-  WaveFormat: procedure(Wave: PWave; sampleRate: Integer; sampleSize: Integer; channels: Integer); cdecl = nil;
+  // Set pan for a sound (0.5 is center)
+  SetSoundPan: procedure(Sound: TSound; pan: Single); cdecl = nil;
   // Copy a wave to a new wave
   WaveCopy: function(Wave: TWave): TWave; cdecl = nil;
   // Crop a wave to defined samples range
   WaveCrop: procedure(Wave: PWave; initSample: Integer; finalSample: Integer); cdecl = nil;
-  // Get samples data from wave as a floats array
+  // Convert wave data to desired format
+  WaveFormat: procedure(Wave: PWave; sampleRate: Integer; sampleSize: Integer; channels: Integer); cdecl = nil;
+  // Load samples data from wave as a 32bit float data array
   LoadWaveSamples: function(Wave: TWave): PSingle; cdecl = nil;
   // Unload samples data loaded with LoadWaveSamples()
   UnloadWaveSamples: procedure(samples: PSingle); cdecl = nil;
@@ -2081,6 +2153,8 @@ var
   LoadMusicStream: function(const FileName: PUTF8Char): TMusic; cdecl = nil;
   // Load music stream from data
   LoadMusicStreamFromMemory: function(fileType: PUTF8Char; data:PByte; dataSize: Integer): TMusic; cdecl = nil;
+  // Checks if a music stream is ready
+  IsMusicReady: function(Music: TMusic): Boolean; cdecl = nil;
   // Unload music stream
   UnloadMusicStream: procedure(Music: TMusic); cdecl = nil;
   // Start music playing
@@ -2101,6 +2175,8 @@ var
   SetMusicVolume: procedure(Music: TMusic; volume: Single); cdecl = nil;
   // Set pitch for a music (1.0 is base level)
   SetMusicPitch: procedure(Music: TMusic; pitch: Single); cdecl = nil;
+  // Set pan for a music (0.5 is center)
+  SetMusicPan: procedure(Music: TMusic; pan: Single); cdecl = nil;
   // Get music time length (in seconds)
   GetMusicTimeLength: function(Music: TMusic): Single; cdecl = nil;
   // Get current music time played (in seconds)
@@ -2110,6 +2186,8 @@ var
 
   // Load audio stream (to stream raw audio pcm data)
   LoadAudioStream: function(SampleRate: Cardinal; SampleSize: Cardinal; Channels: Cardinal): TAudioStream; cdecl = nil;
+  // Checks if an audio stream is ready
+  IsAudioStreamReady: function(Stream: TAudioStream): Boolean; cdecl = nil;
   // Unload audio stream and free memory
   UnloadAudioStream: procedure(stream: TAudioStream); cdecl = nil;
   // Update audio stream buffers with data
@@ -2130,8 +2208,22 @@ var
   SetAudioStreamVolume: procedure(stream: TAudioStream; volume: Single); cdecl = nil;
   // Set pitch for audio stream (1.0 is base level)
   SetAudioStreamPitch: procedure(stream: TAudioStream; pitch: Single); cdecl = nil;
+  // Set pan for audio stream (0.5 is centered)
+  SetAudioStreamPan: procedure(stream: TAudioStream; pan: Single); cdecl = nil;
   // Default size for new audio streams
   SetAudioStreamBufferSizeDefault: procedure(size: Integer); cdecl = nil;
+  // Audio thread callback to request new data
+  SetAudioStreamCallback: procedure(Stream: TAudioStream; callback: TAudioCallback); cdecl = nil;
+
+  // Attach audio stream processor to stream
+  AttachAudioStreamProcessor: procedure(Stream: TAudioStream; processor: TAudioCallback); cdecl = nil;
+  // Detach audio stream processor from stream
+  DetachAudioStreamProcessor: procedure(Stream: TAudioStream; processor: TAudioCallback); cdecl = nil;
+
+  // Attach audio stream processor to the entire audio pipeline
+  AttachAudioMixedProcessor: procedure(processor: TAudioCallback); cdecl = nil;
+  // Detach audio stream processor from the entire audio pipeline
+  DetachAudioMixedProcessor: procedure(processor: TAudioCallback); cdecl = nil;
 
 //------------------------------------------------------------------------------------
 // Network (Module: network)
@@ -2318,14 +2410,19 @@ begin
   GetAddress(@MinimizeWindow, 'MinimizeWindow');
   GetAddress(@RestoreWindow, 'RestoreWindow');
   GetAddress(@SetWindowIcon, 'SetWindowIcon');
+  GetAddress(@SetWindowIcons, 'SetWindowIcons');
+
   GetAddress(@SetWindowTitle, 'SetWindowTitle');
   GetAddress(@SetWindowPosition, 'SetWindowPosition');
   GetAddress(@SetWindowMonitor, 'SetWindowMonitor');
   GetAddress(@SetWindowMinSize, 'SetWindowMinSize');
   GetAddress(@SetWindowSize, 'SetWindowSize');
+  GetAddress(@SetWindowOpacity, 'SetWindowOpacity');
   GetAddress(@GetWindowHandle, 'GetWindowHandle');
   GetAddress(@GetScreenWidth, 'GetScreenWidth');
   GetAddress(@GetScreenHeight, 'GetScreenHeight');
+  GetAddress(@GetRenderWidth, 'GetRenderWidth');
+  GetAddress(@GetRenderHeight, 'GetRenderHeight');
   GetAddress(@GetMonitorCount, 'GetMonitorCount');
   GetAddress(@GetCurrentMonitor, 'GetCurrentMonitor');
   GetAddress(@GetMonitorPosition, 'GetMonitorPosition');
@@ -2339,6 +2436,8 @@ begin
   GetAddress(@GetWindowScaleDPI, 'GetWindowScaleDPI');
   GetAddress(@SetClipboardText, 'SetClipboardText');
   GetAddress(@GetClipboardText, 'GetClipboardText');
+  GetAddress(@EnableEventWaiting, 'EnableEventWaiting');
+  GetAddress(@DisableEventWaiting, 'DisableEventWaiting');
   GetAddress(@SwapScreenBuffer, 'SwapScreenBuffer');
   GetAddress(@PollInputEvents, 'PollInputEvents');
   GetAddress(@WaitTime, 'WaitTime');
@@ -2367,6 +2466,7 @@ begin
   GetAddress(@UnloadVrStereoConfig, 'UnloadVrStereoConfig');
   GetAddress(@LoadShader, 'LoadShader');
   GetAddress(@LoadShaderFromMemory, 'LoadShaderFromMemory');
+  GetAddress(@IsShaderReady, 'IsShaderReady');
   GetAddress(@GetShaderLocation, 'GetShaderLocation');
   GetAddress(@GetShaderLocationAttrib, 'GetShaderLocationAttrib');
   GetAddress(@SetShaderValue, 'SetShaderValue');
@@ -2378,9 +2478,9 @@ begin
   GetAddress(@GetCameraMatrix, 'GetCameraMatrix');
   GetAddress(@GetCameraMatrix2D, 'GetCameraMatrix2D');
   GetAddress(@GetWorldToScreen, 'GetWorldToScreen');
+  GetAddress(@GetScreenToWorld2D, 'GetScreenToWorld2D');
   GetAddress(@GetWorldToScreenEx, 'GetWorldToScreenEx');
   GetAddress(@GetWorldToScreen2D, 'GetWorldToScreen2D');
-  GetAddress(@GetScreenToWorld2D, 'GetScreenToWorld2D');
   GetAddress(@SetTargetFPS, 'SetTargetFPS');
   GetAddress(@GetFPS, 'GetFPS');
   GetAddress(@GetFrameTime, 'GetFrameTime');
@@ -2396,6 +2496,8 @@ begin
   GetAddress(@MemRealloc, 'MemRealloc');
   GetAddress(@MemFree, 'MemFree');
 
+  GetAddress(@OpenURL, 'OpenURL');
+
   GetAddress(@SetTraceLogCallback, 'SetTraceLogCallback');
   GetAddress(@SetLoadFileDataCallback, 'SetLoadFileDataCallback');
   GetAddress(@SetSaveFileDataCallback, 'SetSaveFileDataCallback');
@@ -2407,6 +2509,9 @@ begin
   GetAddress(@ColorFromNormalized, 'ColorFromNormalized');
   GetAddress(@ColorToHSV, 'ColorToHSV');
   GetAddress(@ColorFromHSV, 'ColorFromHSV');
+  GetAddress(@ColorTint, 'ColorTint');
+  GetAddress(@ColorBrightness, 'ColorBrightness');
+  GetAddress(@ColorContrast, 'ColorContrast');
   GetAddress(@ColorAlpha, 'ColorAlpha');
   GetAddress(@ColorAlphaBlend, 'ColorAlphaBlend');
   GetAddress(@GetColor, 'GetColor');
@@ -2414,11 +2519,13 @@ begin
   GetAddress(@LoadFileData, 'LoadFileData');
   GetAddress(@UnloadFileData, 'UnloadFileData');
   GetAddress(@SaveFileData, 'SaveFileData');
+  GetAddress(@ExportDataAsCode, 'ExportDataAsCode');
   GetAddress(@LoadFileText, 'LoadFileText');
   GetAddress(@UnloadFileText, 'UnloadFileText');
   GetAddress(@SaveFileText, 'SaveFileText');
   GetAddress(@FileExists, 'FileExists');
   GetAddress(@IsFileExtension, 'IsFileExtension');
+  GetAddress(@GetFileLength, 'GetFileLength');
   GetAddress(@DirectoryExists, 'DirectoryExists');
   GetAddress(@GetFileExtension, 'GetFileExtension');
   GetAddress(@GetFileName, 'GetFileName');
@@ -2426,20 +2533,21 @@ begin
   GetAddress(@GetDirectoryPath, 'GetDirectoryPath');
   GetAddress(@GetPrevDirectoryPath, 'GetPrevDirectoryPath');
   GetAddress(@GetWorkingDirectory, 'GetWorkingDirectory');
-  GetAddress(@GetDirectoryFiles, 'GetDirectoryFiles');
-  GetAddress(@ClearDirectoryFiles, 'ClearDirectoryFiles');
+  GetAddress(@GetApplicationDirectory, 'GetApplicationDirectory');
   GetAddress(@ChangeDirectory, 'ChangeDirectory');
+  GetAddress(@IsPathFile, 'IsPathFile');
+  GetAddress(@LoadDirectoryFiles, 'LoadDirectoryFiles');
+  GetAddress(@LoadDirectoryFilesEx, 'LoadDirectoryFilesEx');
+  GetAddress(@UnloadDirectoryFiles, 'UnloadDirectoryFiles');
   GetAddress(@IsFileDropped, 'IsFileDropped');
-  GetAddress(@GetDroppedFiles, 'GetDroppedFiles');
-  GetAddress(@ClearDroppedFiles, 'ClearDroppedFiles');
+  GetAddress(@LoadDroppedFiles, 'LoadDroppedFiles');
+  GetAddress(@UnloadDroppedFiles, 'UnloadDroppedFiles');
   GetAddress(@GetFileModTime, 'GetFileModTime');
   GetAddress(@CompressData, 'CompressData');
   GetAddress(@DecompressData, 'DecompressData');
   GetAddress(@EncodeDataBase64, 'EncodeDataBase64');
   GetAddress(@DecodeDataBase64, 'DecodeDataBase64');
-  GetAddress(@SaveStorageValue, 'SaveStorageValue');
-  GetAddress(@LoadStorageValue, 'LoadStorageValue');
-  GetAddress(@OpenURL, 'OpenURL');
+
   GetAddress(@IsKeyPressed, 'IsKeyPressed');
   GetAddress(@IsKeyDown, 'IsKeyDown');
   GetAddress(@IsKeyReleased, 'IsKeyReleased');
@@ -2469,6 +2577,7 @@ begin
   GetAddress(@SetMouseOffset, 'SetMouseOffset');
   GetAddress(@SetMouseScale, 'SetMouseScale');
   GetAddress(@GetMouseWheelMove, 'GetMouseWheelMove');
+  GetAddress(@GetMouseWheelMoveV, 'GetMouseWheelMoveV');
   GetAddress(@SetMouseCursor, 'SetMouseCursor');
   GetAddress(@GetTouchX, 'GetTouchX');
   GetAddress(@GetTouchY, 'GetTouchY');
@@ -2483,12 +2592,8 @@ begin
   GetAddress(@GetGestureDragAngle, 'GetGestureDragAngle');
   GetAddress(@GetGesturePinchVector, 'GetGesturePinchVector');
   GetAddress(@GetGesturePinchAngle, 'GetGesturePinchAngle');
-  GetAddress(@SetCameraMode, 'SetCameraMode');
   GetAddress(@UpdateCamera, 'UpdateCamera');
-  GetAddress(@SetCameraPanControl, 'SetCameraPanControl');
-  GetAddress(@SetCameraAltControl, 'SetCameraAltControl');
-  GetAddress(@SetCameraSmoothZoomControl, 'SetCameraSmoothZoomControl');
-  GetAddress(@SetCameraMoveControls, 'SetCameraMoveControls');
+  GetAddress(@UpdateCameraPro, 'UpdateCameraPro');
   GetAddress(@SetShapesTexture, 'SetShapesTexture');
   GetAddress(@DrawPixel, 'DrawPixel');
   GetAddress(@DrawPixelV, 'DrawPixelV');
@@ -2532,6 +2637,7 @@ begin
   GetAddress(@CheckCollisionPointRec, 'CheckCollisionPointRec');
   GetAddress(@CheckCollisionPointCircle, 'CheckCollisionPointCircle');
   GetAddress(@CheckCollisionPointTriangle, 'CheckCollisionPointTriangle');
+  GetAddress(@CheckCollisionPointPoly, 'CheckCollisionPointPoly');
   GetAddress(@CheckCollisionLines, 'CheckCollisionLines');
   GetAddress(@CheckCollisionPointLine, 'CheckCollisionPointLine');
   GetAddress(@GetCollisionRec, 'GetCollisionRec');
@@ -2541,6 +2647,7 @@ begin
   GetAddress(@LoadImageFromMemory, 'LoadImageFromMemory');
   GetAddress(@LoadImageFromTexture, 'LoadImageFromTexture');
   GetAddress(@LoadImageFromScreen, 'LoadImageFromScreen');
+  GetAddress(@IsImageReady, 'IsImageReady');
   GetAddress(@UnloadImage, 'UnloadImage');
   GetAddress(@ExportImage, 'ExportImage');
   GetAddress(@ExportImageAsCode, 'ExportImageAsCode');
@@ -2554,7 +2661,9 @@ begin
   GetAddress(@GenImageGradientRadial, 'GenImageGradientRadial');
   GetAddress(@GenImageChecked, 'GenImageChecked');
   GetAddress(@GenImageWhiteNoise, 'GenImageWhiteNoise');
+  GetAddress(@GenImagePerlinNoise, 'GenImagePerlinNoise');
   GetAddress(@GenImageCellular, 'GenImageCellular');
+  GetAddress(@GenImageText, 'GenImageText');
   GetAddress(@ImageCopy, 'ImageCopy');
   GetAddress(@ImageFromImage, 'ImageFromImage');
   GetAddress(@ImageText, 'ImageText');
@@ -2566,6 +2675,7 @@ begin
   GetAddress(@ImageAlphaClear, 'ImageAlphaClear');
   GetAddress(@ImageAlphaMask, 'ImageAlphaMask');
   GetAddress(@ImageAlphaPremultiply, 'ImageAlphaPremultiply');
+  GetAddress(@ImageBlurGaussian, 'ImageBlurGaussian');
   GetAddress(@ImageResize, 'ImageResize');
   GetAddress(@ImageResizeNN, 'ImageResizeNN');
   GetAddress(@ImageResizeCanvas, 'ImageResizeCanvas');
@@ -2590,6 +2700,8 @@ begin
   GetAddress(@ImageDrawLineV, 'ImageDrawLineV');
   GetAddress(@ImageDrawCircle, 'ImageDrawCircle');
   GetAddress(@ImageDrawCircleV, 'ImageDrawCircleV');
+  GetAddress(@ImageDrawCircleLines, 'ImageDrawCircleLines');
+  GetAddress(@ImageDrawCircleLinesV, 'ImageDrawCircleLinesV');
   GetAddress(@ImageDrawRectangle, 'ImageDrawRectangle');
   GetAddress(@ImageDrawRectangleV, 'ImageDrawRectangleV');
   GetAddress(@ImageDrawRectangleRec, 'ImageDrawRectangleRec');
@@ -2601,7 +2713,9 @@ begin
   GetAddress(@LoadTextureFromImage, 'LoadTextureFromImage');
   GetAddress(@LoadTextureCubemap, 'LoadTextureCubemap');
   GetAddress(@LoadRenderTexture, 'LoadRenderTexture');
+  GetAddress(@IsTextureReady, 'IsTextureReady');
   GetAddress(@UnloadTexture, 'UnloadTexture');
+  GetAddress(@IsRenderTextureReady, 'IsRenderTextureReady');
   GetAddress(@UnloadRenderTexture, 'UnloadRenderTexture');
   GetAddress(@UpdateTexture, 'UpdateTexture');
   GetAddress(@UpdateTextureRec, 'UpdateTextureRec');
@@ -2612,11 +2726,8 @@ begin
   GetAddress(@DrawTextureV, 'DrawTextureV');
   GetAddress(@DrawTextureEx, 'DrawTextureEx');
   GetAddress(@DrawTextureRec, 'DrawTextureRec');
-  DrawTextureQuad := GetAddress('DrawTextureQuad');
-  DrawTextureTiled := GetAddress('DrawTextureTiled');
   DrawTexturePro := GetAddress('DrawTexturePro');
   DrawTextureNPatch := GetAddress('DrawTextureNPatch');
-  GetAddress(@DrawTexturePoly, 'DrawTexturePoly');
   GetAddress(@GetPixelColor, 'GetPixelColor');
   GetAddress(@SetPixelColor, 'SetPixelColor');
   GetAddress(@GetPixelDataSize, 'GetPixelDataSize');
@@ -2625,26 +2736,32 @@ begin
   GetAddress(@LoadFontEx, 'LoadFontEx');
   GetAddress(@LoadFontFromImage, 'LoadFontFromImage');
   GetAddress(@LoadFontFromMemory, 'LoadFontFromMemory');
+  GetAddress(@IsFontReady, 'IsFontReady');
   GetAddress(@LoadFontData, 'LoadFontData');
   GetAddress(@GenImageFontAtlas, 'GenImageFontAtlas');
   GetAddress(@UnloadFontData, 'UnloadFontData');
   GetAddress(@UnloadFont, 'UnloadFont');
+  GetAddress(@ExportFontAsCode, 'ExportFontAsCode');
   GetAddress(@DrawFPS, 'DrawFPS');
   GetAddress(@DrawText, 'DrawText');
   GetAddress(@DrawTextEx, 'DrawTextEx');
   GetAddress(@DrawTextPro, 'DrawTextPro');
   GetAddress(@DrawTextCodepoint, 'DrawTextCodepoint');
+  GetAddress(@DrawTextCodepoints, 'DrawTextCodepoints');
   GetAddress(@MeasureText, 'MeasureText');
   GetAddress(@MeasureTextEx, 'MeasureTextEx');
   GetAddress(@GetGlyphIndex, 'GetGlyphIndex');
   GetAddress(@GetGlyphInfo, 'GetGlyphInfo');
   GetAddress(@GetGlyphAtlasRec, 'GetGlyphAtlasRec');
+  GetAddress(@LoadUTF8, 'LoadUTF8');
+  GetAddress(@UnloadUTF8, 'UnloadUTF8');
   GetAddress(@LoadCodepoints, 'LoadCodepoints');
   GetAddress(@UnloadCodepoints, 'UnloadCodepoints');
   GetAddress(@GetCodepointCount, 'GetCodepointCount');
   GetAddress(@GetCodepoint, 'GetCodepoint');
+  GetAddress(@GetCodepointNext, 'GetCodepointNext');
+  GetAddress(@GetCodepointPrevious, 'GetCodepointPrevious');
   GetAddress(@CodepointToUTF8, 'CodepointToUTF8');
-  GetAddress(@TextCodepointsToUTF8, 'TextCodepointsToUTF8');
   GetAddress(@TextCopy, 'TextCopy');
   GetAddress(@TextIsEqual, 'TextIsEqual');
   GetAddress(@TextLength, 'TextLength');
@@ -2670,22 +2787,22 @@ begin
   GetAddress(@DrawCubeV, 'DrawCubeV');
   GetAddress(@DrawCubeWires, 'DrawCubeWires');
   GetAddress(@DrawCubeWiresV, 'DrawCubeWiresV');
-  GetAddress(@DrawCubeTexture, 'DrawCubeTexture');
-  GetAddress(@DrawCubeTextureRec, 'DrawCubeTextureRec');
   GetAddress(@DrawSphere, 'DrawSphere');
   GetAddress(@DrawSphereEx, 'DrawSphereEx');
   GetAddress(@DrawSphereWires, 'DrawSphereWires');
   GetAddress(@DrawCylinder, 'DrawCylinder');
   GetAddress(@DrawCylinderWires, 'DrawCylinderWires');
   GetAddress(@DrawCylinderWiresEx, 'DrawCylinderWiresEx');
+  GetAddress(@DrawCapsule, 'DrawCapsule');
+  GetAddress(@DrawCapsuleWires, 'DrawCapsuleWires');
   GetAddress(@DrawPlane, 'DrawPlane');
   GetAddress(@DrawRay, 'DrawRay');
   GetAddress(@DrawGrid, 'DrawGrid');
 
   GetAddress(@LoadModel, 'LoadModel');
+  GetAddress(@IsModelReady, 'IsModelReady');
   GetAddress(@LoadModelFromMesh, 'LoadModelFromMesh');
   GetAddress(@UnloadModel, 'UnloadModel');
-  GetAddress(@UnloadModelKeepMeshes, 'UnloadModelKeepMeshes');
   GetAddress(@GetModelBoundingBox, 'GetModelBoundingBox');
   GetAddress(@DrawModel, 'DrawModel');
   GetAddress(@DrawModelEx, 'DrawModelEx');
@@ -2703,7 +2820,6 @@ begin
   GetAddress(@ExportMesh, 'ExportMesh');
   GetAddress(@GetMeshBoundingBox, 'GetMeshBoundingBox');
   GetAddress(@GenMeshTangents, 'GenMeshTangents');
-  GetAddress(@GenMeshBinormals, 'GenMeshBinormals');
 
   GetAddress(@GenMeshPoly, 'GenMeshPoly');
   GetAddress(@GenMeshPlane, 'GenMeshPlane');
@@ -2718,6 +2834,7 @@ begin
   GetAddress(@GenMeshCubicmap, 'GenMeshCubicmap');
 
   GetAddress(@LoadMaterials, 'LoadMaterials');
+  GetAddress(@IsMaterialReady, 'IsMaterialReady');
   GetAddress(@LoadMaterialDefault, 'LoadMaterialDefault');
   GetAddress(@UnloadMaterial, 'UnloadMaterial');
   GetAddress(@SetMaterialTexture, 'SetMaterialTexture');
@@ -2734,7 +2851,6 @@ begin
   GetAddress(@GetRayCollisionSphere, 'GetRayCollisionSphere');
   GetAddress(@GetRayCollisionBox, 'GetRayCollisionBox');
   GetAddress(@GetRayCollisionMesh, 'GetRayCollisionMesh');
-  GetAddress(@GetRayCollisionModel, 'GetRayCollisionModel');
   GetAddress(@GetRayCollisionTriangle, 'GetRayCollisionTriangle');
   GetAddress(@GetRayCollisionQuad, 'GetRayCollisionQuad');
 
@@ -2744,7 +2860,9 @@ begin
   GetAddress(@SetMasterVolume, 'SetMasterVolume');
   GetAddress(@LoadWave, 'LoadWave');
   GetAddress(@LoadWaveFromMemory, 'LoadWaveFromMemory');
+  GetAddress(@IsWaveReady, 'IsWaveReady');
   GetAddress(@LoadSound, 'LoadSound');
+  GetAddress(@IsSoundReady, 'IsSoundReady');
   GetAddress(@LoadSoundFromWave, 'LoadSoundFromWave');
   GetAddress(@UpdateSound, 'UpdateSound');
   GetAddress(@UnloadWave, 'UnloadWave');
@@ -2755,19 +2873,18 @@ begin
   GetAddress(@StopSound, 'StopSound');
   GetAddress(@PauseSound, 'PauseSound');
   GetAddress(@ResumeSound, 'ResumeSound');
-  GetAddress(@PlaySoundMulti, 'PlaySoundMulti');
-  GetAddress(@StopSoundMulti, 'StopSoundMulti');
-  GetAddress(@GetSoundsPlaying, 'GetSoundsPlaying');
   GetAddress(@IsSoundPlaying, 'IsSoundPlaying');
   GetAddress(@SetSoundVolume, 'SetSoundVolume');
   GetAddress(@SetSoundPitch, 'SetSoundPitch');
-  GetAddress(@WaveFormat, 'WaveFormat');
+  GetAddress(@SetSoundPan, 'SetSoundPan');
   GetAddress(@WaveCopy, 'WaveCopy');
   GetAddress(@WaveCrop, 'WaveCrop');
+  GetAddress(@WaveFormat, 'WaveFormat');
   GetAddress(@LoadWaveSamples, 'LoadWaveSamples');
   GetAddress(@UnloadWaveSamples, 'UnloadWaveSamples');
   GetAddress(@LoadMusicStream, 'LoadMusicStream');
   GetAddress(@LoadMusicStreamFromMemory, 'LoadMusicStreamFromMemory');
+  GetAddress(@IsMusicReady, 'IsMusicReady');
   GetAddress(@UnloadMusicStream, 'UnloadMusicStream');
   GetAddress(@PlayMusicStream, 'PlayMusicStream');
   GetAddress(@IsMusicStreamPlaying, 'IsMusicStreamPlaying');
@@ -2778,9 +2895,11 @@ begin
   GetAddress(@SeekMusicStream, 'SeekMusicStream');
   GetAddress(@SetMusicVolume, 'SetMusicVolume');
   GetAddress(@SetMusicPitch, 'SetMusicPitch');
+  GetAddress(@SetMusicPan, 'SetMusicPan');
   GetAddress(@GetMusicTimeLength, 'GetMusicTimeLength');
   GetAddress(@GetMusicTimePlayed, 'GetMusicTimePlayed');
   GetAddress(@LoadAudioStream, 'LoadAudioStream');
+  GetAddress(@IsAudioStreamReady, 'IsAudioStreamReady');
   GetAddress(@UnloadAudioStream, 'UnloadAudioStream');
   GetAddress(@UpdateAudioStream, 'UpdateAudioStream');
   GetAddress(@IsAudioStreamProcessed, 'IsAudioStreamProcessed');
@@ -2791,7 +2910,13 @@ begin
   GetAddress(@StopAudioStream, 'StopAudioStream');
   GetAddress(@SetAudioStreamVolume, 'SetAudioStreamVolume');
   GetAddress(@SetAudioStreamPitch, 'SetAudioStreamPitch');
+  GetAddress(@SetAudioStreamPan, 'SetAudioStreamPan');
   GetAddress(@SetAudioStreamBufferSizeDefault, 'SetAudioStreamBufferSizeDefault');
+  GetAddress(@SetAudioStreamCallback, 'SetAudioStreamCallback');
+  GetAddress(@AttachAudioStreamProcessor, 'AttachAudioStreamProcessor');
+  GetAddress(@DetachAudioStreamProcessor, 'DetachAudioStreamProcessor');
+  GetAddress(@AttachAudioMixedProcessor, 'AttachAudioMixedProcessor');
+  GetAddress(@DetachAudioMixedProcessor, 'DetachAudioMixedProcessor');
 end;
 
 procedure InitLibrary;
@@ -2800,7 +2925,10 @@ begin
 end;
 
 initialization
-  RayLibrary := TmncRayLib.Create('raylib4');
+  {$ifdef WIN64}
+  {$else}
+  RayLibrary := TmncRayLib.Create('raylib4.5-32.dll');
+  {$endif}
 finalization
   FreeAndNil(RayLibrary);
 end.
