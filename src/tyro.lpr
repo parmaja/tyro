@@ -27,7 +27,6 @@ program tyro;
 {$mode objfpc}
 {$H+}
 
-
 uses
   Windows,
   cmem, math,

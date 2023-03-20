@@ -441,8 +441,10 @@ begin
   else
   begin
     //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    SetConfigFlags([FLAG_WINDOW_HIDDEN]);
     SetWindowBounds(0, 0, AWidth, AHeight);
     InitWindow(AWidth, AHeight, PUTF8Char(Title));
+    ClearWindowState([FLAG_WINDOW_HIDDEN]);
     ShowCursor();
     PrepareCanvas;
   end;

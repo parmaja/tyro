@@ -23,7 +23,10 @@ uses
   RayLib;
 
 const
-  cDefaultSampleRate = 44100;     // Default sample rate
+  cDefaultSampleRate     = 44100;   // Default sample rate
+  DEFAULT_TTF_FONTSIZE   = 32;      // Font first character (32 - space)
+  DEFAULT_TTF_NUMCHARS   = 95;      // ASCII 32..126 is 95 glyphs
+  DEFAULT_FIRST_CHAR     = 32;      // Expected first char for image sprite font
 
 type
   TRayObject = class(TObject)
@@ -263,7 +266,7 @@ procedure TRaySound.Play;
 begin
   inherited;
   if IsMutli then
-    PlaySoundMulti(Sound)
+    //PlaySoundMulti(Sound)
   else
     PlaySound(Sound);
 end;
@@ -278,7 +281,7 @@ begin
   if State > plyStop then
   begin
     if IsMutli then
-      PlaySoundMulti(Sound)
+      //PlaySoundMulti(Sound)
     else
       StopSound(Sound);
   end;
