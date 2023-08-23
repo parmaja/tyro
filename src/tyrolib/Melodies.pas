@@ -40,8 +40,6 @@ unit Melodies;
   dot means increase the duration of note by half, i am not sure if i understand it, i need to read about it
 }
 
-
-
 interface
 
 uses

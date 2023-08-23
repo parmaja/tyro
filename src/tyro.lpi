@@ -21,8 +21,8 @@
       <BuildNr Value="1"/>
     </VersionInfo>
     <BuildModes>
-      <Item Name="Default" Default="True"/>
-      <Item Name="Debug">
+      <Item Name="Debug" Default="True"/>
+      <Item Name="Release">
         <CompilerOptions>
           <Version Value="11"/>
           <PathDelim Value="\"/>
@@ -32,43 +32,6 @@
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir)"/>
             <OtherUnitFiles Value="raylib;tyrolib"/>
-            <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
-          </SearchPaths>
-          <Parsing>
-            <SyntaxOptions>
-              <IncludeAssertionCode Value="True"/>
-            </SyntaxOptions>
-          </Parsing>
-          <CodeGeneration>
-            <Checks>
-              <IOChecks Value="True"/>
-              <RangeChecks Value="True"/>
-              <OverflowChecks Value="True"/>
-              <StackChecks Value="True"/>
-            </Checks>
-            <VerifyObjMethodCallValidity Value="True"/>
-          </CodeGeneration>
-          <Linking>
-            <Debugging>
-              <UseExternalDbgSyms Value="True"/>
-            </Debugging>
-            <Options>
-              <Win32>
-                <GraphicApplication Value="True"/>
-              </Win32>
-            </Options>
-          </Linking>
-        </CompilerOptions>
-      </Item>
-      <Item Name="Release">
-        <CompilerOptions>
-          <Version Value="11"/>
-          <PathDelim Value="\"/>
-          <Target>
-            <Filename Value="tyro"/>
-          </Target>
-          <SearchPaths>
-            <IncludeFiles Value="$(ProjOutDir)"/>
             <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <CodeGeneration>
@@ -158,13 +121,35 @@
     <Version Value="11"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="tyro"/>
+      <Filename Value="..\bin\tyro"/>
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="..\..\minilib\lib"/>
+      <OtherUnitFiles Value="raylib;tyrolib"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
+    <Parsing>
+      <SyntaxOptions>
+        <IncludeAssertionCode Value="True"/>
+      </SyntaxOptions>
+    </Parsing>
+    <CodeGeneration>
+      <Checks>
+        <IOChecks Value="True"/>
+        <RangeChecks Value="True"/>
+        <OverflowChecks Value="True"/>
+        <StackChecks Value="True"/>
+      </Checks>
+      <VerifyObjMethodCallValidity Value="True"/>
+    </CodeGeneration>
+    <Linking>
+      <Debugging>
+        <DebugInfoType Value="dsDwarf3"/>
+      </Debugging>
+    </Linking>
+    <Other>
+      <CustomOptions Value="-DDebug"/>
+    </Other>
   </CompilerOptions>
   <Debugging>
     <Exceptions>

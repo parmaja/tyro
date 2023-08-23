@@ -290,6 +290,8 @@ begin
   inherited;
   FOptions := [moWindow, moOpaque];
   RayLibrary.Load;
+  Resources := TTyroResources.Create;
+  Resources.WorkSpace := ExtractFilePath(ParamStr(0));
   FCanvasLock := TCriticalSection.Create;
   MarginSize := cMarginSize;
   //MarginColor := clCornflowerBlue;
@@ -366,9 +368,6 @@ end;
 
 procedure TTyroMain.Run;
 begin
-  Resources := TTyroResources.Create;
-  Resources.WorkSpace := ExtractFilePath(ParamStr(0));
-
   Init;
 
   if not Visible and (moWindow in Options) then
