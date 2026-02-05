@@ -1748,7 +1748,7 @@ var
   // Apply Gaussian blur using a box blur approximation
   ImageBlurGaussian: procedure(image: PImage; blurSize: integer); cdecl = nil;
   // Apply custom square convolution kernel to image
-  ImageKernelConvolution: procedure(image: PImage; Kernel: PSingle; kernelSize: Integer);
+  ImageKernelConvolution: procedure(image: PImage; Kernel: PSingle; kernelSize: Integer); cdecl = nil;
   // Resize image (Bicubic scaling algorithm)
   ImageResize: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl = nil;
   // Resize image (Nearest-Neighbor scaling algorithm)
@@ -1764,7 +1764,7 @@ var
   // Flip image horizontally
   ImageFlipHorizontal: procedure(image: PImage); cdecl = nil;
   // Rotate image by input angle in degrees (-359 to 359)
-  ImageRotate: procedure(image: PImage; degrees: Integer);
+  ImageRotate: procedure(image: PImage; degrees: Integer); cdecl = nil;
   // Rotate image clockwise 90deg
   ImageRotateCW: procedure(image: PImage); cdecl = nil;
   // Rotate image counter-clockwise 90deg
@@ -1969,7 +1969,7 @@ var
   // Draw text using font and additional parameters
   DrawTextEx: procedure(font: TFont; const text: Pointer; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl = nil;
   // Draw text using Font and pro parameters (rotation)
-  DrawTextPro: procedure(Font: TFont; const text: PUTF8Char; Position: TVector2; origin: TVector2; Rotation: Single; fontSize: Single; spacing: Single; tint: TColor);
+  DrawTextPro: procedure(Font: TFont; const text: PUTF8Char; Position: TVector2; origin: TVector2; Rotation: Single; fontSize: Single; spacing: Single; tint: TColor); cdecl = nil;
 
   // Draw text using font inside rectangle limits with support for text selection
   DrawTextCodepoint: procedure(font: TFont; codepoint: Integer; position: TVector2; fontSize: Single; tint: TColor); cdecl = nil;
@@ -2339,7 +2339,7 @@ var
   // Resume playing paused music
   ResumeMusicStream: procedure(Music: TMusic); cdecl = nil;
   // Seek music to a position (in seconds)
-  SeekMusicStream: procedure(music:TMusic; position: Single);
+  SeekMusicStream: procedure(music:TMusic; position: Single); cdecl = nil;
   // Set volume for music (1.0 is max level)
   SetMusicVolume: procedure(Music: TMusic; volume: Single); cdecl = nil;
   // Set pitch for a music (1.0 is base level)
