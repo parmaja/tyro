@@ -1687,7 +1687,7 @@ var
   LoadImageFromTexture: function(texture: TTexture2D): TImage; cdecl = nil;
   // Load image from screen buffer and (screenshot)
   LoadImageFromScreen: function(): TImage; cdecl = nil;
-  // Check if an image is ready
+  // Check if an image is valid (data and parameters)
   IsImageValid: function(image: TImage): Boolean; cdecl = nil;
   // Unload image from CPU memory (RAM)
   UnloadImage: procedure(image: TImage); cdecl = nil;
@@ -1855,11 +1855,11 @@ var
   LoadTextureCubemap: function(image: TImage; Layout: Integer): TTextureCubemap; cdecl = nil;
   // Load texture for rendering (framebuffer)
   LoadRenderTexture: function(Width: Integer; Height: Integer): TRenderTexture2D; cdecl = nil;
-  // Check if a texture is ready
+  // Check if a texture is valid (loaded in GPU)
   IsTextureValid: function(Texture: TTexture2D): Boolean; cdecl = nil;
   // Unload texture from GPU memory (VRAM)
   UnloadTexture: procedure(Texture: TTexture2D); cdecl = nil;
-  // Check if a render texture is ready
+  // Check if a render texture is valid (loaded in GPU)
   IsRenderTextureValid: function(Target: TRenderTexture2D): Boolean; cdecl = nil;
   // Unload render texture from GPU memory (VRAM)
   UnloadRenderTexture: procedure(Target: TRenderTexture2D); cdecl = nil;
@@ -2110,7 +2110,7 @@ var
 
   // Load model from files (meshes and materials)
   LoadModel: function(const fileName: PUTF8Char): TModel; cdecl = nil;
-  // Check if a model is ready
+  // Check if a model is valid (loaded in GPU, VAO/VBOs)
   IsModelValid: function(Model: TModel): Boolean; cdecl = nil;
   // Load model from generated mesh (default material)
   LoadModelFromMesh: function(mesh: TMesh): TModel; cdecl = nil;
