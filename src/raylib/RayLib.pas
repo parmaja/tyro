@@ -1,4 +1,4 @@
-﻿unit RayLib;
+unit RayLib;
 {$IFDEF FPC}
 {$MODE delphi}
 {$ENDIF}
@@ -2575,6 +2575,7 @@ begin
   GetAddress(@SetWindowState, 'SetWindowState');
   GetAddress(@ClearWindowState, 'ClearWindowState');
   GetAddress(@ToggleFullscreen, 'ToggleFullscreen');
+  GetAddress(@ToggleBorderlessWindowed, 'ToggleBorderlessWindowed');
   GetAddress(@MaximizeWindow, 'MaximizeWindow');
   GetAddress(@MinimizeWindow, 'MinimizeWindow');
   GetAddress(@RestoreWindow, 'RestoreWindow');
@@ -2585,8 +2586,10 @@ begin
   GetAddress(@SetWindowPosition, 'SetWindowPosition');
   GetAddress(@SetWindowMonitor, 'SetWindowMonitor');
   GetAddress(@SetWindowMinSize, 'SetWindowMinSize');
+  GetAddress(@SetWindowMaxSize, 'SetWindowMaxSize');
   GetAddress(@SetWindowSize, 'SetWindowSize');
   GetAddress(@SetWindowOpacity, 'SetWindowOpacity');
+  GetAddress(@SetWindowFocused, 'SetWindowFocused');
   GetAddress(@GetWindowHandle, 'GetWindowHandle');
   GetAddress(@GetScreenWidth, 'GetScreenWidth');
   GetAddress(@GetScreenHeight, 'GetScreenHeight');
@@ -2605,6 +2608,7 @@ begin
   GetAddress(@GetWindowScaleDPI, 'GetWindowScaleDPI');
   GetAddress(@SetClipboardText, 'SetClipboardText');
   GetAddress(@GetClipboardText, 'GetClipboardText');
+  GetAddress(@GetClipboardImage, 'GetClipboardImage');
   GetAddress(@EnableEventWaiting, 'EnableEventWaiting');
   GetAddress(@DisableEventWaiting, 'DisableEventWaiting');
   GetAddress(@ShowCursor, 'ShowCursor');
@@ -2628,6 +2632,8 @@ begin
   GetAddress(@EndBlendMode, 'EndBlendMode');
   GetAddress(@BeginScissorMode, 'BeginScissorMode');
   GetAddress(@EndScissorMode, 'EndScissorMode');
+  GetAddress(@BeginVrStereoMode, 'BeginVrStereoMode');
+  GetAddress(@EndVrStereoMode, 'EndVrStereoMode');
   GetAddress(@LoadVrStereoConfig, 'LoadVrStereoConfig');
   GetAddress(@UnloadVrStereoConfig, 'UnloadVrStereoConfig');
   GetAddress(@LoadShader, 'LoadShader');
@@ -2641,6 +2647,7 @@ begin
   GetAddress(@SetShaderValueTexture, 'SetShaderValueTexture');
   GetAddress(@UnloadShader, 'UnloadShader');
   //GetAddress(@GetMouseRay, 'GetMouseRay');
+  GetAddress(@GetScreenToWorldRay, 'GetScreenToWorldRay');
   GetAddress(@GetCameraMatrix, 'GetCameraMatrix');
   GetAddress(@GetCameraMatrix2D, 'GetCameraMatrix2D');
   GetAddress(@GetWorldToScreen, 'GetWorldToScreen');
@@ -2658,6 +2665,8 @@ begin
 
   GetAddress(@SetRandomSeed, 'SetRandomSeed');
   GetAddress(@GetRandomValue, 'GetRandomValue');
+  GetAddress(@LoadRandomSequence, 'LoadRandomSequence');
+  GetAddress(@UnloadRandomSequence, 'UnloadRandomSequence');
 
   GetAddress(@TakeScreenshot, 'TakeScreenshot');
   GetAddress(@SetConfigFlags, 'SetConfigFlags');
@@ -2675,6 +2684,7 @@ begin
   GetAddress(@SetLoadFileTextCallback, 'SetLoadFileTextCallback');
   GetAddress(@SetSaveFileTextCallback, 'SetSaveFileTextCallback');
 
+  GetAddress(@ColorIsEqual, 'ColorIsEqual');
   GetAddress(@ColorToInt, 'ColorToInt');
   GetAddress(@ColorNormalize, 'ColorNormalize');
   GetAddress(@ColorFromNormalized, 'ColorFromNormalized');
@@ -2707,6 +2717,7 @@ begin
   GetAddress(@GetApplicationDirectory, 'GetApplicationDirectory');
   GetAddress(@ChangeDirectory, 'ChangeDirectory');
   GetAddress(@IsPathFile, 'IsPathFile');
+  GetAddress(@IsFileNameValid, 'IsFileNameValid');
   GetAddress(@LoadDirectoryFiles, 'LoadDirectoryFiles');
   GetAddress(@LoadDirectoryFilesEx, 'LoadDirectoryFilesEx');
   GetAddress(@UnloadDirectoryFiles, 'UnloadDirectoryFiles');
@@ -2718,8 +2729,21 @@ begin
   GetAddress(@DecompressData, 'DecompressData');
   GetAddress(@EncodeDataBase64, 'EncodeDataBase64');
   GetAddress(@DecodeDataBase64, 'DecodeDataBase64');
+  GetAddress(@ComputeCRC32, 'ComputeCRC32');
+  GetAddress(@ComputeMD5, 'ComputeMD5');
+  GetAddress(@ComputeSHA1, 'ComputeSHA1');
+
+  GetAddress(@LoadAutomationEventList, 'LoadAutomationEventList');
+  GetAddress(@UnloadAutomationEventList, 'UnloadAutomationEventList');
+  GetAddress(@ExportAutomationEventList, 'ExportAutomationEventList');
+  GetAddress(@SetAutomationEventList, 'SetAutomationEventList');
+  GetAddress(@SetAutomationEventBaseFrame, 'SetAutomationEventBaseFrame');
+  GetAddress(@StartAutomationEventRecording, 'StartAutomationEventRecording');
+  GetAddress(@StopAutomationEventRecording, 'StopAutomationEventRecording');
+  GetAddress(@PlayAutomationEvent, 'PlayAutomationEvent');
 
   GetAddress(@IsKeyPressed, 'IsKeyPressed');
+  GetAddress(@IsKeyPressedRepeat, 'IsKeyPressedRepeat');
   GetAddress(@IsKeyDown, 'IsKeyDown');
   GetAddress(@IsKeyReleased, 'IsKeyReleased');
   GetAddress(@IsKeyUp, 'IsKeyUp');
@@ -2737,6 +2761,7 @@ begin
   GetAddress(@GetGamepadAxisCount, 'GetGamepadAxisCount');
   GetAddress(@GetGamepadAxisMovement, 'GetGamepadAxisMovement');
   GetAddress(@SetGamepadMappings, 'SetGamepadMappings');
+  GetAddress(@SetGamepadVibration, 'SetGamepadVibration');
   GetAddress(@IsMouseButtonPressed, 'IsMouseButtonPressed');
   GetAddress(@IsMouseButtonDown, 'IsMouseButtonDown');
   GetAddress(@IsMouseButtonReleased, 'IsMouseButtonReleased');
@@ -2767,11 +2792,14 @@ begin
   GetAddress(@UpdateCamera, 'UpdateCamera');
   GetAddress(@UpdateCameraPro, 'UpdateCameraPro');
   GetAddress(@SetShapesTexture, 'SetShapesTexture');
+  GetAddress(@GetShapesTexture, 'GetShapesTexture');
+  GetAddress(@GetShapesTextureRectangle, 'GetShapesTextureRectangle');
   GetAddress(@DrawPixel, 'DrawPixel');
   GetAddress(@DrawPixelV, 'DrawPixelV');
   GetAddress(@DrawLine, 'DrawLine');
   GetAddress(@DrawLineV, 'DrawLineV');
   GetAddress(@DrawLineEx, 'DrawLineEx');
+  GetAddress(@DrawLineStrip, 'DrawLineStrip');
   GetAddress(@DrawLineBezier, 'DrawLineBezier');
   GetAddress(@DrawCircle, 'DrawCircle');
   GetAddress(@DrawCircleSector, 'DrawCircleSector');
@@ -2801,6 +2829,21 @@ begin
   GetAddress(@DrawPoly, 'DrawPoly');
   GetAddress(@DrawPolyLines, 'DrawPolyLines');
   GetAddress(@DrawPolyLinesEx, 'DrawPolyLinesEx');
+  GetAddress(@DrawSplineLinear, 'DrawSplineLinear');
+  GetAddress(@DrawSplineBasis, 'DrawSplineBasis');
+  GetAddress(@DrawSplineCatmullRom, 'DrawSplineCatmullRom');
+  GetAddress(@DrawSplineBezierQuadratic, 'DrawSplineBezierQuadratic');
+  GetAddress(@DrawSplineBezierCubic, 'DrawSplineBezierCubic');
+  GetAddress(@DrawSplineSegmentLinear, 'DrawSplineSegmentLinear');
+  GetAddress(@DrawSplineSegmentBasis, 'DrawSplineSegmentBasis');
+  GetAddress(@DrawSplineSegmentCatmullRom, 'DrawSplineSegmentCatmullRom');
+  GetAddress(@DrawSplineSegmentBezierQuadratic, 'DrawSplineSegmentBezierQuadratic');
+  GetAddress(@DrawSplineSegmentBezierCubic, 'DrawSplineSegmentBezierCubic');
+  GetAddress(@GetSplinePointLinear, 'GetSplinePointLinear');
+  GetAddress(@GetSplinePointBasis, 'GetSplinePointBasis');
+  GetAddress(@GetSplinePointCatmullRom, 'GetSplinePointCatmullRom');
+  GetAddress(@GetSplinePointBezierQuad, 'GetSplinePointBezierQuad');
+  GetAddress(@GetSplinePointBezierCubic, 'GetSplinePointBezierCubic');
   GetAddress(@CheckCollisionRecs, 'CheckCollisionRecs');
   GetAddress(@CheckCollisionCircles, 'CheckCollisionCircles');
   GetAddress(@CheckCollisionCircleRec, 'CheckCollisionCircleRec');
@@ -2814,12 +2857,14 @@ begin
   GetAddress(@LoadImage, 'LoadImage');
   GetAddress(@LoadImageRaw, 'LoadImageRaw');
   GetAddress(@LoadImageAnim, 'LoadImageAnim');
+  GetAddress(@LoadImageAnimFromMemory, 'LoadImageAnimFromMemory');
   GetAddress(@LoadImageFromMemory, 'LoadImageFromMemory');
   GetAddress(@LoadImageFromTexture, 'LoadImageFromTexture');
   GetAddress(@LoadImageFromScreen, 'LoadImageFromScreen');
   GetAddress(@IsImageValid, 'IsImageValid');
   GetAddress(@UnloadImage, 'UnloadImage');
   GetAddress(@ExportImage, 'ExportImage');
+  GetAddress(@ExportImageToMemory, 'ExportImageToMemory');
   GetAddress(@ExportImageAsCode, 'ExportImageAsCode');
   GetAddress(@LoadImageColors, 'LoadImageColors');
   GetAddress(@LoadImagePalette, 'LoadImagePalette');
@@ -2828,6 +2873,7 @@ begin
   GetAddress(@GenImageColor, 'GenImageColor');
   GetAddress(@GenImageGradientLinear, 'GenImageGradientLinear');
   GetAddress(@GenImageGradientRadial, 'GenImageGradientRadial');
+  GetAddress(@GenImageGradientSquare, 'GenImageGradientSquare');
   GetAddress(@GenImageChecked, 'GenImageChecked');
   GetAddress(@GenImageWhiteNoise, 'GenImageWhiteNoise');
   GetAddress(@GenImagePerlinNoise, 'GenImagePerlinNoise');
@@ -2835,6 +2881,7 @@ begin
   GetAddress(@GenImageText, 'GenImageText');
   GetAddress(@ImageCopy, 'ImageCopy');
   GetAddress(@ImageFromImage, 'ImageFromImage');
+  GetAddress(@ImageFromChannel, 'ImageFromChannel');
   GetAddress(@ImageText, 'ImageText');
   GetAddress(@ImageTextEx, 'ImageTextEx');
   GetAddress(@ImageToPOT, 'ImageToPOT');
@@ -2845,6 +2892,7 @@ begin
   GetAddress(@ImageAlphaMask, 'ImageAlphaMask');
   GetAddress(@ImageAlphaPremultiply, 'ImageAlphaPremultiply');
   GetAddress(@ImageBlurGaussian, 'ImageBlurGaussian');
+  GetAddress(@ImageKernelConvolution, 'ImageKernelConvolution');
   GetAddress(@ImageResize, 'ImageResize');
   GetAddress(@ImageResizeNN, 'ImageResizeNN');
   GetAddress(@ImageResizeCanvas, 'ImageResizeCanvas');
@@ -2852,6 +2900,7 @@ begin
   GetAddress(@ImageDither, 'ImageDither');
   GetAddress(@ImageFlipVertical, 'ImageFlipVertical');
   GetAddress(@ImageFlipHorizontal, 'ImageFlipHorizontal');
+  GetAddress(@ImageRotate, 'ImageRotate');
   GetAddress(@ImageRotateCW, 'ImageRotateCW');
   GetAddress(@ImageRotateCCW, 'ImageRotateCCW');
   GetAddress(@ImageColorTint, 'ImageColorTint');
@@ -2867,6 +2916,7 @@ begin
   GetAddress(@ImageDrawPixelV, 'ImageDrawPixelV');
   GetAddress(@ImageDrawLine, 'ImageDrawLine');
   GetAddress(@ImageDrawLineV, 'ImageDrawLineV');
+  GetAddress(@ImageDrawLineEx, 'ImageDrawLineEx');
   GetAddress(@ImageDrawCircle, 'ImageDrawCircle');
   GetAddress(@ImageDrawCircleV, 'ImageDrawCircleV');
   GetAddress(@ImageDrawCircleLines, 'ImageDrawCircleLines');
@@ -2917,6 +2967,7 @@ begin
   GetAddress(@DrawTextPro, 'DrawTextPro');
   GetAddress(@DrawTextCodepoint, 'DrawTextCodepoint');
   GetAddress(@DrawTextCodepoints, 'DrawTextCodepoints');
+  GetAddress(@SetTextLineSpacing, 'SetTextLineSpacing');
   GetAddress(@MeasureText, 'MeasureText');
   GetAddress(@MeasureTextEx, 'MeasureTextEx');
   GetAddress(@GetGlyphIndex, 'GetGlyphIndex');
@@ -2945,7 +2996,10 @@ begin
   GetAddress(@TextToUpper, 'TextToUpper');
   GetAddress(@TextToLower, 'TextToLower');
   GetAddress(@TextToPascal, 'TextToPascal');
+  GetAddress(@TextToSnake, 'TextToSnake');
+  GetAddress(@TextToCamel, 'TextToCamel');
   GetAddress(@TextToInteger, 'TextToInteger');
+  GetAddress(@TextToFloat, 'TextToFloat');
 
   GetAddress(@DrawLine3D, 'DrawLine3D');
   GetAddress(@DrawPoint3D, 'DrawPoint3D');
@@ -3011,7 +3065,9 @@ begin
 
   GetAddress(@LoadModelAnimations, 'LoadModelAnimations');
   GetAddress(@UpdateModelAnimation, 'UpdateModelAnimation');
+  GetAddress(@UpdateModelAnimationBones, 'UpdateModelAnimationBones');
   GetAddress(@UnloadModelAnimation, 'UnloadModelAnimation');
+  GetAddress(@UnloadModelAnimations, 'UnloadModelAnimations');
   GetAddress(@IsModelAnimationValid, 'IsModelAnimationValid');
 
   GetAddress(@CheckCollisionSpheres, 'CheckCollisionSpheres');
@@ -3031,11 +3087,13 @@ begin
   GetAddress(@LoadWaveFromMemory, 'LoadWaveFromMemory');
   GetAddress(@IsWaveValid, 'IsWaveValid');
   GetAddress(@LoadSound, 'LoadSound');
+  GetAddress(@LoadSoundAlias, 'LoadSoundAlias');
   GetAddress(@IsSoundValid, 'IsSoundValid');
   GetAddress(@LoadSoundFromWave, 'LoadSoundFromWave');
   GetAddress(@UpdateSound, 'UpdateSound');
   GetAddress(@UnloadWave, 'UnloadWave');
   GetAddress(@UnloadSound, 'UnloadSound');
+  GetAddress(@UnloadSoundAlias, 'UnloadSoundAlias');
   GetAddress(@ExportWave, 'ExportWave');
   GetAddress(@ExportWaveAsCode, 'ExportWaveAsCode');
   GetAddress(@PlaySound, 'PlaySound');
