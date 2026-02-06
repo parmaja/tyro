@@ -453,7 +453,10 @@ end;
 procedure TTyroMain.HideWindow;
 begin
   if Visible then
+  begin
+    Visible := False;
     CloseWindow;
+  end;
 end;
 
 procedure TTyroMain.Init;
@@ -615,7 +618,7 @@ end;
 procedure TTyroControl.SetVisible(AValue: Boolean);
 begin
   if FVisible =AValue then Exit;
-  FVisible :=AValue;
+  FVisible := AValue;
   Invalidate;
 end;
 
