@@ -126,7 +126,7 @@ type
     procedure SetLineCount(c: Integer);
     procedure SetTopLine(Nr: Integer);
     procedure AdjustScrollBars(const Recalc:Boolean=False);
-    function AdjustLineHeight(i: Integer;const Recalc:Boolean=False): Integer;
+    function AdjustLineHeight(i: Integer; const Recalc:Boolean = False): Integer;
     procedure MakeInputVisible;
     procedure MakeOutVisible;
     procedure SetBackGroundColor(c: Tcolor);
@@ -2483,31 +2483,40 @@ begin
   AdjustScrollBars(True);
 end;
 
-function TTyroConsole.AdjustLineHeight(i: Integer;const Recalc:Boolean=False): Integer;
+function TTyroConsole.AdjustLineHeight(i: Integer; const Recalc: Boolean): Integer;
 var
   LineC:  Integer;
   LineC2: Integer;
 begin
   if (i < FLines.Count) and (FLines[i] <> nil) then
-  with FLines[i] do
   begin
-    if (not Recalc) and (FStoredLineCount>=0) then LineC:=FStoredLineCount else
+    with FLines[i] do
     begin
-      LineC := LineCount(ClientWidth, -1, FCaretWidth);
-      FStoredLineCount:=LineC;
+      if (not Recalc) and (FStoredLineCount>=0) then
+        LineC := FStoredLineCount
+      else
+      begin
+        LineC := LineCount(ClientWidth, -1, FCaretWidth);
+        FStoredLineCount:=LineC;
+      end;
     end;
-  end;
+  end
+  else
+    LineC := 0;
 
   if (FInputY = i) then
   begin
     with FInputBuffer do
     begin
-      if (not Recalc) and (FStoredLineCount>=0) then LineC2:=FStoredLineCount else
+      if (not Recalc) and (FStoredLineCount>=0) then
+        LineC2 := FStoredLineCount
+      else
       begin
         LineC2 := LineCount(ClientWidth, FCaretX, FCaretWidth);
         FStoredLineCount:=LineC2;
       end;
     end;
+
     if LineC2 > LineC then
       LineC := LineC2;
   end;
@@ -2523,7 +2532,7 @@ begin
   for i := 0 to FLineCount - 1 do
   begin
     FLineHeightSum[i] := Result;
-    Inc(Result, AdjustLineHeight(i,Recalc));
+    Inc(Result, AdjustLineHeight(i, Recalc));
   end;
 end;
 
