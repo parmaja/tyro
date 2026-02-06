@@ -219,7 +219,6 @@ type
     X: Single; // Vector x component
     Y: Single; // Vector y component
     constructor Create(AX, AY: Single); overload;
-    constructor Create(I: Int64); overload;
   end;
   PVector2 = ^TVector2;
 
@@ -500,8 +499,8 @@ type
   PrAudioBuffer = ^TrAudioBuffer;
 
 	TrAudioProcessor = packed record
-  end;
-	PrAudioProcessor = TrAudioProcessor;
+	end;
+	PrAudioProcessor = ^TrAudioProcessor;
 
   // AudioStream, custom audio stream
   TAudioStream = packed record
@@ -590,7 +589,7 @@ type
   // NOTE: Every bit registers one state (use it with bit masks)
   // By default all flags are set to 0
   TConfigFlag = (
-	FLAG_FULLSCREEN_MODE    = 0,
+	FLAG_NONE               = 0,
     FLAG_FULLSCREEN_MODE    = 1,  //$00000002,   // Set to run program in fullscreen
     FLAG_WINDOW_RESIZABLE   = 2,  //$00000004,   // Set to allow resizable window
     FLAG_WINDOW_UNDECORATED = 3,  //$00000008,   // Set to disable window decoration (frame and buttons)
@@ -2546,11 +2545,6 @@ begin
   Y := AY;
 end;
 
-constructor TVector2.Create(I: Int64);
-begin
-  Self := TVector2(i);
-end;
-
 constructor TVector3.Create(AX, AY, AZ: Single);
 begin
   X := AX;
@@ -2649,7 +2643,6 @@ begin
   GetAddress(@UnloadShader, 'UnloadShader');
   //GetAddress(@GetMouseRay, 'GetMouseRay');
   GetAddress(@GetScreenToWorldRay, 'GetScreenToWorldRay');
-  GetAddress(@GetScreenToWorldRayEx, 'GetScreenToWorldRayEx');
   GetAddress(@GetScreenToWorldRayEx, 'GetScreenToWorldRayEx');
   GetAddress(@GetCameraMatrix, 'GetCameraMatrix');
   GetAddress(@GetCameraMatrix2D, 'GetCameraMatrix2D');
@@ -2811,6 +2804,7 @@ begin
   GetAddress(@DrawCircleGradient, 'DrawCircleGradient');
   GetAddress(@DrawCircleV, 'DrawCircleV');
   GetAddress(@DrawCircleLines, 'DrawCircleLines');
+  GetAddress(@DrawCircleLinesV, 'DrawCircleLinesV');
   GetAddress(@DrawEllipse, 'DrawEllipse');
   GetAddress(@DrawEllipseLines, 'DrawEllipseLines');
   GetAddress(@DrawRing, 'DrawRing');
@@ -2826,6 +2820,7 @@ begin
   GetAddress(@DrawRectangleLinesEx, 'DrawRectangleLinesEx');
   GetAddress(@DrawRectangleRounded, 'DrawRectangleRounded');
   GetAddress(@DrawRectangleRoundedLines, 'DrawRectangleRoundedLines');
+  GetAddress(@DrawRectangleRoundedLinesEx, 'DrawRectangleRoundedLinesEx');
   GetAddress(@DrawTriangle, 'DrawTriangle');
   GetAddress(@DrawTriangleLines, 'DrawTriangleLines');
   GetAddress(@DrawTriangleFan, 'DrawTriangleFan');
@@ -2930,6 +2925,11 @@ begin
   GetAddress(@ImageDrawRectangleV, 'ImageDrawRectangleV');
   GetAddress(@ImageDrawRectangleRec, 'ImageDrawRectangleRec');
   GetAddress(@ImageDrawRectangleLines, 'ImageDrawRectangleLines');
+  GetAddress(@ImageDrawTriangle, 'ImageDrawTriangle');
+  GetAddress(@ImageDrawTriangleEx, 'ImageDrawTriangleEx');
+  GetAddress(@ImageDrawTriangleLines, 'ImageDrawTriangleLines');
+  GetAddress(@ImageDrawTriangleFan, 'ImageDrawTriangleFan');
+  GetAddress(@ImageDrawTriangleStrip, 'ImageDrawTriangleStrip');
   GetAddress(@ImageDraw, 'ImageDraw');
   GetAddress(@ImageDrawText, 'ImageDrawText');
   GetAddress(@ImageDrawTextEx, 'ImageDrawTextEx');
@@ -3020,6 +3020,7 @@ begin
   GetAddress(@DrawSphereEx, 'DrawSphereEx');
   GetAddress(@DrawSphereWires, 'DrawSphereWires');
   GetAddress(@DrawCylinder, 'DrawCylinder');
+  GetAddress(@DrawCylinderEx, 'DrawCylinderEx');
   GetAddress(@DrawCylinderWires, 'DrawCylinderWires');
   GetAddress(@DrawCylinderWiresEx, 'DrawCylinderWiresEx');
   GetAddress(@DrawCapsule, 'DrawCapsule');
@@ -3037,6 +3038,8 @@ begin
   GetAddress(@DrawModelEx, 'DrawModelEx');
   GetAddress(@DrawModelWires, 'DrawModelWires');
   GetAddress(@DrawModelWiresEx, 'DrawModelWiresEx');
+  GetAddress(@DrawModelPoints, 'DrawModelPoints');
+  GetAddress(@DrawModelPointsEx, 'DrawModelPointsEx');
   GetAddress(@DrawBoundingBox, 'DrawBoundingBox');
   GetAddress(@DrawBillboard, 'DrawBillboard');
   GetAddress(@DrawBillboardRec, 'DrawBillboardRec');
