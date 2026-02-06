@@ -1,4 +1,4 @@
-unit RayLib;
+﻿unit RayLib;
 {$IFDEF FPC}
 {$MODE delphi}
 {$ENDIF}
@@ -998,7 +998,7 @@ type
   // FileIO: Load binary data
   TLoadFileDataCallback = function(FileName: PUTF8Char; var dataSize: Integer): PByte; cdecl;
   // FileIO: Save binary data
-  TSaveFileDataCallback = function(FileName: PUTF8Char; var data; var dataSize: Integer): Boolean; cdecl;
+  TSaveFileDataCallback = function(FileName: PUTF8Char; var data; dataSize: Integer): Boolean; cdecl;
   // FileIO: Load text data
   TLoadFileTextCallback = function(FileName: PUTF8Char): PUTF8Char; cdecl;
   // FileIO: Save text data
@@ -1212,7 +1212,7 @@ var
   // Returns the screen space position for a 2d camera world space position
   GetWorldToScreen2D: function(position: TVector2; camera: TCamera2D): TVector2; cdecl = nil;
   // Get the world space position for a 2d camera screen space position
-  GetScreenToWorld2D: function(Position: TVector3; Camera: TCamera): TVector2; cdecl = nil;
+  GetScreenToWorld2D: function(Position: TVector2; Camera: TCamera2D): TVector2; cdecl = nil;
   // Returns camera transform matrix (view matrix)
   GetCameraMatrix: function(Camera: TCamera): TMatrix; cdecl = nil;
   // Returns camera 2d transform matrix
@@ -1356,7 +1356,7 @@ var
   // Encode data to Base64 string, memory must be MemFree()
   EncodeDataBase64: function(Data: PByte; dataSize: Integer; OutputSize: PInteger): PByte; cdecl = nil;  //TODO zaher, check it by example please
   // Decode Base64 string data, memory must be MemFree()
-  DecodeDataBase64: function(Data: PByte; outputSize: PInteger): PByte;  //TODO zaher, check it by example please
+  DecodeDataBase64: function(Data: PByte; outputSize: PInteger): PByte; cdecl = nil;  //TODO zaher, check it by example please
   // Compute CRC32 hash code
   ComputeCRC32: function(Data: PByte; dataSize: Integer): Cardinal; cdecl = nil;
   // Compute MD5 hash code, returns static int[4] (16 bytes)
@@ -1508,9 +1508,9 @@ var
 //------------------------------------------------------------------------------------
 
   // Update camera position for selected mode
-  UpdateCamera: procedure(camera: PCamera); cdecl = nil;
+  UpdateCamera: procedure(Camera: PCamera; Mode: TCameraMode); cdecl = nil;
   // Update camera movement/rotation
-  UpdateCameraPro: procedure(Camera: PCamera; movement, rotation: TVector3; Zoom: Single); cdecl = nil;
+  UpdateCameraPro: procedure(Camera: PCamera; Movement, Rotation: TVector3; Zoom: Single); cdecl = nil;
 
 //------------------------------------------------------------------------------------
 // Basic Shapes Drawing Functions (Module: shapes)
@@ -1967,7 +1967,7 @@ var
   // Draw text (using default font)
   DrawText: procedure(const Text: PUTF8Char; posX: Integer; posY: Integer; FontSize: Integer; Color: TColor); cdecl = nil;
   // Draw text using font and additional parameters
-  DrawTextEx: procedure(font: TFont; const text: Pointer; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl = nil;
+  DrawTextEx: procedure(font: TFont; const text: PUTF8Char; position: TVector2; fontSize: Single; spacing: Single; tint: TColor); cdecl = nil;
   // Draw text using Font and pro parameters (rotation)
   DrawTextPro: procedure(Font: TFont; const text: PUTF8Char; Position: TVector2; origin: TVector2; Rotation: Single; fontSize: Single; spacing: Single; tint: TColor); cdecl = nil;
 
@@ -2140,11 +2140,11 @@ var
   // Draw a billboard texture defined by sourceRec
   DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; source: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl = nil;
   // Draw a billboard texture defined by source and rotation
-  DrawBillboardPro: procedure(camera: TCamera; Texture: TTexture2D; source: TRectangle; position: tVector3; up: TVector3; size: TVector2; origin: TVector2; Rotation: Single; tint: TColor); cdecl = nil;
+  DrawBillboardPro: procedure(camera: TCamera; Texture: TTexture2D; source: TRectangle; position: TVector3; up: TVector3; size: TVector2; origin: TVector2; Rotation: Single; tint: TColor); cdecl = nil;
 
   // Mesh management functions
   // Upload mesh vertex data in GPU and provide VAO/VBO ids
-  UploadMesh: procedure(mesh: PMesh; Dynamic: Boolean); cdecl = nil;
+  UploadMesh: procedure(Mesh: PMesh; Dynamic: Boolean); cdecl = nil;
   // Update mesh vertex data in GPU for a specific buffer index
   UpdateMeshBuffer: procedure(mesh: TMesh; index: Integer; data: PByte; dataSize: Integer; offset: Integer); cdecl = nil;
   // Unload mesh data from CPU and GPU
@@ -2263,7 +2263,7 @@ var
   // Load wave data from file
   LoadWave: function(const fileName: PUTF8Char): TWave; cdecl = nil;
   // Load wave from memory buffer, fileType refers to extension: i.e. "wav"
-  LoadWaveFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer): TImage; cdecl = nil;
+  LoadWaveFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer): TWave; cdecl = nil;
   // Checks if wave data is valid (data loaded and parameters)
   IsWaveValid: function(Wave: TWave): Boolean; cdecl = nil;
   // Load sound from file
@@ -2945,8 +2945,9 @@ begin
   GetAddress(@DrawTextureV, 'DrawTextureV');
   GetAddress(@DrawTextureEx, 'DrawTextureEx');
   GetAddress(@DrawTextureRec, 'DrawTextureRec');
-  DrawTexturePro := GetAddress('DrawTexturePro');
-  DrawTextureNPatch := GetAddress('DrawTextureNPatch');
+  GetAddress(@DrawTexturePro, 'DrawTexturePro');
+  GetAddress(@DrawTextureNPatch, 'DrawTextureNPatch');
+
   GetAddress(@GetPixelColor, 'GetPixelColor');
   GetAddress(@SetPixelColor, 'SetPixelColor');
   GetAddress(@GetPixelDataSize, 'GetPixelDataSize');
