@@ -101,25 +101,26 @@ interface
 
 const
 {$IFDEF MSWINDOWS}
-   LUA_LIB_NAME = 'lua53.dll';
+   LUA_LIB_NAME = 'pluto.dll';
 {$ELSE}
-   LUA_LIB_NAME = 'liblua53.so';
+   LUA_LIB_NAME = 'pluto.so';
 {$ENDIF}
 
 const
    LUA_VERSION_MAJOR   = '5';
-   LUA_VERSION_MINOR   = '3';
-   LUA_VERSION_NUM     = 503;
+   LUA_VERSION_MINOR   = '4';
+   LUA_VERSION_NUM     = 504;
    LUA_VERSION_RELEASE = '0';
-   LUA_VERSION_        = 'Lua 5.3'; // LUA_VERSION was suffixed by '_' for avoiding name collision
-   LUA_RELEASE         = 'Lua 5.3.0';
-   LUA_COPYRIGHT       = 'Lua 5.3.0  Copyright (C) 1994-2015 Lua.org, PUC-Rio';
+   LUA_VERSION_        = 'Lua 5.4'; // LUA_VERSION was suffixed by '_' for avoiding name collision
+   LUA_RELEASE         = 'Lua 5.4.0';
+   LUA_COPYRIGHT       = 'Lua 5.4.0  Copyright (C) 1994-2026 Lua.org, PUC-Rio';
    LUA_AUTHORS         = 'R. Ierusalimschy, L. H. de Figueiredo, W. Celes';
    LUA_SIGNATURE       = #27'Lua';  // mark for precompiled code '<esc>Lua'
    LUA_MULTRET         = -1;        // option for multiple returns in 'lua_pcall' and 'lua_call'
 
    // pseudo-indices
-   LUA_REGISTRYINDEX   = -1001000;
+   LUA_REGISTRYINDEX: Integer = -1001000;
+   //LUA_REGISTRYINDEX = -(MaxInt div 2 + 1000); //* For 5.5
 
 function lua_upvalueindex(I: Integer): Integer; inline;
 
@@ -202,7 +203,7 @@ function lua_newstate(f: lua_Alloc; ud: Pointer): Plua_state; cdecl;
 procedure lua_close(L: Plua_State); cdecl;
 function lua_newthread(L: Plua_State): Plua_State; cdecl;
 function lua_atpanic(L: Plua_State; panicf: lua_CFunction): lua_CFunction; cdecl;
-function lua_version(L: Plua_State): Plua_Number; cdecl;
+function lua_version(L: Plua_State): lua_Number; cdecl;
 
 // basic stack manipulation
 function lua_absindex(L: Plua_State; idx: Integer): Integer; cdecl;
@@ -383,7 +384,31 @@ const
    LUA_IDSIZE = 60;
 
 type
-   lua_Debug = packed record     (* activation record *)
+  lua_Debug = record
+    event: Integer;
+    name: PAnsiChar;                     // (n)
+    namewhat: PAnsiChar;                 // (n)
+    what: PAnsiChar;                     // (S)
+    source: PAnsiChar;                   // (S)
+    srclen: SizeUInt;                    // (S) - platform-sized unsigned integer
+    currentline: Integer;                // (l)
+    linedefined: Integer;                // (S)
+    lastlinedefined: Integer;            // (S)
+    nups: Byte;                          // (u) number of upvalues
+    nparams: Byte;                       // (u) number of parameters
+    isvararg: ShortInt;                  // (u) signed 8-bit (C 'char')
+    extraargs: Byte;                     // (t) number of extra arguments
+    istailcall: ShortInt;                // (t) signed 8-bit (C 'char')
+    ftransfer: Integer;                  // (r) index of first value transferred
+    ntransfer: Integer;                  // (r) number of transferred values
+    short_src: array[0..LUA_IDSIZE - 1] of AnsiChar;  // (S)
+    // private part - implementation-specific fields (do not access directly)
+    // In official Lua bindings, these are often reserved via opaque padding.
+    // Example placeholder (adjust size based on target Lua version/platform):
+    // _private: array[0..47] of Byte;
+  end;
+
+ { lua_Debug = packed record     (* activation record *)
       event: Integer;
       name: PAnsiChar;           (* (n) *)
       namewhat: PAnsiChar;       (* (n) `global', `local', `field', `method' *)
@@ -399,14 +424,14 @@ type
       short_src: packed array[0..LUA_IDSIZE - 1] of AnsiChar; (* (S) *)
       (* private part *)
       i_ci: Pointer;             (* active function *)  // ptr to struct CallInfo
-   end;
+   end;}
    Plua_Debug = ^lua_Debug;
 
    // Functions to be called by the debugger in specific events
    lua_Hook = procedure(L: Plua_State; ar: Plua_Debug); cdecl;
 
-function lua_getstack(L: Plua_State; level: Integer; ar: Plua_Debug): Integer; cdecl;
-function lua_getinfo(L: Plua_State; const what: PAnsiChar; ar: Plua_Debug): Integer; cdecl;
+function lua_getstack(L: Plua_State; level: Integer; var ar: lua_Debug): Integer; cdecl;
+function lua_getinfo(L: Plua_State; const what: PAnsiChar; var ar: lua_Debug): Integer; cdecl;
 function lua_getlocal(L: Plua_State; const ar: Plua_Debug; n: Integer): PAnsiChar; cdecl;
 function lua_setlocal(L: Plua_State; const ar: Plua_Debug; n: Integer): PAnsiChar; cdecl;
 function lua_getupvalue(L: Plua_State; funcindex, n: Integer): PAnsiChar; cdecl;
@@ -510,7 +535,8 @@ function luaopen_debug(L: Plua_State): Integer; cdecl;
 function luaopen_package(L: Plua_State): Integer; cdecl;
 
 // open all previous libraries
-procedure luaL_openlibs(L: Plua_State); cdecl;
+//procedure luaL_openlibs(L: Plua_State); cdecl;
+procedure luaL_openselectedlibs(L: Plua_State; load: integer; preload: integer); cdecl;
 
 implementation
 
@@ -523,7 +549,7 @@ function lua_newstate(f: lua_Alloc; ud: Pointer): Plua_State; cdecl; external LU
 procedure lua_close(L: Plua_State); cdecl; external LUA_LIB_NAME;
 function lua_newthread(L: Plua_State): Plua_State; cdecl; external LUA_LIB_NAME;
 function lua_atpanic(L: Plua_State; panicf: lua_CFunction): lua_CFunction; cdecl; external LUA_LIB_NAME;
-function lua_version(L: Plua_State): Plua_Number; cdecl; external LUA_LIB_NAME;
+function lua_version(L: Plua_State): lua_Number; cdecl; external LUA_LIB_NAME;
 function lua_absindex(L: Plua_State; idx: Integer): Integer; cdecl; external LUA_LIB_NAME;
 function lua_gettop(L: Plua_State): Integer; cdecl; external LUA_LIB_NAME;
 procedure lua_settop(L: Plua_State; idx: Integer); cdecl; external LUA_LIB_NAME;
@@ -732,8 +758,8 @@ begin
    Result := lua_tolstring(L, i, nil);
 end;
 
-function lua_getstack(L: Plua_State; level: Integer; ar: Plua_Debug): Integer; cdecl; external LUA_LIB_NAME;
-function lua_getinfo(L: Plua_State; const what: PAnsiChar; ar: Plua_Debug): Integer; cdecl; external LUA_LIB_NAME;
+function lua_getstack(L: Plua_State; level: Integer; var ar: lua_Debug): Integer; cdecl; external LUA_LIB_NAME;
+function lua_getinfo(L: Plua_State; const what: PAnsiChar; var ar: lua_Debug): Integer; cdecl; external LUA_LIB_NAME;
 function lua_getlocal(L: Plua_State; const ar: Plua_Debug; n: Integer): PAnsiChar; cdecl; external LUA_LIB_NAME;
 function lua_setlocal(L: Plua_State; const ar: Plua_Debug; n: Integer): PAnsiChar; cdecl; external LUA_LIB_NAME;
 function lua_getupvalue(L: Plua_State; funcindex, n: Integer): PAnsiChar; cdecl; external LUA_LIB_NAME;
@@ -887,7 +913,8 @@ function luaopen_bit32(L: Plua_State): Integer; cdecl; external LUA_LIB_NAME;
 function luaopen_math(L: Plua_State): Integer; cdecl; external LUA_LIB_NAME;
 function luaopen_debug(L: Plua_State): Integer; cdecl; external LUA_LIB_NAME;
 function luaopen_package(L: Plua_State): Integer; cdecl; external LUA_LIB_NAME;
-procedure luaL_openlibs(L: Plua_State); cdecl; external LUA_LIB_NAME;
+//procedure luaL_openlibs(L: Plua_State); cdecl; external LUA_LIB_NAME;
+procedure luaL_openselectedlibs(L: Plua_State; load: integer; preload: integer); cdecl; external LUA_LIB_NAME;
 
 initialization
 {$IFDEF MSWINDOWS}

@@ -177,24 +177,27 @@ var
   Starting, Ending: Integer;
   Delta: Single;
   {$endif}
-  aData: array of SmallInt;
+  //aData: array of SmallInt;
+  aData: PSmallInt;
 begin
   Wave.FrameCount := Round(Duration * SampleRate);
   Wave.SampleRate := SampleRate; // By default 44100 Hz
   Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
   Wave.Channels := 1;                  // By default 1 channel (mono)
-  aData := nil;
-  SetLength(aData, Wave.FrameCount);
-  Wave.Data := @aData[0];
+  //aData := nil;
+  //SetLength(aData, Wave.FrameCount);
+  aData := RayLib.MemAlloc(Wave.FrameCount * SizeOf(SmallInt));
   if Frequency <> 0 then
   begin
     Amplitude := (Amplitude * ((Power(2, Wave.SampleSize) / 2) - 1) / 100) - 1;
+
     {$ifdef FADE}
     WaveSamples := SampleRate div round(Frequency);
     Starting := WaveSamples * 3;
     Ending := Wave.FrameCount - WaveSamples * 3;
     Delta := 100 / (WaveSamples * 3);
     {$endif}
+
     for i := 0 to Wave.FrameCount -1 do
     begin
       v := Round(Proc(i, SampleRate, Frequency) * Amplitude);
@@ -204,20 +207,27 @@ begin
       if i > Ending then
         v := Round(v * (Wave.FrameCount - i) * Delta / 100);
       {$endif}
+
       aData[i] := v;
     end;
   end
   else
-    for i := 0 to Length(aData) -1 do
+    for i := 0 to Wave.FrameCount - 1 do
       aData[i] := 0;
+  Wave.Data := aData;
   //ExportWave(Wave, PChar('c:\temp\'+IntTOStr(round(Frequency))+'.wav'));
   UnloadSound(Sound);
   Sound := LoadSoundFromWave(Wave);
+  //RayLib.MemFree(aData);
+  //aData := nil;
+  //Wave.Data := nil;
+  UnloadWave(Wave);
+  //aData := nil;
   if Wave.Data <> nil then //maybe move it to generate
   begin
-    RayLib.MemFree(Wave.Data);
-    Wave.Data := nil;
-    UnloadWave(Wave);
+    //RayLib.MemFree(Wave.Data); //* no it is our memory
+    //Wave.Data := nil;
+    //UnloadWave(Wave);
   end;
 end;
 

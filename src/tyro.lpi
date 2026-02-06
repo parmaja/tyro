@@ -16,9 +16,10 @@
     </General>
     <VersionInfo>
       <UseVersionInfo Value="True"/>
-      <MinorVersionNr Value="1"/>
+      <AutoIncrementBuild Value="True"/>
+      <MinorVersionNr Value="2"/>
       <RevisionNr Value="1"/>
-      <BuildNr Value="1"/>
+      <BuildNr Value="3"/>
     </VersionInfo>
     <BuildModes>
       <Item Name="Debug" Default="True"/>
@@ -145,6 +146,7 @@
     <Linking>
       <Debugging>
         <DebugInfoType Value="dsDwarf3"/>
+        <UseExternalDbgSyms Value="True"/>
       </Debugging>
     </Linking>
     <Other>

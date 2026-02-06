@@ -589,7 +589,7 @@ type
   // NOTE: Every bit registers one state (use it with bit masks)
   // By default all flags are set to 0
   TConfigFlag = (
-	FLAG_NONE               = 0,
+	  FLAG_NONE               = 0,  // Not used
     FLAG_FULLSCREEN_MODE    = 1,  //$00000002,   // Set to run program in fullscreen
     FLAG_WINDOW_RESIZABLE   = 2,  //$00000004,   // Set to allow resizable window
     FLAG_WINDOW_UNDECORATED = 3,  //$00000008,   // Set to disable window decoration (frame and buttons)
@@ -1354,7 +1354,7 @@ var
   // Decompress data (DEFLATE algorithm), memory must be MemFree()
   DecompressData: function(compData: PByte; compDataSize: Integer; dataSize: PInteger): PByte; cdecl = nil;
   // Encode data to Base64 string, memory must be MemFree()
-  EncodeDataBase64: function(Data: PByte; dataSize: Integer; OutputSize: PInteger): PByte; cdecl = nil;  //TODO zaher, check it by example please
+  EncodeDataBase64: function({$ifdef fpc}constref{$else}const[ref]{$endif} Data; dataSize: Integer; OutputSize: PInteger): PByte; cdecl = nil;  //TODO zaher, check it by example please
   // Decode Base64 string data, memory must be MemFree()
   DecodeDataBase64: function(Data: PByte; outputSize: PInteger): PByte; cdecl = nil;  //TODO zaher, check it by example please
   // Compute CRC32 hash code
@@ -2269,9 +2269,9 @@ var
   // Load sound from file
   LoadSound: function(const fileName: PUTF8Char): TSound; cdecl = nil;
   // Load sound from wave data
-  LoadSoundFromWave: function(wave: TWave): TSound; cdecl = nil;
+  LoadSoundFromWave: function(Wave: TWave): TSound; cdecl = nil;
   // Create a new sound that shares the same sample data as the source sound, does not own the sound data
-  LoadSoundAlias: function(source: TSound): TSound; cdecl = nil;
+  LoadSoundAlias: function(Source: TSound): TSound; cdecl = nil;
   // Checks if a sound is valid (data loaded and buffers initialized)
   IsSoundValid: function(Sound: TSound): Boolean; cdecl = nil;
   // Update sound buffer with new data

@@ -12,6 +12,7 @@ unit TyroLua;
 
 {$mode objfpc}{$H+}
 {$WARN 5024 off : Parameter "$1" not used}
+{$define DEBUG_LUA}
 
 interface
 
@@ -83,6 +84,7 @@ type
   TLuaScript = class(TTyroScript)
   private
   protected
+    FVersion: double;
     LuaState: Plua_State;
 
     FQueueObject: TQueueObject;
@@ -164,6 +166,8 @@ var
 begin
   Method.data := lua_topointer(L, lua_upvalueindex(1));
   Method.code := lua_topointer(L, lua_upvalueindex(2));
+  if Method.data = nil then
+    raise Exception.Create('Lua: cannot execute object method!');
   Result := lua_CMethod(Method)(L);
 end;
 
@@ -466,7 +470,9 @@ var
 begin
   inherited;
   LuaState := lua_newstate(@LuaAlloc, nil);
-  lual_openlibs(LuaState);
+  FVersion := lua_version(LuaState);
+  //lual_openlibs(LuaState);
+  luaL_openselectedlibs(LuaState, -1, 0);
   lua_sethook(LuaState, @HookCount, LUA_MASKCOUNT, 100);
 
   lua_register_global_integer(LuaState, 'version', TyroVersion);
@@ -553,13 +559,17 @@ begin
 end;
 
 procedure TLuaScript.AddQueueObject(AQueueObject: TQueueObject);
+{$ifdef DEBUG_LUA}
 var
   ar: lua_Debug;
+{$endif}
 begin
-  lua_getstack(LuaState, 1, @ar);
-  lua_getinfo(LuaState, 'nSl', @ar);
+  {$ifdef DEBUG_LUA}
+  if lua_getstack(LuaState, 1, ar)>0 then
+    lua_getinfo(LuaState, 'nSl', ar);
+  {$endif}
   AQueueObject.LineNo := ar.currentline;
-  inherited AddQueueObject(AQueueObject);
+  inherited;
 end;
 
 function TLuaScript.Clear_func(L: Plua_State): Integer; cdecl;

@@ -160,14 +160,13 @@ begin
     PenColor := clWhite;
 
     if egTop in Edges then
-      DrawLine(x, y, x+w, y);//top
+      DrawLineF(x, y, x+w, y);//top
     if egRight in Edges then
-      DrawLine(x+w, y, x+w, y+w); //right
+      DrawLineF(x+w, y, x+w, y+w); //right
     if egBottom in Edges then
-      DrawLine(x, y+w, x+w, y+w); //bottom
+      DrawLineF(x, y+w, x+w, y+w); //bottom
     if egLeft in Edges then
-      DrawLine(x, y, x, y+w); //left
-
+      DrawLineF(x, y, x, y+w); //left
 
     if FHit then
     begin
