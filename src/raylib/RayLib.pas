@@ -292,11 +292,11 @@ type
 
   // Texture2D, same as Texture
   TTexture2D = TTexture;
-  PTexture2D = ^PTexture;
+  PTexture2D = ^TTexture2D;
 
   // TextureCubemap, same as Texture
   TTextureCubemap = TTexture;
-  PTextureCubemap = ^PTexture;
+  PTextureCubemap = ^TTextureCubemap;
 
   // RenderTexture, fbo for texture rendering
   TRenderTexture = packed record
@@ -590,6 +590,7 @@ type
   // NOTE: Every bit registers one state (use it with bit masks)
   // By default all flags are set to 0
   TConfigFlag = (
+	FLAG_FULLSCREEN_MODE    = 0,
     FLAG_FULLSCREEN_MODE    = 1,  //$00000002,   // Set to run program in fullscreen
     FLAG_WINDOW_RESIZABLE   = 2,  //$00000004,   // Set to allow resizable window
     FLAG_WINDOW_UNDECORATED = 3,  //$00000008,   // Set to disable window decoration (frame and buttons)
@@ -1806,7 +1807,7 @@ var
   // Draw line within an image
   ImageDrawLine: procedure(dst: PImage; startPosX: Integer; startPosY: Integer; endPosX: Integer; endPosY: Integer; color: TColor); cdecl = nil;
   // Draw line within an image (Vector version)
-  ImageDrawLineV: procedure(dst: PImage; start: TVector2; &end: TVector2; color: TColor); cdecl = nil;
+  ImageDrawLineV: procedure(dst: PImage; StartPos: TVector2; EndPos: TVector2; color: TColor); cdecl = nil;
   // Draw a line defining thickness within an image
   ImageDrawLineEx: procedure(dst: PImage; start: TVector2; &end: TVector2; thick: Integer; color: TColor); cdecl = nil;
   // Draw a filled circle within an image
@@ -2648,12 +2649,14 @@ begin
   GetAddress(@UnloadShader, 'UnloadShader');
   //GetAddress(@GetMouseRay, 'GetMouseRay');
   GetAddress(@GetScreenToWorldRay, 'GetScreenToWorldRay');
+  GetAddress(@GetScreenToWorldRayEx, 'GetScreenToWorldRayEx');
+  GetAddress(@GetScreenToWorldRayEx, 'GetScreenToWorldRayEx');
   GetAddress(@GetCameraMatrix, 'GetCameraMatrix');
   GetAddress(@GetCameraMatrix2D, 'GetCameraMatrix2D');
   GetAddress(@GetWorldToScreen, 'GetWorldToScreen');
+  GetAddress(@GetWorldToScreen2D, 'GetWorldToScreen2D');
   GetAddress(@GetScreenToWorld2D, 'GetScreenToWorld2D');
   GetAddress(@GetWorldToScreenEx, 'GetWorldToScreenEx');
-  GetAddress(@GetWorldToScreen2D, 'GetWorldToScreen2D');
   GetAddress(@SetTargetFPS, 'SetTargetFPS');
   GetAddress(@GetFPS, 'GetFPS');
   GetAddress(@GetFrameTime, 'GetFrameTime');
@@ -2697,6 +2700,7 @@ begin
   GetAddress(@ColorAlphaBlend, 'ColorAlphaBlend');
   GetAddress(@GetColor, 'GetColor');
   GetAddress(@Fade, 'Fade');
+  GetAddress(@ColorLerp, 'ColorLerp');
   GetAddress(@LoadFileData, 'LoadFileData');
   GetAddress(@UnloadFileData, 'UnloadFileData');
   GetAddress(@SaveFileData, 'SaveFileData');
@@ -2847,6 +2851,7 @@ begin
   GetAddress(@CheckCollisionRecs, 'CheckCollisionRecs');
   GetAddress(@CheckCollisionCircles, 'CheckCollisionCircles');
   GetAddress(@CheckCollisionCircleRec, 'CheckCollisionCircleRec');
+  GetAddress(@CheckCollisionCircleLine, 'CheckCollisionCircleLine');
   GetAddress(@CheckCollisionPointRec, 'CheckCollisionPointRec');
   GetAddress(@CheckCollisionPointCircle, 'CheckCollisionPointCircle');
   GetAddress(@CheckCollisionPointTriangle, 'CheckCollisionPointTriangle');
@@ -3042,6 +3047,7 @@ begin
   GetAddress(@DrawMesh, 'DrawMesh');
   GetAddress(@DrawMeshInstanced, 'DrawMeshInstanced');
   GetAddress(@ExportMesh, 'ExportMesh');
+  GetAddress(@ExportMeshAsCode, 'ExportMeshAsCode');
   GetAddress(@GetMeshBoundingBox, 'GetMeshBoundingBox');
   GetAddress(@GenMeshTangents, 'GenMeshTangents');
 
@@ -3084,6 +3090,7 @@ begin
   GetAddress(@CloseAudioDevice, 'CloseAudioDevice');
   GetAddress(@IsAudioDeviceReady, 'IsAudioDeviceReady');
   GetAddress(@SetMasterVolume, 'SetMasterVolume');
+  GetAddress(@GetMasterVolume, 'GetMasterVolume');
   GetAddress(@LoadWave, 'LoadWave');
   GetAddress(@LoadWaveFromMemory, 'LoadWaveFromMemory');
   GetAddress(@IsWaveValid, 'IsWaveValid');
