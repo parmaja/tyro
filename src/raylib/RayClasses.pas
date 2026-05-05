@@ -73,8 +73,10 @@ type
 
   TRayMusic = class(TRayPlay)
   protected
-    Music: TMusic;
+    MusicStream: TMusic;
   public
+    destructor Destroy; override;
+
     procedure Play; override;
     function IsPlaying: Boolean; override;
     procedure Stop; override;
@@ -317,32 +319,38 @@ end;
 
 { TRayMusic }
 
+destructor TRayMusic.Destroy;
+begin
+  UnloadMusicStream(MusicStream);
+  inherited Destroy;
+end;
+
 procedure TRayMusic.Play;
 begin
   inherited;
-  PlayMusicStream(Music);
+  PlayMusicStream(MusicStream);
 end;
 
 function TRayMusic.IsPlaying: Boolean;
 begin
-  Result := IsMusicStreamPlaying(Music);
+  Result := IsMusicStreamPlaying(MusicStream);
 end;
 
 procedure TRayMusic.Stop;
 begin
   inherited;
-  StopMusicStream(Music);
+  StopMusicStream(MusicStream);
 end;
 
 procedure TRayMusic.Pause;
 begin
   inherited Pause;
-  PauseMusicStream(Music);
+  PauseMusicStream(MusicStream);
 end;
 
 procedure TRayMusic.Update;
 begin
-  UpdateMusicStream(Music);
+  UpdateMusicStream(MusicStream);
 end;
 
 { TRayPlay }
@@ -407,7 +415,7 @@ var
 begin
   Open;
   Music := TRayMusic.Create;
-  Music.Music := LoadMusicStream(PUTF8Char(FileName));
+  Music.MusicStream := LoadMusicStream(PUTF8Char(FileName));
   Playing.Add(Music);
   RayUpdates.Add(Music);
   Music.Play;

@@ -1,19 +1,10 @@
 ﻿unit RayLib;
 {$IFDEF FPC}
 {$MODE delphi}
+{.$packrecords c}
 {$ENDIF}
-{$M+}{$H+}
-{
-  NOTICES: C to Pas
-    float = single
-    double = double
-    unsigned int -> Cardinal
-    const char *x -> const x: PUTF8Char
-    unsigned char * -> PByte
-}
+{$M+}{$H+}{$A8}
 {$MINENUMSIZE 4} //{$Z4} All enum must be sized as Integer
-{$A8}
-
 {**********************************************************************************************
 *
 *   raylib v5.5 - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
@@ -98,10 +89,21 @@
 ***********************************************************************************************}
 
 interface
+
 {*
 * TODO:
 *       Change to use enum types inside functions
 *}
+
+{
+  NOTICES: C to Pas
+    float = single
+    double = double
+    unsigned int -> Cardinal
+    const char *x -> const x: PUTF8Char
+    unsigned char * -> PByte
+}
+
 uses
   Types, Classes, SysUtils,
   mnLibraries; // take it from github/parmaja/minilib
@@ -110,7 +112,7 @@ const
   RAYLIB_VERSION_MAJOR = 5;
   RAYLIB_VERSION_MINOR = 5;
   RAYLIB_VERSION_PATCH = 0;
-	RAYLIB_VERSION = '5.5';
+  RAYLIB_VERSION = '5.5';
 
 type
   PPUTF8Char = ^PUTF8Char;
