@@ -6,9 +6,8 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils,
-  Classes,
-  RayLib3;
+  SysUtils, Classes,
+  RayLib;
 
 const
   MAX_SAMPLES            =   512;
@@ -35,13 +34,13 @@ var
   writeLength: Integer;
   readLength: Integer;
 begin
-  RayLib.Load;
+  RayLib.InitLibrary;
 
   InitWindow(screenWidth, screenHeight, 'raylib [audio] example - raw audio streaming');
   InitAudioDevice;  // Initialize audio device
 
   // Init raw audio stream (sample rate: 22050, sample size: 16bit, channels: 1-mono)
-  Stream := InitAudioStream(SampleRate, 16, 1);
+  Stream := LoadAudioStream(SampleRate, 16, 1);
 
   // Buffer for the single cycle waveform we are synthesizing
   Data      := AllocMem(Sizeof(SmallInt) * MAX_SAMPLES);
@@ -78,7 +77,7 @@ begin
     // Update
     //----------------------------------------------------------------------------------
 
-    if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) then
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) then
     begin
         // Sample mouse input.
         mousePosition := GetMousePosition();
@@ -144,10 +143,10 @@ begin
     //----------------------------------------------------------------------------------
     BeginDrawing;
 
-    ClearBackground(RAYWHITE);
+    ClearBackground(clWhite);
 
-    DrawText(PChar(Format('sine frequency: %d', [Round(frequency)])), GetScreenWidth() - 220, 10, 20, RED);
-    DrawText('click mouse button to change frequency', 10, 10, 20, DARKGRAY);
+    DrawText(PChar(Format('sine frequency: %d', [Round(frequency)])), GetScreenWidth() - 220, 10, 20, clRed);
+    DrawText('click mouse button to change frequency', 10, 10, 20, clDarkGray);
 
     // Draw the current buffer state proportionate to the screen
     for i := 0 to screenWidth -1 do
@@ -155,7 +154,7 @@ begin
       position.x := i;
       position.y := (ScreenHeight div 2) + 50 * Data[i * MAX_SAMPLES div screenWidth] div MaxSmallint;
 
-      DrawPixelV(position, RED);
+      DrawPixelV(position, clRed);
     end;
 
     EndDrawing();
@@ -167,7 +166,7 @@ begin
   Freemem(data);                 // Unload sine wave data
   Freemem(WriteBuf);             // Unload write buffer
 
-  CloseAudioStream(Stream);   // Close raw audio stream and delete buffers from RAM
+  UnloadAudioStream(Stream);   // Close raw audio stream and delete buffers from RAM
   CloseAudioDevice();         // Close audio device (music streaming is automatically stopped)
 
   CloseWindow();              // Close window and OpenGL context

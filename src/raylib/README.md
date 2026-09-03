@@ -18,9 +18,9 @@ For that 8 bytes struct declared as int64 result then typecast it to that struct
 
 ### Compitations ###
 
-https://github.com/turborium/TurboRaylib
-
 https://github.com/GuvaCode/Ray4Laz
+
+https://github.com/turborium/TurboRaylib
 
 https://github.com/tazdij/raylib-pas
 
