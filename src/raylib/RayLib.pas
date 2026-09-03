@@ -1,10 +1,10 @@
 ﻿unit RayLib;
-{$IFDEF FPC}
-{$MODE delphi}
+{$ifdef fpc}
+{$mode delphi}
 {.$packrecords c}
 {$else}
 {$POINTERMATH ON}
-{$ENDIF}
+{$endif}
 {$M+}{$H+}{$A8}
 {$MINENUMSIZE 4} //{$Z4} All enum must be sized as Integer
 {**********************************************************************************************
@@ -92,6 +92,8 @@
 interface
 
 {*
+* I removed `packed` from records due Music example crashed
+*
 * TODO:
 *       Change to use enum types inside functions
 *}
@@ -100,6 +102,7 @@ interface
   NOTICES: C to Pas
     float = single
     double = double
+    long = LongInt
     unsigned int -> Cardinal
     const char *x -> const x: PUTF8Char
     unsigned char * -> PByte
@@ -218,7 +221,7 @@ type
   { TVector2 }
 
   // Vector2, 2 components
-  TVector2 = packed record
+  TVector2 = record
     X: Single; // Vector x component
     Y: Single; // Vector y component
     constructor Create(AX, AY: Single); overload;
@@ -228,7 +231,7 @@ type
   { TVector3 }
 
   // Vector3, 3 components
-  TVector3 = packed record
+  TVector3 = record
     x: Single; // Vector x component
     y: Single; // Vector y component
     z: Single; // Vector z component
@@ -239,7 +242,7 @@ type
   { TVector4 }
 
   // Vector4, 4 components
-  TVector4 = packed record
+  TVector4 = record
     x: Single; // Vector x component
     y: Single; // Vector y component
     z: Single; // Vector z component
@@ -262,7 +265,7 @@ type
   { TRectangle }
 
   // Rectangle, 4 components
-  TRectangle = packed record
+  TRectangle = record
     X: Single;       // Rectangle top-left corner position x
     Y: Single;       // Rectangle top-left corner position y
     Width: Single;   // Rectangle width
@@ -273,7 +276,7 @@ type
   PPRectangle = ^PRectangle;
 
   // Image, pixel data stored in CPU memory (RAM)
-  TImage = packed record
+  TImage = record
     Data: Pointer;     // Image raw data
     Width: Integer;    // Image base width
     Height: Integer;   // Image base height
@@ -283,7 +286,7 @@ type
   PImage = ^TImage;
 
   // Texture, tex data stored in GPU memory (VRAM)
-  TTexture = packed record
+  TTexture = record
     ID: Cardinal;      // OpenGL texture id
     Width: Integer;    // Texture base width
     Height: Integer;   // Texture base height
@@ -301,7 +304,7 @@ type
   PTextureCubemap = ^TTextureCubemap;
 
   // RenderTexture, fbo for texture rendering
-  TRenderTexture = packed record
+  TRenderTexture = record
     ID: Cardinal;        // OpenGL Framebuffer Object (FBO) id
     Texture: TTexture;   // Color buffer attachment texture
     Depth: TTexture;     // Depth buffer attachment texture
@@ -313,7 +316,7 @@ type
   PRenderTexture2D = ^TRenderTexture;
 
   // NPatchInfo, n-patch layout info
-  TNPatchInfo = packed record
+  TNPatchInfo = record
     Source: TRectangle; // Texture source rectangle
     Left: Integer;         // Left border offset
     Top: Integer;          // Top border offset
@@ -324,7 +327,7 @@ type
   PNPatchInfo = ^TNPatchInfo;
 
   // GlyphInfo, font characters glyphs info
-  TGlyphInfo = packed record
+  TGlyphInfo = record
     Value: Integer;    // Character value (Unicode)
     OffsetX: Integer;  // Character offset X when drawing
     OffsetY: Integer;  // Character offset Y when drawing
@@ -334,7 +337,7 @@ type
   PGlyphInfo = ^TGlyphInfo;
 
   // Font, font texture and GlyphInfo array data
-  TFont = packed record
+  TFont = record
     BaseSize: Integer;       // Base size (default chars height)
     GlyphCount: Integer;     // Number of glyph characters
     GlyphPadding: Integer;   // Padding around the glyph characters
@@ -345,7 +348,7 @@ type
   PFont = ^TFont;
 
   // Camera, defines position/orientation in 3d space
-  TCamera3D = packed record
+  TCamera3D = record
     Position: TVector3;    // Camera position
     Target: TVector3;      // Camera target it looks-at
     Up: TVector3;          // Camera up vector (rotation over its axis)
@@ -358,7 +361,7 @@ type
   PCamera = ^TCamera;
 
   // Camera2D, defines position/orientation in 2d space
-  TCamera2D = packed record
+  TCamera2D = record
     Offset: TVector2;       // Camera offset (screen space offset from window origin)
     Target: TVector2;       // Camera target (world space target point that is mapped to screen space offset)
     Rotation: Single;       // Camera rotation in degrees (pivots around target)
@@ -367,7 +370,7 @@ type
   PCamera2D = ^TCamera2D;
 
   // Mesh, vertex data and vao/vbo
-  TMesh = packed record
+  TMesh = record
       VertexCount: Integer;        // Number of vertices stored in arrays
       TriangleCount: integer;      // Number of triangles stored (indexed or not)
 
@@ -397,14 +400,14 @@ type
   PMesh = TMesh;
 
   // Shader
-  TShader = packed record
+  TShader = record
     ID: Cardinal;         // Shader program id
     Locs: PInteger;       // Shader locations array (RL_MAX_SHADER_LOCATIONS)
   end;
   PShader = ^TShader;
 
   // MaterialMap
-  TMaterialMap = packed record
+  TMaterialMap = record
     Texture: TTexture2D;   // Material map texture
     Color: TColor;         // Material map color
     Value: Single;         // Material map value
@@ -412,7 +415,7 @@ type
   PMaterialMap = ^TMaterialMap;
 
   // Material, includes shader and maps
-  TMaterial = packed record
+  TMaterial = record
     Shader: TShader;        // Material shader
     Maps: PMaterialMap;     // Material maps array (MAX_MATERIAL_MAPS)
     Params: array[0..3] of Single;   // Material generic parameters (if required)
@@ -420,7 +423,7 @@ type
   PMaterial = ^TMaterial;
 
   // Transform, vertex transformation data
-  TTransform = packed record
+  TTransform = record
     Translation: TVector3;   // Translation
     Rotation: TQuaternion;   // Rotation
     Scale: TVector3;         // Scale
@@ -433,14 +436,14 @@ type
   TModelAnimPose = PTransform;
 
   // Bone, skeletal animation bone
-  TBoneInfo = packed record
+  TBoneInfo = record
     Name: array[0..31] of AnsiChar;  // Bone name
     Parent: Integer;                 // Bone parent
   end;
   PBoneInfo = ^TBoneInfo;
 
   // Skeleton, animation bones hierarchy
-  TModelSkeleton = packed record
+  TModelSkeleton = record
     BoneCount: Integer;        // Number of bones
     Bones: PBoneInfo;          // Bones information (skeleton)
     BindPose: TModelAnimPose;  // Bones base transformation (Transform[])
@@ -448,7 +451,7 @@ type
   PModelSkeleton = ^TModelSkeleton;
 
   // Model, meshes, materials and animation data
-  TModel = packed record
+  TModel = record
     Transform: TMatrix;        // Local transform matrix
 
     MeshCount: Integer;        // Number of meshes
@@ -468,7 +471,7 @@ type
   PModel = ^TModel;
 
   // ModelAnimation, contains a full animation sequence
-  TModelAnimation = packed record
+  TModelAnimation = record
     Name: array[0..31] of AnsiChar; // Animation name
 
     BoneCount: Integer;        // Number of bones (per pose)
@@ -478,14 +481,14 @@ type
   PModelAnimation = ^TModelAnimation;
 
   // Ray, ray for raycasting
-  TRay = packed record
+  TRay = record
     Position: TVector3;        // Ray position (origin)
     Direction: TVector3;       // Ray direction (normalized)
   end;
   PRay = ^TRay;
 
   // RayCollision, ray hit information
-  TRayCollision = packed record
+  TRayCollision = record
     Hit: Boolean;              // Did the ray hit something?
     Distance: Single;          // Distance to the nearest hit
     Point: TVector3;           // Point of the nearest hit
@@ -494,14 +497,14 @@ type
   PRayCollision = ^TRayCollision;
 
   // BoundingBox
-  TBoundingBox = packed record
+  TBoundingBox = record
     Min: TVector3;             // Minimum vertex box-corner
     Max: TVector3;             // Maximum vertex box-corner
   end;
   PBoundingBox = ^TBoundingBox;
 
   // Wave, audio wave data
-  TWave = packed record
+  TWave = record
     FrameCount: Cardinal;      // Total number of frames (considering channels)
     SampleRate: Cardinal;      // Frequency (samples per second)
     SampleSize: Cardinal;      // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
@@ -512,16 +515,16 @@ type
 
   // Opaque structs declaration
   // NOTE: Actual structs are defined internally in raudio module
-  TrAudioBuffer = packed record
+  TrAudioBuffer = record
   end;
   PrAudioBuffer = ^TrAudioBuffer;
 
-	TrAudioProcessor = packed record
+	TrAudioProcessor = record
 	end;
 	PrAudioProcessor = ^TrAudioProcessor;
 
   // AudioStream, custom audio stream
-  TAudioStream = packed record
+  TAudioStream = record
     Buffer: PrAudioBuffer;     // Pointer to internal data used by the audio system
     Processor: PrAudioProcessor; // Pointer to internal data processor, useful for audio effects
 
@@ -532,14 +535,14 @@ type
   PAudioStream = ^TAudioStream;
 
   // Sound
-  TSound = packed record
+  TSound = record
     Stream: TAudioStream;       // Audio stream
     FrameCount: Cardinal;       // Total number of frames (considering channels)
   end;
   PSound = ^TSound;
 
   // Music, audio stream, anything longer than ~10 seconds should be streamed
-  TMusic = packed record
+  TMusic = record
     Stream: TAudioStream;      // Audio stream
     FrameCount: Cardinal;      // Total number of frames (considering channels)
     Looping: Boolean;          // Music looping enable
@@ -550,7 +553,7 @@ type
   PMusic = ^TMusic;
 
   // VrDeviceInfo, Head-Mounted-Display device parameters
-  TVrDeviceInfo = packed record
+  TVrDeviceInfo = record
     hResolution: Integer;                            // Horizontal resolution in pixels
     vResolution: Integer;                            // Vertical resolution in pixels
     hScreenSize: Single;                             // Horizontal size in meters
@@ -565,7 +568,7 @@ type
   PVrDeviceInfo = ^TVrDeviceInfo;
 
   // VrStereoConfig, VR stereo rendering configuration for simulator
-  TVrStereoConfig = packed record
+  TVrStereoConfig = record
       projection: array[0..1] of TMatrix;           // VR projection matrices (per eye)
       ViewOffset: array[0..1] of TMatrix;           // VR view offset matrices (per eye)
       LeftLensCenter: array[0..1] of Single;        // VR left lens center
@@ -578,14 +581,14 @@ type
   PVrStereoConfig = ^TVrStereoConfig;
 
   // File path list
-  TFilePathList = packed record
+  TFilePathList = record
       Count: Cardinal;             // Filepaths entries count
       Paths: PPUTF8Char;           // Filepaths entries
   end;
 	PFilePathList = ^TFilePathList;
 
   // Automation event
-  TAutomationEvent = packed record
+  TAutomationEvent = record
       Frame: Cardinal;                 // Event frame
       EventType: Cardinal;             // Event type (AutomationEventType)
       Params: array[0..3] of Integer;  // Event parameters (if required)
@@ -1382,7 +1385,7 @@ var
   // Unload dropped filepaths
   UnloadDroppedFiles: procedure(files: TFilePathList); cdecl = nil;
   // Get file modification time (last write time)
-  GetFileModTime: function(const fileName: PUTF8Char): Integer; cdecl = nil;
+  GetFileModTime: function(const fileName: PUTF8Char): LongInt; cdecl = nil;
   // Get the file count in a directory
   GetDirectoryFileCount: function(const dirPath: PUTF8Char): Cardinal; cdecl = nil;
   // Get the file count in a directory with extension filtering and recursive directory scan. Use 'DIR' in the filter string to include directories in the result
@@ -1432,17 +1435,17 @@ var
   { Input-related functions: keyboard }
 
   // Check if a key has been pressed once
-  IsKeyPressed: function(key: Integer): Boolean; cdecl = nil;
+  IsKeyPressed: function(key: TKeyboardKey): Boolean; cdecl = nil;
   // Check if a key has been pressed again
-  IsKeyPressedRepeat: function(key: Integer): Boolean; cdecl = nil;
+  IsKeyPressedRepeat: function(key: TKeyboardKey): Boolean; cdecl = nil;
   // Check if a key is being pressed
-  IsKeyDown: function(key: Integer): Boolean; cdecl = nil;
+  IsKeyDown: function(key: TKeyboardKey): Boolean; cdecl = nil;
   // Check if a key has been released once
-  IsKeyReleased: function(key: Integer): Boolean; cdecl = nil;
+  IsKeyReleased: function(key: TKeyboardKey): Boolean; cdecl = nil;
   // Detect if a key is NOT being pressed
-  IsKeyUp: function(key: Integer): Boolean; cdecl = nil;
+  IsKeyUp: function(key: TKeyboardKey): Boolean; cdecl = nil;
   // Get key pressed, call it multiple times for chars queued, returns 0 when the queue is empty
-  GetKeyPressed: function: Integer; cdecl = nil;
+  GetKeyPressed: function: TKeyboardKey; cdecl = nil;
   // Get char pressed (unicode), call it multiple times for chars queued, returns 0 when the queue is empty
   GetCharPressed: function: Integer; cdecl = nil;
   // Get name of a QWERTY key on the current keyboard layout (eg returns string 'q' for KEY_A on an AZERTY keyboard)
