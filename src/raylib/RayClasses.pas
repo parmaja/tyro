@@ -321,6 +321,7 @@ end;
 
 destructor TRayMusic.Destroy;
 begin
+  RayUpdates.Remove(Self);
   UnloadMusicStream(MusicStream);
   inherited;
 end;
@@ -418,7 +419,7 @@ begin
   Music.MusicStream := LoadMusicStream(PUTF8Char(FileName));
 
   Playing.Add(Music);
-  RayUpdates.Add(Music);//TODO ZAHER
+  RayUpdates.Add(Music);
   Music.Play;
 end;
 
@@ -433,7 +434,7 @@ begin
 end;
 
 initialization
-  RayUpdates := TRayUpdateList.Create;
+  RayUpdates := TRayUpdateList.Create(False); //Do not own controls
   RayLibSound := TRayLibSound.Create;
 finalization
   FreeAndNil(RayLibSound);
