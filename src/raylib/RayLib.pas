@@ -2,6 +2,8 @@
 {$IFDEF FPC}
 {$MODE delphi}
 {.$packrecords c}
+{$else}
+{$POINTERMATH ON}
 {$ENDIF}
 {$M+}{$H+}{$A8}
 {$MINENUMSIZE 4} //{$Z4} All enum must be sized as Integer

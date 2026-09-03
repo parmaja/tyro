@@ -1,7 +1,10 @@
 unit TyroSounds;
 {$IFDEF FPC}
 {$MODE delphi}
+{$else}
+{$POINTERMATH ON}
 {$ENDIF}
+
 {$M+}{$H+}
 {**
  * This file is part of the 'Tyro'
@@ -207,7 +210,6 @@ begin
       if i > Ending then
         v := Round(v * (Wave.FrameCount - i) * Delta / 100);
       {$endif}
-
       aData[i] := v;
     end;
   end
