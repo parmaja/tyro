@@ -168,7 +168,7 @@ var
   aParam,
   aParamName, aType, aParamType, aParamDefault: string;
 begin
-  SpliteStr(AName, ':', aMethodName, aMethodReturn);
+  SplitStr(AName, ':', aMethodName, aMethodReturn);
   if aMethodReturn <> '' then
     s := 'function '
   else
@@ -182,8 +182,8 @@ begin
     begin
       if c > 0 then
         s := s + ', ';
-      SpliteStr(aParam, ':', aParamName, aType);
-      SpliteStr(aType, '=', aParamType, aParamDefault);
+      SplitStr(aParam, ':', aParamName, aType);
+      SplitStr(aType, '=', aParamType, aParamDefault);
       s := s + aParamName + ': ' + aParamType + ConcatString(aParamDefault, '=');
       Inc(c);
     end;
