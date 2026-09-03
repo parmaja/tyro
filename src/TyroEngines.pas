@@ -59,7 +59,7 @@ type
     procedure Shutdown; override;
     procedure PrepareDraw; override;
     procedure Draw; override;
-    procedure Loop; override;
+    procedure Update; override;
     //property Board: TTyroImage read FBoard;
     property Active: Boolean read GetActive;
 
@@ -261,7 +261,7 @@ begin
   ThreadSwitch; //Yield
 end;
 
-procedure TTyroEngine.Loop;
+procedure TTyroEngine.Update;
 begin
   inherited;
   ThreadSwitch; //Yield
