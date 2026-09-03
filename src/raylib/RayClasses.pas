@@ -322,7 +322,7 @@ end;
 destructor TRayMusic.Destroy;
 begin
   UnloadMusicStream(MusicStream);
-  inherited Destroy;
+  inherited;
 end;
 
 procedure TRayMusic.Play;
@@ -416,8 +416,9 @@ begin
   Open;
   Music := TRayMusic.Create;
   Music.MusicStream := LoadMusicStream(PUTF8Char(FileName));
+
   Playing.Add(Music);
-  RayUpdates.Add(Music);
+  RayUpdates.Add(Music);//TODO ZAHER
   Music.Play;
 end;
 

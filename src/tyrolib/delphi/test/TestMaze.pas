@@ -14,7 +14,7 @@ interface
 uses
   Classes, SysUtils,
   RayLib, Generics.Collections,
-  TyroControls, TyroClasses;
+  TyroControls, TyroClasses, TyroSounds;
 
 type
   TEdge = (egLeft, egTop, egRight, egBottom);
@@ -40,8 +40,10 @@ type
 
   TMain = class(TTyroMain)
   public
+    M: TMusic;
     procedure Init; override;
     procedure Load; override;
+    procedure Update; override;
     procedure Draw; override;
     procedure Unload; override;
   end;
@@ -211,6 +213,7 @@ end;
 procedure TMain.Init;
 begin
   inherited;
+  InitAudioDevice;
   FCW := FWidth div FCols;
   Cells := TObjectList<TCell>.Create;
   Stack := TStack<TCell>.Create;
@@ -229,13 +232,22 @@ begin
   inherited;
   SetFPS(10);
   Options := Options + [moShowFPS];
+  M := LoadMusicStream(PUTF8Char('D:\lab\pascal\tyro\demos\willtell.xm'));
+  PlayMusicStream(M);
 end;
 
 procedure TMain.Unload;
 begin
   inherited;
+  UnloadMusicStream(M);
+  CloseAudioDevice;
   FreeAndNil(Cells);
   FreeAndNil(Stack);
+end;
+
+procedure TMain.Update;
+begin
+  UpdateMusicStream(M);
 end;
 
 end.

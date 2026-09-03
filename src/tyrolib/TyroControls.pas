@@ -246,7 +246,7 @@ type
     procedure Init; virtual;
     //* After window initialized and other resource, load your resources here
     procedure Load; virtual;
-    procedure Loop; virtual;
+    procedure Update; virtual;
     procedure PrepareDraw; virtual;
     procedure Draw; virtual;
 
@@ -362,10 +362,6 @@ begin
   Result := WindowWidth - MarginSize * 2;
 end;
 
-procedure TTyroMain.Loop;
-begin
-end;
-
 procedure TTyroMain.Run;
 begin
   Init;
@@ -419,7 +415,7 @@ begin
           end;
         end;
       end;
-      Loop;
+      Update;
       RayUpdates.Update;
     finally
     end;
@@ -470,6 +466,11 @@ begin
 end;
 
 procedure TTyroMain.Unload;
+begin
+
+end;
+
+procedure TTyroMain.Update;
 begin
 
 end;
