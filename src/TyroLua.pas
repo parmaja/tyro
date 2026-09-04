@@ -20,7 +20,7 @@ uses
   Classes, SysUtils,
   lua53, FPImage,
   RayLib, RayClasses, //remove it
-  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines;
+   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines, TyroInput;
 
 type
   TLuaScript = class;
@@ -113,7 +113,17 @@ type
     function PlaySound_func(L: Plua_State): Integer; cdecl;
     function PlayMusic_func(L: Plua_State): Integer; cdecl;
     function PlayMML_func(L: Plua_State): Integer; cdecl;
-  public
+
+    //input & timing
+    function IsKeyPressed_func(L: Plua_State): Integer; cdecl;
+    function IsKeyDown_func(L: Plua_State): Integer; cdecl;
+    function MouseX_func(L: Plua_State): Integer; cdecl;
+    function MouseY_func(L: Plua_State): Integer; cdecl;
+    function IsMouseButtonPressed_func(L: Plua_State): Integer; cdecl;
+    function FrameTime_func(L: Plua_State): Integer; cdecl;
+    function TotalTime_func(L: Plua_State): Integer; cdecl;
+    function RandomValue_func(L: Plua_State): Integer; cdecl;
+   public
     constructor Create; override;
     destructor Destroy; override;
   end;
@@ -513,6 +523,16 @@ begin
   lua_register_table_method(LuaState, 'music', self, 'play', @PlayMusic_func);
   lua_register_table_method(LuaState, 'music', self, 'mml', @PlayMML_func);
 
+  //input & timing (global functions)
+  lua_register_method(LuaState, 'iskeypressed', @IsKeyPressed_func);
+  lua_register_method(LuaState, 'iskeydown', @IsKeyDown_func);
+  lua_register_method(LuaState, 'mousex', @MouseX_func);
+  lua_register_method(LuaState, 'mousey', @MouseY_func);
+  lua_register_method(LuaState, 'ismousepressed', @IsMouseButtonPressed_func);
+  lua_register_method(LuaState, 'frametime', @FrameTime_func);
+  lua_register_method(LuaState, 'time', @TotalTime_func);
+  lua_register_method(LuaState, 'rand', @RandomValue_func);
+
   lua_newtable(LuaState);
   for i := 0 to Length(Colors.Colors) -1 do
     lua_register_color(LuaState, Colors.Colors[i].Name, Colors.Colors[i].Color);
@@ -758,6 +778,67 @@ begin
     Free;
   end;
   Result := 0;
+end;
+
+function TLuaScript.IsKeyPressed_func(L: Plua_State): Integer; cdecl;
+var
+  s: string;
+begin
+  s := lua_tostring(L, 1);
+  lua_pushboolean(L, TyroInput.IsKeyPressed(s));
+  Result := 1;
+end;
+
+function TLuaScript.IsKeyDown_func(L: Plua_State): Integer; cdecl;
+var
+  s: string;
+begin
+  s := lua_tostring(L, 1);
+  lua_pushboolean(L, TyroInput.IsKeyDown(s));
+  Result := 1;
+end;
+
+function TLuaScript.MouseX_func(L: Plua_State): Integer; cdecl;
+begin
+  lua_pushinteger(L, TyroInput.MouseX);
+  Result := 1;
+end;
+
+function TLuaScript.MouseY_func(L: Plua_State): Integer; cdecl;
+begin
+  lua_pushinteger(L, TyroInput.MouseY);
+  Result := 1;
+end;
+
+function TLuaScript.IsMouseButtonPressed_func(L: Plua_State): Integer; cdecl;
+var
+  s: string;
+begin
+  s := lua_tostring(L, 1);
+  lua_pushboolean(L, TyroInput.IsMouseButtonPressed(s));
+  Result := 1;
+end;
+
+function TLuaScript.FrameTime_func(L: Plua_State): Integer; cdecl;
+begin
+  lua_pushnumber(L, TyroInput.FrameTime);
+  Result := 1;
+end;
+
+function TLuaScript.TotalTime_func(L: Plua_State): Integer; cdecl;
+begin
+  lua_pushnumber(L, TyroInput.TotalTime);
+  Result := 1;
+end;
+
+function TLuaScript.RandomValue_func(L: Plua_State): Integer; cdecl;
+var
+  minv, maxv: Integer;
+begin
+  minv := round(lua_tonumber(L, 1));
+  maxv := round(lua_tonumber(L, 2));
+  lua_pushinteger(L, TyroInput.RandomValue(minv, maxv));
+  Result := 1;
 end;
 
 initialization

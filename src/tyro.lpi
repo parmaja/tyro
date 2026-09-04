@@ -109,6 +109,10 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
+        <Filename Value="TyroInput.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
         <Filename Value="tyrolib\TyroClasses.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>

@@ -21,8 +21,8 @@ uses
   mnRTTIUtils, mnUtils,
   RayLib, RayClasses, //remove it
   uPSCompiler, uPSComponent, uPSRuntime,
-  uPSC_classes, uPSR_classes, uPSC_std, uPSR_std,
-  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines;
+  uPSC_classes, uPSR_classes,   uPSC_std, uPSR_std,
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines, TyroInput;
 
 type
   TPasScript = class;
@@ -117,17 +117,27 @@ type
     function DrawText_func(x, y: Integer; s: string): Integer;
     function DrawCircle_func(x, y, r: integer; f: Boolean): Integer;
     function DrawRectangle_func(x, y, w, h: integer; f: Boolean): Integer;
-    function DrawLine_func(x1, y1, x2, y2: integer): Integer; overload;
-    function DrawLine_func(x1, y1: integer): Integer; overload;
-    function DrawPoint_func(x, y: integer): Integer;
-    //global functions
-    function Print_func(s: string): Integer;
+     function DrawLine_func(x1, y1, x2, y2: integer): Integer;
+     function DrawLineTo_func(x1, y1: integer): Integer;
+     function DrawPoint_func(x, y: integer): Integer;
+     //global functions
+     function Print_func(s: string): Integer;
 
-    function Beep_func: Integer;
-    function PlaySound_func(Freq, Period: integer): Integer;
-    function PlayMusic_func(s: string): Integer;
-    function PlayMML_func(Songs: TmmlSong): Integer;
-  public
+     function Beep_func: Integer;
+     function PlaySound_func(Freq, Period: integer): Integer;
+     function PlayMusic_func(s: string): Integer;
+     function PlayMML_func(Songs: TmmlSong): Integer;
+
+     //input & timing
+     function IsKeyPressed_func(key: string): Boolean;
+    function IsKeyDown_func(key: string): Boolean;
+    function MouseX_func: Integer;
+    function MouseY_func: Integer;
+    function IsMouseButtonPressed_func(button: string): Boolean;
+    function FrameTime_func: Single;
+    function TotalTime_func: Double;
+    function RandomValue_func(minv, maxv: Integer): Integer;
+   public
     constructor Create; override;
     destructor Destroy; override;
   end;
@@ -350,6 +360,16 @@ begin
   Sender.AddMethod(Self, @TPasScript.Window_func, 'procedure Window(w, h: integer);');
   Sender.AddMethod(Self, @TPasScript.Print_func, 'procedure Print(s: string);');
 
+  //input & timing
+  Sender.AddMethod(Self, @TPasScript.IsKeyPressed_func, 'function IsKeyPressed(key: string): Boolean');
+  Sender.AddMethod(Self, @TPasScript.IsKeyDown_func, 'function IsKeyDown(key: string): Boolean');
+  Sender.AddMethod(Self, @TPasScript.MouseX_func, 'function MouseX: Integer');
+  Sender.AddMethod(Self, @TPasScript.MouseY_func, 'function MouseY: Integer');
+  Sender.AddMethod(Self, @TPasScript.IsMouseButtonPressed_func, 'function IsMouseButtonPressed(button: string): Boolean');
+  Sender.AddMethod(Self, @TPasScript.FrameTime_func, 'function FrameTime: Single');
+  Sender.AddMethod(Self, @TPasScript.TotalTime_func, 'function TotalTime: Double');
+  Sender.AddMethod(Self, @TPasScript.RandomValue_func, 'function RandomValue(min, max: Integer): Integer');
+
   Sender.AddRegisteredVariable('Version', 'String');
   Sender.AddRegisteredVariable('Console', 'TConsole');
 end;
@@ -471,7 +491,7 @@ begin
   Result := 0;
 end;
 
-function TPasScript.DrawLine_func(x1, y1: integer): Integer;
+function TPasScript.DrawLineTo_func(x1, y1: integer): Integer;
 begin
   AddQueueObject(TDrawLineToObject.Create(Main.Canvas, x1, y1));
   Result := 0;
@@ -518,6 +538,46 @@ begin
     Free;
   end;
   Result := 0;
+end;
+
+function TPasScript.IsKeyPressed_func(key: string): Boolean;
+begin
+  Result := TyroInput.IsKeyPressed(key);
+end;
+
+function TPasScript.IsKeyDown_func(key: string): Boolean;
+begin
+  Result := TyroInput.IsKeyDown(key);
+end;
+
+function TPasScript.MouseX_func: Integer;
+begin
+  Result := TyroInput.MouseX;
+end;
+
+function TPasScript.MouseY_func: Integer;
+begin
+  Result := TyroInput.MouseY;
+end;
+
+function TPasScript.IsMouseButtonPressed_func(button: string): Boolean;
+begin
+  Result := TyroInput.IsMouseButtonPressed(button);
+end;
+
+function TPasScript.FrameTime_func: Single;
+begin
+  Result := TyroInput.FrameTime;
+end;
+
+function TPasScript.TotalTime_func: Double;
+begin
+  Result := TyroInput.TotalTime;
+end;
+
+function TPasScript.RandomValue_func(minv, maxv: Integer): Integer;
+begin
+  Result := TyroInput.RandomValue(minv, maxv);
 end;
 
 initialization
