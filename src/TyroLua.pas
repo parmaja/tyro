@@ -485,7 +485,7 @@ var
   i: Integer;
 begin
   inherited;
-  LuaState := lua_newstate(@LuaAlloc, nil);
+  LuaState := lua_newstate(@LuaAlloc, nil, 0);
   FVersion := lua_version(LuaState);
   //lual_openlibs(LuaState);
   luaL_openselectedlibs(LuaState, -1, 0);
