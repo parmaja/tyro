@@ -236,7 +236,9 @@ begin
   //end metatable
 
   if new then
-    lua_setglobal(L, pchar(table)); //set table name
+    lua_setglobal(L, pchar(table)) //set table name
+  else
+    lua_pop(L, 1); //pop table from stack
   //end table
 end;
 
@@ -250,7 +252,9 @@ begin
   lua_push_method(L, pchar(Name), method);
 
   if new then
-    lua_setglobal(L, pchar(table));
+    lua_setglobal(L, pchar(table))
+  else
+    lua_pop(L, 1); //pop table from stack
 end;
 
 procedure lua_register_table_value(L : Plua_State; table, name: string; value: integer);
@@ -266,7 +270,9 @@ begin
   lua_setfield(L, -2, pchar(name));
 
   if new then
-    lua_setglobal(L, pchar(table));
+    lua_setglobal(L, pchar(table))
+  else
+    lua_pop(L, 1); //pop table from stack
   //end metatable
 end;
 
@@ -714,18 +720,34 @@ end;
 
 function TLuaScript.Print_func(L: Plua_State): Integer; cdecl;
 var
+  i, c: integer;
   s: string;
 begin
-  s := lua_tostring(L, 1);
+  c := lua_gettop(L);
+  s := '';
+  for i := 1 to c do
+  begin
+    if i > 1 then
+      s := s + #9;
+    s := s + lua_tostring(L, i);
+  end;
   AddQueueObject(TPrintObject.Create(Main.Canvas, s, False));
   Result := 0;
 end;
 
 function TLuaScript.PrintLn_func(L: Plua_State): Integer; cdecl;
 var
+  i, c: integer;
   s: string;
 begin
-  s := lua_tostring(L, 1);
+  c := lua_gettop(L);
+  s := '';
+  for i := 1 to c do
+  begin
+    if i > 1 then
+      s := s + #9;
+    s := s + lua_tostring(L, i);
+  end;
   AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
   Result := 0;
 end;

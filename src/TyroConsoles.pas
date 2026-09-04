@@ -1411,9 +1411,8 @@ end;
 
 procedure TTyroConsole.Write(s: string);
 begin
+  FStringBuffer.Add(s);
   MultiWrite;
-  FCurrentString := S;
-  IntWrite;
 end;
 
 function TTyroConsole.HistoryIndexOf(s: string): Integer;

@@ -314,6 +314,10 @@ end;
 
 procedure TTyroEngine.ShowConsole(AWidth, AHeight: Integer);
 begin
+  if (AWidth > 0) and (AHeight > 0) then
+  begin
+    Console.WindowRect := Rect(Margin, Margin, Margin + AWidth * Console.CharWidth, Margin + AHeight * Console.CharHeight);
+  end;
   Console.Show;
 end;
 
