@@ -1,9 +1,7 @@
 # Tyro Demos
 
-This folder contains script examples for the Tyro engine. Scripts can be run
-with `tyro <script>` or `tyro --main <script>` to execute in the main thread.
-
-Both **Lua** (`.lua`, `.ls`) and **PascalScript** (`.ps`) are supported.
+This folder contains Lua script examples for the Tyro engine. Scripts can be
+run with `tyro <script>`.
 
 ## Quick Start
 
@@ -65,11 +63,10 @@ tyro demos/basic_drawing.lua
 tyro demos/interactive_paint.lua
 ```
 
-Use `--main` to run in the main thread (useful for window-dependent scripts),
-or `--console` to also show the terminal output:
+Use `--console` to also show the terminal output:
 
 ```
-tyro --console --main demos/pong.lua
+tyro --console demos/pong.lua
 ```
 
 ## Script API Reference
