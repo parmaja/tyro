@@ -405,7 +405,7 @@ begin
   case ACaretType of
     cartLine:
     begin
-      FCaretWidth := 1;
+      FCaretWidth := -1;  // Use CharWidth for full character width
       FCaretYShift := 3;
     end;
     cartSubBar:
@@ -2533,7 +2533,7 @@ begin
   FCurrentBackground   := clBlack;
   FCaretColor          := clWhite;
   FCaretType           := cartLine;
-  FCaretWidth          := 1;
+  FCaretWidth          := -1;  // Use CharWidth for full character width (default for cartLine)
   FCaretHeight         := -1;
   FCaretYShift         := 3;
   FInputSelBackground  := clWhite;
