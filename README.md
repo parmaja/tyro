@@ -71,9 +71,53 @@ while true do
     if ismousepressed("left") then
         canvas.circle(mousex(), mousey(), 5, true)
     end
-    sleep(10)
-end
+     sleep(10)
+ end
+ ```
+
+# Console
+
+## Built-in Terminal Commands
+
+When the graphical console is visible, you can type commands at the `> ` prompt.
+The following commands are built in:
+
+| Command | Description |
+|---------|-------------|
+| `dir`, `list`, `ls` | List files in the current directory |
+| `clear`, `cls` | Clear the console output |
+| `help`, `?` | Show available commands |
+| `exit`, `quit` | Hide the console and stop the engine |
+| `ESC` | Hide the console (keybinding) |
+
+Example:
 ```
+tyro demos/terminal_demo.lua
+# then type "dir" at the console prompt
+```
+
+### Console API
+
+| Function | Description |
+|----------|-------------|
+| `console.show([w, h])` | Show the console (optionally sized in characters) |
+| `console.print(text)` | Print text to the console (no newline) |
+| `console.println(text)` | Print text to the console (with newline) |
+| `console.read([prompt])` | **Block** and read a line of input from the user |
+| `console.active` | Read-only boolean — `true` while the console is visible |
+
+### Interactive Reading (console.read)
+
+`console.read()` displays a prompt on the console and blocks the script until
+the user types a line and presses Enter. It returns the typed string.
+
+```lua
+console.show()
+local name = console.read("Your name? ")
+println("Hello, " .. name .. "!")
+```
+
+See `demos/terminal_demo.lua` and `demos/console_read_demo.lua` for examples.
 
 # Timing
 
@@ -111,6 +155,8 @@ tyro demos/<name>.lua
 | `demos/animated_demo.lua` | Animation loop with random colors and sleep timing |
 | `demos/interactive_paint.lua` | Mouse drawing with keyboard color switching (uses input APIs) |
 | `demos/console_demo.lua` | Console output: print, println, log |
+| `demos/terminal_demo.lua` | Built-in terminal commands: dir, list, clear, help, exit |
+| `demos/console_read_demo.lua` | Interactive console.read() — prompt the user for input from Lua |
 | `demos/music_demo.lua` | Sound effects (music.sound) and MML melodies (music.mml) |
 | `demos/test.ls` | Circle animation with random colors |
 | `demos/colors_bar.lua` | Full color palette display |

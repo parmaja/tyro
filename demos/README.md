@@ -32,6 +32,8 @@ tyro demos/pong.lua
 |------|---------|
 | `print.ls` | console.show(), print(), println() |
 | `console_demo.lua` | Console output: print, println, log |
+| `terminal_demo.lua` | Built-in terminal commands: dir, list, clear, help, exit |
+| `console_read_demo.lua` | Interactive console.read() — prompt the user for input from Lua |
 
 ### Sound & Music
 
