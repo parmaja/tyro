@@ -1,7 +1,8 @@
 log(version);
-window(400, 200);
+window(1024, 400);
 console.show(30, 15);
 console.print('Hello World');
+console.read();
 for i = 1,10 do
     console.print(i.."\r\n")
 end

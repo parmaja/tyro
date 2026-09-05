@@ -43,7 +43,6 @@ type
     FScriptThread: TTyroScriptThread;
     FScriptMain: TTyroScript; //only if we have main loop
     FScriptTypes: TScriptTypes;
-    FCaretTimer: Single;
     FReadCallback: TConsoleReadEvent;
   protected
     procedure ConsoleInput(AConsole: TTyroConsole; AInput: string);
@@ -224,8 +223,7 @@ begin
   Console.Focused := True;
   Console.Visible := False;
   Console.Focused := True;
-  Console.OnInput := ConsoleInput;
-  FCaretTimer := 0;
+Console.OnInput := ConsoleInput;
 end;
 
 destructor TTyroEngine.Destroy;
@@ -278,21 +276,9 @@ end;
 procedure TTyroEngine.Update;
 begin
   inherited;
-  // Caret blinking for console (toggle every 500ms)
-  if (Console.Visible) and Console.Focused then
-  begin
-    FCaretTimer := FCaretTimer + RayLib.GetFrameTime();
-    if FCaretTimer >= 0.5 then
-    begin
-      FCaretTimer := FCaretTimer - 0.5;
-      Console.CaretVisible := not Console.CaretVisible;
-    end;
-  end
-  else
-  begin
-    FCaretTimer := 0;
-    Console.CaretVisible := True;
-  end;
+  // Update console (handles caret blinking internally)
+  if Console <> nil then
+    Console.Update;
   ThreadSwitch; //Yield
   if not Active then
     Terminate;

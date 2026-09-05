@@ -83,7 +83,7 @@ type
 
   TTyroConsole = class(TTyroControl)
   private
-    //FCaretTimer: TTimer;
+    FCaretTimer: Double;
     FCaretVisible: boolean;
     FLineCount: Integer;
     FLines: TColorStrings;
@@ -139,7 +139,6 @@ type
     FCurrentAttrib: TCharAttrib;
     FInputAttrib: TCharAttrib;
     FWriteInput: Boolean;
-    procedure CaretTimerExecute(Sender: TObject);
     procedure SetLineCount(c: Integer);
     procedure SetTopLine(Nr: Integer);
     procedure AdjustScrollBars(const Recalc:Boolean=False);
@@ -200,6 +199,7 @@ type
     procedure PasteFromClipBoard;
     procedure CutToClipBoard;
     procedure ClearLine;
+    procedure Update;
     property OutX: Integer Read FOutX Write FOutX;
     property OutY: Integer Read FOutY Write SetOutY;
     property TopLine: Integer Read FTopLine Write SetTopLine;
@@ -1929,9 +1929,9 @@ begin
               UpdateLineHeights;
               TranslateScrollBarPosition;
             end;
-            FLines[FOutY + 1].Clear;
+            FLines.Require[FOutY + 1].Clear;
             FLines[FOutY + 1].OverWrite(FLines[FOutY], 0);
-            FLines[FOutY].Clear;
+            FLines.Require[FOutY].Clear;
             if FInputIsPassWord then
               FLines[FOutY].OverWritePW(FInputBuffer, FInputMinPos, FInputX, FPassWordChar)
             else
@@ -2484,14 +2484,23 @@ begin
   end;
 end;
 
-procedure TTyroConsole.CaretTimerExecute(Sender: TObject);
+procedure TTyroConsole.Update;
 begin
-  if Focused then
+  // Caret blinking (toggle every CCaretBlinkInterval seconds)
+  if Visible and Focused then
   begin
-    if not Assigned(WakeMainThread) then
-      MultiWrite;
-    FCaretVisible := not FCaretVisible;
-    Invalidate;
+    FCaretTimer := FCaretTimer + RayLib.GetFrameTime();
+    if FCaretTimer >= CCaretBlinkInterval then
+    begin
+      FCaretTimer := FCaretTimer - CCaretBlinkInterval;
+      FCaretVisible := not FCaretVisible;
+      Invalidate;
+    end;
+  end
+  else
+  begin
+    FCaretTimer := 0;
+    FCaretVisible := True;
   end;
 end;
 
@@ -2517,6 +2526,7 @@ begin
   SetLength(FLineHeights, FLineCount);
   SetLength(FLineHeightSum, FLineCount);
   FTabWidth := CDefaultTabWidth;
+  FCaretTimer        := 0;
   FCaretVisible        := True;
   FVSBVisible          := True;
   FCurrentColor        := clLightgray;
