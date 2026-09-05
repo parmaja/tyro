@@ -48,7 +48,6 @@ const
   { Default values }
   CDefaultTabWidth = 60;
   CDefaultLineCount = 1000;
-  CDefaultGraphicCharWidth = 10;
 
   { Selection state }
   CNoSelection = -1;
@@ -65,10 +64,7 @@ type
   TEscapeMode = (escmNone, escmOperation, escmData2, escmData1,
     escmAnsiOperation, escmAnsiSquare);
 
-  { TCharAttrib - Character attribute flags for text styling }
-  TCharAttrib = (charaUnderline, charaItalic, charaBold, charaBlink);
-
-  TTyroConsole = class;
+   TTyroConsole = class;
 
   TColorstring = class;
   TColorStrings = class;
@@ -130,14 +126,11 @@ type
     FCaretHeight: Integer;
     FCaretYShift: Integer;
     FTabWidth:  Integer;
-    FGraphicCharWidth: Integer;//Delete
     FEscapeCodeType: TEscapeCodeType;
     FEscapeMode: TEscapeMode;
     FEscapeData: string;
     FStringBuffer: TStringList;
     FAutoFollow: Boolean;
-    FCurrentAttrib: TCharAttrib;
-    FInputAttrib: TCharAttrib;
     FWriteInput: Boolean;
     procedure SetLineCount(c: Integer);
     procedure SetTopLine(Nr: Integer);
@@ -225,7 +218,7 @@ type
     property InputSelBackGround: TColor Read FInputSelBackGround write FInputSelBackGround;
     //property CaretInterval: Integer Read GetCaretInterval Write SetCaretInterval;
     property EscapeCodeType: TEscapeCodeType Read FEscapeCodeType Write FEscapeCodeType;
-    property GraphicalCharacterWidth: Integer Read FGraphicCharWidth Write FGraphicCharWidth;
+    property GraphicalCharacterWidth: Integer Read FCharWidth Write FCharWidth;
     property AutoFollow: Boolean Read FAutoFollow Write FAutoFollow default True;
     property WriteInput:Boolean read FWriteInput write FWriteInput default True;
   end;
@@ -234,23 +227,16 @@ type
   TColorChar = packed record
     { The UTF-8 encoded character }
     FChar:      TUTF8Char;
-    { Cumulative width (in pixels) from the start of the line to this character }
-    FSumWidth:  Integer;
-    { Character position where the current word started (for word wrapping) }
-    FWordStart: Integer;
     { Foreground (text) color }
     FFrontColor: TColor;
     { Background color }
     FBackColor: TColor;
-    { Character attributes (underline, italic, bold, blink) }
-    FAttrib:    TCharAttrib;
   end;
 
   { TColorString - A string where each character has associated color and attribute information }
   TColorString = class(TObject)
   private
     FChars: packed array of TColorChar;
-    FSumWidth: Integer;
     FPassWordStart: Integer;
     FPassWordChar: TUTF8Char;
     FStoredLineCount:Integer;
@@ -266,8 +252,8 @@ type
     constructor Create(AConsole: TTyroConsole);
     destructor Destroy; override;
     procedure Clear;
-    procedure OverWrite(S: string; Pos: Integer; FC, BC: TColor; Attrib: TCharAttrib);
-    procedure OverWriteChar(s: TUTF8Char; Pos, ADefWidth: Integer; FC, BC: TColor; Attrib: TCharAttrib);
+    procedure OverWrite(S: string; Pos: Integer; FC, BC: TColor);
+    procedure OverWriteChar(s: TUTF8Char; Pos: Integer; FC, BC: TColor);
     procedure OverWrite(S: TColorString; Pos: Integer);
     procedure OverWritePW(S: TColorString; PWS, Pos: Integer; PWC: string);
     procedure PartOverWrite(S: TColorString; Start, Stop, Pos: Integer);
@@ -279,7 +265,7 @@ type
     function GetPartString(Start, Stop: Integer): string;
     procedure Delete(Index: Integer);
     procedure Delete(Index, Len: Integer);
-    procedure Insert(Index: Integer; C: string; FC, BC: TColor; Attrib: TCharAttrib);
+    procedure Insert(Index: Integer; C: string; FC, BC: TColor);
     procedure BColorBlock(StartPos, EndPos: Integer; C: TColor);
     procedure ColorBlock(StartPos, EndPos: Integer; FC, BC: TColor);
     function LineCount(AWrapWidth, ACaretPos, ACaretWidth: Integer): Integer;
@@ -366,7 +352,6 @@ end;
 
 procedure TColorString.UpdateSum;
 begin
-  FSumWidth := Length(FChars) * CharWidth;
   FStoredLineCount:=-1;
 end;
 
@@ -432,7 +417,6 @@ begin
   Invalidate;
 end;
 
-// TOdo : Use string buffer instead of string (speed improvement expected)
 procedure TColorString.LineOutAndFill(ACanvas: TTyroCanvas;
   AX, AY, ALeftX, AWrapWidth, ACH, ACB, ACaretPos: Integer; ABC, ACC: TColor;
   ACaretHeight, ACaretWidth, ACaretYShift: Integer; ADrawCaret: Boolean);
@@ -440,9 +424,7 @@ var
   LineStart         : Integer;
   LineEnd           : Integer;
   MidWidth          : Integer;
-  LineStartSumWidth : Integer;
   x                 : Integer;
-  LastLineSumWidth  : Integer;
   ACHH              : Integer;
   ACBH              : Integer;
   SAX               : Integer;
@@ -908,36 +890,23 @@ begin
   ACBH     := ACB div 2;
   SAX:=AX;
   SAY:=AY;
-  MidWidth := FSumWidth div System.Length(FChars);
+  MidWidth := CharWidth;
   // Draw background
   LineStart         := 0;
-  LineStartSumWidth := 0;
-  LastLineSumWidth  := 0;
   x                 := 0;
   while LineStart < System.Length(FChars) do
   begin
     x := LineStart + AWrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x < High(FChars)) and (FChars[x].FSumWidth - LineStartSumWidth <
-        AWrapWidth) do
-      Inc(x);
-    while (x > LineStart) and (FChars[x].FSumWidth - LineStartSumWidth >= AWrapWidth) do
-      with FChars[x] do
-        if (FChar <> ' ') and (FWordStart > LineStart) then
-          x := FWordStart - 1
-        else
-          Dec(x);
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+      Dec(x);
     LineEnd := x;
     DrawBack;
-    LastLineSumWidth  := LineStartSumWidth;
-    LineStartSumWidth := FChars[x].FSumWidth;
     LineStart         := x + 1;
   end;
   // Draw foreground
   LineStart         := 0;
-  LineStartSumWidth := 0;
-  LastLineSumWidth  := 0;
   x                 := 0;
   AX:=SAX;
   AY:=SAY;
@@ -946,19 +915,10 @@ begin
     x := LineStart + AWrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x < High(FChars)) and (FChars[x].FSumWidth - LineStartSumWidth <
-        AWrapWidth) do
-      Inc(x);
-    while (x > LineStart) and (FChars[x].FSumWidth - LineStartSumWidth >= AWrapWidth) do
-      with FChars[x] do
-        if (FChar <> ' ') and (FWordStart > LineStart) then
-          x := FWordStart - 1
-        else
-          Dec(x);
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+      Dec(x);
     LineEnd := x;
     DrawLine;
-    LastLineSumWidth  := LineStartSumWidth;
-    LineStartSumWidth := FChars[x].FSumWidth;
     LineStart         := x + 1;
   end;
   // Draw Caret
@@ -968,7 +928,7 @@ begin
       x := ACaretWidth
     else
       x := CharWidth;
-    AX := LineStartSumWidth - LastLineSumWidth + (ACaretPos - LineStart) * x;
+    AX := (ACaretPos - LineStart) * x;
     if Ax + x > AWrapWidth then
     begin
       Ax := 0;
@@ -984,7 +944,7 @@ end;
 
 function TColorString.GetCharPosition(AWrapWidth, ALine, AXPos: Integer): Integer;
 var
-  x, MidWidth, LineStart, LineStartSumWidth, LastLineSumWidth, LastLineStart: Integer;
+  x, MidWidth, LineStart, LastLineStart: Integer;
 begin
   if AWrapWidth < 0 then
     AWrapWidth := 0;
@@ -993,40 +953,28 @@ begin
     Result := 0;
     Exit;
   end;
-  MidWidth := FSumWidth div System.Length(FChars);
+  MidWidth := CharWidth;
   if MidWidth = 0 then
   begin
     Result := 0;
     Exit;
   end;
   LineStart := 0;
-  LineStartSumWidth := 0;
-  LastLineSumWidth := 0;
-  LastLineStart    := 0;
+  LastLineStart := 0;
   x := 0;
   while (LineStart < System.Length(FChars)) and (ALine >= 0) do
   begin
     x := LineStart + AWrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x < High(FChars)) and (FChars[x].FSumWidth - LineStartSumWidth <
-        AWrapWidth) do
-      Inc(x);
-    while (x > LineStart) and (FChars[x].FSumWidth - LineStartSumWidth >= AWrapWidth) do
-      with FChars[x] do
-        if (FChar <> ' ') and (FWordStart > LineStart) then
-          x := FWordStart - 1
-        else
-          Dec(x);
-    LastLineSumWidth := LineStartSumWidth;
-    LineStartSumWidth := FChars[x].FSumWidth;
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+      Dec(x);
     LastLineStart := LineStart;
     LineStart := x + 1;
     Dec(ALine);
   end;
   Result := LastLineStart;
-  while (Result < LineStart) and (FChars[Result].FSumWidth -
-      LastLineSumWidth <= AXPos) do
+  while (Result < LineStart) and ((Result - LastLineStart) * MidWidth <= AXPos) do
     Inc(Result);
 end;
 
@@ -1042,7 +990,7 @@ begin
     Result := 0;
     Exit;
   end;
-  MidWidth := FSumWidth div System.Length(FChars);
+  MidWidth := CharWidth;
   if MidWidth = 0 then
   begin
     Result := 0;
@@ -1058,17 +1006,10 @@ begin
     x := LineStart + AWrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x < High(FChars)) and (FChars[x].FSumWidth - LineStartSumWidth <
-        AWrapWidth) do
-      Inc(x);
-    while (x > LineStart) and (FChars[x].FSumWidth - LineStartSumWidth >= AWrapWidth) do
-      with FChars[x] do
-        if (FChar <> ' ') and (FWordStart > LineStart) then
-          x := FWordStart - 1
-        else
-          Dec(x);
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+      Dec(x);
     LastLineSumWidth := LineStartSumWidth;
-    LineStartSumWidth := FChars[x].FSumWidth;
+    LineStartSumWidth := (x + 1) * MidWidth;
     LineStart := x + 1;
     if ACaretPos < x then
       Exit;
@@ -1083,11 +1024,10 @@ end;
 function TColorString.LineCount(AWrapWidth, ACaretPos, ACaretWidth: Integer): Integer;
 var
   x: Integer;
-  MidWidth: Integer;
-  LineStart: Integer;
-  LineStartSumWidth: Integer;
-  LastLineSumWidth: Integer;
-begin
+   MidWidth: Integer;
+   LineStart: Integer;
+   LastLineStart: Integer;
+ begin
   if AWrapWidth < 0 then
     AWrapWidth := 0;
   if System.Length(FChars) = 0 then
@@ -1095,15 +1035,14 @@ begin
     Result := 1;
     Exit;
   end;
-  MidWidth := FSumWidth div System.Length(FChars);
+  MidWidth := CharWidth;
   if MidWidth = 0 then
   begin
     Result := 1;
     Exit;
   end;
   LineStart := 0;
-  LineStartSumWidth := 0;
-  LastLineSumWidth := 0;
+  LastLineStart := 0;
   Result := 0;
   x := 0;
   while LineStart < System.Length(FChars) do
@@ -1111,15 +1050,9 @@ begin
     x := LineStart + AWrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x < High(FChars)) and (FChars[x].FSumWidth - LineStartSumWidth <AWrapWidth) do Inc(x);
-    while (x > LineStart) and (FChars[x].FSumWidth - LineStartSumWidth >= AWrapWidth) do
-      with FChars[x] do
-        if (FChar <> ' ') and (FWordStart > LineStart) then
-          x := FWordStart - 1
-        else
-          Dec(x);
-    LastLineSumWidth := LineStartSumWidth;
-    LineStartSumWidth := FChars[x].FSumWidth;
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+      Dec(x);
+    LastLineStart    := LineStart;
     LineStart := x + 1;
     Inc(Result);
   end;
@@ -1127,7 +1060,7 @@ begin
     x := ACaretWidth
   else
     x := CharWidth;
-  if (ACaretPos >= LineStart) and (LineStartSumWidth - LastLineSumWidth +
+  if (ACaretPos >= LineStart) and ((ACaretPos - LastLineStart) * MidWidth +
     (ACaretPos - LineStart) * x + x > AWrapWidth) then
     Inc(Result);
   if Result=0 then Inc(Result);
@@ -1169,7 +1102,7 @@ begin
   end;
 end;
 
-procedure TColorString.Insert(Index: Integer; C: string; FC, BC: TColor; Attrib: TCharAttrib);
+procedure TColorString.Insert(Index: Integer; C: string; FC, BC: TColor);
 var
   i:      Integer;
   l:      Integer;
@@ -1196,7 +1129,6 @@ begin
       FChar := Copy(C, Pp, l);
       FFrontColor := FC;
       FBackColor := BC;
-      FAttrib    := Attrib;
     end;
     Inc(pp, l);
   end;
@@ -1316,7 +1248,7 @@ begin
   UpdateSum;
 end;
 
-procedure TColorString.OverWrite(S: string; Pos: Integer; FC, BC: TColor; Attrib: TCharAttrib);
+procedure TColorString.OverWrite(S: string; Pos: Integer; FC, BC: TColor);
 var
   i, Pp, l: Integer;
 begin
@@ -1330,14 +1262,13 @@ begin
       FChar      := Copy(S, Pp, l);
       FFrontColor := FC;
       FBackColor := BC;
-      FAttrib    := Attrib;
     end;
     Inc(Pp, l);
   end;
   UpdateSum;
 end;
 
-procedure TColorString.OverWriteChar(s: TUTF8Char; Pos, ADefWidth: Integer; FC, BC: TColor; Attrib: TCharAttrib);
+procedure TColorString.OverWriteChar(s: TUTF8Char; Pos: Integer; FC, BC: TColor);
 begin
   MinimumLength(Pos + 1, FC, BC);
   with FChars[Pos] do
@@ -1345,7 +1276,6 @@ begin
     FChar      := s;
     FFrontColor := FC;
     FBackColor := BC;
-    FAttrib    := Attrib;
   end;
   UpdateSum;
 end;
@@ -1518,7 +1448,7 @@ begin
       else
         Inc(Pp, l);
     end;
-    FInputBuffer.Insert(InputPos, s, FInputColor, FInputBackGround, FInputAttrib);
+     FInputBuffer.Insert(InputPos, s, FInputColor, FInputBackGround);
     Inc(FInputPos, UTF8Length(s));
     FCaretX := FInputX + InputPos;
     AdjustScrollBars;
@@ -1789,7 +1719,7 @@ begin
   begin
     if FSelStart <> -1 then
       DeleteSelected;
-    FInputBuffer.Insert(FInputPos, key, FInputColor, FInputBackGround, FCurrentAttrib);
+     FInputBuffer.Insert(FInputPos, key, FInputColor, FInputBackGround);
     Inc(FInputPos);
     FCaretX     := FInputX + FInputPos;
     if Assigned(FOnInputChange) then
@@ -2065,7 +1995,7 @@ begin
     end
     else
       l := UTF8CodepointSize(@Desc[PP]);
-    FInputBuffer.OverWrite(Copy(Desc, Pp, l), i, DFC, DBC, FCurrentAttrib);
+     FInputBuffer.OverWrite(Copy(Desc, Pp, l), i, DFC, DBC);
     Inc(i);
     Inc(Pp, l);
   end;
@@ -2171,8 +2101,7 @@ begin
               end;
               else
               begin
-                FLines.Require[FOutY].OverWrite(s[Pp], FOutX, FCurrentColor, FCurrentBackGround,
-                  FCurrentAttrib);
+                FLines.Require[FOutY].OverWrite(s[Pp], FOutX, FCurrentColor, FCurrentBackGround);
                 Inc(FOutX);
               end;
             end;
@@ -2180,7 +2109,7 @@ begin
           else
           begin
             FLines[FOutY].OverWrite(Copy(s, Pp, l), FOutX, FCurrentColor,
-              FCurrentBackGround, FCurrentAttrib);
+              FCurrentBackGround);
             Inc(FOutX);
           end;
         end;
@@ -2200,8 +2129,7 @@ begin
           end;
           else
           begin
-            FLines[FOutY].OverWriteChar(#27 + S[Pp], FOutX, FGraphicCharWidth,
-              FCurrentColor, FCurrentBackGround, FCurrentAttrib);
+             FLines[FOutY].OverWriteChar(#27 + S[Pp], FOutX, FCurrentColor, FCurrentBackGround);
             Inc(FOutX);
             FEscapeMode := escmNone;
           end;
@@ -2209,8 +2137,7 @@ begin
       end;
       escmData1:
       begin
-        FLines[FOutY].OverWriteChar(#27 + FEscapeData + S[Pp], FOutX, FGraphicCharWidth,
-          FCurrentColor, FCurrentBackGround, FCurrentAttrib);
+         FLines[FOutY].OverWriteChar(#27 + FEscapeData + S[Pp], FOutX, FCurrentColor, FCurrentBackGround);
         Inc(FOutX);
         FEscapeMode := escmNone;
       end;
@@ -2456,20 +2383,20 @@ begin
     while (y <= m) and (CurrentLine < FLines.Count){ and (CurrentLine < Length(FLines))} do
     begin
       FLines[CurrentLine].LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
-        ClientWidth, FCharHeight, FGraphicCharWidth, -1, FBackGroundColor, FCaretColor,
+        ClientWidth, FCharHeight, FCharWidth, -1, FBackGroundColor, FCaretColor,
         FCaretHeight, FCaretWidth, FCaretYShift, False);
       if (FInput) and (FInputY = CurrentLine) then
       begin
         if FInputIsPassWord then
         begin
           FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0, ClientWidth,
-            FCharHeight, FGraphicCharWidth, FCaretX, FBackGroundColor, FCaretColor,
+            FCharHeight, FCharWidth, FCaretX, FBackGroundColor, FCaretColor,
             FCaretHeight, FCaretWidth, FCaretYShift, FCaretVisible and Focused);
         end
         else
         begin
           FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0, ClientWidth,
-            FCharHeight, FGraphicCharWidth, FCaretX, FBackGroundColor, FCaretColor,
+            FCharHeight, FCharWidth, FCaretX, FBackGroundColor, FCaretColor,
             FCaretHeight, FCaretWidth, FCaretYShift, FCaretVisible and Focused);
         end;
       end;
@@ -2517,7 +2444,7 @@ begin
   FInputVisible     := False;
   FWriteInput       := True;
   FBackGroundColor  := clBlack;
-  FGraphicCharWidth := CDefaultGraphicCharWidth;
+  FCharWidth := CDefaultCharWidth;
   FInputBuffer      := TColorString.Create(Self);
   FEscapeCodeType   := esctConsole;
   FAutoFollow       := True;
