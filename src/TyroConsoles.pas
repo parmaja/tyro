@@ -258,7 +258,7 @@ type
     procedure OverWritePW(S: TColorString; PWS, Pos: Integer; PWC: string);
     procedure PartOverWrite(S: TColorString; Start, Stop, Pos: Integer);
     procedure LineOutAndFill(ACanvas: TTyroCanvas;
-      AX, AY, ALeftX, AWrapWidth, ACH, ACB, ACaretPos: Integer;
+      AX, AY, ALeftX, ACH, ACB, ACaretPos: Integer;
       ABC, ACC: TColor; ACaretHeight, ACaretWidth, ACaretYShift: Integer;
       ADrawCaret: Boolean);
     function GetString: string;
@@ -268,10 +268,10 @@ type
     procedure Insert(Index: Integer; C: string; FC, BC: TColor);
     procedure BColorBlock(StartPos, EndPos: Integer; C: TColor);
     procedure ColorBlock(StartPos, EndPos: Integer; FC, BC: TColor);
-    function LineCount(AWrapWidth, ACaretPos, ACaretWidth: Integer): Integer;
+    function LineCount(ACaretPos, ACaretWidth: Integer): Integer;
     function GetCount: Integer;
-    function GetLineOfCaret(AWrapWidth, ACaretPos, ACaretWidth: Integer): Integer;
-    function GetCharPosition(AWrapWidth, ALine, AXPos: Integer): Integer;
+    function GetLineOfCaret(ACaretPos, ACaretWidth: Integer): Integer;
+    function GetCharPosition(ALine, AXPos: Integer): Integer;
   public
     property TabWidth: Integer Read GetTabWidth;
     property PassWordChar: TUTF8Char Read FPassWordChar Write FPassWordChar;
@@ -418,12 +418,13 @@ begin
 end;
 
 procedure TColorString.LineOutAndFill(ACanvas: TTyroCanvas;
-  AX, AY, ALeftX, AWrapWidth, ACH, ACB, ACaretPos: Integer; ABC, ACC: TColor;
+  AX, AY, ALeftX, ACH, ACB, ACaretPos: Integer; ABC, ACC: TColor;
   ACaretHeight, ACaretWidth, ACaretYShift: Integer; ADrawCaret: Boolean);
 var
   LineStart         : Integer;
   LineEnd           : Integer;
   MidWidth          : Integer;
+  WrapWidth         : Integer;
   x                 : Integer;
   ACHH              : Integer;
   ACBH              : Integer;
@@ -511,7 +512,7 @@ var
             end;
             #10:
             begin
-              CW := AWrapWidth - SameColorX;
+              CW := WrapWidth - SameColorX;
               case FChar[3] of
                 #179:
                 begin
@@ -744,7 +745,7 @@ var
             end;
             #10:
             begin
-              CW := AWrapWidth - SameColorX;
+              CW := WrapWidth - SameColorX;
               case FChar[3] of
                 #179:
                 begin
@@ -873,17 +874,18 @@ var
     begin
       ACanvas.DrawRect(SameColorX, Ay, SameColorX + SameColorWidth, Ay + ACH, SameBackColor, True);
     end;
-    ACanvas.DrawRect(AX, AY, AWrapWidth, AY + ACH, SameBackColor, True);
+    ACanvas.DrawRect(AX, AY, WrapWidth, AY + ACH, SameBackColor, True);
     AX := ALeftX;
     Inc(AY, ACH);
   end;
 
 begin
-  if AWrapWidth < 0 then
-    AWrapWidth := 0;
+  WrapWidth := FConsole.ClientWidth;
+  if WrapWidth < 0 then
+    WrapWidth := 0;
   if System.Length(FChars) = 0 then
   begin
-    ACanvas.DrawRect(AX, AY, AWrapWidth, AY + ACH, ABC, True);
+    ACanvas.DrawRect(AX, AY, WrapWidth, AY + ACH, ABC, True);
     Exit;
   end;
   ACHH     := ACH div 2;
@@ -896,10 +898,10 @@ begin
   x                 := 0;
   while LineStart < System.Length(FChars) do
   begin
-    x := LineStart + AWrapWidth div MidWidth;
+    x := LineStart + WrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= WrapWidth) do
       Dec(x);
     LineEnd := x;
     DrawBack;
@@ -912,10 +914,10 @@ begin
   AY:=SAY;
   while LineStart < System.Length(FChars) do
   begin
-    x := LineStart + AWrapWidth div MidWidth;
+    x := LineStart + WrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= WrapWidth) do
       Dec(x);
     LineEnd := x;
     DrawLine;
@@ -929,10 +931,10 @@ begin
     else
       x := CharWidth;
     AX := (ACaretPos - LineStart) * x;
-    if Ax + x > AWrapWidth then
+    if Ax + x > WrapWidth then
     begin
       Ax := 0;
-      ACanvas.DrawRect(0, AY, AWrapWidth, AY + ACH, ABC, True);
+      ACanvas.DrawRect(0, AY, WrapWidth, AY + ACH, ABC, True);
       Inc(Ay, ACH);
     end;
     if ADrawCaret then
@@ -942,12 +944,14 @@ begin
   end;
 end;
 
-function TColorString.GetCharPosition(AWrapWidth, ALine, AXPos: Integer): Integer;
+function TColorString.GetCharPosition(ALine, AXPos: Integer): Integer;
 var
   x, MidWidth, LineStart, LastLineStart: Integer;
+  WrapWidth: Integer;
 begin
-  if AWrapWidth < 0 then
-    AWrapWidth := 0;
+  WrapWidth := FConsole.ClientWidth;
+  if WrapWidth < 0 then
+    WrapWidth := 0;
   if System.Length(FChars) = 0 then
   begin
     Result := 0;
@@ -964,10 +968,10 @@ begin
   x := 0;
   while (LineStart < System.Length(FChars)) and (ALine >= 0) do
   begin
-    x := LineStart + AWrapWidth div MidWidth;
+    x := LineStart + WrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= WrapWidth) do
       Dec(x);
     LastLineStart := LineStart;
     LineStart := x + 1;
@@ -978,13 +982,14 @@ begin
     Inc(Result);
 end;
 
-function TColorString.GetLineOfCaret(AWrapWidth, ACaretPos, ACaretWidth:
-  Integer): Integer;
+function TColorString.GetLineOfCaret(ACaretPos, ACaretWidth: Integer): Integer;
 var
   x, MidWidth, LineStart, LineStartSumWidth, LastLineSumWidth: Integer;
+  WrapWidth: Integer;
 begin
-  if AWrapWidth < 0 then
-    AWrapWidth := 0;
+  WrapWidth := FConsole.ClientWidth;
+  if WrapWidth < 0 then
+    WrapWidth := 0;
   if System.Length(FChars) = 0 then
   begin
     Result := 0;
@@ -1003,10 +1008,10 @@ begin
   x := 0;
   while LineStart < System.Length(FChars) do
   begin
-    x := LineStart + AWrapWidth div MidWidth;
+    x := LineStart + WrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= WrapWidth) do
       Dec(x);
     LastLineSumWidth := LineStartSumWidth;
     LineStartSumWidth := (x + 1) * MidWidth;
@@ -1017,19 +1022,21 @@ begin
   end;
   if ACaretWidth >= 0 then x := ACaretWidth else x := CharWidth;
   if (ACaretPos > LineStart) or (LineStartSumWidth - LastLineSumWidth +
-    (ACaretPos - LineStart) * x + x <= AWrapWidth) then
+    (ACaretPos - LineStart) * x + x <= WrapWidth) then
     Dec(Result);
 end;
 
-function TColorString.LineCount(AWrapWidth, ACaretPos, ACaretWidth: Integer): Integer;
+function TColorString.LineCount(ACaretPos, ACaretWidth: Integer): Integer;
 var
   x: Integer;
-   MidWidth: Integer;
-   LineStart: Integer;
-   LastLineStart: Integer;
- begin
-  if AWrapWidth < 0 then
-    AWrapWidth := 0;
+  MidWidth: Integer;
+  LineStart: Integer;
+  LastLineStart: Integer;
+  WrapWidth: Integer;
+begin
+  WrapWidth := FConsole.ClientWidth;
+  if WrapWidth < 0 then
+    WrapWidth := 0;
   if System.Length(FChars) = 0 then
   begin
     Result := 1;
@@ -1047,12 +1054,12 @@ var
   x := 0;
   while LineStart < System.Length(FChars) do
   begin
-    x := LineStart + AWrapWidth div MidWidth;
+    x := LineStart + WrapWidth div MidWidth;
     if x > High(FChars) then
       x := High(FChars);
-    while (x > LineStart) and ((x - LineStart) * MidWidth >= AWrapWidth) do
+    while (x > LineStart) and ((x - LineStart) * MidWidth >= WrapWidth) do
       Dec(x);
-    LastLineStart    := LineStart;
+    LastLineStart := LineStart;
     LineStart := x + 1;
     Inc(Result);
   end;
@@ -1061,7 +1068,7 @@ var
   else
     x := CharWidth;
   if (ACaretPos >= LineStart) and ((ACaretPos - LastLineStart) * MidWidth +
-    (ACaretPos - LineStart) * x + x > AWrapWidth) then
+    (ACaretPos - LineStart) * x + x > WrapWidth) then
     Inc(Result);
   if Result=0 then Inc(Result);
 end;
@@ -1505,7 +1512,7 @@ begin
   if (sl = FInputY) or (not chl) then
   begin
     Dec(h, FLineHeightSum[FInputY]);
-    q := FInputBuffer.GetCharPosition(ClientWidth, h, x);
+    q := FInputBuffer.GetCharPosition(h, x);
     if (q < FInputMinPos) then
       q := FInputMinPos;
     if (q - FInputX > FInputBuffer.Count) then
@@ -1655,7 +1662,7 @@ begin
     Exit;
   end;
   UpdateLineHeights;
-  y := FLineHeightSum[FInputY] + FInputBuffer.GetLineOfCaret(ClientWidth, FCaretX, FCaretWidth);
+   y := FLineHeightSum[FInputY] + FInputBuffer.GetLineOfCaret(FCaretX, FCaretWidth);
   if y >= FLineHeightSum[FTopLine] + FLineOfTopLine + FPageHeight - 1 then
   begin
     while y >= FLineHeightSum[FTopLine] + FLineHeights[FTopLine] + FPageHeight - 1 do
@@ -1688,8 +1695,7 @@ begin
   if not FAutoFollow then
     Exit;
   UpdateLineHeights;
-  y := FLineHeightSum[FOutY] + FLines.Require[FOutY].GetLineOfCaret(ClientWidth,
-    FOutX, FCaretWidth);
+   y := FLineHeightSum[FOutY] + FLines.Require[FOutY].GetLineOfCaret(FOutX, FCaretWidth);
   if y >= FLineHeightSum[FTopLine] + FLineOfTopLine + FPageHeight then
   begin
     while y >= FLineHeightSum[FTopLine] + FLineHeights[FTopLine] + FPageHeight - 1 do
@@ -2270,8 +2276,8 @@ begin
         LineC := FStoredLineCount
       else
       begin
-        LineC := LineCount(ClientWidth, -1, FCaretWidth);
-        FStoredLineCount:=LineC;
+         LineC := LineCount(-1, FCaretWidth);
+         FStoredLineCount:=LineC;
       end;
     end;
   end
@@ -2286,8 +2292,8 @@ begin
         LineC2 := FStoredLineCount
       else
       begin
-        LineC2 := LineCount(ClientWidth, FCaretX, FCaretWidth);
-        FStoredLineCount:=LineC2;
+         LineC2 := LineCount(FCaretX, FCaretWidth);
+         FStoredLineCount:=LineC2;
       end;
     end;
 
@@ -2382,23 +2388,23 @@ begin
     CurrentLine := FTopLine;
     while (y <= m) and (CurrentLine < FLines.Count){ and (CurrentLine < Length(FLines))} do
     begin
-      FLines[CurrentLine].LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
-        ClientWidth, FCharHeight, FCharWidth, -1, FBackGroundColor, FCaretColor,
-        FCaretHeight, FCaretWidth, FCaretYShift, False);
-      if (FInput) and (FInputY = CurrentLine) then
-      begin
-        if FInputIsPassWord then
-        begin
-          FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0, ClientWidth,
-            FCharHeight, FCharWidth, FCaretX, FBackGroundColor, FCaretColor,
-            FCaretHeight, FCaretWidth, FCaretYShift, FCaretVisible and Focused);
-        end
-        else
-        begin
-          FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0, ClientWidth,
-            FCharHeight, FCharWidth, FCaretX, FBackGroundColor, FCaretColor,
-            FCaretHeight, FCaretWidth, FCaretYShift, FCaretVisible and Focused);
-        end;
+       FLines[CurrentLine].LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
+         FCharHeight, FCharWidth, -1, FBackGroundColor, FCaretColor,
+         FCaretHeight, FCaretWidth, FCaretYShift, False);
+       if (FInput) and (FInputY = CurrentLine) then
+       begin
+         if FInputIsPassWord then
+         begin
+           FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
+             FCharHeight, FCharWidth, FCaretX, FBackGroundColor, FCaretColor,
+             FCaretHeight, FCaretWidth, FCaretYShift, FCaretVisible and Focused);
+         end
+         else
+         begin
+           FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
+             FCharHeight, FCharWidth, FCaretX, FBackGroundColor, FCaretColor,
+             FCaretHeight, FCaretWidth, FCaretYShift, FCaretVisible and Focused);
+         end;
       end;
       Inc(y, FLineHeights[CurrentLine]);
       Inc(CurrentLine);
