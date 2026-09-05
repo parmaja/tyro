@@ -34,20 +34,38 @@ interface
 
 uses
   Classes, SysUtils, Contnrs,
-  LazUTF8, LCLType,
-  RayLib,
-  TyroClasses, TyroControls;
+  LazUTF8,
+  RayLib, TyroClasses, TyroControls;
 
 const
-  SB_HORZ = 0;
-  SB_Vert = 1;
+  { Default character dimensions }
+  CDefaultCharHeight = 8;
+  CDefaultCharWidth = 8;
+
+  { Caret timing (in seconds) }
+  CCaretBlinkInterval = 0.5;
+
+  { Default values }
+  CDefaultTabWidth = 60;
+  CDefaultLineCount = 1000;
+  CDefaultGraphicCharWidth = 10;
+
+  { Selection state }
+  CNoSelection = -1;
 
 type
 
+  { TCaretType - Defines the visual style of the text cursor }
   TCaretType = (cartLine, cartSubBar, cartBigBar, cartUser);
+
+  { TEscapeCodeType - Defines the type of escape sequence parsing to use }
   TEscapeCodeType = (esctConsole, esctAnsi, esctNone);
+
+  { TEscapeMode - Internal parser states for escape sequence handling }
   TEscapeMode = (escmNone, escmOperation, escmData2, escmData1,
     escmAnsiOperation, escmAnsiSquare);
+
+  { TCharAttrib - Character attribute flags for text styling }
   TCharAttrib = (charaUnderline, charaItalic, charaBold, charaBlink);
 
   TTyroConsole = class;
@@ -55,7 +73,10 @@ type
   TColorstring = class;
   TColorStrings = class;
 
+  { EOnConsoleInput - Event handler for console input completion }
   EOnConsoleInput = procedure(AConsole: TTyroConsole; Input: string) of object;
+
+  { EOnConsoleInputChange - Event handler for input buffer changes }
   EOnConsoleInputChange = procedure(AConsole: TTyroConsole; InputData: TColorstring) of object;
 
   { TTyroConsole }
@@ -209,17 +230,23 @@ type
     property WriteInput:Boolean read FWriteInput write FWriteInput default True;
   end;
 
+  { TColorChar - Represents a single character with color and attribute information }
   TColorChar = packed record
+    { The UTF-8 encoded character }
     FChar:      TUTF8Char;
+    { Cumulative width (in pixels) from the start of the line to this character }
     FSumWidth:  Integer;
+    { Character position where the current word started (for word wrapping) }
     FWordStart: Integer;
+    { Foreground (text) color }
     FFrontColor: TColor;
+    { Background color }
     FBackColor: TColor;
+    { Character attributes (underline, italic, bold, blink) }
     FAttrib:    TCharAttrib;
   end;
 
-  { TColorString }
-
+  { TColorString - A string where each character has associated color and attribute information }
   TColorString = class(TObject)
   private
     FChars: packed array of TColorChar;
@@ -1377,16 +1404,6 @@ begin
   end;
 end;
 
-{function TTyroConsole.GetCaretInterval: Integer;
-begin
-  Result := FCaretTimer.Interval;
-end;
-
-procedure TTyroConsole.SetCaretInterval(AValue: Integer);
-begin
-  FCaretTimer.Interval := AValue;
-end;}
-
 procedure TTyroConsole.MultiWrite;
 var
   DoWrite: Boolean;
@@ -1726,7 +1743,7 @@ begin
     end;
     FLineOfTopLine := y - FLineHeightSum[FTopLine];
   end;
-  y := FLineHeightSUm[FTopLine] + FLineOfTopLine;
+  y := FLineHeightSum[FTopLine] + FLineOfTopLine;
   if y <> FVSBPos then
   begin
     FVSBPos := y;
@@ -1756,7 +1773,7 @@ begin
       Dec(FTopLine);
     FLineOfTopLine := y - FLineHeightSum[FTopLine];
   end;
-  y := FLineHeightSUm[FTopLine] + FLineOfTopLine;
+  y := FLineHeightSum[FTopLine] + FLineOfTopLine;
   if y <> FVSBPos then
   begin
     FVSBPos := y;
@@ -2484,26 +2501,22 @@ var
 begin
   inherited;
   FStringBuffer     := TStringList.Create;
-  FCharHeight := 8;
-  FCharWidth := 8;
-  FSelStart         := -1;
-  FLineCount        := 1000;
+  FCharHeight := CDefaultCharHeight;
+  FCharWidth := CDefaultCharWidth;
+  FSelStart         := CNoSelection;
+  FLineCount        := CDefaultLineCount;
   FInputVisible     := False;
   FWriteInput       := True;
   FBackGroundColor  := clBlack;
-  FGraphicCharWidth := 10;
+  FGraphicCharWidth := CDefaultGraphicCharWidth;
   FInputBuffer      := TColorString.Create(Self);
   FEscapeCodeType   := esctConsole;
   FAutoFollow       := True;
-  FLines := TColorStrings.Create(Self);// FLineCount;
+  FLines := TColorStrings.Create(Self);
 
   SetLength(FLineHeights, FLineCount);
   SetLength(FLineHeightSum, FLineCount);
-  FTabWidth := 60;
-{  FCaretTimer          := TTimer.Create(self);
-  FCaretTimer.Interval := 500;
-  FCaretTimer.OnTimer  := @carettimerexecute;
-  FCaretTimer.Enabled  := True;}
+  FTabWidth := CDefaultTabWidth;
   FCaretVisible        := True;
   FVSBVisible          := True;
   FCurrentColor        := clLightgray;
@@ -2532,7 +2545,6 @@ end;
 destructor TTyroConsole.Destroy;
 var i : Integer;
 begin
-  //FCaretTimer.Enabled := False;
   FStringBuffer.Free;
   FreeAndNil(FLines);
   FInputBuffer.Free;
