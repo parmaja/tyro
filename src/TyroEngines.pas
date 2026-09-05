@@ -311,6 +311,10 @@ end;
 procedure TTyroEngine.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
 begin
   inherited;
+  if AWidth = 0 then
+    raise exception.Create('Screen width can not be 0');
+  if AHeight = 0 then
+    raise exception.Create('Screen height can not be 0');
   Graphic := TTyroTextureCanvas.Create(AWidth, AHeight, True);
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
   Console.WindowRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);

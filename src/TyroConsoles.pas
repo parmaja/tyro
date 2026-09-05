@@ -54,9 +54,6 @@ const
 
 type
 
-  { TCaretType - Defines the visual style of the text cursor }
-  TCaretType = (cartLine, cartBlock);
-
   { TEscapeCodeType - Defines the type of escape sequence parsing to use }
   TEscapeCodeType = (esctConsole, esctAnsi, esctNone);
 
@@ -120,7 +117,6 @@ type
     FMouseDownInputPos: Integer;
     FCurrentString: string;
     FCaretColor: TColor;
-    FCaretType: TCaretType;
     FTabWidth:  Integer;
     FEscapeCodeType: TEscapeCodeType;
     FEscapeMode: TEscapeMode;
@@ -148,7 +144,6 @@ type
     procedure SetOutY(v: Integer);
     procedure IntWrite;
     procedure MultiWrite;
-    procedure SetCaretType(ACaretType: TCaretType);
     procedure SetCaretVisible(AValue: Boolean);
     procedure SetTabWidth(AValue: Integer);
   protected
@@ -190,7 +185,6 @@ type
     property CharWidth: Integer read FCharWidth write FCharWidth;
 
     property CaretColor: TColor Read FCaretColor Write FCaretColor;
-    property CaretType: TCaretType Read FCaretType Write SetCaretType;
     property CaretVisible: Boolean Read FCaretVisible Write SetCaretVisible;
     property OnInput: EOnConsoleInput Read FOnInput Write FOnInput;
     property OnInputChange: EOnConsoleInputChange Read FOnInputChange Write FOnInputChange;
@@ -347,12 +341,6 @@ procedure TTyroConsole.SetTabWidth(AValue: Integer);
 begin
   FTabWidth := AValue;
   UpdateLineHeights;
-  Invalidate;
-end;
-
-procedure TTyroConsole.SetCaretType(ACaretType: TCaretType);
-begin
-  FCaretType := ACaretType;
   Invalidate;
 end;
 
@@ -2389,7 +2377,6 @@ begin
   FCurrentColor        := clLightgray;
   FCurrentBackground   := clBlack;
   FCaretColor          := clWhite;
-  FCaretType           := cartLine;
   FInputSelBackground  := clWhite;
   FInputSelColor       := clBlue;
   SetWindowBounds(0, 0, 200, 200);
