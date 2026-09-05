@@ -120,9 +120,9 @@ const
    LUA_MULTRET         = -1;        // option for multiple returns in 'lua_pcall' and 'lua_call'
 
     // pseudo-indices
-    // LUA_REGISTRYINDEX = -(MaxInt div 2 + 1000); // Lua 5.5 uses INT_MAX/2 + 1000
-    LUA_REGISTRYINDEX: Integer = -1001000;
     // Note: The true Lua 5.5 value is (-(INT_MAX/2 + 1000)) = -1073740808.
+    LUA_REGISTRYINDEX = -(MaxInt div 2 + 1000); // For Lua 5.5 and Pluto 0.13.x
+    //LUA_REGISTRYINDEX: Integer = -1001000; DO NOT USE THIS
     // The value above is kept for binary compatibility with the linked library.
 
 function lua_upvalueindex(I: Integer): Integer; inline;

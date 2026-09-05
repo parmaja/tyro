@@ -2163,7 +2163,7 @@ var
 begin
   Inc(FCaretX, UTF8Length(Desc));
   FInputX := 0;
-  if FLines[FOutY].Count = 0 then
+  if FLines.Require[FOutY].Count = 0 then
     FInputY := FOutY
   else
     FInputY := FOutY + 1;
@@ -2449,7 +2449,7 @@ begin
   end;
   if FInput then
   begin
-    if FLines[FOutY].Count = 0 then
+    if FLines.Require[FOutY].Count = 0 then
     begin
       if (FInputY <> FOutY) then
         FInputY := FOutY;
@@ -2697,7 +2697,7 @@ begin
   FHistoryMax          := 10;
   FHistoryLength       := 0;
   SetWindowBounds(0, 0, 200, 200);
-  FHistory := TColorStrings.Create(Self);
+  FHistory := TColorStrings.Create(Self);  
 
   if FCaretHeight = -1 then
     FCaretHeight := FCharHeight;
