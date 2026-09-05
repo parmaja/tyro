@@ -95,10 +95,6 @@ type
     FCurrentBackGround: TColor;
     FPassWordChar: TUTF8Char;
     FInputIsPassWord: Boolean;
-    FHistory: TColorstrings;
-    FHistoryLength: Integer;
-    FHistoryMax: Integer;
-    FHistoryPos: Integer;
     FInputColor: TColor;
     FInputBackground: TColor;
     FInputSelColor: TColor;
@@ -136,12 +132,6 @@ type
     function UpdateLineHeights(const Recalc:Boolean=False): Integer;
     procedure TranslateScrollBarPosition;
     procedure ScrollUp;
-    procedure SetHistoryMax(v: Integer);
-    procedure InsertHistory;
-    procedure SetHistoryPos(v: Integer);
-    function GetHistory(i: Integer): string;
-    procedure DeleteHistoryEntry(i: Integer);
-    procedure MakeFirstHistoryEntry(i: Integer);
     function MoveInputCaretTo(x, y: Integer; chl: Boolean): Boolean;
     procedure SetSelection(Start, Stop: Integer);
     procedure LeftSelection(Start, Stop: Integer);
@@ -176,9 +166,6 @@ type
     procedure MouseMove(Shift: TShiftState; x, y: Integer); override;
 
     procedure SaveToFile(AFileName: string);
-    function HistoryHas(s: string): Boolean;
-    function HistoryIndexOf(s: string): Integer;
-    procedure ClearHistory;
     procedure TextColor(C: TColor);
     procedure TextBackground(C: TColor);
     procedure TextColors(FC, BC: TColor);
@@ -195,9 +182,7 @@ type
     property OutX: Integer Read FOutX Write FOutX;
     property OutY: Integer Read FOutY Write SetOutY;
     property TopLine: Integer Read FTopLine Write SetTopLine;
-    property History[i: Integer]: string Read GetHistory;
     property InputPos: Integer Read FInputPos;
-    function HistoryCount: Integer;
   public
     property CharHeight: Integer read FCharHeight write FCharHeight;
     property CharWidth: Integer read FCharWidth write FCharWidth;
@@ -215,7 +200,6 @@ type
     property BackGroundColor: TColor Read FBackgroundColor Write SetBackGroundColor;
     property TabWidth: Integer Read FTabWidth Write SetTabWidth;
     property PassWordChar: TUTF8Char Read FPassWordChar Write FPassWordChar;
-    property HistoryMax: Integer Read FHistoryMax Write SetHistoryMax;
     property InputSelColor: TColor Read FInputSelColor Write FInputSelColor;
     property InputSelBackGround: TColor Read FInputSelBackGround write FInputSelBackGround;
     //property CaretInterval: Integer Read GetCaretInterval Write SetCaretInterval;
@@ -1425,64 +1409,6 @@ begin
   MultiWrite;
 end;
 
-function TTyroConsole.HistoryIndexOf(s: string): Integer;
-begin
-  for Result := 0 to HistoryCount - 1 do
-    if History[Result] = s then
-      Exit;
-  Result := -1;
-end;
-
-function TTyroConsole.HistoryHas(s: string): Boolean;
-var
-  i: Integer;
-begin
-  Result := True;
-  for i := 0 to HistoryCount - 1 do
-    if History[i] = s then
-      Exit;
-  Result := False;
-end;
-
-function TTyroConsole.HistoryCount: Integer;
-begin
-  HistoryCount := FHistoryLength - Ord(FInput);
-end;
-
-function TTyroConsole.GetHistory(i: Integer): string;
-begin
-  Inc(i, Ord(FInput));
-  if (i >= 0) and (i < FHistoryLength) then
-    GetHistory := FHistory[i].Getstring
-  else
-    GetHistory := '';
-end;
-
-procedure TTyroConsole.ClearHistory;
-begin
-  FHistoryLength := Ord(FInput);
-  FHistoryPos    := 0;
-end;
-
-procedure TTyroConsole.SetHistoryMax(v: Integer);
-var
-  i: Integer;
-begin
-  if v < 1 then
-    v := 1;
-  if v <> FHistoryMax then
-  begin
-    if FHistoryLength > v then
-      FHistoryLength := v;
-    for i := v to FHistoryMax - 1 do
-      FHistory[i].Free;
-    FHistory.Count := v;
-    for i := FHistoryMax to v - 1 do
-      FHistory[i] := TColorString.Create(Self);
-    FHistoryMax   := v;
-  end;
-end;
-
 procedure TTyroConsole.LeftSelection(Start, Stop: Integer);
 begin
   if FSelStart = -1 then
@@ -1838,35 +1764,6 @@ begin
   end;
 end;
 
-procedure TTyroConsole.SetHistoryPos(v: Integer);
-begin
-  if FInputIsPassWord then
-    Exit;
-  if v < 0 then
-    v := FHistoryLength - 1
-  else if v >= FHistoryLength then
-    v := 0;
-  if v <> FHistoryPos then
-  begin
-    if FHistoryPos = 0 then
-    begin
-      FHistory[0].Clear;
-      FHistory[0].PartOverWrite(FInputBuffer, FInputMinPos, FInputBuffer.Count, 0);
-    end;
-    FInputBuffer.MaximumLength(FInputMinPos + FHistory[v].Count);
-    FInputBuffer.OverWrite(FHistory[v], FInputMinPos);
-    FInputPos := FInputBuffer.Count;
-    FCaretX   := FInputX + FInputPos;
-    FHistoryPos := v;
-  end;
-  if Assigned(FOnInputChange) then
-    FOnInputChange(Self, FInputBuffer);
-  MakeInputVisible;
-  AdjustLineHeight(FInputY);
-  AdjustScrollBars;
-  Invalidate;
-end;
-
 procedure TTyroConsole.KeyPress(var Key: TUTF8Char);
 begin
   if not FInput then
@@ -1878,8 +1775,7 @@ begin
     FInputBuffer.Insert(FInputPos, key, FInputColor, FInputBackGround, FCurrentAttrib);
     Inc(FInputPos);
     FCaretX     := FInputX + FInputPos;
-    FHistoryPos := 0;
-    if assigned(FOnInputChange) then
+    if Assigned(FOnInputChange) then
       FOnInputChange(Self, FInputBuffer);
   end;
   if Assigned(OnAny) then
@@ -1956,7 +1852,6 @@ begin
       if (not (ssAlt in Shift)) and FInput then
       begin
         SetSelection(-1, 0);
-        SetHistoryPos(FHistoryPos + 1);
       end;
     end;
     Key_DOWN:
@@ -1965,7 +1860,6 @@ begin
       if (not (ssAlt in Shift)) and FInput then
       begin
         SetSelection(-1, 0);
-        SetHistoryPos(FHistoryPos - 1);
       end;
     end;
     Key_RIGHT:
@@ -1991,8 +1885,7 @@ begin
           DeleteSelected
         else
           FInputBuffer.Delete(FInputPos);
-        FHistoryPos := 0;
-        if assigned(FOnInputChange) then
+        if Assigned(FOnInputChange) then
           FOnInputChange(Self, FInputBuffer);
         MakeInputVisible;
         AdjustLineHeight(FInputY);
@@ -2005,33 +1898,6 @@ begin
       begin
         s := FInputBuffer.GetString;
         s := Copy(s, FUTF8InputMinPos + 1, Length(s));
-        if (FHistoryPos = 0) then
-        begin
-          if (FInputBuffer.Count = FInputMinPos) or FInputIsPassWord then
-          begin
-            DeleteHistoryEntry(0);
-          end
-          else
-          begin
-            i := HistoryIndexOf(s);
-            if i >= 0 then
-            begin
-              DeleteHistoryEntry(0);
-              MakeFirstHistoryEntry(i);
-            end
-            else
-            begin
-              FHistory[0].Clear;
-              FHistory[0].PartOverWrite(FInputBuffer, FInputMinPos,
-                FInputBuffer.Count , 0);
-            end;
-          end;
-        end
-        else
-        begin
-          DeleteHistoryEntry(0);
-          MakeFirstHistoryEntry(FHistoryPos);
-        end;
         FInput := False;
         if FWriteInput then
         begin
@@ -2098,8 +1964,7 @@ begin
             FCaretX := FInputX + FInputPos;
           end;
         end;
-        FHistoryPos := 0;
-        if assigned(FOnInputChange) then
+        if Assigned(FOnInputChange) then
           FOnInputChange(Self, FInputBuffer);
         if Assigned(OnAny) then
           OnAny(Self, FInputBuffer);
@@ -2139,22 +2004,6 @@ begin
   if Assigned(OnAny) then
     OnAny(Self, FInputBuffer);
   inherited KeyDown(Key,Shift);
-end;
-
-procedure TTyroConsole.InsertHistory;
-var
-  i: Integer;
-  t: TColorString;
-begin
-  t := FHistory[FHistoryMax - 1];
-  for i := FHistoryMax - 2 downto 0 do
-  begin
-    FHistory[i + 1] := FHistory[i];
-  end;
-  FHistory[0] := t;
-  FHistoryPos := 0;
-  if FHistoryLength < FHistoryMax then
-    Inc(FHistoryLength);
 end;
 
 procedure TTyroConsole.StartRead(DFC, DBC: TColor; const Desc: string; IFC, IBC: TColor);
@@ -2210,7 +2059,6 @@ begin
   FInputColor  := IFC;
   FInputBackground := IBC;
   FInputBuffer.PassWordStart := MaxInt;
-  InsertHistory;
   MakeInputVisible;
 end;
 
@@ -2226,33 +2074,6 @@ end;
 procedure TTyroConsole.StopRead;
 begin
   FInput := False;
-end;
-
-procedure TTyroConsole.DeleteHistoryEntry(i: Integer);
-var
-  j:    Integer;
-  Temp: TColorString;
-begin
-  Temp := FHistory[i];
-  for j := i to FHistoryLength - 2 do
-    FHistory[j] := FHistory[j + 1];
-  FHistory[FHistoryLength - 1] := Temp;
-  Dec(FHistoryLength);
-  if FHistoryPos >= i then
-    Dec(FHistoryPos);
-end;
-
-procedure TTyroConsole.MakeFirstHistoryEntry(i: Integer);
-var
-  Temp: TColorString;
-begin
-  if FHistoryPos <> 0 then
-  begin
-    Temp := FHistory[i];
-    for i := i - 1 downto 0 do
-      FHistory[i + 1] := FHistory[i];
-    FHistory[0] := Temp;
-  end;
 end;
 
 procedure TTyroConsole.Clear;
@@ -2694,10 +2515,7 @@ begin
   FCaretYShift         := 3;
   FInputSelBackground  := clWhite;
   FInputSelColor       := clBlue;
-  FHistoryMax          := 10;
-  FHistoryLength       := 0;
   SetWindowBounds(0, 0, 200, 200);
-  FHistory := TColorStrings.Create(Self);  
 
   if FCaretHeight = -1 then
     FCaretHeight := FCharHeight;
@@ -2717,7 +2535,6 @@ begin
   //FCaretTimer.Enabled := False;
   FStringBuffer.Free;
   FreeAndNil(FLines);
-  FreeAndNil(FHistory);
   FInputBuffer.Free;
   inherited Destroy;
 end;
