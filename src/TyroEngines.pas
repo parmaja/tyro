@@ -57,6 +57,7 @@ type
     RunFile: string;//that to run in script
     Console: TTyroConsole;
     Graphic: TTyroCanvas;
+    CurrentDirectory: string;
     constructor Create;
     destructor Destroy; override;
     procedure Stop; //and wait
@@ -204,6 +205,7 @@ end;
 constructor TTyroEngine.Create;
 begin
   inherited Create;
+  CurrentDirectory := GetCurrentDir;
   Margin := 10;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
@@ -223,7 +225,7 @@ begin
   Console.Focused := True;
   Console.Visible := False;
   Console.Focused := True;
-Console.OnInput := ConsoleInput;
+  Console.OnInput := ConsoleInput;
 end;
 
 destructor TTyroEngine.Destroy;
@@ -255,6 +257,7 @@ begin
           RunFile := ExpandFileName(Resources.WorkSpace + RunFile);
         aScript.AssetsFolder := ExtractFilePath(RunFile);
         aScript.LoadFile(RunFile);
+        CurrentDirectory := ExtractFilePath(RunFile);
         if RunInMain then
           FScriptMain := aScript
         else
@@ -395,8 +398,8 @@ begin
 
     if (Cmd = 'dir') or (Cmd = 'list') or (Cmd = 'ls') then
     begin
-      Console.Writeln('Directory: ' + GetCurrentDir);
-      DirPath := ExcludeTrailingPathDelimiter(GetCurrentDir);
+      Console.Writeln('Directory: ' + CurrentDirectory);
+      DirPath := ExcludeTrailingPathDelimiter(CurrentDirectory);
       if FindFirst(DirPath + PathDelim + '*.*', faAnyFile, sr) = 0 then
       begin
         try

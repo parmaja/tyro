@@ -377,6 +377,8 @@ begin
 end;
 
 procedure TTyroMain.Run;
+var
+  tw: Integer;
 begin
   Init;
 
@@ -423,7 +425,10 @@ begin
             Canvas.PostDraw;
 
             if moShowFPS in Options then
-              RayLib.DrawFPS(5, 5);
+            begin
+              tw := RayLib.MeasureText('9999 FPS', 20) + 5;
+              RayLib.DrawFPS(RayLib.GetScreenWidth - tw, 5);
+            end;
           finally
             RayLib.EndDrawing();
           end;
