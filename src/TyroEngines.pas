@@ -1,5 +1,5 @@
 unit TyroEngines;
-{$mode ObjFPC}{$H+}
+{$MODE DELPHI} {$H+}
  {**
  *  This file is part of the "Tyro"
  *
@@ -32,6 +32,8 @@ type
 
   { TTyroEngine }
 
+  TConsoleReadEvent = procedure(AConsole: TTyroConsole; AInput: string) of object;
+
   TTyroEngine = class(TTyroMain)
   private
     //FBoard: TTyroImage;
@@ -41,7 +43,14 @@ type
     FScriptThread: TTyroScriptThread;
     FScriptMain: TTyroScript; //only if we have main loop
     FScriptTypes: TScriptTypes;
+    FCaretTimer: Single;
+    FReadCallback: TConsoleReadEvent;
   protected
+    procedure ConsoleInput(AConsole: TTyroConsole; AInput: string);
+    procedure ExecuteCommand(const ACommand: string);
+  public
+    procedure StartConsoleRead;
+    procedure StartConsoleReadEx(ACallback: TConsoleReadEvent);
   public
     RunInMain: Boolean;
     Running: Boolean;
@@ -60,6 +69,7 @@ type
     procedure PrepareDraw; override;
     procedure Draw; override;
     procedure Update; override;
+    procedure ProcessInput; override;
     //property Board: TTyroImage read FBoard;
     property Active: Boolean read GetActive;
 
@@ -212,6 +222,10 @@ begin
   Console.CharWidth := 16;
   Console.Visible := False;
   Console.Focused := True;
+  Console.Visible := False;
+  Console.Focused := True;
+  Console.OnInput := ConsoleInput;
+  FCaretTimer := 0;
 end;
 
 destructor TTyroEngine.Destroy;
@@ -264,9 +278,34 @@ end;
 procedure TTyroEngine.Update;
 begin
   inherited;
+  // Caret blinking for console (toggle every 500ms)
+  if (Console.Visible) and Console.Focused then
+  begin
+    FCaretTimer := FCaretTimer + RayLib.GetFrameTime();
+    if FCaretTimer >= 0.5 then
+    begin
+      FCaretTimer := FCaretTimer - 0.5;
+      Console.CaretVisible := not Console.CaretVisible;
+    end;
+  end
+  else
+  begin
+    FCaretTimer := 0;
+    Console.CaretVisible := True;
+  end;
   ThreadSwitch; //Yield
   if not Active then
     Terminate;
+end;
+
+procedure TTyroEngine.ProcessInput;
+begin
+  inherited;
+  // Handle ESC to hide console when it's active and focused
+  if (Console.Visible) and Console.Focused and RayLib.IsKeyPressed(KEY_ESCAPE) then
+  begin
+    HideConsole;
+  end;
 end;
 
 procedure TTyroEngine.RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
@@ -314,16 +353,124 @@ end;
 
 procedure TTyroEngine.ShowConsole(AWidth, AHeight: Integer);
 begin
-  if (AWidth > 0) and (AHeight > 0) then
+  if (AWidth <= 0) or (AHeight <= 0) then
   begin
-    Console.WindowRect := Rect(Margin, Margin, Margin + AWidth * Console.CharWidth, Margin + AHeight * Console.CharHeight);
+    AWidth := 80;
+    AHeight := 25;
   end;
+  Console.WindowRect := Rect(Margin, Margin, Margin + AWidth * Console.CharWidth, Margin + AHeight * Console.CharHeight);
   Console.Show;
+  StartConsoleRead;
 end;
 
 procedure TTyroEngine.HideConsole;
 begin
+  Console.StopRead;
   Console.Hide;
+end;
+
+procedure TTyroEngine.ConsoleInput(AConsole: TTyroConsole; AInput: string);
+begin
+  // If a script callback is set, route input to it (console.read())
+  if Assigned(FReadCallback) then
+  begin
+    FReadCallback(AConsole, AInput);
+    Exit;
+  end;
+
+  // Echo a newline after user input for readability
+  Console.Writeln('');
+  // Execute the typed command
+  ExecuteCommand(AInput);
+  // Re-arm the console for the next line of input
+  if Console.Visible then
+    StartConsoleRead;
+end;
+
+procedure TTyroEngine.ExecuteCommand(const ACommand: string);
+var
+  sl: TStringList;
+  Cmd: string;
+  sr: TSearchRec;
+  DirPath: string;
+begin
+  Cmd := Trim(ACommand);
+  if Cmd = '' then
+    Exit;
+
+  sl := TStringList.Create;
+  try
+    sl.Delimiter := ' ';
+    sl.StrictDelimiter := True;
+    sl.DelimitedText := Cmd;
+    if sl.Count = 0 then
+      Exit;
+    Cmd := LowerCase(Trim(sl[0]));
+
+    if (Cmd = 'dir') or (Cmd = 'list') or (Cmd = 'ls') then
+    begin
+      Console.Writeln('Directory: ' + GetCurrentDir);
+      DirPath := ExcludeTrailingPathDelimiter(GetCurrentDir);
+      if FindFirst(DirPath + PathDelim + '*.*', faAnyFile, sr) = 0 then
+      begin
+        try
+          repeat
+            Console.Writeln('  ' + sr.Name);
+          until FindNext(sr) <> 0;
+        finally
+          FindClose(sr);
+        end;
+      end
+      else
+      begin
+        Console.Writeln('  (empty)');
+      end;
+      Console.Writeln('');
+    end
+    else if (Cmd = 'clear') or (Cmd = 'cls') then
+    begin
+      Console.Clear;
+    end
+    else if (Cmd = 'exit') or (Cmd = 'quit') then
+    begin
+      HideConsole;
+      Stop;
+      Terminate;
+    end
+    else if (Cmd = 'help') or (Cmd = '?') then
+    begin
+      Console.Writeln('Available commands:');
+      Console.Writeln('  dir, list, ls  - List files in current directory');
+      Console.Writeln('  clear, cls     - Clear the console');
+      Console.Writeln('  exit, quit     - Hide console and stop');
+      Console.Writeln('  help, ?        - Show this help');
+      Console.Writeln('');
+    end
+    else
+    begin
+      // Unknown command
+      Console.Writeln('Unknown command: ' + Cmd);
+      Console.Writeln('Type "help" for available commands.');
+      Console.Writeln('');
+    end;
+  finally
+    sl.Free;
+  end;
+end;
+
+procedure TTyroEngine.StartConsoleRead;
+begin
+  // Clear any script callback so built-in commands are executed
+  FReadCallback := nil;
+  Console.OnInput := ConsoleInput;
+  Console.StartRead(clBlack, clBlack, '> ', clLightGray, clBlack);
+end;
+
+procedure TTyroEngine.StartConsoleReadEx(ACallback: TConsoleReadEvent);
+begin
+  FReadCallback := ACallback;
+  Console.OnInput := ACallback;
+  Console.StartRead(clBlack, clBlack, '> ', clLightGray, clBlack);
 end;
 
 initialization

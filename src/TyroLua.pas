@@ -123,7 +123,10 @@ type
     function FrameTime_func(L: Plua_State): Integer; cdecl;
     function TotalTime_func(L: Plua_State): Integer; cdecl;
     function RandomValue_func(L: Plua_State): Integer; cdecl;
-   public
+
+    // console input
+    function ConsoleRead_func(L: Plua_State): Integer; cdecl;
+  public
     constructor Create; override;
     destructor Destroy; override;
   end;
@@ -322,8 +325,13 @@ var
 begin
   Result := 0;
   field := lua_tostring(L, 2);
-  {case field of
-  end;}
+  case field of
+    'active':
+      begin
+        lua_pushboolean(L, Main.Console.Visible);
+        Result := 1;
+      end;
+  end;
 end;
 
 constructor TLuaConsole.Create(AScript: TLuaScript);
@@ -509,6 +517,7 @@ begin
   lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
   lua_register_table_method(LuaState, 'console', self, 'println', @PrintLn_func);
   lua_register_table_method(LuaState, 'console', self, 'show', @ShowConsole_func);
+  lua_register_table_method(LuaState, 'console', self, 'read', @ConsoleRead_func);
   lua_register_table_index(LuaState, 'console', Console); //Should be last one
 
   //lua_register_table(LuaState, 'draw', Canvas);
@@ -861,6 +870,32 @@ begin
   maxv := round(lua_tonumber(L, 2));
   lua_pushinteger(L, TyroInput.RandomValue(minv, maxv));
   Result := 1;
+end;
+
+function TLuaScript.ConsoleRead_func(L: Plua_State): Integer; cdecl;
+var
+  s: string;
+  c: Integer;
+  Reader: TReadConsoleObject;
+begin
+  s := '> ';
+  c := lua_gettop(L);
+  if c > 0 then
+    s := lua_tostring(L, 1);
+
+  Reader := TReadConsoleObject.Create(s);
+  try
+    // Run the DoExecute on the main thread via Synchronize.
+    // The object is NOT freed by the engine; we free it here.
+    RunQueueObjectNoFree(Reader);
+    // Wait for user to press Enter (signaled from main thread callback)
+    Reader.DoneEvent.WaitFor(INFINITE);
+    // Push the result string to Lua
+    lua_pushstring(L, PChar(Reader.ResultString));
+    Result := 1;
+  finally
+    Reader.Free;
+  end;
 end;
 
 initialization

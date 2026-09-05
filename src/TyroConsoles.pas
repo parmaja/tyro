@@ -154,6 +154,7 @@ type
     procedure SetCaretWidth(AValue: Integer);
     procedure SetCaretHeight(AValue: Integer);
     procedure SetCaretYShift(AValue: Integer);
+    procedure SetCaretVisible(AValue: Boolean);
     procedure SetTabWidth(AValue: Integer);
     //function GetCaretInterval: Integer;
     //procedure SetCaretInterval(AValue: Integer);
@@ -206,6 +207,7 @@ type
     property CaretWidth: Integer Read FCaretWidth Write SetCaretWidth;
     property CaretHeight: Integer Read FCaretHeight Write SetCaretHeight;
     property CaretYShift: Integer Read FCaretYShift Write SetCaretYShift;
+    property CaretVisible: Boolean Read FCaretVisible Write SetCaretVisible;
     property OnInput: EOnConsoleInput Read FOnInput Write FOnInput;
     property OnInputChange: EOnConsoleInputChange Read FOnInputChange Write FOnInputChange;
     property OnAny: EOnConsoleInputChange Read FOnAny Write FOnAny;
@@ -409,6 +411,14 @@ begin
   end;
   Invalidate;
   FCaretType := ACaretType;
+end;
+
+procedure TTyroConsole.SetCaretVisible(AValue: Boolean);
+begin
+  if FCaretVisible = AValue then
+    Exit;
+  FCaretVisible := AValue;
+  Invalidate;
 end;
 
 // TOdo : Use string buffer instead of string (speed improvement expected)

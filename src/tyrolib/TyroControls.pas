@@ -19,7 +19,7 @@ uses
   Classes, SysUtils, Types,
   mnUtils, mnClasses,
   {$ifdef FPC}
-  LCLType,
+   LCLType, LazUTF8,
   {$endif}
   SyncObjs, //after LCLType
   RayLib, RayClasses,
@@ -254,6 +254,7 @@ type
     procedure Unload; virtual;
 
     function Terminated: Boolean; virtual;
+    procedure ProcessInput; virtual;
 
     procedure Run;
     procedure Shutdown; virtual;
@@ -277,6 +278,19 @@ var
 function Canvas: TTyroCanvas; inline;
 
 implementation
+
+{ Convert a Unicode codepoint to a UTF-8 encoded short string (TUTF8Char) }
+function CodePointToUTF8(Ch: Integer): TUTF8Char;
+begin
+  if Ch < $80 then
+    Result := TUTF8Char(Chr(Ch))
+  else if Ch < $800 then
+    Result := TUTF8Char(Chr($C0 or (Ch shr 6)) + Chr($80 or (Ch and $3F)))
+  else if Ch < $10000 then
+    Result := TUTF8Char(Chr($E0 or (Ch shr 12)) + Chr($80 or ((Ch shr 6) and $3F)) + Chr($80 or (Ch and $3F)))
+  else
+    Result := TUTF8Char('');
+end;
 
 { TTyroMain }
 
@@ -415,8 +429,9 @@ begin
           end;
         end;
       end;
-      Update;
-      RayUpdates.Update;
+       Update;
+       RayUpdates.Update;
+       ProcessInput;
     finally
     end;
   until Terminated;
@@ -812,6 +827,65 @@ begin
   FFocused :=AValue;
   if FFocused <> nil then
     FFocused.FocusChanged;
+end;
+
+procedure TTyroMain.ProcessInput;
+var
+  Shift: TShiftState;
+  Key: TKeyboardKey;
+  ch: Integer;
+  aChar: TUTF8Char;
+  FocusedControl: TTyroControl;
+begin
+  if FFocused = nil then
+    Exit;
+
+  // Build shift state from RayLib key queries
+  Shift := [];
+  if RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT) then
+    Shift := Shift + [ssShift];
+  if RayLib.IsKeyDown(KEY_LEFT_CONTROL) or RayLib.IsKeyDown(KEY_RIGHT_CONTROL) then
+    Shift := Shift + [ssCtrl];
+  if RayLib.IsKeyDown(KEY_LEFT_ALT) or RayLib.IsKeyDown(KEY_RIGHT_ALT) then
+    Shift := Shift + [ssAlt];
+
+  // Process key codes (function keys, arrows, etc.)
+  Key := RayLib.GetKeyPressed;
+  while Key <> KEY_NULL do
+  begin
+    case Key of
+      KEY_LEFT_SHIFT, KEY_RIGHT_SHIFT, KEY_LEFT_CONTROL, KEY_RIGHT_CONTROL,
+      KEY_LEFT_ALT, KEY_RIGHT_ALT:
+        begin
+          // Shift keys themselves - skip to avoid sending as regular key
+        end;
+    else
+      FocusedControl := FFocused;
+      if Assigned(FocusedControl) then
+        FocusedControl.KeyDown(Key, Shift);
+    end;
+    Key := RayLib.GetKeyPressed;
+  end;
+
+  // Process character input (printable text, respecting modifiers for shortcuts)
+  ch := RayLib.GetCharPressed;
+  while ch > 0 do
+  begin
+    if ch >= 32 then
+    begin
+      // If Ctrl is held, treat as key shortcut (e.g. Ctrl+V) not text
+      if not (ssCtrl in Shift) then
+      begin
+        FocusedControl := FFocused;
+        if Assigned(FocusedControl) then
+        begin
+          aChar := CodePointToUTF8(ch);
+          FocusedControl.KeyPress(aChar);
+        end;
+      end;
+    end;
+    ch := RayLib.GetCharPressed;
+  end;
 end;
 
 procedure TTyroCustomWindow.SetCanvas(AValue: TTyroCanvas);

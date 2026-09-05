@@ -8,11 +8,11 @@ unit TyroScripts;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, SyncObjs,
   mnUtils, mnClasses, mnLogs, mnRTTIUtils,
   RayLib, RayClasses,
   Melodies, TyroSounds,
-  TyroClasses;
+  TyroClasses, TyroConsoles;
 
 type
   { TQueueObject }
@@ -56,12 +56,25 @@ type
 
   { TShowConsoleObject }
 
-  TShowConsoleObject = class(TQueueObject)
-  public
-    fW, fH: Integer;
-    constructor Create(W, H: Integer);
-    procedure DoExecute; override;
-  end;
+   TShowConsoleObject = class(TQueueObject)
+   public
+     fW, fH: Integer;
+     constructor Create(W, H: Integer);
+     procedure DoExecute; override;
+   end;
+
+   { TReadConsoleObject }
+
+   TReadConsoleObject = class(TQueueObject)
+   public
+     Prompt: string;
+     ResultString: string;
+     DoneEvent: TEvent;
+     constructor Create(APrompt: string);
+     destructor Destroy; override;
+     procedure DoExecute; override;
+     procedure HandleConsoleInput(AConsole: TTyroConsole; AInput: string);
+   end;
 
   { TDrawSetColorObject }
 
@@ -208,12 +221,14 @@ type
     FAssetsFolder: string;
     function GetActive: Boolean;
     procedure ExecuteQueueObject; //this for sync do not call it
+    procedure ExecuteQueueObjectNoFree; //this for sync do not call it
   protected
     QueueObject: TQueueObject;
     ScriptThread: TTyroScriptThread;
     ScriptText: TStringList;
 
     procedure RunQueueObject(AQueueObject: TQueueObject);
+    procedure RunQueueObjectNoFree(AQueueObject: TQueueObject);
     procedure AddQueueObject(AQueueObject: TQueueObject); virtual;
 
     procedure BeforeRun; virtual;
@@ -331,6 +346,37 @@ end;
 procedure TShowConsoleObject.DoExecute;
 begin
   Main.ShowConsole(FW, FH);
+end;
+
+{ TReadConsoleObject }
+
+constructor TReadConsoleObject.Create(APrompt: string);
+begin
+  inherited Create;
+  Prompt := APrompt;
+  DoneEvent := TEvent.Create(nil, True, False, '');
+  ResultString := '';
+end;
+
+destructor TReadConsoleObject.Destroy;
+begin
+  DoneEvent.Free;
+  inherited;
+end;
+
+procedure TReadConsoleObject.DoExecute;
+begin
+  // Show console and start reading input with a custom callback
+  Main.ShowConsole(80, 25);
+  Main.StartConsoleReadEx(HandleConsoleInput);
+end;
+
+procedure TReadConsoleObject.HandleConsoleInput(AConsole: TTyroConsole; AInput: string);
+begin
+  ResultString := AInput;
+  DoneEvent.SetEvent;
+  // Re-arm for built-in command mode
+  Main.StartConsoleRead;
 end;
 { TBeepObject }
 
@@ -613,6 +659,21 @@ begin
     ScriptThread.Synchronize(ExecuteQueueObject)
   else
     ExecuteQueueObject;
+end;
+
+procedure TTyroScript.ExecuteQueueObjectNoFree;
+begin
+  QueueObject.Execute;
+  QueueObject := nil;
+end;
+
+procedure TTyroScript.RunQueueObjectNoFree(AQueueObject: TQueueObject);
+begin
+  QueueObject := AQueueObject;
+  if ScriptThread <> nil then
+    ScriptThread.Synchronize(ExecuteQueueObjectNoFree)
+  else
+    ExecuteQueueObjectNoFree;
 end;
 
 procedure TTyroScript.BeforeRun;
