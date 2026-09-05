@@ -504,7 +504,7 @@ begin
   lua_register(LuaState, 'sleep', @sleep_func);
   lua_register_method(LuaState, 'print', @Print_func);
   lua_register_method(LuaState, 'println', @PrintLn_func);
-  lua_register_method(LuaState, 'window', @Window_func);
+  lua_register_table_method(LuaState, 'window', self, 'show', @Window_func);
   lua_register_method(LuaState, 'showconsole', @ShowConsole_func);
 
 //  lua_register_integer(LuaState, 'width', ScreenWidth));

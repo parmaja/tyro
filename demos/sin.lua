@@ -1,4 +1,4 @@
-window()
+window.show()
 log("test")
 canvas.text(10, 10, "This is a Sin wave")
 canvas.color = colors.white

@@ -1,4 +1,4 @@
-window()
+window.show()
 canvas.text(50, 50, "Now playing a song")
 --music.play('willtell.xm');
 --music.sound(440, 1000);

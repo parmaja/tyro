@@ -1,5 +1,5 @@
 log(version);
-window(1024, 400);
+window.show(1024, 400);
 console.show(30, 15);
 console.print('Hello World');
 console.read();

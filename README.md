@@ -49,7 +49,7 @@ Supported key names: letters `a`-`z`, digits `0`-`9`, `space`, `enter`, `tab`,
 `f1`-`f12`, `shift`, `ctrl`, `alt`.
 
 ```lua
-window()
+window.show()
 while true do
     if iskeydown("w") then print("W is held") end
     if iskeypressed("space") then print("Space pressed!") end
@@ -66,7 +66,7 @@ end
 | `ismousepressed(button)` | True once when a mouse button is pressed | `"left"`, `"right"`, `"middle"` |
 
 ```lua
-window()
+window.show()
 while true do
     if ismousepressed("left") then
         canvas.circle(mousex(), mousey(), 5, true)
@@ -129,7 +129,7 @@ See `demos/terminal_demo.lua` and `demos/console_read_demo.lua` for examples.
 | `rand(min, max)` | `integer` | Random integer in [min, max] |
 
 ```lua
-window()
+window.show()
 start = time()
 while true do
     ft = frametime()

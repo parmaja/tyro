@@ -5,7 +5,7 @@
 --  canvas.line, canvas.point, canvas.text, colors
 --======================================================================
 
-window(640, 480)
+window.show(640, 480)
 canvas.color = colors.black
 canvas.clear()
 

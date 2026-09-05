@@ -5,7 +5,7 @@
 --  Music Macro Language melodies
 --======================================================================
 
-window(640, 480)
+window.show(640, 480)
 canvas.color = colors.white
 canvas.text(10, 30, "Music & Sound Demo")
 canvas.text(10, 50, "You should hear sound effects...")

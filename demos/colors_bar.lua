@@ -1,4 +1,4 @@
-window()
+window.show()
 x = 10
 w = 50
 i = 0

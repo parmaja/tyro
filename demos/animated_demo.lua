@@ -4,7 +4,7 @@
 --  Demonstrates: while-loop animation, random colors, sleep() timing
 --======================================================================
 
-window(640, 480)
+window.show(640, 480)
 canvas.color = colors.black
 canvas.clear()
 canvas.color = colors.white
