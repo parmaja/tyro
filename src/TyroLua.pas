@@ -632,16 +632,27 @@ end;
 function TLuaScript.ShowConsole_func(L: Plua_State): Integer; cdecl;
 var
   c: integer;
-  w, h: integer;
+  x, y, w, h: integer;
 begin
   c := lua_gettop(L);
+  x := 0;
+  y := 0;
   w := 0;
   h := 0;
-  if c > 0 then
-    w := round(lua_tonumber(L, 1));
-  if c > 1 then
-    h := round(lua_tonumber(L, 2));
-  RunQueueObject(TShowConsoleObject.Create(w, h));
+  if c >= 2 then
+  begin
+    x := round(lua_tonumber(L, 1));
+    y := round(lua_tonumber(L, 2));
+  end;
+  if c >= 4 then
+  begin
+    w := round(lua_tonumber(L, 3));
+    h := round(lua_tonumber(L, 4));
+  end;
+  if (w > 0) and (h > 0) then
+    RunQueueObject(TShowConsoleObject.Create(x, y, w, h))
+  else
+    RunQueueObject(TShowConsoleObject.Create(x, y));
   Result := 0;
 end;
 

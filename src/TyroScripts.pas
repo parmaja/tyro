@@ -54,14 +54,16 @@ type
     procedure DoExecute; override;
   end;
 
-  { TShowConsoleObject }
+   { TShowConsoleObject }
 
-   TShowConsoleObject = class(TQueueObject)
-   public
-     fW, fH: Integer;
-     constructor Create(W, H: Integer);
-     procedure DoExecute; override;
-   end;
+    TShowConsoleObject = class(TQueueObject)
+    public
+      fX, fY: Integer;
+      fW, fH: Integer;
+      constructor Create(AX, AY: Integer); overload;
+      constructor Create(AX, AY, AW, AH: Integer); overload;
+      procedure DoExecute; override;
+    end;
 
    { TReadConsoleObject }
 
@@ -336,16 +338,27 @@ end;
 
 { TShowConsoleObject }
 
-constructor TShowConsoleObject.Create(W, H: Integer);
+constructor TShowConsoleObject.Create(AX, AY: Integer);
 begin
   inherited Create;
-  FW := W;
-  FH := H;
+  fX := AX;
+  fY := AY;
+  fW := 0;
+  fH := 0;
+end;
+
+constructor TShowConsoleObject.Create(AX, AY, AW, AH: Integer);
+begin
+  inherited Create;
+  fX := AX;
+  fY := AY;
+  fW := AW;
+  fH := AH;
 end;
 
 procedure TShowConsoleObject.DoExecute;
 begin
-  Main.ShowConsole(FW, FH);
+  Main.ShowConsole(fX, fY, fW, fH);
 end;
 
 { TReadConsoleObject }
@@ -367,7 +380,7 @@ end;
 procedure TReadConsoleObject.DoExecute;
 begin
   // Show console and start reading input with a custom callback
-  Main.ShowConsole(80, 25);
+  //Main.ShowConsole(80, 25);
   Main.StartConsoleReadEx(HandleConsoleInput);
 end;
 

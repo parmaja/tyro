@@ -75,9 +75,9 @@ type
 
     procedure RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 
-    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); override;
-    procedure ShowConsole(AWidth, AHeight: Integer);
-    procedure HideConsole;
+     procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); override;
+     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer);
+     procedure HideConsole;
 
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
@@ -344,14 +344,14 @@ begin
   inherited;
 end;
 
-procedure TTyroEngine.ShowConsole(AWidth, AHeight: Integer);
+procedure TTyroEngine.ShowConsole(AX, AY, AWidth, AHeight: Integer);
 begin
   if (AWidth <= 0) or (AHeight <= 0) then
   begin
     AWidth := 80;
     AHeight := 25;
   end;
-  Console.WindowRect := Rect(Margin, Margin, Margin + AWidth * Console.CharWidth, Margin + AHeight * Console.CharHeight);
+  Console.WindowRect := Rect(AX, AY, AX + AWidth * Console.CharWidth, AY + AHeight * Console.CharHeight);
   Console.Show;
   StartConsoleRead;
 end;
