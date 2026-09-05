@@ -124,6 +124,7 @@ type
     FStringBuffer: TStringList;
     FAutoFollow: Boolean;
     FWriteInput: Boolean;
+    FOverwriteMode: Boolean;
     procedure SetLineCount(c: Integer);
     procedure SetTopLine(Nr: Integer);
     procedure AdjustScrollBars(const Recalc:Boolean=False);
@@ -199,6 +200,7 @@ type
     property GraphicalCharacterWidth: Integer Read FCharWidth Write FCharWidth;
     property AutoFollow: Boolean Read FAutoFollow Write FAutoFollow default True;
     property WriteInput:Boolean read FWriteInput write FWriteInput default True;
+    property OverwriteMode: Boolean Read FOverwriteMode Write FOverwriteMode default False;
   end;
 
   { TColorChar - Represents a single character with color and attribute information }
@@ -613,12 +615,21 @@ var
       ACanvas.PenColor  := SameForeColor;
       ACanvas.DrawText(SameColorX, AY, SameColor, SameForeColor);
     end;
-    AX := ALeftX;
-    Inc(AY, ACharHeight);
-    if ADrawCaret and (CaretX >= 0) then
-    begin
-      ACanvas.DrawRect(CaretX, AY - CharWidth, CaretX + CaretW, AY, ACaretColor, True);
-    end;
+     AX := ALeftX;
+     Inc(AY, ACharHeight);
+     if ADrawCaret and (CaretX >= 0) then
+     begin
+       if FConsole.FOverwriteMode then
+       begin
+         // Overwrite mode: block caret (full character cell)
+         ACanvas.DrawRect(CaretX, AY - ACharHeight, CaretX + CaretW, AY, ACaretColor, True);
+       end
+       else
+       begin
+         // Insert mode: vertical line caret (1 pixel wide, full character height)
+         ACanvas.DrawLine(CaretX, AY - ACharHeight, CaretX, AY - 1, ACaretColor);
+       end;
+     end;
   end;
 
   procedure DrawBack;
@@ -1635,13 +1646,21 @@ procedure TTyroConsole.KeyPress(var Key: TUTF8Char);
 begin
   if not FInput then
     Exit;
-  if key >= #32 then
-  begin
-    if FSelStart <> -1 then
-      DeleteSelected;
-     FInputBuffer.Insert(FInputPos, key, FInputColor, FInputBackGround);
-    Inc(FInputPos);
-    FCaretX     := FInputX + FInputPos;
+   if key >= #32 then
+   begin
+     if FSelStart <> -1 then
+       DeleteSelected;
+     if FOverwriteMode and (FInputPos < FInputBuffer.Count) then
+     begin
+       FInputBuffer.OverWriteChar(key, FInputPos, FInputColor, FInputBackGround);
+       Inc(FInputPos);
+     end
+     else
+     begin
+       FInputBuffer.Insert(FInputPos, key, FInputColor, FInputBackGround);
+       Inc(FInputPos);
+     end;
+     FCaretX     := FInputX + FInputPos;
     if Assigned(FOnInputChange) then
       FOnInputChange(Self, FInputBuffer);
   end;
@@ -1667,8 +1686,17 @@ var
 begin
   if not FInput then
     Exit;
-  case Key of
-    Key_END:
+   case Key of
+     KEY_INSERT:
+     begin
+       if FInput then
+       begin
+         key := KEY_NULL;
+         FOverwriteMode := not FOverwriteMode;
+         Invalidate;
+       end;
+     end;
+     Key_END:
     begin
       key := KEY_NULL;
       if (not (ssAlt in Shift)) and FInput and (FInputPos <> FInputBuffer.Count) then
@@ -2360,8 +2388,9 @@ begin
   FSelStart         := CNoSelection;
   FLineCount        := CDefaultLineCount;
   FInputVisible     := False;
-  FWriteInput       := True;
-  FBackGroundColor  := clBlack;
+   FWriteInput       := True;
+   FOverwriteMode    := False;
+   FBackGroundColor  := clBlack;
   FCharWidth := CDefaultCharWidth;
   FInputBuffer      := TColorString.Create(Self);
   FEscapeCodeType   := esctConsole;
