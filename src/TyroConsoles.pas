@@ -377,7 +377,6 @@ var
     SameColorWidth: Integer;
     LP:     Integer;
     CaretX: Integer;
-    CaretW: Integer;
     CW:     Integer;
     xp:     Integer;
   begin
@@ -594,7 +593,6 @@ var
         if LP = ACaretPos then
         begin
           CaretX := AX;
-          CaretW := CharWidth;
         end;
         Inc(AX, CW);
         Inc(LP);
@@ -608,7 +606,6 @@ var
        (ACaretPos = System.Length(FChars)) then
     begin
       CaretX := AX;
-      CaretW := CharWidth;
     end;
     if SameColor <> '' then
     begin
@@ -622,12 +619,13 @@ var
        if FConsole.FOverwriteMode then
        begin
          // Overwrite mode: block caret (full character cell)
-         ACanvas.DrawRect(CaretX, AY - ACharHeight, CaretX + CaretW, AY, ACaretColor, True);
+         ACanvas.DrawRect(CaretX, AY - ACharHeight, CaretX + CharWidth, AY, ACaretColor, True);
        end
        else
        begin
          // Insert mode: vertical line caret (1 pixel wide, full character height)
-         ACanvas.DrawLine(CaretX, AY - ACharHeight, CaretX, AY - 1, ACaretColor);
+         //ACanvas.DrawRect(CaretX, AY - ACharHeight, CaretX + CharWidth div 4, AY - 1, ACaretColor);
+         ACanvas.DrawRect(CaretX, AY - ACharHeight, CaretX + CharWidth div 4, AY, ACaretColor, True);
        end;
      end;
   end;
@@ -2406,6 +2404,7 @@ begin
   FCurrentColor        := clLightgray;
   FCurrentBackground   := clBlack;
   FCaretColor          := clWhite;
+  FCaretColor.SetAlpha(150);
   FInputSelBackground  := clWhite;
   FInputSelColor       := clBlue;
   SetWindowBounds(0, 0, 200, 200);
