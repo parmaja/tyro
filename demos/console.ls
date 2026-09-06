@@ -1,6 +1,6 @@
 log(version);
 window.show(1024, 400);
-console.show(30, 15);
+console.show(50, 50, 600, 200);
 console.print('Hello World');
 console.read();
 for i = 1,10 do

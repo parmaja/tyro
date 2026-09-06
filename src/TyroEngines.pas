@@ -317,7 +317,7 @@ begin
     raise exception.Create('Screen height can not be 0');
   Graphic := TTyroTextureCanvas.Create(AWidth, AHeight, True);
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
-  Console.WindowRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
+  //Console.WindowRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
 end;
 
 procedure TTyroEngine.Stop;
@@ -351,9 +351,9 @@ begin
     AWidth := 80;
     AHeight := 25;
   end;
-  Console.WindowRect := Rect(AX, AY, AX + AWidth * Console.CharWidth, AY + AHeight * Console.CharHeight);
+  Console.WindowRect := Rect(AX, AY, AX + AWidth, AY + AHeight);
   Console.Show;
-  StartConsoleRead;
+  //StartConsoleRead;
 end;
 
 procedure TTyroEngine.HideConsole;
