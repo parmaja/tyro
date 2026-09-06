@@ -1,4 +1,5 @@
 log(version);
+font.load('fonts/terminus.ttf')
 window.show(1024, 400);
 console.show(50, 50, 600, 200);
 console.print('Hello World');

@@ -2400,9 +2400,9 @@ begin
   FSelStart         := CNoSelection;
   FLineCount        := CDefaultLineCount;
   FInputVisible     := False;
-   FWriteInput       := True;
-   FOverwriteMode    := False;
-   FBackGroundColor  := clBlack;
+  FWriteInput       := True;
+  FOverwriteMode    := False;
+  FBackGroundColor  := clBlack;
   FCharWidth := CDefaultCharWidth;
   FInputBuffer      := TColorString.Create(Self);
   FEscapeCodeType   := esctConsole;
@@ -2412,9 +2412,9 @@ begin
   SetLength(FLineHeights, FLineCount);
   SetLength(FLineHeightSum, FLineCount);
   FTabWidth := CDefaultTabWidth;
-   FCaretTimer        := 0;
-   FCaretDim          := 1;
-   FCaretVisible        := True;
+  FCaretTimer        := 0;
+  FCaretDim          := 1;
+  FCaretVisible        := True;
   FVSBVisible          := True;
   FCurrentColor        := clLightgray;
   FCurrentBackground   := clBlack;
@@ -2433,7 +2433,6 @@ begin
 end;
 
 destructor TTyroConsole.Destroy;
-var i : Integer;
 begin
   FStringBuffer.Free;
   FreeAndNil(FLines);

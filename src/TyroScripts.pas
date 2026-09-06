@@ -190,14 +190,24 @@ type
     procedure DoExecute; override;
   end;
 
-  { TPlayMMLObject }
+   { TPlayMMLObject }
 
-  TPlayMMLObject = class(TQueueObject)
-  public
-    Song: TmmlSong;
-    constructor Create(ASong: TmmlSong);
-    procedure DoExecute; override;
-  end;
+   TPlayMMLObject = class(TQueueObject)
+   public
+     Song: TmmlSong;
+     constructor Create(ASong: TmmlSong);
+     procedure DoExecute; override;
+   end;
+
+   { TLoadFontObject }
+
+   TLoadFontObject = class(TQueueObject)
+   public
+     FileName: string;
+     FontSize: Integer;
+     constructor Create(AFileName: string; AFontSize: Integer = cFontSize);
+     procedure DoExecute; override;
+   end;
 
   { TClearObject }
 
@@ -416,6 +426,20 @@ var
 begin
   Melody := TRayMelody.Create;
   Melody.Play(Song);
+end;
+
+{ TLoadFontObject }
+
+constructor TLoadFontObject.Create(AFileName: string; AFontSize: Integer);
+begin
+  inherited Create;
+  FileName := AFileName;
+  FontSize := AFontSize;
+end;
+
+procedure TLoadFontObject.DoExecute;
+begin
+  Resources.Font.LoadFromFile(FileName, FontSize);
 end;
 
 { TPlaySoundObject }

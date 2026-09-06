@@ -122,6 +122,7 @@ type
   public
     Font: TRayFont;
     WorkSpace: utf8string;
+    CurrentDirectory: string;
     function Find(const ResName, ResType: string): TTyroResource; overload;
     procedure Load; virtual;
     procedure Add(const ResName, ResType: string; const ResData: rawbytestring); overload;
@@ -436,6 +437,8 @@ end;
 constructor TTyroResources.Create;
 begin
   inherited;
+  WorkSpace:= ExtractFilePath(ParamStr(0));
+  CurrentDirectory := GetCurrentDir;
   Font := TRayFont.Create;
 end;
 
@@ -482,21 +485,11 @@ begin
 
   res := Find('font', 'png');
   if res <> nil then
-  begin
-    Font.LoadFromString(res.ResData, 16);
-    Font.Height := Font.Data.BaseSize * 2;
-  end
+    Font.LoadFromString(res.ResData, 16)
   else if SysUtils.FileExists(WorkSpace + 'font.png') then
-  begin
-    Font.LoadFromFile(WorkSpace + 'font.png');
-    Font.Height := Font.Data.BaseSize * 2;
-  end
+    Font.LoadFromFile(WorkSpace + 'font.png')
   else
-  begin
     Font.LoadDefault;
-  end;
-
-  SetTextureFilter(Font.Data.texture, TEXTURE_FILTER_POINT);
 end;
 
 { TTyroResource }

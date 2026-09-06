@@ -24,9 +24,9 @@ uses
 
 const
   cDefaultSampleRate     = 44100;   // Default sample rate
-  DEFAULT_TTF_FONTSIZE   = 32;      // Font first character (32 - space)
-  DEFAULT_TTF_NUMCHARS   = 95;      // ASCII 32..126 is 95 glyphs
-  DEFAULT_FIRST_CHAR     = 32;      // Expected first char for image sprite font
+  cFontSize   = 16;      // Font Size
+  cFirstChar   = 32;      // Font first character (32 - space)
+  cNumChar   = 95;      // ASCII 32..126 is 95 glyphs
 
 type
   TRayObject = class(TObject)
@@ -136,6 +136,7 @@ type
   TRayFont = class(TRayObject)
   public
     Data: TFont;
+    procedure Loaded;
   public
     RefCount: Boolean;
     Width: Integer;
@@ -144,8 +145,8 @@ type
     procedure Release;
     constructor Create;
     destructor Destroy; override;
-    procedure LoadFromFile(FileName: utf8string);
-    procedure LoadFromString(const DataString: rawbytestring; fontSize: Integer);
+    procedure LoadFromFile(FileName: utf8string; FontSize: Integer = cFontSize);
+    procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
     procedure LoadDefault;
   end;
 
@@ -163,6 +164,16 @@ var
 
 { TRayFont }
 
+procedure TRayFont.Loaded;
+var
+  charSize: TVector2;
+begin
+  charSize := RayLib.MeasureTextEx(Data, 'A', Data.BaseSize, 1);
+  Height := Floor(charSize.y) * 2;
+  Width := Floor(charSize.x) * 2;
+  //Width := Data.Glyphs[0].advanceX;;
+end;
+
 procedure TRayFont.Add;
 begin
 end;
@@ -173,33 +184,45 @@ end;
 
 constructor TRayFont.Create;
 begin
-
+  inherited Create;
 end;
 
 destructor TRayFont.Destroy;
 begin
-  UnloadFont(Data);
+  RayLib.UnloadFont(Data);
   inherited Destroy;
 end;
 
 procedure TRayFont.LoadDefault;
 begin
+  RayLib.UnloadFont(Data);
   Data := GetFontDefault();
-  Height := Data.BaseSize;
+  Loaded;
 end;
 
-procedure TRayFont.LoadFromFile(FileName: utf8string);
+procedure TRayFont.LoadFromFile(FileName: utf8string; FontSize: Integer);
 begin
-  Data := LoadFont(PUTF8Char(FileName));
+  if SysUtils.FileExists(FileName) then
+  begin
+    RayLib.UnloadFont(Data);
+    Data := Default(TFont);
+    //Data := RayLib.LoadFont(PUTF8Char(FileName));
+    Data := RayLib.LoadFontEx(PUTF8Char(FileName), FontSize, 0, 250);
+    SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
+    Loaded;
+  end;
 end;
 
 procedure TRayFont.LoadFromString(const DataString: rawbytestring; fontSize: Integer);
 var
   img: TImage;
 begin
+  RayLib.UnloadFont(Data);
   img := LoadImageFromMemory('.png', PByte(DataString), Length(DataString));
-  Data := LoadFontFromImage(img, clMagenta, 32);
+  Data := LoadFontFromImage(img, clMagenta, cFirstChar);
+  SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
   UnloadImage(img);
+  Loaded;
 end;
 
 { TRayAudio }

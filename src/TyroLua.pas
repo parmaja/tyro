@@ -20,7 +20,8 @@ uses
   Classes, SysUtils,
   lua53, FPImage,
   RayLib, RayClasses, //remove it
-   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines, TyroInput;
+  mnUtils,
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines, TyroInput;
 
 type
   TLuaScript = class;
@@ -52,6 +53,16 @@ type
   { TLuaConsole }
 
   TLuaConsole = class(TLuaObject)
+  protected
+    function __setter(L: PLua_State): integer; cdecl; override;
+    function __getter(L: PLua_State): integer; cdecl; override;
+  public
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
+  { TLuaFont }
+
+  TLuaFont = class(TLuaObject)
   protected
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
@@ -91,6 +102,7 @@ type
     Canvas: TLuaCanvas;
     Console: TLuaConsole;
     Colors: TLuaColors;
+    Font: TLuaFont;
     procedure ExecuteQueueObject;
     procedure DoError(S: string);
     procedure Run; override;
@@ -124,8 +136,11 @@ type
     function TotalTime_func(L: Plua_State): Integer; cdecl;
     function RandomValue_func(L: Plua_State): Integer; cdecl;
 
-    // console input
-    function ConsoleRead_func(L: Plua_State): Integer; cdecl;
+     // console input
+     function ConsoleRead_func(L: Plua_State): Integer; cdecl;
+
+     //font
+     function LoadFont_func(L: Plua_State): Integer; cdecl;
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -339,6 +354,23 @@ begin
   inherited Create(AScript);
 end;
 
+{ TLuaFont }
+
+function TLuaFont.__setter(L: PLua_State): integer; cdecl;
+begin
+  Result := 0;
+end;
+
+function TLuaFont.__getter(L: PLua_State): integer; cdecl;
+begin
+  Result := 0;
+end;
+
+constructor TLuaFont.Create(AScript: TLuaScript);
+begin
+  inherited Create(AScript);
+end;
+
 { TLuaObject }
 
 procedure TLuaObject.Created;
@@ -510,28 +542,32 @@ begin
 //  lua_register_integer(LuaState, 'width', ScreenWidth));
 //  lua_register_integer(LuaState, 'height', ScreenHeight));
 
-  Canvas := TLuaCanvas.Create(Self);
-  Console := TLuaConsole.Create(Self);
-  Colors := TLuaColors.Create(Self);
+   Canvas := TLuaCanvas.Create(Self);
+   Console := TLuaConsole.Create(Self);
+   Colors := TLuaColors.Create(Self);
+   Font := TLuaFont.Create(Self);
 
-  lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
-  lua_register_table_method(LuaState, 'console', self, 'println', @PrintLn_func);
-  lua_register_table_method(LuaState, 'console', self, 'show', @ShowConsole_func);
-  lua_register_table_method(LuaState, 'console', self, 'read', @ConsoleRead_func);
-  lua_register_table_index(LuaState, 'console', Console); //Should be last one
+   lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
+   lua_register_table_method(LuaState, 'console', self, 'println', @PrintLn_func);
+   lua_register_table_method(LuaState, 'console', self, 'show', @ShowConsole_func);
+   lua_register_table_method(LuaState, 'console', self, 'read', @ConsoleRead_func);
+   lua_register_table_index(LuaState, 'console', Console); //Should be last one
 
-  //lua_register_table(LuaState, 'draw', Canvas);
-  lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'line', @DrawLine_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'point', @DrawPoint_func);
+   //lua_register_table(LuaState, 'draw', Canvas);
+   lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
+   lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
+   lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
+   lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
+   lua_register_table_method(LuaState, 'canvas', self, 'line', @DrawLine_func);
+   lua_register_table_method(LuaState, 'canvas', self, 'point', @DrawPoint_func);
 
-  lua_register_table_value(LuaState, 'canvas', 'width', ScreenWidth);
-  lua_register_table_value(LuaState, 'canvas', 'height', ScreenHeight);
+   lua_register_table_value(LuaState, 'canvas', 'width', ScreenWidth);
+   lua_register_table_value(LuaState, 'canvas', 'height', ScreenHeight);
 
-  lua_register_table_index(LuaState, 'canvas', Canvas); //Should be last one
+   lua_register_table_index(LuaState, 'canvas', Canvas); //Should be last one
+
+   lua_register_table_method(LuaState, 'font', self, 'load', @LoadFont_func);
+   lua_register_table_index(LuaState, 'font', Font); //Should be last one
 
   lua_register_table_method(LuaState, 'music', self, 'beep', @Beep_func);
   lua_register_table_method(LuaState, 'music', self, 'sound', @PlaySound_func);
@@ -905,8 +941,32 @@ begin
     lua_pushstring(L, PChar(Reader.ResultString));
     Result := 1;
   finally
-    Reader.Free;
+     Reader.Free;
+   end;
+ end;
+
+function TLuaScript.LoadFont_func(L: Plua_State): Integer; cdecl;
+var
+  s: string;
+  aSize: Integer;
+begin
+  s := lua_tostring(L, 1);
+  // Load font from current directory (AssetsFolder or WorkSpace)
+  if ExtractFileDir(s) = '' then
+  begin
+    if not SysUtils.FileExists(s) then
+      s := IncludePathDelimiter(Resources.CurrentDirectory) + s;
+    if not SysUtils.FileExists(s) then
+      s := IncludePathDelimiter(AssetsFolder) + s;
+    if not SysUtils.FileExists(s) then
+      s := IncludePathDelimiter(Resources.WorkSpace) + 'fonts' + PathDelim + s;
   end;
+  if lua_isnumber(L, 2) then
+    aSize := lua_tointeger(L, 2)
+  else
+    aSize := cFontSize;
+  AddQueueObject(TLoadFontObject.Create(s, aSize));
+  Result := 0;
 end;
 
 initialization

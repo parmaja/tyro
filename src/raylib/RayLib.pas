@@ -3,8 +3,8 @@
 {$mode delphi}
 {.$packrecords c}
 {$else}
-{$POINTERMATH ON}
 {$endif}
+{$POINTERMATH ON}
 {$M+}{$H+}{$A8}
 {$MINENUMSIZE 4} //{$Z4} All enum must be sized as Integer
 {**********************************************************************************************
@@ -2009,7 +2009,7 @@ var
   // Unload font chars info data (RAM)
   UnloadFontData: procedure(glyphs: PGlyphInfo; glyphCount: Integer); cdecl = nil;
   // Unload Font from GPU memory (VRAM)
-  UnloadFont: procedure(font: TFont); cdecl = nil;
+  UnloadFont: procedure(Font: TFont); cdecl = nil;
   // Export font as code file, returns true on success
   ExportFontAsCode: function(Font: TFont; const FileName: PUTF8Char): Boolean; cdecl = nil;
 
@@ -2035,6 +2035,7 @@ var
 
   // Set vertical line spacing when drawing with line-breaks
   SetTextLineSpacing: procedure(spacing: Integer); cdecl = nil;
+  // Measure string width for default font
   MeasureText: function(const text: PUTF8Char; fontSize: Integer): Integer; cdecl = nil;
   // Measure string size for Font
   MeasureTextEx: function(font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single): TVector2; cdecl = nil;
