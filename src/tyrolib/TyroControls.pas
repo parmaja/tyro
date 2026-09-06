@@ -720,12 +720,17 @@ procedure TTyroControl.Paint(ACanvas: TTyroCanvas);
 begin
   if Visible then
   begin
+    if csClip in Style then
+      RayLib.BeginScissorMode(FWindowRect.Left + ClientLeft, FWindowRect.Top + ClientTop,
+        ClientWidth, ClientHeight);
     ACanvas.SetOrigin(FWindowRect.Left + ClientLeft, FWindowRect.Top + ClientTop);
     try
       DoPaintBackground(ACanvas);
       DoPaint(ACanvas)
     finally
       ACanvas.ResetOrigin;
+      if csClip in Style then
+        RayLib.EndScissorMode();
     end;
   end;
 end;
