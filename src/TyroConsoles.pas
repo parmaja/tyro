@@ -44,6 +44,8 @@ const
 
   { Caret timing (in seconds) }
   CCaretBlinkInterval = 0.5;
+  { Minimum dim factor (0.0 = fully dimmed, 1.0 = full brightness) }
+  CCaretMinDim = 0.2;
 
   { Default values }
   CDefaultTabWidth = 60;
@@ -77,6 +79,7 @@ type
   TTyroConsole = class(TTyroControl)
   private
     FCaretTimer: Double;
+    FCaretDim: Double;
     FCaretVisible: boolean;
     FLineCount: Integer;
     FLines: TColorStrings;
@@ -619,13 +622,12 @@ var
        if FConsole.FOverwriteMode then
        begin
          // Overwrite mode: block caret (full character cell)
-         ACanvas.DrawRect(CaretX, AY - ACharHeight, CaretX + CharWidth, AY, ACaretColor, True);
+         ACanvas.FillRect(CaretX, AY - ACharHeight, CaretX + CharWidth, AY, ACaretColor);
        end
        else
        begin
          // Insert mode: vertical line caret (1 pixel wide, full character height)
-         //ACanvas.DrawRect(CaretX, AY - ACharHeight, CaretX + CharWidth div 4, AY - 1, ACaretColor);
-         ACanvas.DrawRect(CaretX, AY - ACharHeight, CaretX + CharWidth div 4, AY, ACaretColor, True);
+         ACanvas.FillRect(CaretX, AY - ACharHeight, CaretX + CharWidth div 4, AY, ACaretColor);
        end;
      end;
   end;
@@ -2318,6 +2320,7 @@ var
   y, t : Integer;
   m : Integer;
   CurrentLine : Integer;
+  CaretColorDimmed: TColor;
 begin
   inherited;
   with ACanvas do
@@ -2325,25 +2328,27 @@ begin
     m := FVisibleLines - 1;
     y := -FLineOfTopLine;
     CurrentLine := FTopLine;
+    // Compute dimmed caret color based on blink dim factor
+    CaretColorDimmed := FCaretColor.SetAlpha(Round(FCaretColor.RGBA.Alpha * FCaretDim));
     while (y <= m) and (CurrentLine < FLines.Count){ and (CurrentLine < Length(FLines))} do
     begin
        FLines[CurrentLine].LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
-         FCharHeight, FCharWidth, -1, FBackGroundColor, FCaretColor, False);
+         FCharHeight, FCharWidth, -1, FBackGroundColor, CaretColorDimmed, False);
        if (FInput) and (FInputY = CurrentLine) then
        begin
          if FInputIsPassword then
          begin
            FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
-             FCharHeight, FCharWidth, FCaretX, FBackGroundColor, FCaretColor,
+             FCharHeight, FCharWidth, FCaretX, FBackGroundColor, CaretColorDimmed,
              FCaretVisible and Focused);
          end
          else
          begin
            FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
-             FCharHeight, FCharWidth, FCaretX, FBackGroundColor, FCaretColor,
+             FCharHeight, FCharWidth, FCaretX, FBackGroundColor, CaretColorDimmed,
              FCaretVisible and Focused);
          end;
-      end;
+       end;
       Inc(y, FLineHeights[CurrentLine]);
       Inc(CurrentLine);
     end;
@@ -2356,21 +2361,29 @@ begin
 end;
 
 procedure TTyroConsole.Update;
+var
+  BlinkPhase: Double;
+  DimFactor: Double;
 begin
-  // Caret blinking (toggle every CCaretBlinkInterval seconds)
+  // Caret blinking: dim the caret color based on a sine wave cycle
   if Visible and Focused then
   begin
     FCaretTimer := FCaretTimer + RayLib.GetFrameTime();
     if FCaretTimer >= CCaretBlinkInterval then
-    begin
       FCaretTimer := FCaretTimer - CCaretBlinkInterval;
-      FCaretVisible := not FCaretVisible;
-      Invalidate;
-    end;
+    // BlinkPhase goes 0..1 over the blink interval
+    BlinkPhase := FCaretTimer / CCaretBlinkInterval;
+    // Sine wave: 0 at start, 1 at half-cycle, 0 at full cycle
+    // Map sin(0..2Pi) from [-1..1] to [CCaretMinDim..1.0]
+    DimFactor := Sin(BlinkPhase * 2 * Pi);
+    DimFactor := CCaretMinDim + (DimFactor + 1) / 2 * (1 - CCaretMinDim);
+    FCaretDim := DimFactor;
+    Invalidate;
   end
   else
   begin
     FCaretTimer := 0;
+    FCaretDim := 1.0;
     FCaretVisible := True;
   end;
 end;
@@ -2380,6 +2393,7 @@ var
   i: Integer;
 begin
   inherited;
+  Style := [csClip];
   FStringBuffer     := TStringList.Create;
   FCharHeight := CDefaultCharHeight;
   FCharWidth := CDefaultCharWidth;
@@ -2398,13 +2412,13 @@ begin
   SetLength(FLineHeights, FLineCount);
   SetLength(FLineHeightSum, FLineCount);
   FTabWidth := CDefaultTabWidth;
-  FCaretTimer        := 0;
-  FCaretVisible        := True;
+   FCaretTimer        := 0;
+   FCaretDim          := 1;
+   FCaretVisible        := True;
   FVSBVisible          := True;
   FCurrentColor        := clLightgray;
   FCurrentBackground   := clBlack;
   FCaretColor          := clWhite;
-  FCaretColor.SetAlpha(150);
   FInputSelBackground  := clWhite;
   FInputSelColor       := clBlue;
   SetWindowBounds(0, 0, 200, 200);

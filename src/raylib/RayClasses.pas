@@ -196,8 +196,6 @@ end;
 procedure TRayFont.LoadFromString(const DataString: rawbytestring; fontSize: Integer);
 var
   img: TImage;
-const
-  DEFAULT_FIRST_CHAR = 32;
 begin
   img := LoadImageFromMemory('.png', PByte(DataString), Length(DataString));
   Data := LoadFontFromImage(img, clMagenta, 32);

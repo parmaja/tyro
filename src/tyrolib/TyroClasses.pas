@@ -79,11 +79,13 @@ type
     procedure DrawLineF(X1, Y1, X2, Y2: Single); overload;
 
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
+    procedure FillRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor); overload;
     procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(ARectangle: TRectangle; Color: TColor; Fill: Boolean); overload;
 
+    procedure FillRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor); overload;
     procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
 
@@ -319,7 +321,13 @@ begin
   RayLib.DrawRectangleLinesEx(ARectangle, PenWidth, Color);
 end;
 
-procedure TTyroCanvas.DrawRectangle(X, Y, AWidth, AHeight: Single; Color: TColor; Fill: Boolean);
+procedure TTyroCanvas.FillRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor);
+begin
+  FillRectangle(ALeft, ATop, ARight - ALeft, ABottom - ATop, Color);
+end;
+
+procedure TTyroCanvas.DrawRectangle(X: Single; Y: Single; AWidth: Single;
+  AHeight: Single; Color: TColor; Fill: Boolean);
 begin
   DrawRectangle(RectangleOf(X, Y, AWidth, AHeight), Color, Fill)
 end;
@@ -361,6 +369,13 @@ end;
 procedure TTyroCanvas.DrawLineTo(X2, Y2: Integer; Color: TColor);
 begin
   DrawLine(FLastX + FOriginX, FLastY + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
+end;
+
+procedure TTyroCanvas.FillRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor);
+begin
+  RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color);
+  FLastX := X + AWidth;
+  FLastY := Y + AHeight;
 end;
 
 procedure TTyroCanvas.PostDraw;

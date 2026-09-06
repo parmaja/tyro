@@ -52,6 +52,11 @@ type
     scrollENDSCROLL
   );
 
+  TTyroControlStyle = (
+    csClip
+  );
+  TTyroControlStyles = set of TTyroControlStyle;
+
   TTyroControlState = (csCreating, csCreated, csDestroying);
   TTyroControlStates = set of TTyroControlState;
 
@@ -113,6 +118,7 @@ type
     function GetClientTop: Integer;
   protected
     State: TTyroControlStates;
+    Style: TTyroControlStyles;
     function GetClientRect: TRect;
     function GetClientWidth: Integer;
     function GetClientHeight: Integer;
