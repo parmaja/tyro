@@ -714,7 +714,7 @@ procedure TTyroControl.Paint(ACanvas: TTyroCanvas);
 begin
   if Visible then
   begin
-    ACanvas.SetOrigin(ClientLeft, ClientTop);
+    ACanvas.SetOrigin(FWindowRect.Left + ClientLeft, FWindowRect.Top + ClientTop);
     try
       DoPaintBackground(ACanvas);
       DoPaint(ACanvas)
