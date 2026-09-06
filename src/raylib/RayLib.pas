@@ -1924,7 +1924,7 @@ var
   { Texture configuration functions }
 
   // Generate GPU mipmaps for a texture
-  GenTextureMipmaps: procedure(texture: PTexture2D); cdecl = nil;
+  GenTextureMipmaps: procedure(var texture: TTexture2D); cdecl = nil;
   // Set texture scaling filter mode
   SetTextureFilter: procedure(texture: TTexture2D; Filter: TTextureFilter); cdecl = nil;
   // Set texture wrapping mode
@@ -2003,7 +2003,7 @@ var
   // Check if a font is valid (font data loaded, WARNING: GPU texture not checked)
   IsFontValid: function(Font: TFont): Boolean; cdecl = nil;
   // Load font data for further use
-  LoadFontData: function(fileData: PByte; dataSize, fontSize: Integer; codepoints: PInteger; codepointCount: Integer; &type: Integer; glyphCount: PInteger): PGlyphInfo; cdecl = nil;
+  LoadFontData: function(fileData: PByte; dataSize, fontSize: Integer; codepoints: PInteger; codepointCount: Integer; &type: TFontType; glyphCount: PInteger): PGlyphInfo; cdecl = nil;
   // Generate image font atlas using chars info
   GenImageFontAtlas: function(const glyphs: PGlyphInfo; glyphsRecs: PPRectangle; glyphCount: Integer; fontSize: Integer; padding: Integer; packMethod: Integer): TImage; cdecl = nil;
   // Unload font chars info data (RAM)

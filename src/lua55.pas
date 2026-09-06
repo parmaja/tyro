@@ -1010,7 +1010,7 @@ procedure luaL_openselectedlibs(L: Plua_State; load: integer; preload: integer);
 
 initialization
 {$IFDEF MSWINDOWS}
-//   Set8087CW($133F);  // disable all floating-point exceptions
+//* DO not use this/  Set8087CW($133F);  // disable all floating-point exceptions
 {$ENDIF}
 
 (******************************************************************************
