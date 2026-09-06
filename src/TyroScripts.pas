@@ -230,7 +230,7 @@ type
   private
     FActive: Boolean;
     FStarted: Boolean;
-    FAssetsFolder: string;
+    FScriptPath: string;
     function GetActive: Boolean;
     procedure ExecuteQueueObject; //this for sync do not call it
     procedure ExecuteQueueObjectNoFree; //this for sync do not call it
@@ -253,7 +253,7 @@ type
     procedure Start; virtual;
     procedure Terminate;
     procedure LoadFile(FileName: string); overload;
-    property AssetsFolder: string read FAssetsFolder write FAssetsFolder;
+    property ScriptPath: string read FScriptPath write FScriptPath;
     property Active: Boolean read GetActive;
     property Started: Boolean read FStarted; //started true even after stopped
   end;

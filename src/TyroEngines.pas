@@ -251,7 +251,7 @@ begin
       begin
         if LeftStr(RunFile, 1) = '.' then
           RunFile := ExpandFileName(Resources.WorkSpace + RunFile);
-        aScript.AssetsFolder := ExtractFilePath(RunFile);
+        aScript.ScriptPath := ExtractFilePath(RunFile);
         aScript.LoadFile(RunFile);
         Resources.CurrentDirectory := ExtractFilePath(RunFile);
         if RunInMain then

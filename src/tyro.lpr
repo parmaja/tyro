@@ -33,8 +33,8 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils, Classes, CustApp, RayLib, RayClasses, mnUtils, Melodies,
-  TyroControls, TyroClasses, TyroEditors, mnLogs, TyroSounds, TyroEngines,
+  SysUtils, Classes, CustApp, RayLib, mnUtils, Melodies,
+  TyroControls, TyroClasses, TyroEditors, mnLogs, TyroEngines,
   TyroLua, TyroScripts, TyroConsoles;  //Add all languages units here
 
 type

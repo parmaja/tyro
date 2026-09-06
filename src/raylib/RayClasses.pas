@@ -141,18 +141,19 @@ type
     RefCount: Boolean;
     Width: Integer;
     Height: Integer;
+    Scale: Integer;
     procedure Add;
     procedure Release;
     constructor Create;
     destructor Destroy; override;
-    procedure LoadFromFile(FileName: utf8string; FontSize: Integer = cFontSize);
+    procedure LoadFromFile(FileName: utf8string; FontSize: Integer = 0);
     procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
     procedure LoadDefault;
   end;
 
 var
   RayLibSound: TRayLibSound = nil;
-  RayUpdates: TRayUpdateList = nil; //move it to Tyro classes
+  RayUpdates: TRayUpdateList = nil;
 
 function MouseX: Integer;
 function MouseY: Integer;
@@ -169,8 +170,8 @@ var
   charSize: TVector2;
 begin
   charSize := RayLib.MeasureTextEx(Data, 'A', Data.BaseSize, 1);
-  Height := Floor(charSize.y) * 2;
-  Width := Floor(charSize.x) * 2;
+  Height := Floor(charSize.y);
+  Width := Floor(charSize.x);
   //Width := Data.Glyphs[0].advanceX;;
 end;
 
@@ -185,6 +186,7 @@ end;
 constructor TRayFont.Create;
 begin
   inherited Create;
+  Scale := 1;
 end;
 
 destructor TRayFont.Destroy;
@@ -206,8 +208,10 @@ begin
   begin
     RayLib.UnloadFont(Data);
     Data := Default(TFont);
-    //Data := RayLib.LoadFont(PUTF8Char(FileName));
-    Data := RayLib.LoadFontEx(PUTF8Char(FileName), FontSize, 0, 250);
+    if FontSize = 0 then
+      Data := RayLib.LoadFont(PUTF8Char(FileName))
+    else
+      Data := RayLib.LoadFontEx(PUTF8Char(FileName), FontSize, nil, 255);
     SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
     Loaded;
   end;

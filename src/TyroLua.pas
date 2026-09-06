@@ -18,7 +18,7 @@ interface
 
 uses
   Classes, SysUtils,
-  lua53, FPImage,
+  lua55, FPImage,
   RayLib, RayClasses, //remove it
   mnUtils,
   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines, TyroInput;
@@ -830,7 +830,7 @@ var
 begin
   s := lua_tostring(L, 1);
   if ExtractFileDir(s) = '' then
-    s := AssetsFolder + s;
+    s := ScriptPath + s;
   AddQueueObject(TPlayMusicFileObject.Create(s));
   Result := 0;
 end;
@@ -947,24 +947,24 @@ begin
 
 function TLuaScript.LoadFont_func(L: Plua_State): Integer; cdecl;
 var
-  s: string;
+  aFile, s: string;
   aSize: Integer;
 begin
-  s := lua_tostring(L, 1);
-  // Load font from current directory (AssetsFolder or WorkSpace)
-  if ExtractFileDir(s) = '' then
+  aFile := lua_tostring(L, 1);
+  // Load font from current directory (ScriptPath or WorkSpace)
+  if ExtractFileDir(aFile) = '' then
   begin
+    if not SysUtils.FileExists(aFile) then
+      s := IncludePathDelimiter(ScriptPath) + aFile;
     if not SysUtils.FileExists(s) then
-      s := IncludePathDelimiter(Resources.CurrentDirectory) + s;
+      s := IncludePathDelimiter(Resources.CurrentDirectory) + aFile;
     if not SysUtils.FileExists(s) then
-      s := IncludePathDelimiter(AssetsFolder) + s;
-    if not SysUtils.FileExists(s) then
-      s := IncludePathDelimiter(Resources.WorkSpace) + 'fonts' + PathDelim + s;
+      s := IncludePathDelimiter(Resources.WorkSpace) + 'fonts' + PathDelim + aFile;
   end;
   if lua_isnumber(L, 2) then
-    aSize := lua_tointeger(L, 2)
+    aSize := lua_tointeger(L, 2) //LoadFontEx
   else
-    aSize := cFontSize;
+    aSize := 0; //LoadFont
   AddQueueObject(TLoadFontObject.Create(s, aSize));
   Result := 0;
 end;

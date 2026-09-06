@@ -1,6 +1,6 @@
 (******************************************************************************
  *                                                                            *
- *  File:        lua53.pas                                                    *
+ *  File:        lua55.pas                                                    *
  *                                                                            *
  *  Authors:     TeCGraf           (C headers + actual Lua libraries)         *
  *               Lavergne Thomas   (original translation to Pascal)           *
@@ -96,16 +96,26 @@
 
 {$IFDEF FPC}{$MODE OBJFPC}{$H+}{$ENDIF}
 
-unit lua53;
+unit lua55;
+
+{$define PLUTO}
 
 interface
 
 const
+{$ifdef PLUTO}
 {$IFDEF MSWINDOWS}
-   LUA_LIB_NAME = 'pluto.dll';
+   LUA_LIB_NAME = 'pluto-0.13-64.dll';
 {$ELSE}
-   LUA_LIB_NAME = 'pluto.so';
+   LUA_LIB_NAME = 'pluto-0.13-64.so';
 {$ENDIF}
+{$else}
+{$IFDEF MSWINDOWS}
+   LUA_LIB_NAME = 'lua55.dll';
+{$ELSE}
+   LUA_LIB_NAME = 'lua55.so';
+{$ENDIF}
+{$endif}
 
 const
    LUA_VERSION_MAJOR   = '5';
@@ -1000,7 +1010,7 @@ procedure luaL_openselectedlibs(L: Plua_State; load: integer; preload: integer);
 
 initialization
 {$IFDEF MSWINDOWS}
-   Set8087CW($133F);  // disable all floating-point exceptions
+//   Set8087CW($133F);  // disable all floating-point exceptions
 {$ENDIF}
 
 (******************************************************************************
