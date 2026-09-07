@@ -13,16 +13,51 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs,
-  mnLogs,
+  mnLogs, mnUtils,
 //  FPCanvas, FPImage,
   RayLib, RayClasses, TyroScripts,
-  TyroClasses, TyroControls, TyroConsoles;
+  TyroClasses, TyroControls, TyroConsoles,
+  mnClasses;
 
 const
   TyroVersion = 1;
   TyroVersionString = '0.1';
 
+//  sPromptChar = '>';
+  sPromptChar = '›';
+  sPromptDOT: UTF8string = #$25CF;
+
+
 type
+
+  TProcedureObject = procedure(Params: TStrings) of object;
+
+  TConsoleCommand = class(TmnNamedObject)
+  public
+    Alts: TStringArray;
+    Proc: TProcedureObject;
+    Note: string;
+    SyncIt: Boolean;
+    procedure Execute;
+  end;
+
+  TExecuteCommand = class(TObject)
+  public
+    Command: TConsoleCommand;
+    Params: TStrings;
+    procedure Execute;
+  end;
+
+  { TConsoleCommands }
+
+  TConsoleCommands = class(TmnNamedObjectList<TConsoleCommand>)
+  public
+    function Add(Sync: Boolean; Name: UTF8String; Alts: TStringArray; Proc: TProcedureObject; ANote: string = ''): TConsoleCommand; overload;
+    function Add(Name: UTF8String; Alts: TStringArray; Proc: TProcedureObject; ANote: string = ''): TConsoleCommand; overload;
+    function Find(const Name: string): TConsoleCommand; overload;
+    function Execute(Name: UTF8String; Params: TStrings = nil): Boolean; overload;
+  end;
+
   TRunHow = (
     runLint,
     runCompile,
@@ -38,6 +73,11 @@ type
   private
     //FBoard: TTyroImage;
     function GetActive: Boolean;
+
+    procedure Help_Command(Params: TStrings);
+    procedure Dir_Command(Params: TStrings);
+    procedure Clear_Command(Params: TStrings);
+    procedure Exit_Command(Params: TStrings);
   protected
     FQueue: TQueueObjects;
     FScriptThread: TTyroScriptThread;
@@ -45,8 +85,10 @@ type
     FScriptTypes: TScriptTypes;
     FReadCallback: TConsoleReadEvent;
   protected
+    Commands: TConsoleCommands;
     procedure ConsoleInput(AConsole: TTyroConsole; AInput: string);
-    procedure ExecuteCommand(const ACommand: string);
+    procedure ExecuteCommand(ACommand: string);
+    procedure RegisterCommands;
   public
     procedure StartConsoleRead;
     procedure StartConsoleReadEx(ACallback: TConsoleReadEvent);
@@ -212,7 +254,6 @@ begin
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
-
   //TTyroPanel.Create(Self);
 
   Console := TTyroConsole.Create(Self);
@@ -222,6 +263,8 @@ begin
   Console.Visible := False;
   Console.Focused := True;
   Console.OnInput := ConsoleInput;
+  Commands := TConsoleCommands.Create();
+  RegisterCommands;
 end;
 
 destructor TTyroEngine.Destroy;
@@ -230,6 +273,7 @@ begin
   FreeAndNil(Graphic);
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
+  FreeAndNil(Commands);
   inherited;
 end;
 
@@ -378,75 +422,38 @@ begin
     StartConsoleRead;
 end;
 
-procedure TTyroEngine.ExecuteCommand(const ACommand: string);
+procedure TTyroEngine.ExecuteCommand(ACommand: string);
 var
-  sl: TStringList;
-  Cmd: string;
-  sr: TSearchRec;
-  DirPath: string;
+  Params: TStringList;
 begin
-  Cmd := Trim(ACommand);
-  if Cmd = '' then
-    Exit;
-
-  sl := TStringList.Create;
-  try
-    sl.Delimiter := ' ';
-    sl.StrictDelimiter := True;
-    sl.DelimitedText := Cmd;
-    if sl.Count = 0 then
-      Exit;
-    Cmd := LowerCase(Trim(sl[0]));
-
-    if (Cmd = 'dir') or (Cmd = 'list') or (Cmd = 'ls') then
-    begin
-      Console.Writeln('Directory: ' + Resources.CurrentDirectory);
-      DirPath := ExcludeTrailingPathDelimiter(Resources.CurrentDirectory);
-      if FindFirst(DirPath + PathDelim + '*.*', faAnyFile, sr) = 0 then
+  ACommand := Trim(ACommand);
+  if ACommand <> '' then
+  begin
+    Params := TStringList.Create;
+    ParseArguments(ACommand, Params, ['-', '/']);
+    if (Params.Count>0) then
+    try
+      ACommand := Params[0];
+      Params.Delete(0);
+//          Write(#8);
+      if not Commands.Execute(ACommand, Params) then
       begin
-        try
-          repeat
-            Console.Writeln('  ' + sr.Name);
-          until FindNext(sr) <> 0;
-        finally
-          FindClose(sr);
-        end;
-      end
-      else
-      begin
-        Console.Writeln('  (empty)');
+        Console.Writeln('Unknown command: ' + ACommand);
+        Console.Writeln('Type "help" for available commands.');
+        Console.Writeln('');
       end;
-      Console.Writeln('');
-    end
-    else if (Cmd = 'clear') or (Cmd = 'cls') then
-    begin
-      Console.Clear;
-    end
-    else if (Cmd = 'exit') or (Cmd = 'quit') then
-    begin
-      HideConsole;
-      Stop;
-      Terminate;
-    end
-    else if (Cmd = 'help') or (Cmd = '?') then
-    begin
-      Console.Writeln('Available commands:');
-      Console.Writeln('  dir, list, ls  - List files in current directory');
-      Console.Writeln('  clear, cls     - Clear the console');
-      Console.Writeln('  exit, quit     - Hide console and stop');
-      Console.Writeln('  help, ?        - Show this help');
-      Console.Writeln('');
-    end
-    else
-    begin
-      // Unknown command
-      Console.Writeln('Unknown command: ' + Cmd);
-      Console.Writeln('Type "help" for available commands.');
-      Console.Writeln('');
+    finally
+      FreeAndNil(Params);
     end;
-  finally
-    sl.Free;
   end;
+end;
+
+procedure TTyroEngine.RegisterCommands;
+begin
+  Commands.Add('Help', ['?'], Help_Command, 'Show help');
+  Commands.Add('dir', ['ls'], Dir_Command, 'Show current directory');
+  Commands.Add('clear', ['cls'], Clear_Command, 'List files in current directory');
+  Commands.Add('exit', ['quit', 'q'], Exit_Command, 'Hide console and stop');
 end;
 
 procedure TTyroEngine.StartConsoleRead;
@@ -462,6 +469,116 @@ begin
   FReadCallback := ACallback;
   Console.OnInput := ACallback;
   Console.StartRead(clBlack, clBlack, '> ', clLightGray, clBlack);
+end;
+
+procedure TTyroEngine.Help_Command(Params: TStrings);
+var
+  Command: TConsoleCommand;
+begin
+  Console.Writeln('Available commands:');
+  for Command in Commands do
+    if Command.Note <> '' then
+      Console.Writeln(' '+sPromptDOT+' '+ Command.Name + ' : '+ Command.Note)
+    else
+      Console.Writeln(' '+sPromptDOT+' '+ Command.Name);
+  Console.Writeln('');
+end;
+
+procedure TTyroEngine.Dir_Command(Params: TStrings);
+var
+  DirPath: string;
+  sr: TSearchRec;
+begin
+  Console.Writeln('Directory: ' + Resources.CurrentDirectory);
+  DirPath := ExcludeTrailingPathDelimiter(Resources.CurrentDirectory);
+  if FindFirst(DirPath + PathDelim + '*.*', faAnyFile, sr) = 0 then
+  begin
+    try
+      repeat
+        Console.Writeln('  ' + sr.Name);
+      until FindNext(sr) <> 0;
+    finally
+      FindClose(sr);
+    end;
+  end
+  else
+  begin
+    Console.Writeln('  (empty)');
+  end;
+  Console.Writeln('');
+end;
+
+procedure TTyroEngine.Clear_Command(Params: TStrings);
+begin
+  Console.Clear;
+end;
+
+procedure TTyroEngine.Exit_Command(Params: TStrings);
+begin
+  HideConsole;
+  Stop;
+  Terminate;
+end;
+
+{ TConsoleCommand }
+
+procedure TConsoleCommand.Execute;
+begin
+end;
+
+{ TExecuteCommand }
+
+procedure TExecuteCommand.Execute;
+begin
+  Command.Proc(Params);
+  Free;
+end;
+
+{ TConsoleCommands }
+
+function TConsoleCommands.Add(Sync: Boolean; Name: UTF8String; Alts: TStringArray; Proc: TProcedureObject; ANote: string): TConsoleCommand;
+begin
+  Result := TConsoleCommand.Create;
+  Result.Name := Name;
+  Result.Alts := Alts;
+  Result.Proc := proc;
+  Result.Note := ANote;
+  Result.SyncIt := Sync;
+  inherited Add(Result);
+end;
+
+function TConsoleCommands.Add(Name: UTF8String; Alts: TStringArray; Proc: TProcedureObject; ANote: string): TConsoleCommand;
+begin
+  Result := Add(False, Name, Alts, Proc, ANote);
+end;
+
+function TConsoleCommands.Find(const Name: string): TConsoleCommand;
+var
+  i: integer;
+begin
+	if Name <> '' then
+    for i := 0 to Count - 1 do
+    begin
+      if SameText(Name, Items[i].Name) or IsStrInArray(Name, Items[i].Alts) then
+        exit(Items[i]);
+    end;
+  Result := nil;
+end;
+
+function TConsoleCommands.Execute(Name: UTF8String; Params: TStrings): Boolean;
+var
+  Command: TConsoleCommand;
+  Exec :TExecuteCommand;
+begin
+  Command := Find(Name);
+  Result := Command <> nil;
+  if Result then
+  begin
+    Exec := TExecuteCommand.Create;
+    Exec.Command := Command;
+    Exec.Params := Params;
+    Exec.Execute
+  end;
 end;
 
 initialization
