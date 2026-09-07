@@ -252,6 +252,7 @@ type
     procedure Init; virtual;
     //* After window initialized and other resource, load your resources here
     procedure Load; virtual;
+    procedure Start; virtual;
     procedure Update; virtual;
     procedure PrepareDraw; virtual;
     procedure Draw; virtual;
@@ -337,6 +338,10 @@ procedure TTyroMain.Load;
 begin
 end;
 
+procedure TTyroMain.Start;
+begin
+end;
+
 {procedure TTyroMain.SetMarginColor(const Value: TColor);
 begin
   FMarginColor := Value;
@@ -397,6 +402,7 @@ begin
   Resources.Load;
 
   Load;
+  Start;
   if FPS = 0 then
     SetFPS(cFramePerSeconds);
   repeat

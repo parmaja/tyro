@@ -78,6 +78,10 @@ type
     procedure Dir_Command(Params: TStrings);
     procedure Clear_Command(Params: TStrings);
     procedure Exit_Command(Params: TStrings);
+    procedure Load_Command(Params: TStrings);
+    procedure State_Command(Params: TStrings);
+    procedure Run_Command(Params: TStrings);
+    procedure Stop_Command(Params: TStrings);
   protected
     FQueue: TQueueObjects;
     FScriptThread: TTyroScriptThread;
@@ -105,7 +109,8 @@ type
     procedure Init; override;
     procedure Terminate; override;
     procedure ProcessQueue;
-    procedure Load; override;
+    procedure Start; override;
+    procedure Unload; override;
     procedure Shutdown; override;
     procedure PrepareDraw; override;
     procedure Draw; override;
@@ -217,7 +222,7 @@ begin
   end;
 end;
 
-procedure TTyroEngine.Load;
+procedure TTyroEngine.Start;
 begin
   inherited;
   if (FScriptThread <> nil) and not FScriptThread.Started then
@@ -227,6 +232,11 @@ begin
   if (FScriptMain <> nil) then
     FScriptMain.Start;
   Options := Options + [moShowFPS];
+end;
+
+procedure TTyroEngine.Unload;
+begin
+  inherited;
 end;
 
 procedure TTyroEngine.Shutdown;
@@ -295,7 +305,6 @@ begin
       begin
         if LeftStr(RunFile, 1) = '.' then
           RunFile := ExpandFileName(Resources.WorkSpace + RunFile);
-        aScript.ScriptPath := ExtractFilePath(RunFile);
         aScript.LoadFile(RunFile);
         Resources.CurrentDirectory := ExtractFilePath(RunFile);
         if RunInMain then
@@ -323,8 +332,8 @@ begin
   if Console <> nil then
     Console.Update;
   ThreadSwitch; //Yield
-  if not Active then
-    Terminate;
+  {if not Active then
+    Terminate;}
 end;
 
 procedure TTyroEngine.ProcessInput;
@@ -451,9 +460,13 @@ end;
 procedure TTyroEngine.RegisterCommands;
 begin
   Commands.Add('Help', ['?'], Help_Command, 'Show help');
-  Commands.Add('dir', ['ls'], Dir_Command, 'Show current directory');
+  Commands.Add('list', ['ls'], Dir_Command, 'Show current directory');
   Commands.Add('clear', ['cls'], Clear_Command, 'List files in current directory');
   Commands.Add('exit', ['quit', 'q'], Exit_Command, 'Hide console and stop');
+  Commands.Add('stop', [], Stop_Command, 'Stop current script');
+  Commands.Add('load', [], Load_Command, 'Load script name from current directory');
+  Commands.Add('state', [], State_Command, 'State of current directory');
+  Commands.Add('run', [], Run_Command, 'Run current loaded script');
 end;
 
 procedure TTyroEngine.StartConsoleRead;
@@ -488,10 +501,15 @@ procedure TTyroEngine.Dir_Command(Params: TStrings);
 var
   DirPath: string;
   sr: TSearchRec;
+  aFile: string;
 begin
   Console.Writeln('Directory: ' + Resources.CurrentDirectory);
   DirPath := ExcludeTrailingPathDelimiter(Resources.CurrentDirectory);
-  if FindFirst(DirPath + PathDelim + '*.*', faAnyFile, sr) = 0 then
+  if Params.Count > 0 then
+    aFile := Params[0]
+  else
+      aFile := '*.*';
+  if FindFirst(DirPath + PathDelim + aFile, faAnyFile, sr) = 0 then
   begin
     try
       repeat
@@ -518,6 +536,75 @@ begin
   HideConsole;
   Stop;
   Terminate;
+end;
+
+procedure TTyroEngine.Run_Command(Params: TStrings);
+begin
+  if (FScriptMain <> nil) then
+  begin
+    FScriptMain.Start;
+  end
+  else
+  begin
+    Console.Writeln('No script loaded. Use "load <script>" to load a script first.');
+  end;
+end;
+
+procedure TTyroEngine.Stop_Command(Params: TStrings);
+begin
+  Stop;
+end;
+
+procedure TTyroEngine.Load_Command(Params: TStrings);
+var
+  aFile, aFileName: string;
+  aScriptType: TScriptType;
+  aScript: TTyroScript;
+begin
+  if (Params.Count = 0) then
+  begin
+    Console.Writeln('Usage: load <script_name>');
+    Exit;
+  end;
+
+  aFile := Params[0];
+  aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(aFile));
+  aFileName := IncludePathDelimiter(Resources.CurrentDirectory) + aFile;
+
+  if SysUtils.FileExists(aFileName) then
+  begin
+    if aScriptType = nil then
+    begin
+      Console.Writeln('Unknown script type for: ' + aFile);
+      Exit;
+    end;
+    aScript := aScriptType.ScriptClass.Create;
+    aScript.LoadFile(aFileName);
+    Console.Writeln('Loaded: ' + aFile);
+  end
+  else
+  begin
+    Console.Writeln('Script not found: ' + aFile);
+    FreeAndNil(aScript);
+    Exit;
+  end;
+
+  // Stop previous script if running
+  if (FScriptMain <> nil) then
+  begin
+    FScriptMain.Stop;
+    FreeAndNil(FScriptMain);
+  end;
+  Stop;
+  FScriptMain := aScript;
+  //Start;
+  //FScriptMain.RUNINMAIN := True;
+end;
+
+procedure TTyroEngine.State_Command(Params: TStrings);
+begin
+  if Active and (FScriptMain <> nil) then
+    Console.Writeln(FScriptMain.FileName + ' is running');
 end;
 
 { TConsoleCommand }

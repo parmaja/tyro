@@ -830,7 +830,7 @@ var
 begin
   s := lua_tostring(L, 1);
   if ExtractFileDir(s) = '' then
-    s := ScriptPath + s;
+    s := Resources.CurrentDirectory + s;
   AddQueueObject(TPlayMusicFileObject.Create(s));
   Result := 0;
 end;
@@ -955,7 +955,7 @@ begin
   if ExtractFileDir(aFile) = '' then
   begin
     if not SysUtils.FileExists(aFile) then
-      s := IncludePathDelimiter(ScriptPath) + aFile;
+      s := IncludePathDelimiter(Path) + aFile;
     if not SysUtils.FileExists(s) then
       s := IncludePathDelimiter(Resources.CurrentDirectory) + aFile;
     if not SysUtils.FileExists(s) then

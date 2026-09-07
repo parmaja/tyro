@@ -230,7 +230,8 @@ type
   private
     FActive: Boolean;
     FStarted: Boolean;
-    FScriptPath: string;
+    FPath: string;
+    FFileName: string;
     function GetActive: Boolean;
     procedure ExecuteQueueObject; //this for sync do not call it
     procedure ExecuteQueueObjectNoFree; //this for sync do not call it
@@ -253,7 +254,8 @@ type
     procedure Start; virtual;
     procedure Terminate;
     procedure LoadFile(FileName: string); overload;
-    property ScriptPath: string read FScriptPath write FScriptPath;
+    property Path: string read FPath write FPath;
+    property FileName: string read FFileName write FFileName;
     property Active: Boolean read GetActive;
     property Started: Boolean read FStarted; //started true even after stopped
   end;
@@ -769,6 +771,8 @@ end;
 procedure TTyroScript.LoadFile(FileName: string);
 begin
   ScriptText.LoadFromFile(FileName);
+  Path := ExtractFilePath(FileName);
+  FileName := ExtractFileName(FileName);
 end;
 
 end.
