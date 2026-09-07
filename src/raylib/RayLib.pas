@@ -1797,7 +1797,7 @@ var
   // Apply alpha mask to image
   ImageAlphaMask: procedure(image: PImage; alphaMask: TImage); cdecl = nil;
   // Premultiply alpha channel
-  ImageAlphaPremultiply: procedure(image: PImage); cdecl = nil;
+  ImageAlphaPremultiply: procedure(var image: TImage); cdecl = nil;
   // Apply Gaussian blur using a box blur approximation
   ImageBlurGaussian: procedure(image: PImage; blurSize: integer); cdecl = nil;
   // Apply custom square convolution kernel to image

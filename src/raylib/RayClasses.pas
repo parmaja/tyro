@@ -148,13 +148,8 @@ type
     destructor Destroy; override;
     procedure LoadFromFile(FileName: utf8string; FontSize: Integer = 0);
     procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
+    procedure LoadFromMemory(FileType:string; const FontData: Pointer; DataSize: Integer; FontSize: Integer);
     procedure LoadDefault;
-    {** Generate a mono fixed font texture image (PNG) in memory from TTF data,
-      then load the font from that PNG. Returns the PNG bytes. }
-    function GenerateFontTexturePNGFromTTF(const FontData: Pointer; DataSize: Integer;
-      FontSize: Integer): rawbytestring;
-    {** Load a font from TTF/OTF data in memory (uses raylib LoadFontFromMemory). }
-    procedure LoadFromTTFMemory(const FontData: Pointer; DataSize: Integer; FontSize: Integer);
   end;
 
 var
@@ -219,103 +214,33 @@ begin
     else
       Data := RayLib.LoadFontEx(PUTF8Char(FileName), FontSize, nil, 255);
     //GenTextureMipmaps(Data.texture);
-    SetTextureFilter(Data.texture, TEXTURE_FILTER_TRILINEAR );
+    SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
     Loaded;
   end;
 end;
 
-procedure TRayFont.LoadFromString(const DataString: rawbytestring; fontSize: Integer);
+procedure TRayFont.LoadFromString(const DataString: rawbytestring; FontSize: Integer);
 var
   img: TImage;
 begin
   RayLib.UnloadFont(Data);
   img := LoadImageFromMemory('.png', PByte(DataString), Length(DataString));
+  ImageAlphaPremultiply(img);
   Data := LoadFontFromImage(img, clMagenta, cFirstChar);
   SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
   UnloadImage(img);
   Loaded;
+  //Height := Height * 2;
+  //Width := Width * 2;
 end;
 
-procedure TRayFont.LoadFromTTFMemory(const FontData: Pointer; DataSize: Integer; FontSize: Integer);
+procedure TRayFont.LoadFromMemory(FileType: string; const FontData: Pointer; DataSize: Integer; FontSize: Integer);
 begin
   RayLib.UnloadFont(Data);
   Data := Default(TFont);
-  Data := LoadFontFromMemory('ttf', FontData, DataSize, FontSize, nil, 0);
+  Data := LoadFontFromMemory(PUTF8Char(FileType), FontData, DataSize, FontSize, nil, 0);
   SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
   Loaded;
-end;
-
-function TRayFont.GenerateFontTexturePNGFromTTF(const FontData: Pointer; DataSize: Integer;
-  FontSize: Integer): rawbytestring;
-var
-  Glyphs: PGlyphInfo;
-  GlyphsRecs: PPRectangle;
-  GlyphCount: Integer;
-  AtlasImage: TImage;
-  PNGSize: Integer;
-  PNGData: PByte;
-  Codepoints: array[0..94] of Integer;
-  i: Integer;
-begin
-  Result := '';
-
-  { Build a default codepoint list: ASCII 32..126 (printable ASCII) }
-  for i := 0 to 94 do
-    Codepoints[i] := 32 + i;
-
-  { Load glyph data for the printable ASCII range from TTF in memory }
-  Glyphs := LoadFontData(FontData, DataSize, FontSize, @Codepoints[0], 95, FONT_BITMAP, @GlyphCount);
-  if (Glyphs = nil) or (GlyphCount <= 0) then
-  begin
-    UnloadFontData(Glyphs, GlyphCount);
-    Exit;
-  end;
-
-  { Allocate array of rectangles for glyph packing using raylib's allocator
-    so UnloadFont can free it consistently }
-  GlyphsRecs := MemAlloc(GlyphCount * SizeOf(TRectangle));
-
-  { Generate the font atlas image from the glyph data }
-  AtlasImage := GenImageFontAtlas(Glyphs, GlyphsRecs, GlyphCount, FontSize, 2, 0);
-
-  { Export the atlas image to PNG in memory }
-  PNGData := ExportImageToMemory(AtlasImage, '.png', PNGSize);
-  if (PNGData <> nil) and (PNGSize > 0) then
-  begin
-    SetLength(Result, PNGSize);
-    if PNGSize > 0 then
-      Move(PNGData^, PByte(Result)^, PNGSize);
-    { Free the PNG memory allocated by raylib }
-    MemFree(PNGData);
-  end;
-
-  { Load the font from the generated PNG in memory.
-    The atlas image is used to create the GPU texture, while the glyph
-    data and rectangle array provide the per-character layout. }
-  if Length(Result) > 0 then
-  begin
-    RayLib.UnloadFont(Data);
-    Data := Default(TFont);
-    Data.BaseSize := FontSize;
-    Data.GlyphCount := GlyphCount;
-    Data.GlyphPadding := 2;
-    Data.Texture := LoadTextureFromImage(AtlasImage);
-    Data.Recs := GlyphsRecs^;
-    Data.Glyphs := Glyphs;
-    SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
-    Loaded;
-  end
-  else
-  begin
-    { Fallback cleanup when PNG export failed }
-    UnloadImage(AtlasImage);
-    MemFree(GlyphsRecs);
-    UnloadFontData(Glyphs, GlyphCount);
-    Exit;
-  end;
-
-  { Cleanup the temporary atlas image (texture is already on GPU) }
-  UnloadImage(AtlasImage);
 end;
 
 { TRayAudio }
