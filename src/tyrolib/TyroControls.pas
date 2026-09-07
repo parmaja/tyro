@@ -74,6 +74,9 @@ type
 
   TTyroLayout = class abstract(TObject)
   private
+    FBorderColor: TColor;
+    FBorderSize: Integer;
+    FMarginSize: Integer;
     FAlign: TAlign;
     FControls: TTyroControls;
     FParent: TTyroLayout;
@@ -81,6 +84,9 @@ type
     FWindowRect: TRect;
     procedure SetAlign(AValue: TAlign);
     procedure SetParent(AValue: TTyroLayout);
+    procedure SetBorderColor(AValue: TColor);
+    procedure SetBorderSize(AValue: Integer);
+    procedure SetMarginSize(AValue: Integer);
   protected
     procedure SetBoundsRect(AValue: TRect);
     procedure SetWindowRect(AValue: TRect);
@@ -105,6 +111,9 @@ type
     property Controls: TTyroControls read FControls;
     property Align: TAlign read FAlign write SetAlign;
     property Parent: TTyroLayout read FParent write SetParent;
+    property MarginSize: Integer read FMarginSize write SetMarginSize;
+    property BorderSize: Integer read FBorderSize write SetBorderSize;
+    property BorderColor: TColor read FBorderColor write SetBorderColor;
     //Real bounds
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
     //WindowRect is Virtual changed by RealignControls of parent used paint control
@@ -115,20 +124,14 @@ type
 
   TTyroControl = class abstract(TTyroLayout)
   private
-    FBorderColor: TColor;
-    FBorderSize: Integer;
-    FMargin: Integer;
     FWindow: TTyroCustomWindow;
     FVisible: Boolean;
     function GetFocused: Boolean;
-    procedure SetBorderColor(AValue: TColor);
-    procedure SetBorderSize(AValue: Integer);
-    procedure SetFocused(AValue: Boolean);
-    procedure SetMargin(AValue: Integer);
     procedure SetVisible(AValue: Boolean);
     procedure SetWindow(AValue: TTyroCustomWindow);
     function GetClientLeft: Integer;
     function GetClientTop: Integer;
+    procedure SetFocused(AValue: Boolean);
   protected
     State: TTyroControlStates;
     Style: TTyroControlStyles;
@@ -170,9 +173,6 @@ type
     property ClientTop: Integer read GetClientTop;
     property ClientWidth: Integer read GetClientWidth;
     property ClientHeight: Integer read GetClientHeight;
-    property Margin: Integer read FMargin write SetMargin;
-    property BorderSize: Integer read FBorderSize write SetBorderSize;
-    property BorderColor: TColor read FBorderColor write SetBorderColor;
     property Visible: Boolean read FVisible write SetVisible;
   end;
 
@@ -211,7 +211,6 @@ type
     procedure SetFocused(AValue: TTyroControl);
     procedure SetTitle(AValue: utf8string);
   protected
-    Margin: Integer;
     procedure PrepareCanvas; virtual;
     function CreateCanvas: TTyroCanvas; virtual; abstract;
   public
@@ -240,16 +239,6 @@ type
   private
     FFPS: Integer;
     FOptions: TTyroMainOptions;
-    FMarginSize: Integer;
-    FBorderSize: Integer;
-    FBorderColor: TColor;
-    //FMarginColor: TColor;
-    procedure SetMarginSize(const Value: Integer);
-    procedure SetBorderSize(const Value: Integer);
-    procedure SetBorderColor(const Value: TColor);
-    function GetMargin: Integer;
-    procedure SetMargin(const Value: Integer);
-    //procedure SetMarginColor(const Value: TColor);
     function GetHeight: Integer;
     function GetWidth: Integer;
   protected
@@ -287,11 +276,6 @@ type
     procedure Run;
     procedure Shutdown; virtual;
 
-    //property MarginColor: TColor read FMarginColor write SetMarginColor;
-    property MarginSize: Integer read FMarginSize write SetMarginSize;
-    property Margin: Integer read GetMargin write SetMargin;
-    property BorderSize: Integer read FBorderSize write SetBorderSize;
-    property BorderColor: TColor read FBorderColor write SetBorderColor;
     property Width: Integer read GetWidth;
     property Height: Integer read GetHeight;
     property CanvasLock: TCriticalSection read FCanvasLock;
@@ -364,40 +348,6 @@ end;
 
 procedure TTyroMain.Start;
 begin
-end;
-
-{procedure TTyroMain.SetMarginColor(const Value: TColor);
-begin
-  FMarginColor := Value;
-end;}
-
-procedure TTyroMain.SetMarginSize(const Value: Integer);
-begin
-  FMarginSize := Value;
-end;
-
-procedure TTyroMain.SetBorderSize(const Value: Integer);
-begin
-  if FBorderSize = Value then
-    Exit;
-  FBorderSize := Value;
-end;
-
-procedure TTyroMain.SetBorderColor(const Value: TColor);
-begin
-  if FBorderColor = Value then
-    Exit;
-  FBorderColor := Value;
-end;
-
-function TTyroMain.GetMargin: Integer;
-begin
-  Result := Margin;
-end;
-
-procedure TTyroMain.SetMargin(const Value: Integer);
-begin
-  Margin := Value;
 end;
 
 procedure TTyroMain.SetFPS(FPS: Integer);
@@ -786,13 +736,13 @@ begin
   Result := (Window <> nil) and (Window.Focused = Self);
 end;
 
-procedure TTyroControl.SetBorderColor(AValue: TColor);
+procedure TTyroLayout.SetBorderColor(AValue: TColor);
 begin
   if FBorderColor=AValue then Exit;
   FBorderColor:=AValue;
 end;
 
-procedure TTyroControl.SetBorderSize(AValue: Integer);
+procedure TTyroLayout.SetBorderSize(AValue: Integer);
 begin
   if FBorderSize=AValue then Exit;
   FBorderSize:=AValue;
@@ -804,10 +754,10 @@ begin
     Window.Focused := Self;
 end;
 
-procedure TTyroControl.SetMargin(AValue: Integer);
+procedure TTyroLayout.SetMarginSize(AValue: Integer);
 begin
-  if FMargin=AValue then Exit;
-  FMargin:=AValue;
+  if FMarginSize=AValue then Exit;
+  FMarginSize:=AValue;
 end;
 
 procedure TTyroControl.SetVisible(AValue: Boolean);
@@ -831,7 +781,7 @@ begin
   //* ClientRect is relative to this control's WindowRect origin.
   //* It is inset by BorderSize + Margin on each side.
   vBorder := FBorderSize;
-  vMargin := FMargin;
+  vMargin := FMarginSize;
   vWidth := WindowRect.Width;
   vHeight := WindowRect.Height;
 

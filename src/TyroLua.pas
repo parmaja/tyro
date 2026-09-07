@@ -342,10 +342,10 @@ begin
   if lua_isinteger(L, -1) or lua_isnumber(L, -1) then
   begin
     i := lua_tointeger(L, -1);
-    if field = 'borderSize' then
+    if field = 'border' then
       Main.Console.BorderSize := i
     else if field = 'margin' then
-      Main.Console.Margin := i;
+      Main.Console.MarginSize := i;
   end
   else if lua_isstring(L, -1) then
   begin
@@ -397,7 +397,7 @@ begin
         end;
         Result := 1;
       end;
-    'borderSize':
+    'border':
       begin
         lua_pushinteger(L, Main.Console.BorderSize);
         Result := 1;
@@ -409,7 +409,7 @@ begin
       end;
     'margin':
       begin
-        lua_pushinteger(L, Main.Console.Margin);
+        lua_pushinteger(L, Main.Console.MarginSize);
         Result := 1;
       end;
   end;
@@ -434,7 +434,7 @@ begin
     i := lua_tointeger(L, -1);
     if field = 'margin' then
       Main.MarginSize := i
-    else if field = 'borderSize' then
+    else if field = 'border' then
       Main.BorderSize := i
     else if field = 'borderColor' then
       Main.BorderColor := IntToColor(i);
@@ -453,7 +453,7 @@ begin
         lua_pushinteger(L, Main.MarginSize);
         Result := 1;
       end;
-    'borderSize':
+    'border':
       begin
         lua_pushinteger(L, Main.BorderSize);
         Result := 1;

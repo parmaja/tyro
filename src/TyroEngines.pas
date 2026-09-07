@@ -256,7 +256,7 @@ end;
 constructor TTyroEngine.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Margin := 10;
+  MarginSize := 10;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -267,7 +267,7 @@ begin
   //TTyroPanel.Create(Self);
 
   Console := TTyroConsole.Create(Self);
-  Console.WindowRect := Rect(Margin, Margin , 100, 100);
+  Console.WindowRect := Rect(MarginSize, MarginSize , 100, 100);
   Console.Visible := False;
   Console.Focused := True;
   Console.Visible := False;
