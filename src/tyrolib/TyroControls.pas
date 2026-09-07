@@ -241,8 +241,14 @@ type
     FFPS: Integer;
     FOptions: TTyroMainOptions;
     FMarginSize: Integer;
+    FBorderSize: Integer;
+    FBorderColor: TColor;
     //FMarginColor: TColor;
     procedure SetMarginSize(const Value: Integer);
+    procedure SetBorderSize(const Value: Integer);
+    procedure SetBorderColor(const Value: TColor);
+    function GetMargin: Integer;
+    procedure SetMargin(const Value: Integer);
     //procedure SetMarginColor(const Value: TColor);
     function GetHeight: Integer;
     function GetWidth: Integer;
@@ -283,6 +289,9 @@ type
 
     //property MarginColor: TColor read FMarginColor write SetMarginColor;
     property MarginSize: Integer read FMarginSize write SetMarginSize;
+    property Margin: Integer read GetMargin write SetMargin;
+    property BorderSize: Integer read FBorderSize write SetBorderSize;
+    property BorderColor: TColor read FBorderColor write SetBorderColor;
     property Width: Integer read GetWidth;
     property Height: Integer read GetHeight;
     property CanvasLock: TCriticalSection read FCanvasLock;
@@ -365,6 +374,30 @@ end;}
 procedure TTyroMain.SetMarginSize(const Value: Integer);
 begin
   FMarginSize := Value;
+end;
+
+procedure TTyroMain.SetBorderSize(const Value: Integer);
+begin
+  if FBorderSize = Value then
+    Exit;
+  FBorderSize := Value;
+end;
+
+procedure TTyroMain.SetBorderColor(const Value: TColor);
+begin
+  if FBorderColor = Value then
+    Exit;
+  FBorderColor := Value;
+end;
+
+function TTyroMain.GetMargin: Integer;
+begin
+  Result := Margin;
+end;
+
+procedure TTyroMain.SetMargin(const Value: Integer);
+begin
+  Margin := Value;
 end;
 
 procedure TTyroMain.SetFPS(FPS: Integer);
@@ -619,8 +652,49 @@ begin
 end;
 
 procedure TTyroLayout.AlignControls;
+var
+  aControl: TTyroLayout;
+  aRect: TRect;
 begin
-  //TODO align child controls by change the WindowRect
+  //* Align child controls within this parent's WindowRect.
+  //* Each child's WindowRect is updated to position it according
+  //* to its Align property.
+  if FControls = nil then
+    Exit;
+
+  aRect := FWindowRect;
+
+  for aControl in FControls do
+  begin
+    case aControl.Align of
+      alLeft:
+      begin
+        aControl.WindowRect := Rect(aRect.Left, aRect.Top, aRect.Left + aControl.WindowRect.Width, aRect.Bottom);
+        aRect.Left := aRect.Left + aControl.WindowRect.Width;
+      end;
+      alTop:
+      begin
+        aControl.WindowRect := Rect(aRect.Left, aRect.Top, aRect.Right, aRect.Top + aControl.WindowRect.Height);
+        aRect.Top := aRect.Top + aControl.WindowRect.Height;
+      end;
+      alRight:
+      begin
+        aControl.WindowRect := Rect(aRect.Right - aControl.WindowRect.Width, aRect.Top, aRect.Right, aRect.Bottom);
+        aRect.Right := aRect.Right - aControl.WindowRect.Width;
+      end;
+      alBottom:
+      begin
+        aControl.WindowRect := Rect(aRect.Left, aRect.Bottom - aControl.WindowRect.Height, aRect.Right, aRect.Bottom);
+        aRect.Bottom := aRect.Bottom - aControl.WindowRect.Height;
+      end;
+      alClient:
+      begin
+        aControl.WindowRect := aRect;
+      end;
+      { alNone: leave WindowRect unchanged }
+      alNone: ;
+    end;
+  end;
 end;
 
 { TTyroCustomWindow }
@@ -750,9 +824,27 @@ begin
 end;
 
 function TTyroControl.GetClientRect: TRect;
+var
+  vBorder, vMargin: Integer;
+  vWidth, vHeight: Integer;
 begin
-  //TODM Here we calc based it on margine and BorderSize
-  Result := Rect(0, 0, WindowRect.Width, WindowRect.Height);
+  //* ClientRect is relative to this control's WindowRect origin.
+  //* It is inset by BorderSize + Margin on each side.
+  vBorder := FBorderSize;
+  vMargin := FMargin;
+  vWidth := WindowRect.Width;
+  vHeight := WindowRect.Height;
+
+  Result.Left := vBorder + vMargin;
+  Result.Top := vBorder + vMargin;
+  Result.Right := vWidth - vBorder - vMargin;
+  Result.Bottom := vHeight - vBorder - vMargin;
+
+  //* Guard against negative dimensions when the control is too small
+  if Result.Right < Result.Left then
+    Result.Right := Result.Left;
+  if Result.Bottom < Result.Top then
+    Result.Bottom := Result.Top;
 end;
 
 function TTyroControl.GetClientTop: Integer;

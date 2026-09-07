@@ -21,7 +21,8 @@ uses
   lua55, FPImage,
   RayLib, RayClasses, //remove it
   mnUtils,
-  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroEngines, TyroInput;
+  TyroScripts, TyroSounds, TyroClasses, Melodies,
+  TyroControls, TyroEngines, TyroInput;
 
 type
   TLuaScript = class;
@@ -53,6 +54,16 @@ type
   { TLuaConsole }
 
   TLuaConsole = class(TLuaObject)
+  protected
+    function __setter(L: PLua_State): integer; cdecl; override;
+    function __getter(L: PLua_State): integer; cdecl; override;
+  public
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
+  { TLuaWindow }
+
+  TLuaWindow = class(TLuaObject)
   protected
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
@@ -101,6 +112,7 @@ type
     FQueueObject: TQueueObject;
     Canvas: TLuaCanvas;
     Console: TLuaConsole;
+    Window: TLuaWindow;
     Colors: TLuaColors;
     Font: TLuaFont;
     procedure ExecuteQueueObject;
@@ -327,10 +339,33 @@ var
 begin
   Result := 0;
   field := lua_tostring(L, 2);
-{  if lua_isinteger(L, -1) then
-    case field of
-    end;}
-
+  if lua_isinteger(L, -1) or lua_isnumber(L, -1) then
+  begin
+    i := lua_tointeger(L, -1);
+    if field = 'borderSize' then
+      Main.Console.BorderSize := i
+    else if field = 'margin' then
+      Main.Console.Margin := i;
+  end
+  else if lua_isstring(L, -1) then
+  begin
+    if field = 'align' then
+    begin
+      //* TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
+      if lua_tostring(L, -1) = 'none' then
+        Main.Console.Align := TAlign(0)
+      else if lua_tostring(L, -1) = 'left' then
+        Main.Console.Align := TAlign(1)
+      else if lua_tostring(L, -1) = 'top' then
+        Main.Console.Align := TAlign(2)
+      else if lua_tostring(L, -1) = 'right' then
+        Main.Console.Align := TAlign(3)
+      else if lua_tostring(L, -1) = 'bottom' then
+        Main.Console.Align := TAlign(4)
+      else if lua_tostring(L, -1) = 'client' then
+        Main.Console.Align := TAlign(5);
+    end;
+  end;
 end;
 
 function TLuaConsole.__getter(L: PLua_State): integer; cdecl;
@@ -346,10 +381,92 @@ begin
         lua_pushboolean(L, Main.Console.Visible);
         Result := 1;
       end;
+    'align':
+      begin
+        //* TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
+        i := Ord(Main.Console.Align);
+        case i of
+          0: lua_pushstring(L, 'none');
+          1: lua_pushstring(L, 'left');
+          2: lua_pushstring(L, 'top');
+          3: lua_pushstring(L, 'right');
+          4: lua_pushstring(L, 'bottom');
+          5: lua_pushstring(L, 'client');
+        else
+          lua_pushstring(L, 'none');
+        end;
+        Result := 1;
+      end;
+    'borderSize':
+      begin
+        lua_pushinteger(L, Main.Console.BorderSize);
+        Result := 1;
+      end;
+    'borderColor':
+      begin
+        lua_pushinteger(L, ColorToInt(Main.Console.BorderColor));
+        Result := 1;
+      end;
+    'margin':
+      begin
+        lua_pushinteger(L, Main.Console.Margin);
+        Result := 1;
+      end;
   end;
 end;
 
 constructor TLuaConsole.Create(AScript: TLuaScript);
+begin
+  inherited Create(AScript);
+end;
+
+{ TLuaWindow }
+
+function TLuaWindow.__setter(L: PLua_State): integer; cdecl;
+var
+  i: integer;
+  field: string;
+begin
+  Result := 0;
+  field := lua_tostring(L, 2);
+  if lua_isinteger(L, -1) or lua_isnumber(L, -1) then
+  begin
+    i := lua_tointeger(L, -1);
+    if field = 'margin' then
+      Main.MarginSize := i
+    else if field = 'borderSize' then
+      Main.BorderSize := i
+    else if field = 'borderColor' then
+      Main.BorderColor := IntToColor(i);
+  end;
+end;
+
+function TLuaWindow.__getter(L: PLua_State): integer; cdecl;
+var
+  field: string;
+begin
+  Result := 0;
+  field := lua_tostring(L, 2);
+  case field of
+    'margin':
+      begin
+        lua_pushinteger(L, Main.MarginSize);
+        Result := 1;
+      end;
+    'borderSize':
+      begin
+        lua_pushinteger(L, Main.BorderSize);
+        Result := 1;
+      end;
+    'borderColor':
+      begin
+        lua_pushinteger(L, ColorToInt(Main.BorderColor));
+        Result := 1;
+      end;
+  end;
+end;
+
+constructor TLuaWindow.Create(AScript: TLuaScript);
 begin
   inherited Create(AScript);
 end;
@@ -536,16 +653,19 @@ begin
   lua_register(LuaState, 'sleep', @sleep_func);
   lua_register_method(LuaState, 'print', @Print_func);
   lua_register_method(LuaState, 'println', @PrintLn_func);
-  lua_register_table_method(LuaState, 'window', self, 'show', @Window_func);
-  lua_register_method(LuaState, 'showconsole', @ShowConsole_func);
+   lua_register_table_method(LuaState, 'window', self, 'show', @Window_func);
+   lua_register_method(LuaState, 'showconsole', @ShowConsole_func);
 
 //  lua_register_integer(LuaState, 'width', ScreenWidth));
 //  lua_register_integer(LuaState, 'height', ScreenHeight));
 
    Canvas := TLuaCanvas.Create(Self);
+   Window := TLuaWindow.Create(Self);
    Console := TLuaConsole.Create(Self);
    Colors := TLuaColors.Create(Self);
    Font := TLuaFont.Create(Self);
+
+   lua_register_table_index(LuaState, 'window', Window); //Should be last one for window
 
    lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
    lua_register_table_method(LuaState, 'console', self, 'println', @PrintLn_func);
