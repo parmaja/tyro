@@ -103,7 +103,7 @@ type
     RunFile: string;//that to run in script
     Console: TTyroConsole;
     Graphic: TTyroCanvas;
-    constructor Create;
+    constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
     procedure Stop; //and wait
     procedure Init; override;
@@ -253,9 +253,9 @@ begin
   ProcessQueue;
 end;
 
-constructor TTyroEngine.Create;
+constructor TTyroEngine.Create(AParent: TTyroLayout);
 begin
-  inherited Create;
+  inherited;
   Margin := 10;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
@@ -669,7 +669,7 @@ begin
 end;
 
 initialization
-  Main := TTyroEngine.Create;
+  Main := TTyroEngine.Create(nil);
 finalization
   FreeAndNil(Main);
 end.

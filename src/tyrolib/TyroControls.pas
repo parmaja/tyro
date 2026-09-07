@@ -60,31 +60,29 @@ type
   TTyroControlState = (csCreating, csCreated, csDestroying);
   TTyroControlStates = set of TTyroControlState;
 
-  TTyroContainer = class;
+  TTyroLayout = class;
   TTyroControl = class;
   TTyroCustomWindow = class;
 
-  TTyroControls = class(TmnObjectList<TTyroControl>)
+  TTyroControls = class(TmnObjectList<TTyroLayout>)
   public
   end;
 
-  { TTyroContainer }
+  TAlign = (alNone, alLeft, alTop, alRight, alBottom, alClient);
 
-  TTyroContainer = class abstract(TObject)
+  { TTyroLayout }
+
+  TTyroLayout = class abstract(TObject)
   private
+    FAlign: TAlign;
     FControls: TTyroControls;
-  protected
-    procedure AddControl(AControl: TTyroControl);
-  public
-    constructor Create;
-    destructor Destroy; override;
-    property Controls: TTyroControls read FControls;
-  end;
-
-  TTyroSizable = class abstract(TTyroContainer)
-  private
+    FParent: TTyroLayout;
+    FBoundsRect: TRect;
     FWindowRect: TRect;
+    procedure SetAlign(AValue: TAlign);
+    procedure SetParent(AValue: TTyroLayout);
   protected
+    procedure SetBoundsRect(AValue: TRect);
     procedure SetWindowRect(AValue: TRect);
     function GetWindowHeight: Integer;
     procedure SetWindowHeight(AValue: Integer);
@@ -93,27 +91,42 @@ type
     procedure SetWindowLeft(AValue: Integer);
     procedure SetWindowTop(AValue: Integer);
     procedure SetWindowBounds(Left, Top, Width, Height: Integer); virtual;
-    procedure Resize; virtual;
+
+    procedure Resize;
+    procedure Resized; virtual;
+
+    procedure AddControl(AControl: TTyroLayout);
+    procedure PaintWindow(ACanvas: TTyroCanvas); virtual;
   public
+    constructor Create(AParent: TTyroLayout); virtual;
+    destructor Destroy; override;
+    procedure Realign; virtual;
+    procedure AlignControls; virtual;
+    property Controls: TTyroControls read FControls;
+    property Align: TAlign read FAlign write SetAlign;
+    property Parent: TTyroLayout read FParent write SetParent;
+    //Real bounds
+    property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
+    //WindowRect is Virtual changed by RealignControls of parent used paint control
     property WindowRect: TRect read FWindowRect write SetWindowRect;
-    property WindowLeft: Integer read FWindowRect.Left write SetWindowLeft;
-    property WindowTop: Integer read FWindowRect.Top write SetWindowTop;
-    property WindowWidth: Integer read GetWindowWidth write SetWindowWidth;
-    property WindowHeight: Integer read GetWindowHeight write SetWindowHeight;
   end;
 
   { TTyroControl }
 
-  TTyroControl = class abstract(TTyroSizable)
+  TTyroControl = class abstract(TTyroLayout)
   private
+    FBorderColor: TColor;
+    FBorderSize: Integer;
+    FMargin: Integer;
     FWindow: TTyroCustomWindow;
-    FParent: TTyroContainer;
     FVisible: Boolean;
     function GetFocused: Boolean;
+    procedure SetBorderColor(AValue: TColor);
+    procedure SetBorderSize(AValue: Integer);
     procedure SetFocused(AValue: Boolean);
+    procedure SetMargin(AValue: Integer);
     procedure SetVisible(AValue: Boolean);
     procedure SetWindow(AValue: TTyroCustomWindow);
-    procedure SetParent(AValue: TTyroContainer);
     function GetClientLeft: Integer;
     function GetClientTop: Integer;
   protected
@@ -134,14 +147,13 @@ type
     procedure Created; virtual;
     property Window: TTyroCustomWindow read FWindow write SetWindow;
   public
-    constructor Create(AParent: TTyroContainer); virtual;
+    constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
     procedure Invalidate; virtual;
 
-    procedure Paint(ACanvas: TTyroCanvas); virtual;
+    procedure PaintWindow(ACanvas: TTyroCanvas); override;
 
     procedure FocusChanged; virtual;
-    property Parent: TTyroContainer read FParent write SetParent;
     procedure Show;
     procedure Hide;
 
@@ -158,6 +170,9 @@ type
     property ClientTop: Integer read GetClientTop;
     property ClientWidth: Integer read GetClientWidth;
     property ClientHeight: Integer read GetClientHeight;
+    property Margin: Integer read FMargin write SetMargin;
+    property BorderSize: Integer read FBorderSize write SetBorderSize;
+    property BorderColor: TColor read FBorderColor write SetBorderColor;
     property Visible: Boolean read FVisible write SetVisible;
   end;
 
@@ -165,29 +180,29 @@ type
 
   TTyroPanel = class(TTyroControl)
   public
-    constructor Create(AParent: TTyroContainer); override;
+    constructor Create(AParent: TTyroLayout); override;
     procedure DoPaint(ACanvas: TTyroCanvas); override;
   end;
 
   { TTyroTexture }
 
+  { TTyroTextureControl }
+
   TTyroTextureControl = class(TTyroControl) //Own a texture
   private
     FCanvas: TTyroCanvas;
-//    procedure SetCanvas(AValue: TTyroCanvas);
   public
-    //TODO
-    constructor Create(AParent: TTyroContainer); override;
+    constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
     procedure Invalidate; override;
-    procedure Paint(ACanvas: TTyroCanvas); override;
-    procedure Resize; override;
+    procedure PaintWindow(ACanvas: TTyroCanvas); override;
+    procedure Resized; override;
     property Canvas: TTyroCanvas read FCanvas write FCanvas;
   end;
 
   { TTyroCustomWindow }
 
-  TTyroCustomWindow = class abstract(TTyroSizable)
+  TTyroCustomWindow = class abstract(TTyroLayout)
   private
     FCanvas: TTyroCanvas;
     FFocused: TTyroControl;
@@ -201,8 +216,8 @@ type
     function CreateCanvas: TTyroCanvas; virtual; abstract;
   public
     Visible: Boolean;
-    constructor Create; overload;
-    constructor Create(AWidth, AHeight: Integer); overload;
+    constructor Create(AParent: TTyroLayout); override; overload;
+    constructor Create(AParent: TTyroLayout; AWidth, AHeight: Integer); overload; overload;
     destructor Destroy; override;
     procedure Paint;
     property Canvas: TTyroCanvas read FCanvas write SetCanvas;
@@ -239,7 +254,7 @@ type
     function CreateCanvas: TTyroCanvas; override;
     procedure Terminate; virtual;
   public
-    constructor Create;
+    constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
 
     //* TextureMode create texture with canvas
@@ -306,7 +321,7 @@ begin
   Result := Main.Canvas;
 end;
 
-constructor TTyroMain.Create;
+constructor TTyroMain.Create(AParent: TTyroLayout);
 begin
   inherited;
   FOptions := [moWindow, moOpaque];
@@ -379,12 +394,12 @@ end;
 
 function TTyroMain.GetHeight: Integer;
 begin
-  Result := WindowHeight - MarginSize * 2;
+  Result := WindowRect.Height - MarginSize * 2;
 end;
 
 function TTyroMain.GetWidth: Integer;
 begin
-  Result := WindowWidth - MarginSize * 2;
+  Result := WindowRect.Width - MarginSize * 2;
 end;
 
 procedure TTyroMain.Run;
@@ -509,7 +524,7 @@ end;
 
 { TTyroTextureControl }
 
-constructor TTyroTextureControl.Create(AParent: TTyroContainer);
+constructor TTyroTextureControl.Create(AParent: TTyroLayout);
 begin
   inherited Create(AParent);
   FCanvas := TTyroTextureCanvas.Create(ClientWidth, ClientHeight, True);
@@ -527,35 +542,59 @@ begin
 //  Paint(Canvas);
 end;
 
-procedure TTyroTextureControl.Paint(ACanvas: TTyroCanvas);
+procedure TTyroTextureControl.PaintWindow(ACanvas: TTyroCanvas);
 begin
   inherited;
   Canvas.PostDraw;
 end;
 
-procedure TTyroTextureControl.Resize;
+procedure TTyroTextureControl.Resized;
 begin
   Canvas.Width := ClientWidth;
   Canvas.Height := ClientHeight;
-  inherited Resize;
+  inherited;
 end;
 
-{ TTyroContainer }
+{ TTyroLayout }
 
-procedure TTyroContainer.AddControl(AControl: TTyroControl);
+procedure TTyroLayout.SetAlign(AValue: TAlign);
+begin
+  if FAlign=AValue then Exit;
+  FAlign := AValue;
+  Realign;
+end;
+
+procedure TTyroLayout.SetParent(AValue: TTyroLayout);
+begin
+  if FParent = AValue then
+    Exit;
+  if FParent <> nil then
+    FParent.Controls.Extract(Self);
+  FParent :=AValue;
+  if FParent <> nil then
+    FParent.AddControl(Self);
+end;
+
+procedure TTyroLayout.AddControl(AControl: TTyroLayout);
 begin
   Controls.Add(AControl);
+  AControl.FParent := Self;
 end;
 
-constructor TTyroContainer.Create;
+procedure TTyroLayout.PaintWindow(ACanvas: TTyroCanvas);
+begin
+end;
+
+constructor TTyroLayout.Create(AParent: TTyroLayout);
 begin
   inherited Create;
   FControls := TTyroControls.Create(True);
+  SetParent(AParent);
 end;
 
-destructor TTyroContainer.Destroy;
+destructor TTyroLayout.Destroy;
 var
-  aControl: TTyroControl;
+  aControl: TTyroLayout;
 begin
   aControl := Controls.Last;
   while aControl <> nil do
@@ -569,9 +608,24 @@ begin
   inherited;
 end;
 
+procedure TTyroLayout.Realign;
+begin
+  if Parent <> nil then
+    Parent.AlignControls
+  else
+  begin
+    FWindowRect := FBoundsRect;
+  end;
+end;
+
+procedure TTyroLayout.AlignControls;
+begin
+  //TODO align child controls by change the WindowRect
+end;
+
 { TTyroCustomWindow }
 
-constructor TTyroPanel.Create(AParent: TTyroContainer);
+constructor TTyroPanel.Create(AParent: TTyroLayout);
 begin
   inherited;
   FWindowRect.Right := 100;
@@ -586,55 +640,71 @@ end;
 
 { TTyroControl }
 
-procedure TTyroSizable.SetWindowRect(AValue: TRect);
+procedure TTyroLayout.SetBoundsRect(AValue: TRect);
 begin
-  if FWindowRect = AValue then Exit;
-  FWindowRect := AValue;
+  if FBoundsRect=AValue then Exit;
+  FBoundsRect:=AValue;
   Resize;
 end;
 
-function TTyroSizable.GetWindowHeight: Integer;
+procedure TTyroLayout.SetWindowRect(AValue: TRect);
+begin
+  if FWindowRect = AValue then Exit;
+  FWindowRect := AValue;
+  FBoundsRect := AValue;
+  Resize;
+end;
+
+function TTyroLayout.GetWindowHeight: Integer;
 begin
   Result := FWindowRect.Height;
 end;
 
-function TTyroSizable.GetWindowWidth: Integer;
+function TTyroLayout.GetWindowWidth: Integer;
 begin
   Result := FWindowRect.Width;
 end;
 
-procedure TTyroSizable.SetWindowHeight(AValue: Integer);
+procedure TTyroLayout.SetWindowHeight(AValue: Integer);
 begin
   FWindowRect.Height := AValue;
   Resize;
 end;
 
-procedure TTyroSizable.SetWindowLeft(AValue: Integer);
+procedure TTyroLayout.SetWindowLeft(AValue: Integer);
 begin
   FWindowRect.Left := AValue;
+  FBoundsRect.Left := AValue;
   Resize;
 end;
 
-procedure TTyroSizable.SetWindowTop(AValue: Integer);
+procedure TTyroLayout.SetWindowTop(AValue: Integer);
 begin
   FWindowRect.Top := AValue;
   Resize;
 end;
 
-procedure TTyroSizable.SetWindowWidth(AValue: Integer);
+procedure TTyroLayout.SetWindowWidth(AValue: Integer);
 begin
   FWindowRect.Width := AValue;
   Resize;
 end;
 
-procedure TTyroSizable.SetWindowBounds(Left, Top, Width, Height: Integer);
+procedure TTyroLayout.SetWindowBounds(Left, Top, Width, Height: Integer);
 begin
   FWindowRect := Rect(Left, Top, Left + Width, Top + Height);
+  Resize;
 end;
 
-procedure TTyroSizable.Resize;
+procedure TTyroLayout.Resize;
 begin
+  if Parent <> nil then
+    Parent.AlignControls;
+  Resized;
+end;
 
+procedure TTyroLayout.Resized;
+begin
 end;
 
 function TTyroControl.GetFocused: Boolean;
@@ -642,10 +712,28 @@ begin
   Result := (Window <> nil) and (Window.Focused = Self);
 end;
 
+procedure TTyroControl.SetBorderColor(AValue: TColor);
+begin
+  if FBorderColor=AValue then Exit;
+  FBorderColor:=AValue;
+end;
+
+procedure TTyroControl.SetBorderSize(AValue: Integer);
+begin
+  if FBorderSize=AValue then Exit;
+  FBorderSize:=AValue;
+end;
+
 procedure TTyroControl.SetFocused(AValue: Boolean);
 begin
   if Window <> nil then
     Window.Focused := Self;
+end;
+
+procedure TTyroControl.SetMargin(AValue: Integer);
+begin
+  if FMargin=AValue then Exit;
+  FMargin:=AValue;
 end;
 
 procedure TTyroControl.SetVisible(AValue: Boolean);
@@ -661,20 +749,10 @@ begin
   FWindow :=AValue;
 end;
 
-procedure TTyroControl.SetParent(AValue: TTyroContainer);
-begin
-  if FParent =AValue then
-    Exit;
-  if FParent <> nil then
-    FParent.Controls.Extract(Self);
-  FParent :=AValue;
-  if FParent <> nil then
-    FParent.AddControl(Self);
-end;
-
 function TTyroControl.GetClientRect: TRect;
 begin
-  Result := Rect(0, 0, WindowWidth, WindowHeight);
+  //TODM Here we calc based it on margine and BorderSize
+  Result := Rect(0, 0, WindowRect.Width, WindowRect.Height);
 end;
 
 function TTyroControl.GetClientTop: Integer;
@@ -722,13 +800,12 @@ begin
 
 end;
 
-procedure TTyroControl.Paint(ACanvas: TTyroCanvas);
+procedure TTyroControl.PaintWindow(ACanvas: TTyroCanvas);
 begin
   if Visible then
   begin
     if csClip in Style then
-      RayLib.BeginScissorMode(FWindowRect.Left + ClientLeft, FWindowRect.Top + ClientTop,
-        ClientWidth, ClientHeight);
+      RayLib.BeginScissorMode(FWindowRect.Left + ClientLeft, FWindowRect.Top + ClientTop, ClientWidth, ClientHeight);
     ACanvas.SetOrigin(FWindowRect.Left + ClientLeft, FWindowRect.Top + ClientTop);
     try
       DoPaintBackground(ACanvas);
@@ -799,13 +876,11 @@ procedure TTyroControl.Created;
 begin
 end;
 
-constructor TTyroControl.Create(AParent: TTyroContainer);
+constructor TTyroControl.Create(AParent: TTyroLayout);
 begin
-  inherited Create;
+  inherited;
   State := State + [csCreating];
   FParent := AParent;
-  if Parent <> nil then
-    Parent.AddControl(Self);
   if (Parent is TTyroCustomWindow) then
     FWindow := (Parent as TTyroCustomWindow);
   FVisible := True;
@@ -835,9 +910,9 @@ begin
     FCanvas := CreateCanvas;
 end;
 
-constructor TTyroCustomWindow.Create(AWidth, AHeight: Integer);
+constructor TTyroCustomWindow.Create(AParent: TTyroLayout; AWidth, AHeight: Integer);
 begin
-  Create;
+  Create(AParent);
   FWindowRect := Rect(0, 0, AWidth, AHeight);
 end;
 
@@ -916,9 +991,9 @@ begin
   FCanvas :=AValue;
 end;
 
-constructor TTyroCustomWindow.Create;
+constructor TTyroCustomWindow.Create(AParent: TTyroLayout);
 begin
-  inherited Create;
+  inherited;
 end;
 
 destructor TTyroCustomWindow.Destroy;
@@ -929,14 +1004,14 @@ end;
 
 procedure TTyroCustomWindow.Paint;
 var
-  aControl: TTyroControl;
+  aControl: TTyroLayout;
 begin
   if Visible then
   begin
     try
       for aControl in Controls do
       begin
-        aControl.Paint(Canvas);
+        aControl.PaintWindow(Canvas);
       end;
     finally
     end;
@@ -947,7 +1022,7 @@ end;
 
 function TTyroWindow.CreateCanvas: TTyroCanvas;
 begin
-  Result := TTyroTextureCanvas.Create(WindowWidth, WindowHeight, True);
+  Result := TTyroTextureCanvas.Create(WindowRect.Width, WindowRect.Height, True);
 end;
 
 initialization

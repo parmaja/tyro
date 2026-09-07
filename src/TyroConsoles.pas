@@ -153,11 +153,11 @@ type
   protected
     procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
   public
-    constructor Create(AParent: TTyroContainer); override;
+    constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
 
     procedure DoPaint(ACanvas: TTyroCanvas); override;
-    procedure Resize; override;
+    procedure Resized; override;
     procedure KeyPress(var Key: TUTF8Char); override;
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
     procedure KeyUp(var Key: TKeyboardKey; Shift: TShiftState); override;
@@ -2198,9 +2198,9 @@ begin
   FOutY := v;
 end;
 
-procedure TTyroConsole.Resize;
+procedure TTyroConsole.Resized;
 begin
-  inherited Resize;
+  inherited;
   AdjustScrollBars(True);
 end;
 
@@ -2388,7 +2388,7 @@ begin
   end;
 end;
 
-constructor TTyroConsole.Create(AParent: TTyroContainer);
+constructor TTyroConsole.Create(AParent: TTyroLayout);
 var
   i: Integer;
 begin
