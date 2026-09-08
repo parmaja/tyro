@@ -342,7 +342,11 @@ begin
   if lua_isinteger(L, -1) or lua_isnumber(L, -1) then
   begin
     i := lua_tointeger(L, -1);
-    if field = 'border' then
+    if field = 'height' then
+      Main.Console.Height := i
+    else if field = 'width' then
+      Main.Console.Width := i
+    else if field = 'border' then
       Main.Console.BorderSize := i
     else if field = 'margin' then
       Main.Console.MarginSize := i;
@@ -397,6 +401,16 @@ begin
         end;
         Result := 1;
       end;
+      'height':
+        begin
+          lua_pushinteger(L, Main.Console.Height);
+          Result := 1;
+        end;
+      'width':
+        begin
+          lua_pushinteger(L, Main.Console.Width);
+          Result := 1;
+        end;
     'border':
       begin
         lua_pushinteger(L, Main.Console.BorderSize);

@@ -190,9 +190,11 @@ type
 
     property CaretColor: TColor Read FCaretColor Write FCaretColor;
     property CaretVisible: Boolean Read FCaretVisible Write SetCaretVisible;
+
     property OnInput: EOnConsoleInput Read FOnInput Write FOnInput;
     property OnInputChange: EOnConsoleInputChange Read FOnInputChange Write FOnInputChange;
     property OnAny: EOnConsoleInputChange Read FOnAny Write FOnAny;
+
     property LineCount: Integer Read FLineCount Write SetLineCount;
     property BackGroundColor: TColor Read FBackgroundColor Write SetBackGroundColor;
     property TabWidth: Integer Read FTabWidth Write SetTabWidth;

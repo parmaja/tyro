@@ -82,11 +82,15 @@ type
     FParent: TTyroLayout;
     FBoundsRect: TRect;
     FWindowRect: TRect;
+    function GetHeight: Integer;
+    function GetWidth: Integer;
     procedure SetAlign(AValue: TAlign);
+    procedure SetHeight(AValue: Integer);
     procedure SetParent(AValue: TTyroLayout);
     procedure SetBorderColor(AValue: TColor);
     procedure SetBorderSize(AValue: Integer);
     procedure SetMarginSize(AValue: Integer);
+    procedure SetWidth(AValue: Integer);
   protected
     procedure SetBoundsRect(AValue: TRect);
     procedure SetWindowRect(AValue: TRect);
@@ -116,6 +120,8 @@ type
     property BorderColor: TColor read FBorderColor write SetBorderColor;
     //Real bounds
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
+    property Height: Integer read GetHeight write SetHeight;
+    property Width: Integer read GetWidth write SetWidth;
     //WindowRect is Virtual changed by RealignControls of parent used paint control
     property WindowRect: TRect read FWindowRect write SetWindowRect;
   end;
@@ -547,6 +553,22 @@ begin
   Realign;
 end;
 
+function TTyroLayout.GetHeight: Integer;
+begin
+  Result := BoundsRect.Height;
+end;
+
+function TTyroLayout.GetWidth: Integer;
+begin
+  Result := BoundsRect.Width;
+end;
+
+procedure TTyroLayout.SetHeight(AValue: Integer);
+begin
+  FBoundsRect.Height := AValue;;
+  Resize;
+end;
+
 procedure TTyroLayout.SetParent(AValue: TTyroLayout);
 begin
   if FParent = AValue then
@@ -666,8 +688,9 @@ end;
 
 procedure TTyroLayout.SetBoundsRect(AValue: TRect);
 begin
-  if FBoundsRect=AValue then Exit;
-  FBoundsRect:=AValue;
+  if FBoundsRect=AValue then
+    Exit;
+  FBoundsRect := AValue;
   Resize;
 end;
 
@@ -758,6 +781,12 @@ procedure TTyroLayout.SetMarginSize(AValue: Integer);
 begin
   if FMarginSize=AValue then Exit;
   FMarginSize:=AValue;
+end;
+
+procedure TTyroLayout.SetWidth(AValue: Integer);
+begin
+  FBoundsRect.Width := AValue;
+  Resize;
 end;
 
 procedure TTyroControl.SetVisible(AValue: Boolean);
