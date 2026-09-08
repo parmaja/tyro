@@ -74,7 +74,10 @@
 **    - Only tested with FPC (FreePascal Compiler)
 **    - Needs Delphi with Int64 supported.
 *)
-
+(*
+** Updated to Lua 5.5.0 by Zaher Dirkey
+*
+*)
 
 //--------------------------
 // What was not translated:
@@ -118,25 +121,24 @@ const
 {$endif}
 
 const
-   LUA_VERSION_MAJOR   = '5';
-   LUA_VERSION_MINOR   = '5';
-   LUA_VERSION_NUM     = 505;
-   LUA_VERSION_RELEASE = '1';
-   LUA_VERSION_        = 'Lua 5.5'; // LUA_VERSION was suffixed by '_' for avoiding name collision
-   LUA_RELEASE         = 'Lua 5.5.1';
-   LUA_COPYRIGHT       = 'Lua 5.5.1  Copyright (C) 1994-2026 Lua.org, PUC-Rio';
-   LUA_AUTHORS         = 'R. Ierusalimschy, L. H. de Figueiredo, W. Celes';
-   LUA_SIGNATURE       = #27'Lua';  // mark for precompiled code '<esc>Lua'
-   LUA_MULTRET         = -1;        // option for multiple returns in 'lua_pcall' and 'lua_call'
+  LUA_VERSION_MAJOR   = '5';
+  LUA_VERSION_MINOR   = '5';
+  LUA_VERSION_NUM     = 505;
+  LUA_VERSION_RELEASE = '1';
+  LUA_VERSION_        = 'Lua 5.5'; // LUA_VERSION was suffixed by '_' for avoiding name collision
+  LUA_RELEASE         = 'Lua 5.5.1';
+  LUA_COPYRIGHT       = 'Lua 5.5.1  Copyright (C) 1994-2026 Lua.org, PUC-Rio';
+  LUA_AUTHORS         = 'R. Ierusalimschy, L. H. de Figueiredo, W. Celes';
+  LUA_SIGNATURE       = #27'Lua';  // mark for precompiled code '<esc>Lua'
+  LUA_MULTRET         = -1;        // option for multiple returns in 'lua_pcall' and 'lua_call'
 
-    // pseudo-indices
-    // Note: The true Lua 5.5 value is (-(INT_MAX/2 + 1000)) = -1073740808.
-    LUA_REGISTRYINDEX = -(MaxInt div 2 + 1000); // For Lua 5.5 and Pluto 0.13.x
-    //LUA_REGISTRYINDEX: Integer = -1001000; DO NOT USE THIS
-    // The value above is kept for binary compatibility with the linked library.
+  // pseudo-indices
+  // Note: The true Lua 5.5 value is (-(INT_MAX/2 + 1000)) = -1073740808.
+  LUA_REGISTRYINDEX = -(MaxInt div 2 + 1000); // For Lua 5.5 and Pluto 0.13.x
+  //LUA_REGISTRYINDEX: Integer = -1001000; DO NOT USE THIS
+  // The value above is kept for binary compatibility with the linked library.
 
 function lua_upvalueindex(I: Integer): Integer; inline;
-
 // thread status
 const
    LUA_OK        = 0;
@@ -165,33 +167,33 @@ type
   {$IFEND}
 {$ENDIF}
 
-   Plua_Integer  = ^lua_Integer;
-   Plua_Unsigned = ^lua_Unsigned;
+  Plua_Integer  = ^lua_Integer;
+  Plua_Unsigned = ^lua_Unsigned;
 
-    lua_Number   = Double;
-    Plua_Number  = ^lua_Number;
+  lua_Number   = Double;
+  Plua_Number  = ^lua_Number;
 
-    // size_t matches the C size_t used by the Lua shared library.
-    // Using a platform-sized unsigned type avoids truncation on 64-bit.
-    size_t = NativeUInt;
-    Psize_t = ^size_t;
+  // size_t matches the C size_t used by the Lua shared library.
+  // Using a platform-sized unsigned type avoids truncation on 64-bit.
+  size_t = NativeUInt;
+  Psize_t = ^size_t;
 
-   Plua_State = Pointer;
+  Plua_State = Pointer;
 
-   // type for continuation-function contexts
-   lua_KContext = Pointer;
+  // type for continuation-function contexts
+  lua_KContext = Pointer;
 
-   lua_CFunction = function(L: Plua_State): Integer; cdecl;
+  lua_CFunction = function(L: Plua_State): Integer; cdecl;
 
-   // Type for continuation functions
-   lua_KFunction = function(L: Plua_State; status: Integer; ctx: lua_KContext): Integer; cdecl;
+  // Type for continuation functions
+  lua_KFunction = function(L: Plua_State; status: Integer; ctx: lua_KContext): Integer; cdecl;
 
-   // functions that read/write blocks when loading/dumping Lua chunks
-   lua_Reader = function(L: Plua_State; ud: Pointer; sz: Psize_t): PAnsiChar; cdecl;
-   lua_Writer = function(L: Plua_State; const p: Pointer; sz: size_t; ud: Pointer): Integer; cdecl;
+  // functions that read/write blocks when loading/dumping Lua chunks
+  lua_Reader = function(L: Plua_State; ud: Pointer; sz: Psize_t): PAnsiChar; cdecl;
+  lua_Writer = function(L: Plua_State; const p: Pointer; sz: size_t; ud: Pointer): Integer; cdecl;
 
-   // prototype for memory-allocation functions
-   lua_Alloc = function(ud, ptr: Pointer; osize, nsize: size_t): Pointer; cdecl;
+  // prototype for memory-allocation functions
+  lua_Alloc = function(ud, ptr: Pointer; osize, nsize: size_t): Pointer; cdecl;
 
 const
    // basic types
@@ -1014,7 +1016,7 @@ initialization
 {$ENDIF}
 
 (******************************************************************************
-* Copyright (C) 1994-2015 Lua.org, PUC-Rio.
+* Copyright (C) 1994-2026 Lua.org, PUC-Rio.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the

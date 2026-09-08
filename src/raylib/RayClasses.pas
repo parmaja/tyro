@@ -142,14 +142,13 @@ type
     Width: Integer;
     Height: Integer;
     Scale: Integer;
-    procedure Add;
-    procedure Release;
     constructor Create;
     destructor Destroy; override;
     procedure LoadFromFile(FileName: utf8string; FontSize: Integer = 0);
     procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
     procedure LoadFromMemory(FileType:string; const FontData: Pointer; DataSize: Integer; FontSize: Integer);
     procedure LoadDefault;
+    procedure Unload;
   end;
 
 var
@@ -176,14 +175,6 @@ begin
   //Width := Data.Glyphs[0].advanceX;;
 end;
 
-procedure TRayFont.Add;
-begin
-end;
-
-procedure TRayFont.Release;
-begin
-end;
-
 constructor TRayFont.Create;
 begin
   inherited Create;
@@ -198,17 +189,22 @@ end;
 
 procedure TRayFont.LoadDefault;
 begin
-  RayLib.UnloadFont(Data);
+  Unload;
   Data := GetFontDefault();
   Loaded;
+end;
+
+procedure TRayFont.Unload;
+begin
+  RayLib.UnloadFont(Data);
+  Data := Default(TFont);
 end;
 
 procedure TRayFont.LoadFromFile(FileName: utf8string; FontSize: Integer);
 begin
   if SysUtils.FileExists(FileName) then
   begin
-    RayLib.UnloadFont(Data);
-    Data := Default(TFont);
+    Unload;
     if FontSize = 0 then
       Data := RayLib.LoadFont(PUTF8Char(FileName))
     else
@@ -216,14 +212,16 @@ begin
     //GenTextureMipmaps(Data.texture);
     SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
     Loaded;
-  end;
+  end
+  else
+    raise Exception.Create('Font file not exists ' + FileName);
 end;
 
 procedure TRayFont.LoadFromString(const DataString: rawbytestring; FontSize: Integer);
 var
   img: TImage;
 begin
-  RayLib.UnloadFont(Data);
+  Unload;
   img := LoadImageFromMemory('.png', PByte(DataString), Length(DataString));
   ImageAlphaPremultiply(img);
   Data := LoadFontFromImage(img, clMagenta, cFirstChar);
@@ -236,8 +234,7 @@ end;
 
 procedure TRayFont.LoadFromMemory(FileType: string; const FontData: Pointer; DataSize: Integer; FontSize: Integer);
 begin
-  RayLib.UnloadFont(Data);
-  Data := Default(TFont);
+  Unload;
   Data := LoadFontFromMemory(PUTF8Char(FileType), FontData, DataSize, FontSize, nil, 0);
   SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
   Loaded;

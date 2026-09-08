@@ -20,7 +20,7 @@ uses
   mnClasses;
 
 const
-  TyroVersion = 1;
+  TyroVersion: Double = 0.1;
   TyroVersionString = '0.1';
 
 //  sPromptChar = '>';

@@ -9,7 +9,6 @@
 --    SPACE              - clear the screen
 --    C                  - cycle drawing color
 --======================================================================
-
 window.show(640, 480)
 canvas.color = colors.black
 canvas.clear()

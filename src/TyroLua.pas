@@ -85,14 +85,14 @@ type
 
   TLuaColors = class(TLuaObject)
   protected
-    type
-      TLuaColor = record
-        Name: string;
-        Color: TColor;
-      end;
+  type
+    TLuaColor = record
+      Name: string;
+      Color: TColor;
+    end;
 
-    var
-      Colors: array of TLuaColor;
+  var
+    Colors: array of TLuaColor;
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
 
@@ -121,38 +121,38 @@ type
   protected
     procedure AddQueueObject(AQueueObject: TQueueObject); override;
     //canvas functions
-    function Clear_func(L: Plua_State): Integer; cdecl;
-    function Window_func(L: Plua_State): Integer; cdecl;
-    function ShowConsole_func(L: Plua_State): Integer; cdecl;
-    function DrawText_func(L: Plua_State): Integer; cdecl;
-    function DrawCircle_func(L: Plua_State): Integer; cdecl;
-    function DrawRectangle_func(L: Plua_State): Integer; cdecl;
-    function DrawLine_func(L: Plua_State): Integer; cdecl;
-    function DrawPoint_func(L: Plua_State): Integer; cdecl;
+    function Clear_func(L: Plua_State): integer; cdecl;
+    function Window_func(L: Plua_State): integer; cdecl;
+    function ShowConsole_func(L: Plua_State): integer; cdecl;
+    function DrawText_func(L: Plua_State): integer; cdecl;
+    function DrawCircle_func(L: Plua_State): integer; cdecl;
+    function DrawRectangle_func(L: Plua_State): integer; cdecl;
+    function DrawLine_func(L: Plua_State): integer; cdecl;
+    function DrawPoint_func(L: Plua_State): integer; cdecl;
     //global functions
-    function Print_func(L: Plua_State): Integer; cdecl;
-    function PrintLn_func(L: Plua_State): Integer; cdecl;
+    function Print_func(L: Plua_State): integer; cdecl;
+    function PrintLn_func(L: Plua_State): integer; cdecl;
 
-    function Beep_func(L: Plua_State): Integer; cdecl;
-    function PlaySound_func(L: Plua_State): Integer; cdecl;
-    function PlayMusic_func(L: Plua_State): Integer; cdecl;
-    function PlayMML_func(L: Plua_State): Integer; cdecl;
+    function Beep_func(L: Plua_State): integer; cdecl;
+    function PlaySound_func(L: Plua_State): integer; cdecl;
+    function PlayMusic_func(L: Plua_State): integer; cdecl;
+    function PlayMML_func(L: Plua_State): integer; cdecl;
 
     //input & timing
-    function IsKeyPressed_func(L: Plua_State): Integer; cdecl;
-    function IsKeyDown_func(L: Plua_State): Integer; cdecl;
-    function MouseX_func(L: Plua_State): Integer; cdecl;
-    function MouseY_func(L: Plua_State): Integer; cdecl;
-    function IsMouseButtonPressed_func(L: Plua_State): Integer; cdecl;
-    function FrameTime_func(L: Plua_State): Integer; cdecl;
-    function TotalTime_func(L: Plua_State): Integer; cdecl;
-    function RandomValue_func(L: Plua_State): Integer; cdecl;
+    function IsKeyPressed_func(L: Plua_State): integer; cdecl;
+    function IsKeyDown_func(L: Plua_State): integer; cdecl;
+    function MouseX_func(L: Plua_State): integer; cdecl;
+    function MouseY_func(L: Plua_State): integer; cdecl;
+    function IsMouseButtonPressed_func(L: Plua_State): integer; cdecl;
+    function FrameTime_func(L: Plua_State): integer; cdecl;
+    function TotalTime_func(L: Plua_State): integer; cdecl;
+    function RandomValue_func(L: Plua_State): integer; cdecl;
 
-     // console input
-     function ConsoleRead_func(L: Plua_State): Integer; cdecl;
+    // console input
+    function ConsoleRead_func(L: Plua_State): integer; cdecl;
 
-     //font
-     function LoadFont_func(L: Plua_State): Integer; cdecl;
+    //font
+    function LoadFont_func(L: Plua_State): integer; cdecl;
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -160,18 +160,18 @@ type
 
 implementation
 
-function LuaAlloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t) : Pointer; cdecl;
+function LuaAlloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t): Pointer; cdecl;
 begin
   try
-    Result:= ptr;
+    Result := ptr;
     ReallocMem(Result, nSize);
   except
-    Result:= nil;
+    Result := nil;
   end;
 end;
 
 //global functions
-function sleep_func(L : Plua_State) : Integer; cdecl;
+function sleep_func(L: Plua_State): integer; cdecl;
 var
   n: int64;
 begin
@@ -180,7 +180,7 @@ begin
   Result := 0;
 end;
 
-function log_func(L : Plua_State) : Integer; cdecl;
+function log_func(L: Plua_State): integer; cdecl;
 var
   i, c: integer;
   s: string;
@@ -198,41 +198,41 @@ end;
 { TLuaScript }
 
 type
-  lua_CMethod = function(L: Plua_State): Integer of object cdecl; // Lua Function
+  lua_CMethod = function(L: Plua_State): integer of object cdecl; // Lua Function
 
-function lua_method_callback(L: Plua_State): Integer; cdecl;
+function lua_method_callback(L: Plua_State): integer; cdecl;
 var
   Method: TMethod;
 begin
-  Method.data := lua_topointer(L, lua_upvalueindex(1));
+  Method.Data := lua_topointer(L, lua_upvalueindex(1));
   Method.code := lua_topointer(L, lua_upvalueindex(2));
-  if Method.data = nil then
+  if Method.Data = nil then
     raise Exception.Create('Lua: cannot execute object method!');
   Result := lua_CMethod(Method)(L);
 end;
 
-procedure lua_register_method(L: Plua_State; name: String; method: lua_CMethod);
+procedure lua_register_method(L: Plua_State; Name: string; method: lua_CMethod);
 begin
   lua_pushlightuserdata(L, TMethod(method).Data);
   lua_pushlightuserdata(L, TMethod(method).Code);
   lua_pushcclosure(L, @lua_method_callback, 2);
-  lua_setglobal(L, PChar(name));
+  lua_setglobal(L, PChar(Name));
 end;
 
-procedure lua_register_function(L: Plua_State; name: String; func: lua_CFunction);
+procedure lua_register_function(L: Plua_State; Name: string; func: lua_CFunction);
 begin
-  lua_register(L, PChar(name), func);
+  lua_register(L, PChar(Name), func);
 end;
 
-procedure lua_push_method(L: Plua_State; name: String; method: lua_CMethod);
+procedure lua_push_method(L: Plua_State; Name: string; method: lua_CMethod);
 begin
   lua_pushlightuserdata(L, TMethod(method).Data);
   lua_pushlightuserdata(L, TMethod(method).Code);
   lua_pushcclosure(L, @lua_method_callback, 2);
-  lua_setfield(L, -2, pchar(name));
+  lua_setfield(L, -2, PChar(Name));
 end;
 
-procedure lua_register_table(L : Plua_State; table: string; obj: TLuaObject);
+procedure lua_register_table(L: Plua_State; table: string; obj: TLuaObject);
 begin
   //table
   lua_newtable(L);
@@ -243,16 +243,16 @@ begin
   lua_setmetatable(L, -2);
   //end metatable
 
-  lua_setglobal(L, pchar(table)); //set table name
+  lua_setglobal(L, PChar(table)); //set table name
   //end table
 end;
 
-procedure lua_register_table_index(L : Plua_State; table: string; obj: TLuaObject);
+procedure lua_register_table_index(L: Plua_State; table: string; obj: TLuaObject);
 var
-  new: Boolean;
+  new: boolean;
 begin
   //table
-  new := lua_getglobal(L, pchar(table)) = 0; //get table by name
+  new := lua_getglobal(L, PChar(table)) = 0; //get table by name
   if new then
     lua_newtable(L);
 
@@ -266,68 +266,75 @@ begin
   //end metatable
 
   if new then
-    lua_setglobal(L, pchar(table)) //set table name
+    lua_setglobal(L, PChar(table)) //set table name
   else
     lua_pop(L, 1); //pop table from stack
   //end table
 end;
 
-procedure lua_register_table_method(L : Plua_State; table: string; obj: TObject; name: string; method: lua_CMethod);
+procedure lua_register_table_method(L: Plua_State; table: string;
+  obj: TObject; Name: string; method: lua_CMethod);
 var
-  new: Boolean;
+  new: boolean;
 begin
-  new := lua_getglobal(L, pchar(table)) = 0; //get table by name
+  new := lua_getglobal(L, PChar(table)) = 0; //get table by name
   if new then
     lua_newtable(L);
-  lua_push_method(L, pchar(Name), method);
+  lua_push_method(L, PChar(Name), method);
 
   if new then
-    lua_setglobal(L, pchar(table))
+    lua_setglobal(L, PChar(table))
   else
     lua_pop(L, 1); //pop table from stack
 end;
 
-procedure lua_register_table_value(L : Plua_State; table, name: string; value: integer);
+procedure lua_register_table_value(L: Plua_State; table, Name: string; Value: integer);
 var
-  new: Boolean;
+  new: boolean;
 begin
   //table
-  new := lua_getglobal(L, pchar(table)) = 0; //get table by name
+  new := lua_getglobal(L, PChar(table)) = 0; //get table by name
   if new then
     lua_newtable(L);
 
-  lua_pushinteger(L, value);
-  lua_setfield(L, -2, pchar(name));
+  lua_pushinteger(L, Value);
+  lua_setfield(L, -2, PChar(Name));
 
   if new then
-    lua_setglobal(L, pchar(table))
+    lua_setglobal(L, PChar(table))
   else
     lua_pop(L, 1); //pop table from stack
   //end metatable
 end;
 
-procedure lua_register_string(L : Plua_State; name: string; value: string);
+procedure lua_register_string(L: Plua_State; Name: string; Value: string);
 begin
-  lua_pushstring(L, value);
-  lua_setfield(L, -2, pchar(name));
+  lua_pushstring(L, Value);
+  lua_setfield(L, -2, PChar(Name));
 end;
 
-procedure lua_register_integer(L : Plua_State; name: string; value: integer);
+procedure lua_register_integer(L: Plua_State; Name: string; Value: integer);
 begin
-  lua_pushinteger(L, value);
-  lua_setfield(L, -2, pchar(name));
+  lua_pushinteger(L, Value);
+  lua_setfield(L, -2, PChar(Name));
 end;
 
-procedure lua_register_global_integer(L : Plua_State; name: string; value: integer);
+procedure lua_register_global_integer(L: Plua_State; Name: string; Value: integer);
 begin
-  lua_pushinteger(L, value);
-  lua_setglobal(L, pchar(name));
+  lua_pushinteger(L, Value);
+  lua_setglobal(L, PChar(Name));
 end;
 
-procedure lua_register_color(L : Plua_State; name: string; value: TColor);
+procedure lua_register_global_number(L: Plua_State; Name: string; Value: double);
 begin
-  lua_pushinteger(L, ColorToInt(value));
-  lua_setfield(L, -2, pchar(name));
+  lua_pushnumber(L, Value);
+  lua_setglobal(L, PChar(Name));
+end;
+
+procedure lua_register_color(L: Plua_State; Name: string; Value: TColor);
+begin
+  lua_pushinteger(L, ColorToInt(Value));
+  lua_setfield(L, -2, PChar(Name));
 end;
 
 { TLuaConsole }
@@ -336,6 +343,7 @@ function TLuaConsole.__setter(L: PLua_State): integer; cdecl;
 var
   i: integer;
   field: string;
+  color: string;
 begin
   Result := 0;
   field := lua_tostring(L, 2);
@@ -349,11 +357,18 @@ begin
     else if field = 'border' then
       Main.Console.BorderSize := i
     else if field = 'margin' then
-      Main.Console.MarginSize := i;
+      Main.Console.MarginSize := i
+    else if field = 'borderColor' then
+      Main.Console.BorderColor := IntToColor(i);
   end
   else if lua_isstring(L, -1) then
   begin
-    if field = 'align' then
+    if field = 'borderColor' then
+    begin
+      color := StrPas(lua_tostring(L, -1));
+      Main.Console.BorderColor := StrToColor(color);
+    end
+    else if field = 'align' then
     begin
       //* TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
       if lua_tostring(L, -1) = 'none' then
@@ -381,51 +396,51 @@ begin
   field := lua_tostring(L, 2);
   case field of
     'active':
-      begin
-        lua_pushboolean(L, Main.Console.Visible);
-        Result := 1;
-      end;
+    begin
+      lua_pushboolean(L, Main.Console.Visible);
+      Result := 1;
+    end;
     'align':
-      begin
-        //* TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
-        i := Ord(Main.Console.Align);
-        case i of
-          0: lua_pushstring(L, 'none');
-          1: lua_pushstring(L, 'left');
-          2: lua_pushstring(L, 'top');
-          3: lua_pushstring(L, 'right');
-          4: lua_pushstring(L, 'bottom');
-          5: lua_pushstring(L, 'client');
+    begin
+      //* TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
+      i := Ord(Main.Console.Align);
+      case i of
+        0: lua_pushstring(L, 'none');
+        1: lua_pushstring(L, 'left');
+        2: lua_pushstring(L, 'top');
+        3: lua_pushstring(L, 'right');
+        4: lua_pushstring(L, 'bottom');
+        5: lua_pushstring(L, 'client');
         else
           lua_pushstring(L, 'none');
-        end;
-        Result := 1;
       end;
-      'height':
-        begin
-          lua_pushinteger(L, Main.Console.Height);
-          Result := 1;
-        end;
-      'width':
-        begin
-          lua_pushinteger(L, Main.Console.Width);
-          Result := 1;
-        end;
+      Result := 1;
+    end;
+    'height':
+    begin
+      lua_pushinteger(L, Main.Console.Height);
+      Result := 1;
+    end;
+    'width':
+    begin
+      lua_pushinteger(L, Main.Console.Width);
+      Result := 1;
+    end;
     'border':
-      begin
-        lua_pushinteger(L, Main.Console.BorderSize);
-        Result := 1;
-      end;
+    begin
+      lua_pushinteger(L, Main.Console.BorderSize);
+      Result := 1;
+    end;
     'borderColor':
-      begin
-        lua_pushinteger(L, ColorToInt(Main.Console.BorderColor));
-        Result := 1;
-      end;
+    begin
+      lua_pushinteger(L, ColorToInt(Main.Console.BorderColor));
+      Result := 1;
+    end;
     'margin':
-      begin
-        lua_pushinteger(L, Main.Console.MarginSize);
-        Result := 1;
-      end;
+    begin
+      lua_pushinteger(L, Main.Console.MarginSize);
+      Result := 1;
+    end;
   end;
 end;
 
@@ -463,20 +478,20 @@ begin
   field := lua_tostring(L, 2);
   case field of
     'margin':
-      begin
-        lua_pushinteger(L, Main.MarginSize);
-        Result := 1;
-      end;
+    begin
+      lua_pushinteger(L, Main.MarginSize);
+      Result := 1;
+    end;
     'border':
-      begin
-        lua_pushinteger(L, Main.BorderSize);
-        Result := 1;
-      end;
+    begin
+      lua_pushinteger(L, Main.BorderSize);
+      Result := 1;
+    end;
     'borderColor':
-      begin
-        lua_pushinteger(L, ColorToInt(Main.BorderColor));
-        Result := 1;
-      end;
+    begin
+      lua_pushinteger(L, ColorToInt(Main.BorderColor));
+      Result := 1;
+    end;
   end;
 end;
 
@@ -559,25 +574,25 @@ begin
   aItem.Name := Name;
   aItem.Color := AColor;
   SetLength(Colors, Length(Colors) + 1);
-  Colors[Length(Colors) -1] := aItem;
+  Colors[Length(Colors) - 1] := aItem;
 end;
 
 procedure TLuaColors.Created;
 begin
   AddColor('white', clWhite);
   AddColor('silver', clLightgray);
-  AddColor('gray' , clGray);
+  AddColor('gray', clGray);
   AddColor('black', clBlack);
-  AddColor('red'  , clRed);
+  AddColor('red', clRed);
   AddColor('maroon', clMaroon);
   AddColor('yellow', clYellow);
   AddColor('olive', clDarkgreen);
-  AddColor('lime' , clLime);
+  AddColor('lime', clLime);
   AddColor('green', clGreen);
-  AddColor('aqua' , clSkyBlue);
-  AddColor('teal' , clBrown);
-  AddColor('blue' , clBlue);
-  AddColor('navy' , clViolet);
+  AddColor('aqua', clSkyBlue);
+  AddColor('teal', clBrown);
+  AddColor('blue', clBlue);
+  AddColor('navy', clViolet);
   AddColor('fuchsia', clMagenta);
   AddColor('purple', clPurple);
 end;
@@ -597,19 +612,19 @@ begin
       begin
         i := lua_tointeger(L, -1);
         FScript.AddQueueObject(TDrawSetColorObject.Create(Main.Canvas, IntToColor(i)));
-        Result:= 1;
+        Result := 1;
       end;
       'alpha':
       begin
         i := lua_tointeger(L, -1);
         FScript.AddQueueObject(TDrawSetAlphaObject.Create(Main.Canvas, i));
-        Result:= 1;
+        Result := 1;
       end;
       'backcolor':
       begin
         i := lua_tointeger(L, -1);
         //Main.Canvas.BackgroundColor := RayColorOf(IntToColor(i));//thread unsafe
-        Result:= 1;
+        Result := 1;
       end;
     end;
 end;
@@ -653,7 +668,7 @@ end;
 
 constructor TLuaScript.Create;
 var
-  i: Integer;
+  i: integer;
 begin
   inherited;
   LuaState := lua_newstate(@LuaAlloc, nil, 0);
@@ -662,46 +677,46 @@ begin
   luaL_openselectedlibs(LuaState, -1, 0);
   lua_sethook(LuaState, @HookCount, LUA_MASKCOUNT, 100);
 
-  lua_register_global_integer(LuaState, 'version', TyroVersion);
+  lua_register_global_number(LuaState, 'version', TyroVersion);
   lua_register(LuaState, 'log', @log_func);
   lua_register(LuaState, 'sleep', @sleep_func);
   lua_register_method(LuaState, 'print', @Print_func);
   lua_register_method(LuaState, 'println', @PrintLn_func);
-   lua_register_table_method(LuaState, 'window', self, 'show', @Window_func);
-   lua_register_method(LuaState, 'showconsole', @ShowConsole_func);
+  lua_register_table_method(LuaState, 'window', self, 'show', @Window_func);
+  lua_register_method(LuaState, 'showconsole', @ShowConsole_func);
 
-//  lua_register_integer(LuaState, 'width', ScreenWidth));
-//  lua_register_integer(LuaState, 'height', ScreenHeight));
+  //  lua_register_integer(LuaState, 'width', ScreenWidth));
+  //  lua_register_integer(LuaState, 'height', ScreenHeight));
 
-   Canvas := TLuaCanvas.Create(Self);
-   Window := TLuaWindow.Create(Self);
-   Console := TLuaConsole.Create(Self);
-   Colors := TLuaColors.Create(Self);
-   Font := TLuaFont.Create(Self);
+  Canvas := TLuaCanvas.Create(Self);
+  Window := TLuaWindow.Create(Self);
+  Console := TLuaConsole.Create(Self);
+  Colors := TLuaColors.Create(Self);
+  Font := TLuaFont.Create(Self);
 
-   lua_register_table_index(LuaState, 'window', Window); //Should be last one for window
+  lua_register_table_index(LuaState, 'window', Window); //Should be last one for window
 
-   lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
-   lua_register_table_method(LuaState, 'console', self, 'println', @PrintLn_func);
-   lua_register_table_method(LuaState, 'console', self, 'show', @ShowConsole_func);
-   lua_register_table_method(LuaState, 'console', self, 'read', @ConsoleRead_func);
-   lua_register_table_index(LuaState, 'console', Console); //Should be last one
+  lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
+  lua_register_table_method(LuaState, 'console', self, 'println', @PrintLn_func);
+  lua_register_table_method(LuaState, 'console', self, 'show', @ShowConsole_func);
+  lua_register_table_method(LuaState, 'console', self, 'read', @ConsoleRead_func);
+  lua_register_table_index(LuaState, 'console', Console); //Should be last one
 
-   //lua_register_table(LuaState, 'draw', Canvas);
-   lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
-   lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
-   lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
-   lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
-   lua_register_table_method(LuaState, 'canvas', self, 'line', @DrawLine_func);
-   lua_register_table_method(LuaState, 'canvas', self, 'point', @DrawPoint_func);
+  //lua_register_table(LuaState, 'draw', Canvas);
+  lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
+  lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
+  lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
+  lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
+  lua_register_table_method(LuaState, 'canvas', self, 'line', @DrawLine_func);
+  lua_register_table_method(LuaState, 'canvas', self, 'point', @DrawPoint_func);
 
-   lua_register_table_value(LuaState, 'canvas', 'width', ScreenWidth);
-   lua_register_table_value(LuaState, 'canvas', 'height', ScreenHeight);
+  lua_register_table_value(LuaState, 'canvas', 'width', ScreenWidth);
+  lua_register_table_value(LuaState, 'canvas', 'height', ScreenHeight);
 
-   lua_register_table_index(LuaState, 'canvas', Canvas); //Should be last one
+  lua_register_table_index(LuaState, 'canvas', Canvas); //Should be last one
 
-   lua_register_table_method(LuaState, 'font', self, 'load', @LoadFont_func);
-   lua_register_table_index(LuaState, 'font', Font); //Should be last one
+  lua_register_table_method(LuaState, 'font', self, 'load', @LoadFont_func);
+  lua_register_table_index(LuaState, 'font', Font); //Should be last one
 
   lua_register_table_method(LuaState, 'music', self, 'beep', @Beep_func);
   lua_register_table_method(LuaState, 'music', self, 'sound', @PlaySound_func);
@@ -719,7 +734,7 @@ begin
   lua_register_method(LuaState, 'rand', @RandomValue_func);
 
   lua_newtable(LuaState);
-  for i := 0 to Length(Colors.Colors) -1 do
+  for i := 0 to Length(Colors.Colors) - 1 do
     lua_register_color(LuaState, Colors.Colors[i].Name, Colors.Colors[i].Color);
   lua_setglobal(LuaState, 'colors');
   lua_register_table_index(LuaState, 'colors', Colors); //Should be last one
@@ -755,7 +770,7 @@ begin
   begin
     r := lua_pcall(LuaState, 0, LUA_MULTRET, 0);
   end;
-  if (r <> LUA_OK)  then
+  if (r <> LUA_OK) then
   begin
     Msg := lua_tostring(LuaState, -1);
     DoError(Msg);
@@ -770,20 +785,20 @@ var
 {$endif}
 begin
   {$ifdef DEBUG_LUA}
-  if lua_getstack(LuaState, 1, ar)>0 then
+  if lua_getstack(LuaState, 1, ar) > 0 then
     lua_getinfo(LuaState, 'nSl', ar);
   {$endif}
   AQueueObject.LineNo := ar.currentline;
   inherited;
 end;
 
-function TLuaScript.Clear_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.Clear_func(L: Plua_State): integer; cdecl;
 begin
   AddQueueObject(TClearObject.Create(Main.Canvas));
   Result := 0;
 end;
 
-function TLuaScript.Window_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.Window_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   w, h: integer;
@@ -799,7 +814,7 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.ShowConsole_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.ShowConsole_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x, y, w, h: integer;
@@ -826,9 +841,9 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.DrawText_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.DrawText_func(L: Plua_State): integer; cdecl;
 var
-  x, y: Integer;
+  x, y: integer;
   s: string;
 begin
   x := round(lua_tonumber(L, 1));
@@ -838,13 +853,13 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.DrawCircle_func(L : Plua_State) : Integer; cdecl;
+function TLuaScript.DrawCircle_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x, y, r: integer;
-  f: Boolean;
+  f: boolean;
 begin
-  f := false;
+  f := False;
   c := lua_gettop(L);
   x := round(lua_tonumber(L, 1));
   y := round(lua_tonumber(L, 2));
@@ -861,13 +876,13 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.DrawRectangle_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.DrawRectangle_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x, y, w, h: integer;
-  f: Boolean;
+  f: boolean;
 begin
-  f := false;
+  f := False;
   c := lua_gettop(L);
   x := round(lua_tonumber(L, 1));
   y := round(lua_tonumber(L, 2));
@@ -879,7 +894,7 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.DrawLine_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.DrawLine_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x1, y1, x2, y2: integer;
@@ -898,7 +913,7 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.DrawPoint_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.DrawPoint_func(L: Plua_State): integer; cdecl;
 var
   x, y: integer;
 begin
@@ -908,7 +923,7 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.Print_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.Print_func(L: Plua_State): integer; cdecl;
 var
   i, c: integer;
   s: string;
@@ -925,7 +940,7 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.PrintLn_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.PrintLn_func(L: Plua_State): integer; cdecl;
 var
   i, c: integer;
   s: string;
@@ -942,13 +957,13 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.Beep_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.Beep_func(L: Plua_State): integer; cdecl;
 begin
   AddQueueObject(TBeepObject.Create);
   Result := 0;
 end;
 
-function TLuaScript.PlaySound_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.PlaySound_func(L: Plua_State): integer; cdecl;
 var
   Freq, Period: integer;
 begin
@@ -958,7 +973,7 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.PlayMusic_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.PlayMusic_func(L: Plua_State): integer; cdecl;
 var
   s: string;
 begin
@@ -969,7 +984,7 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.PlayMML_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.PlayMML_func(L: Plua_State): integer; cdecl;
 var
   i, c: integer;
   s: string;
@@ -984,7 +999,8 @@ begin
     Song[i] := s;
   end;
   //AddQueueObject(TPlayMMLObject.Create(Song));
-  with TPlayMMLObject.Create(Song) do //using current lua thread to not block current thread, or maybe use a thread
+  with TPlayMMLObject.Create(Song) do
+    //using current lua thread to not block current thread, or maybe use a thread
   begin
     Execute;
     Free;
@@ -992,7 +1008,7 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.IsKeyPressed_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.IsKeyPressed_func(L: Plua_State): integer; cdecl;
 var
   s: string;
 begin
@@ -1001,7 +1017,7 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.IsKeyDown_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.IsKeyDown_func(L: Plua_State): integer; cdecl;
 var
   s: string;
 begin
@@ -1010,19 +1026,19 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.MouseX_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.MouseX_func(L: Plua_State): integer; cdecl;
 begin
   lua_pushinteger(L, TyroInput.MouseX);
   Result := 1;
 end;
 
-function TLuaScript.MouseY_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.MouseY_func(L: Plua_State): integer; cdecl;
 begin
   lua_pushinteger(L, TyroInput.MouseY);
   Result := 1;
 end;
 
-function TLuaScript.IsMouseButtonPressed_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.IsMouseButtonPressed_func(L: Plua_State): integer; cdecl;
 var
   s: string;
 begin
@@ -1031,21 +1047,21 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.FrameTime_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.FrameTime_func(L: Plua_State): integer; cdecl;
 begin
   lua_pushnumber(L, TyroInput.FrameTime);
   Result := 1;
 end;
 
-function TLuaScript.TotalTime_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.TotalTime_func(L: Plua_State): integer; cdecl;
 begin
   lua_pushnumber(L, TyroInput.TotalTime);
   Result := 1;
 end;
 
-function TLuaScript.RandomValue_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.RandomValue_func(L: Plua_State): integer; cdecl;
 var
-  minv, maxv: Integer;
+  minv, maxv: integer;
 begin
   minv := round(lua_tonumber(L, 1));
   maxv := round(lua_tonumber(L, 2));
@@ -1053,10 +1069,10 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.ConsoleRead_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.ConsoleRead_func(L: Plua_State): integer; cdecl;
 var
   s: string;
-  c: Integer;
+  c: integer;
   Reader: TReadConsoleObject;
 begin
   s := '> ';
@@ -1075,14 +1091,14 @@ begin
     lua_pushstring(L, PChar(Reader.ResultString));
     Result := 1;
   finally
-     Reader.Free;
-   end;
- end;
+    Reader.Free;
+  end;
+end;
 
-function TLuaScript.LoadFont_func(L: Plua_State): Integer; cdecl;
+function TLuaScript.LoadFont_func(L: Plua_State): integer; cdecl;
 var
   aFile, s: string;
-  aSize: Integer;
+  aSize: integer;
 begin
   aFile := lua_tostring(L, 1);
   // Load font from current directory (ScriptPath or WorkSpace)
@@ -1107,4 +1123,3 @@ initialization
   ThreadRunning := nil;
   Main.RegisterLanguage('Lua', ['.lua', '.ls'], TLuaScript);
 end.
-

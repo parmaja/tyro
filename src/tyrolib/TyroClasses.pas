@@ -130,8 +130,9 @@ type
     destructor Destroy; override;
   end;
 
-  function IntToColor(I: integer): TColor;
-  function ColorToInt(C: TColor): integer;
+  function StrToColor(Value: String): TColor;
+  function IntToColor(I: Integer): TColor;
+  function ColorToInt(C: TColor): Integer;
 
 const
   ScreenCharWidth = 40;
@@ -149,6 +150,11 @@ implementation
 
 uses
   minibidi;
+
+function StrToColor(Value: String): TColor;
+begin
+  //TODO
+end;
 
 function IntToColor(I: Integer): TColor;
 begin
