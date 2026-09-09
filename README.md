@@ -119,6 +119,80 @@ println("Hello, " .. name .. "!")
 
 See `demos/terminal_demo.lua` and `demos/console_read_demo.lua` for examples.
 
+# Spirits (Sprites)
+
+The `Spirits` system manages textured images ("spirits") that the engine draws
+every frame. Each spirit is created with `Spirits.new`, loaded with `load`, and
+positioned with `move` or by setting `x`/`y` properties.
+
+## Creating & Loading
+
+| Function | Description |
+|----------|-------------|
+| `Spirits.new("name"?)` | Create a new spirit. Optional name registers it for lookup. |
+| `Spirits("name")` | Look up a spirit by name (returns the spirit object or `nil`). |
+| `Spirits.find("name")` | Same as above. |
+
+## Spirit Methods
+
+| Method | Description |
+|--------|-------------|
+| `spirit:load("image.png")` | Load a texture from file into this spirit. |
+| `spirit:show()` | Make the spirit visible (shown by default). |
+| `spirit:hide()` | Hide the spirit from rendering. |
+| `spirit:move(x, y)` | Set the spirit's position. |
+| `spirit:width()` | Return the texture width in pixels. |
+| `spirit:height()` | Return the texture height in pixels. |
+
+## Spirit Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `spirit.x` | `number` | X position (read/write). |
+| `spirit.y` | `number` | Y position (read/write). |
+| `spirit.angle` | `number` | Rotation in degrees (read/write). |
+| `spirit.scale` | `number` | Scale factor, 1.0 = original size (read/write). |
+| `spirit.visible` | `boolean` | Whether the spirit is drawn (read/write). |
+
+Image files are searched in the script directory, the workspace `sprites/`
+folder, and the current directory.
+
+```lua
+window.show(640, 480)
+canvas.color(colors.black)
+canvas.clear()
+
+myspirit1 = Spirits.new("player")
+myspirit1.load("richard-say.png")
+myspirit1.show()
+myspirit1.move(100, 200)
+
+myspirit2 = Spirits.new()
+myspirit2.load("richard-say.png")
+myspirit2.move(300, 100)
+myspirit2.angle = 45
+myspirit2.scale = 0.5
+
+-- Look up by name
+local p = Spirits("player")
+println("Sprite size: " .. p.width() .. "x" .. p.height())
+
+local a = 0
+while true do
+    canvas.color(colors.black)
+    canvas.clear()
+
+    -- Engine draws all spirits automatically; just update properties
+    myspirit1.move(mousex(), mousey())
+    myspirit1.angle = a
+
+    a = a + 1
+    if a >= 360 then a = 0 end
+
+    sleep(16)
+end
+```
+
 # Timing
 
 | Function | Returns | Description |
@@ -153,6 +227,7 @@ tyro demos/<name>.lua
 | `demos/pong.lua` | Complete Pong game — drawing, keyboard input, AI, physics, collision, sound, scoring |
 | `demos/basic_drawing.lua` | All drawing primitives: rectangle, circle, line, point, text, colors |
 | `demos/animated_demo.lua` | Animation loop with random colors and sleep timing |
+| `demos/sprites_demo.lua` | Spirits system: load, show, hide, move, rotate, scale, named access |
 | `demos/interactive_paint.lua` | Mouse drawing with keyboard color switching (uses input APIs) |
 | `demos/console_demo.lua` | Console output: print, println, log |
 | `demos/terminal_demo.lua` | Built-in terminal commands: dir, list, clear, help, exit |

@@ -14,9 +14,9 @@ interface
 uses
   Classes, SysUtils, SyncObjs,
   mnLogs, mnUtils,
-//  FPCanvas, FPImage,
   RayLib, RayClasses, TyroScripts,
   TyroClasses, TyroControls, TyroConsoles,
+  TyroSpirits,
   mnClasses;
 
 const
@@ -103,6 +103,7 @@ type
     RunFile: string;//that to run in script
     Console: TTyroConsole;
     Graphic: TTyroCanvas;
+    Spirits: TSpiritStore;
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
     procedure Stop; //and wait
@@ -266,20 +267,22 @@ begin
   {$IFEND}
   //TTyroPanel.Create(Self);
 
-  Console := TTyroConsole.Create(Self);
+   Console := TTyroConsole.Create(Self);
   Console.WindowRect := Rect(MarginSize, MarginSize , 100, 100);
   Console.Visible := False;
   Console.Focused := True;
   Console.Visible := False;
   Console.Focused := True;
   Console.OnInput := ConsoleInput;
+  Spirits := TSpiritStore.Create;
   Commands := TConsoleCommands.Create();
   RegisterCommands;
 end;
 
-destructor TTyroEngine.Destroy;
+   destructor TTyroEngine.Destroy;
 begin
   //Stop;
+  FreeAndNil(Spirits);
   FreeAndNil(Graphic);
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
@@ -318,10 +321,13 @@ begin
   end;
 end;
 
-procedure TTyroEngine.Draw;
+   procedure TTyroEngine.Draw;
 begin
   if Graphic <> nil then
+  begin
+    Spirits.DrawAll;
     Graphic.PostDraw;
+  end;
   ThreadSwitch; //Yield
 end;
 
