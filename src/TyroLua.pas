@@ -289,8 +289,7 @@ begin
   //end table
 end;
 
-procedure lua_register_table_method(L: Plua_State; table: string;
-  obj: TObject; Name: string; method: lua_CMethod);
+procedure lua_register_table_method(L: Plua_State; table: string; obj: TObject; Name: string; method: lua_CMethod);
 var
   new: boolean;
 begin
@@ -695,12 +694,11 @@ begin
   lua_sethook(LuaState, @HookCount, LUA_MASKCOUNT, 100);
 
   lua_register_global_number(LuaState, 'version', TyroVersion);
+
   lua_register(LuaState, 'log', @log_func);
   lua_register(LuaState, 'sleep', @sleep_func);
   lua_register_method(LuaState, 'print', @Print_func);
   lua_register_method(LuaState, 'println', @PrintLn_func);
-  lua_register_table_method(LuaState, 'window', self, 'show', @Window_func);
-  lua_register_method(LuaState, 'showconsole', @ShowConsole_func);
 
   //  lua_register_integer(LuaState, 'width', ScreenWidth));
   //  lua_register_integer(LuaState, 'height', ScreenHeight));
@@ -711,6 +709,7 @@ begin
   Colors := TLuaColors.Create(Self);
   Font := TLuaFont.Create(Self);
 
+  lua_register_table_method(LuaState, 'window', self, 'show', @Window_func);
   lua_register_table_index(LuaState, 'window', Window); //Should be last one for window
 
   lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
@@ -1113,6 +1112,7 @@ begin
     // Run the DoExecute on the main thread via Synchronize.
     // The object is NOT freed by the engine; we free it here.
     RunQueueObjectNoFree(Reader);
+    //TThread.Synchronize(ScriptThread, procedure begin sleep(1000) end);
     // Wait for user to press Enter (signaled from main thread callback)
     Reader.DoneEvent.WaitFor(INFINITE);
     // Push the result string to Lua
@@ -1137,7 +1137,7 @@ begin
     if not SysUtils.FileExists(s) then
       s := IncludePathDelimiter(Resources.CurrentDirectory) + aFile;
     if not SysUtils.FileExists(s) then
-      s := IncludePathDelimiter(Resources.WorkSpace) + 'fonts' + PathDelim + aFile;
+      s := IncludePathDelimiter(Resources.WorkSpace) + 'assets' + PathDelim + aFile;
   end;
   if lua_isnumber(L, 2) then
     aSize := lua_tointeger(L, 2) //LoadFontEx
@@ -1261,16 +1261,7 @@ var
   aTexture: TTexture2D;
 begin
   // upvalue 1 = spirit table, arg 1 = filename
-  aFile := lua_tostring(L, 1);
-  // Resolve file path
-  if ExtractFileDir(aFile) = '' then
-  begin
-    s := IncludePathDelimiter(Resources.CurrentDirectory) + aFile;
-    if not SysUtils.FileExists(s) then
-      s := IncludePathDelimiter(Resources.WorkSpace) + 'sprites' + PathDelim + aFile;
-    if SysUtils.FileExists(s) then
-      aFile := s;
-  end;
+  aFile := Resources.GuessFileName(lua_tostring(L, 1));
   // Get name from spirit
   lua_pushvalue(L, lua_upvalueindex(1));
   lua_getfield(L, -1, '__name');
@@ -1291,7 +1282,7 @@ begin
     lua_pop(L, 1);
   end
   else
-    Main.Console.Writeln('Spirit not found: ' + aFile);
+    Writeln('Spirit not found: ' + aFile);
   Result := 0;
 end;
 
@@ -1429,5 +1420,5 @@ end;
 
 initialization
   ThreadRunning := nil;
-  Main.RegisterLanguage('Lua', ['.lua', '.ls'], TLuaScript);
+  Main.RegisterLanguage('Lua', ['.ls', '.lua', '.pluto'], TLuaScript);
 end.

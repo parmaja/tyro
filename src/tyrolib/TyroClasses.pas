@@ -118,11 +118,14 @@ type
     constructor Create(const AResName, AResType: string; const AResData: rawbytestring);
   end;
 
+  { TTyroResources }
+
   TTyroResources = class(TmnNamedObjectList<TTyroResource>)
   public
     Font: TRayFont;
     WorkSpace: utf8string;
     CurrentDirectory: string;
+    function GuessFileName(const FileName: string; InDirectory: string = ''): string;
     function Find(const ResName, ResType: string): TTyroResource; overload;
     procedure Load; virtual;
     procedure Add(const ResName, ResType: string; const ResData: rawbytestring); overload;
@@ -454,6 +457,30 @@ begin
   if Resources = Self then
     Resources := nil;
   inherited;
+end;
+
+function TTyroResources.GuessFileName(const FileName: string; InDirectory: string): string;
+var
+  s: string;
+begin
+  if ExtractFileDir(FileName) = '' then
+  begin
+    if (InDirectory <> '') then
+      s := IncludePathDelimiter(InDirectory) + FileName;
+
+    if (InDirectory ='') or not SysUtils.FileExists(s) then
+      s := IncludePathDelimiter(Resources.CurrentDirectory) + FileName;
+
+    if not SysUtils.FileExists(s) then
+      s := IncludePathDelimiter(Resources.WorkSpace) + 'assets' + PathDelim + FileName;
+
+    if SysUtils.FileExists(s) then
+      Exit(s)
+    else
+      Result := FileName;
+  end
+  else
+    Result := FileName;
 end;
 
 function TTyroResources.Find(const ResName, ResType: string): TTyroResource;

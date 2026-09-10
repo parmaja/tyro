@@ -1901,11 +1901,11 @@ var
   // NOTE: These functions require GPU access
 
   // Load texture from file into GPU memory (VRAM)
-  LoadTexture: function(const fileName: PUTF8Char): TTexture2D; cdecl = nil;
+  LoadTexture: function(const FileName: PUTF8Char): TTexture2D; cdecl = nil;
   // Load texture from image data
-  LoadTextureFromImage: function(image: TImage): TTexture2D; cdecl = nil;
+  LoadTextureFromImage: function(Image: TImage): TTexture2D; cdecl = nil;
   // Load cubemap from image, multiple image cubemap layouts supported
-  LoadTextureCubemap: function(image: TImage; Layout: Integer): TTextureCubemap; cdecl = nil;
+  LoadTextureCubemap: function(Image: TImage; Layout: Integer): TTextureCubemap; cdecl = nil;
   // Load texture for rendering (framebuffer)
   LoadRenderTexture: function(Width: Integer; Height: Integer): TRenderTexture2D; cdecl = nil;
   // Check if a texture is valid (loaded in GPU)
