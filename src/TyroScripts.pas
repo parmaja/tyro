@@ -19,11 +19,16 @@ type
 
   TQueueObject = class abstract(TObject)
   private
+    FEvent: TEvent;
   protected
+    function EventNeeded: TEvent; virtual;
     procedure DoExecute; virtual; abstract;
   public
     LineNo: Integer;
-    procedure Execute; virtual;
+    procedure Execute;
+    //Sync to main thread
+    procedure Run(Thread: TThread = nil);
+    function Wait(Timeout: Cardinal = INFINITE): Boolean;
   end;
 
   { TQueueObjects }
@@ -39,9 +44,9 @@ type
     FCanvas: TTyroCanvas;
   protected
     procedure Created; virtual;
+    procedure DoExecute; override;
   public
     constructor Create(ACanvas: TTyroCanvas);
-    procedure Execute; override;
     property Canvas: TTyroCanvas read FCanvas;
   end;
 
@@ -71,7 +76,6 @@ type
    public
      Prompt: string;
      ResultString: string;
-     DoneEvent: TEvent;
      constructor Create(APrompt: string);
      destructor Destroy; override;
      procedure DoExecute; override;
@@ -379,13 +383,12 @@ constructor TReadConsoleObject.Create(APrompt: string);
 begin
   inherited Create;
   Prompt := APrompt;
-  DoneEvent := TEvent.Create(nil, True, False, '');
   ResultString := '';
+  EventNeeded;
 end;
 
 destructor TReadConsoleObject.Destroy;
 begin
-  DoneEvent.Free;
   inherited;
 end;
 
@@ -399,7 +402,7 @@ end;
 procedure TReadConsoleObject.HandleConsoleInput(AConsole: TTyroConsole; AInput: string);
 begin
   ResultString := AInput;
-  DoneEvent.SetEvent;
+//  Event.SetEvent;
   // Re-arm for built-in command mode
   Main.StartConsoleRead;
 end;
@@ -486,9 +489,34 @@ end;
 
 { TQueueObject }
 
+function TQueueObject.EventNeeded: TEvent;
+begin
+  if FEvent = nil then
+    FEvent := TEvent.Create(nil, True, False, '');
+  Result := FEvent;
+end;
+
+function TQueueObject.Wait(Timeout: Cardinal): Boolean;
+begin
+  if FEvent <> nil then
+    Result := FEvent.WaitFor(Timeout) <> wrSignaled
+  else
+    Result := True;
+end;
+
 procedure TQueueObject.Execute;
 begin
   DoExecute;
+  if FEvent <> nil then
+    FEvent.SetEvent;
+end;
+
+procedure TQueueObject.Run(Thread: TThread);
+begin
+  if (Thread <> nil) and (Thread.ThreadID <> MainThreadID) then
+    TThread.Synchronize(Thread, Execute)
+  else
+    Execute;
 end;
 
 { TWindowObject }
@@ -654,7 +682,7 @@ begin
   FCanvas := ACanvas;
 end;
 
-procedure TDrawObject.Execute;
+procedure TDrawObject.DoExecute;
 begin
   if (Canvas = nil) then
     Log.WriteLn('You need to init window to use this command, ' + ClassName + ' line: ' + IntToStr(LineNo))

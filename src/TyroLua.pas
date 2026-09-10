@@ -154,10 +154,16 @@ type
     //font
     function LoadFont_func(L: Plua_State): integer; cdecl;
     //spirits
+    function CreateSpiritObject(AHandle: integer): integer;
     function SpiritsNew_func(L: Plua_State): integer; cdecl;
     function SpiritsFind_func(L: Plua_State): integer; cdecl;
-     function SpiritsCall_func(L: Plua_State): integer; cdecl;
-    function CreateSpiritObject(AHandle: integer): integer;
+    function SpiritsCall_func(L: Plua_State): integer; cdecl;
+    function SpiritLoad_func(L: Plua_State): integer; cdecl;
+    function SpiritShow_func(L: Plua_State): integer; cdecl;
+    function SpiritHide_func(L: Plua_State): integer; cdecl;
+    function SpiritMove_func(L: Plua_State): integer; cdecl;
+    function SpiritWidth_func(L: Plua_State): integer; cdecl;
+    function SpiritHeight_func(L: Plua_State): integer; cdecl;
    public
     constructor Create; override;
     destructor Destroy; override;
@@ -165,17 +171,10 @@ type
 
 implementation
 
-{ Forward declarations for module-level spirit wrapper functions }
-function SpiritLoad_Wrap(L: Plua_State): integer; cdecl; forward;
-function SpiritShow_Wrap(L: Plua_State): integer; cdecl; forward;
-function SpiritHide_Wrap(L: Plua_State): integer; cdecl; forward;
-function SpiritMove_Wrap(L: Plua_State): integer; cdecl; forward;
-function SpiritWidth_Wrap(L: Plua_State): integer; cdecl; forward;
-function SpiritHeight_Wrap(L: Plua_State): integer; cdecl; forward;
+{ Forward declarations for spirit functions }
+function lua_spirit_method_callback(L: Plua_State): integer; cdecl; forward;
 function SpiritGetter(L: Plua_State): integer; cdecl; forward;
 function SpiritSetter(L: Plua_State): integer; cdecl; forward;
-function GetSpiritHandle(L: Plua_State; idx: integer): integer; forward;
-function GetSpiritFromUpvalue(L: Plua_State): integer; forward;
 
 function LuaAlloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t): Pointer; cdecl;
 begin
@@ -1111,10 +1110,10 @@ begin
   try
     // Run the DoExecute on the main thread via Synchronize.
     // The object is NOT freed by the engine; we free it here.
-    RunQueueObjectNoFree(Reader);
+    Reader.Run;
     //TThread.Synchronize(ScriptThread, procedure begin sleep(1000) end);
     // Wait for user to press Enter (signaled from main thread callback)
-    Reader.DoneEvent.WaitFor(INFINITE);
+    Reader.Wait;
     // Push the result string to Lua
     lua_pushstring(L, PChar(Reader.ResultString));
     Result := 1;
@@ -1147,37 +1146,43 @@ begin
    Result := 0;
 end;
 
+{ Spirit method callback - 3 upvalues: Data, Code, spirit_table }
+
+function lua_spirit_method_callback(L: Plua_State): integer; cdecl;
+var
+  Method: TMethod;
+begin
+  Method.Data := lua_topointer(L, lua_upvalueindex(1));
+  Method.code := lua_topointer(L, lua_upvalueindex(2));
+  lua_pushvalue(L, lua_upvalueindex(3));
+  lua_insert(L, 1);
+  if Method.Data = nil then
+    raise Exception.Create('Lua: cannot execute object method!');
+  Result := lua_CMethod(Method)(L);
+end;
+
+procedure lua_push_spirit_method(L: Plua_State; Name: string; method: lua_CMethod; TableStackIdx: integer);
+begin
+  lua_pushlightuserdata(L, TMethod(method).Data);
+  lua_pushlightuserdata(L, TMethod(method).Code);
+  lua_pushvalue(L, TableStackIdx - 2);
+  lua_pushcclosure(L, @lua_spirit_method_callback, 3);
+  lua_setfield(L, -2, PChar(Name));
+end;
+
 { Spirits }
 
-// Helper: create a Lua spirit object wrapping a handle, with methods
-// Each method is a closure with upvalue 1 = the spirit table itself.
 function TLuaScript.CreateSpiritObject(AHandle: integer): integer;
 begin
-  // Create spirit table (the object itself)
   lua_newtable(LuaState);
-  // Store the handle directly in the table (mutable)
   lua_pushinteger(LuaState, AHandle);
   lua_setfield(LuaState, -2, '__handle');
-  // Add method closures: upvalue 1 = the spirit table itself
-  lua_pushvalue(LuaState, -1); // push spirit table as upvalue
-  lua_pushcclosure(LuaState, @SpiritLoad_Wrap, 1);
-  lua_setfield(LuaState, -2, 'load');
-  lua_pushvalue(LuaState, -1);
-  lua_pushcclosure(LuaState, @SpiritShow_Wrap, 1);
-  lua_setfield(LuaState, -2, 'show');
-  lua_pushvalue(LuaState, -1);
-  lua_pushcclosure(LuaState, @SpiritHide_Wrap, 1);
-  lua_setfield(LuaState, -2, 'hide');
-  lua_pushvalue(LuaState, -1);
-  lua_pushcclosure(LuaState, @SpiritMove_Wrap, 1);
-  lua_setfield(LuaState, -2, 'move');
-  lua_pushvalue(LuaState, -1);
-  lua_pushcclosure(LuaState, @SpiritWidth_Wrap, 1);
-  lua_setfield(LuaState, -2, 'width');
-  lua_pushvalue(LuaState, -1);
-  lua_pushcclosure(LuaState, @SpiritHeight_Wrap, 1);
-  lua_setfield(LuaState, -2, 'height');
-  // Add metatable for property access (__index/__newindex)
+  lua_push_spirit_method(LuaState, 'load', @SpiritLoad_func, -1);
+  lua_push_spirit_method(LuaState, 'show', @SpiritShow_func, -1);
+  lua_push_spirit_method(LuaState, 'hide', @SpiritHide_func, -1);
+  lua_push_spirit_method(LuaState, 'move', @SpiritMove_func, -1);
+  lua_push_spirit_method(LuaState, 'width', @SpiritWidth_func, -1);
+  lua_push_spirit_method(LuaState, 'height', @SpiritHeight_func, -1);
   lua_newtable(LuaState);
   lua_pushcfunction(LuaState, @SpiritGetter);
   lua_setfield(LuaState, -2, '__index');
@@ -1237,7 +1242,6 @@ begin
   Result := 1;
 end;
 
-// Module-level helper: get handle from spirit table at the given stack index
 function GetSpiritHandle(L: Plua_State; idx: integer): integer;
 begin
   lua_getfield(L, idx, '__handle');
@@ -1245,99 +1249,84 @@ begin
   lua_pop(L, 1);
 end;
 
-// Module-level helper: get spirit table from upvalue 1
-function GetSpiritFromUpvalue(L: Plua_State): integer;
-begin
-  lua_pushvalue(L, lua_upvalueindex(1));
-  Result := GetSpiritHandle(L, -1);
-  lua_pop(L, 1);
-end;
-
-// Wrapper: spirit.load("image.png") - handle is in upvalue 1 (the spirit table)
-function SpiritLoad_Wrap(L: Plua_State): integer; cdecl;
+function TLuaScript.SpiritLoad_func(L: Plua_State): integer; cdecl;
 var
-  aFile, s, aName: string;
+  aFile, aName: string;
   handle: integer;
-  aTexture: TTexture2D;
+  LoadObj: TLoadSpiritObject;
 begin
-  // upvalue 1 = spirit table, arg 1 = filename
-  aFile := Resources.GuessFileName(lua_tostring(L, 1));
-  // Get name from spirit
-  lua_pushvalue(L, lua_upvalueindex(1));
-  lua_getfield(L, -1, '__name');
+  aFile := Resources.GuessFileName(lua_tostring(L, 2));
+  lua_getfield(L, 1, '__name');
   if lua_isstring(L, -1) then
     aName := lua_tostring(L, -1)
   else
     aName := ExtractFileName(aFile);
-  lua_pop(L, 2);
-  // Load the texture
-  aTexture := RayLib.LoadTexture(PUTF8Char(aFile));
-  if aTexture.id > 0 then
-  begin
-    handle := Main.Spirits.AddTexture(aTexture, aName);
-     // Update the handle in the spirit table
-    lua_pushvalue(L, lua_upvalueindex(1));
-    lua_pushinteger(L, handle);
-    lua_setfield(L, -2, '__handle');
-    lua_pop(L, 1);
-  end
-  else
-    Writeln('Spirit not found: ' + aFile);
+  lua_pop(L, 1);
+  LoadObj := TLoadSpiritObject.Create(aFile, aName);
+  try
+    LoadObj.Run(ScriptThread);
+    LoadObj.Wait;
+    handle := LoadObj.HandleResult;
+    if handle > cSpiritInvalid then
+    begin
+      lua_pushinteger(L, handle);
+      lua_setfield(L, 1, '__handle');
+    end
+    else
+      DoError('Spirit not loaded: ' + aFile);
+  finally
+    LoadObj.Free;
+  end;
   Result := 0;
 end;
 
-// Wrapper: spirit.show()
-function SpiritShow_Wrap(L: Plua_State): integer; cdecl;
+function TLuaScript.SpiritShow_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
 begin
-  handle := GetSpiritFromUpvalue(L);
+  handle := GetSpiritHandle(L, 1);
   if handle > cSpiritInvalid then
     Main.Spirits.SetVisible(handle, True);
   Result := 0;
 end;
 
-// Wrapper: spirit.hide()
-function SpiritHide_Wrap(L: Plua_State): integer; cdecl;
+function TLuaScript.SpiritHide_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
 begin
-  handle := GetSpiritFromUpvalue(L);
+  handle := GetSpiritHandle(L, 1);
   if handle > cSpiritInvalid then
     Main.Spirits.SetVisible(handle, False);
   Result := 0;
 end;
 
-// Wrapper: spirit.move(x, y)
-function SpiritMove_Wrap(L: Plua_State): integer; cdecl;
+function TLuaScript.SpiritMove_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
   x, y: single;
 begin
-  x := lua_tonumber(L, 1);
-  y := lua_tonumber(L, 2);
-  handle := GetSpiritFromUpvalue(L);
+  x := lua_tonumber(L, 2);
+  y := lua_tonumber(L, 3);
+  handle := GetSpiritHandle(L, 1);
   if handle > cSpiritInvalid then
     Main.Spirits.SetPosition(handle, x, y);
   Result := 0;
 end;
 
-// Wrapper: spirit.width()
-function SpiritWidth_Wrap(L: Plua_State): integer; cdecl;
+function TLuaScript.SpiritWidth_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
 begin
-  handle := GetSpiritFromUpvalue(L);
+  handle := GetSpiritHandle(L, 1);
   lua_pushinteger(L, Main.Spirits.GetWidth(handle));
   Result := 1;
 end;
 
-// Wrapper: spirit.height()
-function SpiritHeight_Wrap(L: Plua_State): integer; cdecl;
+function TLuaScript.SpiritHeight_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
 begin
-  handle := GetSpiritFromUpvalue(L);
+  handle := GetSpiritHandle(L, 1);
   lua_pushinteger(L, Main.Spirits.GetHeight(handle));
   Result := 1;
 end;

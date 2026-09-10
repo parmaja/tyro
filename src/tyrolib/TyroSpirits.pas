@@ -12,7 +12,7 @@ uses
   TyroScripts, TyroClasses;
 
 const
-  cSpiritInvalid: integer = 0;
+  cSpiritInvalid: Integer = 0;
   cSpiritMax = 256;
 
 type
@@ -71,7 +71,6 @@ type
     FFileName: string;
     FName: string;
     FHandleResult: integer;
-    FEvent: TEvent;
   public
     constructor Create(AFileName: string; const AName: string);
     destructor Destroy; override;
@@ -79,7 +78,6 @@ type
     property FileName: string read FFileName;
     property Name: string read FName;
     property HandleResult: integer read FHandleResult;
-    property DoneEvent: TEvent read FEvent;
   end;
 
   { TDrawSpiritObject }
@@ -411,13 +409,12 @@ begin
   inherited Create;
   FFileName := AFileName;
   FName := AName;
-  FEvent := TEvent.Create(nil, True, False, '');
   FHandleResult := cSpiritInvalid;
+  EventNeeded;;
 end;
 
 destructor TLoadSpiritObject.Destroy;
 begin
-  FEvent.Free;
   inherited;
 end;
 
@@ -431,10 +428,9 @@ begin
   else
   begin
     if IsConsole then
-      WriteLn('Spirit not found: ' + FFileName);
+      WriteLn('Spirit not loaded: ' + FFileName);
     FHandleResult := cSpiritInvalid;
   end;
-  FEvent.SetEvent;
 end;
 
 { TDrawSpiritObject }
