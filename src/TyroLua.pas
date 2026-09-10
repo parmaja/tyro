@@ -18,7 +18,7 @@ interface
 
 uses
   Classes, SysUtils,
-  lua55, FPImage,
+  LuaAPI, LuaClasses, FPImage,
   RayLib, RayClasses, //remove it
   mnUtils,
   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSpirits,
@@ -109,17 +109,16 @@ type
     FVersion: double;
     LuaState: Plua_State;
 
-    FQueueObject: TQueueObject;
     Canvas: TLuaCanvas;
     Console: TLuaConsole;
     Window: TLuaWindow;
     Colors: TLuaColors;
     Font: TLuaFont;
-    procedure ExecuteQueueObject;
     procedure DoError(S: string);
     procedure Run; override;
   protected
     procedure AddQueueObject(AQueueObject: TQueueObject); override;
+
     //canvas functions
     function Clear_func(L: Plua_State): integer; cdecl;
     function Window_func(L: Plua_State): integer; cdecl;
@@ -771,10 +770,6 @@ destructor TLuaScript.Destroy;
 begin
   lua_close(LuaState);
   inherited;
-end;
-
-procedure TLuaScript.ExecuteQueueObject;
-begin
 end;
 
 procedure TLuaScript.DoError(S: string);

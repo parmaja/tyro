@@ -104,6 +104,11 @@
         <Filename Value="tyrolib\TyroSpirits.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="luaclasses.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="LuaClasses"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

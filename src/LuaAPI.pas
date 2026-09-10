@@ -1,6 +1,12 @@
+unit LuaAPI;
+{$ifdef fpc}
+{$mode objfpc}
+{$endif}
+{$h+}
 (******************************************************************************
  *                                                                            *
- *  File:        lua55.pas                                                    *
+ *  File:        luaAPI.pas                                                   *
+ *  Version:     Lua 5.5                                                      *
  *                                                                            *
  *  Authors:     TeCGraf           (C headers + actual Lua libraries)         *
  *               Lavergne Thomas   (original translation to Pascal)           *
@@ -16,7 +22,6 @@
  *  This is 3-in-1 replacement for FPC modules lua.pas,lauxlib.pas,lualib.pas *
  *                                                                            *
  ******************************************************************************)
-
 (*
  ** $Id: lua.h,v 1.325 2014/12/26 17:24:27 roberto Exp $
  ** $Id: lauxlib.h,v 1.128 2014/10/29 16:11:17 roberto Exp $
@@ -95,11 +100,6 @@
 // They were translated but commented intentionally.
 // Uncomment them if you really need.
 //    luaL_pushmodule, luaL_openlib, luaL_register
-
-
-{$IFDEF FPC}{$MODE OBJFPC}{$H+}{$ENDIF}
-
-unit lua55;
 
 {$define PLUTO}
 
