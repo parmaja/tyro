@@ -178,7 +178,8 @@ type
   size_t = NativeUInt;
   Psize_t = ^size_t;
 
-  Plua_State = Pointer;
+  lua_State = record end;
+  Plua_State = ^lua_State;
 
   // type for continuation-function contexts
   lua_KContext = Pointer;
@@ -291,8 +292,8 @@ procedure lua_pushnumber(L: Plua_State; n: lua_Number); cdecl;
 procedure lua_pushinteger(L: Plua_State; n: lua_Integer); cdecl;
 procedure lua_pushlstring(L: Plua_State; const s: PAnsiChar; len: size_t); cdecl;
 function lua_pushexternalstring(L: Plua_State; const s: PAnsiChar; len: size_t; falloc: lua_Alloc; ud: Pointer): PAnsiChar; cdecl;
-procedure lua_pushstring(L: Plua_State; const s: PAnsiChar); cdecl; overload;
-procedure lua_pushstring(L: Plua_State; const s: AnsiString); inline; overload; // added for Pascal
+procedure lua_pushstring(L: Plua_State; const s: PUTF8Char); cdecl; overload;
+procedure lua_pushstring(L: Plua_State; const s: UTF8String); inline; overload; // added for Pascal
 function lua_pushvfstring(L: Plua_State; const fmt: PAnsiChar; argp: Pointer): PAnsiChar; cdecl;
 function lua_pushfstring(L: Plua_State; const fmt: PAnsiChar): PAnsiChar; cdecl; varargs;
 procedure lua_pushcclosure(L: Plua_State; fn: lua_CFunction; n: Integer); cdecl;
@@ -650,9 +651,9 @@ procedure lua_pushlstring(L: Plua_State; const s: PAnsiChar; len: size_t); cdecl
 function lua_pushexternalstring(L: Plua_State; const s: PAnsiChar; len: size_t; falloc: lua_Alloc; ud: Pointer): PAnsiChar; cdecl; external LUA_LIB_NAME;
 procedure lua_pushstring(L: Plua_State; const s: PAnsiChar); cdecl; external LUA_LIB_NAME;
 
-procedure lua_pushstring(L: Plua_State; const s: AnsiString);
+procedure lua_pushstring(L: Plua_State; const s: UTF8String);
 begin
-   lua_pushlstring(L, PAnsiChar(s), Length(s));
+   lua_pushlstring(L, PUTF8Char(s), Length(s));
 end;
 
 function lua_pushvfstring(L: Plua_State; const fmt: PAnsiChar; argp: Pointer): PAnsiChar; cdecl; external LUA_LIB_NAME;

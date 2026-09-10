@@ -27,23 +27,21 @@ uses
 type
   TLuaScript = class;
 
-  { TLuaObject }
+  { TTyroLuaObject }
 
-  TLuaObject = class abstract(TObject)
+  TTyroLuaObject = class abstract(TLuaObject)
   private
     FScript: TLuaScript;
   protected
     procedure Created; virtual;
   protected
-    function __setter(L: PLua_State): integer; cdecl; virtual; abstract;
-    function __getter(L: PLua_State): integer; cdecl; virtual; abstract;
   public
     constructor Create(AScript: TLuaScript); virtual;
   end;
 
   { TLuaCanvas }
 
-  TLuaCanvas = class(TLuaObject)
+  TLuaCanvas = class(TTyroLuaObject)
   protected
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
@@ -53,7 +51,7 @@ type
 
   { TLuaConsole }
 
-  TLuaConsole = class(TLuaObject)
+  TLuaConsole = class(TTyroLuaObject)
   protected
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
@@ -63,17 +61,18 @@ type
 
   { TLuaWindow }
 
-  TLuaWindow = class(TLuaObject)
+  TLuaWindow = class(TTyroLuaObject)
   protected
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
   public
+    function Window_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
   { TLuaFont }
 
-  TLuaFont = class(TLuaObject)
+  TLuaFont = class(TTyroLuaObject)
   protected
     function __setter(L: PLua_State): integer; cdecl; override;
     function __getter(L: PLua_State): integer; cdecl; override;
@@ -83,7 +82,7 @@ type
 
   { TLuaColors }
 
-  TLuaColors = class(TLuaObject)
+  TLuaColors = class(TTyroLuaObject)
   protected
   type
     TLuaColor = record
@@ -107,7 +106,7 @@ type
   private
   protected
     FVersion: double;
-    LuaState: Plua_State;
+    Lua: TLua;
 
     Canvas: TLuaCanvas;
     Console: TLuaConsole;
@@ -121,7 +120,6 @@ type
 
     //canvas functions
     function Clear_func(L: Plua_State): integer; cdecl;
-    function Window_func(L: Plua_State): integer; cdecl;
     function ShowConsole_func(L: Plua_State): integer; cdecl;
     function DrawText_func(L: Plua_State): integer; cdecl;
     function DrawCircle_func(L: Plua_State): integer; cdecl;
@@ -175,16 +173,6 @@ function lua_spirit_method_callback(L: Plua_State): integer; cdecl; forward;
 function SpiritGetter(L: Plua_State): integer; cdecl; forward;
 function SpiritSetter(L: Plua_State): integer; cdecl; forward;
 
-function LuaAlloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t): Pointer; cdecl;
-begin
-  try
-    Result := ptr;
-    ReallocMem(Result, nSize);
-  except
-    Result := nil;
-  end;
-end;
-
 //global functions
 function sleep_func(L: Plua_State): integer; cdecl;
 var
@@ -208,147 +196,6 @@ begin
       WriteLn(s);
   end;
   Result := 0;
-end;
-
-{ TLuaScript }
-
-type
-  lua_CMethod = function(L: Plua_State): integer of object cdecl; // Lua Function
-
-function lua_method_callback(L: Plua_State): integer; cdecl;
-var
-  Method: TMethod;
-begin
-  Method.Data := lua_topointer(L, lua_upvalueindex(1));
-  Method.code := lua_topointer(L, lua_upvalueindex(2));
-  if Method.Data = nil then
-    raise Exception.Create('Lua: cannot execute object method!');
-  Result := lua_CMethod(Method)(L);
-end;
-
-procedure lua_register_method(L: Plua_State; Name: string; method: lua_CMethod);
-begin
-  lua_pushlightuserdata(L, TMethod(method).Data);
-  lua_pushlightuserdata(L, TMethod(method).Code);
-  lua_pushcclosure(L, @lua_method_callback, 2);
-  lua_setglobal(L, PChar(Name));
-end;
-
-procedure lua_register_function(L: Plua_State; Name: string; func: lua_CFunction);
-begin
-  lua_register(L, PChar(Name), func);
-end;
-
-procedure lua_push_method(L: Plua_State; Name: string; method: lua_CMethod);
-begin
-  lua_pushlightuserdata(L, TMethod(method).Data);
-  lua_pushlightuserdata(L, TMethod(method).Code);
-  lua_pushcclosure(L, @lua_method_callback, 2);
-  lua_setfield(L, -2, PChar(Name));
-end;
-
-procedure lua_register_table(L: Plua_State; table: string; obj: TLuaObject);
-begin
-  //table
-  lua_newtable(L);
-
-  //metatable
-  lua_newtable(L);
-
-  lua_setmetatable(L, -2);
-  //end metatable
-
-  lua_setglobal(L, PChar(table)); //set table name
-  //end table
-end;
-
-procedure lua_register_table_index(L: Plua_State; table: string; obj: TLuaObject);
-var
-  new: boolean;
-begin
-  //table
-  new := lua_getglobal(L, PChar(table)) = 0; //get table by name
-  if new then
-    lua_newtable(L);
-
-  //metatable
-  lua_newtable(L);
-
-  lua_push_method(L, '__index', @obj.__getter);
-  lua_push_method(L, '__newindex', @obj.__setter);
-
-  lua_setmetatable(L, -2);
-  //end metatable
-
-  if new then
-    lua_setglobal(L, PChar(table)) //set table name
-  else
-    lua_pop(L, 1); //pop table from stack
-  //end table
-end;
-
-procedure lua_register_table_method(L: Plua_State; table: string; obj: TObject; Name: string; method: lua_CMethod);
-var
-  new: boolean;
-begin
-  new := lua_getglobal(L, PChar(table)) = 0; //get table by name
-  if new then
-    lua_newtable(L);
-  lua_push_method(L, PChar(Name), method);
-
-  if new then
-    lua_setglobal(L, PChar(table))
-  else
-    lua_pop(L, 1); //pop table from stack
-end;
-
-procedure lua_register_table_value(L: Plua_State; table, Name: string; Value: integer);
-var
-  new: boolean;
-begin
-  //table
-  new := lua_getglobal(L, PChar(table)) = 0; //get table by name
-  if new then
-    lua_newtable(L);
-
-  lua_pushinteger(L, Value);
-  lua_setfield(L, -2, PChar(Name));
-
-  if new then
-    lua_setglobal(L, PChar(table))
-  else
-    lua_pop(L, 1); //pop table from stack
-  //end metatable
-end;
-
-procedure lua_register_string(L: Plua_State; Name: string; Value: string);
-begin
-  lua_pushstring(L, Value);
-  lua_setfield(L, -2, PChar(Name));
-end;
-
-procedure lua_register_integer(L: Plua_State; Name: string; Value: integer);
-begin
-  lua_pushinteger(L, Value);
-  lua_setfield(L, -2, PChar(Name));
-end;
-
-procedure lua_register_global_integer(L: Plua_State; Name: string; Value: integer);
-begin
-  lua_pushinteger(L, Value);
-  lua_setglobal(L, PChar(Name));
-end;
-
-procedure lua_register_global_number(L: Plua_State; Name: string; Value: double);
-begin
-  lua_pushnumber(L, Value);
-  lua_setglobal(L, PChar(Name));
-end;
-
-procedure lua_register_color(L: Plua_State; Name: string; Value: TColor);
-begin
-  lua_pushinteger(L, ColorToInt(Value));
-  lua_setfield(L, -2, PChar(Name));
 end;
 
 { TLuaConsole }
@@ -531,13 +378,13 @@ begin
   inherited Create(AScript);
 end;
 
-{ TLuaObject }
+{ TTyroLuaObject }
 
-procedure TLuaObject.Created;
+procedure TTyroLuaObject.Created;
 begin
 end;
 
-constructor TLuaObject.Create(AScript: TLuaScript);
+constructor TTyroLuaObject.Create(AScript: TLuaScript);
 begin
   inherited Create;
   FScript := AScript;
@@ -671,32 +518,19 @@ begin
   inherited;
 end;
 
-threadvar
-  ThreadRunning: TTyroScript;
-
-procedure HookCount(L: Plua_State; ar: Plua_Debug); cdecl;
-begin
-  if not ThreadRunning.Active then
-    luaL_error(L, PChar('Terminated by user!'));
-end;
-
 constructor TLuaScript.Create;
 var
   i: integer;
 begin
   inherited;
-  LuaState := lua_newstate(@LuaAlloc, nil, 0);
-  FVersion := lua_version(LuaState);
-  //lual_openlibs(LuaState);
-  luaL_openselectedlibs(LuaState, -1, 0);
-  lua_sethook(LuaState, @HookCount, LUA_MASKCOUNT, 100);
+  Lua.Init;
+  Lua.State.RegisterGlobal('version', TyroVersion);
 
-  lua_register_global_number(LuaState, 'version', TyroVersion);
+  Lua.State.Register('log', @log_func);
 
-  lua_register(LuaState, 'log', @log_func);
-  lua_register(LuaState, 'sleep', @sleep_func);
-  lua_register_method(LuaState, 'print', @Print_func);
-  lua_register_method(LuaState, 'println', @PrintLn_func);
+  Lua.State.Register('sleep', @sleep_func);
+  Lua.State.Register('print', @Print_func);
+  Lua.State.Register('println', @PrintLn_func);
 
   //  lua_register_integer(LuaState, 'width', ScreenWidth));
   //  lua_register_integer(LuaState, 'height', ScreenHeight));
@@ -707,46 +541,35 @@ begin
   Colors := TLuaColors.Create(Self);
   Font := TLuaFont.Create(Self);
 
-  lua_register_table_method(LuaState, 'window', self, 'show', @Window_func);
-  lua_register_table_index(LuaState, 'window', Window); //Should be last one for window
-
-  lua_register_table_method(LuaState, 'console', self, 'print', @Print_func);
-  lua_register_table_method(LuaState, 'console', self, 'println', @PrintLn_func);
-  lua_register_table_method(LuaState, 'console', self, 'show', @ShowConsole_func);
-  lua_register_table_method(LuaState, 'console', self, 'read', @ConsoleRead_func);
+  Lua.State.Register('window', 'show', Window, @Window.Window_func);
+  //TODO Complete it from here
+  //TODO move functions inside objects
+  Lua.State.Register('window', Window); //Should be last one for window
+  lua_register_table_method(LuaState, 'console', 'print', self, @Print_func);
+  lua_register_table_method(LuaState, 'console', 'println', self, @PrintLn_func);
+  lua_register_table_method(LuaState, 'console', 'show', self, @ShowConsole_func);
+  lua_register_table_method(LuaState, 'console', 'read', self, @ConsoleRead_func);
   lua_register_table_index(LuaState, 'console', Console); //Should be last one
 
   //lua_register_table(LuaState, 'draw', Canvas);
-  lua_register_table_method(LuaState, 'canvas', self, 'clear', @Clear_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'text', @DrawText_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'circle', @DrawCircle_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'rectangle', @DrawRectangle_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'line', @DrawLine_func);
-  lua_register_table_method(LuaState, 'canvas', self, 'point', @DrawPoint_func);
+  lua_register_table_method(LuaState, 'canvas', 'clear', self,@Clear_func);
+  lua_register_table_method(LuaState, 'canvas', 'text', self, @DrawText_func);
+  lua_register_table_method(LuaState, 'canvas', 'circle', self, @DrawCircle_func);
+  lua_register_table_method(LuaState, 'canvas', 'rectangle', self, @DrawRectangle_func);
+  lua_register_table_method(LuaState, 'canvas', 'line', self, @DrawLine_func);
+  lua_register_table_method(LuaState, 'canvas', 'point', self, @DrawPoint_func);
 
   lua_register_table_value(LuaState, 'canvas', 'width', ScreenWidth);
   lua_register_table_value(LuaState, 'canvas', 'height', ScreenHeight);
-
   lua_register_table_index(LuaState, 'canvas', Canvas); //Should be last one
 
-  lua_register_table_method(LuaState, 'font', self, 'load', @LoadFont_func);
+  lua_register_table_method(LuaState, 'font', 'load', self, @LoadFont_func);
   lua_register_table_index(LuaState, 'font', Font); //Should be last one
 
-  // Spirit system: Spirits.new creates a spirit, Spirits("name") finds by name
-  lua_register_table(LuaState, 'Spirits', nil);
-  lua_register_table_method(LuaState, 'Spirits', self, 'new', @SpiritsNew_func);
-  lua_register_table_method(LuaState, 'Spirits', self, 'find', @SpiritsFind_func);
-  // Set __call on the Spirits metatable for Spirits("name") access
-  lua_getglobal(LuaState, 'Spirits');   // push Spirits table
-  lua_getmetatable(LuaState, -1);       // push its metatable (created by lua_register_table)
-  lua_push_method(LuaState, '__call', @SpiritsCall_func);
-  lua_setfield(LuaState, -2, '__call');
-  lua_pop(LuaState, 2);                // pop metatable and Spirits table
-
-  lua_register_table_method(LuaState, 'music', self, 'beep', @Beep_func);
-  lua_register_table_method(LuaState, 'music', self, 'sound', @PlaySound_func);
-  lua_register_table_method(LuaState, 'music', self, 'play', @PlayMusic_func);
-  lua_register_table_method(LuaState, 'music', self, 'mml', @PlayMML_func);
+  lua_register_table_method(LuaState, 'music', 'beep', self, @Beep_func);
+  lua_register_table_method(LuaState, 'music', 'sound', self, @PlaySound_func);
+  lua_register_table_method(LuaState, 'music', 'play', self, @PlayMusic_func);
+  lua_register_table_method(LuaState, 'music', 'mml', self, @PlayMML_func);
 
   //input & timing (global functions)
   lua_register_method(LuaState, 'iskeypressed', @IsKeyPressed_func);
@@ -758,12 +581,24 @@ begin
   lua_register_method(LuaState, 'time', @TotalTime_func);
   lua_register_method(LuaState, 'rand', @RandomValue_func);
 
+  // Spirit system: Spirits.new creates a spirit, Spirits("name") finds by name
+  Lua.State.RegisterTable('Spirits');
+  lua_register_table_method(LuaState, 'Spirits', 'new', self, @SpiritsNew_func);
+  lua_register_table_method(LuaState, 'Spirits', 'find', self, @SpiritsFind_func);
+  // Set __call on the Spirits metatable for Spirits("name") access
+
+  lua_getglobal(LuaState, 'Spirits');   // push Spirits table
+  lua_getmetatable(LuaState, -1);       // push its metatable (created by lua_register_table)
+
+  lua_push_method(LuaState, '__call', @SpiritsCall_func);
+  lua_setfield(LuaState, -2, '__call');
+  lua_pop(LuaState, 2);                // pop metatable and Spirits table
+
   lua_newtable(LuaState);
   for i := 0 to Length(Colors.Colors) - 1 do
-    lua_register_color(LuaState, Colors.Colors[i].Name, Colors.Colors[i].Color);
+    lua_register_color(LuaState, Colors.Colors[i].Name, ColorToInt(Colors.Colors[i].Color));
   lua_setglobal(LuaState, 'colors');
   lua_register_table_index(LuaState, 'colors', Colors); //Should be last one
-  //lua_register_table(LuaState, 'color', Canvas);
 end;
 
 destructor TLuaScript.Destroy;
@@ -819,18 +654,18 @@ begin
   Result := 0;
 end;
 
-function TLuaScript.Window_func(L: Plua_State): integer; cdecl;
+function TLuaWindow.Window_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   w, h: integer;
 begin
-  c := lua_gettop(L);
+  c := L.ParamsCount;
   w := ScreenWidth;
   h := ScreenHeight;
   if c > 0 then
-    w := round(lua_tonumber(L, 1));
+    w := round(L.Params[1].AsNumber);
   if c > 1 then
-    h := round(lua_tonumber(L, 2));
+    h := round(L.Params[2].AsNumber);
   RunQueueObject(TWindowObject.Create(w, h));
   Result := 0;
 end;
@@ -966,7 +801,7 @@ var
   i, c: integer;
   s: string;
 begin
-  c := lua_gettop(L);
+  c := L.ParamsCount;
   s := '';
   for i := 1 to c do
   begin
@@ -1153,10 +988,10 @@ begin
   lua_insert(L, 1);
   if Method.Data = nil then
     raise Exception.Create('Lua: cannot execute object method!');
-  Result := lua_CMethod(Method)(L);
+  Result := TLuaMethod(Method)(L);
 end;
 
-procedure lua_push_spirit_method(L: Plua_State; Name: string; method: lua_CMethod; TableStackIdx: integer);
+procedure lua_push_spirit_method(L: Plua_State; Name: string; method: TLuaMethod; TableStackIdx: integer);
 begin
   lua_pushlightuserdata(L, TMethod(method).Data);
   lua_pushlightuserdata(L, TMethod(method).Code);
