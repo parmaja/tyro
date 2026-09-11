@@ -16,7 +16,7 @@ uses
   mnLogs, mnUtils,
   RayLib, RayClasses, TyroScripts,
   TyroClasses, TyroControls, TyroConsoles,
-  TyroSprites,
+  TyroSprites, TyroPhysics,
   mnClasses;
 
 const
@@ -104,6 +104,7 @@ type
     Console: TTyroConsole;
     Graphic: TTyroCanvas;
     Sprites: TSprites;
+    Physics: TPhysics;
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
     procedure Stop; //and wait
@@ -275,6 +276,7 @@ begin
   Console.Focused := True;
   Console.OnInput := ConsoleInput;
   Sprites := TSprites.Create;
+  Physics := TPhysics.Create(Sprites);
   Commands := TConsoleCommands.Create();
   RegisterCommands;
 end;
@@ -282,6 +284,7 @@ end;
    destructor TTyroEngine.Destroy;
 begin
   //Stop;
+  FreeAndNil(Physics);
   FreeAndNil(Sprites);
   FreeAndNil(Graphic);
   FreeAndNil(FQueue);
@@ -325,7 +328,15 @@ end;
 begin
   if Graphic <> nil then
   begin
-    Sprites.DrawAll;
+    try
+      Sprites.DrawAll;
+    except
+      on E: Exception do
+      begin
+        if IsConsole then WriteLn('EX-DRAW: ' + E.ClassName + ': ' + E.Message);
+        raise;
+      end;
+    end;
     Graphic.PostDraw;
   end;
   ThreadSwitch; //Yield
@@ -334,9 +345,30 @@ end;
 procedure TTyroEngine.Update;
 begin
   inherited;
+  try
+    if Physics <> nil then
+      Physics.Step(RayLib.GetFrameTime());
+  except
+    on E: Exception do
+    begin
+      if IsConsole then
+      begin
+        WriteLn('EX-STEP: ' + E.ClassName + ': ' + E.Message + ' @' + IntToHex(NativeUInt(ExceptAddr), 16));
+      end;
+      raise;
+    end;
+  end;
   // Update console (handles caret blinking internally)
-  if Console <> nil then
-    Console.Update;
+  try
+    if Console <> nil then
+      Console.Update;
+  except
+    on E: Exception do
+    begin
+      if IsConsole then WriteLn('EX-CONSOLE: ' + E.ClassName + ': ' + E.Message);
+      raise;
+    end;
+  end;
   ThreadSwitch; //Yield
   {if not Active then
     Terminate;}

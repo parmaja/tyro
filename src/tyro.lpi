@@ -101,7 +101,15 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="tyrolib\TyroSpirits.pas"/>
+        <Filename Value="tyrolib\TyroSprites.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="tyrolib\TyroPhysics.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="chipmunk.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
@@ -142,7 +150,7 @@
       </Debugging>
     </Linking>
     <Other>
-      <CustomOptions Value="-DDebug"/>
+      <CustomOptions Value="-DDebug -Xm"/>
     </Other>
   </CompilerOptions>
   <Debugging>

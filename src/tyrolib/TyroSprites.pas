@@ -15,6 +15,29 @@ const
   cSpriteInvalid: Integer = 0;
 
 type
+  { Physics kind of a sprite body }
+  TSpriteKind = (
+    skDynamic,
+    skKinematic,
+    skStatic
+  );
+
+  { Snapshot of everything TPhysics needs to build/sync a body for one sprite }
+  TSpritePhysicsState = record
+    Collides: Boolean;
+    Kind: TSpriteKind;
+    X: single;
+    Y: single;
+    Angle: single;
+    Scale: single;
+    Width: single;   // texture width * scale
+    Height: single;  // texture height * scale
+    Mass: single;
+    Friction: single;
+    Bouncy: single;
+    Radius: single;
+  end;
+
   { TSprite }
 
   TSprite = class(TObject)
@@ -27,6 +50,12 @@ type
     Angle: single;
     Scale: single;
     Visible: boolean;
+    Collides: boolean;
+    Kind: TSpriteKind;
+    Mass: single;
+    Friction: single;
+    Bouncy: single;
+    Radius: single;
     constructor Create(AHandle: Integer; ATexture: TTexture2D; const AName: string);
   end;
 
@@ -58,6 +87,24 @@ type
     function GetVisible(Handle: integer): boolean;
     function GetWidth(Handle: integer): integer;
     function GetHeight(Handle: integer): integer;
+
+    // Physics configuration (safely callable from the script thread)
+    procedure SetCollide(Handle: integer; ACollide: boolean);
+    procedure SetKind(Handle: integer; AKind: TSpriteKind);
+    procedure SetMass(Handle: integer; AMass: single);
+    procedure SetFriction(Handle: integer; AFriction: single);
+    procedure SetBouncy(Handle: integer; ABouncy: single);
+    procedure SetRadius(Handle: integer; ARadius: single);
+    function GetCollide(Handle: integer): boolean;
+    function GetKind(Handle: integer): TSpriteKind;
+    function GetMass(Handle: integer): single;
+    function GetFriction(Handle: integer): single;
+    function GetBouncy(Handle: integer): single;
+    function GetRadius(Handle: integer): single;
+
+    // Collects handles of colliding sprites (used by TPhysics before stepping)
+    procedure GetCollideList(var AHandles: TArray<Integer>);
+    function GetPhysicsState(Handle: integer; out AState: TSpritePhysicsState): boolean;
 
     // Draw all valid sprites (called in the engine's draw loop)
     procedure DrawAll;
@@ -116,6 +163,12 @@ begin
   Angle := 0;
   Scale := 1.0;
   Visible := True;
+  Collides := False;
+  Kind := skDynamic;
+  Mass := 1.0;
+  Friction := 0.5;
+  Bouncy := 0.0;
+  Radius := 0.0;
 end;
 
 { TSprites }
@@ -343,6 +396,235 @@ begin
       Result := Sprite.Texture.height
     else
       Result := 0;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+{ Physics helpers }
+
+procedure TSprites.SetCollide(Handle: integer; ACollide: boolean);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Collides := ACollide;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetKind(Handle: integer; AKind: TSpriteKind);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Kind := AKind;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetMass(Handle: integer; AMass: single);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Mass := AMass;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetFriction(Handle: integer; AFriction: single);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Friction := AFriction;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetBouncy(Handle: integer; ABouncy: single);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Bouncy := ABouncy;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetRadius(Handle: integer; ARadius: single);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Radius := ARadius;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetCollide(Handle: integer): boolean;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Collides
+    else
+      Result := False;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetKind(Handle: integer): TSpriteKind;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Kind
+    else
+      Result := skDynamic;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetMass(Handle: integer): single;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Mass
+    else
+      Result := 0;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetFriction(Handle: integer): single;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Friction
+    else
+      Result := 0;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetBouncy(Handle: integer): single;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Bouncy
+    else
+      Result := 0;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetRadius(Handle: integer): single;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Radius
+    else
+      Result := 0;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.GetCollideList(var AHandles: TArray<Integer>);
+var
+  Sprite: TSprite;
+  Handles: TArray<Integer>;
+  I: Integer;
+begin
+  AHandles := nil;
+  FLock.Enter;
+  try
+    if IsConsole then WriteLn('DBG gcl entered');
+    Handles := FItems.Keys.ToArray;
+    if IsConsole then WriteLn('DBG gcl keys=' + IntToStr(Length(Handles)));
+    for I := 0 to Length(Handles) - 1 do
+    begin
+      if not FItems.TryGetValue(Handles[I], Sprite) then
+        Continue;
+      if Sprite = nil then
+        Continue;
+      if IsConsole then WriteLn('DBG gcl sprite=' + IntToHex(NativeUInt(Sprite), 16) + ' collides=' + BoolToStr(Sprite.Collides, True));
+      if Sprite.Collides then
+      begin
+        SetLength(AHandles, Length(AHandles) + 1);
+        AHandles[Length(AHandles) - 1] := Sprite.Handle;
+      end;
+    end;
+    if IsConsole then WriteLn('DBG gcl done n=' + IntToStr(Length(AHandles)));
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetPhysicsState(Handle: integer; out AState: TSpritePhysicsState): boolean;
+var
+  Sprite: TSprite;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+    begin
+      AState.Collides := Sprite.Collides;
+      AState.Kind := Sprite.Kind;
+      AState.X := Sprite.X;
+      AState.Y := Sprite.Y;
+      AState.Angle := Sprite.Angle;
+      AState.Scale := Sprite.Scale;
+      AState.Width := Sprite.Texture.width * Sprite.Scale;
+      AState.Height := Sprite.Texture.height * Sprite.Scale;
+      AState.Mass := Sprite.Mass;
+      AState.Friction := Sprite.Friction;
+      AState.Bouncy := Sprite.Bouncy;
+      AState.Radius := Sprite.Radius;
+      Result := True;
+    end;
   finally
     FLock.Leave;
   end;

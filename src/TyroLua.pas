@@ -18,10 +18,10 @@ interface
 
 uses
   Classes, SysUtils,
-  LuaClasses, FPImage,
+  LuaClasses, LuaAPI, FPImage,
   RayLib, RayClasses, //remove it
   mnUtils,
-  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites,
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroPhysics,
   TyroControls, TyroEngines, TyroInput;
 
 type
@@ -154,6 +154,19 @@ type
     function Call_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaCollision }
+
+  TLuaCollision = class(TTyroLuaObject)
+  private
+    procedure FireEvent(L: Plua_State; AHandle, AOtherHandle: Integer; const AState: string);
+  protected
+    function Getter(L: Plua_State): integer; override;
+    function Setter(L: Plua_State): integer; override;
+  public
+    // collision.pump() drains the queue and fires sprite.onCollide(other, state)
+    function Pump_func(L: Plua_State): integer; cdecl;
+  end;
+
   { TLuaScript }
 
   TLuaScript = class(TTyroScript)
@@ -169,6 +182,7 @@ type
     Music: TLuaMusic;
     Sprite: TLuaSprite;
     Sprites: TLuaSprites;
+    Collision: TLuaCollision;
     procedure DoError(S: string);
     procedure Run; override;
   protected
@@ -188,6 +202,10 @@ type
     destructor Destroy; override;
     procedure AddQueueObject(AQueueObject: TQueueObject); override;
   end;
+
+const
+  // Integer key base in the Lua registry for "sprite handle -> sprite table"
+  cSpriteRegistryBase = $00700000;
 
 implementation
 
@@ -575,6 +593,7 @@ begin
   Music := TLuaMusic.Create(Self);
   Sprite := TLuaSprite.Create(Self);
   Sprites := TLuaSprites.Create(Self);
+  Collision := TLuaCollision.Create(Self);
 
   //window
   Lua.State.Register('window', 'show', Window, @Window.Window_func);
@@ -626,6 +645,10 @@ begin
   Lua.State.Register('Sprites', 'find', Self, @Sprites.Find_func);
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
   Lua.State.Register('Sprites', '__call', Self, @Sprites.Call_func, True);
+
+  // Collision system: collision.pump() drains events and fires sprite.onCollide(other, state)
+  Lua.State.Register('collision', 'pump', Collision, @Collision.Pump_func);
+  Lua.State.Register('collision', Collision); // should be last — wires getter/setter metamethods
 
   Lua.State.BeginTable;
   for i := 0 to Length(Colors.Colors) - 1 do
@@ -1022,6 +1045,13 @@ begin
     Lua.State.RegisterMeta('__newindex', @__setter);
     Lua.State.SetMetaTable(-2); //sprite.metatable = meta
 
+    // remember this sprite table so collision.pump() can find it by handle
+    if AHandle > cSpriteInvalid then
+    begin
+      Lua.State.PushValue(-1); // duplicate the sprite table
+      lua_rawseti(Lua.State, LUA_REGISTRYINDEX, cSpriteRegistryBase + AHandle);
+    end;
+
     Lua.State.Remove(base); //drop the first reference, keep one on the stack
     Result := 1;
   end;
@@ -1106,6 +1136,9 @@ begin
     begin
       L.PushInteger(handle);
       L.SetField(1, '__handle');
+      // re-index the sprite table under its real handle (it was keyed as unloaded)
+      L.PushValue(1);
+      lua_rawseti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + handle);
     end
     else
       Script.DoError('Sprite not loaded: ' + aFile);
@@ -1166,7 +1199,7 @@ begin
   Result := 1;
 end;
 
-// Sprite __index: read properties x, y, angle, scale, visible
+// Sprite __index: read properties x, y, angle, scale, visible + physics keys; unknown keys raw-read from the sprite table
 function TLuaSprite.Getter(L: Plua_State): integer;
 var
   handle: integer;
@@ -1176,48 +1209,98 @@ begin
   handle := GetSpriteHandle(L, 1);
   field := L.ToString(2);
   Result := 0;
-  if handle <= cSpriteInvalid then
-    Exit;
-  if field = 'x' then
+  if handle > cSpriteInvalid then
   begin
-    L.PushNumber(Main.Sprites.GetX(handle));
-    Result := 1;
-  end
-  else if field = 'y' then
+    if field = 'x' then
+    begin
+      L.PushNumber(Main.Sprites.GetX(handle));
+      Result := 1;
+    end
+    else if field = 'y' then
+    begin
+      L.PushNumber(Main.Sprites.GetY(handle));
+      Result := 1;
+    end
+    else if field = 'angle' then
+    begin
+      L.PushNumber(Main.Sprites.GetAngle(handle));
+      Result := 1;
+    end
+    else if field = 'scale' then
+    begin
+      L.PushNumber(Main.Sprites.GetScale(handle));
+      Result := 1;
+    end
+    else if field = 'visible' then
+    begin
+      L.PushBoolean(Main.Sprites.GetVisible(handle));
+      Result := 1;
+    end
+    else if field = 'collide' then
+    begin
+      L.PushBoolean(Main.Sprites.GetCollide(handle));
+      Result := 1;
+    end
+    else if field = 'kind' then
+    begin
+      case Main.Sprites.GetKind(handle) of
+        skKinematic: L.PushString('kinematic');
+        skStatic: L.PushString('static');
+      else
+        L.PushString('dynamic');
+      end;
+      Result := 1;
+    end
+    else if field = 'mass' then
+    begin
+      L.PushNumber(Main.Sprites.GetMass(handle));
+      Result := 1;
+    end
+    else if field = 'friction' then
+    begin
+      L.PushNumber(Main.Sprites.GetFriction(handle));
+      Result := 1;
+    end
+    else if field = 'bouncy' then
+    begin
+      L.PushNumber(Main.Sprites.GetBouncy(handle));
+      Result := 1;
+    end
+    else if field = 'radius' then
+    begin
+      L.PushNumber(Main.Sprites.GetRadius(handle));
+      Result := 1;
+    end;
+  end;
+  if Result = 0 then
   begin
-    L.PushNumber(Main.Sprites.GetY(handle));
-    Result := 1;
-  end
-  else if field = 'angle' then
-  begin
-    L.PushNumber(Main.Sprites.GetAngle(handle));
-    Result := 1;
-  end
-  else if field = 'scale' then
-  begin
-    L.PushNumber(Main.Sprites.GetScale(handle));
-    Result := 1;
-  end
-  else if field = 'visible' then
-  begin
-    L.PushBoolean(Main.Sprites.GetVisible(handle));
+    // unknown key (e.g. onCollide) or unloaded sprite: read raw from the sprite table
+    L.PushValue(2);
+    lua_rawget(L, 1);
     Result := 1;
   end;
 end;
 
-// Sprite __newindex: write properties x, y, angle, scale, visible
+// Sprite __newindex: write properties x, y, angle, scale, visible + physics keys; unknown keys raw-stored
 function TLuaSprite.Setter(L: Plua_State): integer;
 var
   handle: integer;
   field: string;
   curX, curY: single;
+  k: TSpriteKind;
 begin
   // arg 1 is the table, arg 2 is the key, arg 3 is the value
   handle := GetSpriteHandle(L, 1);
   field := L.ToString(2);
   Result := 0;
   if handle <= cSpriteInvalid then
+  begin
+    // unloaded sprite: store unknown keys (like onCollide) raw so they survive load()
+    L.PushValue(2);
+    L.PushValue(3);
+    lua_rawset(L, 1);
     Exit;
+  end;
   if (field = 'x') or (field = 'y') then
   begin
     curX := Main.Sprites.GetX(handle);
@@ -1239,7 +1322,148 @@ begin
   else if field = 'visible' then
   begin
     Main.Sprites.SetVisible(handle, L.ToBoolean(3));
-   end;
+  end
+  else if field = 'collide' then
+  begin
+    Main.Sprites.SetCollide(handle, L.ToBoolean(3));
+  end
+  else if field = 'kind' then
+  begin
+    if L.ToString(3) = 'kinematic' then
+      k := skKinematic
+    else if L.ToString(3) = 'static' then
+      k := skStatic
+    else
+      k := skDynamic;
+    Main.Sprites.SetKind(handle, k);
+  end
+  else if field = 'mass' then
+  begin
+    Main.Sprites.SetMass(handle, L.ToNumber(3));
+  end
+  else if field = 'friction' then
+  begin
+    Main.Sprites.SetFriction(handle, L.ToNumber(3));
+  end
+  else if field = 'bouncy' then
+  begin
+    Main.Sprites.SetBouncy(handle, L.ToNumber(3));
+  end
+  else if field = 'radius' then
+  begin
+    Main.Sprites.SetRadius(handle, L.ToNumber(3));
+  end
+  else
+  begin
+    // unknown key (e.g. onCollide = function): store it raw in the sprite table
+    L.PushValue(2);
+    L.PushValue(3);
+    lua_rawset(L, 1);
+  end;
+end;
+
+{ TLuaCollision }
+
+function TLuaCollision.Getter(L: Plua_State): integer;
+begin
+  Result := 0;
+  if Main.Physics = nil then
+    Exit;
+  if L.ToString(2) = 'gravityx' then
+  begin
+    L.PushNumber(Main.Physics.GetGravityX);
+    Result := 1;
+  end
+  else if L.ToString(2) = 'gravityy' then
+  begin
+    L.PushNumber(Main.Physics.GetGravityY);
+    Result := 1;
+  end
+  else if L.ToString(2) = 'bodies' then
+  begin
+    L.PushInteger(Main.Physics.BodyCount);
+    Result := 1;
+  end;
+end;
+
+function TLuaCollision.Setter(L: Plua_State): integer;
+var
+  x, y: single;
+begin
+  Result := 0;
+  if Main.Physics = nil then
+    Exit;
+  x := Main.Physics.GetGravityX;
+  y := Main.Physics.GetGravityY;
+  if L.ToString(2) = 'gravityx' then
+    x := L.ToNumber(3)
+  else if L.ToString(2) = 'gravityy' then
+    y := L.ToNumber(3);
+  Main.Physics.SetGravity(x, y);
+end;
+
+// Fire the onCollide handler of the sprite AHandle, passing the other sprite and the contact state
+procedure TLuaCollision.FireEvent(L: Plua_State; AHandle, AOtherHandle: Integer; const AState: string);
+begin
+  // get the target sprite table from the registry
+  lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + AHandle);
+  if not lua_istable(L, -1) then
+  begin
+    L.Pop(1);
+    Exit;
+  end;
+  // read its onCollide field raw (bypasses __index)
+  L.PushString('onCollide');
+  lua_rawget(L, -2);
+  if not lua_isfunction(L, -1) then
+  begin
+    L.Pop(2);
+    Exit;
+  end;
+  // push the other sprite (or nil) and the state string as arguments
+  lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + AOtherHandle);
+  if not lua_istable(L, -1) then
+  begin
+    L.Pop(1);
+    L.PushNil;
+  end;
+  L.PushString(AState);
+  if lua_pcall(L, 2, 0, 0) <> 0 then
+  begin
+    Script.DoError('onCollide: ' + L.ToString(-1));
+    L.Pop(1);
+  end;
+  L.Pop(1); // remove the target sprite table
+end;
+
+// collision.pump() -> number of events dispatched; fires onCollide handlers for both sides
+function TLuaCollision.Pump_func(L: Plua_State): integer; cdecl;
+var
+  Evs: array[0..1023] of TCollisionEvent;
+  ACount: Integer;
+  I: Integer;
+  ev: TCollisionEvent;
+begin
+  Result := 0;
+  if Main.Physics = nil then
+    Exit;
+  ACount := 0;
+  Main.Physics.Poll(Evs, ACount);
+  for I := 0 to ACount - 1 do
+  begin
+    ev := Evs[I];
+    if ev.State = csBegin then
+    begin
+      FireEvent(L, ev.HandleA, ev.HandleB, 'enter');
+      FireEvent(L, ev.HandleB, ev.HandleA, 'enter');
+    end
+    else
+    begin
+      FireEvent(L, ev.HandleA, ev.HandleB, 'leave');
+      FireEvent(L, ev.HandleB, ev.HandleA, 'leave');
+    end;
+    Inc(Result);
+  end;
 end;
 
 initialization

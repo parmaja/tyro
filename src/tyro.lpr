@@ -224,7 +224,7 @@ begin
       on E:Exception do
       begin
         if IsConsole then
-          WriteLn(E.Message);
+          WriteLn('EX: ' + E.ClassName + ': ' + E.Message + ' @' + IntToHex(NativeUInt(ExceptAddr), 16));
       end;
     end;
   finally
