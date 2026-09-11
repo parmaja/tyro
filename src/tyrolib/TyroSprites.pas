@@ -82,6 +82,10 @@ type
     destructor Destroy; override;
     // Add a loaded texture to the store, returns a handle
     function Add(ATexture: TTexture2D; const AName: string = ''): integer;
+    // Add a texture-less sprite (script-only markers, etc.), returns a handle
+    function AddEmpty(const AName: string = ''): integer;
+    // Replace the texture of an existing sprite in place, returns success
+    function SetTexture(Handle: integer; ATexture: TTexture2D): boolean;
     function FindByName(const AName: string): integer;
 
     function GetTexture(Handle: integer): TTexture2D;
@@ -126,10 +130,26 @@ type
 
     // Draw all valid sprites (called in the engine's draw loop)
     procedure DrawAll;
+    // Dispatch on_draw() for visible scripted sprites (called after the
+    // legacy Graphic layer is blitted, so script overlays stay on top)
+    procedure DrawScripts;
     // Draw a single sprite (queued from Lua)
     procedure DrawSprite(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
     property Count: integer read GetCount;
     property Items[Index: Integer]: TSprite read GetItems; default;
+  end;
+
+  { TCreateSpriteObject }
+
+  { Creates a texture-less sprite on the main thread and returns its handle. }
+  TCreateSpriteObject = class(TQueueObject)
+  private
+    FName: string;
+    FHandleResult: integer;
+  public
+    constructor Create(const AName: string);
+    procedure DoExecute; override;
+    property HandleResult: integer read FHandleResult;
   end;
 
   { TLoadSpriteObject }
@@ -138,9 +158,10 @@ type
   private
     FFileName: string;
     FName: string;
+    FExistingHandle: integer;
     FHandleResult: integer;
   public
-    constructor Create(AFileName: string; const AName: string);
+    constructor Create(AFileName: string; const AName: string; AExistingHandle: integer = 0);
     destructor Destroy; override;
     procedure DoExecute; override;
     property FileName: string read FFileName;
@@ -253,6 +274,39 @@ begin
       FItems.Add(FNextHandle, TSprite.Create(FNextHandle, ATexture, AName));
       Result := FNextHandle;
       Inc(FNextHandle);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.AddEmpty(const AName: string): integer;
+var
+  EmptyTexture: TTexture2D;
+begin
+  Result := cSpriteInvalid;
+  EmptyTexture := Default(TTexture2D);
+  FLock.Enter;
+  try
+    FItems.Add(FNextHandle, TSprite.Create(FNextHandle, EmptyTexture, AName));
+    Result := FNextHandle;
+    Inc(FNextHandle);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.SetTexture(Handle: integer; ATexture: TTexture2D): boolean;
+var
+  Sprite: TSprite;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+    begin
+      Sprite.Texture := ATexture;
+      Result := True;
     end;
   finally
     FLock.Leave;
@@ -619,23 +673,19 @@ begin
   AHandles := nil;
   FLock.Enter;
   try
-    if IsConsole then WriteLn('DBG gcl entered');
     Handles := FItems.Keys.ToArray;
-    if IsConsole then WriteLn('DBG gcl keys=' + IntToStr(Length(Handles)));
     for I := 0 to Length(Handles) - 1 do
     begin
       if not FItems.TryGetValue(Handles[I], Sprite) then
         Continue;
       if Sprite = nil then
         Continue;
-      if IsConsole then WriteLn('DBG gcl sprite=' + IntToHex(NativeUInt(Sprite), 16) + ' collides=' + BoolToStr(Sprite.Collides, True));
       if Sprite.Collides then
       begin
         SetLength(AHandles, Length(AHandles) + 1);
         AHandles[Length(AHandles) - 1] := Sprite.Handle;
       end;
     end;
-    if IsConsole then WriteLn('DBG gcl done n=' + IntToStr(Length(AHandles)));
   finally
     FLock.Leave;
   end;
@@ -746,6 +796,23 @@ procedure TSprites.DrawAll;
 var
   Sprite: TSprite;
   Pos: TVector2;
+begin
+  FLock.Enter;
+  try
+    for Sprite in FItems.Values do
+      if Sprite.Visible and (Sprite.Texture.id > 0) then
+      begin
+        Pos := TVector2.Create(Sprite.X, Sprite.Y);
+        RayLib.DrawTextureEx(Sprite.Texture, Pos, Sprite.Angle, Sprite.Scale, clWhite);
+      end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.DrawScripts;
+var
+  Sprite: TSprite;
   Scripts: TList<ISpriteScript>;
   I: Integer;
 begin
@@ -754,19 +821,12 @@ begin
     FLock.Enter;
     try
       for Sprite in FItems.Values do
-      begin
-        if Sprite.Visible and (Sprite.Texture.id > 0) then
-        begin
-          Pos := TVector2.Create(Sprite.X, Sprite.Y);
-          RayLib.DrawTextureEx(Sprite.Texture, Pos, Sprite.Angle, Sprite.Scale, clWhite);
-        end;
         if Sprite.Visible and (Sprite.Script <> nil) then
           Scripts.Add(Sprite.Script);
-      end;
     finally
       FLock.Leave;
     end;
-    // on_draw runs after the texture blit, outside the store lock
+    // on_draw runs after the Graphic layer blit, outside the store lock
     for I := 0 to Scripts.Count - 1 do
       Scripts[I].Draw;
   finally
@@ -799,15 +859,31 @@ begin
   RayLib.DrawTextureEx(Sprite.Texture, Pos, Sprite.Angle, Sprite.Scale, ATint);
 end;
 
+{ TCreateSpriteObject }
+
+constructor TCreateSpriteObject.Create(const AName: string);
+begin
+  inherited Create;
+  FName := AName;
+  FHandleResult := cSpriteInvalid;
+  EventNeeded;
+end;
+
+procedure TCreateSpriteObject.DoExecute;
+begin
+  FHandleResult := Main.Sprites.AddEmpty(FName);
+end;
+
 { TLoadSpriteObject }
 
-constructor TLoadSpriteObject.Create(AFileName: string; const AName: string);
+constructor TLoadSpriteObject.Create(AFileName: string; const AName: string; AExistingHandle: integer);
 begin
   inherited Create;
   FFileName := AFileName;
   FName := AName;
+  FExistingHandle := AExistingHandle;
   FHandleResult := cSpriteInvalid;
-  EventNeeded;;
+  EventNeeded;
 end;
 
 destructor TLoadSpriteObject.Destroy;
@@ -821,7 +897,18 @@ var
 begin
   aTexture := RayLib.LoadTexture(PUTF8Char(FFileName));
   if aTexture.id > 0 then
-    FHandleResult := Main.Sprites.Add(aTexture, FName)
+  begin
+    if FExistingHandle > cSpriteInvalid then
+    begin
+      // materialize a texture created by Sprites.new() in place
+      if Main.Sprites.SetTexture(FExistingHandle, aTexture) then
+        FHandleResult := FExistingHandle
+      else
+        FHandleResult := cSpriteInvalid;
+    end
+    else
+      FHandleResult := Main.Sprites.Add(aTexture, FName);
+  end
   else
   begin
     if IsConsole then

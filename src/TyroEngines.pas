@@ -338,6 +338,9 @@ begin
       end;
     end;
     Graphic.PostDraw;
+    // scripted on_draw() overlays run last so they stay above the texture
+    // and the legacy Graphic layer
+    Sprites.DrawScripts;
   end;
   ThreadSwitch; //Yield
 end;

@@ -1110,13 +1110,27 @@ end;
 function TLuaSprites.New_func(L: Plua_State): integer; cdecl;
 var
   aName: string;
+  handle: integer;
+  CreateObj: TCreateSpriteObject;
 begin
   if L.Count >= 1 then
     aName := L.ToString(1)
   else
     aName := '';
-  // Create sprite object with handle -1 (no texture yet, load() will populate it)
-  Script.Sprite.RegisterSprite(-1);
+  // Create the sprite object immediately on the main thread so script-only
+  // ("texture-less") sprites get a real handle; load() swaps the texture in place.
+  CreateObj := TCreateSpriteObject.Create(aName);
+  try
+    CreateObj.Run(Script.Thread);
+    CreateObj.Wait;
+    handle := CreateObj.HandleResult;
+  finally
+    CreateObj.Free;
+  end;
+  if handle > cSpriteInvalid then
+    Script.Sprite.RegisterSprite(handle)
+  else
+    Script.Sprite.RegisterSprite(-1);
   // Store optional name
   if aName <> '' then
   begin
@@ -1179,7 +1193,11 @@ begin
   else
     aName := ExtractFileName(aFile);
   L.Pop(1);
-  LoadObj := TLoadSpriteObject.Create(aFile, aName);
+  // reuse the handle created by Sprites.new() if this sprite already exists
+  handle := GetSpriteHandle(L, 1);
+  if handle <= cSpriteInvalid then
+    handle := cSpriteInvalid;
+  LoadObj := TLoadSpriteObject.Create(aFile, aName, handle);
   try
     LoadObj.Run(Script.Thread);
     LoadObj.Wait;
@@ -1474,13 +1492,18 @@ begin
   lua_setmetatable(L, -2); //t.metatable = meta -> [t]
 end;
 
-// draw.* color argument: an integer paletted color or a color name
-function ColorValue(L: Plua_State; Idx: Integer): TColor;
+// draw.* color for sprite scripts: the colors table stores AARRGGBB as a Lua
+// integer. Read it back via the Lua number (int64-safe) and mask bytes
+// explicitly so large values never get mangled by 32-bit arithmetic.
+function SpriteColorValue(L: Plua_State; Idx: Integer): TColor;
+var
+  v: UInt32;
 begin
-  if L.IsString(Idx) then
-    Result := StrToColor(L.ToString(Idx))
-  else
-    Result := IntToColor(L.ToInteger(Idx));
+  v := UInt32(Trunc(L.ToNumber(Idx)));
+  Result.RGBA.Red := Byte(v and $FF);
+  Result.RGBA.Green := Byte((v shr 8) and $FF);
+  Result.RGBA.Blue := Byte((v shr 16) and $FF);
+  Result.RGBA.Alpha := Byte((v shr 24) and $FF);
 end;
 
 constructor TLuaSpriteScript.Create(AScript: TLuaScript; AHandle: Integer; const AFileName: string);
@@ -1615,9 +1638,9 @@ begin
   else
     f := True;
   if f then
-    RayLib.DrawCircle(round(x), round(y), r, ColorValue(L, 4))
+    RayLib.DrawCircle(round(x), round(y), r, SpriteColorValue(L, 4))
   else
-    RayLib.DrawCircleLines(round(x), round(y), r, ColorValue(L, 4));
+    RayLib.DrawCircleLines(round(x), round(y), r, SpriteColorValue(L, 4));
   Result := 0;
 end;
 
@@ -1636,23 +1659,23 @@ begin
   else
     f := True;
   if f then
-    RayLib.DrawRectangle(x, y, w, h, ColorValue(L, 5))
+    RayLib.DrawRectangle(x, y, w, h, SpriteColorValue(L, 5))
   else
-    RayLib.DrawRectangleLinesEx(RectangleOf(x, y, w, h), 1, ColorValue(L, 5));
+    RayLib.DrawRectangleLinesEx(RectangleOf(x, y, w, h), 1, SpriteColorValue(L, 5));
   Result := 0;
 end;
 
 // draw.line(x1, y1, x2, y2, color)
 function TLuaSpriteScript.Line_func(L: Plua_State): integer; cdecl;
 begin
-  RayLib.DrawLineEx(Vector2Of(L.ToNumber(1), L.ToNumber(2)), Vector2Of(L.ToNumber(3), L.ToNumber(4)), 1, ColorValue(L, 5));
+  RayLib.DrawLineEx(Vector2Of(L.ToNumber(1), L.ToNumber(2)), Vector2Of(L.ToNumber(3), L.ToNumber(4)), 1, SpriteColorValue(L, 5));
   Result := 0;
 end;
 
 // draw.text(x, y, text, color)
 function TLuaSpriteScript.Text_func(L: Plua_State): integer; cdecl;
 begin
-  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(L.ToString(3)), Vector2Of(L.ToNumber(1), L.ToNumber(2)), Resources.Font.Height, 0, ColorValue(L, 4));
+  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(L.ToString(3)), Vector2Of(L.ToNumber(1), L.ToNumber(2)), Resources.Font.Height, 0, SpriteColorValue(L, 4));
   Result := 0;
 end;
 
