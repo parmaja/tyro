@@ -13,39 +13,39 @@ uses
 
 const
   cSpriteInvalid: Integer = 0;
-  cSpriteMax = 256;
 
 type
-  { TSpriteRecord }
+  { TSprite }
 
-  TSpriteRecord = record
+  TSprite = class(TObject)
+  public
     Handle: Integer;
     Texture: TTexture2D;
-    Valid: boolean;
     Name: string;
     X: single;
     Y: single;
     Angle: single;
     Scale: single;
     Visible: boolean;
+    constructor Create(AHandle: Integer; ATexture: TTexture2D; const AName: string);
   end;
-  PSpriteRecord = ^TSpriteRecord;
 
   { TSpriteStore }
 
-  //TODO convert to use TDictionary<Integer, TSpriteRecord>
-  TSprites = class
+  TSprites = class(TObject)
   private
     FLock: TCriticalSection;
-    FItems: array[0..cSpriteMax - 1] of TSpriteRecord; //TODO remove this
-    FCount: integer;
+    FItems: TDictionary<Integer, TSprite>;
+    FNextHandle: Integer;
     function GetCount: integer;
+    function GetItems(Index: Integer): TSprite;
   public
     constructor Create;
     destructor Destroy; override;
     // Add a loaded texture to the store, returns a handle
-    function AddTexture(ATexture: TTexture2D; const AName: string = ''): integer;
-    function IsValid(Handle: integer): boolean;
+    function Add(ATexture: TTexture2D; const AName: string = ''): integer;
+    function FindByName(const AName: string): integer;
+
     function GetTexture(Handle: integer): TTexture2D;
     procedure SetPosition(Handle: integer; X, Y: single);
     procedure SetAngle(Handle: integer; Angle: single);
@@ -58,12 +58,13 @@ type
     function GetVisible(Handle: integer): boolean;
     function GetWidth(Handle: integer): integer;
     function GetHeight(Handle: integer): integer;
-    function FindByName(const AName: string): integer;
+
     // Draw all valid sprites (called in the engine's draw loop)
     procedure DrawAll;
     // Draw a single sprite (queued from Lua)
-    procedure DrawOne(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
+    procedure DrawSprite(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
     property Count: integer read GetCount;
+    property Items[Index: Integer]: TSprite read GetItems; default;
   end;
 
   { TLoadSpriteObject }
@@ -84,10 +85,10 @@ type
 
   { TDrawSpriteObject }
 
-  TDrawSpriteObject = class(TDrawObject)
+  {TDrawSpriteObject = class(TDrawObject)
   private
     FSpriteStore: TSprites;
-    fHandle: integer;
+    FHandle: integer;
     fX, fY: single;
     fAngle: single;
     fScale: single;
@@ -95,111 +96,108 @@ type
   public
     constructor Create(ASpriteStore: TSprites; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
     procedure DoExecute; override;
-  end;
+  end;}
 
 implementation
 
 uses
   TyroEngines;
 
+{ TSprite }
+
+constructor TSprite.Create(AHandle: Integer; ATexture: TTexture2D; const AName: string);
+begin
+  inherited Create;
+  Handle := AHandle;
+  Texture := ATexture;
+  Name := AName;
+  X := 0;
+  Y := 0;
+  Angle := 0;
+  Scale := 1.0;
+  Visible := True;
+end;
+
 { TSprites }
 
 constructor TSprites.Create;
-var
-  i: integer;
 begin
   inherited Create;
   FLock := TCriticalSection.Create;
-  FCount := 0;
-  for i := 0 to cSpriteMax - 1 do
-  begin
-    FItems[i].Valid := False;
-    FItems[i].Name := '';
-    FItems[i].X := 0;
-    FItems[i].Y := 0;
-    FItems[i].Angle := 0;
-    FItems[i].Scale := 1.0;
-    FItems[i].Visible := True;
-  end;
+  FItems := TDictionary<Integer, TSprite>.Create;
+  FNextHandle := 1;
 end;
 
 destructor TSprites.Destroy;
 var
-  i: integer;
+  Sprite: TSprite;
 begin
-  for i := 0 to cSpriteMax - 1 do
-    if FItems[i].Valid then
-      RayLib.UnloadTexture(FItems[i].Texture);
+  for Sprite in FItems.Values do
+  begin
+    RayLib.UnloadTexture(Sprite.Texture);
+  end;
+  FItems.Free;
   FLock.Free;
   inherited;
 end;
 
 function TSprites.GetCount: integer;
 begin
-  Result := FCount;
+  Result := FItems.Count;
 end;
 
-function TSprites.AddTexture(ATexture: TTexture2D; const AName: string): integer;
-var
-  i: integer;
+function TSprites.GetItems(Index: Integer): TSprite;
+begin
+  Result := FItems[Index];
+end;
+
+function TSprites.Add(ATexture: TTexture2D; const AName: string): integer;
 begin
   Result := cSpriteInvalid;
   FLock.Enter;
   try
     if (ATexture.id > 0) then
     begin
-      for i := 0 to cSpriteMax - 1 do
-        if not FItems[i].Valid then
-        begin
-          FItems[i].Texture := ATexture;
-          FItems[i].Valid := True;
-          FItems[i].Name := AName;
-          FItems[i].X := 0;
-          FItems[i].Y := 0;
-          FItems[i].Angle := 0;
-          FItems[i].Scale := 1.0;
-          FItems[i].Visible := True;
-          Inc(FCount);
-          Result := i;
-          Exit;
-        end;
+      FItems.Add(FNextHandle, TSprite.Create(FNextHandle, ATexture, AName));
+      Result := FNextHandle;
+      Inc(FNextHandle);
     end;
   finally
     FLock.Leave;
   end;
 end;
 
-function TSprites.IsValid(Handle: integer): boolean;
-begin
-  FLock.Enter;
-  try
-    Result := (Handle > cSpriteInvalid) and (Handle < cSpriteMax) and FItems[Handle].Valid;
-  finally
-    FLock.Leave;
-  end;
-end;
-
 function TSprites.GetTexture(Handle: integer): TTexture2D;
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      Result := FItems[Handle].Texture
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Texture
     else
-      Result.ID := 0; Result.Width := 0; Result.Height := 0; Result.Mipmaps := 1; Result.Format := 0;
+    begin
+      Result.ID := 0;
+      Result.Width := 0;
+      Result.Height := 0;
+      Result.Mipmaps := 1;
+      Result.Format := 0;
+    end;
   finally
     FLock.Leave;
   end;
 end;
 
 procedure TSprites.SetPosition(Handle: integer; X, Y: single);
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
+    if FItems.TryGetValue(Handle, Sprite) then
     begin
-      FItems[Handle].X := X;
-      FItems[Handle].Y := Y;
+      Sprite.X := X;
+      Sprite.Y := Y;
     end;
   finally
     FLock.Leave;
@@ -207,44 +205,52 @@ begin
 end;
 
 procedure TSprites.SetAngle(Handle: integer; Angle: single);
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      FItems[Handle].Angle := Angle;
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Angle := Angle;
   finally
     FLock.Leave;
   end;
 end;
 
 procedure TSprites.SetScale(Handle: integer; Scale: single);
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      FItems[Handle].Scale := Scale;
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Scale := Scale;
   finally
     FLock.Leave;
   end;
 end;
 
 procedure TSprites.SetVisible(Handle: integer; AVisible: boolean);
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      FItems[Handle].Visible := AVisible;
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Visible := AVisible;
   finally
     FLock.Leave;
   end;
 end;
 
 function TSprites.GetX(Handle: integer): single;
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      Result := FItems[Handle].X
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.X
     else
       Result := 0;
   finally
@@ -253,11 +259,13 @@ begin
 end;
 
 function TSprites.GetY(Handle: integer): single;
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      Result := FItems[Handle].Y
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Y
     else
       Result := 0;
   finally
@@ -266,11 +274,13 @@ begin
 end;
 
 function TSprites.GetAngle(Handle: integer): single;
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      Result := FItems[Handle].Angle
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Angle
     else
       Result := 0;
   finally
@@ -279,11 +289,13 @@ begin
 end;
 
 function TSprites.GetScale(Handle: integer): single;
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      Result := FItems[Handle].Scale
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Scale
     else
       Result := 1;
   finally
@@ -292,11 +304,13 @@ begin
 end;
 
 function TSprites.GetVisible(Handle: integer): boolean;
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      Result := FItems[Handle].Visible
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Visible
     else
       Result := False;
   finally
@@ -305,11 +319,13 @@ begin
 end;
 
 function TSprites.GetWidth(Handle: integer): integer;
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      Result := FItems[Handle].Texture.width
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Texture.width
     else
       Result := 0;
   finally
@@ -318,11 +334,13 @@ begin
 end;
 
 function TSprites.GetHeight(Handle: integer): integer;
+var
+  Sprite: TSprite;
 begin
   FLock.Enter;
   try
-    if IsValid(Handle) then
-      Result := FItems[Handle].Texture.height
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Texture.height
     else
       Result := 0;
   finally
@@ -332,15 +350,15 @@ end;
 
 function TSprites.FindByName(const AName: string): integer;
 var
-  i: integer;
+  Sprite: TSprite;
 begin
   Result := cSpriteInvalid;
   FLock.Enter;
   try
-    for i := 0 to cSpriteMax - 1 do
-      if FItems[i].Valid and (FItems[i].Name = AName) then
+    for Sprite in FItems.Values do
+      if (Sprite.Name = AName) then
       begin
-        Result := i;
+        Result := Sprite.Handle;
         Exit;
       end;
   finally
@@ -350,23 +368,17 @@ end;
 
 procedure TSprites.DrawAll;
 var
-  i: integer;
-  Rec: TTexture2D;
+  Sprite: TSprite;
   Pos: TVector2;
-  Ang: single;
-  Scl: single;
 begin
   FLock.Enter;
   try
-    for i := 0 to cSpriteMax - 1 do
+    for Sprite in FItems.Values do
     begin
-      if FItems[i].Valid and FItems[i].Visible and (FItems[i].Texture.id > 0) then
+      if Sprite.Visible and (Sprite.Texture.id > 0) then
       begin
-        Rec := FItems[i].Texture;
-        Pos := TVector2.Create(FItems[i].X, FItems[i].Y);
-        Ang := FItems[i].Angle;
-        Scl := FItems[i].Scale;
-        RayLib.DrawTextureEx(Rec, Pos, Ang, Scl, clWhite);
+        Pos := TVector2.Create(Sprite.X, Sprite.Y);
+        RayLib.DrawTextureEx(Sprite.Texture, Pos, Sprite.Angle, Sprite.Scale, clWhite);
       end;
     end;
   finally
@@ -374,34 +386,29 @@ begin
   end;
 end;
 
-procedure TSprites.DrawOne(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
+procedure TSprites.DrawSprite(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
 var
-  Rec: TTexture2D;
+  Sprite: TSprite;
   Pos: TVector2;
-  Ang: single;
-  Scl: single;
 begin
   FLock.Enter;
   try
-    if not IsValid(Handle) then
+    if (not FItems.TryGetValue(Handle, Sprite)) then
       Exit;
     if (AX > -1) or (AY > -1) then
     begin
-      FItems[Handle].X := AX;
-      FItems[Handle].Y := AY;
+      Sprite.X := AX;
+      Sprite.Y := AY;
     end;
     if AAngle >= 0 then
-      FItems[Handle].Angle := AAngle;
+      Sprite.Angle := AAngle;
     if AScale >= 0 then
-      FItems[Handle].Scale := AScale;
-    Rec := FItems[Handle].Texture;
-    Pos := TVector2.Create(FItems[Handle].X, FItems[Handle].Y);
-    Ang := FItems[Handle].Angle;
-    Scl := FItems[Handle].Scale;
+      Sprite.Scale := AScale;
+    Pos := TVector2.Create(Sprite.X, Sprite.Y);
   finally
     FLock.Leave;
   end;
-  RayLib.DrawTextureEx(Rec, Pos, Ang, Scl, ATint);
+  RayLib.DrawTextureEx(Sprite.Texture, Pos, Sprite.Angle, Sprite.Scale, ATint);
 end;
 
 { TLoadSpriteObject }
@@ -426,18 +433,18 @@ var
 begin
   aTexture := RayLib.LoadTexture(PUTF8Char(FFileName));
   if aTexture.id > 0 then
-    FHandleResult := Main.Sprites.AddTexture(aTexture, FName)
+    FHandleResult := Main.Sprites.Add(aTexture, FName)
   else
   begin
     if IsConsole then
       WriteLn('Sprite not loaded: ' + FFileName);
-    FHandleResult := cSpriteInvalid;
+    FHandleResult := 0;
   end;
 end;
 
 { TDrawSpriteObject }
 
-constructor TDrawSpriteObject.Create(ASpriteStore: TSprites; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
+{constructor TDrawSpriteObject.Create(ASpriteStore: TSprites; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
 begin
   inherited Create(ACanvas);
   FSpriteStore := ASpriteStore;
@@ -453,7 +460,7 @@ procedure TDrawSpriteObject.DoExecute;
 begin
   if not Assigned(FSpriteStore) then
     Exit;
-  FSpriteStore.DrawOne(fHandle, Canvas, fX, fY, fAngle, fScale, fTint);
-end;
+  FSpriteStore.DrawSprite(fHandle, Canvas, fX, fY, fAngle, fScale, fTint);
+end;}
 
 end.
