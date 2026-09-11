@@ -624,12 +624,8 @@ begin
   Lua.State.RegisterTable('Sprites');
   Lua.State.Register('Sprites', 'new', Self, @Sprites.New_func);
   Lua.State.Register('Sprites', 'find', Self, @Sprites.Find_func);
-  // Set __call on the Sprites metatable for Sprites("name") access
-
-  lua_getglobal(Lua.State, 'Sprites');   // push Sprites table
-  lua_getmetatable(Lua.State, -1);       // push its metatable (created by lua_register_table)
-  Lua.State.Register('__call', @Sprites.Call_func, -1);
-  lua_pop(Lua.State, 2);                // pop metatable and Sprites table
+  // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
+  Lua.State.Register('Sprites', '__call', Self, @Sprites.Call_func, True);
 
   Lua.State.BeginTable;
   for i := 0 to Length(Colors.Colors) - 1 do
@@ -998,25 +994,35 @@ end;
 { Sprites }
 
 function TLuaSprite.RegisterSprite(AHandle: integer): integer;
+var
+  base: integer;
 begin
   with Script do
   begin
-    Lua.State.BeginTable;
+    Lua.State.BeginTable; //[sprite]
+    base := lua_gettop(Lua.State); //index of the sprite table
 
-    lua_newtable(Lua.State);
+    //keep a duplicate, the -2/-3 addressing in Register() hits the sprite table
+    lua_pushvalue(Lua.State, -1); //[sprite, sprite]
 
     lua_pushinteger(Lua.State, AHandle);
-    lua_setfield(Lua.State, -2, '__handle');
+    lua_setfield(Lua.State, -2, '__handle'); //sprite.__handle = AHandle
+
+    //methods receive the sprite table injected as argument 1
     Lua.State.Register('load', @Load_func);
     Lua.State.Register('show', @Show_func);
     Lua.State.Register('hide', @Hide_func);
     Lua.State.Register('move', @Move_func);
     Lua.State.Register('width', @Width_func);
     Lua.State.Register('height', @Height_func);
-    lua_newtable(Lua.State);
-    Lua.State.Register('__index', @__getter);
-    Lua.State.Register('__newindex', @__setter);
-    lua_setmetatable(Lua.State, -2);
+
+    //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
+    lua_newtable(Lua.State); //[sprite, sprite, meta]
+    Lua.State.RegisterMeta('__index', @__getter);
+    Lua.State.RegisterMeta('__newindex', @__setter);
+    lua_setmetatable(Lua.State, -2); //sprite.metatable = meta
+
+    lua_remove(Lua.State, base); //drop the first reference, keep one on the stack
     Result := 1;
   end;
 end;

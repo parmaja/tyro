@@ -106,10 +106,12 @@ type
     procedure Register(const Name: string; Method: TLuaMethod; TableStackIdx: Integer = -1); overload;
     //
     //RegisterMethod_2
-    procedure Register(const Table, Name: string; AObject:TObject; Method: TLuaMethod); overload;
+    procedure Register(const Table, Name: string; AObject:TObject; Method: TLuaMethod; AToMeta: Boolean = False); overload;
     procedure Register(const Name: string; LuaFunction: TLuaFunction); overload;
     //Must be last one after object fields
     procedure Register(const Table: string; AObject: TLuaObject); overload;
+    //Set a method into the table that is just below the top of the stack (no self table injected); used for metamethods
+    procedure RegisterMeta(const Name: string; Method: TLuaMethod); overload;
 
     procedure RegisterTable(Table: string);
 
@@ -187,16 +189,28 @@ begin
   //end table
 end;
 
-procedure lua_register_table_method(L: Plua_State; table: string; Name: string; obj: TObject; method: TLuaMethod);
+procedure lua_register_table_method(L: Plua_State; table: string; Name: string; obj: TObject; method: TLuaMethod; AToMeta: Boolean);
 var
   new: boolean;
 begin
   new := lua_getglobal(L, PChar(table)) = 0; //get table by name
   if new then
     lua_newtable(L);
+  if AToMeta then
+  begin
+    if lua_getmetatable(L, -1) = 0 then
+    begin
+      lua_pop(L, 1);
+      lua_newtable(L);
+      lua_setmetatable(L, -2);
+      lua_getmetatable(L, -1);
+    end;
+  end;
   lua_push_method(L, PChar(Name), method);
 
-  if new then
+  if AToMeta then
+    lua_pop(L, 2) //pop table and metatable from stack
+  else if new then
     lua_setglobal(L, PChar(table))
   else
     lua_pop(L, 1); //pop table from stack
@@ -474,10 +488,14 @@ begin
   lua_setfield(Self, -2, PUTF8Char(Name));
 end;
 
-procedure TLuaHelper.Register(const Table, Name: string; AObject: TObject;
-  Method: TLuaMethod);
+procedure TLuaHelper.Register(const Table, Name: string; AObject: TObject; Method: TLuaMethod; AToMeta: Boolean);
 begin
-  lua_register_table_method(Self, Table, Name, AObject, Method);
+  lua_register_table_method(Self, Table, Name, AObject, Method, AToMeta);
+end;
+
+procedure TLuaHelper.RegisterMeta(const Name: string; Method: TLuaMethod);
+begin
+  lua_push_method(Self, Name, Method);
 end;
 
 procedure TLuaHelper.Register(const Name: string; LuaFunction: TLuaFunction);
