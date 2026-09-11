@@ -103,7 +103,7 @@ type
     RunFile: string;//that to run in script
     Console: TTyroConsole;
     Graphic: TTyroCanvas;
-    Sprites: TSpriteStore;
+    Sprites: TSprites;
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
     procedure Stop; //and wait
@@ -274,7 +274,7 @@ begin
   Console.Visible := False;
   Console.Focused := True;
   Console.OnInput := ConsoleInput;
-  Sprites := TSpriteStore.Create;
+  Sprites := TSprites.Create;
   Commands := TConsoleCommands.Create();
   RegisterCommands;
 end;

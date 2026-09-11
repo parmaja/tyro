@@ -7,7 +7,7 @@ unit TyroSprites;
 interface
 
 uses
-  Classes, SysUtils, SyncObjs,
+  Classes, SysUtils, SyncObjs, Generics.Collections,
   RayLib, RayClasses,
   TyroScripts, TyroClasses;
 
@@ -19,6 +19,7 @@ type
   { TSpriteRecord }
 
   TSpriteRecord = record
+    Handle: Integer;
     Texture: TTexture2D;
     Valid: boolean;
     Name: string;
@@ -32,10 +33,11 @@ type
 
   { TSpriteStore }
 
-  TSpriteStore = class
+  //TODO convert to use TDictionary<Integer, TSpriteRecord>
+  TSprites = class
   private
     FLock: TCriticalSection;
-    FItems: array[0..cSpriteMax - 1] of TSpriteRecord;
+    FItems: array[0..cSpriteMax - 1] of TSpriteRecord; //TODO remove this
     FCount: integer;
     function GetCount: integer;
   public
@@ -84,14 +86,14 @@ type
 
   TDrawSpriteObject = class(TDrawObject)
   private
-    FSpriteStore: TSpriteStore;
+    FSpriteStore: TSprites;
     fHandle: integer;
     fX, fY: single;
     fAngle: single;
     fScale: single;
     fTint: TColor;
   public
-    constructor Create(ASpriteStore: TSpriteStore; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
+    constructor Create(ASpriteStore: TSprites; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
     procedure DoExecute; override;
   end;
 
@@ -100,9 +102,9 @@ implementation
 uses
   TyroEngines;
 
-{ TSpriteStore }
+{ TSprites }
 
-constructor TSpriteStore.Create;
+constructor TSprites.Create;
 var
   i: integer;
 begin
@@ -121,7 +123,7 @@ begin
   end;
 end;
 
-destructor TSpriteStore.Destroy;
+destructor TSprites.Destroy;
 var
   i: integer;
 begin
@@ -132,12 +134,12 @@ begin
   inherited;
 end;
 
-function TSpriteStore.GetCount: integer;
+function TSprites.GetCount: integer;
 begin
   Result := FCount;
 end;
 
-function TSpriteStore.AddTexture(ATexture: TTexture2D; const AName: string): integer;
+function TSprites.AddTexture(ATexture: TTexture2D; const AName: string): integer;
 var
   i: integer;
 begin
@@ -167,7 +169,7 @@ begin
   end;
 end;
 
-function TSpriteStore.IsValid(Handle: integer): boolean;
+function TSprites.IsValid(Handle: integer): boolean;
 begin
   FLock.Enter;
   try
@@ -177,7 +179,7 @@ begin
   end;
 end;
 
-function TSpriteStore.GetTexture(Handle: integer): TTexture2D;
+function TSprites.GetTexture(Handle: integer): TTexture2D;
 begin
   FLock.Enter;
   try
@@ -190,7 +192,7 @@ begin
   end;
 end;
 
-procedure TSpriteStore.SetPosition(Handle: integer; X, Y: single);
+procedure TSprites.SetPosition(Handle: integer; X, Y: single);
 begin
   FLock.Enter;
   try
@@ -204,7 +206,7 @@ begin
   end;
 end;
 
-procedure TSpriteStore.SetAngle(Handle: integer; Angle: single);
+procedure TSprites.SetAngle(Handle: integer; Angle: single);
 begin
   FLock.Enter;
   try
@@ -215,7 +217,7 @@ begin
   end;
 end;
 
-procedure TSpriteStore.SetScale(Handle: integer; Scale: single);
+procedure TSprites.SetScale(Handle: integer; Scale: single);
 begin
   FLock.Enter;
   try
@@ -226,7 +228,7 @@ begin
   end;
 end;
 
-procedure TSpriteStore.SetVisible(Handle: integer; AVisible: boolean);
+procedure TSprites.SetVisible(Handle: integer; AVisible: boolean);
 begin
   FLock.Enter;
   try
@@ -237,7 +239,7 @@ begin
   end;
 end;
 
-function TSpriteStore.GetX(Handle: integer): single;
+function TSprites.GetX(Handle: integer): single;
 begin
   FLock.Enter;
   try
@@ -250,7 +252,7 @@ begin
   end;
 end;
 
-function TSpriteStore.GetY(Handle: integer): single;
+function TSprites.GetY(Handle: integer): single;
 begin
   FLock.Enter;
   try
@@ -263,7 +265,7 @@ begin
   end;
 end;
 
-function TSpriteStore.GetAngle(Handle: integer): single;
+function TSprites.GetAngle(Handle: integer): single;
 begin
   FLock.Enter;
   try
@@ -276,7 +278,7 @@ begin
   end;
 end;
 
-function TSpriteStore.GetScale(Handle: integer): single;
+function TSprites.GetScale(Handle: integer): single;
 begin
   FLock.Enter;
   try
@@ -289,7 +291,7 @@ begin
   end;
 end;
 
-function TSpriteStore.GetVisible(Handle: integer): boolean;
+function TSprites.GetVisible(Handle: integer): boolean;
 begin
   FLock.Enter;
   try
@@ -302,7 +304,7 @@ begin
   end;
 end;
 
-function TSpriteStore.GetWidth(Handle: integer): integer;
+function TSprites.GetWidth(Handle: integer): integer;
 begin
   FLock.Enter;
   try
@@ -315,7 +317,7 @@ begin
   end;
 end;
 
-function TSpriteStore.GetHeight(Handle: integer): integer;
+function TSprites.GetHeight(Handle: integer): integer;
 begin
   FLock.Enter;
   try
@@ -328,7 +330,7 @@ begin
   end;
 end;
 
-function TSpriteStore.FindByName(const AName: string): integer;
+function TSprites.FindByName(const AName: string): integer;
 var
   i: integer;
 begin
@@ -346,7 +348,7 @@ begin
   end;
 end;
 
-procedure TSpriteStore.DrawAll;
+procedure TSprites.DrawAll;
 var
   i: integer;
   Rec: TTexture2D;
@@ -372,7 +374,7 @@ begin
   end;
 end;
 
-procedure TSpriteStore.DrawOne(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
+procedure TSprites.DrawOne(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
 var
   Rec: TTexture2D;
   Pos: TVector2;
@@ -435,7 +437,7 @@ end;
 
 { TDrawSpriteObject }
 
-constructor TDrawSpriteObject.Create(ASpriteStore: TSpriteStore; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
+constructor TDrawSpriteObject.Create(ASpriteStore: TSprites; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
 begin
   inherited Create(ACanvas);
   FSpriteStore := ASpriteStore;

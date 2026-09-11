@@ -23,6 +23,10 @@ uses
   Classes, SysUtils, LuaAPI, Rtti, mnLogs;
 
 type
+  { Re-exported Lua types so callers can use LuaClasses without depending on LuaAPI directly }
+  Plua_State = LuaAPI.Plua_State;
+  lua_CFunction = LuaAPI.lua_CFunction;
+  lua_Debug = LuaAPI.lua_Debug;
 
   { TLuaObject }
 
@@ -63,6 +67,7 @@ type
     function AsInteger: Integer;
     function AsNumber: Double;
     function AsString: string;
+    function AsBoolean: Boolean;
   end;
 
   TLuaMethod = function(L: Plua_State): integer of object cdecl;
@@ -113,8 +118,36 @@ type
     //Set a method into the table that is just below the top of the stack (no self table injected); used for metamethods
     procedure RegisterMeta(const Name: string; Method: TLuaMethod); overload;
 
-    procedure RegisterTable(Table: string);
+    //Low-level stack access used by the C callbacks; keeps the callers independent of LuaAPI
+    function ToString(Index: Integer): string;
+    function ToInteger(Index: Integer): Int64;
+    function ToNumber(Index: Integer): Double;
+    function ToBoolean(Index: Integer): Boolean;
 
+    function IsInteger(Index: Integer): Boolean;
+    function IsNumber(Index: Integer): Boolean;
+    function IsString(Index: Integer): Boolean;
+
+    procedure PushBoolean(Value: Boolean);
+    procedure PushInteger(Value: Int64);
+    procedure PushNumber(Value: Double);
+    procedure PushString(const Value: string);
+    procedure PushNil;
+    procedure PushValue(Index: Integer);
+
+    procedure Pop(N: Integer);
+    procedure NewTable;
+
+    procedure GetField(Index: Integer; const Name: string);
+    procedure SetField(Index: Integer; const Name: string);
+    procedure SetMetaTable(Index: Integer);
+    procedure Remove(Index: Integer);
+
+    function GetStack(Level: Integer; var AInfo: lua_Debug): Boolean;
+    function GetInfo(const What: string; var AInfo: lua_Debug): Boolean;
+
+    procedure RegisterTable(Table: string);
+    //Run
     function RunString(Script: string; out Output: string): Boolean;
 
     procedure BeginTable;
@@ -412,6 +445,11 @@ begin
   Result := lua_tostring(State, Index);
 end;
 
+function TLuaParam.AsBoolean: Boolean;
+begin
+  Result := lua_toboolean(State, Index);
+end;
+
 { TLuaHelper }
 
 function TLuaHelper.GetParams(Index: Integer): TLuaParam;
@@ -496,6 +534,111 @@ end;
 procedure TLuaHelper.RegisterMeta(const Name: string; Method: TLuaMethod);
 begin
   lua_push_method(Self, Name, Method);
+end;
+
+function TLuaHelper.ToString(Index: Integer): string;
+begin
+  Result := lua_tostring(Self, Index);
+end;
+
+function TLuaHelper.ToInteger(Index: Integer): Int64;
+begin
+  Result := lua_tointeger(Self, Index);
+end;
+
+function TLuaHelper.ToNumber(Index: Integer): Double;
+begin
+  Result := lua_tonumber(Self, Index);
+end;
+
+function TLuaHelper.ToBoolean(Index: Integer): Boolean;
+begin
+  Result := lua_toboolean(Self, Index);
+end;
+
+function TLuaHelper.IsInteger(Index: Integer): Boolean;
+begin
+  Result := lua_isinteger(Self, Index);
+end;
+
+function TLuaHelper.IsNumber(Index: Integer): Boolean;
+begin
+  Result := lua_isnumber(Self, Index);
+end;
+
+function TLuaHelper.IsString(Index: Integer): Boolean;
+begin
+  Result := lua_isstring(Self, Index);
+end;
+
+procedure TLuaHelper.PushBoolean(Value: Boolean);
+begin
+  lua_pushboolean(Self, Value);
+end;
+
+procedure TLuaHelper.PushInteger(Value: Int64);
+begin
+  lua_pushinteger(Self, Value);
+end;
+
+procedure TLuaHelper.PushNumber(Value: Double);
+begin
+  lua_pushnumber(Self, Value);
+end;
+
+procedure TLuaHelper.PushString(const Value: string);
+begin
+  lua_pushstring(Self, PUTF8Char(Value));
+end;
+
+procedure TLuaHelper.PushNil;
+begin
+  lua_pushnil(Self);
+end;
+
+procedure TLuaHelper.PushValue(Index: Integer);
+begin
+  lua_pushvalue(Self, Index);
+end;
+
+procedure TLuaHelper.Pop(N: Integer);
+begin
+  lua_pop(Self, N);
+end;
+
+procedure TLuaHelper.NewTable;
+begin
+  lua_newtable(Self);
+end;
+
+procedure TLuaHelper.GetField(Index: Integer; const Name: string);
+begin
+  lua_getfield(Self, Index, PUTF8Char(Name));
+end;
+
+procedure TLuaHelper.SetField(Index: Integer; const Name: string);
+begin
+  lua_setfield(Self, Index, PUTF8Char(Name));
+end;
+
+procedure TLuaHelper.SetMetaTable(Index: Integer);
+begin
+  lua_setmetatable(Self, Index);
+end;
+
+procedure TLuaHelper.Remove(Index: Integer);
+begin
+  lua_remove(Self, Index);
+end;
+
+function TLuaHelper.GetStack(Level: Integer; var AInfo: lua_Debug): Boolean;
+begin
+  Result := lua_getstack(Self, Level, AInfo) > 0;
+end;
+
+function TLuaHelper.GetInfo(const What: string; var AInfo: lua_Debug): Boolean;
+begin
+  Result := lua_getinfo(Self, PUTF8Char(What), AInfo) > 0;
 end;
 
 procedure TLuaHelper.Register(const Name: string; LuaFunction: TLuaFunction);
