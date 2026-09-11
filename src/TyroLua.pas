@@ -138,6 +138,7 @@ type
   public
     function RegisterSprite(AHandle: Integer): Integer;
     function Load_func(L: Plua_State): integer; cdecl;
+    function LoadScript_func(L: Plua_State): integer; cdecl;
     function Show_func(L: Plua_State): integer; cdecl;
     function Hide_func(L: Plua_State): integer; cdecl;
     function Move_func(L: Plua_State): integer; cdecl;
@@ -154,7 +155,54 @@ type
     function Call_func(L: Plua_State): integer; cdecl;
   end;
 
-  { TLuaCollision }
+{ TLuaSpriteScript }
+
+  // One Lua state per sprite (a TLua recording). Routed through handler
+  // globals that the main thread polls: on_update(), on_draw(), on_collide(other, state).
+  // When attached, the file is compiled and Run()ed once, so its top-level code
+  // runs immediately; the handlers themselves are plain functions we look up each tick.
+  TLuaSpriteScript = class(TInterfacedObject, ISpriteScript)
+  private
+    FScript: TLuaScript;
+    FHandle: Integer;
+    FLua: TLua;
+    FFileName: string;
+    FSprite: TLuaSprite; // proxy object whose getter/setter back the self/other tables
+    procedure DoError(S: string; const AHandler: string);
+    procedure BuildSelf; // registers the self global table (properties read/write main sprite)
+    procedure BuildGlobals; // global helpers shared from the main script state (time, rand, println)
+    procedure BuildColors; // registers the colors global table
+    procedure BuildDraw; // registers the draw global table
+    procedure CallHandler(const AName: string; AArgs: Integer); // pcall a global handler (args already on stack), ignore if not a function
+  public
+    constructor Create(AScript: TLuaScript; AHandle: Integer; const AFileName: string);
+    destructor Destroy; override;
+    function Load: Boolean; // load file and run top-level code once
+    procedure Update; // dispatch on_update()
+    procedure Draw;   // dispatch on_draw()
+    procedure OnCollide(AOtherHandle: Integer; const AState: string); // dispatch on_collide(other, state)
+    // draw.* helpers for on_draw; safe only while a frame is active (main thread)
+    function Circle_func(L: Plua_State): integer; cdecl;
+    function Rectangle_func(L: Plua_State): integer; cdecl;
+    function Line_func(L: Plua_State): integer; cdecl;
+    function Text_func(L: Plua_State): integer; cdecl;
+    property FileName: string read FFileName;
+  end;
+
+  { Loads a per-sprite script on the main thread (engine canvas queue), then
+    attaches the ISpriteScript to the sprite. }
+  TLoadSpriteScriptObject = class(TQueueObject)
+  private
+    FScript: TLuaScript;
+    FHandle: Integer;
+    FFileName: string;
+  public
+    constructor Create(AScript: TLuaScript; AHandle: Integer; const AFileName: string);
+    procedure DoExecute; override;
+  end;
+
+
+{ TLuaCollision }
 
   TLuaCollision = class(TTyroLuaObject)
   private
@@ -1033,6 +1081,7 @@ begin
 
     //methods receive the sprite table injected as argument 1
     Lua.State.Register('load', @Load_func);
+    Lua.State.Register('loadscript', @LoadScript_func);
     Lua.State.Register('show', @Show_func);
     Lua.State.Register('hide', @Hide_func);
     Lua.State.Register('move', @Move_func);
@@ -1116,11 +1165,14 @@ end;
 
 function TLuaSprite.Load_func(L: Plua_State): integer; cdecl;
 var
-  aFile, aName: string;
+  aFile, aName, aScriptFile: string;
   handle: integer;
   LoadObj: TLoadSpriteObject;
+  ScriptObj: TLoadSpriteScriptObject;
 begin
   aFile := Resources.GuessFileName(L.ToString(2));
+  if L.Count >= 3 then
+    aScriptFile := L.ToString(3);
   L.GetField(1, '__name');
   if L.IsString(-1) then
     aName := L.ToString(-1)
@@ -1139,11 +1191,34 @@ begin
       // re-index the sprite table under its real handle (it was keyed as unloaded)
       L.PushValue(1);
       lua_rawseti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + handle);
+      // optional per-sprite script; compiled on the main thread by the engine queue
+      if aScriptFile <> '' then
+      begin
+        ScriptObj := TLoadSpriteScriptObject.Create(Script, handle, aScriptFile);
+        FScript.AddQueueObject(ScriptObj);
+      end;
     end
     else
       Script.DoError('Sprite not loaded: ' + aFile);
   finally
     LoadObj.Free;
+  end;
+  Result := 0;
+end;
+
+// sprite:loadscript("file.ls") -> compile & attach a per-sprite script (main thread)
+function TLuaSprite.LoadScript_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+  aScriptFile: string;
+  ScriptObj: TLoadSpriteScriptObject;
+begin
+  handle := GetSpriteHandle(L, 1);
+  aScriptFile := L.ToString(2);
+  if (handle > cSpriteInvalid) and (aScriptFile <> '') then
+  begin
+    ScriptObj := TLoadSpriteScriptObject.Create(Script, handle, aScriptFile);
+    FScript.AddQueueObject(ScriptObj);
   end;
   Result := 0;
 end;
@@ -1362,6 +1437,255 @@ begin
   end;
 end;
 
+{ TLuaSpriteScript }
+
+// Callback trampoline: Lua C-closure bound to an object method. Mirrors the
+// internal one in LuaClasses, used to back the self/other sprite tables.
+function sprite_script_method_callback(L: Plua_State): integer; cdecl;
+var
+  Method: TMethod;
+begin
+  Method.Data := lua_topointer(L, lua_upvalueindex(1));
+  Method.Code := lua_topointer(L, lua_upvalueindex(2));
+  if Method.Data = nil then
+    raise Exception.Create('Lua: cannot execute sprite script method!');
+  Result := TLuaMethod(Method)(L);
+end;
+
+// Builds a sprite table (like Sprites.new returns) bound to AHandle and leaves
+// it on the Lua stack. Properties route through the proxy TLuaSprite getter/
+// setter, so self.x / self.kind / ... work and unknown keys are raw-stored.
+procedure PushSpriteTable(L: Plua_State; AHandle: Integer; ASprite: TLuaSprite);
+begin
+  L.NewTable; //[t]
+  L.PushInteger(AHandle);
+  L.SetField(-2, '__handle'); //t.__handle = AHandle -> [t]
+  L.PushString(Main.Sprites.GetName(AHandle));
+  L.SetField(-2, '__name'); //t.__name = sprite name -> [t]
+  L.NewTable; //[t, meta]
+  lua_pushlightuserdata(L, TMethod(@ASprite.__getter).Data);
+  lua_pushlightuserdata(L, TMethod(@ASprite.__getter).Code);
+  lua_pushcclosure(L, @sprite_script_method_callback, 2);
+  lua_setfield(L, -2, '__index'); //[t, meta]
+  lua_pushlightuserdata(L, TMethod(@ASprite.__setter).Data);
+  lua_pushlightuserdata(L, TMethod(@ASprite.__setter).Code);
+  lua_pushcclosure(L, @sprite_script_method_callback, 2);
+  lua_setfield(L, -2, '__newindex'); //[t, meta]
+  lua_setmetatable(L, -2); //t.metatable = meta -> [t]
+end;
+
+// draw.* color argument: an integer paletted color or a color name
+function ColorValue(L: Plua_State; Idx: Integer): TColor;
+begin
+  if L.IsString(Idx) then
+    Result := StrToColor(L.ToString(Idx))
+  else
+    Result := IntToColor(L.ToInteger(Idx));
+end;
+
+constructor TLuaSpriteScript.Create(AScript: TLuaScript; AHandle: Integer; const AFileName: string);
+begin
+  inherited Create;
+  FScript := AScript;
+  FHandle := AHandle;
+  FFileName := AFileName;
+  FSprite := TLuaSprite.Create(AScript); // proxy; only its property getter/setter are used
+  FLua.Init;
+  BuildSelf;
+  BuildGlobals;
+  BuildColors;
+  BuildDraw;
+end;
+
+destructor TLuaSpriteScript.Destroy;
+begin
+  FLua.Close;
+  FSprite.Free;
+  inherited;
+end;
+
+procedure TLuaSpriteScript.DoError(S: string; const AHandler: string);
+begin
+  FScript.DoError('[' + FFileName + '] ' + AHandler + ': ' + S);
+end;
+
+function TLuaSpriteScript.Load: Boolean;
+var
+  Msg: string;
+begin
+  Result := False;
+  if FFileName = '' then
+    Exit;
+  FFileName := Resources.GuessFileName(FFileName);
+  if luaL_dofile(FLua.State, PUTF8Char(FFileName)) <> 0 then
+  begin
+    Msg := FLua.State.ToString(-1);
+    FLua.State.Pop(1);
+    DoError(Msg, 'load');
+  end
+  else
+    Result := True;
+end;
+
+procedure TLuaSpriteScript.BuildSelf;
+begin
+  PushSpriteTable(FLua.State, FHandle, FSprite); //[self]
+  lua_setglobal(FLua.State, 'self'); //[]
+end;
+
+procedure TLuaSpriteScript.BuildGlobals;
+begin
+  // Reuse the main script's globals so per-sprite states can call the same
+  // helpers (the bound FScript outlives this state).
+  FLua.State.RegisterGlobal('time', @FScript.TotalTime_func);
+  FLua.State.RegisterGlobal('rand', @FScript.RandomValue_func);
+  FLua.State.RegisterGlobal('println', @FScript.Console.PrintLn_func);
+end;
+
+procedure TLuaSpriteScript.BuildColors;
+var
+  i: integer;
+begin
+  FLua.State.BeginTable;
+  for i := 0 to Length(FScript.Colors.Colors) - 1 do
+    FLua.State.Register(FScript.Colors.Colors[i].Name, ColorToInt(FScript.Colors.Colors[i].Color));
+  FLua.State.EndTable('colors', FScript.Colors);
+end;
+
+procedure TLuaSpriteScript.BuildDraw;
+begin
+  FLua.State.RegisterTable('draw');
+  FLua.State.Register('draw', 'circle', Self, @Circle_func);
+  FLua.State.Register('draw', 'rectangle', Self, @Rectangle_func);
+  FLua.State.Register('draw', 'line', Self, @Line_func);
+  FLua.State.Register('draw', 'text', Self, @Text_func);
+end;
+
+// Look up the global handler AName and pcall it. The caller has pushed the
+// arguments (AArgs of them) below the handler position; an absent/ non-
+// function handler just drains the stack and is ignored.
+procedure TLuaSpriteScript.CallHandler(const AName: string; AArgs: Integer);
+var
+  Msg: string;
+begin
+  lua_getglobal(FLua.State, PUTF8Char(AName)); //[args..., func]
+  if not lua_isfunction(FLua.State, -1) then
+  begin
+    FLua.State.Pop(1 + AArgs); // discard the function and the caller args
+    Exit;
+  end;
+  if AArgs > 0 then
+    lua_insert(FLua.State, 1); //[func, args...]
+  if lua_pcall(FLua.State, AArgs, 0, 0) <> 0 then
+  begin
+    Msg := FLua.State.ToString(-1);
+    FLua.State.Pop(1);
+    DoError(Msg, AName);
+  end;
+end;
+
+procedure TLuaSpriteScript.Update;
+begin
+  CallHandler('on_update', 0);
+end;
+
+procedure TLuaSpriteScript.Draw;
+begin
+  CallHandler('on_draw', 0);
+end;
+
+procedure TLuaSpriteScript.OnCollide(AOtherHandle: Integer; const AState: string);
+begin
+  PushSpriteTable(FLua.State, AOtherHandle, FSprite); //[other]
+  FLua.State.PushString(AState); //[other, state]
+  CallHandler('on_collide', 2);
+end;
+
+// draw.circle(x, y, radius, color, fill?) - sprite/world coordinates
+function TLuaSpriteScript.Circle_func(L: Plua_State): integer; cdecl;
+var
+  x, y, r: single;
+  f: boolean;
+begin
+  x := L.ToNumber(1);
+  y := L.ToNumber(2);
+  r := L.ToNumber(3);
+  if L.Count >= 5 then
+    f := L.ToBoolean(5)
+  else
+    f := True;
+  if f then
+    RayLib.DrawCircle(round(x), round(y), r, ColorValue(L, 4))
+  else
+    RayLib.DrawCircleLines(round(x), round(y), r, ColorValue(L, 4));
+  Result := 0;
+end;
+
+// draw.rectangle(x, y, w, h, color, fill?) - sprite/world coordinates
+function TLuaSpriteScript.Rectangle_func(L: Plua_State): integer; cdecl;
+var
+  x, y, w, h: integer;
+  f: boolean;
+begin
+  x := round(L.ToNumber(1));
+  y := round(L.ToNumber(2));
+  w := round(L.ToNumber(3));
+  h := round(L.ToNumber(4));
+  if L.Count >= 6 then
+    f := L.ToBoolean(6)
+  else
+    f := True;
+  if f then
+    RayLib.DrawRectangle(x, y, w, h, ColorValue(L, 5))
+  else
+    RayLib.DrawRectangleLinesEx(RectangleOf(x, y, w, h), 1, ColorValue(L, 5));
+  Result := 0;
+end;
+
+// draw.line(x1, y1, x2, y2, color)
+function TLuaSpriteScript.Line_func(L: Plua_State): integer; cdecl;
+begin
+  RayLib.DrawLineEx(Vector2Of(L.ToNumber(1), L.ToNumber(2)), Vector2Of(L.ToNumber(3), L.ToNumber(4)), 1, ColorValue(L, 5));
+  Result := 0;
+end;
+
+// draw.text(x, y, text, color)
+function TLuaSpriteScript.Text_func(L: Plua_State): integer; cdecl;
+begin
+  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(L.ToString(3)), Vector2Of(L.ToNumber(1), L.ToNumber(2)), Resources.Font.Height, 0, ColorValue(L, 4));
+  Result := 0;
+end;
+
+{ TLoadSpriteScriptObject }
+
+constructor TLoadSpriteScriptObject.Create(AScript: TLuaScript; AHandle: Integer; const AFileName: string);
+begin
+  inherited Create;
+  FScript := AScript;
+  FHandle := AHandle;
+  FFileName := AFileName;
+end;
+
+procedure TLoadSpriteScriptObject.DoExecute;
+var
+  Scr: TLuaSpriteScript;
+begin
+  if FHandle <= cSpriteInvalid then
+    Exit;
+  Scr := TLuaSpriteScript.Create(FScript, FHandle, FFileName);
+  try
+    if Scr.Load then
+      Main.Sprites.SetScript(FHandle, Scr)
+    else
+      Scr.Free;
+  except
+    on E: Exception do
+    begin
+      Scr.Free;
+      FScript.DoError('Sprite script failed: ' + FFileName + ': ' + E.ClassName + ': ' + E.Message);
+    end;
+  end;
+end;
 { TLuaCollision }
 
 function TLuaCollision.Getter(L: Plua_State): integer;

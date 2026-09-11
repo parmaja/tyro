@@ -343,6 +343,12 @@ begin
 end;
 
 procedure TTyroEngine.Update;
+var
+  Scripted: array[0..1023] of TCollisionEvent;
+  Enough: Integer;
+  I: Integer;
+  ev: TCollisionEvent;
+  AState: string;
 begin
   inherited;
   try
@@ -355,6 +361,34 @@ begin
       begin
         WriteLn('EX-STEP: ' + E.ClassName + ': ' + E.Message + ' @' + IntToHex(NativeUInt(ExceptAddr), 16));
       end;
+      raise;
+    end;
+  end;
+  // Fire per-sprite on_collide handlers (main thread) for events touching scripted sprites
+  try
+    if Physics <> nil then
+    begin
+      Physics.SplitScriptedEvents;
+      Physics.PollScripted(Scripted, Enough);
+      for I := 0 to Enough - 1 do
+      begin
+        ev := Scripted[I];
+        if ev.State = csBegin then
+          AState := 'enter'
+        else
+          AState := 'leave';
+        if Sprites.HasScript(ev.HandleA) then
+          Sprites.GetScript(ev.HandleA).OnCollide(ev.HandleB, AState);
+        if Sprites.HasScript(ev.HandleB) then
+          Sprites.GetScript(ev.HandleB).OnCollide(ev.HandleA, AState);
+      end;
+    end;
+    if Sprites <> nil then
+      Sprites.UpdateScripts;
+  except
+    on E: Exception do
+    begin
+      if IsConsole then WriteLn('EX-SCRIPT: ' + E.ClassName + ': ' + E.Message);
       raise;
     end;
   end;

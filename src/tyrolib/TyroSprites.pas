@@ -38,6 +38,13 @@ type
     Radius: single;
   end;
 
+  { Per-sprite script hook (implemented by TyroLua; run on the main thread) }
+  ISpriteScript = interface
+    procedure Update;
+    procedure Draw;
+    procedure OnCollide(AOtherHandle: Integer; const AState: string);
+  end;
+
   { TSprite }
 
   TSprite = class(TObject)
@@ -56,7 +63,9 @@ type
     Friction: single;
     Bouncy: single;
     Radius: single;
+    Script: ISpriteScript;
     constructor Create(AHandle: Integer; ATexture: TTexture2D; const AName: string);
+    destructor Destroy; override;
   end;
 
   { TSpriteStore }
@@ -87,6 +96,7 @@ type
     function GetVisible(Handle: integer): boolean;
     function GetWidth(Handle: integer): integer;
     function GetHeight(Handle: integer): integer;
+    function GetName(Handle: integer): string;
 
     // Physics configuration (safely callable from the script thread)
     procedure SetCollide(Handle: integer; ACollide: boolean);
@@ -105,6 +115,14 @@ type
     // Collects handles of colliding sprites (used by TPhysics before stepping)
     procedure GetCollideList(var AHandles: TArray<Integer>);
     function GetPhysicsState(Handle: integer; out AState: TSpritePhysicsState): boolean;
+
+    // Per-sprite Lua script (safe from any thread; callbacks fire on the main thread)
+    procedure SetScript(Handle: integer; AScript: ISpriteScript);
+    function GetScript(Handle: integer): ISpriteScript;
+    function HasScript(Handle: integer): boolean;
+
+    // Update all scripted sprites (called on the main thread after physics step)
+    procedure UpdateScripts;
 
     // Draw all valid sprites (called in the engine's draw loop)
     procedure DrawAll;
@@ -169,6 +187,13 @@ begin
   Friction := 0.5;
   Bouncy := 0.0;
   Radius := 0.0;
+  Script := nil;
+end;
+
+destructor TSprite.Destroy;
+begin
+  Script := nil;
+  inherited;
 end;
 
 { TSprites }
@@ -202,6 +227,20 @@ end;
 function TSprites.GetItems(Index: Integer): TSprite;
 begin
   Result := FItems[Index];
+end;
+
+function TSprites.GetName(Handle: integer): string;
+var
+  Sprite: TSprite;
+begin
+  Result := '';
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Name;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TSprites.Add(ATexture: TTexture2D; const AName: string): integer;
@@ -648,23 +687,90 @@ begin
   end;
 end;
 
+procedure TSprites.SetScript(Handle: integer; AScript: ISpriteScript);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Script := AScript;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetScript(Handle: integer): ISpriteScript;
+var
+  Sprite: TSprite;
+begin
+  Result := nil;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Script;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.HasScript(Handle: integer): boolean;
+begin
+  Result := GetScript(Handle) <> nil;
+end;
+
+procedure TSprites.UpdateScripts;
+var
+  Sprite: TSprite;
+  Scripts: TList<ISpriteScript>;
+  I: Integer;
+begin
+  Scripts := TList<ISpriteScript>.Create;
+  try
+    FLock.Enter;
+    try
+      for Sprite in FItems.Values do
+        if Sprite.Script <> nil then
+          Scripts.Add(Sprite.Script);
+    finally
+      FLock.Leave;
+    end;
+    for I := 0 to Scripts.Count - 1 do
+      Scripts[I].Update;
+  finally
+    Scripts.Free;
+  end;
+end;
+
 procedure TSprites.DrawAll;
 var
   Sprite: TSprite;
   Pos: TVector2;
+  Scripts: TList<ISpriteScript>;
+  I: Integer;
 begin
-  FLock.Enter;
+  Scripts := TList<ISpriteScript>.Create;
   try
-    for Sprite in FItems.Values do
-    begin
-      if Sprite.Visible and (Sprite.Texture.id > 0) then
+    FLock.Enter;
+    try
+      for Sprite in FItems.Values do
       begin
-        Pos := TVector2.Create(Sprite.X, Sprite.Y);
-        RayLib.DrawTextureEx(Sprite.Texture, Pos, Sprite.Angle, Sprite.Scale, clWhite);
+        if Sprite.Visible and (Sprite.Texture.id > 0) then
+        begin
+          Pos := TVector2.Create(Sprite.X, Sprite.Y);
+          RayLib.DrawTextureEx(Sprite.Texture, Pos, Sprite.Angle, Sprite.Scale, clWhite);
+        end;
+        if Sprite.Visible and (Sprite.Script <> nil) then
+          Scripts.Add(Sprite.Script);
       end;
+    finally
+      FLock.Leave;
     end;
+    // on_draw runs after the texture blit, outside the store lock
+    for I := 0 to Scripts.Count - 1 do
+      Scripts[I].Draw;
   finally
-    FLock.Leave;
+    Scripts.Free;
   end;
 end;
 

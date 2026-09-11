@@ -34,13 +34,16 @@ type
   { TPhysics: Chipmunk2D world, driven by the engine's main thread.
     Sprite config/positions are read from TSprites (thread-safe store).
     Collision events are buffered here and drained by the script thread
-    via Poll() (used by collision.pump in Lua). }
+    via Poll() (used by collision.pump in Lua).
+    Events touching a sprite that owns a Lua script are moved to a separate
+    queue by SplitScriptedEvents (main thread) and fire on_collide directly. }
   TPhysics = class(TObject)
   private
-    FLock: TCriticalSection;        // guards FEvents and gravity request
+    FLock: TCriticalSection;        // guards FEvents, FScriptedEvents and gravity request
     FSpace: cpSpace;
     FSprites: TSprites;
     FEvents: TList<TCollisionEvent>;
+    FScriptedEvents: TList<TCollisionEvent>;
     FHandleToBody: TDictionary<Integer, cpBody>;
     FHandleToShape: TDictionary<Integer, cpShape>;
     FApplied: TDictionary<Integer, TBodyConfig>;
@@ -67,6 +70,11 @@ type
     function GetGravityY: cpFloat;
     // Main thread, called every frame before drawing
     procedure Step(ADt: Single);
+    // Main thread, after Step: move events touching a scripted sprite out of
+    // the legacy buffer so on_collide can fire without double-dispatch
+    procedure SplitScriptedEvents;
+    // Main thread: drain scripted collision events into AEvents (up to capacity)
+    procedure PollScripted(var AEvents: array of TCollisionEvent; out ACount: Integer);
     // Script thread: drain pending collision events into AEvents (up to its capacity)
     procedure Poll(var AEvents: array of TCollisionEvent; out ACount: Integer);
     function BodyCount: Integer;
@@ -117,6 +125,7 @@ begin
   FSprites := ASprites;
   FLock := TCriticalSection.Create;
   FEvents := TList<TCollisionEvent>.Create;
+  FScriptedEvents := TList<TCollisionEvent>.Create;
   FHandleToBody := TDictionary<Integer, cpBody>.Create;
   FHandleToShape := TDictionary<Integer, cpShape>.Create;
   FApplied := TDictionary<Integer, TBodyConfig>.Create;
@@ -132,7 +141,7 @@ begin
       cpSpaceSetIterations(FSpace, 10);
       cpSpaceSetDamping(FSpace, 1.0);
       cpSpaceSetCollisionSlop(FSpace, 0.1);
-      cpSpaceSetSleepTimeThreshold(FSpace, 0.0); // keep all bodies active for reliable onCollide
+      cpSpaceSetSleepTimeThreshold(FSpace, Infinity); // never sleep; keep all bodies active for reliable onCollide
       Handler := cpSpaceAddDefaultCollisionHandler(FSpace);
       if Handler <> nil then
       begin
@@ -156,6 +165,7 @@ begin
   if FSpace <> nil then
     RemoveAll;
   FreeAndNil(FEvents);
+  FreeAndNil(FScriptedEvents);
   FreeAndNil(FHandleToBody);
   FreeAndNil(FHandleToShape);
   FreeAndNil(FApplied);
@@ -336,11 +346,25 @@ begin
   if (e.HandleA <= 0) or (e.HandleB <= 0) then
     Exit;
   e.State := AState;
-  FLock.Enter;
-  try
-    FEvents.Add(e);
-  finally
-    FLock.Leave;
+  // Route events touching a scripted sprite straight to the scripted queue
+  // so threads draining FEvents (collision.pump) can not steal them.
+  if FSprites.HasScript(e.HandleA) or FSprites.HasScript(e.HandleB) then
+  begin
+    FLock.Enter;
+    try
+      FScriptedEvents.Add(e);
+    finally
+      FLock.Leave;
+    end;
+  end
+  else
+  begin
+    FLock.Enter;
+    try
+      FEvents.Add(e);
+    finally
+      FLock.Leave;
+    end;
   end;
 end;
 
@@ -492,6 +516,51 @@ begin
   finally
     Dyn.Free;
     Keys.Free;
+  end;
+end;
+
+procedure TPhysics.SplitScriptedEvents;
+var
+  I: Integer;
+  ev: TCollisionEvent;
+begin
+  FLock.Enter;
+  try
+    I := 0;
+    while I < FEvents.Count do
+    begin
+      ev := FEvents[I];
+      if FSprites.HasScript(ev.HandleA) or FSprites.HasScript(ev.HandleB) then
+      begin
+        FScriptedEvents.Add(ev);
+        FEvents.Delete(I);
+      end
+      else
+        Inc(I);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TPhysics.PollScripted(var AEvents: array of TCollisionEvent; out ACount: Integer);
+var
+  I, Max: Integer;
+begin
+  ACount := 0;
+  FLock.Enter;
+  try
+    Max := Length(AEvents);
+    if Max > FScriptedEvents.Count then
+      Max := FScriptedEvents.Count;
+    for I := 0 to Max - 1 do
+    begin
+      AEvents[I] := FScriptedEvents[0];
+      FScriptedEvents.Delete(0);
+    end;
+    ACount := Max;
+  finally
+    FLock.Leave;
   end;
 end;
 
