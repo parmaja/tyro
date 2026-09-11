@@ -1,4 +1,4 @@
-unit TyroSpirits;
+unit TyroSprites;
 {$IFDEF FPC}
 {$mode delphi}
 {$ENDIF}
@@ -12,13 +12,13 @@ uses
   TyroScripts, TyroClasses;
 
 const
-  cSpiritInvalid: Integer = 0;
-  cSpiritMax = 256;
+  cSpriteInvalid: Integer = 0;
+  cSpriteMax = 256;
 
 type
-  { TSpiritRecord }
+  { TSpriteRecord }
 
-  TSpiritRecord = record
+  TSpriteRecord = record
     Texture: TTexture2D;
     Valid: boolean;
     Name: string;
@@ -28,14 +28,14 @@ type
     Scale: single;
     Visible: boolean;
   end;
-  PSpiritRecord = ^TSpiritRecord;
+  PSpriteRecord = ^TSpriteRecord;
 
-  { TSpiritStore }
+  { TSpriteStore }
 
-  TSpiritStore = class
+  TSpriteStore = class
   private
     FLock: TCriticalSection;
-    FItems: array[0..cSpiritMax - 1] of TSpiritRecord;
+    FItems: array[0..cSpriteMax - 1] of TSpriteRecord;
     FCount: integer;
     function GetCount: integer;
   public
@@ -57,16 +57,16 @@ type
     function GetWidth(Handle: integer): integer;
     function GetHeight(Handle: integer): integer;
     function FindByName(const AName: string): integer;
-    // Draw all valid spirits (called in the engine's draw loop)
+    // Draw all valid sprites (called in the engine's draw loop)
     procedure DrawAll;
-    // Draw a single spirit (queued from Lua)
+    // Draw a single sprite (queued from Lua)
     procedure DrawOne(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
     property Count: integer read GetCount;
   end;
 
-  { TLoadSpiritObject }
+  { TLoadSpriteObject }
 
-  TLoadSpiritObject = class(TQueueObject)
+  TLoadSpriteObject = class(TQueueObject)
   private
     FFileName: string;
     FName: string;
@@ -80,18 +80,18 @@ type
     property HandleResult: integer read FHandleResult;
   end;
 
-  { TDrawSpiritObject }
+  { TDrawSpriteObject }
 
-  TDrawSpiritObject = class(TDrawObject)
+  TDrawSpriteObject = class(TDrawObject)
   private
-    FSpiritStore: TSpiritStore;
+    FSpriteStore: TSpriteStore;
     fHandle: integer;
     fX, fY: single;
     fAngle: single;
     fScale: single;
     fTint: TColor;
   public
-    constructor Create(ASpiritStore: TSpiritStore; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
+    constructor Create(ASpriteStore: TSpriteStore; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
     procedure DoExecute; override;
   end;
 
@@ -100,16 +100,16 @@ implementation
 uses
   TyroEngines;
 
-{ TSpiritStore }
+{ TSpriteStore }
 
-constructor TSpiritStore.Create;
+constructor TSpriteStore.Create;
 var
   i: integer;
 begin
   inherited Create;
   FLock := TCriticalSection.Create;
   FCount := 0;
-  for i := 0 to cSpiritMax - 1 do
+  for i := 0 to cSpriteMax - 1 do
   begin
     FItems[i].Valid := False;
     FItems[i].Name := '';
@@ -121,32 +121,32 @@ begin
   end;
 end;
 
-destructor TSpiritStore.Destroy;
+destructor TSpriteStore.Destroy;
 var
   i: integer;
 begin
-  for i := 0 to cSpiritMax - 1 do
+  for i := 0 to cSpriteMax - 1 do
     if FItems[i].Valid then
       RayLib.UnloadTexture(FItems[i].Texture);
   FLock.Free;
   inherited;
 end;
 
-function TSpiritStore.GetCount: integer;
+function TSpriteStore.GetCount: integer;
 begin
   Result := FCount;
 end;
 
-function TSpiritStore.AddTexture(ATexture: TTexture2D; const AName: string): integer;
+function TSpriteStore.AddTexture(ATexture: TTexture2D; const AName: string): integer;
 var
   i: integer;
 begin
-  Result := cSpiritInvalid;
+  Result := cSpriteInvalid;
   FLock.Enter;
   try
     if (ATexture.id > 0) then
     begin
-      for i := 0 to cSpiritMax - 1 do
+      for i := 0 to cSpriteMax - 1 do
         if not FItems[i].Valid then
         begin
           FItems[i].Texture := ATexture;
@@ -167,17 +167,17 @@ begin
   end;
 end;
 
-function TSpiritStore.IsValid(Handle: integer): boolean;
+function TSpriteStore.IsValid(Handle: integer): boolean;
 begin
   FLock.Enter;
   try
-    Result := (Handle > cSpiritInvalid) and (Handle < cSpiritMax) and FItems[Handle].Valid;
+    Result := (Handle > cSpriteInvalid) and (Handle < cSpriteMax) and FItems[Handle].Valid;
   finally
     FLock.Leave;
   end;
 end;
 
-function TSpiritStore.GetTexture(Handle: integer): TTexture2D;
+function TSpriteStore.GetTexture(Handle: integer): TTexture2D;
 begin
   FLock.Enter;
   try
@@ -190,7 +190,7 @@ begin
   end;
 end;
 
-procedure TSpiritStore.SetPosition(Handle: integer; X, Y: single);
+procedure TSpriteStore.SetPosition(Handle: integer; X, Y: single);
 begin
   FLock.Enter;
   try
@@ -204,7 +204,7 @@ begin
   end;
 end;
 
-procedure TSpiritStore.SetAngle(Handle: integer; Angle: single);
+procedure TSpriteStore.SetAngle(Handle: integer; Angle: single);
 begin
   FLock.Enter;
   try
@@ -215,7 +215,7 @@ begin
   end;
 end;
 
-procedure TSpiritStore.SetScale(Handle: integer; Scale: single);
+procedure TSpriteStore.SetScale(Handle: integer; Scale: single);
 begin
   FLock.Enter;
   try
@@ -226,7 +226,7 @@ begin
   end;
 end;
 
-procedure TSpiritStore.SetVisible(Handle: integer; AVisible: boolean);
+procedure TSpriteStore.SetVisible(Handle: integer; AVisible: boolean);
 begin
   FLock.Enter;
   try
@@ -237,7 +237,7 @@ begin
   end;
 end;
 
-function TSpiritStore.GetX(Handle: integer): single;
+function TSpriteStore.GetX(Handle: integer): single;
 begin
   FLock.Enter;
   try
@@ -250,7 +250,7 @@ begin
   end;
 end;
 
-function TSpiritStore.GetY(Handle: integer): single;
+function TSpriteStore.GetY(Handle: integer): single;
 begin
   FLock.Enter;
   try
@@ -263,7 +263,7 @@ begin
   end;
 end;
 
-function TSpiritStore.GetAngle(Handle: integer): single;
+function TSpriteStore.GetAngle(Handle: integer): single;
 begin
   FLock.Enter;
   try
@@ -276,7 +276,7 @@ begin
   end;
 end;
 
-function TSpiritStore.GetScale(Handle: integer): single;
+function TSpriteStore.GetScale(Handle: integer): single;
 begin
   FLock.Enter;
   try
@@ -289,7 +289,7 @@ begin
   end;
 end;
 
-function TSpiritStore.GetVisible(Handle: integer): boolean;
+function TSpriteStore.GetVisible(Handle: integer): boolean;
 begin
   FLock.Enter;
   try
@@ -302,7 +302,7 @@ begin
   end;
 end;
 
-function TSpiritStore.GetWidth(Handle: integer): integer;
+function TSpriteStore.GetWidth(Handle: integer): integer;
 begin
   FLock.Enter;
   try
@@ -315,7 +315,7 @@ begin
   end;
 end;
 
-function TSpiritStore.GetHeight(Handle: integer): integer;
+function TSpriteStore.GetHeight(Handle: integer): integer;
 begin
   FLock.Enter;
   try
@@ -328,14 +328,14 @@ begin
   end;
 end;
 
-function TSpiritStore.FindByName(const AName: string): integer;
+function TSpriteStore.FindByName(const AName: string): integer;
 var
   i: integer;
 begin
-  Result := cSpiritInvalid;
+  Result := cSpriteInvalid;
   FLock.Enter;
   try
-    for i := 0 to cSpiritMax - 1 do
+    for i := 0 to cSpriteMax - 1 do
       if FItems[i].Valid and (FItems[i].Name = AName) then
       begin
         Result := i;
@@ -346,7 +346,7 @@ begin
   end;
 end;
 
-procedure TSpiritStore.DrawAll;
+procedure TSpriteStore.DrawAll;
 var
   i: integer;
   Rec: TTexture2D;
@@ -356,7 +356,7 @@ var
 begin
   FLock.Enter;
   try
-    for i := 0 to cSpiritMax - 1 do
+    for i := 0 to cSpriteMax - 1 do
     begin
       if FItems[i].Valid and FItems[i].Visible and (FItems[i].Texture.id > 0) then
       begin
@@ -372,7 +372,7 @@ begin
   end;
 end;
 
-procedure TSpiritStore.DrawOne(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
+procedure TSpriteStore.DrawOne(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
 var
   Rec: TTexture2D;
   Pos: TVector2;
@@ -402,43 +402,43 @@ begin
   RayLib.DrawTextureEx(Rec, Pos, Ang, Scl, ATint);
 end;
 
-{ TLoadSpiritObject }
+{ TLoadSpriteObject }
 
-constructor TLoadSpiritObject.Create(AFileName: string; const AName: string);
+constructor TLoadSpriteObject.Create(AFileName: string; const AName: string);
 begin
   inherited Create;
   FFileName := AFileName;
   FName := AName;
-  FHandleResult := cSpiritInvalid;
+  FHandleResult := cSpriteInvalid;
   EventNeeded;;
 end;
 
-destructor TLoadSpiritObject.Destroy;
+destructor TLoadSpriteObject.Destroy;
 begin
   inherited;
 end;
 
-procedure TLoadSpiritObject.DoExecute;
+procedure TLoadSpriteObject.DoExecute;
 var
   aTexture: TTexture2D;
 begin
   aTexture := RayLib.LoadTexture(PUTF8Char(FFileName));
   if aTexture.id > 0 then
-    FHandleResult := Main.Spirits.AddTexture(aTexture, FName)
+    FHandleResult := Main.Sprites.AddTexture(aTexture, FName)
   else
   begin
     if IsConsole then
-      WriteLn('Spirit not loaded: ' + FFileName);
-    FHandleResult := cSpiritInvalid;
+      WriteLn('Sprite not loaded: ' + FFileName);
+    FHandleResult := cSpriteInvalid;
   end;
 end;
 
-{ TDrawSpiritObject }
+{ TDrawSpriteObject }
 
-constructor TDrawSpiritObject.Create(ASpiritStore: TSpiritStore; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
+constructor TDrawSpriteObject.Create(ASpriteStore: TSpriteStore; AHandle: integer; AX, AY: single; ACanvas: TTyroCanvas; AAngle: single; AScale: single; ATint: TColor);
 begin
   inherited Create(ACanvas);
-  FSpiritStore := ASpiritStore;
+  FSpriteStore := ASpriteStore;
   fHandle := AHandle;
   fX := AX;
   fY := AY;
@@ -447,11 +447,11 @@ begin
   fTint := ATint;
 end;
 
-procedure TDrawSpiritObject.DoExecute;
+procedure TDrawSpriteObject.DoExecute;
 begin
-  if not Assigned(FSpiritStore) then
+  if not Assigned(FSpriteStore) then
     Exit;
-  FSpiritStore.DrawOne(fHandle, Canvas, fX, fY, fAngle, fScale, fTint);
+  FSpriteStore.DrawOne(fHandle, Canvas, fX, fY, fAngle, fScale, fTint);
 end;
 
 end.

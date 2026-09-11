@@ -241,7 +241,7 @@ type
     procedure ExecuteQueueObjectNoFree; //this for sync do not call it
   protected
     QueueObject: TQueueObject;
-    ScriptThread: TTyroScriptThread;
+    Thread: TTyroScriptThread;
     ScriptText: TStringList;
 
     procedure RunQueueObject(AQueueObject: TQueueObject);
@@ -329,7 +329,7 @@ constructor TTyroScriptThread.Create(AScript: TTyroScript);
 begin
   inherited Create(True);
   Script := AScript;
-  Script.ScriptThread := Self;
+  Script.Thread := Self;
   FreeOnTerminate := False;
   Priority := tpLower; //hmmm
 end;
@@ -722,8 +722,8 @@ end;
 procedure TTyroScript.RunQueueObject(AQueueObject: TQueueObject);
 begin
   QueueObject := AQueueObject;
-  if ScriptThread <> nil then
-    ScriptThread.Synchronize(ExecuteQueueObject)
+  if Thread <> nil then
+    Thread.Synchronize(ExecuteQueueObject)
   else
     ExecuteQueueObject;
 end;
@@ -737,8 +737,8 @@ end;
 procedure TTyroScript.RunQueueObjectNoFree(AQueueObject: TQueueObject);
 begin
   QueueObject := AQueueObject;
-  if ScriptThread <> nil then
-    ScriptThread.Synchronize(ExecuteQueueObjectNoFree)
+  if Thread <> nil then
+    Thread.Synchronize(ExecuteQueueObjectNoFree)
   else
     ExecuteQueueObjectNoFree;
 end;
@@ -759,8 +759,8 @@ begin
   finally
     Lock.Leave;
   end;
-  if ScriptThread <> nil then
-    ScriptThread.Yield;
+  if Thread <> nil then
+    Thread.Yield;
 end;
 
 constructor TTyroScript.Create;

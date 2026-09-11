@@ -10,7 +10,7 @@ unit TyroLua;
  *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
  *}
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$M+}
 {$WARN 5024 off : Parameter "$1" not used}
 {$define DEBUG_LUA}
 
@@ -21,7 +21,7 @@ uses
   LuaAPI, LuaClasses, FPImage,
   RayLib, RayClasses, //remove it
   mnUtils,
-  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSpirits,
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites,
   TyroControls, TyroEngines, TyroInput;
 
 type
@@ -37,15 +37,23 @@ type
   protected
   public
     constructor Create(AScript: TLuaScript); virtual;
+    procedure Register; override;
+    property Script: TLuaScript read FScript;
   end;
 
   { TLuaCanvas }
 
   TLuaCanvas = class(TTyroLuaObject)
   protected
-    function __setter(L: PLua_State): integer; cdecl; override;
-    function __getter(L: PLua_State): integer; cdecl; override;
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
   public
+    function Clear_func(L: Plua_State): integer; cdecl;
+    function Text_func(L: Plua_State): integer; cdecl;
+    function Circle_func(L: Plua_State): integer; cdecl;
+    function Rectangle_func(L: Plua_State): integer; cdecl;
+    function Line_func(L: Plua_State): integer; cdecl;
+    function Point_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
@@ -53,9 +61,13 @@ type
 
   TLuaConsole = class(TTyroLuaObject)
   protected
-    function __setter(L: PLua_State): integer; cdecl; override;
-    function __getter(L: PLua_State): integer; cdecl; override;
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
   public
+    function Print_func(L: Plua_State): integer; cdecl;
+    function PrintLn_func(L: Plua_State): integer; cdecl;
+    function Show_func(L: Plua_State): integer; cdecl;
+    function Read_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
@@ -63,20 +75,22 @@ type
 
   TLuaWindow = class(TTyroLuaObject)
   protected
-    function __setter(L: PLua_State): integer; cdecl; override;
-    function __getter(L: PLua_State): integer; cdecl; override;
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
   public
-    function Window_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
+  published
+    function Window_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaFont }
 
   TLuaFont = class(TTyroLuaObject)
   protected
-    function __setter(L: PLua_State): integer; cdecl; override;
-    function __getter(L: PLua_State): integer; cdecl; override;
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
   public
+    function Load_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
@@ -92,12 +106,52 @@ type
 
   var
     Colors: array of TLuaColor;
-    function __setter(L: PLua_State): integer; cdecl; override;
-    function __getter(L: PLua_State): integer; cdecl; override;
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
 
     procedure Created; override;
   public
-    procedure AddColor(Name: string; AColor: TColor);
+    procedure AddColor(AName: string; AColor: TColor);
+  end;
+
+  { TLuaMusic }
+
+  TLuaMusic = class(TTyroLuaObject)
+  protected
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
+  public
+    function Beep_func(L: Plua_State): integer; cdecl;
+    function Sound_func(L: Plua_State): integer; cdecl;
+    function Play_func(L: Plua_State): integer; cdecl;
+    function MML_func(L: Plua_State): integer; cdecl;
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
+  { TLuaSprite }
+
+  TLuaSprite = class(TTyroLuaObject)
+  private
+  protected
+    function Getter(L: Plua_State): integer; override;
+    function Setter(L: Plua_State): integer; override;
+  public
+    function RegisterSprite(AHandle: Integer): Integer;
+    function Load_func(L: Plua_State): integer; cdecl;
+    function Show_func(L: Plua_State): integer; cdecl;
+    function Hide_func(L: Plua_State): integer; cdecl;
+    function Move_func(L: Plua_State): integer; cdecl;
+    function Width_func(L: Plua_State): integer; cdecl;
+    function Height_func(L: Plua_State): integer; cdecl;
+  end;
+
+  TLuaSprites = class(TTyroLuaObject)
+  protected
+  public
+    //sprites
+    function New_func(L: Plua_State): integer; cdecl;
+    function Find_func(L: Plua_State): integer; cdecl;
+    function Call_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaScript }
@@ -105,7 +159,6 @@ type
   TLuaScript = class(TTyroScript)
   private
   protected
-    FVersion: double;
     Lua: TLua;
 
     Canvas: TLuaCanvas;
@@ -113,27 +166,12 @@ type
     Window: TLuaWindow;
     Colors: TLuaColors;
     Font: TLuaFont;
+    Music: TLuaMusic;
+    Sprite: TLuaSprite;
+    Sprites: TLuaSprites;
     procedure DoError(S: string);
     procedure Run; override;
   protected
-    procedure AddQueueObject(AQueueObject: TQueueObject); override;
-
-    //canvas functions
-    function Clear_func(L: Plua_State): integer; cdecl;
-    function ShowConsole_func(L: Plua_State): integer; cdecl;
-    function DrawText_func(L: Plua_State): integer; cdecl;
-    function DrawCircle_func(L: Plua_State): integer; cdecl;
-    function DrawRectangle_func(L: Plua_State): integer; cdecl;
-    function DrawLine_func(L: Plua_State): integer; cdecl;
-    function DrawPoint_func(L: Plua_State): integer; cdecl;
-    //global functions
-    function Print_func(L: Plua_State): integer; cdecl;
-    function PrintLn_func(L: Plua_State): integer; cdecl;
-
-    function Beep_func(L: Plua_State): integer; cdecl;
-    function PlaySound_func(L: Plua_State): integer; cdecl;
-    function PlayMusic_func(L: Plua_State): integer; cdecl;
-    function PlayMML_func(L: Plua_State): integer; cdecl;
 
     //input & timing
     function IsKeyPressed_func(L: Plua_State): integer; cdecl;
@@ -145,40 +183,20 @@ type
     function TotalTime_func(L: Plua_State): integer; cdecl;
     function RandomValue_func(L: Plua_State): integer; cdecl;
 
-    // console input
-    function ConsoleRead_func(L: Plua_State): integer; cdecl;
-
-    //font
-    function LoadFont_func(L: Plua_State): integer; cdecl;
-    //spirits
-    function CreateSpiritObject(AHandle: integer): integer;
-    function SpiritsNew_func(L: Plua_State): integer; cdecl;
-    function SpiritsFind_func(L: Plua_State): integer; cdecl;
-    function SpiritsCall_func(L: Plua_State): integer; cdecl;
-    function SpiritLoad_func(L: Plua_State): integer; cdecl;
-    function SpiritShow_func(L: Plua_State): integer; cdecl;
-    function SpiritHide_func(L: Plua_State): integer; cdecl;
-    function SpiritMove_func(L: Plua_State): integer; cdecl;
-    function SpiritWidth_func(L: Plua_State): integer; cdecl;
-    function SpiritHeight_func(L: Plua_State): integer; cdecl;
    public
     constructor Create; override;
     destructor Destroy; override;
+    procedure AddQueueObject(AQueueObject: TQueueObject); override;
   end;
 
 implementation
-
-{ Forward declarations for spirit functions }
-function lua_spirit_method_callback(L: Plua_State): integer; cdecl; forward;
-function SpiritGetter(L: Plua_State): integer; cdecl; forward;
-function SpiritSetter(L: Plua_State): integer; cdecl; forward;
 
 //global functions
 function sleep_func(L: Plua_State): integer; cdecl;
 var
   n: int64;
 begin
-  n := round(lua_tonumber(L, 1));
+  n := round(L.Params[1].AsInteger);
   sleep(n);
   Result := 0;
 end;
@@ -188,10 +206,10 @@ var
   i, c: integer;
   s: string;
 begin
-  c := lua_gettop(L);
+  c := L.Count;
   for i := 1 to c do
   begin
-    s := lua_tostring(L, i);
+    s := L.Params[i].AsString;
     if IsConsole then
       WriteLn(s);
   end;
@@ -200,7 +218,7 @@ end;
 
 { TLuaConsole }
 
-function TLuaConsole.__setter(L: PLua_State): integer; cdecl;
+function TLuaConsole.Setter(L: PLua_State): integer;
 var
   i: integer;
   field: string;
@@ -248,7 +266,7 @@ begin
   end;
 end;
 
-function TLuaConsole.__getter(L: PLua_State): integer; cdecl;
+function TLuaConsole.Getter(L: PLua_State): integer;
 var
   i: integer;
   field: string;
@@ -312,7 +330,7 @@ end;
 
 { TLuaWindow }
 
-function TLuaWindow.__setter(L: PLua_State): integer; cdecl;
+function TLuaWindow.Setter(L: PLua_State): integer;
 var
   i: integer;
   field: string;
@@ -331,7 +349,7 @@ begin
   end;
 end;
 
-function TLuaWindow.__getter(L: PLua_State): integer; cdecl;
+function TLuaWindow.Getter(L: PLua_State): integer;
 var
   field: string;
 begin
@@ -363,17 +381,34 @@ end;
 
 { TLuaFont }
 
-function TLuaFont.__setter(L: PLua_State): integer; cdecl;
+function TLuaFont.Setter(L: PLua_State): integer;
 begin
   Result := 0;
 end;
 
-function TLuaFont.__getter(L: PLua_State): integer; cdecl;
+function TLuaFont.Getter(L: PLua_State): integer;
 begin
   Result := 0;
 end;
 
 constructor TLuaFont.Create(AScript: TLuaScript);
+begin
+  inherited Create(AScript);
+end;
+
+{ TLuaMusic }
+
+function TLuaMusic.Setter(L: PLua_State): integer;
+begin
+  Result := 0;
+end;
+
+function TLuaMusic.Getter(L: PLua_State): integer;
+begin
+  Result := 0;
+end;
+
+constructor TLuaMusic.Create(AScript: TLuaScript);
 begin
   inherited Create(AScript);
 end;
@@ -391,14 +426,18 @@ begin
   Created;
 end;
 
+procedure TTyroLuaObject.Register;
+begin
+end;
+
 { TLuaColors }
 
-function TLuaColors.__setter(L: PLua_State): integer; cdecl;
+function TLuaColors.Setter(L: PLua_State): integer;
 begin
   Result := 0;
 end;
 
-function TLuaColors.__getter(L: PLua_State): integer; cdecl;
+function TLuaColors.Getter(L: PLua_State): integer;
 var
   c: integer;
   index: integer;
@@ -428,11 +467,11 @@ begin
   end;
 end;
 
-procedure TLuaColors.AddColor(Name: string; AColor: TColor);
+procedure TLuaColors.AddColor(AName: string; AColor: TColor);
 var
   aItem: TLuaColor;
 begin
-  aItem.Name := Name;
+  aItem.Name := aName;
   aItem.Color := AColor;
   SetLength(Colors, Length(Colors) + 1);
   Colors[Length(Colors) - 1] := aItem;
@@ -460,7 +499,7 @@ end;
 
 { TLuaCanvas }
 
-function TLuaCanvas.__setter(L: PLua_State): integer; cdecl;
+function TLuaCanvas.Setter(L: PLua_State): integer;
 var
   i: integer;
   field: string;
@@ -490,7 +529,7 @@ begin
     end;
 end;
 
-function TLuaCanvas.__getter(L: PLua_State): integer; cdecl;
+function TLuaCanvas.Getter(L: PLua_State): integer;
 var
   i: integer;
   field: string;
@@ -525,85 +564,82 @@ begin
   inherited;
   Lua.Init;
   Lua.State.RegisterGlobal('version', TyroVersion);
-
-  Lua.State.Register('log', @log_func);
-
-  Lua.State.Register('sleep', @sleep_func);
-  Lua.State.Register('print', @Print_func);
-  Lua.State.Register('println', @PrintLn_func);
-
-  //  lua_register_integer(LuaState, 'width', ScreenWidth));
-  //  lua_register_integer(LuaState, 'height', ScreenHeight));
+  Lua.State.RegisterGlobal('log', @log_func);
+  Lua.State.RegisterGlobal('sleep', @sleep_func);
 
   Canvas := TLuaCanvas.Create(Self);
   Window := TLuaWindow.Create(Self);
   Console := TLuaConsole.Create(Self);
   Colors := TLuaColors.Create(Self);
   Font := TLuaFont.Create(Self);
+  Music := TLuaMusic.Create(Self);
+  Sprite := TLuaSprite.Create(Self);
+  Sprites := TLuaSprites.Create(Self);
 
+  //window
   Lua.State.Register('window', 'show', Window, @Window.Window_func);
-  //TODO Complete it from here
-  //TODO move functions inside objects
   Lua.State.Register('window', Window); //Should be last one for window
-  lua_register_table_method(LuaState, 'console', 'print', self, @Print_func);
-  lua_register_table_method(LuaState, 'console', 'println', self, @PrintLn_func);
-  lua_register_table_method(LuaState, 'console', 'show', self, @ShowConsole_func);
-  lua_register_table_method(LuaState, 'console', 'read', self, @ConsoleRead_func);
-  lua_register_table_index(LuaState, 'console', Console); //Should be last one
 
-  //lua_register_table(LuaState, 'draw', Canvas);
-  lua_register_table_method(LuaState, 'canvas', 'clear', self,@Clear_func);
-  lua_register_table_method(LuaState, 'canvas', 'text', self, @DrawText_func);
-  lua_register_table_method(LuaState, 'canvas', 'circle', self, @DrawCircle_func);
-  lua_register_table_method(LuaState, 'canvas', 'rectangle', self, @DrawRectangle_func);
-  lua_register_table_method(LuaState, 'canvas', 'line', self, @DrawLine_func);
-  lua_register_table_method(LuaState, 'canvas', 'point', self, @DrawPoint_func);
+  //global functions
+  Lua.State.RegisterGlobal('print', @Console.Print_func);
+  Lua.State.RegisterGlobal('println', @Console.PrintLn_func);
 
-  lua_register_table_value(LuaState, 'canvas', 'width', ScreenWidth);
-  lua_register_table_value(LuaState, 'canvas', 'height', ScreenHeight);
-  lua_register_table_index(LuaState, 'canvas', Canvas); //Should be last one
+  //console
+  Lua.State.Register('console', 'print', Console, @Console.Print_func);
+  Lua.State.Register('console', 'println', Console, @Console.PrintLn_func);
+  Lua.State.Register('console', 'show', Console, @Console.Show_func);
+  Lua.State.Register('console', 'read', Console, @Console.Read_func);
+  Lua.State.Register('console', Console); //Should be last one
 
-  lua_register_table_method(LuaState, 'font', 'load', self, @LoadFont_func);
-  lua_register_table_index(LuaState, 'font', Font); //Should be last one
+  //canvas
+  Lua.State.Register('canvas', 'clear', Canvas, @Canvas.Clear_func);
+  Lua.State.Register('canvas', 'text', Canvas, @Canvas.Text_func);
+  Lua.State.Register('canvas', 'circle', Canvas, @Canvas.Circle_func);
+  Lua.State.Register('canvas', 'rectangle', Canvas, @Canvas.Rectangle_func);
+  Lua.State.Register('canvas', 'line', Canvas, @Canvas.Line_func);
+  Lua.State.Register('canvas', 'point', Canvas, @Canvas.Point_func);
+  Lua.State.Register('canvas', Canvas); //Should be last one
 
-  lua_register_table_method(LuaState, 'music', 'beep', self, @Beep_func);
-  lua_register_table_method(LuaState, 'music', 'sound', self, @PlaySound_func);
-  lua_register_table_method(LuaState, 'music', 'play', self, @PlayMusic_func);
-  lua_register_table_method(LuaState, 'music', 'mml', self, @PlayMML_func);
+  //font
+  Lua.State.Register('font', 'load', Font, @Font.Load_func);
+  Lua.State.Register('font', Font); //Should be last one
+
+  //music
+  Lua.State.Register('music', 'beep', Music, @Music.Beep_func);
+  Lua.State.Register('music', 'sound', Music, @Music.Sound_func);
+  Lua.State.Register('music', 'play', Music, @Music.Play_func);
+  Lua.State.Register('music', 'mml', Music, @Music.MML_func);
 
   //input & timing (global functions)
-  lua_register_method(LuaState, 'iskeypressed', @IsKeyPressed_func);
-  lua_register_method(LuaState, 'iskeydown', @IsKeyDown_func);
-  lua_register_method(LuaState, 'mousex', @MouseX_func);
-  lua_register_method(LuaState, 'mousey', @MouseY_func);
-  lua_register_method(LuaState, 'ismousepressed', @IsMouseButtonPressed_func);
-  lua_register_method(LuaState, 'frametime', @FrameTime_func);
-  lua_register_method(LuaState, 'time', @TotalTime_func);
-  lua_register_method(LuaState, 'rand', @RandomValue_func);
+  Lua.State.RegisterGlobal('iskeypressed', @IsKeyPressed_func);
+  Lua.State.RegisterGlobal('iskeydown', @IsKeyDown_func);
+  Lua.State.RegisterGlobal('mousex', @MouseX_func);
+  Lua.State.RegisterGlobal('mousey', @MouseY_func);
+  Lua.State.RegisterGlobal('ismousepressed', @IsMouseButtonPressed_func);
+  Lua.State.RegisterGlobal('frametime', @FrameTime_func);
+  Lua.State.RegisterGlobal('time', @TotalTime_func);
+  Lua.State.RegisterGlobal('rand', @RandomValue_func);
 
-  // Spirit system: Spirits.new creates a spirit, Spirits("name") finds by name
-  Lua.State.RegisterTable('Spirits');
-  lua_register_table_method(LuaState, 'Spirits', 'new', self, @SpiritsNew_func);
-  lua_register_table_method(LuaState, 'Spirits', 'find', self, @SpiritsFind_func);
-  // Set __call on the Spirits metatable for Spirits("name") access
+  // Sprite system: Sprites.new creates a sprite, Sprites("name") finds by name
+  Lua.State.RegisterTable('Sprites');
+  Lua.State.Register('Sprites', 'new', Self, @Sprites.New_func);
+  Lua.State.Register('Sprites', 'find', Self, @Sprites.Find_func);
+  // Set __call on the Sprites metatable for Sprites("name") access
 
-  lua_getglobal(LuaState, 'Spirits');   // push Spirits table
-  lua_getmetatable(LuaState, -1);       // push its metatable (created by lua_register_table)
+  lua_getglobal(Lua.State, 'Sprites');   // push Sprites table
+  lua_getmetatable(Lua.State, -1);       // push its metatable (created by lua_register_table)
+  Lua.State.Register('__call', @Sprites.Call_func, -1);
+  lua_pop(Lua.State, 2);                // pop metatable and Sprites table
 
-  lua_push_method(LuaState, '__call', @SpiritsCall_func);
-  lua_setfield(LuaState, -2, '__call');
-  lua_pop(LuaState, 2);                // pop metatable and Spirits table
-
-  lua_newtable(LuaState);
+  Lua.State.BeginTable;
   for i := 0 to Length(Colors.Colors) - 1 do
-    lua_register_color(LuaState, Colors.Colors[i].Name, ColorToInt(Colors.Colors[i].Color));
-  lua_setglobal(LuaState, 'colors');
-  lua_register_table_index(LuaState, 'colors', Colors); //Should be last one
+    Lua.State.Register(Colors.Colors[i].Name, ColorToInt(Colors.Colors[i].Color));
+  Lua.State.EndTable('colors', Colors);
 end;
 
 destructor TLuaScript.Destroy;
 begin
-  lua_close(LuaState);
+  Lua.Close;
   inherited;
 end;
 
@@ -615,23 +651,12 @@ end;
 
 procedure TLuaScript.Run;
 var
-  r: integer;
   Msg: string;
 begin
-  ThreadRunning := Self;
   //WriteLn('Run Script');
   //Sleep(1000);
-  r := luaL_loadstring(LuaState, PChar(ScriptText.Text));
-  if r = 0 then
-  begin
-    r := lua_pcall(LuaState, 0, LUA_MULTRET, 0);
-  end;
-  if (r <> LUA_OK) then
-  begin
-    Msg := lua_tostring(LuaState, -1);
+  if not Lua.State.RunString(ScriptText.Text, Msg) then
     DoError(Msg);
-    lua_pop(LuaState, 1);  //* remove message
-  end;
 end;
 
 procedure TLuaScript.AddQueueObject(AQueueObject: TQueueObject);
@@ -641,16 +666,16 @@ var
 {$endif}
 begin
   {$ifdef DEBUG_LUA}
-  if lua_getstack(LuaState, 1, ar) > 0 then
-    lua_getinfo(LuaState, 'nSl', ar);
+  if lua_getstack(Lua.State, 1, ar) > 0 then
+    lua_getinfo(Lua.State, 'nSl', ar);
   {$endif}
   AQueueObject.LineNo := ar.currentline;
   inherited;
 end;
 
-function TLuaScript.Clear_func(L: Plua_State): integer; cdecl;
+function TLuaCanvas.Clear_func(L: Plua_State): integer; cdecl;
 begin
-  AddQueueObject(TClearObject.Create(Main.Canvas));
+  FScript.AddQueueObject(TClearObject.Create(Main.Canvas));
   Result := 0;
 end;
 
@@ -659,18 +684,18 @@ var
   c: integer;
   w, h: integer;
 begin
-  c := L.ParamsCount;
+  c := L.Count;
   w := ScreenWidth;
   h := ScreenHeight;
   if c > 0 then
     w := round(L.Params[1].AsNumber);
   if c > 1 then
     h := round(L.Params[2].AsNumber);
-  RunQueueObject(TWindowObject.Create(w, h));
+  FScript.RunQueueObject(TWindowObject.Create(w, h));
   Result := 0;
 end;
 
-function TLuaScript.ShowConsole_func(L: Plua_State): integer; cdecl;
+function TLuaConsole.Show_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x, y, w, h: integer;
@@ -691,13 +716,13 @@ begin
     h := round(lua_tonumber(L, 4));
   end;
   if (w > 0) and (h > 0) then
-    RunQueueObject(TShowConsoleObject.Create(x, y, w, h))
+    FScript.RunQueueObject(TShowConsoleObject.Create(x, y, w, h))
   else
-    RunQueueObject(TShowConsoleObject.Create(x, y));
+    FScript.RunQueueObject(TShowConsoleObject.Create(x, y));
   Result := 0;
 end;
 
-function TLuaScript.DrawText_func(L: Plua_State): integer; cdecl;
+function TLuaCanvas.Text_func(L: Plua_State): integer; cdecl;
 var
   x, y: integer;
   s: string;
@@ -705,11 +730,11 @@ begin
   x := round(lua_tonumber(L, 1));
   y := round(lua_tonumber(L, 2));
   s := lua_tostring(L, 3);
-  AddQueueObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  FScript.AddQueueObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
   Result := 0;
 end;
 
-function TLuaScript.DrawCircle_func(L: Plua_State): integer; cdecl;
+function TLuaCanvas.Circle_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x, y, r: integer;
@@ -722,17 +747,11 @@ begin
   r := round(lua_tonumber(L, 3));
   if c >= 4 then
     f := lua_toboolean(L, 4);
-  AddQueueObject(TDrawCircleObject.Create(Main.Canvas, x, y, r, f));
-  {Main.CanvasLock.Enter;
-  try
-    Main.Board.Circle(x, y, r, f);
-  finally
-    Main.CanvasLock.Leave;
-  end;}
+  FScript.AddQueueObject(TDrawCircleObject.Create(Main.Canvas, x, y, r, f));
   Result := 0;
 end;
 
-function TLuaScript.DrawRectangle_func(L: Plua_State): integer; cdecl;
+function TLuaCanvas.Rectangle_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x, y, w, h: integer;
@@ -746,11 +765,11 @@ begin
   h := round(lua_tonumber(L, 4));
   if c >= 4 then
     f := lua_toboolean(L, 5);
-  AddQueueObject(TDrawRectangleObject.Create(Main.Canvas, x, y, w, h, f));
+  FScript.AddQueueObject(TDrawRectangleObject.Create(Main.Canvas, x, y, w, h, f));
   Result := 0;
 end;
 
-function TLuaScript.DrawLine_func(L: Plua_State): integer; cdecl;
+function TLuaCanvas.Line_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x1, y1, x2, y2: integer;
@@ -762,24 +781,24 @@ begin
   begin
     x2 := round(lua_tonumber(L, 3));
     y2 := round(lua_tonumber(L, 4));
-    AddQueueObject(TDrawLineObject.Create(Main.Canvas, x1, y1, x2, y2));
+    FScript.AddQueueObject(TDrawLineObject.Create(Main.Canvas, x1, y1, x2, y2));
   end
   else
-    AddQueueObject(TDrawLineToObject.Create(Main.Canvas, x1, y1));
+    FScript.AddQueueObject(TDrawLineToObject.Create(Main.Canvas, x1, y1));
   Result := 0;
 end;
 
-function TLuaScript.DrawPoint_func(L: Plua_State): integer; cdecl;
+function TLuaCanvas.Point_func(L: Plua_State): integer; cdecl;
 var
   x, y: integer;
 begin
   x := round(lua_tonumber(L, 1));
   y := round(lua_tonumber(L, 2));
-  AddQueueObject(TDrawPointObject.Create(Main.Canvas, x, y));
+  FScript.AddQueueObject(TDrawPointObject.Create(Main.Canvas, x, y));
   Result := 0;
 end;
 
-function TLuaScript.Print_func(L: Plua_State): integer; cdecl;
+function TLuaConsole.Print_func(L: Plua_State): integer; cdecl;
 var
   i, c: integer;
   s: string;
@@ -792,55 +811,55 @@ begin
       s := s + #9;
     s := s + lua_tostring(L, i);
   end;
-  AddQueueObject(TPrintObject.Create(Main.Canvas, s, False));
+  FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, False));
   Result := 0;
 end;
 
-function TLuaScript.PrintLn_func(L: Plua_State): integer; cdecl;
+function TLuaConsole.PrintLn_func(L: Plua_State): integer; cdecl;
 var
   i, c: integer;
   s: string;
 begin
-  c := L.ParamsCount;
+  c := L.Count;
   s := '';
   for i := 1 to c do
   begin
     if i > 1 then
       s := s + #9;
-    s := s + lua_tostring(L, i);
+    s := s + L.Params[i].AsString;
   end;
-  AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
+  FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
   Result := 0;
 end;
 
-function TLuaScript.Beep_func(L: Plua_State): integer; cdecl;
+function TLuaMusic.Beep_func(L: Plua_State): integer; cdecl;
 begin
-  AddQueueObject(TBeepObject.Create);
+  FScript.AddQueueObject(TBeepObject.Create);
   Result := 0;
 end;
 
-function TLuaScript.PlaySound_func(L: Plua_State): integer; cdecl;
+function TLuaMusic.Sound_func(L: Plua_State): integer; cdecl;
 var
   Freq, Period: integer;
 begin
   Freq := round(lua_tonumber(L, 1));
   Period := round(lua_tonumber(L, 2));
-  AddQueueObject(TPlaySoundObject.Create(Freq, Period));
+  FScript.AddQueueObject(TPlaySoundObject.Create(Freq, Period));
   Result := 0;
 end;
 
-function TLuaScript.PlayMusic_func(L: Plua_State): integer; cdecl;
+function TLuaMusic.Play_func(L: Plua_State): integer; cdecl;
 var
   s: string;
 begin
   s := lua_tostring(L, 1);
   if ExtractFileDir(s) = '' then
     s := Resources.CurrentDirectory + s;
-  AddQueueObject(TPlayMusicFileObject.Create(s));
+  FScript.AddQueueObject(TPlayMusicFileObject.Create(s));
   Result := 0;
 end;
 
-function TLuaScript.PlayMML_func(L: Plua_State): integer; cdecl;
+function TLuaMusic.MML_func(L: Plua_State): integer; cdecl;
 var
   i, c: integer;
   s: string;
@@ -854,7 +873,7 @@ begin
     s := lua_tostring(L, i + 1);
     Song[i] := s;
   end;
-  //AddQueueObject(TPlayMMLObject.Create(Song));
+  //FScript.AddQueueObject(TPlayMMLObject.Create(Song));
   with TPlayMMLObject.Create(Song) do
     //using current lua thread to not block current thread, or maybe use a thread
   begin
@@ -925,7 +944,7 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.ConsoleRead_func(L: Plua_State): integer; cdecl;
+function TLuaConsole.Read_func(L: Plua_State): integer; cdecl;
 var
   s: string;
   c: integer;
@@ -952,7 +971,7 @@ begin
   end;
 end;
 
-function TLuaScript.LoadFont_func(L: Plua_State): integer; cdecl;
+function TLuaFont.Load_func(L: Plua_State): integer; cdecl;
 var
   aFile, s: string;
   aSize: integer;
@@ -962,7 +981,7 @@ begin
   if ExtractFileDir(aFile) = '' then
   begin
     if not SysUtils.FileExists(aFile) then
-      s := IncludePathDelimiter(Path) + aFile;
+      s := IncludePathDelimiter(FScript.Path) + aFile;
     if not SysUtils.FileExists(s) then
       s := IncludePathDelimiter(Resources.CurrentDirectory) + aFile;
     if not SysUtils.FileExists(s) then
@@ -972,58 +991,38 @@ begin
     aSize := lua_tointeger(L, 2) //LoadFontEx
   else
     aSize := 0; //LoadFont
-   AddQueueObject(TLoadFontObject.Create(s, aSize));
+   FScript.AddQueueObject(TLoadFontObject.Create(s, aSize));
    Result := 0;
 end;
 
-{ Spirit method callback - 3 upvalues: Data, Code, spirit_table }
+{ Sprites }
 
-function lua_spirit_method_callback(L: Plua_State): integer; cdecl;
-var
-  Method: TMethod;
+function TLuaSprite.RegisterSprite(AHandle: integer): integer;
 begin
-  Method.Data := lua_topointer(L, lua_upvalueindex(1));
-  Method.code := lua_topointer(L, lua_upvalueindex(2));
-  lua_pushvalue(L, lua_upvalueindex(3));
-  lua_insert(L, 1);
-  if Method.Data = nil then
-    raise Exception.Create('Lua: cannot execute object method!');
-  Result := TLuaMethod(Method)(L);
+  with Script do
+  begin
+    Lua.State.BeginTable;
+
+    lua_newtable(Lua.State);
+
+    lua_pushinteger(Lua.State, AHandle);
+    lua_setfield(Lua.State, -2, '__handle');
+    Lua.State.Register('load', @Load_func);
+    Lua.State.Register('show', @Show_func);
+    Lua.State.Register('hide', @Hide_func);
+    Lua.State.Register('move', @Move_func);
+    Lua.State.Register('width', @Width_func);
+    Lua.State.Register('height', @Height_func);
+    lua_newtable(Lua.State);
+    Lua.State.Register('__index', @__getter);
+    Lua.State.Register('__newindex', @__setter);
+    lua_setmetatable(Lua.State, -2);
+    Result := 1;
+  end;
 end;
 
-procedure lua_push_spirit_method(L: Plua_State; Name: string; method: TLuaMethod; TableStackIdx: integer);
-begin
-  lua_pushlightuserdata(L, TMethod(method).Data);
-  lua_pushlightuserdata(L, TMethod(method).Code);
-  lua_pushvalue(L, TableStackIdx - 2);
-  lua_pushcclosure(L, @lua_spirit_method_callback, 3);
-  lua_setfield(L, -2, PChar(Name));
-end;
-
-{ Spirits }
-
-function TLuaScript.CreateSpiritObject(AHandle: integer): integer;
-begin
-  lua_newtable(LuaState);
-  lua_pushinteger(LuaState, AHandle);
-  lua_setfield(LuaState, -2, '__handle');
-  lua_push_spirit_method(LuaState, 'load', @SpiritLoad_func, -1);
-  lua_push_spirit_method(LuaState, 'show', @SpiritShow_func, -1);
-  lua_push_spirit_method(LuaState, 'hide', @SpiritHide_func, -1);
-  lua_push_spirit_method(LuaState, 'move', @SpiritMove_func, -1);
-  lua_push_spirit_method(LuaState, 'width', @SpiritWidth_func, -1);
-  lua_push_spirit_method(LuaState, 'height', @SpiritHeight_func, -1);
-  lua_newtable(LuaState);
-  lua_pushcfunction(LuaState, @SpiritGetter);
-  lua_setfield(LuaState, -2, '__index');
-  lua_pushcfunction(LuaState, @SpiritSetter);
-  lua_setfield(LuaState, -2, '__newindex');
-  lua_setmetatable(LuaState, -2);
-  Result := 1;
-end;
-
-// Spirits.new("name"?) -> creates a new spirit object, returns it on Lua stack
-function TLuaScript.SpiritsNew_func(L: Plua_State): integer; cdecl;
+// Sprites.new("name"?) -> creates a new sprite object, returns it on Lua stack
+function TLuaSprites.New_func(L: Plua_State): integer; cdecl;
 var
   aName: string;
 begin
@@ -1031,8 +1030,8 @@ begin
     aName := lua_tostring(L, 1)
   else
     aName := '';
-  // Create spirit object with handle -1 (no texture yet, load() will populate it)
-  CreateSpiritObject(-1);
+  // Create sprite object with handle -1 (no texture yet, load() will populate it)
+  Script.Sprite.RegisterSprite(-1);
   // Store optional name
   if aName <> '' then
   begin
@@ -1042,48 +1041,48 @@ begin
   Result := 1;
 end;
 
-// Spirits.find("name") -> returns a spirit object for the named spirit, or nil
-function TLuaScript.SpiritsFind_func(L: Plua_State): integer; cdecl;
+// Sprites.find("name") -> returns a sprite object for the named sprite, or nil
+function TLuaSprites.Find_func(L: Plua_State): integer; cdecl;
 var
   aName: string;
   handle: integer;
 begin
   aName := lua_tostring(L, 1);
-  handle := Main.Spirits.FindByName(aName);
-  if handle > cSpiritInvalid then
-    CreateSpiritObject(handle)
+  handle := Main.Sprites.FindByName(aName);
+  if handle > cSpriteInvalid then
+    Script.Sprite.RegisterSprite(handle)
   else
     lua_pushnil(L);
   Result := 1;
 end;
 
-// Spirits("name") -> __call metamethod, same as Spirits.find
-function TLuaScript.SpiritsCall_func(L: Plua_State): integer; cdecl;
+// Sprites("name") -> __call metamethod, same as Sprites.find
+function TLuaSprites.Call_func(L: Plua_State): integer; cdecl;
 var
   aName: string;
   handle: integer;
 begin
   aName := lua_tostring(L, 2); // first arg after table self
-  handle := Main.Spirits.FindByName(aName);
-  if handle > cSpiritInvalid then
-    CreateSpiritObject(handle)
+  handle := Main.Sprites.FindByName(aName);
+  if handle > cSpriteInvalid then
+    Script.Sprite.RegisterSprite(handle)
   else
     lua_pushnil(L);
   Result := 1;
 end;
 
-function GetSpiritHandle(L: Plua_State; idx: integer): integer;
+function GetSpriteHandle(L: Plua_State; idx: integer): integer;
 begin
   lua_getfield(L, idx, '__handle');
   Result := lua_tointeger(L, -1);
   lua_pop(L, 1);
 end;
 
-function TLuaScript.SpiritLoad_func(L: Plua_State): integer; cdecl;
+function TLuaSprite.Load_func(L: Plua_State): integer; cdecl;
 var
   aFile, aName: string;
   handle: integer;
-  LoadObj: TLoadSpiritObject;
+  LoadObj: TLoadSpriteObject;
 begin
   aFile := Resources.GuessFileName(lua_tostring(L, 2));
   lua_getfield(L, 1, '__name');
@@ -1092,152 +1091,151 @@ begin
   else
     aName := ExtractFileName(aFile);
   lua_pop(L, 1);
-  LoadObj := TLoadSpiritObject.Create(aFile, aName);
+  LoadObj := TLoadSpriteObject.Create(aFile, aName);
   try
-    LoadObj.Run(ScriptThread);
+    LoadObj.Run(Script.Thread);
     LoadObj.Wait;
     handle := LoadObj.HandleResult;
-    if handle > cSpiritInvalid then
+    if handle > cSpriteInvalid then
     begin
       lua_pushinteger(L, handle);
       lua_setfield(L, 1, '__handle');
     end
     else
-      DoError('Spirit not loaded: ' + aFile);
+      Script.DoError('Sprite not loaded: ' + aFile);
   finally
     LoadObj.Free;
   end;
   Result := 0;
 end;
 
-function TLuaScript.SpiritShow_func(L: Plua_State): integer; cdecl;
+function TLuaSprite.Show_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
 begin
-  handle := GetSpiritHandle(L, 1);
-  if handle > cSpiritInvalid then
-    Main.Spirits.SetVisible(handle, True);
+  handle := GetSpriteHandle(L, 1);
+  if handle > cSpriteInvalid then
+    Main.Sprites.SetVisible(handle, True);
   Result := 0;
 end;
 
-function TLuaScript.SpiritHide_func(L: Plua_State): integer; cdecl;
+function TLuaSprite.Hide_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
 begin
-  handle := GetSpiritHandle(L, 1);
-  if handle > cSpiritInvalid then
-    Main.Spirits.SetVisible(handle, False);
+  handle := GetSpriteHandle(L, 1);
+  if handle > cSpriteInvalid then
+    Main.Sprites.SetVisible(handle, False);
   Result := 0;
 end;
 
-function TLuaScript.SpiritMove_func(L: Plua_State): integer; cdecl;
+function TLuaSprite.Move_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
   x, y: single;
 begin
   x := lua_tonumber(L, 2);
   y := lua_tonumber(L, 3);
-  handle := GetSpiritHandle(L, 1);
-  if handle > cSpiritInvalid then
-    Main.Spirits.SetPosition(handle, x, y);
+  handle := GetSpriteHandle(L, 1);
+  if handle > cSpriteInvalid then
+    Main.Sprites.SetPosition(handle, x, y);
   Result := 0;
 end;
 
-function TLuaScript.SpiritWidth_func(L: Plua_State): integer; cdecl;
+function TLuaSprite.Width_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
 begin
-  handle := GetSpiritHandle(L, 1);
-  lua_pushinteger(L, Main.Spirits.GetWidth(handle));
+  handle := GetSpriteHandle(L, 1);
+  lua_pushinteger(L, Main.Sprites.GetWidth(handle));
   Result := 1;
 end;
 
-function TLuaScript.SpiritHeight_func(L: Plua_State): integer; cdecl;
+function TLuaSprite.Height_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
 begin
-  handle := GetSpiritHandle(L, 1);
-  lua_pushinteger(L, Main.Spirits.GetHeight(handle));
+  handle := GetSpriteHandle(L, 1);
+  lua_pushinteger(L, Main.Sprites.GetHeight(handle));
   Result := 1;
 end;
 
-// Spirit __index: read properties x, y, angle, scale, visible
-function SpiritGetter(L: Plua_State): integer; cdecl;
+// Sprite __index: read properties x, y, angle, scale, visible
+function TLuaSprite.Getter(L: Plua_State): integer;
 var
   handle: integer;
   field: string;
 begin
   // arg 1 is the table, arg 2 is the key
-  handle := GetSpiritHandle(L, 1);
+  handle := GetSpriteHandle(L, 1);
   field := lua_tostring(L, 2);
   Result := 0;
-  if handle <= cSpiritInvalid then
+  if handle <= cSpriteInvalid then
     Exit;
   if field = 'x' then
   begin
-    lua_pushnumber(L, Main.Spirits.GetX(handle));
+    lua_pushnumber(L, Main.Sprites.GetX(handle));
     Result := 1;
   end
   else if field = 'y' then
   begin
-    lua_pushnumber(L, Main.Spirits.GetY(handle));
+    lua_pushnumber(L, Main.Sprites.GetY(handle));
     Result := 1;
   end
   else if field = 'angle' then
   begin
-    lua_pushnumber(L, Main.Spirits.GetAngle(handle));
+    lua_pushnumber(L, Main.Sprites.GetAngle(handle));
     Result := 1;
   end
   else if field = 'scale' then
   begin
-    lua_pushnumber(L, Main.Spirits.GetScale(handle));
+    lua_pushnumber(L, Main.Sprites.GetScale(handle));
     Result := 1;
   end
   else if field = 'visible' then
   begin
-    lua_pushboolean(L, Main.Spirits.GetVisible(handle));
+    lua_pushboolean(L, Main.Sprites.GetVisible(handle));
     Result := 1;
   end;
 end;
 
-// Spirit __newindex: write properties x, y, angle, scale, visible
-function SpiritSetter(L: Plua_State): integer; cdecl;
+// Sprite __newindex: write properties x, y, angle, scale, visible
+function TLuaSprite.Setter(L: Plua_State): integer;
 var
   handle: integer;
   field: string;
   curX, curY: single;
 begin
   // arg 1 is the table, arg 2 is the key, arg 3 is the value
-  handle := GetSpiritHandle(L, 1);
+  handle := GetSpriteHandle(L, 1);
   field := lua_tostring(L, 2);
   Result := 0;
-  if handle <= cSpiritInvalid then
+  if handle <= cSpriteInvalid then
     Exit;
   if (field = 'x') or (field = 'y') then
   begin
-    curX := Main.Spirits.GetX(handle);
-    curY := Main.Spirits.GetY(handle);
+    curX := Main.Sprites.GetX(handle);
+    curY := Main.Sprites.GetY(handle);
     if field = 'x' then
       curX := lua_tonumber(L, 3)
     else
       curY := lua_tonumber(L, 3);
-    Main.Spirits.SetPosition(handle, curX, curY);
+    Main.Sprites.SetPosition(handle, curX, curY);
   end
   else if field = 'angle' then
   begin
-    Main.Spirits.SetAngle(handle, lua_tonumber(L, 3));
+    Main.Sprites.SetAngle(handle, lua_tonumber(L, 3));
   end
   else if field = 'scale' then
   begin
-    Main.Spirits.SetScale(handle, lua_tonumber(L, 3));
+    Main.Sprites.SetScale(handle, lua_tonumber(L, 3));
   end
   else if field = 'visible' then
   begin
-    Main.Spirits.SetVisible(handle, lua_toboolean(L, 3));
+    Main.Sprites.SetVisible(handle, lua_toboolean(L, 3));
    end;
 end;
 
 initialization
-  ThreadRunning := nil;
   Main.RegisterLanguage('Lua', ['.ls', '.lua', '.pluto'], TLuaScript);
 end.

@@ -16,7 +16,7 @@ uses
   mnLogs, mnUtils,
   RayLib, RayClasses, TyroScripts,
   TyroClasses, TyroControls, TyroConsoles,
-  TyroSpirits,
+  TyroSprites,
   mnClasses;
 
 const
@@ -103,7 +103,7 @@ type
     RunFile: string;//that to run in script
     Console: TTyroConsole;
     Graphic: TTyroCanvas;
-    Spirits: TSpiritStore;
+    Sprites: TSpriteStore;
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
     procedure Stop; //and wait
@@ -274,7 +274,7 @@ begin
   Console.Visible := False;
   Console.Focused := True;
   Console.OnInput := ConsoleInput;
-  Spirits := TSpiritStore.Create;
+  Sprites := TSpriteStore.Create;
   Commands := TConsoleCommands.Create();
   RegisterCommands;
 end;
@@ -282,7 +282,7 @@ end;
    destructor TTyroEngine.Destroy;
 begin
   //Stop;
-  FreeAndNil(Spirits);
+  FreeAndNil(Sprites);
   FreeAndNil(Graphic);
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
@@ -325,7 +325,7 @@ end;
 begin
   if Graphic <> nil then
   begin
-    Spirits.DrawAll;
+    Sprites.DrawAll;
     Graphic.PostDraw;
   end;
   ThreadSwitch; //Yield

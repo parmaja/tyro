@@ -105,9 +105,8 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="luaclasses.pas"/>
+        <Filename Value="LuaClasses.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="LuaClasses"/>
       </Unit>
     </Units>
   </ProjectOptions>

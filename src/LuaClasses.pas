@@ -12,13 +12,15 @@ unit LuaClasses;
 
 {$ifdef fpc}
 {$mode delphi}
+{$else}
+{$RTTI EXPLICIT METHODS([vcPublic, vcProtected, vcPublished])}
 {$endif}
-{$H+}
+{$H+}{$M+}
 
 interface
 
 uses
-  Classes, SysUtils, LuaAPI;
+  Classes, SysUtils, LuaAPI, Rtti, mnLogs;
 
 type
 
@@ -27,9 +29,18 @@ type
   TLuaObject = class abstract(TObject)
   private
   protected
-    function __setter(L: PLua_State): integer; cdecl; virtual; abstract;
-    function __getter(L: PLua_State): integer; cdecl; virtual; abstract;
+    function Setter(L: PLua_State): integer; virtual;
+    function Getter(L: PLua_State): integer; virtual;
+    procedure EnumMethods;
+    procedure RegisterMethod(const AName: string; AParams: TStringList); virtual;
   public
+    function __setter(L: PLua_State): integer; cdecl;
+    function __getter(L: PLua_State): integer; cdecl;
+  public
+    //Name: string;
+    procedure Register; virtual;
+    constructor Create;
+  published
   end;
 
   TLua = record
@@ -38,6 +49,7 @@ type
   public
     State: Plua_State;
     procedure Init;
+    procedure Close;
     property Version: Double read FVersion;
   end;
 
@@ -50,6 +62,7 @@ type
   public
     function AsInteger: Integer;
     function AsNumber: Double;
+    function AsString: string;
   end;
 
   TLuaMethod = function(L: Plua_State): integer of object cdecl;
@@ -60,13 +73,12 @@ type
   TLuaHelper = record helper for Plua_State
   private
     function GetParams(Index: Integer): TLuaParam;
-    function GetParamsCount: Integer;
+    function GetCount: Integer;
   public
-    property ParamsCount: Integer read GetParamsCount;
+    property Count: Integer read GetCount;
     property Params[Index: Integer]: TLuaParam read GetParams; default;
-    procedure Register(const Name: string; Method: TLuaMethod); overload;
-    procedure Register(const Name: string; LuaFunction: TLuaFunction); overload;
-
+    procedure RegisterGlobal(const Name: string; LuaFunction: TLuaFunction); overload;
+    procedure RegisterGlobal(const Name: string; Method: TLuaMethod); overload;
     procedure RegisterGlobal(const Name: string; Value: string); overload;
     procedure RegisterGlobal(const Name: string; Value: Integer); overload;
     procedure RegisterGlobal(const Name: string; Value: Double); overload;
@@ -74,23 +86,44 @@ type
     procedure Register(const Name: string; Value: string); overload;
     procedure Register(const Name: string; Value: Integer); overload;
     procedure Register(const Name: string; Value: Double); overload;
+{
+    RegisterMethod_1 gives the C callback access to the actual Lua table, not just the underlying C/Delphi object.
+    RegisterMethod_2 only knows the C object. Snippet 1 knows both.
 
+    Here is why a callback needs the Lua table:
+
+    The benefit is that RegisterMethod_1 gives the C callback access to the actual Lua table, not just the underlying C/Delphi object.
+    RegisterMethod_2 only knows the C object. RegisterMethod_1 knows both.
+
+    * Lua-side state: To read or write fields stored directly in the Lua table (e.g., custom properties not exposed to C).
+    * Wrapper identity: If multiple Lua tables wrap the same underlying C object, the callback knows exactly which Lua table to interact with.
+    * C-to-Lua callbacks: If the method registers an event (like "on animation finish"), the C code needs the Lua table reference to call back into Lua later.
+    * Garbage Collection: Holding the table as an upvalue prevents the Lua table from being garbage-collected while the closure exists.
+
+    Summary: Use RegisterMethod_2 for pure C-side logic. Use RegisterMethod_1 when the method needs to interact with the Lua-side wrapper.
+}
+    //RegisterMethod_1
+    procedure Register(const Name: string; Method: TLuaMethod; TableStackIdx: Integer = -1); overload;
+    //
+    //RegisterMethod_2
     procedure Register(const Table, Name: string; AObject:TObject; Method: TLuaMethod); overload;
+    procedure Register(const Name: string; LuaFunction: TLuaFunction); overload;
     //Must be last one after object fields
     procedure Register(const Table: string; AObject: TLuaObject); overload;
 
     procedure RegisterTable(Table: string);
 
-    procedure Register(const Table, Name: string; Value: string); overload;
+    function RunString(Script: string; out Output: string): Boolean;
 
-
+    procedure BeginTable;
+    procedure EndTable(Table: string; AObject: TLuaObject = nil);
   end;
 
 procedure LuaSetTerminated;
 
 implementation
 
-function lua_method_callback(L: Plua_State): integer; cdecl;
+function lua_table_method_callback(L: Plua_State): integer; cdecl;
 var
   Method: TMethod;
 begin
@@ -101,24 +134,19 @@ begin
   Result := TLuaMethod(Method)(L);
 end;
 
-procedure lua_register_method(L: Plua_State; Name: string; method: TLuaMethod);
+procedure lua_register_global_method(L: Plua_State; Name: string; Method: TLuaMethod);
 begin
   lua_pushlightuserdata(L, TMethod(method).Data);
   lua_pushlightuserdata(L, TMethod(method).Code);
-  lua_pushcclosure(L, @lua_method_callback, 2);
+  lua_pushcclosure(L, @lua_table_method_callback, 2);
   lua_setglobal(L, PChar(Name));
-end;
-
-procedure lua_register_function(L: Plua_State; Name: string; func: lua_CFunction);
-begin
-  lua_register(L, PChar(Name), func);
 end;
 
 procedure lua_push_method(L: Plua_State; Name: string; method: TLuaMethod);
 begin
   lua_pushlightuserdata(L, TMethod(method).Data);
   lua_pushlightuserdata(L, TMethod(method).Code);
-  lua_pushcclosure(L, @lua_method_callback, 2);
+  lua_pushcclosure(L, @lua_table_method_callback, 2);
   lua_setfield(L, -2, PChar(Name));
 end;
 
@@ -256,6 +284,85 @@ begin
     luaL_error(L, PChar('Terminated by user!'));
 end;
 
+{ TLuaObject }
+
+function TLuaObject.__setter(L: PLua_State): integer; cdecl;
+begin
+  Result := Setter(L);
+end;
+
+function TLuaObject.__getter(L: PLua_State): integer; cdecl;
+begin
+  Result := Getter(L);
+end;
+
+function TLuaObject.Setter(L: PLua_State): integer;
+begin
+  Result := 0;
+end;
+
+function TLuaObject.Getter(L: PLua_State): integer;
+begin
+  Result := 0;
+end;
+
+procedure TLuaObject.EnumMethods;
+var
+  aContext: TRttiContext;
+  aMethods: TArray<TRttiMethod>;
+  procedure EnumParams(aMethod: TRttiMethod);
+  var
+    //aType: TRttiType;
+    aParams: TStringList;
+    aMethodParameter: TRttiParameter;
+    aMethodParameters: TArray<TRttiParameter>;
+  begin
+    aParams := TStringList.Create;
+    try
+      aParams.NameValueSeparator := ':';
+      aMethodParameters := aMethod.GetParameters;
+      for aMethodParameter in aMethodParameters do
+      begin
+        aParams.AddPair(aMethodParameter.Name, aMethodParameter.ParamType.Name);
+      end;
+      RegisterMethod(aMethod.Name, aParams);
+    finally
+      aParams.Free;
+    end;
+  end;
+var
+  aType: TRttiType;
+  aMethod: TRttiMethod;
+begin
+  aContext := TRttiContext.Create;
+  try
+    aType := aContext.GetType(ClassType);
+    if aType <> nil then
+    begin
+      aMethods := aType.GetMethods;
+      for aMethod in aMethods do
+        EnumParams(aMethod);
+    end;
+  finally
+    aContext.Free;
+  end;
+end;
+
+procedure TLuaObject.RegisterMethod(const AName: string; AParams: TStringList);
+begin
+
+end;
+
+procedure TLuaObject.Register;
+begin
+end;
+
+constructor TLuaObject.Create;
+begin
+  inherited Create;
+  EnumMethods;
+end;
+
 { TLua }
 
 procedure TLua.Init;
@@ -267,6 +374,11 @@ begin
   luaL_openselectedlibs(State, -1, 0);
   LuaStatus := luaReady;
   lua_sethook(State, @HookCount, LUA_MASKCOUNT, 100);
+end;
+
+procedure TLua.Close;
+begin
+  lua_close(State);
 end;
 
 { TLuaParam }
@@ -281,6 +393,11 @@ begin
   Result := lua_tonumber(State, Index);
 end;
 
+function TLuaParam.AsString: string;
+begin
+  Result := lua_tostring(State, Index);
+end;
+
 { TLuaHelper }
 
 function TLuaHelper.GetParams(Index: Integer): TLuaParam;
@@ -290,19 +407,19 @@ begin
   Result.Index := Index;
 end;
 
-function TLuaHelper.GetParamsCount: Integer;
+function TLuaHelper.GetCount: Integer;
 begin
   Result := lua_gettop(Self);
 end;
 
-procedure TLuaHelper.Register(const Name: string; Method: TLuaMethod);
+procedure TLuaHelper.RegisterGlobal(const Name: string; Method: TLuaMethod);
 begin
-  lua_register_method(Self, Name, Method);
+  lua_register_global_method(Self, Name, Method);
 end;
 
-procedure TLuaHelper.Register(const Name: string; LuaFunction: TLuaFunction);
+procedure TLuaHelper.RegisterGlobal(const Name: string; LuaFunction: TLuaFunction);
 begin
-  lua_register(Self, PUTF8Char(Name), LuaFunction);
+  lua_reg_global_function(Self, PUTF8Char(Name), LuaFunction);
 end;
 
 procedure TLuaHelper.RegisterGlobal(const Name: string; Value: string);
@@ -335,9 +452,37 @@ begin
   lua_register_number(Self, Name, Value);
 end;
 
-procedure TLuaHelper.Register(const Table, Name: string; AObject: TObject; Method: TLuaMethod);
+function lua_method_callback(L: Plua_State): integer; cdecl;
+var
+  Method: TMethod;
+begin
+  Method.Data := lua_topointer(L, lua_upvalueindex(1));
+  Method.code := lua_topointer(L, lua_upvalueindex(2));
+  lua_pushvalue(L, lua_upvalueindex(3));
+  lua_insert(L, 1);
+  if Method.Data = nil then
+    raise Exception.Create('Lua: cannot execute object method!');
+  Result := TLuaMethod(Method)(L);
+end;
+
+procedure TLuaHelper.Register(const Name: string; Method: TLuaMethod; TableStackIdx: Integer);
+begin
+  lua_pushlightuserdata(Self, TMethod(method).Data);
+  lua_pushlightuserdata(Self, TMethod(method).Code);
+  lua_pushvalue(Self, TableStackIdx - 2);
+  lua_pushcclosure(Self, @lua_method_callback, 3);
+  lua_setfield(Self, -2, PUTF8Char(Name));
+end;
+
+procedure TLuaHelper.Register(const Table, Name: string; AObject: TObject;
+  Method: TLuaMethod);
 begin
   lua_register_table_method(Self, Table, Name, AObject, Method);
+end;
+
+procedure TLuaHelper.Register(const Name: string; LuaFunction: TLuaFunction);
+begin
+  lua_reg_function(Self, PUTF8Char(Name), LuaFunction);
 end;
 
 procedure TLuaHelper.Register(const Table: string; AObject: TLuaObject);
@@ -350,9 +495,34 @@ begin
   lua_register_table(Self, Table);
 end;
 
-procedure TLuaHelper.Register(const Table, Name: string; Value: string);
+function TLuaHelper.RunString(Script: string; out Output: string): Boolean;
+var
+  r: integer;
+  Msg: string;
 begin
-  //TODO
+  r := luaL_loadstring(Self, PChar(Script));
+  if r = 0 then
+    r := lua_pcall(Self, 0, LUA_MULTRET, 0);
+  Result := r = LUA_OK;
+  if not Result then
+  begin
+    Output := lua_tostring(Self, -1);    ;
+    lua_pop(Self, 1);  //* remove message
+  end
+  else
+    Output := '';
+end;
+
+procedure TLuaHelper.BeginTable;
+begin
+  lua_newtable(Self);
+end;
+
+procedure TLuaHelper.EndTable(Table: string; AObject: TLuaObject);
+begin
+  lua_setglobal(Self, PUTF8Char(Table));
+  if AObject <> nil then
+    Register(Table, AObject); //Should be last one
 end;
 
 end.
