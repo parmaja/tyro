@@ -106,6 +106,7 @@ type
     How: TRunHow;
     RunFile: string;//that to run in script
     Console: TTyroConsole;
+    Output: TTyroOutput;
     Graphic: TTyroCanvas;
     Sprites: TSprites;
     Physics: TPhysics;
@@ -130,6 +131,8 @@ type
      procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); override;
      procedure ShowConsole(AX, AY, AWidth, AHeight: Integer);
      procedure HideConsole;
+     procedure ToggleConsole;
+     procedure ToggleOutput;
      procedure Resize(AWidth, AHeight: Integer); override;
 
     property Queue: TQueueObjects read FQueue;
@@ -280,6 +283,9 @@ begin
   Console.Visible := False;
   Console.Focused := True;
   Console.OnInput := ConsoleInput;
+  Output := TTyroOutput.Create(Self);
+  Output.WindowRect := Rect(MarginSize, MarginSize, 480, 240);
+  Output.Visible := False;
   Sprites := TSprites.Create;
   Physics := TPhysics.Create(Sprites);
   Commands := TConsoleCommands.Create();
@@ -419,6 +425,12 @@ end;
 procedure TTyroMain.ProcessInput;
 begin
   inherited;
+  // F7 toggles the output control
+  if RayLib.IsKeyPressed(KEY_F7) then
+    ToggleOutput;
+  // F8 toggles the console
+  if RayLib.IsKeyPressed(KEY_F8) then
+    ToggleConsole;
   // Handle ESC to hide console when it's active and focused
   if (Console.Visible) and Console.Focused and RayLib.IsKeyPressed(KEY_ESCAPE) then
   begin
@@ -484,6 +496,14 @@ procedure TTyroMain.ShowConsole(AX, AY, AWidth, AHeight: Integer);
 begin
   Console.CharWidth := Resources.Font.Width;
   Console.CharHeight := Resources.Font.Height;
+  if (AX = 0) and (AY = 0) and (AWidth = 0) and (AHeight = 0) then
+  begin
+    //restore the console's last position/size, default to 80x25 at 0,0 otherwise
+    AX := Console.WindowRect.Left;
+    AY := Console.WindowRect.Top;
+    AWidth := Console.WindowRect.Width;
+    AHeight := Console.WindowRect.Height;
+  end;
   if (AWidth <= 0) or (AHeight <= 0) then
   begin
     AWidth := 80;
@@ -498,6 +518,19 @@ procedure TTyroMain.HideConsole;
 begin
   Console.StopRead;
   Console.Hide;
+end;
+
+procedure TTyroMain.ToggleConsole;
+begin
+  if Console.Visible then
+    HideConsole
+  else
+    ShowConsole(0, 0, 0, 0); //restores the console's last WindowRect (80x25 if not set yet)
+end;
+
+procedure TTyroMain.ToggleOutput;
+begin
+  Output.Visible := not Output.Visible;
 end;
 
 procedure TTyroMain.ConsoleInput(AConsole: TTyroConsole; AInput: string);

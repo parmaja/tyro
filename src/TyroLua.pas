@@ -54,7 +54,17 @@ type
     function Rectangle_func(L: Plua_State): integer; cdecl;
     function Line_func(L: Plua_State): integer; cdecl;
     function Point_func(L: Plua_State): integer; cdecl;
-    function Effect_func(L: Plua_State): integer; cdecl;
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
+  { TLuaShader }
+
+  TLuaShader = class(TTyroLuaObject)
+  protected
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
+  public
+    function Load_func(L: PLua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
@@ -67,8 +77,23 @@ type
   public
     function Print_func(L: Plua_State): integer; cdecl;
     function PrintLn_func(L: Plua_State): integer; cdecl;
+    function PrintOut_func(L: Plua_State): integer; cdecl;
+    function PrintLnOut_func(L: Plua_State): integer; cdecl;
     function Show_func(L: Plua_State): integer; cdecl;
     function Read_func(L: Plua_State): integer; cdecl;
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
+  { TLuaOutput }
+
+  TLuaOutput = class(TTyroLuaObject)
+  protected
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
+  public
+    function Show_func(L: Plua_State): integer; cdecl;
+    function Hide_func(L: Plua_State): integer; cdecl;
+    function Clear_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
@@ -156,6 +181,25 @@ type
     function Call_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaButtons }
+
+  TLuaButtons = class(TTyroLuaObject)
+  private
+    FItems: TList; //of TTyroButton (owned by the main window, not by us)
+    function GetButton(AHandle: Integer): TTyroButton;
+  protected
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
+  public
+    function New_func(L: Plua_State): integer; cdecl;
+    function Caption_func(L: Plua_State): integer; cdecl;
+    function Border_func(L: Plua_State): integer; cdecl;
+    function Hover_func(L: Plua_State): integer; cdecl;
+    function Down_func(L: Plua_State): integer; cdecl;
+    function Clicked_func(L: Plua_State): integer; cdecl;
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
 { TLuaSpriteScript }
 
   // One Lua state per sprite (a TLua recording). Routed through handler
@@ -231,7 +275,10 @@ type
     Music: TLuaMusic;
     Sprite: TLuaSprite;
     Sprites: TLuaSprites;
+    Buttons: TLuaButtons;
+    Output: TLuaOutput;
     Collision: TLuaCollision;
+    Shader: TLuaShader;
     procedure DoError(S: string);
     procedure Run; override;
   protected
@@ -274,12 +321,18 @@ var
   s: string;
 begin
   c := L.Count;
+  s := '';
   for i := 1 to c do
   begin
-    s := L.Params[i].AsString;
+    if i > 1 then
+      s := s + #9;
+    s := s + L.Params[i].AsString;
     if IsConsole then
-      WriteLn(s);
+      WriteLn(L.Params[i].AsString);
   end;
+  //mirror the log line to the Output control too
+  if (Main <> nil) and (Main.Output <> nil) then
+    Main.Output.Writeln(s);
   Result := 0;
 end;
 
@@ -652,20 +705,116 @@ begin
       L.PushInteger(Main.Canvas.Height);
       Result := 1;
     end;
-    'effect':
-    begin
-      if Main.Graphic <> nil then
-        L.PushString(Main.Graphic.GetEffectName)
-      else
-        L.PushString('none');
-      Result := 1;
-    end;
   end;
 end;
 
 constructor TLuaCanvas.Create(AScript: TLuaScript);
 begin
   inherited;
+end;
+
+{ TLuaShader }
+
+constructor TLuaShader.Create(AScript: TLuaScript);
+begin
+  inherited;
+end;
+
+function TLuaShader.Setter(L: PLua_State): integer;
+var
+  field: string;
+  area: TRectangle;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'effect' then
+  begin
+    if L.IsString(-1) then
+      FScript.AddQueueObject(TSetEffectObject.Create(Main.Graphic, L.ToString(-1)));
+  end
+  else if field = 'value' then
+  begin
+    if L.IsNumber(-1) then
+      FScript.AddQueueObject(TSetEffectValueObject.Create(Main.Graphic, L.ToNumber(-1)));
+  end
+  else if field = 'area' then
+  begin
+    if lua_istable(L, -1) then
+    begin
+      area := Default(TRectangle);
+      lua_rawgeti(L, -1, 1);
+      if L.IsNumber(-1) then
+        area.x := L.ToNumber(-1);
+      lua_pop(L, 1);
+      lua_rawgeti(L, -1, 2);
+      if L.IsNumber(-1) then
+        area.y := L.ToNumber(-1);
+      lua_pop(L, 1);
+      lua_rawgeti(L, -1, 3);
+      if L.IsNumber(-1) then
+        area.width := L.ToNumber(-1);
+      lua_pop(L, 1);
+      lua_rawgeti(L, -1, 4);
+      if L.IsNumber(-1) then
+        area.height := L.ToNumber(-1);
+      lua_pop(L, 1);
+      FScript.AddQueueObject(TSetEffectAreaObject.Create(Main.Graphic, area));
+    end;
+  end;
+end;
+
+function TLuaShader.Getter(L: PLua_State): integer;
+var
+  field: string;
+  area: TRectangle;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'effect' then
+  begin
+    if Main.Graphic <> nil then
+      L.PushString(Main.Graphic.GetEffectName)
+    else
+      L.PushString('none');
+    Result := 1;
+  end
+  else if field = 'value' then
+  begin
+    if Main.Graphic <> nil then
+      L.PushNumber(Main.Graphic.GetEffectValue)
+    else
+      L.PushNumber(1.0);
+    Result := 1;
+  end
+  else if field = 'area' then
+  begin
+    if Main.Graphic <> nil then
+      area := Main.Graphic.GetEffectArea
+    else
+    begin
+      area := Default(TRectangle);
+      area.width := Main.Canvas.Width;
+      area.height := Main.Canvas.Height;
+    end;
+    lua_createtable(L, 4, 0);
+    lua_pushnumber(L, area.x);
+    lua_rawseti(L, -2, 1);
+    lua_pushnumber(L, area.y);
+    lua_rawseti(L, -2, 2);
+    lua_pushnumber(L, area.width);
+    lua_rawseti(L, -2, 3);
+    lua_pushnumber(L, area.height);
+    lua_rawseti(L, -2, 4);
+    Result := 1;
+  end;
+end;
+
+function TLuaShader.Load_func(L: PLua_State): integer; cdecl;
+begin
+  //Load a custom fragment shader from a file
+  if L.IsString(1) then
+    FScript.AddQueueObject(TLoadShaderObject.Create(Main.Graphic, L.ToString(1)));
+  Result := 0;
 end;
 
 constructor TLuaScript.Create;
@@ -686,15 +835,18 @@ begin
   Music := TLuaMusic.Create(Self);
   Sprite := TLuaSprite.Create(Self);
   Sprites := TLuaSprites.Create(Self);
+  Buttons := TLuaButtons.Create(Self);
+  Output := TLuaOutput.Create(Self);
   Collision := TLuaCollision.Create(Self);
+  Shader := TLuaShader.Create(Self);
 
   //window
   Lua.State.Register('window', 'show', Window, @Window.Window_func);
   Lua.State.Register('window', Window); //Should be last one for window
 
   //global functions
-  Lua.State.RegisterGlobal('print', @Console.Print_func);
-  Lua.State.RegisterGlobal('println', @Console.PrintLn_func);
+  Lua.State.RegisterGlobal('print', @Console.PrintOut_func);
+  Lua.State.RegisterGlobal('println', @Console.PrintLnOut_func);
 
   //console
   Lua.State.Register('console', 'print', Console, @Console.Print_func);
@@ -710,8 +862,11 @@ begin
   Lua.State.Register('canvas', 'rectangle', Canvas, @Canvas.Rectangle_func);
   Lua.State.Register('canvas', 'line', Canvas, @Canvas.Line_func);
   Lua.State.Register('canvas', 'point', Canvas, @Canvas.Point_func);
-  Lua.State.Register('canvas', 'effect', Canvas, @Canvas.Effect_func);
   Lua.State.Register('canvas', Canvas); //Should be last one
+
+  //shader (property-style: shader.effect, shader.value, shader.area)
+  Lua.State.Register('shader', 'load', Shader, @Shader.Load_func);
+  Lua.State.Register('shader', Shader); //Should be last one
 
   //font
   Lua.State.Register('font', 'load', Font, @Font.Load_func);
@@ -739,6 +894,22 @@ begin
   Lua.State.Register('Sprites', 'find', Self, @Sprites.Find_func);
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
   Lua.State.Register('Sprites', '__call', Self, @Sprites.Call_func, True);
+
+  //buttons (controls)
+  Lua.State.Register('buttons', 'new', Buttons, @Buttons.New_func);
+  Lua.State.Register('buttons', 'caption', Buttons, @Buttons.Caption_func);
+  Lua.State.Register('buttons', 'border', Buttons, @Buttons.Border_func);
+  Lua.State.Register('buttons', 'hover', Buttons, @Buttons.Hover_func);
+  Lua.State.Register('buttons', 'down', Buttons, @Buttons.Down_func);
+  Lua.State.Register('buttons', 'clicked', Buttons, @Buttons.Clicked_func);
+  Lua.State.Register('buttons', Buttons); //should be last one
+
+  //output (catches print/println/log)
+  Lua.State.RegisterTable('output');
+  Lua.State.Register('output', 'show', Output, @Output.Show_func);
+  Lua.State.Register('output', 'hide', Output, @Output.Hide_func);
+  Lua.State.Register('output', 'clear', Output, @Output.Clear_func);
+  Lua.State.Register('output', Output); //should be last one
 
   // Collision system: collision.pump() drains events and fires sprite.onCollide(other, state)
   Lua.State.Register('collision', 'pump', Collision, @Collision.Pump_func);
@@ -911,13 +1082,6 @@ begin
   Result := 0;
 end;
 
-function TLuaCanvas.Effect_func(L: Plua_State): integer; cdecl;
-begin
-  //Post-processing effect on the graphic canvas which is blitted each frame
-  FScript.AddQueueObject(TSetEffectObject.Create(Main.Graphic, L.ToString(1)));
-  Result := 0;
-end;
-
 function TLuaConsole.Print_func(L: Plua_State): integer; cdecl;
 var
   i, c: integer;
@@ -951,6 +1115,189 @@ begin
   FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
   Result := 0;
 end;
+
+function TLuaConsole.PrintOut_func(L: Plua_State): integer; cdecl;
+var
+  i, c: integer;
+  s: string;
+begin
+  c := L.Count;
+  s := '';
+  for i := 1 to c do
+  begin
+    if i > 1 then
+      s := s + #9;
+    s := s + L.ToString(i);
+  end;
+  FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, False));
+  FScript.AddQueueObject(TOutputPrintObject.Create(Main.Canvas, s, False));
+  Result := 0;
+end;
+
+function TLuaConsole.PrintLnOut_func(L: Plua_State): integer; cdecl;
+var
+  i, c: integer;
+  s: string;
+begin
+  c := L.Count;
+  s := '';
+  for i := 1 to c do
+  begin
+    if i > 1 then
+      s := s + #9;
+    s := s + L.Params[i].AsString;
+  end;
+  FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
+  FScript.AddQueueObject(TOutputPrintObject.Create(Main.Canvas, s, True));
+  Result := 0;
+end;
+
+{ TLuaOutput }
+
+function TLuaOutput.Setter(L: PLua_State): integer;
+var
+  i: integer;
+  field: string;
+  r: TRect;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'visible' then
+    Main.Output.Visible := L.ToBoolean(-1)
+  else if L.IsInteger(-1) or L.IsNumber(-1) then
+  begin
+    i := L.ToInteger(-1);
+    if field = 'height' then
+      Main.Output.Height := i
+    else if field = 'width' then
+      Main.Output.Width := i
+    else if field = 'x' then
+    begin
+      r := Main.Output.WindowRect;
+      Main.Output.WindowRect := Rect(i, r.Top, i + r.Width, r.Bottom);
+    end
+    else if field = 'y' then
+    begin
+      r := Main.Output.WindowRect;
+      Main.Output.WindowRect := Rect(r.Left, i, r.Right, i + r.Height);
+    end
+    else if field = 'border' then
+      Main.Output.BorderSize := i
+    else if field = 'margin' then
+      Main.Output.MarginSize := i
+    else if field = 'maxlines' then
+      Main.Output.MaxLines := i;
+  end
+  else if L.IsString(-1) then
+  begin
+    if field = 'textColor' then
+      Main.Output.TextColor := StrToColor(L.ToString(-1))
+    else if field = 'backColor' then
+      Main.Output.BackColor := StrToColor(L.ToString(-1));
+  end;
+end;
+
+function TLuaOutput.Getter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  case field of
+    'visible':
+    begin
+      L.PushBoolean(Main.Output.Visible);
+      Result := 1;
+    end;
+    'height':
+    begin
+      L.PushInteger(Main.Output.Height);
+      Result := 1;
+    end;
+    'width':
+    begin
+      L.PushInteger(Main.Output.Width);
+      Result := 1;
+    end;
+    'x':
+    begin
+      L.PushInteger(Main.Output.WindowRect.Left);
+      Result := 1;
+    end;
+    'y':
+    begin
+      L.PushInteger(Main.Output.WindowRect.Top);
+      Result := 1;
+    end;
+    'lines':
+    begin
+      L.PushInteger(Main.Output.LineCount);
+      Result := 1;
+    end;
+    'maxlines':
+    begin
+      L.PushInteger(Main.Output.MaxLines);
+      Result := 1;
+    end;
+    'border':
+    begin
+      L.PushInteger(Main.Output.BorderSize);
+      Result := 1;
+    end;
+    'margin':
+    begin
+      L.PushInteger(Main.Output.MarginSize);
+      Result := 1;
+    end;
+  end;
+end;
+
+constructor TLuaOutput.Create(AScript: TLuaScript);
+begin
+  inherited Create(AScript);
+end;
+
+// output.show() | output.show(x, y) | output.show(x, y, w, h) -> show and place
+function TLuaOutput.Show_func(L: Plua_State): integer; cdecl;
+var
+  c: integer;
+  x, y, w, h: integer;
+begin
+  c := L.Count;
+  x := 0;
+  y := 0;
+  w := 0;
+  h := 0;
+  if c >= 2 then
+  begin
+    x := round(L.ToNumber(1));
+    y := round(L.ToNumber(2));
+  end;
+  if c >= 4 then
+  begin
+    w := round(L.ToNumber(3));
+    h := round(L.ToNumber(4));
+  end;
+  if (w > 0) and (h > 0) then
+    FScript.RunQueueObject(TShowOutputObject.Create(x, y, w, h))
+  else
+    FScript.RunQueueObject(TShowOutputObject.Create(x, y));
+  Result := 0;
+end;
+
+function TLuaOutput.Hide_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.RunQueueObject(THideOutputObject.Create);
+  Result := 0;
+end;
+
+function TLuaOutput.Clear_func(L: Plua_State): integer; cdecl;
+begin
+  Main.Output.Clear;
+  Result := 0;
+end;
+
+{ TLuaMusic }
 
 function TLuaMusic.Beep_func(L: Plua_State): integer; cdecl;
 begin
@@ -1228,6 +1575,163 @@ begin
   L.GetField(idx, '__handle');
   Result := L.ToInteger(-1);
   L.Pop(1);
+end;
+
+{ TLuaButtons }
+
+constructor TLuaButtons.Create(AScript: TLuaScript);
+begin
+  inherited Create(AScript);
+  FItems := TList.Create;
+end;
+
+function TLuaButtons.GetButton(AHandle: Integer): TTyroButton;
+begin
+  Result := nil;
+  if (AHandle >= 1) and (AHandle <= FItems.Count) then
+    Result := TTyroButton(FItems[AHandle - 1]);
+end;
+
+function TLuaButtons.Setter(L: PLua_State): integer;
+begin
+  Result := 0;
+end;
+
+function TLuaButtons.Getter(L: PLua_State): integer;
+begin
+  Result := 0;
+  if L.ToString(2) = 'count' then
+  begin
+    L.PushInteger(FItems.Count);
+    Result := 1;
+  end;
+end;
+
+// buttons.new(caption, x, y, w?, h?, borderSize?) -> handle (self drawn by the main cycle)
+function TLuaButtons.New_func(L: Plua_State): integer; cdecl;
+var
+  c: Integer;
+  x, y, w, h, border: Integer;
+  caption: string;
+  CreateObj: TCreateButtonObject;
+begin
+  caption := L.ToString(1);
+  c := L.Count;
+  x := 0;
+  y := 0;
+  w := 100;
+  h := 32;
+  border := 4;
+  if c >= 2 then x := round(L.ToNumber(2));
+  if c >= 3 then y := round(L.ToNumber(3));
+  if c >= 4 then w := round(L.ToNumber(4));
+  if c >= 5 then h := round(L.ToNumber(5));
+  if c >= 6 then border := round(L.ToNumber(6));
+  CreateObj := TCreateButtonObject.Create(caption, x, y, w, h, border);
+  try
+    CreateObj.Run(Script.Thread);
+    CreateObj.Wait;
+    if CreateObj.Button <> nil then
+    begin
+      FItems.Add(CreateObj.Button);
+      Result := 1;
+      L.PushInteger(FItems.Count); //handle of the created button
+    end
+    else
+    begin
+      Result := 1;
+      L.PushNil;
+    end;
+  finally
+    CreateObj.Free;
+  end;
+end;
+
+//buttons.caption(handle [, text]) -> get/set the caption
+function TLuaButtons.Caption_func(L: Plua_State): integer; cdecl;
+var
+  b: TTyroButton;
+begin
+  b := GetButton(round(L.ToNumber(1)));
+  if b = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    b.Caption := L.ToString(2);
+    Result := 0;
+  end
+  else
+  begin
+    L.PushString(b.Caption);
+    Result := 1;
+  end;
+end;
+
+//buttons.border(handle [, size]) -> get/set the border size (drives the rounded corners)
+function TLuaButtons.Border_func(L: Plua_State): integer; cdecl;
+var
+  b: TTyroButton;
+begin
+  b := GetButton(round(L.ToNumber(1)));
+  if b = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    b.BorderSize := round(L.ToNumber(2));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushInteger(b.BorderSize);
+    Result := 1;
+  end;
+end;
+
+//buttons.hover(handle) -> is the mouse over the button
+function TLuaButtons.Hover_func(L: Plua_State): integer; cdecl;
+var
+  b: TTyroButton;
+begin
+  b := GetButton(round(L.ToNumber(1)));
+  if b = nil then
+    L.PushBoolean(False)
+  else
+    L.PushBoolean(b.Hover);
+  Result := 1;
+end;
+
+//buttons.down(handle) -> is the button pressed (mouse down over it)
+function TLuaButtons.Down_func(L: Plua_State): integer; cdecl;
+var
+  b: TTyroButton;
+begin
+  b := GetButton(round(L.ToNumber(1)));
+  if b = nil then
+    L.PushBoolean(False)
+  else
+    L.PushBoolean(b.Down);
+  Result := 1;
+end;
+
+//buttons.clicked(handle) -> true once after the button is released (click)
+function TLuaButtons.Clicked_func(L: Plua_State): integer; cdecl;
+var
+  b: TTyroButton;
+begin
+  b := GetButton(round(L.ToNumber(1)));
+  if b = nil then
+    L.PushBoolean(False)
+  else
+    L.PushBoolean(b.Clicked);
+  Result := 1;
 end;
 
 function TLuaSprite.Load_func(L: Plua_State): integer; cdecl;

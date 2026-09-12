@@ -198,6 +198,29 @@ type
     procedure DoPaint(ACanvas: TTyroCanvas); override;
   end;
 
+  { TTyroButton }
+
+  TTyroButton = class(TTyroControl)
+  private
+    FCaption: utf8string;
+    FHover: Boolean;
+    FDown: Boolean;
+    FClicked: Boolean;
+    FWasDown: Boolean;
+    function GetRoundness: Single;
+    function IsMouseOver: Boolean;
+    procedure CheckState;
+    procedure SetCaption(AValue: utf8string);
+  protected
+    procedure DoPaint(ACanvas: TTyroCanvas); override;
+  public
+    constructor Create(AParent: TTyroLayout); override;
+    property Caption: utf8string read FCaption write SetCaption;
+    property Hover: Boolean read FHover;
+    property Down: Boolean read FDown;
+    property Clicked: Boolean read FClicked;
+  end;
+
   { TTyroTexture }
 
   { TTyroTextureControl }
@@ -718,6 +741,102 @@ procedure TTyroPanel.DoPaint(ACanvas: TTyroCanvas);
 begin
   inherited;
   ACanvas.DrawRectangle(ClientRect, ACanvas.PenColor, False);
+end;
+
+{ TTyroButton }
+
+constructor TTyroButton.Create(AParent: TTyroLayout);
+begin
+  inherited;
+  FWindowRect.Right := 100;
+  FWindowRect.Bottom := 32;
+  BorderSize := 4; //little rounded border depends on BorderSize
+  MarginSize := 0;
+  FCaption := '';
+end;
+
+procedure TTyroButton.SetCaption(AValue: utf8string);
+begin
+  if FCaption = AValue then
+    Exit;
+  FCaption := AValue;
+  Invalidate;
+end;
+
+function TTyroButton.GetRoundness: Single;
+begin
+  //The bigger the border size, the more rounded the border
+  Result := BorderSize / 20;
+  if Result < 0.02 then
+    Result := 0.02
+  else if Result > 0.5 then
+    Result := 0.5;
+end;
+
+function TTyroButton.IsMouseOver: Boolean;
+var
+  mp: TVector2;
+begin
+  Result := False;
+  if (WindowRect.Width <= 0) or (WindowRect.Height <= 0) then
+    Exit;
+  mp := RayLib.GetMousePosition;
+  Result := (mp.X >= WindowRect.Left) and (mp.X <= WindowRect.Right) and
+            (mp.Y >= WindowRect.Top) and (mp.Y <= WindowRect.Bottom);
+end;
+
+procedure TTyroButton.CheckState;
+begin
+  FHover := IsMouseOver;
+  FDown := FHover and RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+  FClicked := FWasDown and FHover and (not FDown);
+  FWasDown := FDown;
+end;
+
+procedure TTyroButton.DoPaint(ACanvas: TTyroCanvas);
+var
+  r: TRectangle;
+  body, border, foreground: TColor;
+  roundness, lineThick: Single;
+  tx, ty, tw, th: Integer;
+begin
+  inherited;
+  CheckState;
+
+  r := RectangleOf(ClientLeft, ClientTop, ClientWidth, ClientHeight);
+  if (r.Width <= 0) or (r.Height <= 0) then
+    Exit;
+
+  roundness := GetRoundness;
+  lineThick := BorderSize;
+  if lineThick < 1 then
+    lineThick := 1
+  else if lineThick > 4 then
+    lineThick := 4;
+
+  if FDown then
+    body := clGray
+  else if FHover then
+    body := clSkyBlue
+  else
+    body := clLightgray;
+  border := clDarkGray;
+  foreground := clBlack;
+  r.X := r.X + 1;
+  r.Y := r.Y + 1;
+  r.Width := r.Width - 2;
+  r.Height := r.Height - 2;
+
+  RayLib.DrawRectangleRounded(r, roundness, 8, body);
+  RayLib.DrawRectangleRoundedLinesEx(r, roundness, 8, lineThick, border);
+
+  th := Resources.Font.Height;
+  tw := RayLib.MeasureText(PUTF8Char(FCaption), th);
+  tx := round(r.X + (r.Width - tw) / 2);
+  ty := round(r.Y + (r.Height - th) / 2);
+  if FDown then
+    Inc(ty);
+  ACanvas.DrawText(tx, ty, FCaption, foreground);
 end;
 
 { TTyroControl }

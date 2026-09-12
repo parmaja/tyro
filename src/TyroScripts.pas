@@ -12,7 +12,7 @@ uses
   mnUtils, mnClasses, mnLogs,
   RayLib, RayClasses,
   Melodies, TyroSounds,
-  TyroClasses, TyroConsoles;
+  TyroClasses, TyroControls, TyroConsoles;
 
 type
   { TQueueObject }
@@ -70,6 +70,24 @@ type
       procedure DoExecute; override;
     end;
 
+   { TShowOutputObject }
+
+   TShowOutputObject = class(TQueueObject)
+   public
+     fX, fY: Integer;
+     fW, fH: Integer;
+     constructor Create(AX, AY: Integer); overload;
+     constructor Create(AX, AY, AW, AH: Integer); overload;
+     procedure DoExecute; override;
+   end;
+
+   { THideOutputObject }
+
+   THideOutputObject = class(TQueueObject)
+   public
+     procedure DoExecute; override;
+   end;
+
    { TReadConsoleObject }
 
    TReadConsoleObject = class(TQueueObject)
@@ -80,6 +98,22 @@ type
      destructor Destroy; override;
      procedure DoExecute; override;
      procedure HandleConsoleInput(AConsole: TTyroConsole; AInput: string);
+   end;
+
+   { TCreateButtonObject }
+
+   { Creates a button control on the main thread (it is painted by the main
+     drawing cycle every frame) and returns the created control. }
+   TCreateButtonObject = class(TQueueObject)
+   private
+     FCaption: utf8string;
+     FX, FY, FW, FH: Integer;
+     FBorderSize: Integer;
+     FButton: TTyroButton;
+   public
+     constructor Create(const ACaption: utf8string; AX, AY, AW, AH, ABorderSize: Integer);
+     procedure DoExecute; override;
+     property Button: TTyroButton read FButton;
    end;
 
   { TDrawSetColorObject }
@@ -167,6 +201,17 @@ type
     procedure DoExecute; override;
   end;
 
+  { TOutputPrintObject - writes a copy of the script output (print/println)
+    to the engine's Output control. }
+
+  TOutputPrintObject = class(TDrawObject)
+  public
+    FText: String;
+    FNewLine: Boolean;
+    constructor Create(ACanvas: TTyroCanvas; Text: String; NewLine: Boolean);
+    procedure DoExecute; override;
+  end;
+
 
   { TBeepObject }
 
@@ -220,6 +265,36 @@ type
      Canvas: TTyroCanvas;
      EffectName: string;
      constructor Create(ACanvas: TTyroCanvas; const AEffectName: string);
+     procedure DoExecute; override;
+   end;
+
+   { TSetEffectValueObject }
+
+   TSetEffectValueObject = class(TQueueObject)
+   public
+     Canvas: TTyroCanvas;
+     Value: Single;
+     constructor Create(ACanvas: TTyroCanvas; AValue: Single);
+     procedure DoExecute; override;
+   end;
+
+   { TSetEffectAreaObject }
+
+   TSetEffectAreaObject = class(TQueueObject)
+   public
+     Canvas: TTyroCanvas;
+     Area: TRectangle;
+     constructor Create(ACanvas: TTyroCanvas; const AArea: TRectangle);
+     procedure DoExecute; override;
+   end;
+
+   { TLoadShaderObject }
+
+   TLoadShaderObject = class(TQueueObject)
+   public
+     Canvas: TTyroCanvas;
+     FileName: string;
+     constructor Create(ACanvas: TTyroCanvas; const AFileName: string);
      procedure DoExecute; override;
    end;
 
@@ -387,6 +462,42 @@ begin
   Main.ShowConsole(fX, fY, fW, fH);
 end;
 
+{ TShowOutputObject }
+
+constructor TShowOutputObject.Create(AX, AY: Integer);
+begin
+  inherited Create;
+  fX := AX;
+  fY := AY;
+  fW := 0;
+  fH := 0;
+end;
+
+constructor TShowOutputObject.Create(AX, AY, AW, AH: Integer);
+begin
+  inherited Create;
+  fX := AX;
+  fY := AY;
+  fW := AW;
+  fH := AH;
+end;
+
+procedure TShowOutputObject.DoExecute;
+begin
+  Main.Output.Visible := True;
+  if (fW > 0) and (fH > 0) then
+    Main.Output.WindowRect := Rect(fX, fY, fX + fW, fY + fH)
+  else if (fX <> 0) or (fY <> 0) then
+    Main.Output.WindowRect := Rect(fX, fY, fX + Main.Output.Width, fY + Main.Output.Height);
+end;
+
+{ THideOutputObject }
+
+procedure THideOutputObject.DoExecute;
+begin
+  Main.Output.Visible := False;
+end;
+
 { TReadConsoleObject }
 
 constructor TReadConsoleObject.Create(APrompt: string);
@@ -470,6 +581,51 @@ procedure TSetEffectObject.DoExecute;
 begin
   if Canvas <> nil then
     Canvas.SetEffect(EffectName);
+end;
+
+{ TSetEffectValueObject }
+
+constructor TSetEffectValueObject.Create(ACanvas: TTyroCanvas; AValue: Single);
+begin
+  inherited Create;
+  Canvas := ACanvas;
+  Value := AValue;
+end;
+
+procedure TSetEffectValueObject.DoExecute;
+begin
+  if Canvas <> nil then
+    Canvas.SetEffectValue(Value);
+end;
+
+{ TSetEffectAreaObject }
+
+constructor TSetEffectAreaObject.Create(ACanvas: TTyroCanvas; const AArea: TRectangle);
+begin
+  inherited Create;
+  Canvas := ACanvas;
+  Area := AArea;
+end;
+
+procedure TSetEffectAreaObject.DoExecute;
+begin
+  if Canvas <> nil then
+    Canvas.SetEffectArea(Area);
+end;
+
+{ TLoadShaderObject }
+
+constructor TLoadShaderObject.Create(ACanvas: TTyroCanvas; const AFileName: string);
+begin
+  inherited Create;
+  Canvas := ACanvas;
+  FileName := AFileName;
+end;
+
+procedure TLoadShaderObject.DoExecute;
+begin
+  if Canvas <> nil then
+    Canvas.LoadCustomEffect(FileName);
 end;
 
 { TPlaySoundObject }
@@ -556,6 +712,28 @@ end;
 procedure TWindowObject.DoExecute;
 begin
   Main.ShowWindow(FW, FH);
+end;
+
+{ TCreateButtonObject }
+
+constructor TCreateButtonObject.Create(const ACaption: utf8string; AX, AY, AW, AH, ABorderSize: Integer);
+begin
+  inherited Create;
+  FCaption := ACaption;
+  FX := AX;
+  FY := AY;
+  FW := AW;
+  FH := AH;
+  FBorderSize := ABorderSize;
+  EventNeeded;
+end;
+
+procedure TCreateButtonObject.DoExecute;
+begin
+  FButton := TTyroButton.Create(Main);
+  FButton.Caption := FCaption;
+  FButton.WindowRect := Rect(FX, FY, FX + FW, FY + FH);
+  FButton.BorderSize := FBorderSize;
 end;
 
 { TDrawSetColorObject }
@@ -675,9 +853,26 @@ end;
 procedure TPrintObject.DoExecute;
 begin
   if FNewLine then
-    Main.Console.Writeln(fText)
+    Main.Console.Writeln(FText)
   else
-    Main.Console.Write(fText);
+    Main.Console.Write(FText);
+end;
+
+{ TOutputPrintObject }
+
+constructor TOutputPrintObject.Create(ACanvas: TTyroCanvas; Text: String; NewLine: Boolean);
+begin
+  inherited Create(ACanvas);
+  FText := Text;
+  FNewLine := NewLine;
+end;
+
+procedure TOutputPrintObject.DoExecute;
+begin
+  if FNewLine then
+    Main.Output.Writeln(FText)
+  else
+    Main.Output.Write(FText);
 end;
 
 { TDrawTextObject }

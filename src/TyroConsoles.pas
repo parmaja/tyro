@@ -33,7 +33,7 @@ unit TyroConsoles;
 interface
 
 uses
-  Classes, SysUtils, Contnrs,
+  Classes, SysUtils, Contnrs, SyncObjs,
   LazUTF8,
   RayLib, TyroClasses, TyroControls;
 
@@ -206,6 +206,35 @@ type
     property AutoFollow: Boolean Read FAutoFollow Write FAutoFollow default True;
     property WriteInput:Boolean read FWriteInput write FWriteInput default True;
     property OverwriteMode: Boolean Read FOverwriteMode Write FOverwriteMode default False;
+  end;
+
+  { TTyroOutput }
+
+  { Simple output-only control. It catches the script output (log, print,
+    println) and displays the tail of the line buffer. It is positioned,
+    shown and hidden from Lua (see the "output" table). }
+
+  TTyroOutput = class(TTyroControl)
+  private
+    FLines: TStringList;
+    FLock: TCriticalSection; //guards FLines (log() writes from the script thread)
+    FMaxLines: Integer;
+    FBackColor: TColor;
+    FTextColor: TColor;
+    procedure TrimLines;
+    function GetLineCount: Integer;
+  protected
+    procedure DoPaint(ACanvas: TTyroCanvas); override;
+  public
+    constructor Create(AParent: TTyroLayout); override;
+    destructor Destroy; override;
+    procedure Write(S: string);
+    procedure Writeln(S: string);
+    procedure Clear;
+    property MaxLines: Integer read FMaxLines write FMaxLines default 500;
+    property LineCount: Integer read GetLineCount;
+    property BackColor: TColor read FBackColor write FBackColor;
+    property TextColor: TColor read FTextColor write FTextColor;
   end;
 
   { TColorChar - Represents a single character with color and attribute information }
@@ -2440,6 +2469,118 @@ begin
   FreeAndNil(FLines);
   FInputBuffer.Free;
   inherited Destroy;
+end;
+
+constructor TTyroOutput.Create(AParent: TTyroLayout);
+begin
+  inherited;
+  Style := [csClip];
+  FMaxLines := 500;
+  FBackColor := clBlack;
+  FTextColor := clLightgray;
+  FLines := TStringList.Create;
+  FLock := TCriticalSection.Create;
+  SetWindowBounds(0, 0, 480, 240);
+end;
+
+destructor TTyroOutput.Destroy;
+begin
+  FreeAndNil(FLines);
+  FreeAndNil(FLock);
+  inherited Destroy;
+end;
+
+function TTyroOutput.GetLineCount: Integer;
+begin
+  FLock.Enter;
+  try
+    Result := FLines.Count;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TTyroOutput.TrimLines;
+begin
+  while FLines.Count > FMaxLines do
+    FLines.Delete(0);
+end;
+
+procedure TTyroOutput.Write(S: string);
+begin
+  if S = '' then
+    Exit;
+  FLock.Enter;
+  try
+    if FLines.Count = 0 then
+      FLines.Add('');
+    FLines[FLines.Count - 1] := FLines[FLines.Count - 1] + S;
+    TrimLines;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TTyroOutput.Writeln(S: string);
+begin
+  FLock.Enter;
+  try
+    if S <> '' then
+    begin
+      if FLines.Count = 0 then
+        FLines.Add('');
+      FLines[FLines.Count - 1] := FLines[FLines.Count - 1] + S;
+    end;
+    FLines.Add(''); //open the next line
+    TrimLines;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TTyroOutput.Clear;
+begin
+  FLock.Enter;
+  try
+    FLines.Clear;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TTyroOutput.DoPaint(ACanvas: TTyroCanvas);
+var
+  r: TRect;
+  ch: Integer;
+  i, vis, start, y: Integer;
+begin
+  inherited;
+  r := ClientRect;
+  if (r.Width <= 0) or (r.Height <= 0) then
+    Exit;
+  ACanvas.DrawRectangle(r.Left, r.Top, r.Width, r.Height, FBackColor, True);
+  ch := Resources.Font.Height;
+  if ch <= 0 then
+    ch := CDefaultCharHeight;
+  if ch <= 0 then
+    Exit;
+  vis := r.Height div ch;
+  if vis < 1 then
+    vis := 1;
+  FLock.Enter;
+  try
+    start := FLines.Count - vis;
+    if start < 0 then
+      start := 0;
+    y := r.Top;
+    for i := start to FLines.Count - 1 do
+    begin
+      ACanvas.DrawText(r.Left, y, FLines[i], FTextColor);
+      Inc(y, ch);
+    end;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure InitColors;
