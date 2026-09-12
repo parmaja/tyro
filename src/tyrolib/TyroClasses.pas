@@ -25,58 +25,75 @@ const
   clFrenchSkyBlue: TRGBAColor = (Red: $77; Green: $B5; Blue: $FE; Alpha: $FF);
   clCornflowerBlue: TRGBAColor = (Red: $5d; Green: $9f; Blue: $f9; Alpha: $FF);
 
-  // Built-in post-processing shaders (GLSL 330 fragment sources)
-  cWaterEffectShader =
+  // Built-in post-processing shaders (GLSL 330 fragment sources).
+  // All share two uniforms:
+  //   value - a 0..1 effect parameter (water height, glow boundary, intensity...)
+  //   area  - optional rectangle {x, y, w, h} in canvas pixels (y from the top)
+  //           that restricts where the effect applies (w <= 0 = full canvas)
+  cShaderPreamble =
     '#version 330' + #10 +
     'uniform vec2 resolution;' + #10 +
     'uniform float time;' + #10 +
+    'uniform float value;' + #10 +
+    'uniform vec4 area;' + #10 +
     'uniform sampler2D texture0;' + #10 +
     'uniform vec4 colDiffuse;' + #10 +
     'in vec2 fragTexCoord;' + #10 +
     'in vec4 fragColor;' + #10 +
-    'out vec4 finalColor;' + #10 +
-    '' + #10 +
+    'out vec4 finalColor;' + #10;
+
+  // Common region setup:
+  //   px      canvas pixel position (y grows upward, 0 = bottom)
+  //   localY  0..1 height within the area measured from its bottom (or canvas)
+  //   soft    soft mask of the area rectangle (1 inside, fades on the border)
+  cShaderRegion =
+    'vec2 px = fragTexCoord * resolution;' + #10 +
+    'float localY = fragTexCoord.y;' + #10 +
+    'float soft = 1.0;' + #10 +
+    'if (area.z > 0.0)' + #10 +
+    '{' + #10 +
+    '    vec2 d = abs(px - (area.xy + area.zw * 0.5)) - area.zw * 0.5;' + #10 +
+    '    float dist = max(d.x, d.y);' + #10 +
+    '    soft = 1.0 - smoothstep(0.0, 3.0, dist);' + #10 +
+    '    localY = clamp((px.y - area.y) / area.w, 0.0, 1.0);' + #10 +
+    '}' + #10;
+
+  cWaterEffectShader =
+    cShaderPreamble +
     'void main()' + #10 +
     '{' + #10 +
-    '    vec2 tc = fragTexCoord;' + #10 +
-    '    // water fills the bottom of the canvas (fragTexCoord.y = 0 is the bottom)' + #10 +
-    '    float waterTop = 0.34;' + #10 +
-    '    float region = 1.0 - smoothstep(0.12, waterTop, tc.y);' + #10 +
+    cShaderRegion +
+    '    // water fills the bottom of the canvas/area; value = water surface height' + #10 +
+    '    float waterTop = clamp(value, 0.001, 1.0);' + #10 +
+    '    float region = 1.0 - smoothstep(max(0.0, waterTop - 0.22), waterTop, localY);' + #10 +
     '' + #10 +
-    '    // horizontal wave displacement, growing closer to the bottom' + #10 +
+    '    // horizontal wave displacement, growing closer to the surface' + #10 +
+    '    vec2 tc = fragTexCoord;' + #10 +
     '    float wave = 0.0;' + #10 +
-    '    wave += sin(tc.y * 40.0 + time * 2.2) * 0.012;' + #10 +
-    '    wave += sin(tc.y * 25.0 - time * 1.6) * 0.009;' + #10 +
-    '    wave += sin(tc.y * 12.0 + time * 0.9) * 0.006;' + #10 +
-    '    tc.x += wave * region;' + #10 +
+    '    wave += sin(localY * 40.0 + time * 2.2) * 0.012;' + #10 +
+    '    wave += sin(localY * 25.0 - time * 1.6) * 0.009;' + #10 +
+    '    wave += sin(localY * 12.0 + time * 0.9) * 0.006;' + #10 +
+    '    tc.x += wave * region * soft;' + #10 +
     '' + #10 +
     '    vec4 color = texture(texture0, tc);' + #10 +
     '' + #10 +
-    '    // blue water tint over the bottom region' + #10 +
+    '    // blue water tint over the region' + #10 +
     '    vec4 water = vec4(0.10, 0.35, 0.75, 1.0);' + #10 +
-    '    color.rgb = mix(color.rgb, color.rgb * 0.5 + water.rgb * 0.6, region * 0.45);' + #10 +
+    '    color.rgb = mix(color.rgb, color.rgb * 0.5 + water.rgb * 0.6, region * 0.45 * soft);' + #10 +
     '' + #10 +
     '    // foam line around the water surface' + #10 +
-    '    float band = 1.0 - smoothstep(0.0, 0.035, abs(tc.y - waterTop));' + #10 +
-    '    float foam = 0.5 + 0.5 * sin(tc.x * 50.0 + time * 3.0);' + #10 +
-    '    foam *= 0.5 + 0.5 * sin(tc.x * 31.0 - time * 2.3);' + #10 +
-    '    color.rgb += vec3(0.95, 0.98, 1.0) * band * foam * 0.4;' + #10 +
+    '    float band = 1.0 - smoothstep(0.0, 0.035, abs(localY - waterTop));' + #10 +
+    '    float foam = (0.5 + 0.5 * sin(tc.x * 50.0 + time * 3.0)) * (0.5 + 0.5 * sin(tc.x * 31.0 - time * 2.3));' + #10 +
+    '    color.rgb += vec3(0.95, 0.98, 1.0) * band * foam * 0.4 * soft;' + #10 +
     '' + #10 +
     '    finalColor = color;' + #10 +
     '}';
 
   cGlowEffectShader =
-    '#version 330' + #10 +
-    'uniform vec2 resolution;' + #10 +
-    'uniform float time;' + #10 +
-    'uniform sampler2D texture0;' + #10 +
-    'uniform vec4 colDiffuse;' + #10 +
-    'in vec2 fragTexCoord;' + #10 +
-    'in vec4 fragColor;' + #10 +
-    'out vec4 finalColor;' + #10 +
-    '' + #10 +
+    cShaderPreamble +
     'void main()' + #10 +
     '{' + #10 +
+    cShaderRegion +
     '    vec2 texelSize = 1.0 / resolution;' + #10 +
     '    vec4 color = texture(texture0, fragTexCoord);' + #10 +
     '' + #10 +
@@ -93,12 +110,73 @@ const
     '    blur += texture(texture0, fragTexCoord + vec2( 2.0,  2.0) * texelSize);' + #10 +
     '    blur /= 9.0;' + #10 +
     '' + #10 +
-    '    // bright pixels leak light into the blur' + #10 +
+    '    // bright pixels leak light into the blur; value limits the region height' + #10 +
     '    float bright = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));' + #10 +
     '    float pulse = 0.75 + 0.25 * sin(time * 2.0);' + #10 +
     '    vec3 glow = blur.rgb * bright * bright * pulse * 1.8;' + #10 +
+    '    float region = 1.0 - smoothstep(value - 0.02, value, localY);' + #10 +
+    '    glow *= region * soft;' + #10 +
     '' + #10 +
     '    finalColor = vec4(color.rgb + glow, color.a);' + #10 +
+    '}';
+
+  cGrayEffectShader =
+    cShaderPreamble +
+    'void main()' + #10 +
+    '{' + #10 +
+    cShaderRegion +
+    '    vec4 color = texture(texture0, fragTexCoord);' + #10 +
+    '    float lum = dot(color.rgb, vec3(0.299, 0.587, 0.114));' + #10 +
+    '    vec3 gray = mix(color.rgb, vec3(lum), clamp(value, 0.0, 1.0));' + #10 +
+    '    finalColor = mix(color, vec4(gray, color.a), soft);' + #10 +
+    '}';
+
+  cSepiaEffectShader =
+    cShaderPreamble +
+    'void main()' + #10 +
+    '{' + #10 +
+    cShaderRegion +
+    '    vec4 color = texture(texture0, fragTexCoord);' + #10 +
+    '    vec3 sep = vec3(' + #10 +
+    '        dot(color.rgb, vec3(0.393, 0.769, 0.189)),' + #10 +
+    '        dot(color.rgb, vec3(0.349, 0.686, 0.168)),' + #10 +
+    '        dot(color.rgb, vec3(0.272, 0.534, 0.131)));' + #10 +
+    '    vec3 outC = mix(color.rgb, sep, clamp(value, 0.0, 1.0));' + #10 +
+    '    finalColor = mix(color, vec4(outC, color.a), soft);' + #10 +
+    '}';
+
+  cInvertEffectShader =
+    cShaderPreamble +
+    'void main()' + #10 +
+    '{' + #10 +
+    cShaderRegion +
+    '    vec4 color = texture(texture0, fragTexCoord);' + #10 +
+    '    vec3 inv = mix(color.rgb, 1.0 - color.rgb, clamp(value, 0.0, 1.0));' + #10 +
+    '    finalColor = mix(color, vec4(inv, color.a), soft);' + #10 +
+    '}';
+
+  cVignetteEffectShader =
+    cShaderPreamble +
+    'void main()' + #10 +
+    '{' + #10 +
+    cShaderRegion +
+    '    vec4 color = texture(texture0, fragTexCoord);' + #10 +
+    '    float dist = distance(fragTexCoord, vec2(0.5, 0.5));' + #10 +
+    '    float vig = 1.0 - smoothstep(0.25, 0.75, dist) * clamp(value, 0.0, 1.0);' + #10 +
+    '    vec3 dark = color.rgb * vig;' + #10 +
+    '    finalColor = mix(color, vec4(dark, color.a), soft);' + #10 +
+    '}';
+
+  cPixelateEffectShader =
+    cShaderPreamble +
+    'void main()' + #10 +
+    '{' + #10 +
+    cShaderRegion +
+    '    vec4 color = texture(texture0, fragTexCoord);' + #10 +
+    '    float block = clamp(value, 0.002, 1.0) * 16.0;' + #10 +
+    '    vec2 cells = resolution / block;' + #10 +
+    '    vec2 q = floor(fragTexCoord * cells) / cells;' + #10 +
+    '    finalColor = mix(color, texture(texture0, q), soft);' + #10 +
     '}';
 
 type
@@ -121,7 +199,7 @@ type
 
   { TTyroCanvas }
 
-  TTyroEffect = (fxNone, fxWater, fxGlow);
+  TTyroEffect = (fxNone, fxWater, fxGlow, fxGray, fxSepia, fxInvert, fxVignette, fxPixelate, fxCustom);
 
   TTyroCanvas = class abstract(TObject)
   private
@@ -146,7 +224,7 @@ type
     procedure ResetOrigin;
     procedure BeginDraw; virtual;
     procedure EndDraw; virtual;
-    procedure PostDraw; virtual;
+    procedure PostDraw(AX: Integer = 0; AY: Integer = 0); virtual;
     procedure Resize(AWidth, AHeight: Integer); virtual;
 
     procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
@@ -169,10 +247,17 @@ type
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
 
     procedure Clear;
+    procedure ClearBackground(const AColor: TColor); virtual;
 
-    //Post-processing shader effect ("water", "glow", "none")
+    //Post-processing shader effect ("water", "glow", "gray", "sepia",
+    //"invert", "vignette", "pixelate", "custom", "none")
     procedure SetEffect(const AEffectName: string); virtual;
+    procedure LoadCustomEffect(const AFileName: string); virtual;
     function GetEffectName: string; virtual;
+    procedure SetEffectValue(AValue: Single); virtual;
+    function GetEffectValue: Single; virtual;
+    procedure SetEffectArea(const AArea: TRectangle); virtual;
+    function GetEffectArea: TRectangle; virtual;
 
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
     property PenWidth: Integer read FPenWidth write SetPenWidth;
@@ -190,17 +275,31 @@ type
     FShader: TShader;
     FShaderTimeLoc: Integer;
     FShaderResLoc: Integer;
+    FShaderValueLoc: Integer;
+    FShaderAreaLoc: Integer;
+    FEffectValue: Single;
+    FValueExplicit: Boolean;
+    FEffectArea: TRectangle;
+    FAreaExplicit: Boolean;
+    FCustomShaderFile: string;
     procedure LoadEffect(ACode: rawbytestring; AEffect: TTyroEffect);
     procedure UnloadEffect;
+    procedure SetValueUniform;
+    procedure SetAreaUniform;
   public
     constructor Create(AWidth, AHeight: Integer; ATextureMode: Boolean = False);
     destructor Destroy; override;
     procedure BeginDraw; override;
     procedure EndDraw; override;
-    procedure PostDraw; override;
+    procedure PostDraw(AX: Integer = 0; AY: Integer = 0); override;
     procedure Resize(AWidth, AHeight: Integer); override;
     procedure SetEffect(const AEffectName: string); override;
+    procedure LoadCustomEffect(const AFileName: string); override;
     function GetEffectName: string; override;
+    procedure SetEffectValue(AValue: Single); override;
+    function GetEffectValue: Single; override;
+    procedure SetEffectArea(const AArea: TRectangle); override;
+    function GetEffectArea: TRectangle; override;
     property Texture: TRenderTexture2D read FTexture;
   end;
 
@@ -481,7 +580,7 @@ begin
   FLastY := Y + AHeight;
 end;
 
-procedure TTyroCanvas.PostDraw;
+procedure TTyroCanvas.PostDraw(AX: Integer = 0; AY: Integer = 0);
 begin
 end;
 
@@ -497,13 +596,40 @@ begin
   ClearBackground(FBackColor);
 end;
 
+procedure TTyroCanvas.ClearBackground(const AColor: TColor);
+begin
+  RayLib.ClearBackground(AColor);
+end;
+
 procedure TTyroCanvas.SetEffect(const AEffectName: string);
+begin
+end;
+
+procedure TTyroCanvas.LoadCustomEffect(const AFileName: string);
 begin
 end;
 
 function TTyroCanvas.GetEffectName: string;
 begin
   Result := 'none';
+end;
+
+procedure TTyroCanvas.SetEffectValue(AValue: Single);
+begin
+end;
+
+function TTyroCanvas.GetEffectValue: Single;
+begin
+  Result := 1.0;
+end;
+
+procedure TTyroCanvas.SetEffectArea(const AArea: TRectangle);
+begin
+end;
+
+function TTyroCanvas.GetEffectArea: TRectangle;
+begin
+  Result := TRectangle.Create(0, 0, 0, 0);
 end;
 
 { TTyroTextureCanvas }
@@ -540,7 +666,11 @@ begin
     begin
       FShaderTimeLoc := RayLib.GetShaderLocation(FShader, 'time');
       FShaderResLoc := RayLib.GetShaderLocation(FShader, 'resolution');
+      FShaderValueLoc := RayLib.GetShaderLocation(FShader, 'value');
+      FShaderAreaLoc := RayLib.GetShaderLocation(FShader, 'area');
       FEffect := AEffect;
+      SetValueUniform;
+      SetAreaUniform;
     end;
   end;
 end;
@@ -552,10 +682,40 @@ begin
   FShader := Default(TShader);
   FShaderTimeLoc := -1;
   FShaderResLoc := -1;
+  FShaderValueLoc := -1;
+  FShaderAreaLoc := -1;
   FEffect := fxNone;
 end;
 
-procedure TTyroTextureCanvas.PostDraw;
+procedure TTyroTextureCanvas.SetValueUniform;
+var
+  v: Single;
+begin
+  if (FShader.ID <> 0) and RayLib.IsShaderValid(FShader) and (FShaderValueLoc >= 0) then
+  begin
+    v := GetEffectValue;
+    RayLib.SetShaderValue(FShader, FShaderValueLoc, PUTF8Char(Pointer(@v)), Ord(SHADER_UNIFORM_FLOAT));
+  end;
+end;
+
+procedure TTyroTextureCanvas.SetAreaUniform;
+var
+  vArea: TRectangle;
+  A: TRectangle;
+begin
+  if (FShader.ID <> 0) and RayLib.IsShaderValid(FShader) and (FShaderAreaLoc >= 0) then
+  begin
+    A := GetEffectArea;
+    //canvas y grows down, shader px.y grows up -> flip vertically
+    vArea.x := A.x;
+    vArea.y := Height - (A.y + A.height);
+    vArea.width := A.width;
+    vArea.height := A.height;
+    RayLib.SetShaderValue(FShader, FShaderAreaLoc, PUTF8Char(Pointer(@vArea)), Ord(SHADER_UNIFORM_VEC4));
+  end;
+end;
+
+procedure TTyroTextureCanvas.PostDraw(AX: Integer = 0; AY: Integer = 0);
 var
   Shader: TShader;
   vTime: Single;
@@ -574,9 +734,16 @@ begin
       vRes := Vector2Of(Width, Height);
       if FShaderResLoc >= 0 then
         RayLib.SetShaderValue(Shader, FShaderResLoc, PUTF8Char(Pointer(@vRes)), Ord(SHADER_UNIFORM_VEC2));
+      if FShaderValueLoc >= 0 then
+      begin
+        vTime := GetEffectValue;
+        RayLib.SetShaderValue(Shader, FShaderValueLoc, PUTF8Char(Pointer(@vTime)), Ord(SHADER_UNIFORM_FLOAT));
+      end;
+      if FShaderAreaLoc >= 0 then
+        SetAreaUniform;
     end;
     with FTexture do
-      RayLib.DrawTextureRec(Texture, TRectangle.Create(0, 0, Texture.Width, -Texture.height), Vector2Of(0, 0), clWhite);
+      RayLib.DrawTextureRec(Texture, TRectangle.Create(0, 0, Texture.Width, -Texture.height), Vector2Of(AX, AY), clWhite);
     if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
       RayLib.EndShaderMode;
   end;
@@ -590,7 +757,17 @@ begin
   if SameText(AEffectName, 'water') then
     LoadEffect(cWaterEffectShader, fxWater)
   else if SameText(AEffectName, 'glow') then
-    LoadEffect(cGlowEffectShader, fxGlow);
+    LoadEffect(cGlowEffectShader, fxGlow)
+  else if SameText(AEffectName, 'gray') then
+    LoadEffect(cGrayEffectShader, fxGray)
+  else if SameText(AEffectName, 'sepia') then
+    LoadEffect(cSepiaEffectShader, fxSepia)
+  else if SameText(AEffectName, 'invert') then
+    LoadEffect(cInvertEffectShader, fxInvert)
+  else if SameText(AEffectName, 'vignette') then
+    LoadEffect(cVignetteEffectShader, fxVignette)
+  else if SameText(AEffectName, 'pixelate') then
+    LoadEffect(cPixelateEffectShader, fxPixelate);
 end;
 
 function TTyroTextureCanvas.GetEffectName: string;
@@ -598,9 +775,81 @@ begin
   case FEffect of
     fxWater: Result := 'water';
     fxGlow: Result := 'glow';
+    fxGray: Result := 'gray';
+    fxSepia: Result := 'sepia';
+    fxInvert: Result := 'invert';
+    fxVignette: Result := 'vignette';
+    fxPixelate: Result := 'pixelate';
+    fxCustom: Result := FCustomShaderFile;
   else
     Result := 'none';
   end;
+end;
+
+procedure TTyroTextureCanvas.LoadCustomEffect(const AFileName: string);
+var
+  s: string;
+  fs: TFileStream;
+  Code: rawbytestring;
+begin
+  s := Resources.GuessFileName(AFileName, '');
+  if not SysUtils.FileExists(s) then
+    Exit;
+  fs := TFileStream.Create(s, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Code, fs.Size);
+    if fs.Size > 0 then
+      fs.Read(Code[1], fs.Size);
+  finally
+    fs.Free;
+  end;
+  if Code <> '' then
+  begin
+    UnloadEffect;
+    FCustomShaderFile := AFileName;
+    LoadEffect(Code, fxCustom);
+  end;
+end;
+
+procedure TTyroTextureCanvas.SetEffectValue(AValue: Single);
+begin
+  if AValue < 0.0 then
+    AValue := 0.0
+  else if AValue > 1.0 then
+    AValue := 1.0;
+  FEffectValue := AValue;
+  FValueExplicit := True;
+  SetValueUniform;
+end;
+
+function TTyroTextureCanvas.GetEffectValue: Single;
+begin
+  if FValueExplicit then
+    Result := FEffectValue
+  else
+    case FEffect of
+      fxWater: Result := 0.34;
+      fxVignette: Result := 0.5;
+      fxPixelate: Result := 0.06;
+      fxGlow: Result := 1.0;
+    else
+      Result := 1.0;
+    end;
+end;
+
+procedure TTyroTextureCanvas.SetEffectArea(const AArea: TRectangle);
+begin
+  FEffectArea := AArea;
+  FAreaExplicit := True;
+  SetAreaUniform;
+end;
+
+function TTyroTextureCanvas.GetEffectArea: TRectangle;
+begin
+  if FAreaExplicit then
+    Result := FEffectArea
+  else
+    Result := TRectangle.Create(0, 0, Width, Height);
 end;
 
 procedure TTyroTextureCanvas.EndDraw;

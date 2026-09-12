@@ -140,10 +140,12 @@ type
   TTyroControl = class abstract(TTyroLayout)
   private
     FWindow: TTyroWindow;
+    FCanvas: TTyroCanvas;
     FVisible: Boolean;
     function GetFocused: Boolean;
     procedure SetVisible(AValue: Boolean);
     procedure SetWindow(AValue: TTyroWindow);
+    procedure SetCanvas(AValue: TTyroCanvas);
     function GetClientLeft: Integer;
     function GetClientTop: Integer;
     procedure SetFocused(AValue: Boolean);
@@ -153,6 +155,9 @@ type
     function GetClientWidth: Integer;
     function GetClientHeight: Integer;
 
+    //* Make sure the own (transparent) texture buffer exists and matches the
+    //* control size. Returns False when no buffer can be created.
+    function PrepareCanvas: Boolean;
     procedure ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
     procedure SetScrollRange(Which: TScrollbarType; AMin, AMax: Integer; APage: Integer);
     procedure SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
@@ -192,6 +197,10 @@ type
     property ClientWidth: Integer read GetClientWidth;
     property ClientHeight: Integer read GetClientHeight;
     property Visible: Boolean read FVisible write SetVisible;
+
+    //* Own transparent texture buffer. The control content is painted into it
+    //* every frame and the buffer is drawn (blitted) on top of the canvas.
+    property Canvas: TTyroCanvas read FCanvas write SetCanvas;
   end;
 
   { TTyroPanel }
@@ -223,22 +232,6 @@ type
     property Hover: Boolean read FHover;
     property Down: Boolean read FDown;
     property Clicked: Boolean read FClicked;
-  end;
-
-  { TTyroTexture }
-
-  { TTyroTextureControl }
-
-  TTyroTextureControl = class(TTyroControl) //Own a texture
-  private
-    FCanvas: TTyroCanvas;
-  public
-    constructor Create(AParent: TTyroLayout); override;
-    destructor Destroy; override;
-    procedure Invalidate; override;
-    procedure PaintWindow(ACanvas: TTyroCanvas); override;
-    procedure Resized; override;
-    property Canvas: TTyroCanvas read FCanvas write FCanvas;
   end;
 
   { TTyroWindow }
@@ -478,13 +471,14 @@ begin
             Camera2D.Zoom := 1;
             Camera2D.Rotation := 0;
 
-            Paint;
             Canvas.BeginDraw;
             BeginMode2D(Camera2D);
             Draw;
             EndMode2D();
             Canvas.EndDraw;
             Canvas.PostDraw;
+
+            Paint;
 
             if moShowFPS in Options then
             begin
@@ -567,39 +561,6 @@ end;
 procedure TTyroMainWindow.Update;
 begin
 
-end;
-
-{ TTyroTextureControl }
-
-constructor TTyroTextureControl.Create(AParent: TTyroLayout);
-begin
-  inherited Create(AParent);
-  FCanvas := TTyroTextureCanvas.Create(ClientWidth, ClientHeight, True);
-end;
-
-destructor TTyroTextureControl.Destroy;
-begin
-  FreeAndNil(FCanvas);
-  inherited Destroy;
-end;
-
-procedure TTyroTextureControl.Invalidate;
-begin
-  inherited Invalidate;
-//  Paint(Canvas);
-end;
-
-procedure TTyroTextureControl.PaintWindow(ACanvas: TTyroCanvas);
-begin
-  inherited;
-  Canvas.PostDraw;
-end;
-
-procedure TTyroTextureControl.Resized;
-begin
-  Canvas.Width := ClientWidth;
-  Canvas.Height := ClientHeight;
-  inherited;
 end;
 
 { TTyroLayout }
@@ -1035,18 +996,69 @@ procedure TTyroControl.PaintWindow(ACanvas: TTyroCanvas);
 begin
   if Visible then
   begin
-    if csClip in Style then
-      RayLib.BeginScissorMode(FWindowRect.Left + ClientLeft, FWindowRect.Top + ClientTop, ClientWidth, ClientHeight);
-    ACanvas.SetOrigin(FWindowRect.Left + ClientLeft, FWindowRect.Top + ClientTop);
-    try
-      DoPaintBackground(ACanvas);
-      DoPaint(ACanvas)
-    finally
-      ACanvas.ResetOrigin;
+    if PrepareCanvas then
+    begin
+      //* Paint the control content into its own transparent texture buffer,
+      //* then draw (blit) that buffer on top of the window canvas.
+      Canvas.BeginDraw;
+      Canvas.ClearBackground(clBlank);
+      try
+        if csClip in Style then
+          RayLib.BeginScissorMode(ClientLeft, ClientTop, ClientWidth, ClientHeight);
+        Canvas.SetOrigin(ClientLeft, ClientTop);
+        try
+          DoPaintBackground(Canvas);
+          DoPaint(Canvas)
+        finally
+          Canvas.ResetOrigin;
+          if csClip in Style then
+            RayLib.EndScissorMode();
+        end;
+      finally
+        Canvas.EndDraw;
+      end;
+      Canvas.PostDraw(WindowRect.Left, WindowRect.Top);
+    end
+    else
+    begin
+      //* No own texture could be created: paint directly as a fallback.
       if csClip in Style then
-        RayLib.EndScissorMode();
+        RayLib.BeginScissorMode(WindowRect.Left + ClientLeft, WindowRect.Top + ClientTop, ClientWidth, ClientHeight);
+      ACanvas.SetOrigin(WindowRect.Left + ClientLeft, WindowRect.Top + ClientTop);
+      try
+        DoPaintBackground(ACanvas);
+        DoPaint(ACanvas)
+      finally
+        ACanvas.ResetOrigin;
+        if csClip in Style then
+          RayLib.EndScissorMode();
+      end;
     end;
   end;
+end;
+
+function TTyroControl.PrepareCanvas: Boolean;
+var
+  w, h: Integer;
+begin
+  w := WindowRect.Width;
+  h := WindowRect.Height;
+  Result := (w >= 1) and (h >= 1);
+  if not Result then
+    Exit;
+  if (FCanvas = nil) or (FCanvas.Width <> w) or (FCanvas.Height <> h) then
+  begin
+    FreeAndNil(FCanvas);
+    FCanvas := TTyroTextureCanvas.Create(w, h, True);
+  end;
+end;
+
+procedure TTyroControl.SetCanvas(AValue: TTyroCanvas);
+begin
+  if FCanvas = AValue then
+    Exit;
+  FreeAndNil(FCanvas);
+  FCanvas := AValue;
 end;
 
 procedure TTyroControl.FocusChanged;
@@ -1138,6 +1150,7 @@ begin
   FState := FState - [csCreating, csCreated] + [csDestroying];
   if Parent <> nil then
     Parent := nil;
+  FreeAndNil(FCanvas);
   inherited;
 end;
 
