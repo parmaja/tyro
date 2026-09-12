@@ -27,6 +27,11 @@ const
   sPromptChar = '›';
   sPromptDOT: UTF8string = #$25CF;
 
+var
+  // Debug switch: when True, DBG messages are written to the console.
+  // Off by default (globals are zero-initialized) to keep the output clean.
+  IsDebug: Boolean;
+
 
 type
 
