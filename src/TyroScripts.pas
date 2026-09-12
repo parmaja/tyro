@@ -213,6 +213,16 @@ type
      procedure DoExecute; override;
    end;
 
+   { TSetEffectObject }
+
+   TSetEffectObject = class(TQueueObject)
+   public
+     Canvas: TTyroCanvas;
+     EffectName: string;
+     constructor Create(ACanvas: TTyroCanvas; const AEffectName: string);
+     procedure DoExecute; override;
+   end;
+
   { TClearObject }
 
   TClearObject = class(TDrawObject)
@@ -445,6 +455,21 @@ end;
 procedure TLoadFontObject.DoExecute;
 begin
   Resources.Font.LoadFromFile(FileName, FontSize);
+end;
+
+{ TSetEffectObject }
+
+constructor TSetEffectObject.Create(ACanvas: TTyroCanvas; const AEffectName: string);
+begin
+  inherited Create;
+  Canvas := ACanvas;
+  EffectName := AEffectName;
+end;
+
+procedure TSetEffectObject.DoExecute;
+begin
+  if Canvas <> nil then
+    Canvas.SetEffect(EffectName);
 end;
 
 { TPlaySoundObject }

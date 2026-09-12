@@ -193,6 +193,36 @@ while true do
 end
 ```
 
+# Post-processing Effects
+
+Simple screen shaders can be applied to the whole canvas with
+`canvas.effect()`. They are built-in and need no files.
+
+| Function | Description |
+|----------|-------------|
+| `canvas.effect("water")` | Wavy water with foam across the bottom of the canvas |
+| `canvas.effect("glow")` | Soft glow around bright pixels (nice for suns, bulbs, lasers) |
+| `canvas.effect("none")` | Remove the effect |
+
+```lua
+window.show(640, 480)
+canvas.effect("glow")       -- turn it on
+
+-- draw something bright, it will glow
+canvas.color = colors.yellow
+canvas.circle(320, 240, 60, true)
+```
+
+The `"water"` effect tints and distorts the lower part of the canvas, so draw a
+shore or sea bottom there if you want a sea scene. Toggle effects at any time
+with the keys of your choice:
+
+```lua
+if iskeypressed("1") then canvas.effect("water") end
+if iskeypressed("2") then canvas.effect("glow") end
+if iskeypressed("0") then canvas.effect("none") end
+```
+
 # Timing
 
 | Function | Returns | Description |
@@ -237,6 +267,7 @@ tyro demos/<name>.lua
 | `demos/colors_bar.lua` | Full color palette display |
 | `demos/multiply.lua` | Drawing + MML sound |
 | `demos/text.lua` | Multi-language text rendering |
+| `demos/shader_demo.lua` | Post-processing shaders: water and glow effects |
 
 # Issues
 

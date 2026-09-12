@@ -42,6 +42,12 @@ tyro demos/pong.lua
 | `music_demo.lua` | music.sound() tones and music.mml() melodies |
 | `multiply.lua` | Drawing + MML sound effects |
 
+### Effects
+
+| File | Feature |
+|------|---------|
+| `shader_demo.lua` | Post-processing shaders: canvas.effect("water") and canvas.effect("glow") |
+
 ### Input
 
 | File | Feature |

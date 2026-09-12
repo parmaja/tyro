@@ -25,6 +25,82 @@ const
   clFrenchSkyBlue: TRGBAColor = (Red: $77; Green: $B5; Blue: $FE; Alpha: $FF);
   clCornflowerBlue: TRGBAColor = (Red: $5d; Green: $9f; Blue: $f9; Alpha: $FF);
 
+  // Built-in post-processing shaders (GLSL 330 fragment sources)
+  cWaterEffectShader =
+    '#version 330' + #10 +
+    'uniform vec2 resolution;' + #10 +
+    'uniform float time;' + #10 +
+    'uniform sampler2D texture0;' + #10 +
+    'uniform vec4 colDiffuse;' + #10 +
+    'in vec2 fragTexCoord;' + #10 +
+    'in vec4 fragColor;' + #10 +
+    'out vec4 finalColor;' + #10 +
+    '' + #10 +
+    'void main()' + #10 +
+    '{' + #10 +
+    '    vec2 tc = fragTexCoord;' + #10 +
+    '    // water fills the bottom of the canvas (fragTexCoord.y = 0 is the bottom)' + #10 +
+    '    float waterTop = 0.34;' + #10 +
+    '    float region = 1.0 - smoothstep(0.12, waterTop, tc.y);' + #10 +
+    '' + #10 +
+    '    // horizontal wave displacement, growing closer to the bottom' + #10 +
+    '    float wave = 0.0;' + #10 +
+    '    wave += sin(tc.y * 40.0 + time * 2.2) * 0.012;' + #10 +
+    '    wave += sin(tc.y * 25.0 - time * 1.6) * 0.009;' + #10 +
+    '    wave += sin(tc.y * 12.0 + time * 0.9) * 0.006;' + #10 +
+    '    tc.x += wave * region;' + #10 +
+    '' + #10 +
+    '    vec4 color = texture(texture0, tc);' + #10 +
+    '' + #10 +
+    '    // blue water tint over the bottom region' + #10 +
+    '    vec4 water = vec4(0.10, 0.35, 0.75, 1.0);' + #10 +
+    '    color.rgb = mix(color.rgb, color.rgb * 0.5 + water.rgb * 0.6, region * 0.45);' + #10 +
+    '' + #10 +
+    '    // foam line around the water surface' + #10 +
+    '    float band = 1.0 - smoothstep(0.0, 0.035, abs(tc.y - waterTop));' + #10 +
+    '    float foam = 0.5 + 0.5 * sin(tc.x * 50.0 + time * 3.0);' + #10 +
+    '    foam *= 0.5 + 0.5 * sin(tc.x * 31.0 - time * 2.3);' + #10 +
+    '    color.rgb += vec3(0.95, 0.98, 1.0) * band * foam * 0.4;' + #10 +
+    '' + #10 +
+    '    finalColor = color;' + #10 +
+    '}';
+
+  cGlowEffectShader =
+    '#version 330' + #10 +
+    'uniform vec2 resolution;' + #10 +
+    'uniform float time;' + #10 +
+    'uniform sampler2D texture0;' + #10 +
+    'uniform vec4 colDiffuse;' + #10 +
+    'in vec2 fragTexCoord;' + #10 +
+    'in vec4 fragColor;' + #10 +
+    'out vec4 finalColor;' + #10 +
+    '' + #10 +
+    'void main()' + #10 +
+    '{' + #10 +
+    '    vec2 texelSize = 1.0 / resolution;' + #10 +
+    '    vec4 color = texture(texture0, fragTexCoord);' + #10 +
+    '' + #10 +
+    '    // small blurred sample' + #10 +
+    '    vec4 blur = vec4(0.0);' + #10 +
+    '    blur += texture(texture0, fragTexCoord + vec2(-2.0, -2.0) * texelSize);' + #10 +
+    '    blur += texture(texture0, fragTexCoord + vec2( 0.0, -2.0) * texelSize);' + #10 +
+    '    blur += texture(texture0, fragTexCoord + vec2( 2.0, -2.0) * texelSize);' + #10 +
+    '    blur += texture(texture0, fragTexCoord + vec2(-2.0,  0.0) * texelSize);' + #10 +
+    '    blur += texture(texture0, fragTexCoord + vec2( 0.0,  0.0) * texelSize);' + #10 +
+    '    blur += texture(texture0, fragTexCoord + vec2( 2.0,  0.0) * texelSize);' + #10 +
+    '    blur += texture(texture0, fragTexCoord + vec2(-2.0,  2.0) * texelSize);' + #10 +
+    '    blur += texture(texture0, fragTexCoord + vec2( 0.0,  2.0) * texelSize);' + #10 +
+    '    blur += texture(texture0, fragTexCoord + vec2( 2.0,  2.0) * texelSize);' + #10 +
+    '    blur /= 9.0;' + #10 +
+    '' + #10 +
+    '    // bright pixels leak light into the blur' + #10 +
+    '    float bright = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));' + #10 +
+    '    float pulse = 0.75 + 0.25 * sin(time * 2.0);' + #10 +
+    '    vec3 glow = blur.rgb * bright * bright * pulse * 1.8;' + #10 +
+    '' + #10 +
+    '    finalColor = vec4(color.rgb + glow, color.a);' + #10 +
+    '}';
+
 type
 
   TTyroCanvas = class;
@@ -44,6 +120,8 @@ type
   end;
 
   { TTyroCanvas }
+
+  TTyroEffect = (fxNone, fxWater, fxGlow);
 
   TTyroCanvas = class abstract(TObject)
   private
@@ -91,6 +169,11 @@ type
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
 
     procedure Clear;
+
+    //Post-processing shader effect ("water", "glow", "none")
+    procedure SetEffect(const AEffectName: string); virtual;
+    function GetEffectName: string; virtual;
+
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
     property PenWidth: Integer read FPenWidth write SetPenWidth;
     property PenColor: TColor read FPenColor write SetPenColor;
@@ -103,6 +186,12 @@ type
   private
     FTextureMode: Boolean;
     FTexture: TRenderTexture2D;
+    FEffect: TTyroEffect;
+    FShader: TShader;
+    FShaderTimeLoc: Integer;
+    FShaderResLoc: Integer;
+    procedure LoadEffect(ACode: rawbytestring; AEffect: TTyroEffect);
+    procedure UnloadEffect;
   public
     constructor Create(AWidth, AHeight: Integer; ATextureMode: Boolean = False);
     destructor Destroy; override;
@@ -110,6 +199,8 @@ type
     procedure EndDraw; override;
     procedure PostDraw; override;
     procedure Resize(AWidth, AHeight: Integer); override;
+    procedure SetEffect(const AEffectName: string); override;
+    function GetEffectName: string; override;
     property Texture: TRenderTexture2D read FTexture;
   end;
 
@@ -406,6 +497,15 @@ begin
   ClearBackground(FBackColor);
 end;
 
+procedure TTyroCanvas.SetEffect(const AEffectName: string);
+begin
+end;
+
+function TTyroCanvas.GetEffectName: string;
+begin
+  Result := 'none';
+end;
+
 { TTyroTextureCanvas }
 
 procedure TTyroTextureCanvas.BeginDraw;
@@ -425,17 +525,82 @@ end;
 
 destructor TTyroTextureCanvas.Destroy;
 begin
+  UnloadEffect;
   if FTextureMode then
     UnloadRenderTexture(FTexture);
   inherited;
 end;
 
+procedure TTyroTextureCanvas.LoadEffect(ACode: rawbytestring; AEffect: TTyroEffect);
+begin
+  if ACode <> '' then
+  begin
+    FShader := RayLib.LoadShaderFromMemory(nil, PUTF8Char(ACode));
+    if RayLib.IsShaderValid(FShader) then
+    begin
+      FShaderTimeLoc := RayLib.GetShaderLocation(FShader, 'time');
+      FShaderResLoc := RayLib.GetShaderLocation(FShader, 'resolution');
+      FEffect := AEffect;
+    end;
+  end;
+end;
+
+procedure TTyroTextureCanvas.UnloadEffect;
+begin
+  if FShader.ID <> 0 then
+    RayLib.UnloadShader(FShader);
+  FShader := Default(TShader);
+  FShaderTimeLoc := -1;
+  FShaderResLoc := -1;
+  FEffect := fxNone;
+end;
+
 procedure TTyroTextureCanvas.PostDraw;
+var
+  Shader: TShader;
+  vTime: Single;
+  vRes: TVector2;
 begin
   inherited;
   if FTextureMode then
+  begin
+    Shader := FShader;
+    if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
+    begin
+      RayLib.BeginShaderMode(Shader);
+      vTime := RayLib.GetTime();
+      if FShaderTimeLoc >= 0 then
+        RayLib.SetShaderValue(Shader, FShaderTimeLoc, PUTF8Char(Pointer(@vTime)), Ord(SHADER_UNIFORM_FLOAT));
+      vRes := Vector2Of(Width, Height);
+      if FShaderResLoc >= 0 then
+        RayLib.SetShaderValue(Shader, FShaderResLoc, PUTF8Char(Pointer(@vRes)), Ord(SHADER_UNIFORM_VEC2));
+    end;
     with FTexture do
       RayLib.DrawTextureRec(Texture, TRectangle.Create(0, 0, Texture.Width, -Texture.height), Vector2Of(0, 0), clWhite);
+    if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
+      RayLib.EndShaderMode;
+  end;
+end;
+
+procedure TTyroTextureCanvas.SetEffect(const AEffectName: string);
+begin
+  if SameText(AEffectName, GetEffectName) then
+    Exit;
+  UnloadEffect;
+  if SameText(AEffectName, 'water') then
+    LoadEffect(cWaterEffectShader, fxWater)
+  else if SameText(AEffectName, 'glow') then
+    LoadEffect(cGlowEffectShader, fxGlow);
+end;
+
+function TTyroTextureCanvas.GetEffectName: string;
+begin
+  case FEffect of
+    fxWater: Result := 'water';
+    fxGlow: Result := 'glow';
+  else
+    Result := 'none';
+  end;
 end;
 
 procedure TTyroTextureCanvas.EndDraw;

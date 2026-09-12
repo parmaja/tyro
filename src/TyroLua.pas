@@ -54,6 +54,7 @@ type
     function Rectangle_func(L: Plua_State): integer; cdecl;
     function Line_func(L: Plua_State): integer; cdecl;
     function Point_func(L: Plua_State): integer; cdecl;
+    function Effect_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
@@ -651,6 +652,14 @@ begin
       L.PushInteger(Main.Canvas.Height);
       Result := 1;
     end;
+    'effect':
+    begin
+      if Main.Graphic <> nil then
+        L.PushString(Main.Graphic.GetEffectName)
+      else
+        L.PushString('none');
+      Result := 1;
+    end;
   end;
 end;
 
@@ -701,6 +710,7 @@ begin
   Lua.State.Register('canvas', 'rectangle', Canvas, @Canvas.Rectangle_func);
   Lua.State.Register('canvas', 'line', Canvas, @Canvas.Line_func);
   Lua.State.Register('canvas', 'point', Canvas, @Canvas.Point_func);
+  Lua.State.Register('canvas', 'effect', Canvas, @Canvas.Effect_func);
   Lua.State.Register('canvas', Canvas); //Should be last one
 
   //font
@@ -898,6 +908,13 @@ begin
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
   FScript.AddQueueObject(TDrawPointObject.Create(Main.Canvas, x, y));
+  Result := 0;
+end;
+
+function TLuaCanvas.Effect_func(L: Plua_State): integer; cdecl;
+begin
+  //Post-processing effect on the graphic canvas which is blitted each frame
+  FScript.AddQueueObject(TSetEffectObject.Create(Main.Graphic, L.ToString(1)));
   Result := 0;
 end;
 
