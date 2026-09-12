@@ -129,8 +129,8 @@ type
     property BorderColor: TColor read FBorderColor write SetBorderColor;
     //Real bounds
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
-    property Height: Integer read GetHeight write SetHeight;
     property Width: Integer read GetWidth write SetWidth;
+    property Height: Integer read GetHeight write SetHeight;
     //WindowRect is Virtual changed by RealignControls of parent used paint control
     property WindowRect: TRect read FWindowRect write SetWindowRect;
   end;
@@ -253,8 +253,6 @@ type
   private
     FFPS: Integer;
     FOptions: TTyroMainOptions;
-    function GetHeight: Integer;
-    function GetWidth: Integer;
   protected
     FTextureMode: Boolean;
     IsTerminated: Boolean;
@@ -291,8 +289,6 @@ type
     procedure Run;
     procedure Shutdown; virtual;
 
-    property Width: Integer read GetWidth;
-    property Height: Integer read GetHeight;
     property CanvasLock: TCriticalSection read FCanvasLock;
     property Options: TTyroMainOptions read FOptions write FOptions;
     property FPS: Integer read FFPS write SetFPS;
@@ -337,6 +333,8 @@ begin
   Resources := TTyroResources.Create;
   Resources.WorkSpace := ExtractFilePath(ParamStr(0));
   FCanvasLock := TCriticalSection.Create;
+  BoundsRect.Width := ScreenWidth;
+  BoundsRect.Height := ScreenHeight;
   MarginSize := cMarginSize;
   //MarginColor := clCornflowerBlue;
 end;
@@ -393,16 +391,6 @@ end;
 
 procedure TTyroMain.Draw;
 begin
-end;
-
-function TTyroMain.GetHeight: Integer;
-begin
-  Result := WindowRect.Height - MarginSize * 2;
-end;
-
-function TTyroMain.GetWidth: Integer;
-begin
-  Result := WindowRect.Width - MarginSize * 2;
 end;
 
 procedure TTyroMain.Run;

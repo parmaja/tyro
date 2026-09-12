@@ -30,8 +30,7 @@ const
 var
   // Debug switch: when True, DBG messages are written to the console.
   // Off by default (globals are zero-initialized) to keep the output clean.
-  IsDebug: Boolean;
-
+  IsDebug: Boolean = False;
 
 type
 
@@ -273,7 +272,7 @@ begin
   {$IFEND}
   //TTyroPanel.Create(Self);
 
-   Console := TTyroConsole.Create(Self);
+  Console := TTyroConsole.Create(Self);
   Console.WindowRect := Rect(MarginSize, MarginSize , 100, 100);
   Console.Visible := False;
   Console.Focused := True;

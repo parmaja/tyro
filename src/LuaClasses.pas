@@ -64,7 +64,7 @@ type
     Index: Integer;
     State: Plua_State;
   public
-    function AsInteger: Integer;
+    function AsInteger: lua_Integer;
     function AsNumber: Double;
     function AsString: string;
     function AsBoolean: Boolean;
@@ -120,7 +120,7 @@ type
 
     //Low-level stack access used by the C callbacks; keeps the callers independent of LuaAPI
     function ToString(Index: Integer): string;
-    function ToInteger(Index: Integer): Int64;
+    function ToInteger(Index: Integer): lua_Integer;
     function ToNumber(Index: Integer): Double;
     function ToBoolean(Index: Integer): Boolean;
 
@@ -129,7 +129,7 @@ type
     function IsString(Index: Integer): Boolean;
 
     procedure PushBoolean(Value: Boolean);
-    procedure PushInteger(Value: Int64);
+    procedure PushInteger(Value: lua_Integer);
     procedure PushNumber(Value: Double);
     procedure PushString(const Value: string);
     procedure PushNil;
@@ -430,7 +430,7 @@ end;
 
 { TLuaParam }
 
-function TLuaParam.AsInteger: Integer;
+function TLuaParam.AsInteger: lua_Integer;
 begin
   Result := lua_tointeger(State, Index);
 end;
@@ -541,7 +541,7 @@ begin
   Result := lua_tostring(Self, Index);
 end;
 
-function TLuaHelper.ToInteger(Index: Integer): Int64;
+function TLuaHelper.ToInteger(Index: Integer): lua_Integer;
 begin
   Result := lua_tointeger(Self, Index);
 end;
@@ -576,7 +576,7 @@ begin
   lua_pushboolean(Self, Value);
 end;
 
-procedure TLuaHelper.PushInteger(Value: Int64);
+procedure TLuaHelper.PushInteger(Value: lua_Integer);
 begin
   lua_pushinteger(Self, Value);
 end;

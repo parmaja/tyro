@@ -437,6 +437,16 @@ begin
       L.PushInteger(ColorToInt(Main.BorderColor));
       Result := 1;
     end;
+    'width':
+    begin
+      L.PushInteger(Main.Width);
+      Result := 1;
+    end;
+    'height':
+    begin
+      L.PushInteger(Main.Height);
+      Result := 1;
+    end;
   end;
 end;
 
@@ -613,6 +623,16 @@ begin
     begin
       i := ColorToInt(Main.Canvas.BackColor);
       L.PushInteger(i);
+      Result := 1;
+    end;
+    'width':
+    begin
+      L.PushInteger(Main.Canvas.Width);
+      Result := 1;
+    end;
+    'height':
+    begin
+      L.PushInteger(Main.Canvas.Height);
       Result := 1;
     end;
   end;

@@ -750,17 +750,17 @@ end;
 
 function lua_tointeger(L: Plua_State; idx: Integer): lua_Integer;
 begin
-   Result := lua_tointegerx(L, idx, nil);
+  Result := lua_tointegerx(L, idx, nil);
 end;
 
 procedure lua_pop(L: Plua_State; n: Integer);
 begin
-   lua_settop(L, - n - 1);
+  lua_settop(L, - n - 1);
 end;
 
 procedure lua_newtable(L: Plua_state);
 begin
-   lua_createtable(L, 0, 0);
+  lua_createtable(L, 0, 0);
 end;
 
 procedure lua_reg_global_function(L: Plua_State; const n: PUTF8Char; f: lua_CFunction);

@@ -294,7 +294,8 @@ begin
   Result := nil;
   if FSpace = nil then
     Exit;
-  if IsDebug then WriteLn('DBG AddBody ' + IntToStr(Handle));
+  if IsDebug then
+    WriteLn('DBG AddBody ' + IntToStr(Handle));
   W := AState.Width;
   H := AState.Height;
   R := AState.Radius * AState.Scale;
@@ -430,13 +431,15 @@ begin
   finally
     FLock.Leave;
   end;
-  if IsDebug then WriteLn('DBG phase1-collect');
+  if IsDebug then
+    WriteLn('DBG phase1-collect');
   Dyn := TList<Integer>.Create;
   Keys := TList<Integer>.Create;
   try
     // 1) Current colliding sprite handles
     FSprites.GetCollideList(Colliders);
-    if IsDebug then WriteLn('DBG phase1-done n=' + IntToStr(Length(Colliders)));
+    if IsDebug then
+      WriteLn('DBG phase1-done n=' + IntToStr(Length(Colliders)));
 
     // 2) Remove bodies for sprites that no longer collide
     for AHandle in FHandleToBody.Keys do
@@ -456,16 +459,19 @@ begin
     Keys.Clear;
 
     // 3) Add/rebuild/reconfigure bodies for colliding sprites
-    if IsDebug then WriteLn('DBG phase2-remove n=' + IntToStr(Length(Colliders)));
+    if IsDebug then
+      WriteLn('DBG phase2-remove n=' + IntToStr(Length(Colliders)));
     for I := 0 to Length(Colliders) - 1 do
     begin
       AHandle := Colliders[I];
       if not FSprites.GetPhysicsState(AHandle, State) then
       begin
-        if IsDebug then WriteLn('DBG phase2-badstate h=' + IntToStr(AHandle));
+        if IsDebug then
+          WriteLn('DBG phase2-badstate h=' + IntToStr(AHandle));
         Continue;
       end;
-      if IsDebug then WriteLn('DBG phase2-state h=' + IntToStr(AHandle) + ' w=' + FloatToStr(State.Width) + ' r=' + FloatToStr(State.Radius));
+      if IsDebug then
+        WriteLn('DBG phase2-state h=' + IntToStr(AHandle) + ' w=' + FloatToStr(State.Width) + ' r=' + FloatToStr(State.Radius));
       if FApplied.TryGetValue(AHandle, Config) then
       begin
         if SameConfig(Config, State) then
@@ -502,9 +508,11 @@ begin
     end;
 
 // 5) advance the simulation
-  if IsDebug then WriteLn('DBG preStep');
+  if IsDebug then
+    WriteLn('DBG preStep');
   cpSpaceStep(FSpace, ADt);
-  if IsDebug then WriteLn('DBG postStep');
+  if IsDebug then
+    WriteLn('DBG postStep');
 
     // 6) write back dynamic bodies -> sprites
     for I := 0 to Dyn.Count - 1 do
