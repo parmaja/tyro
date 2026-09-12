@@ -130,6 +130,7 @@ type
      procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); override;
      procedure ShowConsole(AX, AY, AWidth, AHeight: Integer);
      procedure HideConsole;
+     procedure Resize(AWidth, AHeight: Integer); override;
 
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
@@ -443,9 +444,16 @@ begin
     raise exception.Create('Screen width can not be 0');
   if AHeight = 0 then
     raise exception.Create('Screen height can not be 0');
-  Graphic := TTyroTextureCanvas.Create(AWidth, AHeight, True);
+  Graphic := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + MarginSize), AHeight - 2 * (BorderSize + MarginSize), True);
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
   //Console.WindowRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
+end;
+
+procedure TTyroMain.Resize(AWidth, AHeight: Integer);
+begin
+  inherited Resize(AWidth, AHeight);
+  if Graphic <> nil then
+    Graphic.Resize(AWidth - 2 * (BorderSize + MarginSize), AHeight - 2 * (BorderSize + MarginSize));
 end;
 
 procedure TTyroMain.Stop;

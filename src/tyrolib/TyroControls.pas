@@ -247,6 +247,9 @@ type
   private
     FFPS: Integer;
     FOptions: TTyroMainWindowOptions;
+    FBackColor: TColor;
+    function GetCanvasWidth: Integer;
+    function GetCanvasHeight: Integer;
   protected
     FTextureMode: Boolean;
     IsTerminated: Boolean;
@@ -264,6 +267,9 @@ type
     procedure ShowWindow; overload;
     procedure SetFPS(FPS: Integer); virtual;
     procedure HideWindow; virtual;
+
+    //* Resize the window (and canvas) to the given size; canvas is inset by margin + border
+    procedure Resize(AWidth, AHeight: Integer); virtual;
 
     //* Before Show window
     procedure Init; virtual;
@@ -285,6 +291,7 @@ type
 
     property CanvasLock: TCriticalSection read FCanvasLock;
     property Options: TTyroMainWindowOptions read FOptions write FOptions;
+    property BackColor: TColor read FBackColor write FBackColor;
     property FPS: Integer read FFPS write SetFPS;
   end;
 
@@ -330,6 +337,7 @@ begin
   BoundsRect.Width := ScreenWidth;
   BoundsRect.Height := ScreenHeight;
   MarginSize := cMarginSize;
+  FBackColor := clCornflowerBlue;
   //MarginColor := clCornflowerBlue;
 end;
 
@@ -340,7 +348,21 @@ end;
 
 function TTyroMainWindow.CreateCanvas: TTyroCanvas;
 begin
-  Result := TTyroTextureCanvas.Create(Width, Height, FTextureMode);
+  Result := TTyroTextureCanvas.Create(GetCanvasWidth, GetCanvasHeight, FTextureMode);
+end;
+
+function TTyroMainWindow.GetCanvasWidth: Integer;
+begin
+  Result := Width - 2 * (BorderSize + MarginSize);
+  if Result < 1 then
+    Result := 1;
+end;
+
+function TTyroMainWindow.GetCanvasHeight: Integer;
+begin
+  Result := Height - 2 * (BorderSize + MarginSize);
+  if Result < 1 then
+    Result := 1;
 end;
 
 destructor TTyroMainWindow.Destroy;
@@ -417,10 +439,12 @@ begin
       begin
         if Visible then
         begin
+          if RayLib.IsWindowResized() then
+            Resize(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
           PrepareDraw;
           RayLib.BeginDrawing();
           if moOpaque in Options then
-            Canvas.Clear;
+            RayLib.ClearBackground(BackColor);
 
           try
             Camera2D.Target := Vector2Of(0, 0);
@@ -468,7 +492,7 @@ begin
   else
   begin
     //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    SetConfigFlags([FLAG_WINDOW_HIDDEN]);
+    SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
     SetWindowBounds(0, 0, AWidth, AHeight);
     InitWindow(AWidth, AHeight, PUTF8Char(Title));
     ClearWindowState([FLAG_WINDOW_HIDDEN]);
@@ -476,6 +500,18 @@ begin
     PrepareCanvas;
   end;
   Visible := True;
+  Resize(AWidth, AHeight);
+end;
+
+procedure TTyroMainWindow.Resize(AWidth, AHeight: Integer);
+begin
+  if (AWidth <= 0) or (AHeight <= 0) then Exit;
+  if (FWindowRect.Width = AWidth) and (FWindowRect.Height = AHeight)
+     and (FCanvas <> nil) and (FCanvas.Width = GetCanvasWidth) and (FCanvas.Height = GetCanvasHeight) then
+    Exit;
+  SetWindowBounds(0, 0, AWidth, AHeight);
+  if FCanvas <> nil then
+    FCanvas.Resize(GetCanvasWidth, GetCanvasHeight);
 end;
 
 procedure TTyroMainWindow.HideWindow;

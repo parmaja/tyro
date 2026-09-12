@@ -69,6 +69,7 @@ type
     procedure BeginDraw; virtual;
     procedure EndDraw; virtual;
     procedure PostDraw; virtual;
+    procedure Resize(AWidth, AHeight: Integer); virtual;
 
     procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
     procedure DrawText(X, Y: Integer; S: utf8string; Color: TColor);
@@ -108,6 +109,7 @@ type
     procedure BeginDraw; override;
     procedure EndDraw; override;
     procedure PostDraw; override;
+    procedure Resize(AWidth, AHeight: Integer); override;
     property Texture: TRenderTexture2D read FTexture;
   end;
 
@@ -392,6 +394,13 @@ procedure TTyroCanvas.PostDraw;
 begin
 end;
 
+procedure TTyroCanvas.Resize(AWidth, AHeight: Integer);
+begin
+  if (FWidth = AWidth) and (FHeight = AHeight) then Exit;
+  FWidth := AWidth;
+  FHeight := AHeight;
+end;
+
 procedure TTyroCanvas.Clear;
 begin
   ClearBackground(FBackColor);
@@ -434,6 +443,16 @@ begin
   if FTextureMode then
     RayLib.EndTextureMode();
   inherited;
+end;
+
+procedure TTyroTextureCanvas.Resize(AWidth, AHeight: Integer);
+begin
+  if (Width = AWidth) and (Height = AHeight) then Exit;
+  if FTextureMode then
+    UnloadRenderTexture(FTexture);
+  inherited Resize(AWidth, AHeight);
+  if FTextureMode then
+    FTexture := LoadRenderTexture(Width, Height);
 end;
 
 { TTyroResources }

@@ -400,6 +400,7 @@ function TLuaWindow.Setter(L: PLua_State): integer;
 var
   i: integer;
   field: string;
+  color: string;
 begin
   Result := 0;
   field := L.ToString(2);
@@ -411,7 +412,17 @@ begin
     else if field = 'border' then
       Main.BorderSize := i
     else if field = 'borderColor' then
-      Main.BorderColor := IntToColor(i);
+      Main.BorderColor := IntToColor(i)
+    else if field = 'backcolor' then
+      Main.BackColor := IntToColor(i);
+  end
+  else if L.IsString(-1) then
+  begin
+    color := L.ToString(-1);
+    if field = 'borderColor' then
+      Main.BorderColor := StrToColor(color)
+    else if field = 'backcolor' then
+      Main.BackColor := StrToColor(color);
   end;
 end;
 
@@ -435,6 +446,11 @@ begin
     'borderColor':
     begin
       L.PushInteger(ColorToInt(Main.BorderColor));
+      Result := 1;
+    end;
+    'backcolor':
+    begin
+      L.PushInteger(ColorToInt(Main.BackColor));
       Result := 1;
     end;
     'width':
