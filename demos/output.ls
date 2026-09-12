@@ -25,8 +25,7 @@ output.y = 40
 output.width = 480
 output.height = 200
 output.border = 1
-output.backColor = colors.black
-output.textColor = colors.green
+output.textColor = colors.black -- contrasts with the light window backcolor
 
 print("output control ready")
 println("print/println/log go here AND to the console")

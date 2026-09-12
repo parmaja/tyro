@@ -2476,8 +2476,8 @@ begin
   inherited;
   Style := [csClip];
   FMaxLines := 500;
-  FBackColor := clBlack;
-  FTextColor := clLightgray;
+  FBackColor := clBlack.ReplaceAlpha(0); //transparent by default
+  FTextColor := clBlack; //contrasts with the light window backcolor
   FLines := TStringList.Create;
   FLock := TCriticalSection.Create;
   SetWindowBounds(0, 0, 480, 240);
@@ -2558,7 +2558,8 @@ begin
   r := ClientRect;
   if (r.Width <= 0) or (r.Height <= 0) then
     Exit;
-  ACanvas.DrawRectangle(r.Left, r.Top, r.Width, r.Height, FBackColor, True);
+  if FBackColor.RGBA.Alpha > 0 then
+    ACanvas.DrawRectangle(r.Left, r.Top, r.Width, r.Height, FBackColor, True);
   ch := Resources.Font.Height;
   if ch <= 0 then
     ch := CDefaultCharHeight;

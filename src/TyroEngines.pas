@@ -525,12 +525,14 @@ begin
   if Console.Visible then
     HideConsole
   else
-    ShowConsole(0, 0, 0, 0); //restores the console's last WindowRect (80x25 if not set yet)
+    Console.Show; //restores the console's last WindowRect (80x25 if not set yet)
 end;
 
 procedure TTyroMain.ToggleOutput;
 begin
   Output.Visible := not Output.Visible;
+  if Output.Visible then
+    Output.BringToFront;
 end;
 
 procedure TTyroMain.ConsoleInput(AConsole: TTyroConsole; AInput: string);

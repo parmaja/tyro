@@ -485,6 +485,7 @@ end;
 procedure TShowOutputObject.DoExecute;
 begin
   Main.Output.Visible := True;
+  Main.Output.BringToFront;
   if (fW > 0) and (fH > 0) then
     Main.Output.WindowRect := Rect(fX, fY, fX + fW, fY + fH)
   else if (fX <> 0) or (fY <> 0) then

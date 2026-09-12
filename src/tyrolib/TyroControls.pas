@@ -174,6 +174,10 @@ type
     procedure Show;
     procedure Hide;
 
+    //Move the control to the end of the parent's control list (drawn last, on
+    //top) when it is not aligned
+    procedure BringToFront;
+
     procedure KeyPress(var Key: TUTF8Char); virtual;
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); virtual;
     procedure KeyUp(var Key: TKeyboardKey; Shift: TShiftState); virtual;
@@ -1057,6 +1061,20 @@ end;
 procedure TTyroControl.Hide;
 begin
   Visible := False;
+end;
+
+procedure TTyroControl.BringToFront;
+var
+  I: Integer;
+begin
+  if (FParent = nil) or (FAlign <> alNone) then
+    Exit;
+  I := FParent.FControls.IndexOf(Self);
+  if (I >= 0) and (I < FParent.FControls.Count - 1) then
+  begin
+    FParent.FControls.Move(I, FParent.FControls.Count - 1);
+    Invalidate;
+  end;
 end;
 
 procedure TTyroControl.DoPaintBackground(ACanvas: TTyroCanvas);
