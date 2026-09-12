@@ -6,6 +6,7 @@
 
 window.show(640, 480)
 canvas.color = colors.black
+canvas.backcolor = colors.blue
 canvas.clear()
 canvas.color = colors.white
 canvas.text(10, 10, "Animated Demo - watch the circles appear!")

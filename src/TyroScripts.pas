@@ -9,7 +9,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs,
-  mnUtils, mnClasses, mnLogs, mnRTTIUtils,
+  mnUtils, mnClasses, mnLogs,
   RayLib, RayClasses,
   Melodies, TyroSounds,
   TyroClasses, TyroConsoles;

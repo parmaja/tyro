@@ -69,11 +69,11 @@ type
     runExecute
   );
 
-  { TTyroEngine }
+  { TTyroMain }
 
   TConsoleReadEvent = procedure(AConsole: TTyroConsole; AInput: string) of object;
 
-  TTyroEngine = class(TTyroMain)
+  TTyroMain = class(TTyroMainWindow)
   private
     //FBoard: TTyroImage;
     function GetActive: Boolean;
@@ -141,7 +141,7 @@ type
   function RayColorOf(Color: TFPColor): TRGBAColor;
 }
 var
-  Main : TTyroEngine = nil;
+  Main : TTyroMain = nil;
 
 implementation
 
@@ -182,14 +182,14 @@ begin
 end;
 }
 
-{ TTyroEngine }
+{ TTyroMain }
 
-function TTyroEngine.GetActive: Boolean;
+function TTyroMain.GetActive: Boolean;
 begin
   Result := Running or ((FScriptThread <> nil) and FScriptThread.Active) or ((FScriptMain <> nil) and (FScriptMain.Active));
 end;
 
-procedure TTyroEngine.ProcessQueue;
+procedure TTyroMain.ProcessQueue;
 var
   p: TQueueObject;
   c: Integer;
@@ -228,7 +228,7 @@ begin
   end;
 end;
 
-procedure TTyroEngine.Start;
+procedure TTyroMain.Start;
 begin
   inherited;
   if (FScriptThread <> nil) and not FScriptThread.Started then
@@ -240,12 +240,12 @@ begin
   Options := Options + [moShowFPS];
 end;
 
-procedure TTyroEngine.Unload;
+procedure TTyroMain.Unload;
 begin
   inherited;
 end;
 
-procedure TTyroEngine.Shutdown;
+procedure TTyroMain.Shutdown;
 begin
   Running := False;
   if (FScriptThread <> nil) then
@@ -254,12 +254,12 @@ begin
     FScriptMain.Terminate;
 end;
 
-procedure TTyroEngine.PrepareDraw;
+procedure TTyroMain.PrepareDraw;
 begin
   ProcessQueue;
 end;
 
-constructor TTyroEngine.Create(AParent: TTyroLayout);
+constructor TTyroMain.Create(AParent: TTyroLayout);
 begin
   inherited;
   MarginSize := 10;
@@ -285,7 +285,7 @@ begin
   RegisterCommands;
 end;
 
-   destructor TTyroEngine.Destroy;
+   destructor TTyroMain.Destroy;
 begin
   //Stop;
   FreeAndNil(Physics);
@@ -297,7 +297,7 @@ begin
   inherited;
 end;
 
-procedure TTyroEngine.Init;
+procedure TTyroMain.Init;
 var
   aScriptType: TScriptType;
   aScript: TTyroScript;
@@ -328,7 +328,7 @@ begin
   end;
 end;
 
-   procedure TTyroEngine.Draw;
+   procedure TTyroMain.Draw;
 begin
   if Graphic <> nil then
   begin
@@ -349,7 +349,7 @@ begin
   ThreadSwitch; //Yield
 end;
 
-procedure TTyroEngine.Update;
+procedure TTyroMain.Update;
 var
   Scripted: array[0..1023] of TCollisionEvent;
   Enough: Integer;
@@ -415,7 +415,7 @@ begin
     Terminate;}
 end;
 
-procedure TTyroEngine.ProcessInput;
+procedure TTyroMain.ProcessInput;
 begin
   inherited;
   // Handle ESC to hide console when it's active and focused
@@ -425,7 +425,7 @@ begin
   end;
 end;
 
-procedure TTyroEngine.RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
+procedure TTyroMain.RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 var
   Item: TScriptType;
 begin
@@ -436,7 +436,7 @@ begin
   FScriptTypes.Add(Item);
 end;
 
-procedure TTyroEngine.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
+procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
 begin
   inherited;
   if AWidth = 0 then
@@ -448,7 +448,7 @@ begin
   //Console.WindowRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
 end;
 
-procedure TTyroEngine.Stop;
+procedure TTyroMain.Stop;
 begin
   Running := False;
   if FScriptThread <> nil then
@@ -465,14 +465,14 @@ begin
   end;
 end;
 
-procedure TTyroEngine.Terminate;
+procedure TTyroMain.Terminate;
 begin
   HideWindow;
   Stop;
   inherited;
 end;
 
-procedure TTyroEngine.ShowConsole(AX, AY, AWidth, AHeight: Integer);
+procedure TTyroMain.ShowConsole(AX, AY, AWidth, AHeight: Integer);
 begin
   Console.CharWidth := Resources.Font.Width;
   Console.CharHeight := Resources.Font.Height;
@@ -486,13 +486,13 @@ begin
   //StartConsoleRead;
 end;
 
-procedure TTyroEngine.HideConsole;
+procedure TTyroMain.HideConsole;
 begin
   Console.StopRead;
   Console.Hide;
 end;
 
-procedure TTyroEngine.ConsoleInput(AConsole: TTyroConsole; AInput: string);
+procedure TTyroMain.ConsoleInput(AConsole: TTyroConsole; AInput: string);
 begin
   // If a script callback is set, route input to it (console.read())
   if Assigned(FReadCallback) then
@@ -510,7 +510,7 @@ begin
     StartConsoleRead;
 end;
 
-procedure TTyroEngine.ExecuteCommand(ACommand: string);
+procedure TTyroMain.ExecuteCommand(ACommand: string);
 var
   Params: TStringList;
 begin
@@ -536,7 +536,7 @@ begin
   end;
 end;
 
-procedure TTyroEngine.RegisterCommands;
+procedure TTyroMain.RegisterCommands;
 begin
   Commands.Add('Help', ['?'], Help_Command, 'Show help');
   Commands.Add('list', ['ls'], Dir_Command, 'Show current directory');
@@ -548,7 +548,7 @@ begin
   Commands.Add('run', [], Run_Command, 'Run current loaded script');
 end;
 
-procedure TTyroEngine.StartConsoleRead;
+procedure TTyroMain.StartConsoleRead;
 begin
   // Clear any script callback so built-in commands are executed
   FReadCallback := nil;
@@ -556,14 +556,14 @@ begin
   Console.StartRead(clBlack, clBlack, '> ', clLightGray, clBlack);
 end;
 
-procedure TTyroEngine.StartConsoleReadEx(ACallback: TConsoleReadEvent);
+procedure TTyroMain.StartConsoleReadEx(ACallback: TConsoleReadEvent);
 begin
   FReadCallback := ACallback;
   Console.OnInput := ACallback;
   Console.StartRead(clBlack, clBlack, '> ', clLightGray, clBlack);
 end;
 
-procedure TTyroEngine.Help_Command(Params: TStrings);
+procedure TTyroMain.Help_Command(Params: TStrings);
 var
   Command: TConsoleCommand;
 begin
@@ -576,7 +576,7 @@ begin
   Console.Writeln('');
 end;
 
-procedure TTyroEngine.Dir_Command(Params: TStrings);
+procedure TTyroMain.Dir_Command(Params: TStrings);
 var
   DirPath: string;
   sr: TSearchRec;
@@ -605,19 +605,19 @@ begin
   Console.Writeln('');
 end;
 
-procedure TTyroEngine.Clear_Command(Params: TStrings);
+procedure TTyroMain.Clear_Command(Params: TStrings);
 begin
   Console.Clear;
 end;
 
-procedure TTyroEngine.Exit_Command(Params: TStrings);
+procedure TTyroMain.Exit_Command(Params: TStrings);
 begin
   HideConsole;
   Stop;
   Terminate;
 end;
 
-procedure TTyroEngine.Run_Command(Params: TStrings);
+procedure TTyroMain.Run_Command(Params: TStrings);
 begin
   if (FScriptMain <> nil) then
   begin
@@ -629,12 +629,12 @@ begin
   end;
 end;
 
-procedure TTyroEngine.Stop_Command(Params: TStrings);
+procedure TTyroMain.Stop_Command(Params: TStrings);
 begin
   Stop;
 end;
 
-procedure TTyroEngine.Load_Command(Params: TStrings);
+procedure TTyroMain.Load_Command(Params: TStrings);
 var
   aFile, aFileName: string;
   aScriptType: TScriptType;
@@ -680,7 +680,7 @@ begin
   //FScriptMain.RUNINMAIN := True;
 end;
 
-procedure TTyroEngine.State_Command(Params: TStrings);
+procedure TTyroMain.State_Command(Params: TStrings);
 begin
   if Active and (FScriptMain <> nil) then
     Console.Writeln(FScriptMain.FileName + ' is running');
@@ -748,7 +748,7 @@ begin
 end;
 
 initialization
-  Main := TTyroEngine.Create(nil);
+  Main := TTyroMain.Create(nil);
 finalization
   FreeAndNil(Main);
 end.

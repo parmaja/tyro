@@ -59,7 +59,7 @@ type
 
   TTyroLayout = class;
   TTyroControl = class;
-  TTyroCustomWindow = class;
+  TTyroWindow = class;
 
   TTyroControls = class(TmnObjectList<TTyroLayout>)
   public
@@ -139,11 +139,11 @@ type
 
   TTyroControl = class abstract(TTyroLayout)
   private
-    FWindow: TTyroCustomWindow;
+    FWindow: TTyroWindow;
     FVisible: Boolean;
     function GetFocused: Boolean;
     procedure SetVisible(AValue: Boolean);
-    procedure SetWindow(AValue: TTyroCustomWindow);
+    procedure SetWindow(AValue: TTyroWindow);
     function GetClientLeft: Integer;
     function GetClientTop: Integer;
     procedure SetFocused(AValue: Boolean);
@@ -162,7 +162,7 @@ type
     procedure DoPaint(ACanvas: TTyroCanvas); virtual;
 
     procedure Created; virtual;
-    property Window: TTyroCustomWindow read FWindow write SetWindow;
+    property Window: TTyroWindow read FWindow write SetWindow;
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -214,9 +214,9 @@ type
     property Canvas: TTyroCanvas read FCanvas write FCanvas;
   end;
 
-  { TTyroCustomWindow }
+  { TTyroWindow }
 
-  TTyroCustomWindow = class abstract(TTyroLayout)
+  TTyroWindow = class abstract(TTyroLayout)
   private
     FCanvas: TTyroCanvas;
     FFocused: TTyroControl;
@@ -238,21 +238,15 @@ type
     property Focused: TTyroControl read FFocused write SetFocused;
   end;
 
-  TTyroWindow = class(TTyroCustomWindow)
-  protected
-    function CreateCanvas: TTyroCanvas; override;
-  public
-  end;
+  TTyroMainWindowOption = (moWindow, moOpaque, moShowFPS);
+  TTyroMainWindowOptions= set of TTyroMainWindowOption;
 
-  TTyroMainOption = (moWindow, moOpaque, moShowFPS);
-  TTyroMainOptions= set of TTyroMainOption;
+  { TTyroMainWindow }
 
-  { TTyroMain }
-
-  TTyroMain = class(TTyroCustomWindow)
+  TTyroMainWindow = class(TTyroWindow)
   private
     FFPS: Integer;
-    FOptions: TTyroMainOptions;
+    FOptions: TTyroMainWindowOptions;
   protected
     FTextureMode: Boolean;
     IsTerminated: Boolean;
@@ -290,7 +284,7 @@ type
     procedure Shutdown; virtual;
 
     property CanvasLock: TCriticalSection read FCanvasLock;
-    property Options: TTyroMainOptions read FOptions write FOptions;
+    property Options: TTyroMainWindowOptions read FOptions write FOptions;
     property FPS: Integer read FFPS write SetFPS;
   end;
 
@@ -299,7 +293,7 @@ const
   cDefaultWindowHeight = 480;
 
 var
-  Main: TTyroMain = nil;
+  Main: TTyroMainWindow = nil;
 
 function Canvas: TTyroCanvas; inline;
 
@@ -318,14 +312,14 @@ begin
     Result := TUTF8Char('');
 end;
 
-{ TTyroMain }
+{ TTyroMainWindow }
 
 function Canvas: TTyroCanvas;
 begin
   Result := Main.Canvas;
 end;
 
-constructor TTyroMain.Create(AParent: TTyroLayout);
+constructor TTyroMainWindow.Create(AParent: TTyroLayout);
 begin
   inherited;
   FOptions := [moWindow, moOpaque];
@@ -339,61 +333,61 @@ begin
   //MarginColor := clCornflowerBlue;
 end;
 
-constructor TTyroMain.Create;
+constructor TTyroMainWindow.Create;
 begin
   Create(nil);
 end;
 
-function TTyroMain.CreateCanvas: TTyroCanvas;
+function TTyroMainWindow.CreateCanvas: TTyroCanvas;
 begin
   Result := TTyroTextureCanvas.Create(Width, Height, FTextureMode);
 end;
 
-destructor TTyroMain.Destroy;
+destructor TTyroMainWindow.Destroy;
 begin
   FreeAndNil(FCanvasLock);
   inherited;
 end;
 
-function TTyroMain.Terminated: Boolean;
+function TTyroMainWindow.Terminated: Boolean;
 begin
   Result := IsTerminated;
 end;
 
-procedure TTyroMain.Load;
+procedure TTyroMainWindow.Load;
 begin
 end;
 
-procedure TTyroMain.Start;
+procedure TTyroMainWindow.Start;
 begin
 end;
 
-procedure TTyroMain.SetFPS(FPS: Integer);
+procedure TTyroMainWindow.SetFPS(FPS: Integer);
 begin
   FFPS := FPS;
   SetTargetFPS(FPS);
 end;
 
-procedure TTyroMain.ShowWindow;
+procedure TTyroMainWindow.ShowWindow;
 begin
   ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
 end;
 
-procedure TTyroMain.Shutdown;
+procedure TTyroMainWindow.Shutdown;
 begin
 
 end;
 
-procedure TTyroMain.PrepareDraw;
+procedure TTyroMainWindow.PrepareDraw;
 begin
 
 end;
 
-procedure TTyroMain.Draw;
+procedure TTyroMainWindow.Draw;
 begin
 end;
 
-procedure TTyroMain.Run;
+procedure TTyroMainWindow.Run;
 var
   tw: Integer;
 begin
@@ -463,7 +457,7 @@ begin
     RayLib.CloseWindow();
 end;
 
-procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
+procedure TTyroMainWindow.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
 begin
   FTextureMode := ATextureMode;
   if Visible then
@@ -484,7 +478,7 @@ begin
   Visible := True;
 end;
 
-procedure TTyroMain.HideWindow;
+procedure TTyroMainWindow.HideWindow;
 begin
   if Visible then
   begin
@@ -493,22 +487,22 @@ begin
   end;
 end;
 
-procedure TTyroMain.Init;
+procedure TTyroMainWindow.Init;
 begin
 
 end;
 
-procedure TTyroMain.Terminate;
+procedure TTyroMainWindow.Terminate;
 begin
   IsTerminated := True;
 end;
 
-procedure TTyroMain.Unload;
+procedure TTyroMainWindow.Unload;
 begin
 
 end;
 
-procedure TTyroMain.Update;
+procedure TTyroMainWindow.Update;
 begin
 
 end;
@@ -676,7 +670,7 @@ begin
   end;
 end;
 
-{ TTyroCustomWindow }
+{ TTyroWindow }
 
 constructor TTyroPanel.Create(AParent: TTyroLayout);
 begin
@@ -804,7 +798,7 @@ begin
   Invalidate;
 end;
 
-procedure TTyroControl.SetWindow(AValue: TTyroCustomWindow);
+procedure TTyroControl.SetWindow(AValue: TTyroWindow);
 begin
   if FWindow =AValue then Exit;
   FWindow :=AValue;
@@ -960,8 +954,8 @@ begin
   inherited;
   FState := FState + [csCreating];
   FParent := AParent;
-  if (Parent is TTyroCustomWindow) then
-    FWindow := (Parent as TTyroCustomWindow);
+  if (Parent is TTyroWindow) then
+    FWindow := (Parent as TTyroWindow);
   FVisible := True;
   Created;
   FState := FState - [csCreating] + [csCreated];
@@ -975,27 +969,27 @@ begin
   inherited;
 end;
 
-{ TTyroCustomWindow }
+{ TTyroWindow }
 
-procedure TTyroCustomWindow.SetTitle(AValue: utf8string);
+procedure TTyroWindow.SetTitle(AValue: utf8string);
 begin
   if FTitle =AValue then Exit;
   FTitle :=AValue;
 end;
 
-procedure TTyroCustomWindow.PrepareCanvas;
+procedure TTyroWindow.PrepareCanvas;
 begin
   if FCanvas = nil then
     FCanvas := CreateCanvas;
 end;
 
-constructor TTyroCustomWindow.Create(AParent: TTyroLayout; AWidth, AHeight: Integer);
+constructor TTyroWindow.Create(AParent: TTyroLayout; AWidth, AHeight: Integer);
 begin
   Create(AParent);
   FWindowRect := Rect(0, 0, AWidth, AHeight);
 end;
 
-procedure TTyroCustomWindow.SetFocused(AValue: TTyroControl);
+procedure TTyroWindow.SetFocused(AValue: TTyroControl);
 begin
   if FFocused =AValue then
     Exit;
@@ -1006,7 +1000,7 @@ begin
     FFocused.FocusChanged;
 end;
 
-procedure TTyroMain.ProcessInput;
+procedure TTyroMainWindow.ProcessInput;
 var
   Shift: TShiftState;
   Key: TKeyboardKey;
@@ -1065,24 +1059,24 @@ begin
   end;
 end;
 
-procedure TTyroCustomWindow.SetCanvas(AValue: TTyroCanvas);
+procedure TTyroWindow.SetCanvas(AValue: TTyroCanvas);
 begin
   if FCanvas =AValue then Exit;
   FCanvas :=AValue;
 end;
 
-constructor TTyroCustomWindow.Create(AParent: TTyroLayout);
+constructor TTyroWindow.Create(AParent: TTyroLayout);
 begin
   inherited;
 end;
 
-destructor TTyroCustomWindow.Destroy;
+destructor TTyroWindow.Destroy;
 begin
   FreeAndNil(FCanvas);
   inherited Destroy;
 end;
 
-procedure TTyroCustomWindow.Paint;
+procedure TTyroWindow.Paint;
 var
   aControl: TTyroLayout;
 begin
@@ -1096,13 +1090,6 @@ begin
     finally
     end;
   end;
-end;
-
-{ TTyroWindow }
-
-function TTyroWindow.CreateCanvas: TTyroCanvas;
-begin
-  Result := TTyroTextureCanvas.Create(WindowRect.Width, WindowRect.Height, True);
 end;
 
 initialization
