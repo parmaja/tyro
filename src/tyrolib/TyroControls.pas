@@ -338,7 +338,6 @@ begin
   BoundsRect.Height := ScreenHeight;
   MarginSize := cMarginSize;
   FBackColor := clCornflowerBlue;
-  //MarginColor := clCornflowerBlue;
 end;
 
 constructor TTyroMainWindow.Create;
