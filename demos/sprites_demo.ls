@@ -1,8 +1,8 @@
 --======================================================================
 -- spirits_demo.lua  Sprite loading, drawing, moving & transforms
 --======================================================================
--- Demonstrates the Spirits system:
---   Spirits.new("name")     - create a named spirit
+-- Demonstrates the Sprites system:
+--   Sprites.new("name")     - create a named spirit
 --   spirit:load("image.png") - load a texture into the spirit
 --   spirit:show()            - make the spirit visible
 --   spirit:hide()            - make the sprite invisible
@@ -11,8 +11,8 @@
 --   spirit.angle             - get/set rotation angle
 --   spirit.scale             - get/set scale
 --   spirit.width() / spirit.height() - dimensions
---   Spirits("name")          - look up a spirit by name
---   Spirits.find("name")     - same as above, returns spirit or nil
+--   Sprites("name")          - look up a spirit by name
+--   Sprites.find("name")     - same as above, returns spirit or nil
 --
 -- The engine draws all visible spirits every frame automatically.
 --======================================================================
@@ -22,13 +22,13 @@ canvas.color = colors.black
 canvas.clear()
 
 -- Create a spirit named "player"
-local player = Spirits.new("player")
+local player = Sprites.new("player")
 player.load("richard-say.png")
 player.show()
 player.move(100, 200)
 
 -- Create a second spirit without a name
-local ghost = Spirits.new()
+local ghost = Sprites.new()
 ghost.load("richard-say.png")
 ghost.show()
 ghost.angle = 45
@@ -36,7 +36,7 @@ ghost.scale = 0.5
 ghost.move(300, 100)
 
 -- Access by name
-local found = Spirits("player")
+local found = Sprites("player")
 if found then
   print("Found spirit by name, width=" .. found.width() .. " height=" .. found.height())
 end

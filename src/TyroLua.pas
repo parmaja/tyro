@@ -1425,7 +1425,7 @@ begin
   try
     // Run the DoExecute on the main thread via Synchronize.
     // The object is NOT freed by the engine; we free it here.
-    Reader.Run;
+    Reader.Run(Script.Thread);
     //TThread.Synchronize(ScriptThread, procedure begin sleep(1000) end);
     // Wait for user to press Enter (signaled from main thread callback)
     Reader.Wait;

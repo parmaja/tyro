@@ -2,14 +2,14 @@ window.show(640, 480)
 canvas.color = colors.black
 canvas.clear()
 
-log("Spirits type = " .. type(Spirits))
+log("Sprites type = " .. type(Sprites))
 log("test1")
-if Spirits then
-  log("Spirits.new type = " .. type(Spirits.new))
-  log("Spirits.find type = " .. type(Spirits.find))
+if Sprites then
+  log("Sprites.new type = " .. type(Sprites.new))
+  log("Sprites.find type = " .. type(Sprites.find))
   log("test2")
   
-  local player = Spirits.new("player")
+  local player = Sprites.new("player")
   log("Created spirit: " .. tostring(player))
   log("player type = " .. type(player))
   

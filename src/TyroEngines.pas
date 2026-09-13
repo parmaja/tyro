@@ -23,9 +23,8 @@ const
   TyroVersion: Double = 0.1;
   TyroVersionString = '0.1';
 
-//  sPromptChar = '>';
-  sPromptChar = '›';
-  sPromptDOT: UTF8string = #$25CF;
+  sPromptChar: UTF8string = '>';
+  sPromptDOT: UTF8string = '*';
 
 var
   // Debug switch: when True, DBG messages are written to the console.
@@ -635,7 +634,7 @@ end;
 
 procedure TTyroMain.RegisterCommands;
 begin
-  Commands.Add('Help', ['?'], Help_Command, 'Show help');
+  Commands.Add('help', ['?'], Help_Command, 'Show help');
   Commands.Add('list', ['ls'], Dir_Command, 'Show current directory');
   Commands.Add('clear', ['cls'], Clear_Command, 'List files in current directory');
   Commands.Add('exit', ['quit', 'q'], Exit_Command, 'Hide console and stop');
@@ -650,14 +649,14 @@ begin
   // Clear any script callback so built-in commands are executed
   FReadCallback := nil;
   Console.OnInput := ConsoleInput;
-  Console.StartRead(clBlack, clBlack, '> ', clLightGray, clBlack);
+  Console.StartRead(clBlack, clBlack, sPromptChar, clLightGray, clBlack);
 end;
 
 procedure TTyroMain.StartConsoleReadEx(ACallback: TConsoleReadEvent);
 begin
   FReadCallback := ACallback;
   Console.OnInput := ACallback;
-  Console.StartRead(clBlack, clBlack, '> ', clLightGray, clBlack);
+  Console.StartRead(clBlack, clBlack, sPromptChar, clLightGray, clBlack);
 end;
 
 procedure TTyroMain.Help_Command(Params: TStrings);

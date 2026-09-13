@@ -2,9 +2,9 @@ window.show(640, 480)
 canvas.color = colors.black
 canvas.clear()
 
-log("Spirits type = " .. type(Spirits))
+log("Sprites type = " .. type(Sprites))
 
-local player = Spirits.new("player")
+local player = Sprites.new("player")
 log("Created spirit: " .. tostring(player))
 
 -- Test load
@@ -36,7 +36,7 @@ player.y = 60
 log("After set y, y=" .. tostring(player.y))
 
 -- Test named lookup
-local found = Spirits("player")
+local found = Sprites("player")
 log("Found by name: " .. tostring(found))
 if found then
   log("Found width=" .. tostring(found:width()))
@@ -49,7 +49,7 @@ player.show()
 log("After show, visible=" .. tostring(player.visible))
 
 -- Test find
-local found2 = Spirits.find("player")
+local found2 = Sprites.find("player")
 log("Find by name: " .. tostring(found2))
 
 -- Test drawing in a loop

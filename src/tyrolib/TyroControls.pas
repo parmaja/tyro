@@ -279,7 +279,7 @@ type
     procedure Terminate; virtual;
   public
     constructor Create(AParent: TTyroLayout); overload; override;
-    constructor Create; overload; reintroduce;
+    constructor Create; reintroduce; overload;
     destructor Destroy; override;
 
     //* TextureMode create texture with canvas
@@ -745,7 +745,7 @@ begin
   Result := False;
   if (WindowRect.Width <= 0) or (WindowRect.Height <= 0) then
     Exit;
-  mp := RayLib.GetMousePosition;
+  mp := TVector2(RayLib.GetMousePosition);
   Result := (mp.X >= WindowRect.Left) and (mp.X <= WindowRect.Right) and
             (mp.Y >= WindowRect.Top) and (mp.Y <= WindowRect.Bottom);
 end;

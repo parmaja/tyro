@@ -19,7 +19,7 @@ uses
 
 type
 
-  TMain = class(TTyroMain)
+  TMain = class(TTyroMainWindow)
   public
     X, Y: Integer;
     Spacing: Integer;

@@ -1974,7 +1974,7 @@ begin
     end
     else
       l := UTF8CodepointSize(@Desc[PP]);
-     FInputBuffer.OverWrite(Copy(Desc, Pp, l), i, DFC, DBC);
+    FInputBuffer.OverWrite(Copy(Desc, Pp, l), i, DFC, DBC);
     Inc(i);
     Inc(Pp, l);
   end;

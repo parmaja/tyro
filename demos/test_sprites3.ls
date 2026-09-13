@@ -2,21 +2,21 @@ window.show(640, 480)
 canvas.color = colors.black
 canvas.clear()
 
-local f = io.open("spirits_test_output.txt", "w")
+local f = io.open("sprites_test_output.txt", "w")
 
-f:write("Spirits type = " .. type(Spirits) .. "\n")
-if type(Spirits) ~= "table" then
-  f:write("Spirits is not a table!\n")
+f:write("Sprites type = " .. type(Sprites) .. "\n")
+if type(Sprites) ~= "table" then
+  f:write("Sprites is not a table!\n")
   f:close()
   running = false
   return
 end
 
-f:write("Spirits.new type = " .. type(Spirits.new) .. "\n")
-f:write("Spirits.find type = " .. type(Spirits.find) .. "\n")
+f:write("Sprites.new type = " .. type(Sprites.new) .. "\n")
+f:write("Sprites.find type = " .. type(Sprites.find) .. "\n")
 
 -- Try calling new
-local player = Spirits.new("player")
+local player = Sprites.new("player")
 f:write("Created spirit: " .. tostring(player) .. "\n")
 f:write("player type = " .. type(player) .. "\n")
 
@@ -38,7 +38,7 @@ if player then
   f:write("angle=" .. player.angle .. " scale=" .. player.scale .. "\n")
   
   -- Test named lookup
-  local found = Spirits("player")
+  local found = Sprites("player")
   f:write("Found by name: " .. tostring(found) .. "\n")
   if found then
     found.angle = 45

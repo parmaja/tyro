@@ -2,9 +2,9 @@ window.show(640, 480)
 canvas.color = colors.black
 canvas.clear()
 
-log("Testing Spirits")
+log("Testing Sprites")
 
-local player = Spirits.new("player")
+local player = Sprites.new("player")
 log("Created spirit")
 
 -- Test load with different paths

@@ -19,7 +19,10 @@ interface
 
 uses
   Classes, SysUtils, Contnrs, Math,
-  mnLogs, mnClasses, mnUtils, mnBDF,
+  mnLogs, mnClasses, mnUtils,
+  {$ifdef FPC}
+  mnBDF,
+  {$endif}
   RayLib;
 
 const
@@ -146,7 +149,9 @@ type
     destructor Destroy; override;
     procedure LoadFromFile(FileName: utf8string; FontSize: Integer = 0);
     procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
+    {$ifdef FPC}
     procedure LoadFromBDF(FileName: utf8string; FontSize: Integer = 0);
+    {$endif}
     procedure LoadFromMemory(FileType: string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger = nil; CodepointsCount: Integer = 0);
     procedure LoadDefault;
     procedure Unload;
@@ -203,11 +208,13 @@ end;
 
 procedure TRayFont.LoadFromFile(FileName: utf8string; FontSize: Integer);
 begin
+{$ifdef FPC}
   if SameText(ExtractFileExt(FileName), '.bdf') then
   begin
     LoadFromBDF(FileName, FontSize);
     exit;
   end;
+{$endif}
   if SysUtils.FileExists(FileName) then
   begin
     Unload;
@@ -248,6 +255,7 @@ begin
   Loaded;
 end;
 
+{$ifdef FPC}
 procedure TRayFont.LoadFromBDF(FileName: utf8string; FontSize: Integer);
 var
   BDF: TBDF;
@@ -294,6 +302,7 @@ begin
   else
     raise Exception.Create('Font file not exists ' + FileName);
 end;
+{$endif}
 
 { TRayAudio }
 

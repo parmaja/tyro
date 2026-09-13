@@ -28,6 +28,7 @@ type
     procedure Execute;
     //Sync to main thread
     procedure Run(Thread: TThread = nil);
+    procedure SetEvent;
     function Wait(Timeout: Cardinal = INFINITE): Boolean;
   end;
 
@@ -516,8 +517,7 @@ end;
 
 procedure TReadConsoleObject.DoExecute;
 begin
-  // Show console and start reading input with a custom callback
-  //Main.ShowConsole(80, 25);
+  // reading input with a custom callback
   Main.StartConsoleReadEx(HandleConsoleInput);
 end;
 
@@ -527,6 +527,7 @@ begin
 //  Event.SetEvent;
   // Re-arm for built-in command mode
   Main.StartConsoleRead;
+  SetEvent;
 end;
 { TBeepObject }
 
@@ -689,8 +690,6 @@ end;
 procedure TQueueObject.Execute;
 begin
   DoExecute;
-  if FEvent <> nil then
-    FEvent.SetEvent;
 end;
 
 procedure TQueueObject.Run(Thread: TThread);
@@ -699,6 +698,12 @@ begin
     TThread.Synchronize(Thread, Execute)
   else
     Execute;
+end;
+
+procedure TQueueObject.SetEvent;
+begin
+  if FEvent <> nil then
+    FEvent.SetEvent;
 end;
 
 { TWindowObject }

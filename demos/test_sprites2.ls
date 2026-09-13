@@ -6,12 +6,12 @@ canvas.clear()
 console.show()
 
 println("Test 1: table exists")
-println("Spirits type = " .. type(Spirits))
-if Spirits then
-  println("Spirits.new type = " .. type(Spirits.new))
-  println("Spirits.find type = " .. type(Spirits.find))
+println("Sprites type = " .. type(Sprites))
+if Sprites then
+  println("Sprites.new type = " .. type(Sprites.new))
+  println("Sprites.find type = " .. type(Sprites.find))
   
-  local player = Spirits.new("player")
+  local player = Sprites.new("player")
   println("Created spirit: " .. tostring(player))
   
   if player then

@@ -38,7 +38,7 @@ type
     function Check: TCell;
   end;
 
-  TMain = class(TTyroMain)
+  TMain = class(TTyroMainWindow)
   public
     M: TMusic;
     procedure Init; override;
@@ -232,8 +232,8 @@ begin
   inherited;
   SetFPS(10);
   Options := Options + [moShowFPS];
-  M := LoadMusicStream(PUTF8Char('D:\lab\pascal\tyro\demos\willtell.xm'));
-  PlayMusicStream(M);
+//  M := LoadMusicStream(PUTF8Char('D:\lab\pascal\tyro\demos\willtell.xm'));
+//  PlayMusicStream(M);
 end;
 
 procedure TMain.Unload;
@@ -247,7 +247,7 @@ end;
 
 procedure TMain.Update;
 begin
-  UpdateMusicStream(M);
+  //UpdateMusicStream(M);
 end;
 
 end.
