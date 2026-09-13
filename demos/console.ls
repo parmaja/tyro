@@ -1,6 +1,7 @@
 log(version);
 --font.load('terminus.ttf', 24)
-font.load('DejaVuSansMono.ttf', 18)
+font.load('spleen-12x24.bdf')
+--font.load('c:/temp/1.png')
 --font.load('ter-u24n.fnt')
 --font.load('font2bitmap.png', 24)
 --font.load('Inconsolata-16r.psf')

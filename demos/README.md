@@ -46,7 +46,7 @@ tyro demos/pong.lua
 
 | File | Feature |
 |------|---------|
-| `shader_demo.lua` | Post-processing shaders: canvas.effect("water") and canvas.effect("glow") |
+| `shader_demo.lua` | Post-processing shaders: `shader.effect`, `shader.value`, `shader.area` and `shader.load("custom.frag")` |
 
 ### Input
 

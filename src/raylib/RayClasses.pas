@@ -19,7 +19,7 @@ interface
 
 uses
   Classes, SysUtils, Contnrs, Math,
-  mnClasses, mnUtils,
+  mnLogs, mnClasses, mnUtils, mnBDF,
   RayLib;
 
 const
@@ -146,7 +146,8 @@ type
     destructor Destroy; override;
     procedure LoadFromFile(FileName: utf8string; FontSize: Integer = 0);
     procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
-    procedure LoadFromMemory(FileType:string; const FontData: Pointer; DataSize: Integer; FontSize: Integer);
+    procedure LoadFromBDF(FileName: utf8string; FontSize: Integer = 0);
+    procedure LoadFromMemory(FileType: string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger = nil; CodepointsCount: Integer = 0);
     procedure LoadDefault;
     procedure Unload;
   end;
@@ -202,6 +203,11 @@ end;
 
 procedure TRayFont.LoadFromFile(FileName: utf8string; FontSize: Integer);
 begin
+  if SameText(ExtractFileExt(FileName), '.bdf') then
+  begin
+    LoadFromBDF(FileName, FontSize);
+    exit;
+  end;
   if SysUtils.FileExists(FileName) then
   begin
     Unload;
@@ -209,6 +215,8 @@ begin
       Data := RayLib.LoadFont(PUTF8Char(FileName))
     else
       Data := RayLib.LoadFontEx(PUTF8Char(FileName), FontSize, nil, 255);
+    if Data.Texture.ID<=2 then
+      Log.WriteLn('Fail to load font: ' + FileName);
     //GenTextureMipmaps(Data.texture);
     SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
     Loaded;
@@ -232,12 +240,59 @@ begin
   //Width := Width * 2;
 end;
 
-procedure TRayFont.LoadFromMemory(FileType: string; const FontData: Pointer; DataSize: Integer; FontSize: Integer);
+procedure TRayFont.LoadFromMemory(FileType: string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger; CodepointsCount: Integer);
 begin
   Unload;
-  Data := LoadFontFromMemory(PUTF8Char(FileType), FontData, DataSize, FontSize, nil, 0);
+  Data := LoadFontFromMemory(PUTF8Char(FileType), FontData, DataSize, FontSize, Codepoints, CodepointsCount);
   SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
   Loaded;
+end;
+
+procedure TRayFont.LoadFromBDF(FileName: utf8string; FontSize: Integer);
+var
+  BDF: TBDF;
+  img: TImage;
+  Stream: TMemoryStream;
+  Codepoints: array of Integer;
+  i: Integer;
+begin
+  Unload;
+  Codepoints := nil;
+  if SysUtils.FileExists(FileName) then
+  begin
+    BDF := TBDF.Create;
+    try
+      BDF.LoadFromFile(FileName);
+      // Load the BDF glyphs with their real codepoints (ENCODING), not a plain
+      // firstChar.. sequence, so extended fonts (CP864, Cyrillic, ...) map right.
+      SetLength(Codepoints, BDF.Count);
+      for i := 0 to BDF.Count - 1 do
+        Codepoints[i] := BDF.CodePoints[i].Code;
+
+      try
+        Stream := BDF.EncodeToPNG;
+        Stream.Position:= 0;
+        Stream.SaveToFile('c:\temp\1.png');
+        Stream.Position:= 0;
+
+        if FontSize = 0 then
+          FontSize := BDF.Height;
+
+        img := LoadImageFromMemory('.png', Stream.Memory, Stream.Size);
+        //ImageAlphaPremultiply(img);
+        Data := LoadFontFromImage(img, clMagenta, cFirstChar);
+        SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
+        UnloadImage(img);
+        Loaded;
+      finally
+        Stream.Free;
+      end;
+    finally
+      BDF.Free;
+    end;
+  end
+  else
+    raise Exception.Create('Font file not exists ' + FileName);
 end;
 
 { TRayAudio }

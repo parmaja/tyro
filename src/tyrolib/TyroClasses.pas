@@ -896,21 +896,31 @@ function TTyroResources.GuessFileName(const FileName: string; InDirectory: strin
 var
   s: string;
 begin
-  if ExtractFileDir(FileName) = '' then
+  if not SysUtils.FileExists(FileName) or (ExtractFileDir(FileName) = '') then
   begin
     if (InDirectory <> '') then
+    begin
       s := IncludePathDelimiter(InDirectory) + FileName;
+      if SysUtils.FileExists(s) then
+        exit(s);
+    end;
 
-    if (InDirectory ='') or not SysUtils.FileExists(s) then
+    if (InDirectory = '') or (not SameFileName(Resources.CurrentDirectory, InDirectory)) then
+    begin
       s := IncludePathDelimiter(Resources.CurrentDirectory) + FileName;
+      if SysUtils.FileExists(s) then
+        exit(s);
+    end;
 
-    if not SysUtils.FileExists(s) then
-      s := IncludePathDelimiter(Resources.WorkSpace) + 'assets' + PathDelim + FileName;
-
+    s := IncludePathDelimiter(Resources.WorkSpace) + 'assets' + PathDelim + FileName;
     if SysUtils.FileExists(s) then
-      Exit(s)
-    else
-      Result := FileName;
+      Exit(s);
+
+    s := IncludePathDelimiter(Resources.WorkSpace) + FileName;
+    if SysUtils.FileExists(s) then
+      Exit(s);
+
+    Result := FileName;
   end
   else
     Result := FileName;

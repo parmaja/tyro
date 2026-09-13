@@ -193,34 +193,89 @@ while true do
 end
 ```
 
-# Post-processing Effects
+# Shader Effects
 
-Simple screen shaders can be applied to the whole canvas with
-`canvas.effect()`. They are built-in and need no files.
+Post-processing screen shaders are controlled with the `shader` table. They are
+built-in and need no files. Assign properties the usual way:
 
-| Function | Description |
+```lua
+shader.effect = "water"          -- pick the effect
+shader.value  = 0.5              -- 0..1 effect parameter
+shader.area   = {x, y, w, h}     -- restrict the effect to a rectangle
+```
+
+| Property | Description |
 |----------|-------------|
-| `canvas.effect("water")` | Wavy water with foam across the bottom of the canvas |
-| `canvas.effect("glow")` | Soft glow around bright pixels (nice for suns, bulbs, lasers) |
-| `canvas.effect("none")` | Remove the effect |
+| `shader.effect` | `"water"`, `"glow"`, `"gray"`, `"sepia"`, `"invert"`, `"vignette"`, `"pixelate"` or `"none"` |
+| `shader.value` | `0..1` effect parameter (see per-effect meaning below) |
+| `shader.area` | Rectangle `{x, y, w, h}` in canvas pixels (`y` from the top) where the effect applies; outside it the canvas is unchanged |
+| `shader.load(file)` | Load a custom fragment shader from a GLSL file and activate it (see below) |
+
+| Effect | What it does | `value` meaning (default) |
+|--------|--------------|---------------------------|
+| `"water"` | Wavy water with foam across the lower region | water surface height (0.34) |
+| `"glow"` | Soft glow around bright pixels (suns, bulbs, lasers) | height of the glowing region from the bottom (1.0 = full) |
+| `"gray"` | Grayscale | gray strength (1.0) |
+| `"sepia"` | Old-photo look | sepia strength (1.0) |
+| `"invert"` | Inverted colors | inversion strength (1.0) |
+| `"vignette"` | Darkened corners | vignette amount (0.5) |
+| `"pixelate"` | Chunky pixel blocks | block size (0.06 ~ 1px) |
 
 ```lua
 window.show(640, 480)
-canvas.effect("glow")       -- turn it on
+shader.effect = "glow"           -- turn it on
+shader.value  = 0.5              -- glow on the bottom half
 
 -- draw something bright, it will glow
 canvas.color = colors.yellow
 canvas.circle(320, 240, 60, true)
 ```
 
-The `"water"` effect tints and distorts the lower part of the canvas, so draw a
-shore or sea bottom there if you want a sea scene. Toggle effects at any time
-with the keys of your choice:
+`shader.value` and `shader.area` survive effect switches, so once set they apply
+to whichever effect is active. Toggle effects and tweak the parameters at any
+time:
 
 ```lua
-if iskeypressed("1") then canvas.effect("water") end
-if iskeypressed("2") then canvas.effect("glow") end
-if iskeypressed("0") then canvas.effect("none") end
+if iskeypressed("1") then shader.effect = "water" end
+if iskeypressed("2") then shader.effect = "glow" end
+if iskeypressed("0") then shader.effect = "none" end
+if iskeypressed("q") then shader.value = shader.value - 0.1 end
+if iskeypressed("e") then shader.value = shader.value + 0.1 end
+if iskeypressed("z") then shader.area = {0, canvas.height/2, canvas.width, canvas.height/2} end
+```
+
+The `"water"` effect tints and distorts the lower part of the canvas, so draw a
+shore or sea bottom there if you want a sea scene. See `demos/shader_demo.lua`
+for a full on-screen demo of every effect, `value` and `area`.
+
+## Custom shaders
+
+`shader.load("file.frag")` loads a **fragment** shader from a file and activates
+it. The file is looked up next to the script, then in the current directory, then
+in `assets/` under the workspace. It must be GLSL `#version 330` with the same
+outputs as the built-in effects:
+
+```glsl
+#version 330
+uniform vec2  resolution;                 // canvas size in pixels
+uniform float time;                       // elapsed seconds
+uniform float value;                      // shader.value (0..1)
+uniform vec4  area;                       // shader.area {x, y, w, h} (y from the bottom)
+uniform sampler2D texture0;               // the canvas
+uniform vec4 colDiffuse;                  // vertex color
+in vec2 fragTexCoord;
+in vec4 fragColor;
+out vec4 finalColor;
+```
+
+All uniforms are optional: use the ones you need and ignore the rest. `shader.value`
+and `shader.area` still control `value`/`area`. Set `shader.effect = "none"` to go
+back to the built-in effects. See `demos/custom.frag` for a working example:
+
+```lua
+shader.load("custom.frag")    -- activate the scanlines shader
+shader.value = 0.8
+shader.area  = {0, 0, canvas.width, canvas.height}
 ```
 
 # Timing
@@ -267,7 +322,7 @@ tyro demos/<name>.lua
 | `demos/colors_bar.lua` | Full color palette display |
 | `demos/multiply.lua` | Drawing + MML sound |
 | `demos/text.lua` | Multi-language text rendering |
-| `demos/shader_demo.lua` | Post-processing shaders: water and glow effects |
+| `demos/shader_demo.lua` | Post-processing shaders: water, glow, gray, sepia, invert, vignette, pixelate |
 
 # Issues
 

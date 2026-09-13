@@ -1320,8 +1320,7 @@ var
   s: string;
 begin
   s := L.ToString(1);
-  if ExtractFileDir(s) = '' then
-    s := Resources.CurrentDirectory + s;
+  s := Resources.GuessFileName(s, Script.Path);
   FScript.AddQueueObject(TPlayMusicFileObject.Create(s));
   Result := 0;
 end;
@@ -1440,25 +1439,17 @@ end;
 
 function TLuaFont.Load_func(L: Plua_State): integer; cdecl;
 var
-  aFile, s: string;
+  aFile: string;
   aSize: integer;
 begin
   aFile := L.ToString(1);
   // Load font from current directory (ScriptPath or WorkSpace)
-  if ExtractFileDir(aFile) = '' then
-  begin
-    if not SysUtils.FileExists(aFile) then
-      s := IncludePathDelimiter(FScript.Path) + aFile;
-    if not SysUtils.FileExists(s) then
-      s := IncludePathDelimiter(Resources.CurrentDirectory) + aFile;
-    if not SysUtils.FileExists(s) then
-      s := IncludePathDelimiter(Resources.WorkSpace) + 'assets' + PathDelim + aFile;
-  end;
+  aFile := Resources.GuessFileName(aFile, Script.Path);
   if L.IsNumber(2) then
     aSize := L.ToInteger(2) //LoadFontEx
   else
     aSize := 0; //LoadFont
-   FScript.AddQueueObject(TLoadFontObject.Create(s, aSize));
+   FScript.AddQueueObject(TLoadFontObject.Create(aFile, aSize));
    Result := 0;
 end;
 

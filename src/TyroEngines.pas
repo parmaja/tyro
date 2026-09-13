@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs,
-  mnLogs, mnUtils,
+  mnLogs, mnUtils, mnBDF,
   RayLib, RayClasses, TyroScripts,
   TyroClasses, TyroControls, TyroConsoles,
   TyroSprites, TyroPhysics,
