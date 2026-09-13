@@ -171,6 +171,9 @@ begin
 
   InstallConsoleLog;
 
+  if HasOption('d', 'debug') then
+    IsDebug := True;
+
   if HasOption('h', 'help') then
   begin
     PrintHelp;

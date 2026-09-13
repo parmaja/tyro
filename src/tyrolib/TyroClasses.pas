@@ -335,11 +335,11 @@ const
   ScreenFontSize = 16;
   ScreenWidth: Integer = ScreenCharWidth * ScreenFontSize;
   ScreenHeight: Integer = ScreenCharHeight * ScreenFontSize;
-  cFramePerSeconds = 60;
 
 var
   Resources: TTyroResources = nil;
   Lock: TCriticalSection = nil;
+  FramePerSeconds: Integer = 60;
 
 implementation
 
@@ -347,8 +347,80 @@ uses
   minibidi;
 
 function StrToColor(Value: String): TColor;
+var
+  s: string;
+  v: Integer;
 begin
-  //TODO
+  Result := clBlack;
+  s := Trim(Value);
+  if s = '' then
+    Exit;
+  if s[1] = '#' then
+    s := Copy(s, 2, MaxInt);
+  if Length(s) = 3 then
+    s := s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
+  if Length(s) = 6 then
+  begin
+    v := StrToIntDef('$' + s, -1);
+    if v >= 0 then
+    begin
+      Result.RGBA.Red := (v shr 16) and $FF;
+      Result.RGBA.Green := (v shr 8) and $FF;
+      Result.RGBA.Blue := v and $FF;
+      Result.RGBA.Alpha := $FF;
+      Exit;
+    end;
+  end;
+  if SameText(Value, 'black') then
+    Result := clBlack
+  else if SameText(Value, 'white') then
+    Result := clWhite
+  else if SameText(Value, 'gray') or SameText(Value, 'grey') then
+    Result := clGray
+  else if SameText(Value, 'lightgray') then
+    Result := clLightgray
+  else if SameText(Value, 'darkgray') then
+    Result := clDarkGray
+  else if SameText(Value, 'red') then
+    Result := clRed
+  else if SameText(Value, 'maroon') then
+    Result := clMaroon
+  else if SameText(Value, 'green') then
+    Result := clGreen
+  else if SameText(Value, 'lime') then
+    Result := clLime
+  else if SameText(Value, 'darkgreen') then
+    Result := clDarkgreen
+  else if SameText(Value, 'blue') then
+    Result := clBlue
+  else if SameText(Value, 'skyblue') then
+    Result := clSkyBlue
+  else if SameText(Value, 'darkblue') then
+    Result := clDarkblue
+  else if SameText(Value, 'yellow') then
+    Result := clYellow
+  else if SameText(Value, 'gold') then
+    Result := clGold
+  else if SameText(Value, 'orange') then
+    Result := clOrange
+  else if SameText(Value, 'pink') then
+    Result := clPink
+  else if SameText(Value, 'purple') then
+    Result := clPurple
+  else if SameText(Value, 'violet') then
+    Result := clViolet
+  else if SameText(Value, 'darkpurple') then
+    Result := clDarkpurple
+  else if SameText(Value, 'brown') then
+    Result := clBrown
+  else if SameText(Value, 'darkbrown') then
+    Result := clDarkbrown
+  else if SameText(Value, 'beige') then
+    Result := clBeige
+  else if SameText(Value, 'magenta') then
+    Result := clMagenta
+  else if SameText(Value, 'raywhite') then
+    Result := clRayWhite;
 end;
 
 function IntToColor(I: Integer): TColor;

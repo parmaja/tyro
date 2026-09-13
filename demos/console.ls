@@ -18,7 +18,7 @@ log(x)
 --    console.print(i.."\r\n")
 --end
 --console.print(tostring(10+10));
-function align()
-    global console
-    console.align = 'bottom'
-end
+--function align()
+--    global console
+--    console.align = 'bottom'
+--end

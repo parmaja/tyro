@@ -437,7 +437,7 @@ begin
   if not Visible and (moWindow in Options) then
   begin
     ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
-    SetFPS(cFramePerSeconds);
+    SetFPS(FramePerSeconds);
   end;
 
   Resources.Load;
@@ -445,7 +445,7 @@ begin
   Load;
   Start;
   if FPS = 0 then
-    SetFPS(cFramePerSeconds);
+    SetFPS(FramePerSeconds);
   repeat
     try
       CheckSynchronize;

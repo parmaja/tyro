@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs,
-  mnLogs, mnUtils, mnBDF,
+  mnLogs, mnUtils, mnBDF, mnConfigs,
   RayLib, RayClasses, TyroScripts,
   TyroClasses, TyroControls, TyroConsoles,
   TyroSprites, TyroPhysics,
@@ -117,6 +117,7 @@ type
     procedure Terminate; override;
     procedure ProcessQueue;
     procedure Start; override;
+    procedure LoadConfig;
     procedure Unload; override;
     procedure Shutdown; override;
     procedure PrepareDraw; override;
@@ -205,7 +206,7 @@ begin
     CanvasLock.Enter;
     try
       ft := GetTime();
-      fpd := (1 / cFramePerSeconds);
+      fpd := (1 / FramePerSeconds);
       Graphic.BeginDraw;
       c := 0;
       while Queue.Count > 0 do
@@ -235,13 +236,66 @@ end;
 procedure TTyroMain.Start;
 begin
   inherited;
+  LoadConfig;
   if (FScriptThread <> nil) and not FScriptThread.Started then
     FScriptThread.Start;
 
   //if (FScriptMain <> nil) and not FScriptMain.Started then
   if (FScriptMain <> nil) then
     FScriptMain.Start;
-  Options := Options + [moShowFPS];
+end;
+
+procedure TTyroMain.LoadConfig;
+const
+  cConfigFile = 'tyro.conf';
+var
+  Config: TConfFile;
+  aFileName, aColor: string;
+begin
+  aFileName := IncludePathDelimiter(Resources.WorkSpace) + cConfigFile;
+  if not SysUtils.FileExists(aFileName) then
+    aFileName := IncludePathDelimiter(Resources.CurrentDirectory) + cConfigFile;
+  if not SysUtils.FileExists(aFileName) then
+  begin
+    Options := Options + [moShowFPS];
+    Exit;
+  end;
+
+  Config := TConfFile.Create;
+  try
+    try
+      Config.LoadFromFile(aFileName);
+    except
+      on E: Exception do
+      begin
+        Log.WriteLn('Config: ' + E.Message);
+        Exit;
+      end;
+    end;
+
+    FPS := Config.ReadInteger('fps', FramePerSeconds);
+    FramePerSeconds := FPS;
+    IsDebug := Config.ReadBool('debug', IsDebug);
+    aColor := Config.ReadString('backcolor', '');
+    if aColor <> '' then
+      BackColor := StrToColor(aColor);
+
+    if Config.Sections.ReadBool('show', 'fps', True) then
+      Options := Options + [moShowFPS]
+    else
+      Options := Options - [moShowFPS];
+
+    if Config.Sections.ReadBool('show', 'console', False) then
+    begin
+      ShowConsole(0, 0, 0, 0);
+      StartConsoleRead;
+    end;
+
+    if Config.Sections.ReadBool('show', 'log', False) then
+      Output.Show;
+  finally
+    Config.Free;
+  end;
 end;
 
 procedure TTyroMain.Unload;
