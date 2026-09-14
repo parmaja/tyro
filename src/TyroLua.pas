@@ -187,6 +187,7 @@ type
   private
     FItems: TList; //of TTyroButton (owned by the main window, not by us)
     function GetButton(AHandle: Integer): TTyroButton;
+    function FindByName(const AName: string): Integer;
   protected
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
@@ -297,6 +298,9 @@ type
     constructor Create; override;
     destructor Destroy; override;
     procedure AddQueueObject(AQueueObject: TQueueObject); override;
+    //Global environment hooks: unresolved globals resolve to sprites/controls by name
+    function __global_getter(L: Plua_State): integer; cdecl;
+    function __global_setter(L: Plua_State): integer; cdecl;
   end;
 
 const
@@ -333,6 +337,85 @@ begin
   //mirror the log line to the Output control too
   if (Main <> nil) and (Main.Output <> nil) then
     Main.Output.Writeln(s);
+  Result := 0;
+end;
+
+// Callback trampoline for the global-environment hooks: binds a TLuaScript
+// method to a Lua C-closure (mirrors the internal one in LuaClasses).
+function global_meta_callback(L: Plua_State): integer; cdecl;
+var
+  Method: TMethod;
+begin
+  Method.Data := lua_topointer(L, lua_upvalueindex(1));
+  Method.Code := lua_topointer(L, lua_upvalueindex(2));
+  if Method.Data = nil then
+    raise Exception.Create('Lua: cannot execute global hook!');
+  Result := TLuaMethod(Method)(L);
+end;
+
+// Global environment __index: called when a global name is not stored raw in
+// the globals table. Raw globals win; then the name is resolved against the
+// sprite list (by name) and the control list (buttons by caption); the final
+// fallback is an empty table. lua_rawget/rawset keep this recursion-free.
+function TLuaScript.__global_getter(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  AHandle: integer;
+begin
+  Result := 1;
+  //1) Existing globals win; raw read never re-enters __index
+  L.PushValue(2);
+  lua_rawget(L, 1);
+  if not lua_isnil(L, -1) then
+    Exit;
+  L.Pop(1); //[globals, key]
+
+  //2) Only string names can refer to a sprite/control
+  if lua_type(L, 2) <> LUA_TSTRING then
+  begin
+    L.NewTable;
+    Exit;
+  end;
+
+  aName := L.ToString(2);
+
+  //3) Sprites: reuse/create the sprite proxy bound to the found handle
+  AHandle := Main.Sprites.FindByName(aName);
+  if AHandle > cSpriteInvalid then
+  begin
+    lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + AHandle); //[globals, key, sprite?]
+    if not lua_istable(L, -1) then
+    begin
+      L.Pop(1);
+      Sprite.RegisterSprite(AHandle); //[globals, key, sprite]
+    end;
+    //cache it raw into the globals table and return it
+    L.PushValue(-1); //[globals, key, sprite, sprite]
+    L.PushValue(2); //[globals, key, sprite, sprite, key]
+    lua_rawset(L, 1); //globals[key] = sprite -> [globals, key, sprite]
+    L.Remove(1); //[key, sprite]
+    L.Remove(1); //[sprite]
+    Exit;
+  end;
+
+  //4) Controls: buttons matched by caption -> the button handle
+  //TODO use Main.Controls
+  AHandle := Buttons.FindByName(aName);
+  if AHandle > 0 then
+  begin
+    L.PushInteger(AHandle);
+    Exit;
+  end;
+
+  //5) Default pascal side value so missing names never error out
+  L.NewTable;
+end;
+
+// Global environment __newindex: assign the value raw into the globals table.
+// lua_rawset never re-enters __newindex (no recursion).
+function TLuaScript.__global_setter(L: Plua_State): integer; cdecl;
+begin
+  lua_rawset(L, 1);
   Result := 0;
 end;
 
@@ -919,6 +1002,23 @@ begin
   for i := 0 to Length(Colors.Colors) - 1 do
     Lua.State.Register(Colors.Colors[i].Name, ColorToInt(Colors.Colors[i].Color));
   Lua.State.EndTable('colors', Colors);
+
+  //Attach a metatable to the global environment so an unresolved global name
+  //resolves to a sprite or control by name (e.g. richard.move(...) when
+  //"richard" is a sprite). The globals table is fetched via LUA_RIDX_GLOBALS
+  //for Lua 5.5 compatibility; __index/__newindex use raw access (no recursion).
+  lua_rawgeti(Lua.State, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS); //[globals]
+  Lua.State.NewTable; //[globals, meta]
+  lua_pushlightuserdata(Lua.State, TMethod(@__global_getter).Data);
+  lua_pushlightuserdata(Lua.State, TMethod(@__global_getter).Code);
+  lua_pushcclosure(Lua.State, @global_meta_callback, 2); //[globals, meta, getter]
+  lua_setfield(Lua.State, -2, '__index'); //[globals, meta]
+  lua_pushlightuserdata(Lua.State, TMethod(@__global_setter).Data);
+  lua_pushlightuserdata(Lua.State, TMethod(@__global_setter).Code);
+  lua_pushcclosure(Lua.State, @global_meta_callback, 2); //[globals, meta, setter]
+  lua_setfield(Lua.State, -2, '__newindex'); //[globals, meta]
+  lua_setmetatable(Lua.State, -2); //globals.metatable = meta -> [globals]
+  lua_pop(Lua.State, 1); //[]
 end;
 
 destructor TLuaScript.Destroy;
@@ -1580,6 +1680,23 @@ begin
   Result := nil;
   if (AHandle >= 1) and (AHandle <= FItems.Count) then
     Result := TTyroButton(FItems[AHandle - 1]);
+end;
+
+function TLuaButtons.FindByName(const AName: string): Integer;
+var
+  i: Integer;
+  b: TTyroButton;
+begin
+  Result := 0;
+  for i := 0 to FItems.Count - 1 do
+  begin
+    b := TTyroButton(FItems[i]);
+    if (b <> nil) and (b.Name = AName) then
+    begin
+      Result := i + 1;
+      Exit;
+    end;
+  end;
 end;
 
 function TLuaButtons.Setter(L: PLua_State): integer;

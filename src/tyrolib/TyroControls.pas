@@ -61,10 +61,6 @@ type
   TTyroControl = class;
   TTyroWindow = class;
 
-  TTyroControls = class(TmnObjectList<TTyroLayout>)
-  public
-  end;
-
   TTyroLayoutState = (
     csCreating,
     csCreated,
@@ -77,9 +73,11 @@ type
 
   TAlign = (alNone, alLeft, alTop, alRight, alBottom, alClient);
 
+  TTyroControls = class;
+
   { TTyroLayout }
 
-  TTyroLayout = class abstract(TObject)
+  TTyroLayout = class abstract(TmnNamedObject)
   private
     FBorderColor: TColor;
     FBorderSize: Integer;
@@ -133,6 +131,11 @@ type
     property Height: Integer read GetHeight write SetHeight;
     //WindowRect is Virtual changed by RealignControls of parent used paint control
     property WindowRect: TRect read FWindowRect write SetWindowRect;
+  end;
+
+
+  TTyroControls = class(TmnNamedObjectList<TTyroLayout>)
+  public
   end;
 
   { TTyroControl }
