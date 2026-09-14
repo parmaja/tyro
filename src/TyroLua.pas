@@ -1512,8 +1512,7 @@ begin
   // ("texture-less") sprites get a real handle; load() swaps the texture in place.
   CreateObj := TCreateSpriteObject.Create(aName);
   try
-    CreateObj.Run(Script.Thread);
-    CreateObj.Wait;
+    CreateObj.Run(Script.Thread); //Will run in Synchronize
     handle := CreateObj.HandleResult;
   finally
     CreateObj.Free;
@@ -1620,8 +1619,7 @@ begin
   if c >= 6 then border := round(L.ToNumber(6));
   CreateObj := TCreateButtonObject.Create(caption, x, y, w, h, border);
   try
-    CreateObj.Run(Script.Thread);
-    CreateObj.Wait;
+    CreateObj.Run(Script.Thread); //Will run in Synchronize
     if CreateObj.Button <> nil then
     begin
       FItems.Add(CreateObj.Button);
@@ -1748,7 +1746,6 @@ begin
   LoadObj := TLoadSpriteObject.Create(aFile, aName, handle);
   try
     LoadObj.Run(Script.Thread);
-    LoadObj.Wait;
     handle := LoadObj.HandleResult;
     if handle > cSpriteInvalid then
     begin

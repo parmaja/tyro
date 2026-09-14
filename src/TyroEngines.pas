@@ -392,6 +392,9 @@ end;
 begin
   if Graphic <> nil then
   begin
+    // Canvas layer sits at the bottom: blit the legacy Graphic first so its
+    // opaque background does not cover the sprites drawn on top of it.
+    Graphic.PostDraw;
     try
       Sprites.DrawAll;
     except
@@ -401,7 +404,6 @@ begin
         raise;
       end;
     end;
-    Graphic.PostDraw;
     // scripted on_draw() overlays run last so they stay above the texture
     // and the legacy Graphic layer
     Sprites.DrawScripts;

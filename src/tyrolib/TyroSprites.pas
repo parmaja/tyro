@@ -866,7 +866,7 @@ begin
   inherited Create;
   FName := AName;
   FHandleResult := cSpriteInvalid;
-  EventNeeded;
+  //EventNeeded;
 end;
 
 procedure TCreateSpriteObject.DoExecute;
@@ -883,7 +883,6 @@ begin
   FName := AName;
   FExistingHandle := AExistingHandle;
   FHandleResult := cSpriteInvalid;
-  EventNeeded;
 end;
 
 destructor TLoadSpriteObject.Destroy;

@@ -689,7 +689,11 @@ end;
 
 procedure TQueueObject.Execute;
 begin
-  DoExecute;
+  try
+    DoExecute;
+  finally
+    //SetEvent;
+  end;
 end;
 
 procedure TQueueObject.Run(Thread: TThread);
@@ -731,7 +735,6 @@ begin
   FW := AW;
   FH := AH;
   FBorderSize := ABorderSize;
-  EventNeeded;
 end;
 
 procedure TCreateButtonObject.DoExecute;
