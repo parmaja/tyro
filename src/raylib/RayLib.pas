@@ -2485,7 +2485,8 @@ var
 
 function Vector2Of(X, Y: Single): TVector2;
 function Vector3Of(X, Y, Z: Single): TVector3;
-function RectangleOf(X, Y, W, H: Single): TRectangle;
+function RectangleOf(X, Y, W, H: Single): TRectangle; overload;
+function RectangleOf(ARect: TRect): TRectangle; overload;
 
 procedure InitLibrary;
 
@@ -2504,6 +2505,11 @@ end;
 function RectangleOf(X, Y, W, H: Single): TRectangle;
 begin
   Result := TRectangle.Create(X, Y, W, H);
+end;
+
+function RectangleOf(ARect: TRect): TRectangle; overload;
+begin
+  Result := TRectangle.Create(ARect.Left, ARect.Top, ARect.Width, ARect.Height);
 end;
 
 function TColorHelper.SetAlpha(AAlpha: Byte): TColor;

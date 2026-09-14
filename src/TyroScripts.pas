@@ -742,7 +742,6 @@ begin
   FButton := TTyroButton.Create(Main);
   FButton.Caption := FCaption;
   FButton.BoundsRect := Rect(FX, FY, FX + FW, FY + FH);
-  FButton.BorderSize := FBorderSize;
 end;
 
 { TDrawSetColorObject }

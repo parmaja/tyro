@@ -111,6 +111,7 @@ type
   public
     constructor Create(AParent: TTyroLayout); virtual;
     destructor Destroy; override;
+    procedure AfterConstruction; override;
     procedure Realign; virtual;
     procedure AlignControls; virtual;
     property Controls: TTyroControls read FControls;
@@ -216,7 +217,6 @@ type
     FDown: Boolean;
     FClicked: Boolean;
     FWasDown: Boolean;
-    function GetRoundness: Single;
     function IsMouseOver: Boolean;
     procedure CheckState;
     procedure SetCaption(AValue: utf8string);
@@ -608,6 +608,7 @@ end;
 constructor TTyroLayout.Create(AParent: TTyroLayout);
 begin
   inherited Create;
+  FState := FState + [csCreating];
   FControls := TTyroControls.Create(True);
   SetParent(AParent);
 end;
@@ -626,6 +627,12 @@ begin
   end;
   FreeAndNil(FControls);
   inherited;
+end;
+
+procedure TTyroLayout.AfterConstruction;
+begin
+  inherited;
+  FState := FState + [csCreating];
 end;
 
 procedure TTyroLayout.Realign;
@@ -694,8 +701,7 @@ end;
 constructor TTyroPanel.Create(AParent: TTyroLayout);
 begin
   inherited;
-  FWindowRect.Right := 100;
-  FWindowRect.Bottom := 100;
+  BoundsRect := Rect(0 ,0 , 100, 100);
 end;
 
 procedure TTyroPanel.DoPaint(ACanvas: TTyroCanvas);
@@ -709,11 +715,7 @@ end;
 constructor TTyroButton.Create(AParent: TTyroLayout);
 begin
   inherited;
-  FWindowRect.Right := 100;
-  FWindowRect.Bottom := 32;
-  BorderSize := 4; //little rounded border depends on BorderSize
-  MarginSize := 0;
-  FCaption := '';
+  BoundsRect := Rect(0, 0 , 100, 32);
 end;
 
 procedure TTyroButton.SetCaption(AValue: utf8string);
@@ -722,16 +724,6 @@ begin
     Exit;
   FCaption := AValue;
   Invalidate;
-end;
-
-function TTyroButton.GetRoundness: Single;
-begin
-  //The bigger the border size, the more rounded the border
-  Result := BorderSize / 20;
-  if Result < 0.02 then
-    Result := 0.02
-  else if Result > 0.5 then
-    Result := 0.5;
 end;
 
 function TTyroButton.IsMouseOver: Boolean;
@@ -759,17 +751,18 @@ var
   r: TRectangle;
   body, border, foreground: TColor;
   roundness, lineThick: Single;
-  tx, ty, tw, th: Integer;
+  tx, ty, tw, th: Single;
+  v: TVector2;
 begin
   inherited;
   CheckState;
 
-  r := RectangleOf(ClientLeft, ClientTop, ClientWidth, ClientHeight);
+  r := RectangleOf(ClientRect);
   if (r.Width <= 0) or (r.Height <= 0) then
     Exit;
 
-  roundness := GetRoundness;
-  lineThick := BorderSize;
+  roundness := 8;
+  lineThick := 2;
   if lineThick < 1 then
     lineThick := 1
   else if lineThick > 4 then
@@ -781,22 +774,23 @@ begin
     body := clSkyBlue
   else
     body := clLightgray;
+
   border := clDarkGray;
   foreground := clBlack;
-  r.X := r.X + 1;
-  r.Y := r.Y + 1;
-  r.Width := r.Width - 2;
-  r.Height := r.Height - 2;
+  r.X := r.X + 2;
+  r.Y := r.Y + 2;
+  r.Width := r.Width - 4;
+  r.Height := r.Height - 4;
 
-  RayLib.DrawRectangleRounded(r, roundness, 8, body);
-  RayLib.DrawRectangleRoundedLinesEx(r, roundness, 8, lineThick, border);
+  RayLib.DrawRectangleRounded(r, 0.5, 15, body);
+  RayLib.DrawRectangleRoundedLinesEx(r, 0.5, 15, 0.4, border);
 
   th := Resources.Font.Height;
-  tw := RayLib.MeasureText(PUTF8Char(FCaption), th);
-  tx := round(r.X + (r.Width - tw) / 2);
-  ty := round(r.Y + (r.Height - th) / 2);
+  tw := RayLib.MeasureTextEx(Resources.Font.Data, PUTF8Char(FCaption), Resources.Font.Height, 0).x;
+  tx := r.X + (r.Width - tw) / 2;
+  ty := r.Y + (r.Height - th) / 2;
   if FDown then
-    Inc(ty);
+    ty := ty + 0.1;
   ACanvas.DrawText(tx, ty, FCaption, foreground);
 end;
 
@@ -878,20 +872,17 @@ end;
 
 function TTyroControl.GetClientRect: TRect;
 var
-  vBorder, vMargin: Integer;
-  vWidth, vHeight: Integer;
+  lWidth, lHeight: Integer;
 begin
   //* ClientRect is relative to this control's WindowRect origin.
   //* It is inset by BorderSize + Margin on each side.
-  vBorder := FBorderSize;
-  vMargin := FMarginSize;
-  vWidth := WindowRect.Width;
-  vHeight := WindowRect.Height;
+  lWidth := WindowRect.Width;
+  lHeight := WindowRect.Height;
 
-  Result.Left := vBorder + vMargin;
-  Result.Top := vBorder + vMargin;
-  Result.Right := vWidth - vBorder - vMargin;
-  Result.Bottom := vHeight - vBorder - vMargin;
+  Result.Left := BorderSize + MarginSize;
+  Result.Top := BorderSize + MarginSize;
+  Result.Right := lWidth - BorderSize - MarginSize;
+  Result.Bottom := lHeight - BorderSize - MarginSize;
 
   //* Guard against negative dimensions when the control is too small
   if Result.Right < Result.Left then
@@ -1124,7 +1115,7 @@ end;
 constructor TTyroWindow.Create(AParent: TTyroLayout; AWidth, AHeight: Integer);
 begin
   Create(AParent);
-  FWindowRect := Rect(0, 0, AWidth, AHeight);
+  BoundsRect := Rect(0, 0, AWidth, AHeight);
 end;
 
 procedure TTyroWindow.SetFocused(AValue: TTyroControl);

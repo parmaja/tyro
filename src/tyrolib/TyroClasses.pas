@@ -228,7 +228,8 @@ type
     procedure Resize(AWidth, AHeight: Integer); virtual;
 
     procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
-    procedure DrawText(X, Y: Integer; S: utf8string; Color: TColor);
+    procedure DrawText(X, Y: Integer; S: utf8string; Color: TColor); overload;
+    procedure DrawText(X, Y: Single; S: utf8string; Color: TColor); overload;
     procedure DrawPixel(X, Y: Integer; Color: TColor);
     procedure DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor); overload;
     procedure DrawLine(X1, Y1, X2, Y2: Integer); overload;
@@ -607,6 +608,11 @@ begin
 end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: utf8string; Color: TColor);
+begin
+  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginX, y + FOriginY), Resources.Font.Height, 0, Color);
+end;
+
+procedure TTyroCanvas.DrawText(X, Y: Single; S: utf8string; Color: TColor);
 begin
   RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginX, y + FOriginY), Resources.Font.Height, 0, Color);
 end;
