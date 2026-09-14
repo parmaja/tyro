@@ -1271,15 +1271,15 @@ begin
       Main.Output.Height := i
     else if field = 'width' then
       Main.Output.Width := i
-    else if field = 'x' then
+    else if field = 'left' then
     begin
-      r := Main.Output.WindowRect;
-      Main.Output.WindowRect := Rect(i, r.Top, i + r.Width, r.Bottom);
+      r := Main.Output.BoundsRect;
+      Main.Output.BoundsRect := Rect(i, r.Top, i + r.Width, r.Bottom);
     end
-    else if field = 'y' then
+    else if field = 'top' then
     begin
-      r := Main.Output.WindowRect;
-      Main.Output.WindowRect := Rect(r.Left, i, r.Right, i + r.Height);
+      r := Main.Output.BoundsRect;
+      Main.Output.BoundsRect := Rect(r.Left, i, r.Right, i + r.Height);
     end
     else if field = 'border' then
       Main.Output.BorderSize := i
@@ -1319,14 +1319,14 @@ begin
       L.PushInteger(Main.Output.Width);
       Result := 1;
     end;
-    'x':
+    'left':
     begin
-      L.PushInteger(Main.Output.WindowRect.Left);
+      L.PushInteger(Main.Output.BoundsRect.Left);
       Result := 1;
     end;
-    'y':
+    'top':
     begin
-      L.PushInteger(Main.Output.WindowRect.Top);
+      L.PushInteger(Main.Output.BoundsRect.Top);
       Result := 1;
     end;
     'lines':

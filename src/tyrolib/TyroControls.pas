@@ -100,19 +100,14 @@ type
   protected
     procedure SetBoundsRect(AValue: TRect);
     procedure SetWindowRect(AValue: TRect);
-    function GetWindowHeight: Integer;
-    procedure SetWindowHeight(AValue: Integer);
-    function GetWindowWidth: Integer;
-    procedure SetWindowWidth(AValue: Integer);
-    procedure SetWindowLeft(AValue: Integer);
-    procedure SetWindowTop(AValue: Integer);
-    procedure SetWindowBounds(Left, Top, Width, Height: Integer); virtual;
 
     procedure Resize;
     procedure Resized; virtual;
 
     procedure AddControl(AControl: TTyroLayout);
     procedure PaintWindow(ACanvas: TTyroCanvas); virtual;
+    //WindowRect aligned rect, is Virtual changed by RealignControls of parent used paint control
+    property WindowRect: TRect read FWindowRect;
   public
     constructor Create(AParent: TTyroLayout); virtual;
     destructor Destroy; override;
@@ -125,12 +120,10 @@ type
     property MarginSize: Integer read FMarginSize write SetMarginSize;
     property BorderSize: Integer read FBorderSize write SetBorderSize;
     property BorderColor: TColor read FBorderColor write SetBorderColor;
-    //Real bounds
+    //Real bounds control rect
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
     property Width: Integer read GetWidth write SetWidth;
     property Height: Integer read GetHeight write SetHeight;
-    //WindowRect is Virtual changed by RealignControls of parent used paint control
-    property WindowRect: TRect read FWindowRect write SetWindowRect;
   end;
 
 
@@ -509,14 +502,14 @@ begin
   FTextureMode := ATextureMode;
   if Visible then
   begin
-    SetWindowBounds(0, 0, AWidth, AHeight);
+    SetBoundsRect(Rect(0, 0, AWidth, AHeight));
     SetWindowSize(AWidth, AHeight);
   end
   else
   begin
     //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
-    SetWindowBounds(0, 0, AWidth, AHeight);
+    SetBoundsRect(Rect(0, 0, AWidth, AHeight));
     InitWindow(AWidth, AHeight, PUTF8Char(Title));
     ClearWindowState([FLAG_WINDOW_HIDDEN]);
     ShowCursor();
@@ -532,7 +525,7 @@ begin
   if (FWindowRect.Width = AWidth) and (FWindowRect.Height = AHeight)
      and (FCanvas <> nil) and (FCanvas.Width = GetCanvasWidth) and (FCanvas.Height = GetCanvasHeight) then
     Exit;
-  SetWindowBounds(0, 0, AWidth, AHeight);
+  SetWindowRect(Rect(0, 0, AWidth, AHeight));
   if FCanvas <> nil then
     FCanvas.Resize(GetCanvasWidth, GetCanvasHeight);
 end;
@@ -664,30 +657,30 @@ begin
       case aControl.Align of
         alLeft:
         begin
-          aControl.WindowRect := Rect(aRect.Left, aRect.Top, aRect.Left + aControl.WindowRect.Width, aRect.Bottom);
+          aControl.SetWindowRect(Rect(aRect.Left, aRect.Top, aRect.Left + aControl.WindowRect.Width, aRect.Bottom));
           aRect.Left := aRect.Left + aControl.WindowRect.Width;
         end;
         alTop:
         begin
-          aControl.WindowRect := Rect(aRect.Left, aRect.Top, aRect.Right, aRect.Top + aControl.WindowRect.Height);
+          aControl.SetWindowRect(Rect(aRect.Left, aRect.Top, aRect.Right, aRect.Top + aControl.WindowRect.Height));
           aRect.Top := aRect.Top + aControl.WindowRect.Height;
         end;
         alRight:
         begin
-          aControl.WindowRect := Rect(aRect.Right - aControl.WindowRect.Width, aRect.Top, aRect.Right, aRect.Bottom);
+          aControl.SetWindowRect(Rect(aRect.Right - aControl.WindowRect.Width, aRect.Top, aRect.Right, aRect.Bottom));
           aRect.Right := aRect.Right - aControl.WindowRect.Width;
         end;
         alBottom:
         begin
-          aControl.WindowRect := Rect(aRect.Left, aRect.Bottom - aControl.WindowRect.Height, aRect.Right, aRect.Bottom);
+          aControl.SetWindowRect(Rect(aRect.Left, aRect.Bottom - aControl.WindowRect.Height, aRect.Right, aRect.Bottom));
           aRect.Bottom := aRect.Bottom - aControl.WindowRect.Height;
         end;
         alClient:
         begin
-          aControl.WindowRect := aRect;
+          aControl.SetWindowRect(aRect);
         end;
         alNone:
-          aControl.WindowRect := aControl.BoundsRect;
+          aControl.SetWindowRect(aControl.BoundsRect);
       end;
     finally
       if aControl.Align <> alNone then
@@ -819,50 +812,7 @@ end;
 
 procedure TTyroLayout.SetWindowRect(AValue: TRect);
 begin
-  if FWindowRect = AValue then Exit;
   FWindowRect := AValue;
-  FBoundsRect := AValue;
-  Resize;
-end;
-
-function TTyroLayout.GetWindowHeight: Integer;
-begin
-  Result := FWindowRect.Height;
-end;
-
-function TTyroLayout.GetWindowWidth: Integer;
-begin
-  Result := FWindowRect.Width;
-end;
-
-procedure TTyroLayout.SetWindowHeight(AValue: Integer);
-begin
-  FWindowRect.Height := AValue;
-  Resize;
-end;
-
-procedure TTyroLayout.SetWindowLeft(AValue: Integer);
-begin
-  FWindowRect.Left := AValue;
-  FBoundsRect.Left := AValue;
-  Resize;
-end;
-
-procedure TTyroLayout.SetWindowTop(AValue: Integer);
-begin
-  FWindowRect.Top := AValue;
-  Resize;
-end;
-
-procedure TTyroLayout.SetWindowWidth(AValue: Integer);
-begin
-  FWindowRect.Width := AValue;
-  Resize;
-end;
-
-procedure TTyroLayout.SetWindowBounds(Left, Top, Width, Height: Integer);
-begin
-  FWindowRect := Rect(Left, Top, Left + Width, Top + Height);
   Resize;
 end;
 

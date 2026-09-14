@@ -488,9 +488,9 @@ begin
   Main.Output.Visible := True;
   Main.Output.BringToFront;
   if (fW > 0) and (fH > 0) then
-    Main.Output.WindowRect := Rect(fX, fY, fX + fW, fY + fH)
+    Main.Output.BoundsRect := Rect(fX, fY, fX + fW, fY + fH)
   else if (fX <> 0) or (fY <> 0) then
-    Main.Output.WindowRect := Rect(fX, fY, fX + Main.Output.Width, fY + Main.Output.Height);
+    Main.Output.BoundsRect := Rect(fX, fY, fX + Main.Output.Width, fY + Main.Output.Height);
 end;
 
 { THideOutputObject }
@@ -741,7 +741,7 @@ procedure TCreateButtonObject.DoExecute;
 begin
   FButton := TTyroButton.Create(Main);
   FButton.Caption := FCaption;
-  FButton.WindowRect := Rect(FX, FY, FX + FW, FY + FH);
+  FButton.BoundsRect := Rect(FX, FY, FX + FW, FY + FH);
   FButton.BorderSize := FBorderSize;
 end;
 

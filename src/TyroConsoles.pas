@@ -2452,7 +2452,7 @@ begin
   FCaretColor          := clWhite;
   FInputSelBackground  := clWhite;
   FInputSelColor       := clBlue;
-  SetWindowBounds(0, 0, 200, 200);
+  SetBoundsRect(Rect(0, 0, 200, 200));
   AdjustScrollBars;
 
   for i:=0 to FLines.Count-1 do
@@ -2480,7 +2480,7 @@ begin
   FTextColor := clBlack; //contrasts with the light window backcolor
   FLines := TStringList.Create;
   FLock := TCriticalSection.Create;
-  SetWindowBounds(0, 0, 480, 240);
+  SetBoundsRect(Rect(0, 0, 480, 240));
 end;
 
 destructor TTyroOutput.Destroy;

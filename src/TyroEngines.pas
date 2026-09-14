@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs,
-  mnLogs, mnUtils, mnBDF, mnConfigs,
+  mnLogs, mnUtils, mnConfigs,
   RayLib, RayClasses, TyroScripts,
   TyroClasses, TyroControls, TyroConsoles,
   TyroSprites, TyroPhysics,
@@ -330,14 +330,16 @@ begin
   //TTyroPanel.Create(Self);
 
   Console := TTyroConsole.Create(Self);
-  Console.WindowRect := Rect(MarginSize, MarginSize , 100, 100);
+  Console.BoundsRect := Rect(MarginSize, MarginSize , 100, 100);
   Console.Visible := False;
   Console.Focused := True;
   Console.Visible := False;
   Console.Focused := True;
   Console.OnInput := ConsoleInput;
+  Console.MarginSize:= 5;
+  Console.Align:= alBottom;
   Output := TTyroOutput.Create(Self);
-  Output.WindowRect := Rect(MarginSize, MarginSize, 480, 240);
+  Output.BoundsRect := Rect(MarginSize, MarginSize, 480, 240);
   Output.Visible := False;
   Sprites := TSprites.Create;
   Physics := TPhysics.Create(Sprites);
@@ -551,22 +553,14 @@ procedure TTyroMain.ShowConsole(AX, AY, AWidth, AHeight: Integer);
 begin
   Console.CharWidth := Resources.Font.Width;
   Console.CharHeight := Resources.Font.Height;
-  if (AX = 0) and (AY = 0) and (AWidth = 0) and (AHeight = 0) then
-  begin
-    //restore the console's last position/size, default to 80x25 at 0,0 otherwise
-    AX := Console.WindowRect.Left;
-    AY := Console.WindowRect.Top;
-    AWidth := Console.WindowRect.Width;
-    AHeight := Console.WindowRect.Height;
-  end;
   if (AWidth <= 0) or (AHeight <= 0) then
   begin
     AWidth := 80;
     AHeight := 25;
   end;
-  Console.WindowRect := Rect(AX, AY, AX + AWidth, AY + AHeight);
+  Console.BoundsRect := Rect(AX, AY, AX + AWidth, AY + AHeight);
   Console.Show;
-  //StartConsoleRead;
+  StartConsoleRead;
 end;
 
 procedure TTyroMain.HideConsole;
