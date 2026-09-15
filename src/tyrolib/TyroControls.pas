@@ -27,6 +27,7 @@ uses
 
 const
   cMainMargin = 32;
+  cMinResizeSize = 16;
 
 type
   {$ifdef FPC}
@@ -75,6 +76,9 @@ type
   TAlign = (alNone, alLeft, alTop, alRight, alBottom, alClient);
   TBorder = (brdNone, brdThin, brdThick, brdSizable);
 
+  TTyroResizeSide = (rsLeft, rsRight, rsTop, rsBottom);
+  TTyroResizeSides = set of TTyroResizeSide;
+
   TTyroControls = class;
 
   { TTyroLayout }
@@ -106,8 +110,6 @@ type
 
     procedure AddControl(AControl: TTyroLayout);
     procedure PaintWindow(ACanvas: TTyroCanvas); virtual;
-    //WindowRect aligned rect, is Virtual changed by RealignControls of parent used paint control
-    property WindowRect: TRect read FWindowRect;
     function BorderSize: Integer;
   public
     constructor Create(AParent: TTyroLayout); virtual;
@@ -116,6 +118,8 @@ type
     procedure Realign; virtual;
     procedure AlignControls; virtual;
     property Controls: TTyroControls read FControls;
+    //WindowRect aligned rect, is Virtual changed by RealignControls of parent used paint control
+    property WindowRect: TRect read FWindowRect;
     property State: TTyroLayoutStates read FState;
     property Align: TAlign read FAlign write SetAlign;
     property Parent: TTyroLayout read FParent write SetParent;
@@ -140,6 +144,12 @@ type
     FWindow: TTyroWindow;
     FCanvas: TTyroCanvas;
     FVisible: Boolean;
+    FResizing: Boolean;
+    FResizeSides: TTyroResizeSides;
+    FResizeStartRect: TRect;
+    FResizeStartMouse: TVector2;
+    FLastMouseX: Integer;
+    FLastMouseY: Integer;
     function GetFocused: Boolean;
     procedure SetBackColor(AValue: TColor);
     procedure SetVisible(AValue: Boolean);
@@ -153,6 +163,12 @@ type
     function GetClientRect: TRect;
     function GetClientWidth: Integer;
     function GetClientHeight: Integer;
+    //* Edges which may be resized when hovering at the local point (X, Y).
+    //* brdSizable honors the Align constraint: aligned controls only expose the
+    //* single free edge, alClient exposes none, alNone exposes all four.
+    function GetResizeSides(X, Y: Integer): TTyroResizeSides;
+    procedure ApplyResize;
+    procedure PaintBorder(ACanvas: TTyroCanvas);
 
     //* Make sure the own (transparent) texture buffer exists and matches the
     //* control size. Returns False when no buffer can be created.
@@ -162,6 +178,7 @@ type
     procedure SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
     procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); virtual;
 
+    procedure DoBorder(ACanvas: TTyroCanvas); virtual;
     procedure DoPaintBackground(ACanvas: TTyroCanvas); virtual;
     procedure DoPaint(ACanvas: TTyroCanvas); virtual;
 
@@ -197,6 +214,7 @@ type
     property ClientHeight: Integer read GetClientHeight;
 
     property BackColor: TColor read FBackColor write SetBackColor;
+
     property Visible: Boolean read FVisible write SetVisible;
 
     //* Own transparent texture buffer. The control content is painted into it
@@ -268,6 +286,9 @@ type
     FFPS: Integer;
     FOptions: TTyroMainWindowOptions;
     FBackColor: TColor;
+    //* The control which captured the mouse (e.g. dragging a sizable border).
+    //* It keeps receiving MouseMove/MouseUp until the left button is released.
+    FControlCapture: TTyroControl;
     function GetCanvasWidth: Integer;
     function GetCanvasHeight: Integer;
   protected
@@ -349,6 +370,7 @@ end;
 constructor TTyroMainWindow.Create(AParent: TTyroLayout);
 begin
   inherited;
+  FControlCapture := nil;
   FOptions := [moWindow, moOpaque];
   RayLibrary.Load;
   Resources := TTyroResources.Create;
@@ -622,7 +644,7 @@ begin
     brdNone: Result := 0;
     brdThin: Result := 1;
     brdThick: Result := 2;
-    brdSizable: Result := 2;
+    brdSizable: Result := 4;
   end;
 end;
 
@@ -843,6 +865,22 @@ procedure TTyroLayout.Resized;
 begin
 end;
 
+function GetCursorForSides(Sides: TTyroResizeSides): TMouseCursor;
+begin
+  if ((rsLeft in Sides) and (rsTop in Sides)) or
+     ((rsRight in Sides) and (rsBottom in Sides)) then
+    Result := MOUSE_CURSOR_RESIZE_NWSE
+  else if ((rsRight in Sides) and (rsTop in Sides)) or
+          ((rsLeft in Sides) and (rsBottom in Sides)) then
+    Result := MOUSE_CURSOR_RESIZE_NESW
+  else if (rsLeft in Sides) or (rsRight in Sides) then
+    Result := MOUSE_CURSOR_RESIZE_EW
+  else if (rsTop in Sides) or (rsBottom in Sides) then
+    Result := MOUSE_CURSOR_RESIZE_NS
+  else
+    Result := MOUSE_CURSOR_DEFAULT;
+end;
+
 function TTyroControl.GetFocused: Boolean;
 begin
   Result := (Window <> nil) and (Window.Focused = Self);
@@ -946,6 +984,11 @@ begin
 
 end;
 
+procedure TTyroControl.DoBorder(ACanvas: TTyroCanvas);
+begin
+
+end;
+
 procedure TTyroControl.Invalidate;
 begin
 
@@ -962,6 +1005,7 @@ begin
       Canvas.BeginDraw;
       Canvas.ClearBackground(clBlank);
       try
+        PaintBorder(Canvas);
         if csClip in Style then
           RayLib.BeginScissorMode(ClientLeft, ClientTop, ClientWidth, ClientHeight);
         Canvas.SetOrigin(ClientLeft, ClientTop);
@@ -981,6 +1025,9 @@ begin
     else
     begin
       //* No own texture could be created: paint directly as a fallback.
+      ACanvas.SetOrigin(WindowRect.Left, WindowRect.Top);
+      PaintBorder(ACanvas);
+      ACanvas.ResetOrigin;
       if csClip in Style then
         RayLib.BeginScissorMode(WindowRect.Left + ClientLeft, WindowRect.Top + ClientTop, ClientWidth, ClientHeight);
       ACanvas.SetOrigin(WindowRect.Left + ClientLeft, WindowRect.Top + ClientTop);
@@ -1075,18 +1122,189 @@ begin
 end;
 
 procedure TTyroControl.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer);
+var
+  sides: TTyroResizeSides;
 begin
-
+  if (Button = mbLeft) and (Border = brdSizable) then
+  begin
+    sides := GetResizeSides(x, y);
+    if sides <> [] then
+    begin
+      FResizing := True;
+      FResizeSides := sides;
+      if Align = alNone then
+        FResizeStartRect := BoundsRect
+      else
+        FResizeStartRect := WindowRect;
+      FResizeStartMouse := TVector2(RayLib.GetMousePosition);
+    end;
+  end;
 end;
 
 procedure TTyroControl.MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer);
 begin
-
+  if FResizing then
+  begin
+    FResizing := False;
+    FResizeSides := [];
+    RayLib.SetMouseCursor(Ord(MOUSE_CURSOR_DEFAULT));
+  end;
 end;
 
 procedure TTyroControl.MouseMove(Shift: TShiftState; x, y: integer);
+var
+  sides: TTyroResizeSides;
 begin
+  FLastMouseX := x;
+  FLastMouseY := y;
+  if FResizing then
+  begin
+    if ssLeft in Shift then
+      ApplyResize
+    else
+    begin
+      FResizing := False;
+      FResizeSides := [];
+      RayLib.SetMouseCursor(Ord(MOUSE_CURSOR_DEFAULT));
+    end;
+    RayLib.SetMouseCursor(Ord(GetCursorForSides(FResizeSides)));
+  end
+  else if Border = brdSizable then
+  begin
+    sides := GetResizeSides(x, y);
+    if sides <> [] then
+      RayLib.SetMouseCursor(Ord(GetCursorForSides(sides)));
+  end;
+end;
 
+function TTyroControl.GetResizeSides(X, Y: Integer): TTyroResizeSides;
+var
+  bs, w, h: Integer;
+begin
+  Result := [];
+  if Border <> brdSizable then
+    Exit;
+  w := WindowRect.Width;
+  h := WindowRect.Height;
+  if (w <= 0) or (h <= 0) then
+    Exit;
+  bs := BorderSize;
+
+  case Align of
+    alLeft:
+      if X >= w - bs then
+        Include(Result, rsRight);
+    alRight:
+      if X < bs then
+        Include(Result, rsLeft);
+    alTop:
+      if Y >= h - bs then
+        Include(Result, rsBottom);
+    alBottom:
+      if Y < bs then
+        Include(Result, rsTop);
+    alClient:
+      ; // no resizable edges
+  else // alNone
+    if X < bs then
+      Include(Result, rsLeft)
+    else if X >= w - bs then
+      Include(Result, rsRight);
+    if Y < bs then
+      Include(Result, rsTop)
+    else if Y >= h - bs then
+      Include(Result, rsBottom);
+  end;
+end;
+
+procedure TTyroControl.ApplyResize;
+var
+  mp: TVector2;
+  dx, dy: Integer;
+  r: TRect;
+  minSize: Integer;
+begin
+  minSize := cMinResizeSize;
+  mp := TVector2(RayLib.GetMousePosition);
+  dx := Round(mp.X) - Round(FResizeStartMouse.X);
+  dy := Round(mp.Y) - Round(FResizeStartMouse.Y);
+  r := FResizeStartRect;
+
+  if rsRight in FResizeSides then
+    r.Right := r.Right + dx;
+  if rsLeft in FResizeSides then
+    r.Left := r.Left + dx;
+  if rsBottom in FResizeSides then
+    r.Bottom := r.Bottom + dy;
+  if rsTop in FResizeSides then
+    r.Top := r.Top + dy;
+
+  if (r.Right - r.Left) < minSize then
+  begin
+    if rsRight in FResizeSides then
+      r.Right := r.Left + minSize
+    else if rsLeft in FResizeSides then
+      r.Left := r.Right - minSize;
+  end;
+  if (r.Bottom - r.Top) < minSize then
+  begin
+    if rsBottom in FResizeSides then
+      r.Bottom := r.Top + minSize
+    else if rsTop in FResizeSides then
+      r.Top := r.Bottom - minSize;
+  end;
+
+  if Align = alNone then
+    SetBoundsRect(r)
+  else
+    SetWindowRect(r);
+  Invalidate;
+end;
+
+procedure TTyroControl.PaintBorder(ACanvas: TTyroCanvas);
+var
+  bs, w, h: Integer;
+  baseColor, highlightColor: TColor;
+  activeSides: TTyroResizeSides;
+begin
+  if Border = brdNone then
+    Exit;
+  bs := BorderSize;
+  w := ClientRect.Width;
+  h := ClientRect.Height;
+  if (w <= 0) or (h <= 0) then
+    Exit;
+
+  baseColor := clDarkGray;
+
+  RayLib.DrawRectangleLinesEx(RectangleOf(ClientRect.Left-bs, ClientRect.Top-bs, ClientRect.Width+bs*2, ClientRect.Height+bs*2), 2, clRed);
+  //ACanvas.FillRectangle(0, h - bs, w, bs, baseColor);
+  //ACanvas.FillRectangle(0, 0, bs, h, baseColor);
+  //ACanvas.FillRectangle(w - bs, 0, bs, h, baseColor);
+  exit;
+  if Border = brdSizable then
+  begin
+    if FResizing then
+      activeSides := FResizeSides
+    else if (FLastMouseX >= 0) and (FLastMouseX < w) and
+            (FLastMouseY >= 0) and (FLastMouseY < h) then
+      activeSides := GetResizeSides(FLastMouseX, FLastMouseY)
+    else
+      activeSides := [];
+
+    if activeSides <> [] then
+    begin
+      highlightColor := clLightgray;
+      if rsRight in activeSides then
+        ACanvas.FillRectangle(w - bs, 0, 1, h, highlightColor);
+      if rsLeft in activeSides then
+        ACanvas.FillRectangle(bs - 1, 0, 1, h, highlightColor);
+      if rsBottom in activeSides then
+        ACanvas.FillRectangle(0, h - bs, w, 1, highlightColor);
+      if rsTop in activeSides then
+        ACanvas.FillRectangle(0, bs - 1, w, 1, highlightColor);
+    end;
+  end;
 end;
 
 procedure TTyroControl.Created;
@@ -1152,10 +1370,11 @@ var
   ch: Integer;
   aChar: TUTF8Char;
   FocusedControl: TTyroControl;
+  mp: TVector2;
+  mx, my, x, y: Integer;
+  i: Integer;
+  aControl: TTyroControl;
 begin
-  if FFocused = nil then
-    Exit;
-
   // Build shift state from RayLib key queries
   Shift := [];
   if RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT) then
@@ -1164,6 +1383,59 @@ begin
     Shift := Shift + [ssCtrl];
   if RayLib.IsKeyDown(KEY_LEFT_ALT) or RayLib.IsKeyDown(KEY_RIGHT_ALT) then
     Shift := Shift + [ssAlt];
+  if RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT) then
+    Shift := Shift + [ssLeft];
+  if RayLib.IsMouseButtonDown(MOUSE_BUTTON_RIGHT) then
+    Shift := Shift + [ssRight];
+
+  //* Mouse routing: move is sent to the control under the cursor every frame;
+  //* once a left press lands inside a control the pointer is captured to it
+  //* (keeps tracking the cursor while dragging a sizable border) until release.
+  RayLib.SetMouseCursor(Ord(MOUSE_CURSOR_DEFAULT));
+  mp := TVector2(RayLib.GetMousePosition);
+  mx := Round(mp.X);
+  my := Round(mp.Y);
+
+  if FControlCapture <> nil then
+  begin
+    x := mx - FControlCapture.WindowRect.Left;
+    y := my - FControlCapture.WindowRect.Top;
+    FControlCapture.MouseMove(Shift, x, y);
+    if not (ssLeft in Shift) then
+    begin
+      x := mx - FControlCapture.WindowRect.Left;
+      y := my - FControlCapture.WindowRect.Top;
+      FControlCapture.MouseUp(mbLeft, Shift, x, y);
+      FControlCapture := nil;
+    end;
+  end
+  else
+  begin
+    for i := Controls.Count - 1 downto 0 do
+    begin
+      if Controls[i] is TTyroControl then
+      begin
+        aControl := TTyroControl(Controls[i]);
+        if aControl.Visible and
+           (mx >= aControl.WindowRect.Left) and (mx < aControl.WindowRect.Right) and
+           (my >= aControl.WindowRect.Top) and (my < aControl.WindowRect.Bottom) then
+        begin
+          x := mx - aControl.WindowRect.Left;
+          y := my - aControl.WindowRect.Top;
+          aControl.MouseMove(Shift, x, y);
+          if RayLib.IsMouseButtonPressed(MOUSE_BUTTON_LEFT) then
+          begin
+            aControl.MouseDown(mbLeft, Shift, x, y);
+            FControlCapture := aControl;
+          end;
+          Break;
+        end;
+      end;
+    end;
+  end;
+
+  if FFocused = nil then
+    Exit;
 
   // Process key codes (function keys, arrows, etc.)
   Key := RayLib.GetKeyPressed;

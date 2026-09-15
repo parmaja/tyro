@@ -317,6 +317,8 @@ begin
 
   Console := TTyroConsole.Create(Self);
   Console.BoundsRect := Rect(Margin, Margin , 100, 100);
+  Console.Border:= brdSizable;
+  Console.BackColor := clDarkGray;
   Console.Visible := False;
   Console.Focused := True;
   Console.Visible := False;

@@ -106,7 +106,6 @@ type
     FOnInput:   EOnConsoleInput;
     FOnAny:     EOnConsoleInputChange;
     FOnInputChange: EOnConsoleInputChange;
-    FBackGroundColor: TColor;
     FCurrentColor: TColor;
     FCurrentBackGround: TColor;
     FPasswordChar: TUTF8Char;
@@ -134,7 +133,6 @@ type
     function AdjustLineHeight(i: Integer; const Recalc:Boolean = False): Integer;
     procedure MakeInputVisible;
     procedure MakeOutVisible;
-    procedure SetBackGroundColor(c: Tcolor);
     procedure ScrollBarRange(Which: TScrollbarType; aRange, aPage: Integer);
     procedure ScrollBarPosition(Which: TScrollbarType; Value: Integer);
     function UpdateLineHeights(const Recalc:Boolean=False): Integer;
@@ -196,7 +194,6 @@ type
     property OnAny: EOnConsoleInputChange Read FOnAny Write FOnAny;
 
     property LineCount: Integer Read FLineCount Write SetLineCount;
-    property BackGroundColor: TColor Read FBackgroundColor Write SetBackGroundColor;
     property TabWidth: Integer Read FTabWidth Write SetTabWidth;
     property PasswordChar: TUTF8Char Read FPasswordChar Write FPasswordChar;
     property InputSelColor: TColor Read FInputSelColor Write FInputSelColor;
@@ -1043,7 +1040,7 @@ begin
   inherited Create;
   FConsole := AConsole;
   FPasswordStart := MaxInt;
-  DefaultBackGround := FConsole.FBackGroundColor;
+  DefaultBackGround := FConsole.BackColor;
   FStoredLineCount:= -1;
 end;
 
@@ -1596,15 +1593,6 @@ end;
 procedure TTyroConsole.ScrollBarPosition(Which: TScrollbarType; Value: Integer);
 begin
   SetScrollPosition(Which, Value, FVSbVisible);
-end;
-
-procedure TTyroConsole.SetBackGroundColor(c: Tcolor);
-begin
-  if c <> FBackGroundColor then
-  begin
-    FBackGroundColor := c;
-    Invalidate;
-  end;
 end;
 
 // Still a Bug: Try having a cmdline with more lines than fit on screen : update doesn't work anymore...
@@ -2364,19 +2352,19 @@ begin
     while (y <= m) and (CurrentLine < FLines.Count){ and (CurrentLine < Length(FLines))} do
     begin
        FLines[CurrentLine].LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
-         FCharHeight, FCharWidth, -1, FBackGroundColor, CaretColorDimmed, False);
+         FCharHeight, FCharWidth, -1, BackColor, CaretColorDimmed, False);
        if (FInput) and (FInputY = CurrentLine) then
        begin
          if FInputIsPassword then
          begin
            FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
-             FCharHeight, FCharWidth, FCaretX, FBackGroundColor, CaretColorDimmed,
+             FCharHeight, FCharWidth, FCaretX, BackColor, CaretColorDimmed,
              FCaretVisible and Focused);
          end
          else
          begin
            FInputBuffer.LineOutAndFill(ACanvas, 0, y * FCharHeight, 0,
-             FCharHeight, FCharWidth, FCaretX, FBackGroundColor, CaretColorDimmed,
+             FCharHeight, FCharWidth, FCaretX, BackColor, CaretColorDimmed,
              FCaretVisible and Focused);
          end;
        end;
@@ -2386,7 +2374,7 @@ begin
     y := y * FCharHeight;
     if y < ClientHeight then
     begin
-      ACanvas.DrawRect(0, y, ClientWidth, ClientHeight, FBackGroundColor, True);
+      ACanvas.DrawRect(0, y, ClientWidth, ClientHeight, BackColor, True);
     end;
   end;
 end;
@@ -2424,7 +2412,9 @@ var
   i: Integer;
 begin
   inherited;
-  Style := [csClip];
+  Style := [csClip, csOpaque];
+  BackColor := clDarkGray;
+
   FStringBuffer     := TStringList.Create;
   FCharHeight := CDefaultCharHeight;
   FCharWidth := CDefaultCharWidth;
@@ -2433,7 +2423,6 @@ begin
   FInputVisible     := False;
   FWriteInput       := True;
   FOverwriteMode    := False;
-  FBackGroundColor  := clBlack;
   FCharWidth := CDefaultCharWidth;
   FInputBuffer      := TColorString.Create(Self);
   FEscapeCodeType   := esctConsole;
