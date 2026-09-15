@@ -53,7 +53,8 @@ type
   );
 
   TTyroControlStyle = (
-    csClip
+    csClip,
+    csOpaque
   );
   TTyroControlStyles = set of TTyroControlStyle;
 
@@ -136,10 +137,12 @@ type
 
   TTyroControl = class abstract(TTyroLayout)
   private
+    FBackColor: TColor;
     FWindow: TTyroWindow;
     FCanvas: TTyroCanvas;
     FVisible: Boolean;
     function GetFocused: Boolean;
+    procedure SetBackColor(AValue: TColor);
     procedure SetVisible(AValue: Boolean);
     procedure SetWindow(AValue: TTyroWindow);
     procedure SetCanvas(AValue: TTyroCanvas);
@@ -193,6 +196,8 @@ type
     property ClientTop: Integer read GetClientTop;
     property ClientWidth: Integer read GetClientWidth;
     property ClientHeight: Integer read GetClientHeight;
+
+    property BackColor: TColor read FBackColor write SetBackColor;
     property Visible: Boolean read FVisible write SetVisible;
 
     //* Own transparent texture buffer. The control content is painted into it
@@ -827,6 +832,12 @@ begin
   Result := (Window <> nil) and (Window.Focused = Self);
 end;
 
+procedure TTyroControl.SetBackColor(AValue: TColor);
+begin
+  if FBackColor=AValue then Exit;
+  FBackColor:=AValue;
+end;
+
 procedure TTyroLayout.SetBorderColor(AValue: TColor);
 begin
   if FBorderColor=AValue then Exit;
@@ -1035,7 +1046,8 @@ end;
 
 procedure TTyroControl.DoPaintBackground(ACanvas: TTyroCanvas);
 begin
-
+  if csOpaque in Style then
+    ACanvas.DrawRectangle(0, 0, ClientWidth, ClientHeight, BackColor, True);
 end;
 
 procedure TTyroControl.DoPaint(ACanvas: TTyroCanvas);

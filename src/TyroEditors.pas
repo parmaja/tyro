@@ -25,9 +25,10 @@ const
   cEditorTabWidth = 4;
   cEditorMaxUndo = 100;
   cEditorCaretBlink = 0.5;
+  cEditorRepeatDelay = 0.5;      //seconds before a held key starts repeating
+  cEditorRepeatInterval = 0.03;  //seconds between repeats
 
-  cEditorBackColor = $FF20203A;       //dark blue-ish background
-  cEditorCaretLineColor = $FF20264A;  //subtle highlight for the caret line
+  cEditorCaretLineColor = $FF141414;  //subtle highlight for the caret line
 
 type
   TEditorCloseEvent = procedure(Sender: TObject) of object;
@@ -69,6 +70,8 @@ type
     FFileName: string;
     FOnClose: TEditorCloseEvent;
     FOnSave: TEditorSaveEvent;
+    FRepeatKey: TKeyboardKey;
+    FRepeatTimer: Double;
     function GetLineCount: Integer;
     function GetLineLength(ALine: Integer): Integer;
     function GetGutterWidth: Integer;
@@ -115,6 +118,8 @@ type
     function IsKeyword(const AWord: string): Boolean;
     function IsApiName(const AWord: string): Boolean;
     procedure UpdateSizes;
+    procedure ProcessKey(var Key: TKeyboardKey; Shift: TShiftState);
+    procedure UpdateKeyRepeat;
 
     procedure DrawLine(ACanvas: TTyroCanvas; ALine: Integer; aY: Integer; aGutterWidth: Integer);
     procedure DrawStatus(ACanvas: TTyroCanvas);
@@ -226,7 +231,7 @@ end;
 constructor TyroEditor.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Style := [csClip];
+  Style := [csClip, csOpaque];
   FLines := TStringList.Create;
   FLines.Add('');
   FUndo := TStringList.Create;
@@ -247,7 +252,10 @@ begin
   FAnchorCol := 0;
   FSelecting := False;
   FMouseDown := False;
+  FRepeatKey := KEY_NULL;
+  FRepeatTimer := 0;
   FFileName := '';
+  BackColor := clDarkGray;
   SetBoundsRect(Rect(0, 0, 400, 300));
   RebuildRuns;
 end;
@@ -1306,7 +1314,6 @@ end;
 procedure TyroEditor.DoPaintBackground(ACanvas: TTyroCanvas);
 begin
   inherited;
-  ACanvas.DrawRectangle(0, 0, ClientWidth, ClientHeight, TColor.CreateRGBA(cEditorBackColor), True);
 end;
 
 procedure TyroEditor.DoPaint(ACanvas: TTyroCanvas);
@@ -1357,6 +1364,7 @@ begin
     FCaretDim := 0.3 + (FCaretDim + 1) / 2 * 0.7;
     FCaretVisible := True;
     Invalidate;
+    UpdateKeyRepeat;
 
     mp := RayLib.GetMousePosition;
     lx := Round(mp.X) - WindowRect.Left - ClientLeft;
@@ -1398,6 +1406,7 @@ begin
   end
   else
   begin
+    FRepeatKey := KEY_NULL;
     FCaretTimer := 0;
     FCaretDim := 1;
     FCaretVisible := True;
@@ -1420,6 +1429,18 @@ begin
 end;
 
 procedure TyroEditor.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
+begin
+  //remember the key for auto-repeat while it stays held down (no Ctrl, no Insert)
+  if not (ssCtrl in Shift) and (Key <> KEY_INSERT) and (Key <> KEY_ESCAPE) then
+  begin
+    FRepeatKey := Key;
+    FRepeatTimer := cEditorRepeatDelay;
+  end;
+  ProcessKey(Key, Shift);
+  inherited KeyDown(Key, Shift);
+end;
+
+procedure TyroEditor.ProcessKey(var Key: TKeyboardKey; Shift: TShiftState);
 var
   Extend: Boolean;
 begin
@@ -1541,7 +1562,32 @@ begin
         Key := KEY_NULL;
       end;
   end;
-  inherited KeyDown(Key, Shift);
+end;
+
+procedure TyroEditor.UpdateKeyRepeat;
+var
+  dt: Double;
+  Key: TKeyboardKey;
+  Shift: TShiftState;
+begin
+  if FRepeatKey = KEY_NULL then
+    Exit;
+  if not RayLib.IsKeyDown(FRepeatKey) then
+  begin
+    FRepeatKey := KEY_NULL;
+    Exit;
+  end;
+  dt := RayLib.GetFrameTime();
+  FRepeatTimer := FRepeatTimer - dt;
+  if FRepeatTimer > 0 then
+    Exit;
+  FRepeatTimer := FRepeatTimer + cEditorRepeatInterval;
+  //rebuild the shift state live so Shift+arrow keeps extending on repeat
+  Shift := [];
+  if RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT) then
+    Shift := Shift + [ssShift];
+  Key := FRepeatKey;
+  ProcessKey(Key, Shift);
 end;
 
 procedure TyroEditor.LoadSource(ASource: TStringList);

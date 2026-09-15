@@ -358,7 +358,7 @@ type
     FStarted: Boolean;
     function GetActive: Boolean;
   protected
-    Script: TTyroScript;
+    FScript: TTyroScript;
     procedure TerminatedSet; override;
   public
     procedure Execute; override;
@@ -367,6 +367,7 @@ type
     procedure Stop;
     property Started: Boolean read FStarted;
     property Active: Boolean read GetActive;
+    property Script: TTyroScript read FScript;
   end;
 
   TTyroScriptClass = class of TTyroScript;
@@ -415,7 +416,7 @@ end;
 constructor TTyroScriptThread.Create(AScript: TTyroScript);
 begin
   inherited Create(True);
-  Script := AScript;
+  FScript := AScript;
   Script.Thread := Self;
   FreeOnTerminate := False;
   Priority := tpLower; //hmmm

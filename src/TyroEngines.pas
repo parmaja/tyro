@@ -89,6 +89,7 @@ type
     procedure Edit_Command(Params: TStrings);
     procedure EditorClosed(Sender: TObject);
     procedure EditorSave(Sender: TObject);
+    procedure ReloadAndRunScript;
   protected
     FQueue: TQueueObjects;
     FScriptThread: TTyroScriptThread;
@@ -603,7 +604,10 @@ begin
   if Console.Visible then
     HideConsole
   else
+  begin
     Console.Show; //restores the console's last WindowRect (80x25 if not set yet)
+    StartConsoleRead;
+  end;
 end;
 
 procedure TTyroMain.ToggleOutput;
@@ -617,22 +621,17 @@ procedure TTyroMain.ShowEditor;
 var
   w, h: Integer;
 begin
-  if FScriptMain = nil then
+  if FScriptThread = nil then
   begin
-    Console.Writeln('No script loaded. Use "load <script>" first.');
-    if Console.Visible then
-      StartConsoleRead;
+    Log.Writeln('No script loaded. Use "load <script>" first.');
     Exit;
   end;
-  Editor.FileName := FScriptMain.FileName;
-  Editor.LoadSource(FScriptMain.Source);
-  w := Width - 2 * (BorderSize + MarginSize);
-  h := Height - 2 * (BorderSize + MarginSize);
-  if w < 1 then
-    w := 1;
-  if h < 1 then
-    h := 1;
-  Editor.BoundsRect := Rect(0, 0, w, h);
+  //stop the current run so the edited source is not being executed
+  Editor.FileName := FScriptThread.Script.FileName;
+  Editor.LoadSource(FScriptThread.Script.Source);
+  Editor.BoundsRect := Rect(0, 0, Width, Height);
+  Editor.MarginSize:= 10;
+  Editor.BackColor:= clBlack;
   Editor.Visible := True;
   Editor.Focused := True;
 end;
@@ -642,7 +641,10 @@ begin
   if Editor.Visible then
   begin
     if FScriptMain <> nil then
+    begin
       Editor.SaveSource(FScriptMain.Source);
+      ReloadAndRunScript;
+    end;
     Editor.Visible := False;
     if Console.Visible then
     begin
@@ -668,7 +670,32 @@ end;
 procedure TTyroMain.EditorSave(Sender: TObject);
 begin
   if FScriptMain <> nil then
+  begin
     Editor.SaveSource(FScriptMain.Source);
+    ReloadAndRunScript;
+  end;
+end;
+
+//Save the edited source to disk, reload the script from it, and run it again
+procedure TTyroMain.ReloadAndRunScript;
+var
+  aFileName: string;
+begin
+  if FScriptMain = nil then
+    Exit;
+  FScriptMain.Stop;
+  aFileName := IncludePathDelimiter(FScriptMain.Path) + FScriptMain.FileName;
+  try
+    FScriptMain.Source.SaveToFile(aFileName);
+  except
+    on E: Exception do
+    begin
+      if IsConsole then WriteLn('EDITOR-SAVE: ' + E.ClassName + ': ' + E.Message);
+      raise;
+    end;
+  end;
+  FScriptMain.LoadFile(aFileName);
+  FScriptMain.Start;
 end;
 
 procedure TTyroMain.Edit_Command(Params: TStrings);
