@@ -17,6 +17,7 @@ uses
   RayLib, RayClasses, TyroScripts,
   TyroClasses, TyroControls, TyroConsoles,
   TyroSprites, TyroPhysics,
+  TyroEditors,
   mnClasses;
 
 const
@@ -85,6 +86,9 @@ type
     procedure State_Command(Params: TStrings);
     procedure Run_Command(Params: TStrings);
     procedure Stop_Command(Params: TStrings);
+    procedure Edit_Command(Params: TStrings);
+    procedure EditorClosed(Sender: TObject);
+    procedure EditorSave(Sender: TObject);
   protected
     FQueue: TQueueObjects;
     FScriptThread: TTyroScriptThread;
@@ -106,6 +110,7 @@ type
     RunFile: string;//that to run in script
     Console: TTyroConsole;
     Output: TTyroOutput;
+    Editor: TyroEditor;
     Graphic: TTyroCanvas;
     Sprites: TSprites;
     Physics: TPhysics;
@@ -133,6 +138,9 @@ type
      procedure HideConsole;
      procedure ToggleConsole;
      procedure ToggleOutput;
+     procedure ShowEditor;
+     procedure HideEditor;
+     procedure ToggleEditor;
      procedure Resize(AWidth, AHeight: Integer); override;
 
     property Queue: TQueueObjects read FQueue;
@@ -341,6 +349,11 @@ begin
   Output := TTyroOutput.Create(Self);
   Output.BoundsRect := Rect(MarginSize, MarginSize, 480, 240);
   Output.Visible := False;
+  Editor := TyroEditor.Create(Self);
+  Editor.BoundsRect := Rect(0, 0, 200, 200);
+  Editor.Visible := False;
+  Editor.OnClose := EditorClosed;
+  Editor.OnSave := EditorSave;
   Sprites := TSprites.Create;
   Physics := TPhysics.Create(Sprites);
   Commands := TConsoleCommands.Create();
@@ -474,6 +487,17 @@ begin
       raise;
     end;
   end;
+  // Update editor (caret blink and mouse interaction)
+  try
+    if Editor <> nil then
+      Editor.Update;
+  except
+    on E: Exception do
+    begin
+      if IsConsole then WriteLn('EX-EDITOR: ' + E.ClassName + ': ' + E.Message);
+      raise;
+    end;
+  end;
   ThreadSwitch; //Yield
   {if not Active then
     Terminate;}
@@ -482,6 +506,9 @@ end;
 procedure TTyroMain.ProcessInput;
 begin
   inherited;
+  // F2 toggles the script editor
+  if RayLib.IsKeyPressed(KEY_F2) then
+    ToggleEditor;
   // F7 toggles the output control
   if RayLib.IsKeyPressed(KEY_F7) then
     ToggleOutput;
@@ -523,6 +550,8 @@ begin
   inherited Resize(AWidth, AHeight);
   if Graphic <> nil then
     Graphic.Resize(AWidth - 2 * (BorderSize + MarginSize), AHeight - 2 * (BorderSize + MarginSize));
+  if (Editor <> nil) and Editor.Visible then
+    Editor.BoundsRect := Rect(0, 0, AWidth - 2 * (BorderSize + MarginSize), AHeight - 2 * (BorderSize + MarginSize));
 end;
 
 procedure TTyroMain.Stop;
@@ -584,6 +613,69 @@ begin
     Output.BringToFront;
 end;
 
+procedure TTyroMain.ShowEditor;
+var
+  w, h: Integer;
+begin
+  if FScriptMain = nil then
+  begin
+    Console.Writeln('No script loaded. Use "load <script>" first.');
+    if Console.Visible then
+      StartConsoleRead;
+    Exit;
+  end;
+  Editor.FileName := FScriptMain.FileName;
+  Editor.LoadSource(FScriptMain.Source);
+  w := Width - 2 * (BorderSize + MarginSize);
+  h := Height - 2 * (BorderSize + MarginSize);
+  if w < 1 then
+    w := 1;
+  if h < 1 then
+    h := 1;
+  Editor.BoundsRect := Rect(0, 0, w, h);
+  Editor.Visible := True;
+  Editor.Focused := True;
+end;
+
+procedure TTyroMain.HideEditor;
+begin
+  if Editor.Visible then
+  begin
+    if FScriptMain <> nil then
+      Editor.SaveSource(FScriptMain.Source);
+    Editor.Visible := False;
+    if Console.Visible then
+    begin
+      Console.Focused := True;
+      StartConsoleRead;
+    end;
+  end;
+end;
+
+procedure TTyroMain.ToggleEditor;
+begin
+  if Editor.Visible then
+    HideEditor
+  else
+    ShowEditor;
+end;
+
+procedure TTyroMain.EditorClosed(Sender: TObject);
+begin
+  HideEditor;
+end;
+
+procedure TTyroMain.EditorSave(Sender: TObject);
+begin
+  if FScriptMain <> nil then
+    Editor.SaveSource(FScriptMain.Source);
+end;
+
+procedure TTyroMain.Edit_Command(Params: TStrings);
+begin
+  ShowEditor;
+end;
+
 procedure TTyroMain.ConsoleInput(AConsole: TTyroConsole; AInput: string);
 begin
   // If a script callback is set, route input to it (console.read())
@@ -638,6 +730,7 @@ begin
   Commands.Add('load', [], Load_Command, 'Load script name from current directory');
   Commands.Add('state', [], State_Command, 'State of current directory');
   Commands.Add('run', [], Run_Command, 'Run current loaded script');
+  Commands.Add('edit', [], Edit_Command, 'Edit the current loaded script (F2)');
 end;
 
 procedure TTyroMain.StartConsoleRead;

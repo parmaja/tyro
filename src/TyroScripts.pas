@@ -348,6 +348,7 @@ type
     property FileName: string read FFileName write FFileName;
     property Active: Boolean read GetActive;
     property Started: Boolean read FStarted; //started true even after stopped
+    property Source: TStringList read ScriptText; //the loaded script lines
   end;
 
   { TTyroScriptThread }
