@@ -360,3 +360,10 @@ You do not need to use it, it is already in the source folder
 ### Competition
 
 [yabasic](http://www.yabasic.de)
+
+## Fonts ##
+
+Thanks for
+https://pixelfonts.org/#116
+https://github.com/IT-Studio-Rech/bdf-fonts
+https://forums.adafruit.com/viewtopic.php?t=203655

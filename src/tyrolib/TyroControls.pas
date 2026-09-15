@@ -26,7 +26,7 @@ uses
   TyroClasses;
 
 const
-  cMarginSize = 32;
+  cMainMargin = 32;
 
 type
   {$ifdef FPC}
@@ -73,6 +73,7 @@ type
   TTyroLayoutStates = set of TTyroLayoutState;
 
   TAlign = (alNone, alLeft, alTop, alRight, alBottom, alClient);
+  TBorder = (brdNone, brdThin, brdThick, brdSizable);
 
   TTyroControls = class;
 
@@ -80,9 +81,8 @@ type
 
   TTyroLayout = class abstract(TmnNamedObject)
   private
-    FBorderColor: TColor;
-    FBorderSize: Integer;
-    FMarginSize: Integer;
+    FBorder: TBorder;
+    FMargin: Integer;
     FAlign: TAlign;
     FParent: TTyroLayout;
     FBoundsRect: TRect;
@@ -92,11 +92,10 @@ type
     function GetHeight: Integer;
     function GetWidth: Integer;
     procedure SetAlign(AValue: TAlign);
+    procedure SetBorder(AValue: TBorder);
     procedure SetHeight(AValue: Integer);
     procedure SetParent(AValue: TTyroLayout);
-    procedure SetBorderColor(AValue: TColor);
-    procedure SetBorderSize(AValue: Integer);
-    procedure SetMarginSize(AValue: Integer);
+    procedure SetMargin(AValue: Integer);
     procedure SetWidth(AValue: Integer);
   protected
     procedure SetBoundsRect(AValue: TRect);
@@ -109,6 +108,7 @@ type
     procedure PaintWindow(ACanvas: TTyroCanvas); virtual;
     //WindowRect aligned rect, is Virtual changed by RealignControls of parent used paint control
     property WindowRect: TRect read FWindowRect;
+    function BorderSize: Integer;
   public
     constructor Create(AParent: TTyroLayout); virtual;
     destructor Destroy; override;
@@ -119,9 +119,8 @@ type
     property State: TTyroLayoutStates read FState;
     property Align: TAlign read FAlign write SetAlign;
     property Parent: TTyroLayout read FParent write SetParent;
-    property MarginSize: Integer read FMarginSize write SetMarginSize;
-    property BorderSize: Integer read FBorderSize write SetBorderSize;
-    property BorderColor: TColor read FBorderColor write SetBorderColor;
+    property Margin: Integer read FMargin write SetMargin;
+    property Border: TBorder read FBorder write SetBorder;
     //Real bounds control rect
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
     property Width: Integer read GetWidth write SetWidth;
@@ -357,7 +356,7 @@ begin
   FCanvasLock := TCriticalSection.Create;
   BoundsRect.Width := ScreenWidth;
   BoundsRect.Height := ScreenHeight;
-  MarginSize := cMarginSize;
+  Margin := cMainMargin;
   FBackColor := clCornflowerBlue;
 end;
 
@@ -373,14 +372,14 @@ end;
 
 function TTyroMainWindow.GetCanvasWidth: Integer;
 begin
-  Result := Width - 2 * (BorderSize + MarginSize);
+  Result := Width - 2 * (BorderSize + Margin);
   if Result < 1 then
     Result := 1;
 end;
 
 function TTyroMainWindow.GetCanvasHeight: Integer;
 begin
-  Result := Height - 2 * (BorderSize + MarginSize);
+  Result := Height - 2 * (BorderSize + Margin);
   if Result < 1 then
     Result := 1;
 end;
@@ -468,7 +467,7 @@ begin
 
           try
             Camera2D.Target := Vector2Of(0, 0);
-            Camera2D.Offset := Vector2Of(MarginSize, MarginSize);
+            Camera2D.Offset := Vector2Of(Margin, Margin);
             Camera2D.Zoom := 1;
             Camera2D.Rotation := 0;
 
@@ -573,6 +572,13 @@ begin
   Realign;
 end;
 
+procedure TTyroLayout.SetBorder(AValue: TBorder);
+begin
+  if FBorder=AValue then Exit;
+  FBorder:=AValue;
+  Resize;
+end;
+
 function TTyroLayout.GetHeight: Integer;
 begin
   Result := BoundsRect.Height;
@@ -608,6 +614,16 @@ end;
 
 procedure TTyroLayout.PaintWindow(ACanvas: TTyroCanvas);
 begin
+end;
+
+function TTyroLayout.BorderSize: Integer;
+begin
+  case Border of
+    brdNone: Result := 0;
+    brdThin: Result := 1;
+    brdThick: Result := 2;
+    brdSizable: Result := 2;
+  end;
 end;
 
 constructor TTyroLayout.Create(AParent: TTyroLayout);
@@ -838,28 +854,16 @@ begin
   FBackColor:=AValue;
 end;
 
-procedure TTyroLayout.SetBorderColor(AValue: TColor);
-begin
-  if FBorderColor=AValue then Exit;
-  FBorderColor:=AValue;
-end;
-
-procedure TTyroLayout.SetBorderSize(AValue: Integer);
-begin
-  if FBorderSize=AValue then Exit;
-  FBorderSize:=AValue;
-end;
-
 procedure TTyroControl.SetFocused(AValue: Boolean);
 begin
   if Window <> nil then
     Window.Focused := Self;
 end;
 
-procedure TTyroLayout.SetMarginSize(AValue: Integer);
+procedure TTyroLayout.SetMargin(AValue: Integer);
 begin
-  if FMarginSize=AValue then Exit;
-  FMarginSize:=AValue;
+  if FMargin=AValue then Exit;
+  FMargin:=AValue;
 end;
 
 procedure TTyroLayout.SetWidth(AValue: Integer);
@@ -890,10 +894,10 @@ begin
   lWidth := WindowRect.Width;
   lHeight := WindowRect.Height;
 
-  Result.Left := BorderSize + MarginSize;
-  Result.Top := BorderSize + MarginSize;
-  Result.Right := lWidth - BorderSize - MarginSize;
-  Result.Bottom := lHeight - BorderSize - MarginSize;
+  Result.Left := BorderSize + Margin;
+  Result.Top := BorderSize + Margin;
+  Result.Right := lWidth - BorderSize - Margin;
+  Result.Bottom := lHeight - BorderSize - Margin;
 
   //* Guard against negative dimensions when the control is too small
   if Result.Right < Result.Left then

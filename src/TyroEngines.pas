@@ -135,7 +135,8 @@ type
     procedure RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 
      procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); override;
-     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer);
+     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
+     procedure ShowConsole; overload;
      procedure HideConsole;
      procedure ToggleConsole;
      procedure ToggleOutput;
@@ -254,33 +255,11 @@ begin
 end;
 
 procedure TTyroMain.LoadConfig;
-const
-  cConfigFile = 'tyro.conf';
 var
-  Config: TConfFile;
-  aFileName, aColor: string;
+  aColor: string;
 begin
-  aFileName := IncludePathDelimiter(Resources.WorkSpace) + cConfigFile;
-  if not SysUtils.FileExists(aFileName) then
-    aFileName := IncludePathDelimiter(Resources.CurrentDirectory) + cConfigFile;
-  if not SysUtils.FileExists(aFileName) then
+  with Resources do
   begin
-    Options := Options + [moShowFPS];
-    Exit;
-  end;
-
-  Config := TConfFile.Create;
-  try
-    try
-      Config.LoadFromFile(aFileName);
-    except
-      on E: Exception do
-      begin
-        Log.WriteLn('Config: ' + E.Message);
-        Exit;
-      end;
-    end;
-
     FPS := Config.ReadInteger('fps', FramePerSeconds);
     FramePerSeconds := FPS;
     IsDebug := Config.ReadBool('debug', IsDebug);
@@ -301,8 +280,6 @@ begin
 
     if Config.Sections.ReadBool('show', 'log', False) then
       Output.Show;
-  finally
-    Config.Free;
   end;
 end;
 
@@ -328,7 +305,7 @@ end;
 constructor TTyroMain.Create(AParent: TTyroLayout);
 begin
   inherited;
-  MarginSize := 10;
+  Margin := 10;
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -339,16 +316,16 @@ begin
   //TTyroPanel.Create(Self);
 
   Console := TTyroConsole.Create(Self);
-  Console.BoundsRect := Rect(MarginSize, MarginSize , 100, 100);
+  Console.BoundsRect := Rect(Margin, Margin , 100, 100);
   Console.Visible := False;
   Console.Focused := True;
   Console.Visible := False;
   Console.Focused := True;
   Console.OnInput := ConsoleInput;
-  Console.MarginSize:= 5;
+  Console.Margin:= 5;
   Console.Align:= alBottom;
   Output := TTyroOutput.Create(Self);
-  Output.BoundsRect := Rect(MarginSize, MarginSize, 480, 240);
+  Output.BoundsRect := Rect(Margin, Margin, 480, 240);
   Output.Visible := False;
   Editor := TyroEditor.Create(Self);
   Editor.BoundsRect := Rect(0, 0, 200, 200);
@@ -541,7 +518,7 @@ begin
     raise exception.Create('Screen width can not be 0');
   if AHeight = 0 then
     raise exception.Create('Screen height can not be 0');
-  Graphic := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + MarginSize), AHeight - 2 * (BorderSize + MarginSize), True);
+  Graphic := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin), True);
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
   //Console.WindowRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
 end;
@@ -550,9 +527,9 @@ procedure TTyroMain.Resize(AWidth, AHeight: Integer);
 begin
   inherited Resize(AWidth, AHeight);
   if Graphic <> nil then
-    Graphic.Resize(AWidth - 2 * (BorderSize + MarginSize), AHeight - 2 * (BorderSize + MarginSize));
+    Graphic.Resize(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin));
   if (Editor <> nil) and Editor.Visible then
-    Editor.BoundsRect := Rect(0, 0, AWidth - 2 * (BorderSize + MarginSize), AHeight - 2 * (BorderSize + MarginSize));
+    Editor.BoundsRect := Rect(0, 0, AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin));
 end;
 
 procedure TTyroMain.Stop;
@@ -581,14 +558,19 @@ end;
 
 procedure TTyroMain.ShowConsole(AX, AY, AWidth, AHeight: Integer);
 begin
-  Console.CharWidth := Resources.Font.Width;
-  Console.CharHeight := Resources.Font.Height;
   if (AWidth <= 0) or (AHeight <= 0) then
   begin
     AWidth := 80;
     AHeight := 25;
   end;
   Console.BoundsRect := Rect(AX, AY, AX + AWidth, AY + AHeight);
+  ShowConsole;
+end;
+
+procedure TTyroMain.ShowConsole;
+begin
+  Console.CharWidth := Resources.Font.Width;
+  Console.CharHeight := Resources.Font.Height;
   Console.Show;
   StartConsoleRead;
 end;
@@ -604,10 +586,7 @@ begin
   if Console.Visible then
     HideConsole
   else
-  begin
-    Console.Show; //restores the console's last WindowRect (80x25 if not set yet)
-    StartConsoleRead;
-  end;
+    ShowConsole;
 end;
 
 procedure TTyroMain.ToggleOutput;
@@ -630,7 +609,7 @@ begin
   Editor.FileName := FScriptThread.Script.FileName;
   Editor.LoadSource(FScriptThread.Script.Source);
   Editor.BoundsRect := Rect(0, 0, Width, Height);
-  Editor.MarginSize:= 10;
+  Editor.Margin:= 10;
   Editor.BackColor:= clBlack;
   Editor.Visible := True;
   Editor.Focused := True;

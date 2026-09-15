@@ -436,21 +436,12 @@ begin
       Main.Console.Height := i
     else if field = 'width' then
       Main.Console.Width := i
-    else if field = 'border' then
-      Main.Console.BorderSize := i
     else if field = 'margin' then
-      Main.Console.MarginSize := i
-    else if field = 'borderColor' then
-      Main.Console.BorderColor := IntToColor(i);
+      Main.Console.Margin := i
   end
   else if L.IsString(-1) then
   begin
-    if field = 'borderColor' then
-    begin
-      color := L.ToString(-1);
-      Main.Console.BorderColor := StrToColor(color);
-    end
-    else if field = 'align' then
+    if field = 'align' then
     begin
       //* TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
       if L.ToString(-1) = 'none' then
@@ -508,19 +499,9 @@ begin
       L.PushInteger(Main.Console.Width);
       Result := 1;
     end;
-    'border':
-    begin
-      L.PushInteger(Main.Console.BorderSize);
-      Result := 1;
-    end;
-    'borderColor':
-    begin
-      L.PushInteger(ColorToInt(Main.Console.BorderColor));
-      Result := 1;
-    end;
     'margin':
     begin
-      L.PushInteger(Main.Console.MarginSize);
+      L.PushInteger(Main.Console.Margin);
       Result := 1;
     end;
   end;
@@ -545,20 +526,14 @@ begin
   begin
     i := L.ToInteger(-1);
     if field = 'margin' then
-      Main.MarginSize := i
-    else if field = 'border' then
-      Main.BorderSize := i
-    else if field = 'borderColor' then
-      Main.BorderColor := IntToColor(i)
+      Main.Margin := i
     else if field = 'backcolor' then
       Main.BackColor := IntToColor(i);
   end
   else if L.IsString(-1) then
   begin
     color := L.ToString(-1);
-    if field = 'borderColor' then
-      Main.BorderColor := StrToColor(color)
-    else if field = 'backcolor' then
+    if field = 'backcolor' then
       Main.BackColor := StrToColor(color);
   end;
 end;
@@ -572,17 +547,7 @@ begin
   case field of
     'margin':
     begin
-      L.PushInteger(Main.MarginSize);
-      Result := 1;
-    end;
-    'border':
-    begin
-      L.PushInteger(Main.BorderSize);
-      Result := 1;
-    end;
-    'borderColor':
-    begin
-      L.PushInteger(ColorToInt(Main.BorderColor));
+      L.PushInteger(Main.Margin);
       Result := 1;
     end;
     'backcolor':
@@ -1281,10 +1246,8 @@ begin
       r := Main.Output.BoundsRect;
       Main.Output.BoundsRect := Rect(r.Left, i, r.Right, i + r.Height);
     end
-    else if field = 'border' then
-      Main.Output.BorderSize := i
     else if field = 'margin' then
-      Main.Output.MarginSize := i
+      Main.Output.Margin := i
     else if field = 'maxlines' then
       Main.Output.MaxLines := i;
   end
@@ -1339,14 +1302,9 @@ begin
       L.PushInteger(Main.Output.MaxLines);
       Result := 1;
     end;
-    'border':
-    begin
-      L.PushInteger(Main.Output.BorderSize);
-      Result := 1;
-    end;
     'margin':
     begin
-      L.PushInteger(Main.Output.MarginSize);
+      L.PushInteger(Main.Output.Margin);
       Result := 1;
     end;
   end;
@@ -1788,16 +1746,6 @@ begin
     L.PushNil;
     Result := 1;
     Exit;
-  end;
-  if L.Count >= 2 then
-  begin
-    b.BorderSize := round(L.ToNumber(2));
-    Result := 0;
-  end
-  else
-  begin
-    L.PushInteger(b.BorderSize);
-    Result := 1;
   end;
 end;
 

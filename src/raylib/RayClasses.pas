@@ -292,6 +292,7 @@ begin
         SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
         UnloadImage(img);
         Loaded;
+        Log.WriteLn('Font loaded: ' + FileName);
       finally
         Stream.Free;
       end;

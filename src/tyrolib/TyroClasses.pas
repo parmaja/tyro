@@ -17,7 +17,7 @@ interface
 
 uses
   Classes, SysUtils, Types, SyncObjs,
-  mnClasses, mnUtils, mnLogs,
+  mnClasses, mnUtils, mnLogs, mnConfigs,
   RayLib, RayClasses,
   Melodies, TyroSounds;
 
@@ -314,8 +314,11 @@ type
   { TTyroResources }
 
   TTyroResources = class(TmnNamedObjectList<TTyroResource>)
+  protected
+    procedure LoadConfig;
   public
     Font: TRayFont;
+    Config: TConfFile;
     WorkSpace: utf8string;
     CurrentDirectory: string;
     function GuessFileName(const FileName: string; InDirectory: string = ''): string;
@@ -959,15 +962,37 @@ begin
   inherited;
   WorkSpace:= ExtractFilePath(ParamStr(0));
   CurrentDirectory := GetCurrentDir;
+  Config := TConfFile.Create;
   Font := TRayFont.Create;
 end;
 
 destructor TTyroResources.Destroy;
 begin
   FreeAndNil(Font);
+  FreeAndNil(Config);
   if Resources = Self then
     Resources := nil;
   inherited;
+end;
+
+procedure TTyroResources.LoadConfig;
+const
+  cConfigFile = 'tyro.conf';
+var
+  aFileName: string;
+begin
+  aFileName := IncludePathDelimiter(Resources.WorkSpace) + cConfigFile;
+  if not SysUtils.FileExists(aFileName) then
+    aFileName := IncludePathDelimiter(Resources.CurrentDirectory) + cConfigFile;
+  try
+    Config.LoadFromFile(aFileName);
+  except
+    on E: Exception do
+    begin
+      Log.WriteLn('Config: ' + E.Message);
+      Exit;
+    end;
+  end;
 end;
 
 function TTyroResources.GuessFileName(const FileName: string; InDirectory: string): string;
@@ -1022,28 +1047,23 @@ end;
 procedure TTyroResources.Load;
 var
   res: TTyroResource;
+  aFontName: string;
 begin
   {$include 'font.inc'}
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'alpha_beta.png'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'Terminess-Bold.ttf'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'dejavu.fnt'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'DejaVuSansMono-Bold.ttf'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'terminus.ttf'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/Chroma.png'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/alpha_beta.png'));
-  //Font := LoadFont(PUTF8Char(Main.WorkSpace + 'fonts/ChiKareGo2.ttf'));
-  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/terminus.ttf'), 12, nil, 255);
-  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/AnonymousPro-Regular.ttf'), 12, nil, 255);
-  //Font := LoadFont(PUTF8Char('computer_pixel.fon.ttf'));
-  //Font := LoadFontEx(PUTF8Char(Main.WorkSpace + 'fonts/tahoma.ttf'), ScreenFontSize, nil, $FFFF); //Good for arabic but it take huge memory
-
-  res := Find('font', 'png');
-  if res <> nil then
-    Font.LoadFromString(res.ResData, 16)
-  else if SysUtils.FileExists(WorkSpace + 'font.png') then
-    Font.LoadFromFile(WorkSpace + 'font.png')
+  LoadConfig;
+  aFontName := Config.ReadString('font', '');
+  if aFontName = '' then
+  begin
+    res := Find('font', 'png');
+    if res <> nil then
+      Font.LoadFromString(res.ResData, 16)
+    else if SysUtils.FileExists(WorkSpace + 'font.png') then
+      Font.LoadFromFile(WorkSpace + 'font.png')
+    else
+      Font.LoadDefault;
+  end
   else
-    Font.LoadDefault;
+    Font.LoadFromFile(WorkSpace + aFontName);
 end;
 
 { TTyroResource }
