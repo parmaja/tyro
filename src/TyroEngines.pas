@@ -15,7 +15,7 @@ uses
   Classes, SysUtils, SyncObjs,
   mnLogs, mnUtils, mnConfigs,
   RayLib, RayClasses, TyroScripts,
-  TyroClasses, TyroControls, TyroConsoles,
+  TyroClasses, TyroControls, TyroTerminal,
   TyroSprites, TyroPhysics,
   TyroEditors,
   mnClasses;
@@ -71,7 +71,7 @@ type
 
   { TTyroMain }
 
-  TConsoleReadEvent = procedure(AConsole: TTyroConsole; AInput: string) of object;
+  TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: string) of object;
 
   TTyroMain = class(TTyroMainWindow)
   private
@@ -98,7 +98,7 @@ type
     FReadCallback: TConsoleReadEvent;
   protected
     Commands: TConsoleCommands;
-    procedure ConsoleInput(AConsole: TTyroConsole; AInput: string);
+    procedure ConsoleInput(AConsole: TTyroTerminal; AInput: string);
     procedure ExecuteCommand(ACommand: string);
     procedure RegisterCommands;
   public
@@ -109,7 +109,7 @@ type
     Running: Boolean;
     How: TRunHow;
     RunFile: string;//that to run in script
-    Console: TTyroConsole;
+Console: TTyroTerminal;
     Output: TTyroOutput;
     Editor: TyroEditor;
     Graphic: TTyroCanvas;
@@ -311,8 +311,8 @@ begin
   {$IFEND}
   //TTyroPanel.Create(Self);
 
-  Console := TTyroConsole.Create(Self);
-  Console.BoundsRect := Rect(Margin, Margin , 100, 100);
+  Console := TTyroTerminal.Create(Self);
+  Console.BoundsRect := Rect(Margin, Margin , 100, 200);
   Console.Border:= brdSizable;
   Console.BackColor := clDarkGray;
   Console.Visible := False;
@@ -682,18 +682,15 @@ begin
   ShowEditor;
 end;
 
-procedure TTyroMain.ConsoleInput(AConsole: TTyroConsole; AInput: string);
+procedure TTyroMain.ConsoleInput(AConsole: TTyroTerminal; AInput: string);
 begin
-  // If a script callback is set, route input to it (console.read())
+  // The terminal echoes the submitted command line itself, so only execute it
   if Assigned(FReadCallback) then
   begin
     FReadCallback(AConsole, AInput);
     Exit;
   end;
 
-  // Echo a newline after user input for readability
-  Console.Writeln('');
-  // Execute the typed command
   ExecuteCommand(AInput);
   // Re-arm the console for the next line of input
   if Console.Visible then
@@ -727,6 +724,8 @@ begin
 end;
 
 procedure TTyroMain.RegisterCommands;
+var
+  aCommand: TConsoleCommand;
 begin
   Commands.Add('help', ['?'], Help_Command, 'Show help');
   Commands.Add('list', ['ls'], Dir_Command, 'Show current directory');
@@ -737,6 +736,13 @@ begin
   Commands.Add('state', [], State_Command, 'State of current directory');
   Commands.Add('run', [], Run_Command, 'Run current loaded script');
   Commands.Add('edit', [], Edit_Command, 'Edit the current loaded script (F2)');
+  Console.CommandNames.Clear;
+  for aCommand in Commands do
+  begin
+    Console.CommandNames.Add(aCommand.Name);
+    if aCommand.Alts <> nil then
+      Console.CommandNames.AddStrings(aCommand.Alts);
+  end;
 end;
 
 procedure TTyroMain.StartConsoleRead;

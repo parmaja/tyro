@@ -97,7 +97,7 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="TyroConsoles.pas"/>
+        <Filename Value="TyroTerminal.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>

@@ -35,7 +35,7 @@ uses
   {$ENDIF}
   SysUtils, Classes, CustApp, RayLib, mnUtils, Melodies,
   TyroControls, TyroClasses, TyroEditors, mnLogs, TyroEngines,
-  TyroLua, TyroScripts, TyroConsoles, LuaClasses;  //Add all languages units here
+  TyroLua, TyroScripts, TyroTerminal, LuaClasses;  //Add all languages units here
 
 type
 

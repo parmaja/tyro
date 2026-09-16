@@ -12,7 +12,7 @@ uses
   mnUtils, mnClasses, mnLogs,
   RayLib, RayClasses,
   Melodies, TyroSounds,
-  TyroClasses, TyroControls, TyroConsoles;
+  TyroClasses, TyroControls, TyroTerminal;
 
 type
   { TQueueObject }
@@ -98,7 +98,7 @@ type
      constructor Create(APrompt: string);
      destructor Destroy; override;
      procedure DoExecute; override;
-     procedure HandleConsoleInput(AConsole: TTyroConsole; AInput: string);
+     procedure HandleConsoleInput(AConsole: TTyroTerminal; AInput: string);
    end;
 
    { TCreateButtonObject }
@@ -516,7 +516,7 @@ begin
   Main.StartConsoleReadEx(HandleConsoleInput);
 end;
 
-procedure TReadConsoleObject.HandleConsoleInput(AConsole: TTyroConsole; AInput: string);
+procedure TReadConsoleObject.HandleConsoleInput(AConsole: TTyroTerminal; AInput: string);
 begin
   ResultString := AInput;
 //  Event.SetEvent;
