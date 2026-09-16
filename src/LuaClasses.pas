@@ -317,7 +317,9 @@ end;
 type
   TLuaStatus = (luaNone, luaReady, luaRunning, luaTerminated);
 
-threadvar
+var
+  //shared across threads: Stop() runs on the main thread but HookCount
+  //reads the flag on the script thread, so it cannot be a threadvar
   LuaStatus: TLuaStatus;
 
 procedure LuaSetTerminated;

@@ -1011,8 +1011,10 @@ end;
 
 procedure TLuaScript.Stop;
 begin
+  //abort the running Lua bytecode: HookCount calls luaL_error when
+  //LuaStatus >= luaTerminated, and RunString returns on the next hook tick
+  LuaSetTerminated;
   inherited;
-  //TODO
 end;
 
 procedure TLuaScript.AddQueueObject(AQueueObject: TQueueObject);
