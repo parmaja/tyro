@@ -41,6 +41,7 @@ tyro demos/pong.lua
 |------|---------|
 | `music_demo.lua` | music.sound() tones and music.mml() melodies |
 | `multiply.lua` | Drawing + MML sound effects |
+| `spectrum_demo.lua` | Internet radio + live stereo spectrum analyzer (`spectrum.show`, `spectrum.bars`) |
 
 ### Effects
 

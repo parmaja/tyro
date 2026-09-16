@@ -24,7 +24,8 @@ interface
 uses
   Classes, SysUtils,
   RayLib, RayClasses,
-  IceCastClients;
+  IceCastClients,
+  TyroSpectrum;
 
 type
   TRadioPlayerState = (
@@ -174,6 +175,7 @@ begin
   FUserPlaying := False;
   if FMusicLoaded then
   begin
+    Spectrum.Detach; //stop feeding the analyzer before the stream is freed
     StopMusicStream(FMusic);
     UnloadMusicStream(FMusic);
     FMusicLoaded := False;
@@ -259,6 +261,7 @@ begin
   FUserPlaying := False;
   if FMusicLoaded then
   begin
+    Spectrum.Detach; //stop feeding the analyzer before the stream is freed
     StopMusicStream(FMusic);
     UnloadMusicStream(FMusic);
     FMusicLoaded := False;
@@ -274,6 +277,7 @@ begin
   FUserPlaying := False;
   if FMusicLoaded then
   begin
+    Spectrum.Detach; //stop feeding the analyzer before the stream is freed
     StopMusicStream(FMusic);
     UnloadMusicStream(FMusic);
     FMusicLoaded := False;
@@ -364,12 +368,14 @@ begin
     //commit the new snapshot; drop the old music
     if FMusicLoaded then
     begin
+      Spectrum.Detach; //stop feeding the analyzer before the stream is freed
       StopMusicStream(FMusic);
       UnloadMusicStream(FMusic);
     end;
     FMusic := aNewMusic;
     FBytesPerSec := aBP;
     FMusicLoaded := True;
+    Spectrum.Attach(FMusic.Stream); //feed the analyzer from the live stream
     FSnapshot.Free;
     FSnapshot := aSnap;
     aSnap := nil;

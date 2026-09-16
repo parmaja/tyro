@@ -23,7 +23,7 @@ uses
   mnUtils,
   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroPhysics,
   TyroControls, TyroEngines, TyroInput,
-  TyroRadio;
+  TyroRadio, TyroSpectrum;
 
 type
   TLuaScript = class;
@@ -168,6 +168,18 @@ type
     function Stop_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaSpectrum }
+
+  TLuaSpectrum = class(TTyroLuaObject)
+  protected
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
+  public
+    function Show_func(L: Plua_State): integer; cdecl;
+    function Hide_func(L: Plua_State): integer; cdecl;
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
   { TRadioAction }
 
   TRadioAction = (raPlay, raPause, raResume, raStop);
@@ -181,6 +193,25 @@ type
   public
     constructor Create(AAction: TRadioAction); overload;
     constructor Create(AAction: TRadioAction; const AURL: string); overload;
+    procedure DoExecute; override;
+  end;
+
+  { TShowSpectrumObject }
+
+  { Shows the spectrum analyzer panel on the main window thread (the panel is
+    part of the control tree painted by the main drawing cycle). }
+  TShowSpectrumObject = class(TQueueObject)
+  private
+    FX, FY, FW, FH: Integer;
+  public
+    constructor Create(AX, AY, AW, AH: Integer);
+    procedure DoExecute; override;
+  end;
+
+  { THideSpectrumObject }
+
+  THideSpectrumObject = class(TQueueObject)
+  public
     procedure DoExecute; override;
   end;
 
@@ -311,6 +342,7 @@ type
     Output: TLuaOutput;
     Collision: TLuaCollision;
     Shader: TLuaShader;
+    SpectrumLua: TLuaSpectrum;
     procedure DoError(S: string);
     procedure Run; override;
     procedure Stop; override;
@@ -915,6 +947,7 @@ begin
   Font := TLuaFont.Create(Self);
   Music := TLuaMusic.Create(Self);
   Radio := TLuaRadio.Create(Self);
+  SpectrumLua := TLuaSpectrum.Create(Self);
   Sprite := TLuaSprite.Create(Self);
   Sprites := TLuaSprites.Create(Self);
   Buttons := TLuaButtons.Create(Self);
@@ -967,6 +1000,12 @@ begin
   Lua.State.Register('radio', 'resume', Radio, @Radio.Resume_func);
   Lua.State.Register('radio', 'stop', Radio, @Radio.Stop_func);
   Lua.State.Register('radio', Radio); //Should be last one
+
+  //spectrum (spectrum.show(x, y, w, h), spectrum.hide()
+  // + getters/setters: spectrum.bars, spectrum.active, spectrum.visible)
+  Lua.State.Register('spectrum', 'show', SpectrumLua, @SpectrumLua.Show_func);
+  Lua.State.Register('spectrum', 'hide', SpectrumLua, @SpectrumLua.Hide_func);
+  Lua.State.Register('spectrum', SpectrumLua); //Should be last one
 
   //input & timing (global functions)
   Lua.State.RegisterGlobal('iskeypressed', @IsKeyPressed_func);
@@ -1632,6 +1671,101 @@ begin
     raResume: RadioPlayer.Resume;
     raStop: RadioPlayer.Stop;
   end;
+end;
+
+{ TLuaSpectrum }
+
+constructor TLuaSpectrum.Create(AScript: TLuaScript);
+begin
+  inherited Create(AScript);
+end;
+
+function TLuaSpectrum.Getter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  case field of
+    'active':
+    begin
+      L.PushBoolean(Spectrum.Active);
+      Result := 1;
+    end;
+    'bars':
+    begin
+      L.PushInteger(Spectrum.Bars);
+      Result := 1;
+    end;
+    'visible':
+    begin
+      L.PushBoolean(Spectrum.Visible);
+      Result := 1;
+    end;
+  end;
+end;
+
+function TLuaSpectrum.Setter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if (field = 'bars') and L.IsInteger(-1) then
+    Spectrum.RequestedBars := L.ToInteger(-1);
+end;
+
+function TLuaSpectrum.Show_func(L: Plua_State): integer; cdecl;
+var
+  c: integer;
+  x, y, w, h: integer;
+begin
+  c := L.Count;
+  x := 120;
+  y := 80;
+  w := 400;
+  h := 200;
+  if c >= 2 then
+  begin
+    x := round(L.ToNumber(1));
+    y := round(L.ToNumber(2));
+  end;
+  if c >= 4 then
+  begin
+    w := round(L.ToNumber(3));
+    h := round(L.ToNumber(4));
+  end;
+  FScript.RunQueueObject(TShowSpectrumObject.Create(x, y, w, h));
+  Result := 0;
+end;
+
+function TLuaSpectrum.Hide_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.RunQueueObject(THideSpectrumObject.Create);
+  Result := 0;
+end;
+
+{ TShowSpectrumObject }
+
+constructor TShowSpectrumObject.Create(AX, AY, AW, AH: Integer);
+begin
+  inherited Create;
+  FX := AX;
+  FY := AY;
+  FW := AW;
+  FH := AH;
+end;
+
+procedure TShowSpectrumObject.DoExecute;
+begin
+  Spectrum.Show(FX, FY, FW, FH);
+end;
+
+{ THideSpectrumObject }
+
+procedure THideSpectrumObject.DoExecute;
+begin
+  Spectrum.Hide;
 end;
 
 function TLuaScript.IsKeyPressed_func(L: Plua_State): integer; cdecl;
