@@ -118,6 +118,8 @@ type
     function IsKeyword(const AWord: string): Boolean;
     function IsApiName(const AWord: string): Boolean;
     procedure UpdateSizes;
+    procedure UpdateScrollBars;
+    function GetMaxCol: Integer;
     procedure ProcessKey(var Key: TKeyboardKey; Shift: TShiftState);
     procedure UpdateKeyRepeat;
 
@@ -126,6 +128,7 @@ type
     procedure DrawCaret(ACanvas: TTyroCanvas);
   protected
     procedure Resized; override;
+    procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -231,7 +234,7 @@ end;
 constructor TyroEditor.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Style := [csClip, csOpaque];
+  Style := [csClip, csOpaque, csHScroll, csVScroll];
   FLines := TStringList.Create;
   FLines.Add('');
   FUndo := TStringList.Create;
@@ -315,10 +318,118 @@ begin
     FCharHeight := 8;
 end;
 
+function TyroEditor.GetMaxCol: Integer;
+var
+  I, L: Integer;
+begin
+  Result := 0;
+  for I := 0 to FLines.Count - 1 do
+  begin
+    L := CPCount(FLines[I]);
+    if L > Result then
+      Result := L;
+  end;
+end;
+
+procedure TyroEditor.UpdateScrollBars;
+var
+  vis, cols, maxV, maxH: Integer;
+begin
+  UpdateSizes;
+  vis := GetVisibleLines;
+  cols := (ClientRect.Width - GetGutterWidth) div FCharWidth;
+  if cols < 1 then
+    cols := 1;
+  maxV := FLines.Count - vis;
+  if maxV < 0 then
+    maxV := 0;
+  maxH := GetMaxCol - cols;
+  if maxH < 0 then
+    maxH := 0;
+
+  if maxV > 0 then
+  begin
+    ShowScrollBar([sbtVertical], True);
+    SetScrollRange(sbtVertical, 0, maxV, vis);
+    SetScrollPosition(sbtVertical, FTopLine, True);
+  end
+  else
+    ShowScrollBar([sbtVertical], False);
+
+  if maxH > 0 then
+  begin
+    ShowScrollBar([sbtHorizontal], True);
+    SetScrollRange(sbtHorizontal, 0, maxH, cols);
+    SetScrollPosition(sbtHorizontal, FLeftCol, True);
+  end
+  else
+    ShowScrollBar([sbtHorizontal], False);
+end;
+
+procedure TyroEditor.Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
+var
+  vis, cols, maxV, maxH: Integer;
+  v: Integer;
+begin
+  UpdateSizes;
+  vis := GetVisibleLines;
+  cols := (ClientRect.Width - GetGutterWidth) div FCharWidth;
+  if cols < 1 then
+    cols := 1;
+  maxV := FLines.Count - vis;
+  if maxV < 0 then
+    maxV := 0;
+  maxH := GetMaxCol - cols;
+  if maxH < 0 then
+    maxH := 0;
+
+  if Witch = sbtVertical then
+  begin
+    v := FTopLine;
+    case ScrollCode of
+      scrollTOP: v := 0;
+      scrollBOTTOM: v := maxV;
+      scrollLINEDOWN: Inc(v);
+      scrollLINEUP: Dec(v);
+      scrollPAGEDOWN: Inc(v, vis);
+      scrollPAGEUP: Dec(v, vis);
+      scrollTHUMBPOSITION, scrollTHUMBTRACK: v := Pos;
+      scrollENDSCROLL: ;
+    end;
+    if v < 0 then
+      v := 0;
+    if v > maxV then
+      v := maxV;
+    FTopLine := v;
+  end
+  else
+  begin
+    v := FLeftCol;
+    case ScrollCode of
+      scrollTOP: v := 0;
+      scrollBOTTOM: v := maxH;
+      scrollLINEDOWN: Inc(v);
+      scrollLINEUP: Dec(v);
+      scrollPAGEDOWN: Inc(v, cols);
+      scrollPAGEUP: Dec(v, cols);
+      scrollTHUMBPOSITION, scrollTHUMBTRACK: v := Pos;
+      scrollENDSCROLL: ;
+    end;
+    if v < 0 then
+      v := 0;
+    if v > maxH then
+      v := maxH;
+    FLeftCol := v;
+  end;
+  UpdateScrollBars;
+  Invalidate;
+end;
+
 procedure TyroEditor.Resized;
 begin
   inherited;
   ScrollCaretVisible;
+  UpdateScrollBars;
   Invalidate;
 end;
 
@@ -1286,7 +1397,10 @@ begin
   ACanvas.DrawText(0, sbY, tx, clLightgray);
 
   rx := Format('Ln %d, Col %d   [F2/Esc: close]', [FCaretLine + 1, FCaretCol + 1]);
-  ACanvas.DrawText(ClientRect.Width - UTF8Length(rx) * FCharWidth, sbY, rx, clLightgray);
+  if (csHScroll in Style) or (csVScroll in Style) then
+    ACanvas.DrawText(ClientRect.Width - UTF8Length(rx) * FCharWidth - cScrollSize, sbY, rx, clLightgray)
+  else
+    ACanvas.DrawText(ClientRect.Width - UTF8Length(rx) * FCharWidth, sbY, rx, clLightgray);
 end;
 
 procedure TyroEditor.DrawCaret(ACanvas: TTyroCanvas);
@@ -1357,6 +1471,7 @@ begin
   if Visible and Focused then
   begin
     UpdateSizes;
+    UpdateScrollBars;
     FCaretTimer := FCaretTimer + RayLib.GetFrameTime();
     if FCaretTimer >= cEditorCaretBlink then
       FCaretTimer := FCaretTimer - cEditorCaretBlink;
@@ -1371,7 +1486,8 @@ begin
     ly := Round(mp.Y) - WindowRect.Top - ClientRect.Top;
     if RayLib.IsMouseButtonPressed(MOUSE_BUTTON_LEFT) then
     begin
-      if (lx >= 0) and (ly >= 0) and (lx < ClientRect.Width) and (ly < ClientRect.Height) then
+      if (lx >= 0) and (ly >= 0) and (lx < ClientRect.Width) and (ly < ClientRect.Height)
+         and (HitScrollBar(lx, ly) = []) then
       begin
         PlaceCaretAt(lx, ly);
         FAnchorLine := FCaretLine;
@@ -1396,11 +1512,20 @@ begin
     wheel := RayLib.GetMouseWheelMove;
     if wheel <> 0 then
     begin
-      FTopLine := FTopLine - Trunc(wheel);
-      if FTopLine < 0 then
-        FTopLine := 0;
-      if FTopLine > FLines.Count - 1 then
-        FTopLine := FLines.Count - 1;
+      if RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT) then
+      begin
+        FLeftCol := FLeftCol - Trunc(wheel);
+        if FLeftCol < 0 then
+          FLeftCol := 0;
+      end
+      else
+      begin
+        FTopLine := FTopLine - Trunc(wheel);
+        if FTopLine < 0 then
+          FTopLine := 0;
+        if FTopLine > FLines.Count - 1 then
+          FTopLine := FLines.Count - 1;
+      end;
       Invalidate;
     end;
   end

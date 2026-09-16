@@ -120,6 +120,7 @@ type
     procedure AppendText(const S: string);
     procedure TrimLines;
     procedure ClampScroll;
+    procedure UpdateScrollBars;
 
     procedure ClearInputSelection;
     procedure SetInputSelection(AStart, AEnd: Integer);
@@ -145,6 +146,7 @@ type
   protected
     procedure UpdateSizes;
     procedure Resized; override;
+    procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -248,7 +250,7 @@ var
   i: Integer;
 begin
   inherited;
-  Style := [csClip, csOpaque];
+  Style := [csClip, csOpaque, csVScroll];
   BackColor := clDarkGray;
 
   FCharWidth := CDefaultCharWidth;
@@ -313,6 +315,7 @@ procedure TTyroTerminal.Resized;
 begin
   inherited;
   ClampScroll;
+  UpdateScrollBars;
   Invalidate;
 end;
 
@@ -518,6 +521,52 @@ begin
     FScrollBack := 0;
   if FScrollBack > MaxScroll then
     FScrollBack := MaxScroll;
+end;
+
+procedure TTyroTerminal.UpdateScrollBars;
+var
+  vis, MaxScroll: Integer;
+begin
+  vis := GetVisibleLines;
+  MaxScroll := FLines.Count - vis;
+  if MaxScroll < 0 then
+    MaxScroll := 0;
+  if MaxScroll > 0 then
+  begin
+    ShowScrollBar([sbtVertical], True);
+    SetScrollRange(sbtVertical, 0, MaxScroll, vis);
+    SetScrollPosition(sbtVertical, FScrollBack, True);
+  end
+  else
+    ShowScrollBar([sbtVertical], False);
+end;
+
+procedure TTyroTerminal.Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
+var
+  vis, MaxScroll: Integer;
+begin
+  if Witch <> sbtVertical then
+  begin
+    inherited Scroll(Witch, ScrollCode, Pos);
+    Exit;
+  end;
+  vis := GetVisibleLines;
+  MaxScroll := FLines.Count - vis;
+  if MaxScroll < 0 then
+    MaxScroll := 0;
+  case ScrollCode of
+    scrollTOP: FScrollBack := 0;
+    scrollBOTTOM: FScrollBack := MaxScroll;
+    scrollLINEDOWN: Inc(FScrollBack);
+    scrollLINEUP: Dec(FScrollBack);
+    scrollPAGEDOWN: Inc(FScrollBack, vis);
+    scrollPAGEUP: Dec(FScrollBack, vis);
+    scrollTHUMBPOSITION, scrollTHUMBTRACK: FScrollBack := Pos;
+    scrollENDSCROLL: ;
+  end;
+  ClampScroll;
+  UpdateScrollBars;
+  Invalidate;
 end;
 
 procedure TTyroTerminal.Clear;
@@ -1253,6 +1302,7 @@ begin
   UpdateSizes;
   if not Visible then
     Exit;
+  UpdateScrollBars;
 
   // caret blink
   if Focused then
@@ -1282,7 +1332,7 @@ begin
 
   if RayLib.IsMouseButtonPressed(MOUSE_BUTTON_LEFT) then
   begin
-    if Hovering then
+    if Hovering and (HitScrollBar(lx, ly) = []) then
     begin
       Focused := True;
       FMouseButtonDown := True;

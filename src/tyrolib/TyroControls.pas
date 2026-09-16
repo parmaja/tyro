@@ -28,6 +28,10 @@ uses
 const
   cMainMargin = 32;
   cMinResizeSize = 16;
+  //* Thin scrollbars painted on the side of a control when csHScroll/csVScroll
+  //* are in Style.
+  cScrollSize = 7;        //* scrollbar thickness in pixels
+  cScrollMinThumb = 8;    //* minimum thumb length in pixels
 
 type
   {$ifdef FPC}
@@ -55,9 +59,20 @@ type
 
   TTyroControlStyle = (
     csClip,
-    csOpaque
+    csOpaque,
+    csHScroll,
+    csVScroll
   );
   TTyroControlStyles = set of TTyroControlStyle;
+
+  { state of one scrollbar (range, page size and current position) }
+  TTyroScrollInfo = record
+    Min: Integer;
+    Max: Integer;
+    Page: Integer;
+    Pos: Integer;
+    Visible: Boolean;
+  end;
 
   TTyroLayout = class;
   TTyroControl = class;
@@ -151,6 +166,14 @@ type
     FResizeStartMouse: TVector2;
     FLastMouseX: Integer;
     FLastMouseY: Integer;
+    FHScroll: TTyroScrollInfo;
+    FVScroll: TTyroScrollInfo;
+    FHScrollHover: Boolean;
+    FVScrollHover: Boolean;
+    FHDrag: Boolean;
+    FVDrag: Boolean;
+    FHDragOfs: Integer;
+    FVDragOfs: Integer;
     function GetFocused: Boolean;
     procedure SetBackColor(AValue: TColor);
     procedure SetVisible(AValue: Boolean);
@@ -168,6 +191,17 @@ type
     //* Make sure the own (transparent) texture buffer exists and matches the
     //* control size. Returns False when no buffer can be created.
     function PrepareCanvas: Boolean;
+
+    //* Track/thumb rectangles are expressed in client-local coordinates; the
+    //* caller maps window-local mouse points (X, Y) to them via ClientRect.Left.
+    function ScrollTrackRect(Which: TScrollbarType): TRect;
+    function ScrollThumbRect(Which: TScrollbarType): TRect;
+    function ScrollThumbToPos(Which: TScrollbarType; AThumbStart: Integer): Integer;
+    //* Which visible scrollbars contain the window-local point (X, Y).
+    function HitScrollBar(X, Y: Integer): TScrollbarTypes;
+    procedure PaintScrollBars(ACanvas: TTyroCanvas);
+    procedure DrawScrollBar(ACanvas: TTyroCanvas; Which: TScrollbarType);
+
     procedure ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
     procedure SetScrollRange(Which: TScrollbarType; AMin, AMax: Integer; APage: Integer);
     procedure SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
@@ -930,20 +964,234 @@ begin
   Result.Offset(-Result.Left, -Result.Top); //Because drawing will use Origin
 end;
 
-procedure TTyroControl.ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
-begin
-end;
-
 procedure TTyroControl.SetScrollRange(Which: TScrollbarType; AMin, AMax: Integer; APage: Integer);
+var
+  Info: ^TTyroScrollInfo;
 begin
+  if Which = sbtVertical then
+    Info := @FVScroll
+  else
+    Info := @FHScroll;
+  if AMax < AMin then
+    AMax := AMin;
+  if APage < 1 then
+    APage := 1;
+  Info^.Min := AMin;
+  Info^.Max := AMax;
+  Info^.Page := APage;
+  if Info^.Pos > AMax then
+    Info^.Pos := AMax;
+  if Info^.Pos < AMin then
+    Info^.Pos := AMin;
+  Invalidate;
 end;
 
 procedure TTyroControl.SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
+var
+  Info: ^TTyroScrollInfo;
 begin
+  if Which = sbtVertical then
+    Info := @FVScroll
+  else
+    Info := @FHScroll;
+  if Info^.Min >= Info^.Max then
+    AValue := Info^.Min
+  else
+  begin
+    if AValue < Info^.Min then
+      AValue := Info^.Min;
+    if AValue > Info^.Max then
+      AValue := Info^.Max;
+  end;
+  Info^.Pos := AValue;
+  Info^.Visible := Visible;
+  Invalidate;
+end;
+
+procedure TTyroControl.ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
+begin
+  if sbtVertical in Which then
+  begin
+    FVScroll.Visible := Visible;
+    if Visible then
+      Include(Style, csVScroll)
+    else
+      Exclude(Style, csVScroll);
+  end;
+  if sbtHorizontal in Which then
+  begin
+    FHScroll.Visible := Visible;
+    if Visible then
+      Include(Style, csHScroll)
+    else
+      Exclude(Style, csHScroll);
+  end;
+  Invalidate;
 end;
 
 procedure TTyroControl.Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
+var
+  Info: ^TTyroScrollInfo;
+  Current: Integer;
 begin
+  if Witch = sbtVertical then
+    Info := @FVScroll
+  else
+    Info := @FHScroll;
+  Current := Info^.Pos;
+  case ScrollCode of
+    scrollTOP: Current := Info^.Min;
+    scrollBOTTOM: Current := Info^.Max;
+    scrollLINEDOWN: Inc(Current);
+    scrollLINEUP: Dec(Current);
+    scrollPAGEDOWN: Inc(Current, Info^.Page);
+    scrollPAGEUP: Dec(Current, Info^.Page);
+    scrollTHUMBPOSITION, scrollTHUMBTRACK: Current := Pos;
+    scrollENDSCROLL: ;
+  end;
+  SetScrollPosition(Witch, Current, Info^.Visible);
+end;
+
+function TTyroControl.ScrollTrackRect(Which: TScrollbarType): TRect;
+begin
+  Result := Rect(0, 0, ClientRect.Width, ClientRect.Height);
+  if Which = sbtVertical then
+  begin
+    if not (csVScroll in Style) or not FVScroll.Visible then
+      Exit(Rect(-1, -1, -1, -1));
+    Result.Left := Result.Right - cScrollSize;
+    if (csHScroll in Style) and FHScroll.Visible then
+      Dec(Result.Bottom, cScrollSize);
+  end
+  else
+  begin
+    if not (csHScroll in Style) or not FHScroll.Visible then
+      Exit(Rect(-1, -1, -1, -1));
+    Result.Top := Result.Bottom - cScrollSize;
+    if (csVScroll in Style) and FVScroll.Visible then
+      Dec(Result.Right, cScrollSize);
+  end;
+end;
+
+function TTyroControl.ScrollThumbRect(Which: TScrollbarType): TRect;
+var
+  Track: TRect;
+  Info: ^TTyroScrollInfo;
+  TrackLen, Range, ThumbLen, ThumbOfs: Integer;
+begin
+  if Which = sbtVertical then
+    Info := @FVScroll
+  else
+    Info := @FHScroll;
+  Track := ScrollTrackRect(Which);
+  if (Track.Right <= Track.Left) or (Track.Bottom <= Track.Top) then
+    Exit(Track);
+  if Which = sbtVertical then
+    TrackLen := Track.Bottom - Track.Top
+  else
+    TrackLen := Track.Right - Track.Left;
+  Range := Info^.Max - Info^.Min;
+  if TrackLen <= 0 then
+    Exit(Track);
+  if Range <= 0 then
+    Exit(Track); //nothing scrollable: full thumb
+  ThumbLen := Round(TrackLen * Info^.Page / (Info^.Page + Range));
+  if ThumbLen > TrackLen then
+    ThumbLen := TrackLen;
+  if ThumbLen < cScrollMinThumb then
+    ThumbLen := cScrollMinThumb;
+  ThumbOfs := Round((TrackLen - ThumbLen) * (Info^.Pos - Info^.Min) / Range);
+  if ThumbOfs < 0 then
+    ThumbOfs := 0;
+  if ThumbOfs + ThumbLen > TrackLen then
+    ThumbOfs := TrackLen - ThumbLen;
+  if Which = sbtVertical then
+    Result := Rect(Track.Left, Track.Top + ThumbOfs, Track.Right, Track.Top + ThumbOfs + ThumbLen)
+  else
+    Result := Rect(Track.Left + ThumbOfs, Track.Top, Track.Left + ThumbOfs + ThumbLen, Track.Bottom);
+end;
+
+function TTyroControl.ScrollThumbToPos(Which: TScrollbarType; AThumbStart: Integer): Integer;
+var
+  Track, Thumb: TRect;
+  Info: ^TTyroScrollInfo;
+  TrackLen, ThumbLen, Range: Integer;
+begin
+  if Which = sbtVertical then
+    Info := @FVScroll
+  else
+    Info := @FHScroll;
+  Track := ScrollTrackRect(Which);
+  Thumb := ScrollThumbRect(Which);
+  if Which = sbtVertical then
+  begin
+    TrackLen := Track.Bottom - Track.Top;
+    ThumbLen := Thumb.Bottom - Thumb.Top;
+  end
+  else
+  begin
+    TrackLen := Track.Right - Track.Left;
+    ThumbLen := Thumb.Right - Thumb.Left;
+  end;
+  Range := Info^.Max - Info^.Min;
+  if (Range <= 0) or (TrackLen <= ThumbLen) then
+    Exit(Info^.Min);
+  if Which = sbtVertical then
+    Result := Info^.Min + Round((AThumbStart - Track.Top) * Range / (TrackLen - ThumbLen))
+  else
+    Result := Info^.Min + Round((AThumbStart - Track.Left) * Range / (TrackLen - ThumbLen));
+  if Result < Info^.Min then
+    Result := Info^.Min;
+  if Result > Info^.Max then
+    Result := Info^.Max;
+end;
+
+function TTyroControl.HitScrollBar(X, Y: Integer): TScrollbarTypes;
+var
+  Ofs: Integer;
+  P: TPoint;
+begin
+  Result := [];
+  Ofs := Margin + BorderSize;
+  P := Point(X - Ofs, Y - Ofs);
+  if (csVScroll in Style) and FVScroll.Visible and PtInRect(ScrollTrackRect(sbtVertical), P) then
+    Include(Result, sbtVertical);
+  if (csHScroll in Style) and FHScroll.Visible and PtInRect(ScrollTrackRect(sbtHorizontal), P) then
+    Include(Result, sbtHorizontal);
+end;
+
+procedure TTyroControl.DrawScrollBar(ACanvas: TTyroCanvas; Which: TScrollbarType);
+var
+  Track, Thumb: TRect;
+  TrackColor, ThumbColor: TColor;
+  Hover: Boolean;
+begin
+  Track := ScrollTrackRect(Which);
+  if (Track.Right <= Track.Left) or (Track.Bottom <= Track.Top) then
+    Exit;
+  TrackColor := clDarkGray.ReplaceAlpha(140);
+  ACanvas.DrawRectangle(Track, TrackColor, True);
+  Thumb := ScrollThumbRect(Which);
+  if (Thumb.Right <= Thumb.Left) or (Thumb.Bottom <= Thumb.Top) then
+    Exit;
+  if Which = sbtVertical then
+    Hover := FVScrollHover
+  else
+    Hover := FHScrollHover;
+  if Hover then
+    ThumbColor := clLightgray
+  else
+    ThumbColor := clLightgray.ReplaceAlpha(170);
+  ACanvas.DrawRectangle(Thumb, ThumbColor, True);
+  ACanvas.DrawRect(Thumb, 1, clDarkGray);
+end;
+
+procedure TTyroControl.PaintScrollBars(ACanvas: TTyroCanvas);
+begin
+  if csVScroll in Style then
+    DrawScrollBar(ACanvas, sbtVertical);
+  if csHScroll in Style then
+    DrawScrollBar(ACanvas, sbtHorizontal);
 end;
 
 procedure TTyroControl.Invalidate;
@@ -970,7 +1218,8 @@ begin
           Canvas.BeginClip(aClientRect);
         try
           DoPaintBackground(Canvas);
-          DoPaint(Canvas)
+          DoPaint(Canvas);
+          PaintScrollBars(Canvas);
         finally
           Canvas.ResetOrigin;
           if csClip in Style then
@@ -991,7 +1240,8 @@ begin
       ACanvas.SetOrigin(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top);
       try
         DoPaintBackground(ACanvas);
-        DoPaint(ACanvas)
+        DoPaint(ACanvas);
+        PaintScrollBars(ACanvas);
       finally
         ACanvas.ResetOrigin;
         if csClip in Style then
@@ -1082,7 +1332,49 @@ end;
 procedure TTyroControl.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer);
 var
   sides: TTyroResizeSides;
+  Hit: TScrollbarTypes;
+  Ofs, lx, ly: Integer;
+  Thumb: TRect;
 begin
+  if (Button = mbLeft) then
+  begin
+    Hit := HitScrollBar(x, y);
+    if (sbtVertical in Hit) and (FVScroll.Max > FVScroll.Min) then
+    begin
+      Ofs := Margin + BorderSize;
+      lx := x - Ofs;
+      ly := y - Ofs;
+      Thumb := ScrollThumbRect(sbtVertical);
+      if PtInRect(Thumb, Point(lx, ly)) then
+      begin
+        FVDrag := True;
+        FVDragOfs := ly - Thumb.Top;
+      end
+      else if ly < Thumb.Top then
+        Scroll(sbtVertical, scrollPAGEUP, FVScroll.Pos)
+      else
+        Scroll(sbtVertical, scrollPAGEDOWN, FVScroll.Pos);
+      Exit;
+    end
+    else if (sbtHorizontal in Hit) and (FHScroll.Max > FHScroll.Min) then
+    begin
+      Ofs := Margin + BorderSize;
+      lx := x - Ofs;
+      ly := y - Ofs;
+      Thumb := ScrollThumbRect(sbtHorizontal);
+      if PtInRect(Thumb, Point(lx, ly)) then
+      begin
+        FHDrag := True;
+        FHDragOfs := lx - Thumb.Left;
+      end
+      else if lx < Thumb.Left then
+        Scroll(sbtHorizontal, scrollPAGEUP, FHScroll.Pos)
+      else
+        Scroll(sbtHorizontal, scrollPAGEDOWN, FHScroll.Pos);
+      Exit;
+    end;
+  end;
+
   if (Button = mbLeft) and (Border = brdSizable) then
   begin
     sides := GetResizeSides(x, y);
@@ -1101,6 +1393,16 @@ end;
 
 procedure TTyroControl.MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer);
 begin
+  if FVDrag or FHDrag then
+  begin
+    if FVDrag then
+      Scroll(sbtVertical, scrollENDSCROLL, FVScroll.Pos);
+    if FHDrag then
+      Scroll(sbtHorizontal, scrollENDSCROLL, FHScroll.Pos);
+    FVDrag := False;
+    FHDrag := False;
+    Exit;
+  end;
   if FResizing then
   begin
     FResizing := False;
@@ -1112,9 +1414,42 @@ end;
 procedure TTyroControl.MouseMove(Shift: TShiftState; x, y: integer);
 var
   sides: TTyroResizeSides;
+  Hit: TScrollbarTypes;
+  Ofs, lx, ly: Integer;
 begin
   FLastMouseX := x;
   FLastMouseY := y;
+
+  Hit := HitScrollBar(x, y);
+  FHScrollHover := sbtHorizontal in Hit;
+  FVScrollHover := sbtVertical in Hit;
+
+  if FVDrag then
+  begin
+    if ssLeft in Shift then
+    begin
+      Ofs := Margin + BorderSize;
+      ly := y - Ofs;
+      Scroll(sbtVertical, scrollTHUMBTRACK, ScrollThumbToPos(sbtVertical, ly - FVDragOfs));
+    end
+    else
+      FVDrag := False;
+    Exit;
+  end;
+
+  if FHDrag then
+  begin
+    if ssLeft in Shift then
+    begin
+      Ofs := Margin + BorderSize;
+      lx := x - Ofs;
+      Scroll(sbtHorizontal, scrollTHUMBTRACK, ScrollThumbToPos(sbtHorizontal, lx - FHDragOfs));
+    end
+    else
+      FHDrag := False;
+    Exit;
+  end;
+
   if FResizing then
   begin
     if ssLeft in Shift then
