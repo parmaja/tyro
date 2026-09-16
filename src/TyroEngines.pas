@@ -301,7 +301,7 @@ end;
 constructor TTyroMain.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Margin := 10;
+  Margin := Resources.Config.Sections['window'].ReadInteger('margin', 0);
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -322,7 +322,6 @@ begin
   Console.OnInput := ConsoleInput;
   Console.Margin:= 5;
   Console.Align:= alBottom;
-  TTyroPanel.Create(Self);
   Output := TTyroOutput.Create(Self);
   Output.BoundsRect := Rect(Margin, Margin, 480, 240);
   Output.Visible := False;
@@ -335,9 +334,11 @@ begin
   Physics := TPhysics.Create(Sprites);
   Commands := TConsoleCommands.Create();
   RegisterCommands;
+
+  //TTyroPanel.Create(Self);
 end;
 
-   destructor TTyroMain.Destroy;
+destructor TTyroMain.Destroy;
 begin
   //Stop;
   FreeAndNil(Physics);

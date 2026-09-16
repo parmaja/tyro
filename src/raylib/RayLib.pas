@@ -1492,17 +1492,10 @@ var
   GetMouseX: function: Integer; cdecl = nil;
   // Get mouse position Y
   GetMouseY: function: Integer; cdecl = nil;
-  {$ifdef FPC}
   // Get mouse position XY
   GetMousePosition: function: TVector2; cdecl = nil;
   // Get mouse delta between frames
   GetMouseDelta: function: TVector2; cdecl = nil;
-  {$else} //Stupid Delphi
-  // Get mouse position XY
-  GetMousePosition: function: Int64; cdecl = nil;
-  // Get mouse delta between frames
-  GetMouseDelta: function: Int64; cdecl = nil;
-  {$endif}
   // Set mouse position XY
   SetMousePosition: procedure(x: Integer; y: Integer); cdecl = nil;
   // Set mouse offset

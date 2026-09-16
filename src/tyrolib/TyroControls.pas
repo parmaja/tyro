@@ -156,8 +156,6 @@ type
     procedure SetVisible(AValue: Boolean);
     procedure SetWindow(AValue: TTyroWindow);
     procedure SetCanvas(AValue: TTyroCanvas);
-    function GetClientLeft: Integer;
-    function GetClientTop: Integer;
     procedure SetFocused(AValue: Boolean);
   protected
     Style: TTyroControlStyles;
@@ -261,7 +259,7 @@ type
   public
     Visible: Boolean;
     constructor Create(AParent: TTyroLayout); overload; override;
-    constructor Create(AParent: TTyroLayout; AWidth, AHeight: Integer); overload;
+    constructor Create(AParent: TTyroLayout; AWidth, AHeight: Integer); reintroduce; overload;
     destructor Destroy; override;
     procedure Paint;
     property Canvas: TTyroCanvas read FCanvas write SetCanvas;
@@ -446,9 +444,7 @@ end;
 procedure TTyroMainWindow.Run;
 var
   tw: Integer;
-  InitialVisible: Boolean;
 begin
-  InitialVisible := False;
   Init;
 
   if not Visible and (moWindow in Options) then
@@ -475,7 +471,6 @@ begin
       begin
         if Visible and IsWindowReady then
         begin
-          InitialVisible := True;
           if IsWindowHidden then
             break;
 
@@ -510,10 +505,10 @@ begin
             RayLib.EndDrawing();
           end;
         end;
+        ProcessInput;
       end;
-       Update;
-       RayUpdates.Update;
-       ProcessInput;
+      Update;
+      RayUpdates.Update;
     finally
     end;
   until Terminated;
@@ -640,18 +635,19 @@ end;
 function TTyroLayout.BorderSize: Integer;
 begin
   case Border of
-    brdNone: Result := 0;
     brdThin: Result := 1;
     brdThick: Result := 2;
-    brdSizable: Result := 2;
-  end;
+    brdSizable: Result := 1;
+    else
+      Result := 0;
+  end
 end;
 
 function TTyroLayout.BorderRect: TRect;
 begin
   Result := WindowRect;
-  Result.Offset(-Result.Left, -Result.Top); //Because drawing will use Origin
-  Result.Inflate(-Margin, - Margin);
+  //Result.Offset(-Result.Left, -Result.Top); //Because drawing will use Origin //NOPE
+  Result.Inflate(-Margin, -Margin);
 end;
 
 constructor TTyroLayout.Create(AParent: TTyroLayout);
@@ -761,7 +757,7 @@ var
 begin
   inherited;
   r := ClientRect;
-  r.Inflate(-2,-2);
+  //r.Inflate(-2,-2);
   ACanvas.DrawRectangle(r, clGreen, True);
 end;
 
@@ -805,9 +801,7 @@ procedure TTyroButton.DoPaint(ACanvas: TTyroCanvas);
 var
   r: TRectangle;
   body, border, foreground: TColor;
-  roundness, lineThick: Single;
   tx, ty, tw, th: Single;
-  v: TVector2;
 begin
   inherited;
   CheckState;
@@ -815,13 +809,6 @@ begin
   r := RectangleOf(ClientRect);
   if (r.Width <= 0) or (r.Height <= 0) then
     Exit;
-
-  roundness := 8;
-  lineThick := 2;
-  if lineThick < 1 then
-    lineThick := 1
-  else if lineThick > 4 then
-    lineThick := 4;
 
   if FDown then
     body := clGray
@@ -939,28 +926,16 @@ function TTyroControl.GetClientRect: TRect;
 begin
   //* ClientRect is relative to this control's WindowRect origin.
   Result := WindowRect;
-  Result.Offset(-Result.Left, -Result.Top); //Because drawing will use Origin
   Result.Inflate(-Margin - BorderSize, - Margin - BorderSize);
-end;
-
-function TTyroControl.GetClientTop: Integer;
-begin
-  Result := ClientRect.Top;
-end;
-
-function TTyroControl.GetClientLeft: Integer;
-begin
-  Result := ClientRect.Left;
+  Result.Offset(-Result.Left, -Result.Top); //Because drawing will use Origin
 end;
 
 procedure TTyroControl.ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
 begin
-
 end;
 
 procedure TTyroControl.SetScrollRange(Which: TScrollbarType; AMin, AMax: Integer; APage: Integer);
 begin
-
 end;
 
 procedure TTyroControl.SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
@@ -989,8 +964,8 @@ begin
       Canvas.BeginDraw;
       Canvas.ClearBackground(clBlank);
       try
-        Canvas.SetOrigin(aClientRect.Left, aClientRect.Top);
         DoPaintBorder(Canvas);
+        Canvas.SetOrigin(Margin + BorderSize, Margin + BorderSize);
         if csClip in Style then
           Canvas.BeginClip(aClientRect);
         try
@@ -1246,25 +1221,24 @@ end;
 
 procedure TTyroControl.DoPaintBorder(ACanvas: TTyroCanvas);
 var
-  bs, w, h: Integer;
   baseColor, highlightColor: TColor;
   activeSides: TTyroResizeSides;
+  aRect: TRect;
 begin
   if Border = brdNone then
     Exit;
-  bs := BorderSize;
-  w := ClientRect.Width;
-  h := ClientRect.Height;
-  if (w <= 0) or (h <= 0) then
-    Exit;
+
+  aRect := BorderRect;
+  aRect.Right := aRect.Right + BorderSize;
+  aRect.Bottom := aRect.Bottom + BorderSize;
+  Canvas.DrawRect(aRect, BorderSize, clRed);
+  exit;
 
   baseColor := clDarkGray;
-
-  Canvas.DrawRect(BorderRect, BorderSize, clRed);
   //ACanvas.FillRectangle(0, h - bs, w, bs, baseColor);
   //ACanvas.FillRectangle(0, 0, bs, h, baseColor);
   //ACanvas.FillRectangle(w - bs, 0, bs, h, baseColor);
-  exit;
+  {
   if Border = brdSizable then
   begin
     if FResizing then
@@ -1287,7 +1261,7 @@ begin
       if rsTop in activeSides then
         ACanvas.FillRectangle(0, bs - 1, w, 1, highlightColor);
     end;
-  end;
+  end;}
 end;
 
 procedure TTyroControl.Created;
@@ -1375,9 +1349,10 @@ begin
   //* once a left press lands inside a control the pointer is captured to it
   //* (keeps tracking the cursor while dragging a sizable border) until release.
   RayLib.SetMouseCursor(Ord(MOUSE_CURSOR_DEFAULT));
-  mp := TVector2(RayLib.GetMousePosition);
-  mx := Integer(mp.X);
-  my := Integer(mp.Y);
+  mp := RayLib.GetMousePosition;
+
+  mx := Round(mp.X);
+  my := Round(mp.Y);
 
   if FControlCapture <> nil then
   begin

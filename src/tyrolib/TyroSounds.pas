@@ -403,9 +403,8 @@ var
   Sample, Fade: Single;
 begin
 //https://stackoverflow.com/questions/20037947/fade-out-function-of-audio-between-samplerate-changes
-  fade := 1;
 //  if not connected then
-      fade := exp(-log10(50) * index / SampleRate / 3); //fadeout
+  fade := exp(-log10(50) * index / SampleRate / 3); //fadeout
   sample := sin(index * (2 * pi) * frequency / SampleRate);
   a := sin(index * (2 * pi) * frequency * 2 / SampleRate);
   b := sin(index * (2 * pi) * frequency / 2 / SampleRate);

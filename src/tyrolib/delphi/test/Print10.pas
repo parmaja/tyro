@@ -58,7 +58,7 @@ begin
   X := 0;
   Y := 0;
   Spacing := 10;
-  MarginSize := 10;
+  Margin:= 10;
   ShowWindow(400, 400, True);
 end;
 

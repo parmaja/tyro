@@ -20,9 +20,7 @@ interface
 uses
   Classes, SysUtils, Contnrs, Math,
   mnLogs, mnClasses, mnUtils,
-  {$ifdef FPC}
   mnBDF,
-  {$endif}
   RayLib;
 
 const
@@ -149,9 +147,7 @@ type
     destructor Destroy; override;
     procedure LoadFromFile(FileName: utf8string; FontSize: Integer = 0);
     procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
-    {$ifdef FPC}
     procedure LoadFromBDF(FileName: utf8string; FontSize: Integer = 0);
-    {$endif}
     procedure LoadFromMemory(FileType: string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger = nil; CodepointsCount: Integer = 0);
     procedure LoadDefault;
     procedure Unload;
@@ -208,13 +204,11 @@ end;
 
 procedure TRayFont.LoadFromFile(FileName: utf8string; FontSize: Integer);
 begin
-{$ifdef FPC}
   if SameText(ExtractFileExt(FileName), '.bdf') then
   begin
     LoadFromBDF(FileName, FontSize);
     exit;
   end;
-{$endif}
   if SysUtils.FileExists(FileName) then
   begin
     Unload;
@@ -255,33 +249,25 @@ begin
   Loaded;
 end;
 
-{$ifdef FPC}
 procedure TRayFont.LoadFromBDF(FileName: utf8string; FontSize: Integer);
 var
   BDF: TBDF;
   img: TImage;
   Stream: TMemoryStream;
-  Codepoints: array of Integer;
   i: Integer;
 begin
   Unload;
-  Codepoints := nil;
+  //Codepoints := nil;
   if SysUtils.FileExists(FileName) then
   begin
     BDF := TBDF.Create;
     try
       BDF.LoadFromFile(FileName);
-      // Load the BDF glyphs with their real codepoints (ENCODING), not a plain
-      // firstChar.. sequence, so extended fonts (CP864, Cyrillic, ...) map right.
-      SetLength(Codepoints, BDF.Count);
-      for i := 0 to BDF.Count - 1 do
-        Codepoints[i] := BDF.CodePoints[i].Code;
-
       try
         Stream := BDF.EncodeToPNG;
         Stream.Position:= 0;
-        Stream.SaveToFile('c:\temp\1.png');
-        Stream.Position:= 0;
+        //Stream.SaveToFile('c:\temp\1.png');
+        //Stream.Position:= 0;
 
         if FontSize = 0 then
           FontSize := BDF.Height;
@@ -303,7 +289,6 @@ begin
   else
     raise Exception.Create('Font file not exists ' + FileName);
 end;
-{$endif}
 
 { TRayAudio }
 
@@ -479,7 +464,6 @@ begin
   if FAudioDeviceInitialized = 0 then
     if not IsAudioDeviceReady then
       InitAudioDevice;
-
   //InterlockedIncrement(FAudioDeviceInitialized);
 end;
 

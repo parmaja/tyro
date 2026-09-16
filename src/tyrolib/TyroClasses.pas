@@ -993,6 +993,8 @@ begin
   CurrentDirectory := GetCurrentDir;
   Config := TConfFile.Create;
   Font := TRayFont.Create;
+  {$include 'font.inc'}
+  LoadConfig;
 end;
 
 destructor TTyroResources.Destroy;
@@ -1010,11 +1012,12 @@ const
 var
   aFileName: string;
 begin
-  aFileName := IncludePathDelimiter(Resources.WorkSpace) + cConfigFile;
+  aFileName := IncludePathDelimiter(WorkSpace) + cConfigFile;
   if not SysUtils.FileExists(aFileName) then
-    aFileName := IncludePathDelimiter(Resources.CurrentDirectory) + cConfigFile;
+    aFileName := IncludePathDelimiter(CurrentDirectory) + cConfigFile;
   try
-    Config.LoadFromFile(aFileName);
+    if SysUtils.FileExists(aFileName) then
+      Config.LoadFromFile(aFileName);
   except
     on E: Exception do
     begin
@@ -1078,8 +1081,6 @@ var
   res: TTyroResource;
   aFontName: string;
 begin
-  {$include 'font.inc'}
-  LoadConfig;
   aFontName := Config.ReadString('font', '');
   if aFontName = '' then
   begin
