@@ -117,13 +117,13 @@ type
     Physics: TPhysics;
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
-    procedure Stop; //and wait
     procedure Init; override;
     procedure Terminate; override;
     procedure ProcessQueue;
     procedure Start; override;
     procedure LoadConfig;
     procedure Unload; override;
+    procedure Stop; //and wait
     procedure Shutdown; override;
     procedure PrepareDraw; override;
     procedure Draw; override;
@@ -290,11 +290,7 @@ end;
 
 procedure TTyroMain.Shutdown;
 begin
-  Running := False;
-  if (FScriptThread <> nil) then
-    FScriptThread.Terminate;
-  if (FScriptMain <> nil) then
-    FScriptMain.Terminate;
+  Stop;
 end;
 
 procedure TTyroMain.PrepareDraw;
@@ -326,6 +322,7 @@ begin
   Console.OnInput := ConsoleInput;
   Console.Margin:= 5;
   Console.Align:= alBottom;
+  TTyroPanel.Create(Self);
   Output := TTyroOutput.Create(Self);
   Output.BoundsRect := Rect(Margin, Margin, 480, 240);
   Output.Visible := False;

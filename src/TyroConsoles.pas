@@ -860,7 +860,7 @@ var
   end;
 
 begin
-  ClientWidth := FConsole.ClientWidth;
+  ClientWidth := FConsole.ClientRect.Width;
   if ClientWidth < 0 then
     ClientWidth := 0;
   if System.Length(FChars) = 0 then
@@ -913,7 +913,7 @@ var
   x, MidWidth, LineStart, LastLineStart: Integer;
   ClientWidth: Integer;
 begin
-  ClientWidth := FConsole.ClientWidth;
+  ClientWidth := FConsole.ClientRect.Width;
   if ClientWidth < 0 then
     ClientWidth := 0;
   if System.Length(FChars) = 0 then
@@ -951,7 +951,7 @@ var
   x, MidWidth, LineStart, LineStartSumWidth, LastLineSumWidth: Integer;
   ClientWidth: Integer;
 begin
-  ClientWidth := FConsole.ClientWidth;
+  ClientWidth := FConsole.ClientRect.Width;
   if ClientWidth < 0 then
     ClientWidth := 0;
   if System.Length(FChars) = 0 then
@@ -998,7 +998,7 @@ var
   LastLineStart: Integer;
   ClientWidth: Integer;
 begin
-  ClientWidth := FConsole.ClientWidth;
+  ClientWidth := FConsole.ClientRect.Width;
   if ClientWidth < 0 then
     ClientWidth := 0;
   if System.Length(FChars) = 0 then
@@ -2280,8 +2280,8 @@ procedure TTyroConsole.AdjustScrollBars(const Recalc: Boolean);
 var
   LH: Integer;
 begin
-  FPageHeight   := ClientHeight div FCharHeight;
-  FVisibleLines := FPageHeight + Ord(ClientHeight mod FCharHeight <> 0);
+  FPageHeight   := ClientRect.Height div FCharHeight;
+  FVisibleLines := FPageHeight + Ord(ClientRect.Height mod FCharHeight <> 0);
   LH            := UpdateLineHeights(Recalc);
   if LH <> FVisibleLineCount then
   begin
@@ -2372,9 +2372,9 @@ begin
       Inc(CurrentLine);
     end;
     y := y * FCharHeight;
-    if y < ClientHeight then
+    if y < ClientRect.Height then
     begin
-      ACanvas.DrawRect(0, y, ClientWidth, ClientHeight, BackColor, True);
+      ACanvas.DrawRect(0, y, ClientRect.Width, ClientRect.Height, BackColor, True);
     end;
   end;
 end;

@@ -111,6 +111,7 @@ type
     procedure AddControl(AControl: TTyroLayout);
     procedure PaintWindow(ACanvas: TTyroCanvas); virtual;
     function BorderSize: Integer;
+    function BorderRect: TRect;
   public
     constructor Create(AParent: TTyroLayout); virtual;
     destructor Destroy; override;
@@ -161,15 +162,11 @@ type
   protected
     Style: TTyroControlStyles;
     function GetClientRect: TRect;
-    function GetClientWidth: Integer;
-    function GetClientHeight: Integer;
     //* Edges which may be resized when hovering at the local point (X, Y).
     //* brdSizable honors the Align constraint: aligned controls only expose the
     //* single free edge, alClient exposes none, alNone exposes all four.
     function GetResizeSides(X, Y: Integer): TTyroResizeSides;
     procedure ApplyResize;
-    procedure PaintBorder(ACanvas: TTyroCanvas);
-
     //* Make sure the own (transparent) texture buffer exists and matches the
     //* control size. Returns False when no buffer can be created.
     function PrepareCanvas: Boolean;
@@ -178,11 +175,11 @@ type
     procedure SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
     procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); virtual;
 
-    procedure DoBorder(ACanvas: TTyroCanvas); virtual;
+    procedure DoPaintBorder(ACanvas: TTyroCanvas); virtual;
     procedure DoPaintBackground(ACanvas: TTyroCanvas); virtual;
     procedure DoPaint(ACanvas: TTyroCanvas); virtual;
 
-    procedure Created; virtual;
+    procedure Created; override;
     property Window: TTyroWindow read FWindow write SetWindow;
   public
     constructor Create(AParent: TTyroLayout); override;
@@ -208,10 +205,6 @@ type
 
     property Focused: Boolean read GetFocused write SetFocused;
     property ClientRect: TRect read GetClientRect;
-    property ClientLeft: Integer read GetClientLeft;
-    property ClientTop: Integer read GetClientTop;
-    property ClientWidth: Integer read GetClientWidth;
-    property ClientHeight: Integer read GetClientHeight;
 
     property BackColor: TColor read FBackColor write SetBackColor;
 
@@ -453,7 +446,9 @@ end;
 procedure TTyroMainWindow.Run;
 var
   tw: Integer;
+  InitialVisible: Boolean;
 begin
+  InitialVisible := False;
   Init;
 
   if not Visible and (moWindow in Options) then
@@ -478,8 +473,12 @@ begin
       end
       else
       begin
-        if Visible then
+        if Visible and IsWindowReady then
         begin
+          InitialVisible := True;
+          if IsWindowHidden then
+            break;
+
           if RayLib.IsWindowResized() then
             Resize(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
           PrepareDraw;
@@ -644,8 +643,15 @@ begin
     brdNone: Result := 0;
     brdThin: Result := 1;
     brdThick: Result := 2;
-    brdSizable: Result := 4;
+    brdSizable: Result := 2;
   end;
+end;
+
+function TTyroLayout.BorderRect: TRect;
+begin
+  Result := WindowRect;
+  Result.Offset(-Result.Left, -Result.Top); //Because drawing will use Origin
+  Result.Inflate(-Margin, - Margin);
 end;
 
 constructor TTyroLayout.Create(AParent: TTyroLayout);
@@ -744,13 +750,19 @@ end;
 constructor TTyroPanel.Create(AParent: TTyroLayout);
 begin
   inherited;
+  Style := [csOpaque];
+  Border := brdSizable;
   BoundsRect := Rect(0 ,0 , 100, 100);
 end;
 
 procedure TTyroPanel.DoPaint(ACanvas: TTyroCanvas);
+var
+  r: TRect;
 begin
   inherited;
-  ACanvas.DrawRectangle(ClientRect, ACanvas.PenColor, False);
+  r := ClientRect;
+  r.Inflate(-2,-2);
+  ACanvas.DrawRectangle(r, clGreen, True);
 end;
 
 { TTyroButton }
@@ -924,39 +936,16 @@ begin
 end;
 
 function TTyroControl.GetClientRect: TRect;
-var
-  lWidth, lHeight: Integer;
 begin
   //* ClientRect is relative to this control's WindowRect origin.
-  //* It is inset by BorderSize + Margin on each side.
-  lWidth := WindowRect.Width;
-  lHeight := WindowRect.Height;
-
-  Result.Left := BorderSize + Margin;
-  Result.Top := BorderSize + Margin;
-  Result.Right := lWidth - BorderSize - Margin;
-  Result.Bottom := lHeight - BorderSize - Margin;
-
-  //* Guard against negative dimensions when the control is too small
-  if Result.Right < Result.Left then
-    Result.Right := Result.Left;
-  if Result.Bottom < Result.Top then
-    Result.Bottom := Result.Top;
+  Result := WindowRect;
+  Result.Offset(-Result.Left, -Result.Top); //Because drawing will use Origin
+  Result.Inflate(-Margin - BorderSize, - Margin - BorderSize);
 end;
 
 function TTyroControl.GetClientTop: Integer;
 begin
   Result := ClientRect.Top;
-end;
-
-function TTyroControl.GetClientWidth: Integer;
-begin
-  Result := ClientRect.Width;
-end;
-
-function TTyroControl.GetClientHeight: Integer;
-begin
-  Result := ClientRect.Height;
 end;
 
 function TTyroControl.GetClientLeft: Integer;
@@ -976,25 +965,19 @@ end;
 
 procedure TTyroControl.SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
 begin
-
 end;
 
 procedure TTyroControl.Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
 begin
-
-end;
-
-procedure TTyroControl.DoBorder(ACanvas: TTyroCanvas);
-begin
-
 end;
 
 procedure TTyroControl.Invalidate;
 begin
-
 end;
 
 procedure TTyroControl.PaintWindow(ACanvas: TTyroCanvas);
+var
+  aClientRect: TRect;
 begin
   if Visible then
   begin
@@ -1002,20 +985,21 @@ begin
     begin
       //* Paint the control content into its own transparent texture buffer,
       //* then draw (blit) that buffer on top of the window canvas.
+      aClientRect := ClientRect;
       Canvas.BeginDraw;
       Canvas.ClearBackground(clBlank);
       try
-        PaintBorder(Canvas);
+        Canvas.SetOrigin(aClientRect.Left, aClientRect.Top);
+        DoPaintBorder(Canvas);
         if csClip in Style then
-          RayLib.BeginScissorMode(ClientLeft, ClientTop, ClientWidth, ClientHeight);
-        Canvas.SetOrigin(ClientLeft, ClientTop);
+          Canvas.BeginClip(aClientRect);
         try
           DoPaintBackground(Canvas);
           DoPaint(Canvas)
         finally
           Canvas.ResetOrigin;
           if csClip in Style then
-            RayLib.EndScissorMode();
+            Canvas.EndClip;
         end;
       finally
         Canvas.EndDraw;
@@ -1026,11 +1010,10 @@ begin
     begin
       //* No own texture could be created: paint directly as a fallback.
       ACanvas.SetOrigin(WindowRect.Left, WindowRect.Top);
-      PaintBorder(ACanvas);
       ACanvas.ResetOrigin;
       if csClip in Style then
-        RayLib.BeginScissorMode(WindowRect.Left + ClientLeft, WindowRect.Top + ClientTop, ClientWidth, ClientHeight);
-      ACanvas.SetOrigin(WindowRect.Left + ClientLeft, WindowRect.Top + ClientTop);
+        RayLib.BeginScissorMode(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top, aClientRect.Width, aClientRect.Height);
+      ACanvas.SetOrigin(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top);
       try
         DoPaintBackground(ACanvas);
         DoPaint(ACanvas)
@@ -1098,7 +1081,7 @@ end;
 procedure TTyroControl.DoPaintBackground(ACanvas: TTyroCanvas);
 begin
   if csOpaque in Style then
-    ACanvas.DrawRectangle(0, 0, ClientWidth, ClientHeight, BackColor, True);
+    ACanvas.DrawRectangle(ClientRect, BackColor, True);
 end;
 
 procedure TTyroControl.DoPaint(ACanvas: TTyroCanvas);
@@ -1261,7 +1244,7 @@ begin
   Invalidate;
 end;
 
-procedure TTyroControl.PaintBorder(ACanvas: TTyroCanvas);
+procedure TTyroControl.DoPaintBorder(ACanvas: TTyroCanvas);
 var
   bs, w, h: Integer;
   baseColor, highlightColor: TColor;
@@ -1277,7 +1260,7 @@ begin
 
   baseColor := clDarkGray;
 
-  RayLib.DrawRectangleLinesEx(RectangleOf(ClientRect.Left-bs, ClientRect.Top-bs, ClientRect.Width+bs*2, ClientRect.Height+bs*2), 2, clRed);
+  Canvas.DrawRect(BorderRect, BorderSize, clRed);
   //ACanvas.FillRectangle(0, h - bs, w, bs, baseColor);
   //ACanvas.FillRectangle(0, 0, bs, h, baseColor);
   //ACanvas.FillRectangle(w - bs, 0, bs, h, baseColor);
@@ -1393,8 +1376,8 @@ begin
   //* (keeps tracking the cursor while dragging a sizable border) until release.
   RayLib.SetMouseCursor(Ord(MOUSE_CURSOR_DEFAULT));
   mp := TVector2(RayLib.GetMousePosition);
-  mx := Round(mp.X);
-  my := Round(mp.Y);
+  mx := Integer(mp.X);
+  my := Integer(mp.Y);
 
   if FControlCapture <> nil then
   begin

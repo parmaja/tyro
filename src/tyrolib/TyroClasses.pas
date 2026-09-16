@@ -207,13 +207,13 @@ type
     FLastX, FLastY: Integer;
     FPenColor: TColor;
     FBackColor: TColor;
-    FPenWidth: Integer;
+    FPenSize: Integer;
     FWidth, FHeight: Integer;
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
     procedure SetHeight(AValue: Integer);
     procedure SetPenColor(AValue: TColor);
-    procedure SetPenWidth(AValue: Integer);
+    procedure SetPenSize(AValue: Integer);
     procedure SetWidth(AValue: Integer);
     procedure SetBackColor(const Value: TColor);
   public
@@ -238,6 +238,7 @@ type
 
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
     procedure FillRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor); overload;
+    procedure FillRectangle(Rect: TRect; Color: TColor); overload;
     procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor; Fill: Boolean); overload;
@@ -246,6 +247,10 @@ type
     procedure FillRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor); overload;
     procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
+    //Only outline
+    procedure DrawRect(ARectangle: TRect; Size: Integer; Color: TColor); overload;
+    procedure BeginClip(ARectangle: TRect);
+    procedure EndClip;
 
     procedure Clear;
     procedure ClearBackground(const AColor: TColor); virtual;
@@ -261,7 +266,7 @@ type
     function GetEffectArea: TRectangle; virtual;
 
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
-    property PenWidth: Integer read FPenWidth write SetPenWidth;
+    property PenSize: Integer read FPenSize write SetPenSize;
     property PenColor: TColor read FPenColor write SetPenColor;
     property BackColor: TColor read FBackColor write SetBackColor;
     property Width: Integer read FWidth write SetWidth;
@@ -491,11 +496,11 @@ begin
   FPenColor := AValue;
 end;
 
-procedure TTyroCanvas.SetPenWidth(AValue: Integer);
+procedure TTyroCanvas.SetPenSize(AValue: Integer);
 begin
-  if FPenWidth =AValue then
+  if FPenSize =AValue then
     Exit;
-  FPenWidth :=AValue;
+  FPenSize :=AValue;
 end;
 
 function TTyroCanvas.GetPenAlpha: Byte;
@@ -519,7 +524,7 @@ begin
   inherited Create;
   FWidth := AWidth;
   FHeight := AHeight;
-  FPenWidth := 1;
+  FPenSize := 1;
   FPenColor := clBlack;
   //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
   //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
@@ -571,14 +576,14 @@ procedure TTyroCanvas.DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHe
 begin
   if Fill then
     RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color);
-  RayLib.DrawRectangleLinesEx(RectangleOf(X + FOriginX, Y + FOriginY, AWidth, AHeight), PenWidth, Color);
+  RayLib.DrawRectangleLinesEx(RectangleOf(X + FOriginX, Y + FOriginY, AWidth, AHeight), PenSize, Color);
   FLastX := X + AWidth;
   FLastY := Y + AHeight;
 end;
 
 procedure TTyroCanvas.DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean);
 begin
-  DrawRectangle(ARectangle.Left, ARectangle.Top, ARectangle.Right - ARectangle.Left, ARectangle.Bottom - ARectangle.Top, Color, Fill);
+  DrawRectangle(ARectangle.Left, ARectangle.Top, ARectangle.Width, ARectangle.Height, Color, Fill);
 end;
 
 procedure TTyroCanvas.DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
@@ -591,12 +596,29 @@ begin
   DrawRect(ARectangle.Left, ARectangle.Top, ARectangle.Right, ARectangle.Bottom, Color, Fill);
 end;
 
+procedure TTyroCanvas.DrawRect(ARectangle: TRect; Size: Integer; Color: TColor);
+begin
+  RayLib.DrawRectangleLinesEx(RectangleOf(ARectangle.Left + FOriginX, ARectangle.Top + FOriginY, ARectangle.Width-Size, ARectangle.Height-Size), Size, Color);
+  FLastX := FOriginX + ARectangle.Right;
+  FLastY := FOriginY + ARectangle.Bottom;
+end;
+
+procedure TTyroCanvas.BeginClip(ARectangle: TRect);
+begin
+  BeginScissorMode(ARectangle.Left + FOriginX, ARectangle.Top + FOriginY, ARectangle.Width, ARectangle.Height);
+end;
+
+procedure TTyroCanvas.EndClip;
+begin
+  EndScissorMode;
+end;
+
 procedure TTyroCanvas.DrawRectangle(ARectangle: TRectangle; Color: TColor; Fill: Boolean);
 begin
   if Fill then
     RayLib.DrawRectangleRec(ARectangle, Color);
 
-  RayLib.DrawRectangleLinesEx(ARectangle, PenWidth, Color);
+  RayLib.DrawRectangleLinesEx(ARectangle, PenSize, Color);
 end;
 
 procedure TTyroCanvas.FillRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor);
@@ -629,7 +651,7 @@ end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
 begin
-  RayLib.DrawLineEx(Vector2Of(X1 + FOriginX, Y1 + FOriginY), Vector2Of(X2 + FOriginX, Y2 + FOriginY), PenWidth, Color);
+  RayLib.DrawLineEx(Vector2Of(X1 + FOriginX, Y1 + FOriginY), Vector2Of(X2 + FOriginX, Y2 + FOriginY), PenSize, Color);
   FLastX := X2;
   FLastY := Y2;
 end;
@@ -646,7 +668,7 @@ end;
 
 procedure TTyroCanvas.DrawLineF(X1, Y1, X2, Y2: Single; Color: TColor);
 begin
-  DrawLineEx(TVector2.Create(X1 + FOriginX, Y1 + FOriginY), TVector2.Create(X2 + FOriginX, Y2 + FOriginY), PenWidth, Color);
+  DrawLineEx(TVector2.Create(X1 + FOriginX, Y1 + FOriginY), TVector2.Create(X2 + FOriginX, Y2 + FOriginY), PenSize, Color);
 end;
 
 procedure TTyroCanvas.DrawLineTo(X2, Y2: Integer; Color: TColor);
@@ -657,8 +679,15 @@ end;
 procedure TTyroCanvas.FillRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor);
 begin
   RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color);
-  FLastX := X + AWidth;
-  FLastY := Y + AHeight;
+  FLastX := FOriginX + X + AWidth;
+  FLastY := FOriginY + Y + AHeight;
+end;
+
+procedure TTyroCanvas.FillRectangle(Rect: TRect; Color: TColor);
+begin
+  RayLib.DrawRectangle(Rect.Left + FOriginX, Rect.Top + FOriginY, Rect.Width, Rect.Height, Color);
+  FLastX := FOriginX + Rect.Right;
+  FLastY := FOriginY + Rect.Bottom;
 end;
 
 procedure TTyroCanvas.PostDraw(AX: Integer = 0; AY: Integer = 0);

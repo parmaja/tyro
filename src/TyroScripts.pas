@@ -342,7 +342,6 @@ type
     destructor Destroy; override;
     procedure Stop; virtual;
     procedure Start; virtual;
-    procedure Terminate;
     procedure LoadFile(FileName: string); overload;
     property Path: string read FPath write FPath;
     property FileName: string read FFileName write FFileName;
@@ -364,7 +363,6 @@ type
     procedure Execute; override;
     constructor Create(AScript: TTyroScript); virtual;
     destructor Destroy; override;
-    procedure Stop;
     property Started: Boolean read FStarted;
     property Active: Boolean read GetActive;
     property Script: TTyroScript read FScript;
@@ -426,11 +424,6 @@ destructor TTyroScriptThread.Destroy;
 begin
   FreeAndNil(Script);
   inherited Destroy;
-end;
-
-procedure TTyroScriptThread.Stop;
-begin
-  Terminate;
 end;
 
 { TScriptType }
@@ -1019,11 +1012,6 @@ begin
   Run;
   AfterRun;
   FActive := False;
-end;
-
-procedure TTyroScript.Terminate;
-begin
-  Stop;
 end;
 
 procedure TTyroScript.LoadFile(FileName: string);

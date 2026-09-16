@@ -295,7 +295,7 @@ function TyroEditor.GetVisibleLines: Integer;
 var
   h: Integer;
 begin
-  h := ClientHeight - GetStatusHeight - FCharHeight;
+  h := ClientRect.Height - GetStatusHeight - FCharHeight;
   if h < FCharHeight then
     h := FCharHeight;
   Result := h div FCharHeight;
@@ -448,7 +448,7 @@ begin
     FTopLine := FCaretLine - visible + 1;
   if FTopLine < 0 then
     FTopLine := 0;
-  cols := (ClientWidth - GetGutterWidth) div FCharWidth;
+  cols := (ClientRect.Width - GetGutterWidth) div FCharWidth;
   if cols < 1 then
     cols := 1;
   if FCaretCol < FLeftCol then
@@ -1191,7 +1191,7 @@ begin
   if (ALine < 0) or (ALine >= FLines.Count) then
     Exit;
   textStart := aGutterWidth;
-  cols := (ClientWidth - textStart) div FCharWidth;
+  cols := (ClientRect.Width - textStart) div FCharWidth;
   if cols < 1 then
     cols := 1;
 
@@ -1246,8 +1246,8 @@ begin
       if x1 < textStart then
         x1 := textStart;
       x2 := textStart + (SelTo - FLeftCol) * FCharWidth;
-      if x2 > ClientWidth then
-        x2 := ClientWidth;
+      if x2 > ClientRect.Width then
+        x2 := ClientRect.Width;
       if x2 > x1 then
       begin
         ACanvas.DrawRectangle(x1, aY, x2 - x1, FCharHeight, clDarkGray, True);
@@ -1276,8 +1276,8 @@ var
   sbY: Integer;
   rx2, tx2: string;
 begin
-  sbY := ClientHeight - GetStatusHeight;
-  ACanvas.DrawRectangle(0, sbY, ClientWidth, GetStatusHeight, clBlack, True);
+  sbY := ClientRect.Height - GetStatusHeight;
+  ACanvas.DrawRectangle(0, sbY, ClientRect.Width, GetStatusHeight, clBlack, True);
   tx := ' ' + FFileName;
   if FModified then
     tx := tx + ' *';
@@ -1286,7 +1286,7 @@ begin
   ACanvas.DrawText(0, sbY, tx, clLightgray);
 
   rx := Format('Ln %d, Col %d   [F2/Esc: close]', [FCaretLine + 1, FCaretCol + 1]);
-  ACanvas.DrawText(ClientWidth - UTF8Length(rx) * FCharWidth, sbY, rx, clLightgray);
+  ACanvas.DrawText(ClientRect.Width - UTF8Length(rx) * FCharWidth, sbY, rx, clLightgray);
 end;
 
 procedure TyroEditor.DrawCaret(ACanvas: TTyroCanvas);
@@ -1299,13 +1299,13 @@ begin
   if FCaretLine < FTopLine then
     Exit;
   y := (FCaretLine - FTopLine) * FCharHeight;
-  if y + FCharHeight > ClientHeight - GetStatusHeight then
+  if y + FCharHeight > ClientRect.Height - GetStatusHeight then
     Exit;
   px := ColToPixel(FCaretLine, FCaretCol) - FLeftCol * FCharWidth;
   x := GetGutterWidth + px;
   if x < GetGutterWidth then
     x := GetGutterWidth;
-  if x >= ClientWidth then
+  if x >= ClientRect.Width then
     Exit;
   col := clWhite.ReplaceAlpha(Round(255 * FCaretDim));
   ACanvas.DrawRectangle(x, y, 2, FCharHeight, col, True);
@@ -1331,14 +1331,14 @@ begin
   if (FCaretLine >= FTopLine) and (FCaretLine < FLines.Count) then
   begin
     Y := (FCaretLine - FTopLine) * FCharHeight;
-    if Y + FCharHeight <= ClientHeight - GetStatusHeight then
-      ACanvas.DrawRectangle(0, Y, ClientWidth, FCharHeight, TColor.CreateRGBA(cEditorCaretLineColor), True);
+    if Y + FCharHeight <= ClientRect.Height - GetStatusHeight then
+      ACanvas.DrawRectangle(0, Y, ClientRect.Width, FCharHeight, TColor.CreateRGBA(cEditorCaretLineColor), True);
   end;
 
   Y := 0;
   for I := FTopLine to FLines.Count - 1 do
   begin
-    if Y + FCharHeight > ClientHeight - GetStatusHeight then
+    if Y + FCharHeight > ClientRect.Height - GetStatusHeight then
       Break;
     DrawLine(ACanvas, I, Y, gW);
     Inc(Y, FCharHeight);
@@ -1367,11 +1367,11 @@ begin
     UpdateKeyRepeat;
 
     mp := RayLib.GetMousePosition;
-    lx := Round(mp.X) - WindowRect.Left - ClientLeft;
-    ly := Round(mp.Y) - WindowRect.Top - ClientTop;
+    lx := Round(mp.X) - WindowRect.Left - ClientRect.Left;
+    ly := Round(mp.Y) - WindowRect.Top - ClientRect.Top;
     if RayLib.IsMouseButtonPressed(MOUSE_BUTTON_LEFT) then
     begin
-      if (lx >= 0) and (ly >= 0) and (lx < ClientWidth) and (ly < ClientHeight) then
+      if (lx >= 0) and (ly >= 0) and (lx < ClientRect.Width) and (ly < ClientRect.Height) then
       begin
         PlaceCaretAt(lx, ly);
         FAnchorLine := FCaretLine;
@@ -1383,7 +1383,7 @@ begin
     end;
     if FMouseDown and RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT) then
     begin
-      if (lx >= 0) and (ly >= 0) and (lx < ClientWidth) and (ly < ClientHeight) then
+      if (lx >= 0) and (ly >= 0) and (lx < ClientRect.Width) and (ly < ClientRect.Height) then
       begin
         PlaceCaretAt(lx, ly);
         FSelecting := True;

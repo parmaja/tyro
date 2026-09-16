@@ -282,6 +282,7 @@ type
     Shader: TLuaShader;
     procedure DoError(S: string);
     procedure Run; override;
+    procedure Stop; override;
   protected
 
     //input & timing
@@ -1006,6 +1007,12 @@ begin
   //Sleep(1000);
   if not Lua.State.RunString(ScriptText.Text, Msg) then
     DoError(Msg);
+end;
+
+procedure TLuaScript.Stop;
+begin
+  inherited;
+  //TODO
 end;
 
 procedure TLuaScript.AddQueueObject(AQueueObject: TQueueObject);
