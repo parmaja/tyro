@@ -343,6 +343,11 @@ type
     procedure Stop; virtual;
     procedure Start; virtual;
     procedure LoadFile(FileName: string); overload;
+
+    //Execute a single line of source on the persistent script state so globals
+    //(e.g. x = 5) survive across lines; used by the console REPL. AOutput is
+    //the error message when Result = False.
+    function RunLine(const ALine: string; out AOutput: string): Boolean; virtual;
     property Path: string read FPath write FPath;
     property FileName: string read FFileName write FFileName;
     property Active: Boolean read GetActive;
@@ -1019,6 +1024,12 @@ begin
   ScriptText.LoadFromFile(FileName);
   Path := ExtractFilePath(FileName);
   FileName := ExtractFileName(FileName);
+end;
+
+function TTyroScript.RunLine(const ALine: string; out AOutput: string): Boolean;
+begin
+  Result := False;
+  AOutput := '';
 end;
 
 end.

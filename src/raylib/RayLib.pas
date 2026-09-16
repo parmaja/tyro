@@ -190,6 +190,7 @@ const
   clLightgray: TRGBAColor = (Red: 200; Green: 200; Blue: 200; Alpha: 255);   // Light Gray
   clGray:      TRGBAColor = (Red: 130; Green: 130; Blue: 130; Alpha: 255);   // Gray
   clDarkGray:  TRGBAColor = (Red: 80; Green: 80; Blue: 80; Alpha: 255);      // Dark Gray
+  clNearBlack: TRGBAColor = (Red: 10; Green: 10; Blue: 10; Alpha: 255);      // Near Black
   clYellow:    TRGBAColor = (Red: 253; Green: 249; Blue: 0; Alpha: 255);     // Yellow
   clGold:      TRGBAColor = (Red: 255; Green: 203; Blue: 0; Alpha: 255);     // Gold
   clOrange:    TRGBAColor = (Red: 255; Green: 161; Blue: 0; Alpha: 255);     // Orange

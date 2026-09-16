@@ -68,26 +68,21 @@ type
   TTyroTerminal = class(TTyroControl)
   private
     FLines: TStringList;              // output/history lines (newest at the end)
-    FLineColors: array of TColor;     // foreground color per line (parallel to FLines)
     FCharWidth: Integer;
     FCharHeight: Integer;
-    FCurrentColor: TColor;
-    FCurrentBackground: TColor;
+    FTextColor: TColor;               // normal text (output lines, input line, caret)
+    FHighlightColor: TColor;          // builtin command word + prompt
+    FSelectionColor: TColor;          // selection background (selected text is inverted)
     FMaxLines: Integer;
     FScrollBack: Integer;             // 0 = stick to bottom, >0 = lines scrolled up
 
     FInputOn: Boolean;                // true when we accept a command line
     FPrompt: string;
-    FPromptColor: TColor;
     FInputBuffer: string;             // the current command line (UTF-8)
     FInputPos: Integer;               // caret position in codepoints
     FInputScroll: Integer;            // first visible codepoint of the input line
     FInputSelStart: Integer;          // -1 = no selection
     FInputSelEnd: Integer;
-    FInputColor: TColor;
-    FInputBackground: TColor;
-    FInputSelColor: TColor;
-    FInputSelBackGround: TColor;
     FPasswordMode: Boolean;
     FPasswordChar: TUTF8Char;
 
@@ -99,7 +94,6 @@ type
     FCaretTimer: Double;
     FCaretDim: Double;
     FCaretVisible: Boolean;
-    FCaretColor: TColor;
 
     FOnInput: EOnTerminalInput;
     FOnInputChange: EOnTerminalInputChange;
@@ -122,7 +116,7 @@ type
     function CharAtPixel(AX: Integer): Integer;
     procedure UpdateInputScroll;
 
-    procedure AddLine(const ALine: string; AColor: TColor);
+    procedure AddLine(const ALine: string);
     procedure AppendText(const S: string);
     procedure TrimLines;
     procedure ClampScroll;
@@ -163,22 +157,20 @@ type
     procedure Clear;
     procedure Write(s: string);
     procedure Writeln(s: string);
-    procedure TextColor(C: TColor);
-    procedure TextBackground(C: TColor);
-    procedure TextColors(FC, BC: TColor);
 
-    procedure StartRead(DFC, DBC: TColor; const Desc: string; IFC, IBC: TColor); overload;
-    procedure StartRead; overload;
+    procedure StartRead(const Desc: string);
     procedure StopRead;
     procedure SaveToFile(AFileName: string);
 
+    { All colors are control properties; code only reads these }
+    property TextColor: TColor read FTextColor write FTextColor;
+    property HighlightColor: TColor read FHighlightColor write FHighlightColor;
+    property SelectionColor: TColor read FSelectionColor write FSelectionColor;
     property CharWidth: Integer read FCharWidth write FCharWidth;
     property CharHeight: Integer read FCharHeight write FCharHeight;
     property MaxLines: Integer read FMaxLines write FMaxLines;
 
-    property CaretColor: TColor read FCaretColor write FCaretColor;
     property CaretVisible: Boolean read FCaretVisible write SetCaretVisible;
-    property PromptColor: TColor read FPromptColor write FPromptColor;
     property PasswordChar: TUTF8Char read FPasswordChar write FPasswordChar;
 
     property OnInput: EOnTerminalInput read FOnInput write FOnInput;
@@ -262,23 +254,19 @@ begin
   FCharWidth := CDefaultCharWidth;
   FCharHeight := CDefaultCharHeight;
   FMaxLines := CDefaultLineCount;
-  FCurrentColor := clLightGray;
-  FCurrentBackground := clBlack;
+  FTextColor := clLightGray;
+  FHighlightColor := clYellow;
+  FSelectionColor := clWhite;
   FScrollBack := 0;
 
   FLines := TStringList.Create;
 
   FPrompt := '';
-  FPromptColor := clYellow;
   FInputBuffer := '';
   FInputPos := 0;
   FInputScroll := 0;
   FInputSelStart := -1;
   FInputSelEnd := -1;
-  FInputColor := clLightGray;
-  FInputBackground := clBlack;
-  FInputSelColor := clBlue;
-  FInputSelBackGround := clWhite;
   FPasswordMode := False;
   FPasswordChar := '*';
 
@@ -294,7 +282,6 @@ begin
   FCaretTimer := 0;
   FCaretDim := 1;
   FCaretVisible := True;
-  FCaretColor := clWhite;
 
   FSelActive := False;
   FMouseButtonDown := False;
@@ -390,7 +377,7 @@ var
   Leading, Word, Rest: string;
   L: Integer;
 begin
-  SetLength(ARuns, 0);
+  ARuns := nil;
   if FPasswordMode then
   begin
     L := CPCount(FInputBuffer);
@@ -399,7 +386,7 @@ begin
       SetLength(ARuns, 1);
       ARuns[0].Start := 0;
       ARuns[0].Count := L;
-      ARuns[0].Color := FInputColor;
+      ARuns[0].Color := FTextColor;
     end;
     Exit;
   end;
@@ -411,7 +398,7 @@ begin
     SetLength(ARuns, Length(ARuns) + 1);
     ARuns[High(ARuns)].Start := 0;
     ARuns[High(ARuns)].Count := CPCount(Leading);
-    ARuns[High(ARuns)].Color := FInputColor;
+    ARuns[High(ARuns)].Color := FTextColor;
   end;
   if Word <> '' then
   begin
@@ -419,16 +406,16 @@ begin
     ARuns[High(ARuns)].Start := CPCount(Leading);
     ARuns[High(ARuns)].Count := CPCount(Word);
     if IsCommandName(Word) then
-      ARuns[High(ARuns)].Color := clYellow
+      ARuns[High(ARuns)].Color := FHighlightColor
     else
-      ARuns[High(ARuns)].Color := FInputColor;
+      ARuns[High(ARuns)].Color := FTextColor;
   end;
   if Rest <> '' then
   begin
     SetLength(ARuns, Length(ARuns) + 1);
     ARuns[High(ARuns)].Start := CPCount(Leading) + CPCount(Word);
     ARuns[High(ARuns)].Count := CPCount(Rest);
-    ARuns[High(ARuns)].Color := FInputColor;
+    ARuns[High(ARuns)].Color := FTextColor;
   end;
 end;
 
@@ -470,11 +457,9 @@ begin
     FInputScroll := 0;
 end;
 
-procedure TTyroTerminal.AddLine(const ALine: string; AColor: TColor);
+procedure TTyroTerminal.AddLine(const ALine: string);
 begin
   FLines.Add(ALine);
-  SetLength(FLineColors, Length(FLineColors) + 1);
-  FLineColors[High(FLineColors)] := AColor;
 end;
 
 procedure TTyroTerminal.AppendText(const S: string);
@@ -484,7 +469,7 @@ begin
   if S = '' then
     Exit;
   if FLines.Count = 0 then
-    AddLine('', FCurrentColor);
+    AddLine('');
   P := 1;
   while P <= Length(S) do
   begin
@@ -496,7 +481,7 @@ begin
       end;
       #10:
       begin
-        AddLine('', FCurrentColor);
+        AddLine('');
       end;
       #9:
       begin
@@ -510,17 +495,12 @@ begin
     end;
     Inc(P, l);
   end;
-  FLineColors[High(FLineColors)] := FCurrentColor;
 end;
 
 procedure TTyroTerminal.TrimLines;
 begin
   while FLines.Count > FMaxLines do
-  begin
     FLines.Delete(0);
-    if Length(FLineColors) > 0 then
-      System.Delete(FLineColors, 0, 1);
-  end;
 end;
 
 procedure TTyroTerminal.ClampScroll;
@@ -543,7 +523,6 @@ end;
 procedure TTyroTerminal.Clear;
 begin
   FLines.Clear;
-  SetLength(FLineColors, 0);
   FScrollBack := 0;
   FInputBuffer := '';
   FInputPos := 0;
@@ -566,31 +545,9 @@ begin
   Write(#10);
 end;
 
-procedure TTyroTerminal.TextColor(C: TColor);
-begin
-  FCurrentColor := C;
-end;
-
-procedure TTyroTerminal.TextBackground(C: TColor);
-begin
-  FCurrentBackground := C;
-end;
-
-procedure TTyroTerminal.TextColors(FC, BC: TColor);
-begin
-  FCurrentColor := FC;
-  FCurrentBackground := BC;
-end;
-
-procedure TTyroTerminal.StartRead(DFC, DBC: TColor; const Desc: string; IFC, IBC: TColor);
+procedure TTyroTerminal.StartRead(const Desc: string);
 begin
   FPrompt := Desc;
-  if DFC = clBlack then
-    FPromptColor := clYellow
-  else
-    FPromptColor := DFC;
-  FInputColor := IFC;
-  FInputBackground := IBC;
   FInputBuffer := '';
   FInputPos := 0;
   FInputScroll := 0;
@@ -598,11 +555,6 @@ begin
   FInputOn := True;
   FHistoryPos := -1;
   Invalidate;
-end;
-
-procedure TTyroTerminal.StartRead;
-begin
-  StartRead(clBlack, clBlack, '>', clLightGray, clBlack);
 end;
 
 procedure TTyroTerminal.StopRead;
@@ -1088,9 +1040,7 @@ begin
   if (ALine < 0) or (ALine >= FLines.Count) then
     Exit;
   S := FLines[ALine];
-  c := clLightGray;
-  if ALine < Length(FLineColors) then
-    c := FLineColors[ALine];
+  c := FTextColor;
 
   selStart := -1;
   selEnd := -1;
@@ -1132,9 +1082,9 @@ begin
     Suffix := CPSub(S, selEnd, L - selEnd);
     if Prefix <> '' then
       ACanvas.DrawText(0, AY, Prefix, c);
-    ACanvas.DrawRectangle(selStart * FCharWidth, AY, (selEnd - selStart) * FCharWidth, FCharHeight, FInputSelBackGround, True);
+    ACanvas.DrawRectangle(selStart * FCharWidth, AY, (selEnd - selStart) * FCharWidth, FCharHeight, FSelectionColor, True);
     if SelText <> '' then
-      ACanvas.DrawText(selStart * FCharWidth, AY, SelText, FInputSelColor);
+      ACanvas.DrawText(selStart * FCharWidth, AY, SelText, BackColor);
     if Suffix <> '' then
       ACanvas.DrawText(selEnd * FCharWidth, AY, Suffix, c);
   end
@@ -1150,7 +1100,7 @@ var
   x: Integer;
   Sc, sE: Integer;
 begin
-  ACanvas.DrawRectangle(0, AY, ClientRect.Width, FCharHeight, FInputBackground, True);
+  ACanvas.DrawRectangle(0, AY, ClientRect.Width, FCharHeight, BackColor, True);
   if (ClientRect.Width <= 0) or (FCharWidth <= 0) then
     Exit;
 
@@ -1160,7 +1110,7 @@ begin
     disp := FPrompt;
     if CPSub(disp, CPCount(disp) - 1, 1) <> ' ' then
       disp := disp + ' ';
-    ACanvas.DrawText(0, AY, disp, FPromptColor);
+    ACanvas.DrawText(0, AY, disp, FHighlightColor);
     promptX := CPCount(disp) * FCharWidth;
   end;
 
@@ -1211,11 +1161,11 @@ begin
     if sE > Sc then
     begin
       x := promptX + (Sc - FInputScroll) * FCharWidth;
-      ACanvas.DrawRectangle(x, AY, (sE - Sc) * FCharWidth, FCharHeight, FInputSelBackGround, True);
+      ACanvas.DrawRectangle(x, AY, (sE - Sc) * FCharWidth, FCharHeight, FSelectionColor, True);
       if FPasswordMode then
-        ACanvas.DrawText(x, AY, StringOfChar(Char(FPasswordChar[1]), sE - Sc), FInputSelColor)
+        ACanvas.DrawText(x, AY, StringOfChar(Char(FPasswordChar[1]), sE - Sc), BackColor)
       else
-        ACanvas.DrawText(x, AY, CPSub(FInputBuffer, Sc, sE - Sc), FInputSelColor);
+        ACanvas.DrawText(x, AY, CPSub(FInputBuffer, Sc, sE - Sc), BackColor);
     end;
   end;
 end;
@@ -1234,7 +1184,7 @@ begin
     x := 0;
   if x >= ClientRect.Width then
     Exit;
-  col := FCaretColor.SetAlpha(Round(FCaretColor.RGBA.Alpha * FCaretDim));
+  col := FTextColor.SetAlpha(Round(FTextColor.RGBA.Alpha * FCaretDim));
   ACanvas.FillRect(x, AY, x + 2, AY + FCharHeight, col);
 end;
 

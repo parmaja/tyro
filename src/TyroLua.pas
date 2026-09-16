@@ -283,6 +283,7 @@ type
     procedure DoError(S: string);
     procedure Run; override;
     procedure Stop; override;
+    function RunLine(const ALine: string; out AOutput: string): Boolean; override;
   protected
 
     //input & timing
@@ -1015,6 +1016,71 @@ begin
   //LuaStatus >= luaTerminated, and RunString returns on the next hook tick
   LuaSetTerminated;
   inherited;
+end;
+
+// Runs a single console line on the persistent Lua state (same globals as the
+// main script), so assignments like "x = 5" stay alive for later lines. Any
+// return values are echoed to the terminal (REPL style); syntax/runtime errors
+// are reported through AOutput.
+function TLuaScript.RunLine(const ALine: string; out AOutput: string): Boolean;
+var
+  n: Integer;
+  p: PUTF8Char;
+  S, Msg, AChunk: string;
+
+  //pcall the chunk already loaded on the stack and echo any return values
+  //(REPL style); runtime errors are reported through AOutput
+  procedure RunChunk;
+  var
+    i: Integer;
+  begin
+    if lua_pcall(Lua.State, 0, LUA_MULTRET, 0) = LUA_OK then
+    begin
+      Result := True;
+      n := lua_gettop(Lua.State);
+      S := '';
+      for i := 1 to n do
+      begin
+        if i > 1 then
+          S := S + #9;
+        p := luaL_tolstring(Lua.State, 1, nil);
+        S := S + PUTF8Char(p);
+        lua_pop(Lua.State, 2); //the converted string and the returned value
+      end;
+      if S <> '' then
+        Main.Console.Writeln(S);
+    end
+    else
+    begin
+      AOutput := lua_tostring(Lua.State, -1);
+      lua_pop(Lua.State, 1);
+    end;
+  end;
+
+begin
+  Result := False;
+  AOutput := '';
+  if Lua.State = nil then
+    Exit;
+  //a previous Stop() left the shared status as terminated and the count hook
+  //would abort this line; the console line opens its own fresh execution
+  LuaSetReady;
+  AChunk := ALine;
+  if luaL_loadstring(Lua.State, PUTF8Char(AChunk)) = 0 then
+    RunChunk
+  else
+  begin
+    Msg := lua_tostring(Lua.State, -1);
+    lua_pop(Lua.State, 1);
+    //bare expression ("x", "1 + 1"): retry as "return ..." so it prints a value
+    if luaL_loadstring(Lua.State, PUTF8Char('return ' + AChunk)) = 0 then
+      RunChunk
+    else
+    begin
+      lua_pop(Lua.State, 1);
+      AOutput := Msg; //genuine syntax error: report the first one
+    end;
+  end;
 end;
 
 procedure TLuaScript.AddQueueObject(AQueueObject: TQueueObject);

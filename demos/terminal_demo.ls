@@ -15,7 +15,7 @@
 -- The console starts hidden. Show it with a 60x20 character grid.
 console.show(60, 20)
 
-print("Welcome to Tyro Terminal!")
+println("Welcome to Tyro Terminal!")
 println("Type 'help' for available commands, or 'dir' to list files.")
 println("Type 'exit' to quit.")
 println("")

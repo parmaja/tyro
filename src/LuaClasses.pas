@@ -155,6 +155,7 @@ type
   end;
 
 procedure LuaSetTerminated;
+procedure LuaSetReady;
 
 implementation
 
@@ -325,6 +326,11 @@ var
 procedure LuaSetTerminated;
 begin
   LuaStatus := luaTerminated;
+end;
+
+procedure LuaSetReady;
+begin
+  LuaStatus := luaReady;
 end;
 
 procedure HookCount(L: Plua_State; ar: Plua_Debug); cdecl;

@@ -100,6 +100,10 @@ type
     Commands: TConsoleCommands;
     procedure ConsoleInput(AConsole: TTyroTerminal; AInput: string);
     procedure ExecuteCommand(ACommand: string);
+    //If the word typed is not a builtin command it is treated as a one line
+    //Lua script run on FScriptMain's Lua state, so variables assigned in the
+    //console survive across lines (and are shared with the main script).
+    function RunLuaLine(const ALine: string): Boolean;
     procedure RegisterCommands;
   public
     procedure StartConsoleRead;
@@ -314,7 +318,10 @@ begin
   Console := TTyroTerminal.Create(Self);
   Console.BoundsRect := Rect(Margin, Margin , 100, 200);
   Console.Border:= brdSizable;
-  Console.BackColor := clDarkGray;
+  Console.BackColor := clNearBlack;
+  Console.TextColor := clLightGray;
+  Console.HighlightColor := clBlue;
+  Console.SelectionColor := clWhite;
   Console.Visible := False;
   Console.Focused := True;
   Console.Visible := False;
@@ -700,10 +707,12 @@ end;
 procedure TTyroMain.ExecuteCommand(ACommand: string);
 var
   Params: TStringList;
+  OriginalLine: string;
 begin
   ACommand := Trim(ACommand);
   if ACommand <> '' then
   begin
+    OriginalLine := ACommand;
     Params := TStringList.Create;
     ParseArguments(ACommand, Params, ['-', '/']);
     if (Params.Count>0) then
@@ -713,13 +722,55 @@ begin
 //          Write(#8);
       if not Commands.Execute(ACommand, Params) then
       begin
-        Console.Writeln('Unknown command: ' + ACommand);
-        Console.Writeln('Type "help" for available commands.');
-        Console.Writeln('');
+        if not RunLuaLine(OriginalLine) then
+        begin
+          Console.Writeln('Unknown command: ' + ACommand);
+          Console.Writeln('Type "help" for available commands.');
+          Console.Writeln('');
+        end;
       end;
     finally
       FreeAndNil(Params);
     end;
+  end;
+end;
+
+//Treat an unknown console line as a one line Lua script run on the main
+//script's Lua state (FScriptMain). A fresh Lua state is created on demand so
+//variables assigned in the console (e.g. x = 42) persist between lines.
+function TTyroMain.RunLuaLine(const ALine: string): Boolean;
+var
+  aScriptType: TScriptType;
+  Output: string;
+begin
+  Result := False;
+  Output := '';
+  if FScriptMain = nil then
+  begin
+    aScriptType := ScriptTypes.FindByExtension('.ls');
+    if aScriptType = nil then
+      aScriptType := ScriptTypes.FindByExtension('.lua');
+    if aScriptType = nil then
+    begin
+      Console.Writeln('No Lua environment available. Use "load <script>" first.');
+      Exit(True);
+    end;
+    FScriptMain := aScriptType.ScriptClass.Create;
+  end;
+
+  if FScriptMain.Started and FScriptMain.Active then
+  begin
+    Console.Writeln('The script is still running. Use "stop" first.');
+    Exit(True);
+  end;
+
+  if FScriptMain.RunLine(ALine, Output) then
+    Result := True
+  else if Output <> '' then
+  begin
+    Console.Writeln(Output);
+    Console.Writeln('');
+    Result := True; //handled: it was the Lua line that failed
   end;
 end;
 
@@ -750,14 +801,14 @@ begin
   // Clear any script callback so built-in commands are executed
   FReadCallback := nil;
   Console.OnInput := ConsoleInput;
-  Console.StartRead(clBlack, clBlack, sPromptChar, clLightGray, clBlack);
+  Console.StartRead(sPromptChar);
 end;
 
 procedure TTyroMain.StartConsoleReadEx(ACallback: TConsoleReadEvent);
 begin
   FReadCallback := ACallback;
   Console.OnInput := ACallback;
-  Console.StartRead(clBlack, clBlack, sPromptChar, clLightGray, clBlack);
+  Console.StartRead(sPromptChar);
 end;
 
 procedure TTyroMain.Help_Command(Params: TStrings);
