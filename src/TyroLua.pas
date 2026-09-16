@@ -22,7 +22,8 @@ uses
   RayLib, RayClasses, //remove it
   mnUtils,
   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroPhysics,
-  TyroControls, TyroEngines, TyroInput;
+  TyroControls, TyroEngines, TyroInput,
+  TyroRadio;
 
 type
   TLuaScript = class;
@@ -154,6 +155,35 @@ type
     constructor Create(AScript: TLuaScript); override;
   end;
 
+  { TLuaRadio }
+
+  TLuaRadio = class(TTyroLuaObject)
+  protected
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
+  public
+    function Play_func(L: Plua_State): integer; cdecl;
+    function Pause_func(L: Plua_State): integer; cdecl;
+    function Resume_func(L: Plua_State): integer; cdecl;
+    function Stop_func(L: Plua_State): integer; cdecl;
+  end;
+
+  { TRadioAction }
+
+  TRadioAction = (raPlay, raPause, raResume, raStop);
+
+  { Routes radio.play/pause/resume/stop into the main window thread (the same
+    one that drives RayUpdates.Update and the raylib audio device). }
+  TRadioPlayObject = class(TQueueObject)
+  private
+    FAction: TRadioAction;
+    FURL: string;
+  public
+    constructor Create(AAction: TRadioAction); overload;
+    constructor Create(AAction: TRadioAction; const AURL: string); overload;
+    procedure DoExecute; override;
+  end;
+
   { TLuaSprite }
 
   TLuaSprite = class(TTyroLuaObject)
@@ -274,6 +304,7 @@ type
     Colors: TLuaColors;
     Font: TLuaFont;
     Music: TLuaMusic;
+    Radio: TLuaRadio;
     Sprite: TLuaSprite;
     Sprites: TLuaSprites;
     Buttons: TLuaButtons;
@@ -883,6 +914,7 @@ begin
   Colors := TLuaColors.Create(Self);
   Font := TLuaFont.Create(Self);
   Music := TLuaMusic.Create(Self);
+  Radio := TLuaRadio.Create(Self);
   Sprite := TLuaSprite.Create(Self);
   Sprites := TLuaSprites.Create(Self);
   Buttons := TLuaButtons.Create(Self);
@@ -927,6 +959,14 @@ begin
   Lua.State.Register('music', 'sound', Music, @Music.Sound_func);
   Lua.State.Register('music', 'play', Music, @Music.Play_func);
   Lua.State.Register('music', 'mml', Music, @Music.MML_func);
+
+  //radio (radio.play(url), radio.pause(), radio.resume(), radio.stop()
+  // + getters: radio.title, radio.station, radio.state, radio.playing ...)
+  Lua.State.Register('radio', 'play', Radio, @Radio.Play_func);
+  Lua.State.Register('radio', 'pause', Radio, @Radio.Pause_func);
+  Lua.State.Register('radio', 'resume', Radio, @Radio.Resume_func);
+  Lua.State.Register('radio', 'stop', Radio, @Radio.Stop_func);
+  Lua.State.Register('radio', Radio); //Should be last one
 
   //input & timing (global functions)
   Lua.State.RegisterGlobal('iskeypressed', @IsKeyPressed_func);
@@ -1480,6 +1520,118 @@ begin
     Free;
   end;
   Result := 0;
+end;
+
+{ TLuaRadio }
+
+function TLuaRadio.Getter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  case field of
+    'title':
+    begin
+      L.PushString(RadioPlayer.Title);
+      Result := 1;
+    end;
+    'station':
+    begin
+      L.PushString(RadioPlayer.Station);
+      Result := 1;
+    end;
+    'genre':
+    begin
+      L.PushString(RadioPlayer.Genre);
+      Result := 1;
+    end;
+    'bitrate':
+    begin
+      L.PushString(RadioPlayer.Bitrate);
+      Result := 1;
+    end;
+    'url':
+    begin
+      L.PushString(RadioPlayer.URL);
+      Result := 1;
+    end;
+    'state':
+    begin
+      L.PushString(RadioPlayer.StateString);
+      Result := 1;
+    end;
+    'error':
+    begin
+      L.PushString(RadioPlayer.Error);
+      Result := 1;
+    end;
+    'playing':
+    begin
+      L.PushBoolean(RadioPlayer.Playing);
+      Result := 1;
+    end;
+    'buffered':
+    begin
+      L.PushInteger(RadioPlayer.Buffered);
+      Result := 1;
+    end;
+  end;
+end;
+
+function TLuaRadio.Setter(L: PLua_State): integer;
+begin
+  Result := 0;
+end;
+
+function TLuaRadio.Play_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.AddQueueObject(TRadioPlayObject.Create(raPlay, L.ToString(1)));
+  Result := 0;
+end;
+
+function TLuaRadio.Pause_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.AddQueueObject(TRadioPlayObject.Create(raPause));
+  Result := 0;
+end;
+
+function TLuaRadio.Resume_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.AddQueueObject(TRadioPlayObject.Create(raResume));
+  Result := 0;
+end;
+
+function TLuaRadio.Stop_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.AddQueueObject(TRadioPlayObject.Create(raStop));
+  Result := 0;
+end;
+
+{ TRadioPlayObject }
+
+constructor TRadioPlayObject.Create(AAction: TRadioAction);
+begin
+  inherited Create;
+  FAction := AAction;
+end;
+
+constructor TRadioPlayObject.Create(AAction: TRadioAction; const AURL: string);
+begin
+  Create(AAction);
+  FURL := AURL;
+end;
+
+procedure TRadioPlayObject.DoExecute;
+begin
+  if RadioPlayer = nil then
+    Exit;
+  case FAction of
+    raPlay: RadioPlayer.Play(FURL);
+    raPause: RadioPlayer.Pause;
+    raResume: RadioPlayer.Resume;
+    raStop: RadioPlayer.Stop;
+  end;
 end;
 
 function TLuaScript.IsKeyPressed_func(L: Plua_State): integer; cdecl;

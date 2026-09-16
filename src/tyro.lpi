@@ -61,6 +61,9 @@
         <PackageName Value="MiniLib"/>
       </Item>
       <Item>
+        <PackageName Value="MiniSockets"/>
+      </Item>
+      <Item>
         <PackageName Value="RayLibPkg"/>
       </Item>
       <Item>
@@ -94,6 +97,10 @@
       </Unit>
       <Unit>
         <Filename Value="tyrolib\TyroClasses.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="tyrolib\TyroRadio.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
