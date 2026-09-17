@@ -365,7 +365,7 @@ begin
       Inc(Start, FRingFrames);
     for i := 0 to cSpectrumFFTSize - 1 do
     begin
-      j := (Start + i) * 2;
+      j := ((Start + i) mod FRingFrames) * 2;
       FWindowL[i] := FRing[j];
       FWindowR[i] := FRing[j + 1];
     end;
