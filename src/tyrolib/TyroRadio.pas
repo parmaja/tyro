@@ -24,7 +24,7 @@ interface
 uses
   Classes, SysUtils,
   RayLib, RayClasses,
-  IceCastClients,
+  mnIceCasts,
   TyroSpectrum;
 
 type

@@ -75,7 +75,6 @@ type
 
   TTyroMain = class(TTyroMainWindow)
   private
-    //FBoard: TTyroImage;
     function GetActive: Boolean;
 
     procedure Help_Command(Params: TStrings);
@@ -113,7 +112,7 @@ type
     Running: Boolean;
     How: TRunHow;
     RunFile: string;//that to run in script
-Console: TTyroTerminal;
+    Console: TTyroTerminal;
     Output: TTyroOutput;
     Editor: TyroEditor;
     Graphic: TTyroCanvas;
@@ -138,16 +137,17 @@ Console: TTyroTerminal;
 
     procedure RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 
-     procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); override;
-     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
-     procedure ShowConsole; overload;
-     procedure HideConsole;
-     procedure ToggleConsole;
-     procedure ToggleOutput;
-     procedure ShowEditor;
-     procedure HideEditor;
-     procedure ToggleEditor;
-     procedure Resize(AWidth, AHeight: Integer); override;
+    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); override;
+    procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
+    procedure ShowConsole; overload;
+    procedure HideConsole;
+    procedure ToggleConsole;
+    procedure ToggleOutput;
+    procedure ShowEditor;
+    procedure HideEditor;
+    procedure ToggleEditor;
+
+    procedure Resize(AWidth, AHeight: Integer); override;
 
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
@@ -313,7 +313,6 @@ begin
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
-  //TTyroPanel.Create(Self);
 
   Console := TTyroTerminal.Create(Self);
   Console.BoundsRect := Rect(Margin, Margin , 100, 200);
@@ -329,20 +328,26 @@ begin
   Console.OnInput := ConsoleInput;
   Console.Margin:= 5;
   Console.Align:= alBottom;
+  Console.Name := 'Console';
+
   Output := TTyroOutput.Create(Self);
+  Output.Name := 'Output';
   Output.BoundsRect := Rect(Margin, Margin, 480, 240);
   Output.Visible := False;
+
   Editor := TyroEditor.Create(Self);
+  Editor.Name := 'Editor';
   Editor.BoundsRect := Rect(0, 0, 200, 200);
   Editor.Visible := False;
   Editor.OnClose := EditorClosed;
   Editor.OnSave := EditorSave;
+
   Sprites := TSprites.Create;
   Physics := TPhysics.Create(Sprites);
   Commands := TConsoleCommands.Create();
   RegisterCommands;
 
-  //TTyroPanel.Create(Self);
+  TTyroPanel.Create(Self);
 end;
 
 destructor TTyroMain.Destroy;
@@ -419,7 +424,6 @@ var
   ev: TCollisionEvent;
   AState: string;
 begin
-  inherited;
   try
     if Physics <> nil then
       Physics.Step(RayLib.GetFrameTime());
@@ -461,8 +465,10 @@ begin
       raise;
     end;
   end;
+  inherited;
+
   // Update console (handles caret blinking internally)
-  try
+{  try
     if Console <> nil then
       Console.Update;
   except
@@ -482,10 +488,10 @@ begin
       if IsConsole then WriteLn('EX-EDITOR: ' + E.ClassName + ': ' + E.Message);
       raise;
     end;
-  end;
+  end;   }
   ThreadSwitch; //Yield
-  {if not Active then
-    Terminate;}
+  if not Active then
+    Terminate;
 end;
 
 procedure TTyroMain.ProcessInput;

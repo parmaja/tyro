@@ -48,10 +48,11 @@ type
   private
     procedure DrawBar(ACanvas: TTyroCanvas; X, AWidth, AMaxHeight, ABaseY: Single; ABar: Integer; AChannel: Integer);
   protected
-    procedure DoPaintBorder(ACanvas: TTyroCanvas); override;
     procedure DoPaint(ACanvas: TTyroCanvas); override;
   public
     constructor Create(AParent: TTyroLayout); override;
+    destructor Destroy; override;
+    procedure PaintWindow(ACanvas: TTyroCanvas); override;
   end;
 
   { TTyroSpectrum }
@@ -120,23 +121,25 @@ implementation
 constructor TTyroSpectrumPanel.Create(AParent: TTyroLayout);
 begin
   inherited;
+  Name := 'Spectrum';
   Style := [csOpaque];
-  Border := brdSizable;
+  //Border := brdSizable;
   BackColor := clNearBlack;
-  BoundsRect := Rect(0, 0, 320, 160);
+  SetBoundsRect(Rect(0, 0, 500, 500));
 end;
 
-procedure TTyroSpectrumPanel.DoPaintBorder(ACanvas: TTyroCanvas);
-var
-  aRect: TRect;
+destructor TTyroSpectrumPanel.Destroy;
 begin
-  if Border = brdNone then
-    Exit;
-  aRect := Rect(0, 0, WindowRect.Width - 1, WindowRect.Height - 1);
-  ACanvas.DrawRect(aRect, BorderSize, clDarkGray);
+  inherited Destroy;
 end;
 
-procedure TTyroSpectrumPanel.DrawBar(ACanvas: TTyroCanvas; X, AWidth, AMaxHeight, ABaseY: Single; ABar, AChannel: Integer);
+procedure TTyroSpectrumPanel.PaintWindow(ACanvas: TTyroCanvas);
+begin
+  inherited PaintWindow(ACanvas);
+end;
+
+procedure TTyroSpectrumPanel.DrawBar(ACanvas: TTyroCanvas; X, AWidth,
+  AMaxHeight, ABaseY: Single; ABar: Integer; AChannel: Integer);
 var
   Level, Peak: Single;
   BarHeight, PeakY: Single;
@@ -473,7 +476,11 @@ end;
 procedure TTyroSpectrum.EnsurePanel;
 begin
   if FPanel = nil then
+  begin
     FPanel := TTyroSpectrumPanel.Create(Main);
+    FPanel.Show;
+    TTyroPanel.Create(Main);
+  end;
 end;
 
 procedure TTyroSpectrum.Show(ALeft, ATop, AWidth, AHeight: Integer);

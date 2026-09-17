@@ -151,7 +151,7 @@ type
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
 
-    procedure Update; //caret blink + mouse interaction (called from the main loop)
+    procedure Update; override; //caret blink + mouse interaction (called from the main loop)
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     procedure KeyPress(var Key: TUTF8Char); override;
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;

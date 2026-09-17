@@ -134,6 +134,7 @@ type
     procedure Realign; virtual;
     procedure AlignControls; virtual;
     property Controls: TTyroControls read FControls;
+    procedure Update; virtual;
     //WindowRect aligned rect, is Virtual changed by RealignControls of parent used paint control
     property WindowRect: TRect read FWindowRect;
     property State: TTyroLayoutStates read FState;
@@ -342,7 +343,7 @@ type
     //* After window initialized and other resource, load your resources here
     procedure Load; virtual;
     procedure Start; virtual;
-    procedure Update; virtual;
+    procedure Update; override;
     procedure PrepareDraw; virtual;
     procedure Draw; virtual;
 
@@ -609,8 +610,13 @@ begin
 end;
 
 procedure TTyroMainWindow.Update;
+var
+  Control: TTyroControl;
 begin
-
+  //for Control in Controls do
+  begin
+    //Control.
+  end;
 end;
 
 { TTyroLayout }
@@ -773,6 +779,10 @@ begin
         aControl.FState := aControl.FState - [lsAligning];
     end;
   end;
+end;
+
+procedure TTyroLayout.Update;
+begin
 end;
 
 { TTyroWindow }
