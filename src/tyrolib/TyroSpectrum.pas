@@ -116,6 +116,9 @@ var
 
 implementation
 
+uses
+  TyroEngines;
+
 { TTyroSpectrumPanel }
 
 constructor TTyroSpectrumPanel.Create(AParent: TTyroLayout);
@@ -479,7 +482,6 @@ begin
   begin
     FPanel := TTyroSpectrumPanel.Create(Main);
     FPanel.Show;
-    TTyroPanel.Create(Main);
   end;
 end;
 

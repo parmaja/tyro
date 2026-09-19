@@ -27,6 +27,10 @@ const
   sPromptChar: UTF8string = '>';
   sPromptDOT: UTF8string = '*';
 
+  cMainMargin = 32;
+  cDefaultWindowWidth = 640;
+  cDefaultWindowHeight = 480;
+
 var
   // Debug switch: when True, DBG messages are written to the console.
   // Off by default (globals are zero-initialized) to keep the output clean.
@@ -64,10 +68,21 @@ type
 
   { TTyroMain }
 
+  TTyroMainOption = (moWindow, moOpaque, moShowFPS);
+  TTyroMainOptions = set of TTyroMainOption;
+
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: string) of object;
 
-  TTyroMain = class(TTyroMainWindow)
+  TTyroMain = class(TTyroWindow)
   private
+    FFPS: Integer;
+    FOptions: TTyroMainOptions;
+    FBackColor: TColor;
+    //* The control which captured the mouse (e.g. dragging a sizable border).
+    //* It keeps receiving MouseMove/MouseUp until the left button is released.
+    FControlCapture: TTyroControl;
+    function GetCanvasWidth: Integer;
+    function GetCanvasHeight: Integer;
     function GetActive: Boolean;
 
     procedure Help_Command(Params: TStrings);
@@ -82,6 +97,14 @@ type
     procedure EditorClosed(Sender: TObject);
     procedure EditorSave(Sender: TObject);
     procedure ReloadAndRunScript;
+  protected
+    FTextureMode: Boolean;
+    IsTerminated: Boolean;
+    FCanvasLock: TCriticalSection;
+    Camera2D: TCamera2D;
+    function CreateCanvas: TTyroCanvas; override;
+    procedure Terminate;
+
   protected
     FQueue: TQueueObjects;
     FScriptThread: TTyroScriptThread;
@@ -98,8 +121,43 @@ type
     function RunLuaLine(const ALine: string): Boolean;
     procedure RegisterCommands;
   public
+    constructor Create(AParent: TTyroLayout); override;
+    constructor Create; reintroduce; overload;
+    destructor Destroy; override;
+
+    //* TextureMode create texture with canvas
+    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); overload;
+    procedure ShowWindow; overload;
+    procedure SetFPS(FPS: Integer); virtual;
+    procedure HideWindow; virtual;
+
+    //* Resize the window (and canvas) to the given size; canvas is inset by margin + border
+    procedure Resize(AWidth, AHeight: Integer); virtual;
+
+    //* Before Show window
+    procedure Init; virtual;
+    //* After window initialized and other resource, load your resources here
+    procedure Load; virtual;
+    procedure Start; virtual;
+    procedure Update; override;
+    procedure PrepareDraw; virtual;
+    procedure Draw; virtual;
+
+    //When application exit, unload your resources
+    procedure Unload; virtual;
+    procedure ProcessQueue;
+
+    function Terminated: Boolean; virtual;
+    procedure ProcessInput; virtual;
+
+    procedure Run;
+    procedure Shutdown; virtual;
+    procedure LoadConfig;
+    procedure Stop; //and wait
+
     procedure StartConsoleRead;
     procedure StartConsoleReadEx(ACallback: TConsoleReadEvent);
+
   public
     RunInMain: Boolean;
     Running: Boolean;
@@ -111,26 +169,11 @@ type
     Board: TTyroCanvas;
     Sprites: TSprites;
     Physics: TPhysics;
-    constructor Create(AParent: TTyroLayout); override;
-    destructor Destroy; override;
-    procedure Init; override;
-    procedure Terminate; override;
-    procedure ProcessQueue;
-    procedure Start; override;
-    procedure LoadConfig;
-    procedure Unload; override;
-    procedure Stop; //and wait
-    procedure Shutdown; override;
-    procedure PrepareDraw; override;
-    procedure Draw; override;
-    procedure Update; override;
-    procedure ProcessInput; override;
     //property Board: TTyroImage read FBoard;
     property Active: Boolean read GetActive;
 
     procedure RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
 
-    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); override;
     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
     procedure ShowConsole; overload;
     procedure HideConsole;
@@ -140,8 +183,10 @@ type
     procedure HideEditor;
     procedure ToggleEditor;
 
-    procedure Resize(AWidth, AHeight: Integer); override;
-
+    property CanvasLock: TCriticalSection read FCanvasLock;
+    property Options: TTyroMainOptions read FOptions write FOptions;
+    property BackColor: TColor read FBackColor write FBackColor;
+    property FPS: Integer read FFPS write SetFPS;
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
 
@@ -195,6 +240,150 @@ end;
 
 { TTyroMain }
 
+{ Convert a Unicode codepoint to a UTF-8 encoded short string (TUTF8Char) }
+function CodePointToUTF8(Ch: Integer): TUTF8Char;
+begin
+  if Ch < $80 then
+    Result := TUTF8Char(Chr(Ch))
+  else if Ch < $800 then
+    Result := TUTF8Char(Chr($C0 or (Ch shr 6)) + Chr($80 or (Ch and $3F)))
+  else if Ch < $10000 then
+    Result := TUTF8Char(Chr($E0 or (Ch shr 12)) + Chr($80 or ((Ch shr 6) and $3F)) + Chr($80 or (Ch and $3F)))
+  else
+    Result := TUTF8Char('');
+end;
+
+constructor TTyroMain.Create;
+begin
+  Create(nil);
+end;
+
+function TTyroMain.CreateCanvas: TTyroCanvas;
+begin
+  Result := TTyroTextureCanvas.Create(GetCanvasWidth, GetCanvasHeight, FTextureMode);
+end;
+
+function TTyroMain.GetCanvasWidth: Integer;
+begin
+  Result := Width - 2 * (BorderSize + Margin);
+  if Result < 1 then
+    Result := 1;
+end;
+
+function TTyroMain.GetCanvasHeight: Integer;
+begin
+  Result := Height - 2 * (BorderSize + Margin);
+  if Result < 1 then
+    Result := 1;
+end;
+
+function TTyroMain.Terminated: Boolean;
+begin
+  Result := IsTerminated;
+end;
+
+procedure TTyroMain.SetFPS(FPS: Integer);
+begin
+  FFPS := FPS;
+  SetTargetFPS(FPS);
+end;
+
+procedure TTyroMain.ShowWindow;
+begin
+  ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
+end;
+
+procedure TTyroMain.HideWindow;
+begin
+  if Visible then
+  begin
+    Visible := False;
+    CloseWindow;
+  end;
+end;
+
+procedure TTyroMain.Load;
+begin
+end;
+
+procedure TTyroMain.Run;
+var
+  tw: Integer;
+begin
+  Init;
+
+  if not Visible and (moWindow in Options) then
+  begin
+    ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
+    SetFPS(FramePerSeconds);
+  end;
+
+  Resources.Load;
+  Load;
+
+  Start;
+  if FPS = 0 then
+    SetFPS(FramePerSeconds);
+  repeat
+    try
+      CheckSynchronize;
+      if WindowShouldClose() then
+      begin
+        Shutdown;
+        Terminate;
+      end
+      else
+      begin
+        if Visible and IsWindowReady then
+        begin
+          if IsWindowHidden then
+            break;
+
+          if RayLib.IsWindowResized() then
+            Resize(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
+          PrepareDraw;
+          RayLib.BeginDrawing();
+          if moOpaque in Options then
+            RayLib.ClearBackground(BackColor);
+
+          try
+            Camera2D.Target := Vector2Of(0, 0);
+            Camera2D.Offset := Vector2Of(Margin, Margin);
+            Camera2D.Zoom := 1;
+            Camera2D.Rotation := 0;
+
+            Canvas.BeginDraw;
+            BeginMode2D(Camera2D);
+            Draw;
+            EndMode2D();
+            Canvas.EndDraw;
+            Canvas.PostDraw;
+
+            Paint;
+
+            if moShowFPS in Options then
+            begin
+              tw := RayLib.MeasureText('999 FPS', 20) + 5;
+              RayLib.DrawFPS(RayLib.GetScreenWidth - tw, 5);
+            end;
+          finally
+            RayLib.EndDrawing();
+          end;
+        end;
+        ProcessInput;
+      end;
+      Update;
+      RayUpdates.Update;
+    finally
+    end;
+  until Terminated;
+
+  Unload;
+
+  if Visible then
+    RayLib.CloseWindow();
+end;
+
 function TTyroMain.GetActive: Boolean;
 begin
   Result := Running or ((FScriptThread <> nil) and FScriptThread.Active) or ((FScriptMain <> nil) and (FScriptMain.Active));
@@ -241,7 +430,6 @@ end;
 
 procedure TTyroMain.Start;
 begin
-  inherited;
   LoadConfig;
   if (FScriptThread <> nil) and not FScriptThread.Started then
     FScriptThread.Start;
@@ -282,7 +470,6 @@ end;
 
 procedure TTyroMain.Unload;
 begin
-  inherited;
 end;
 
 procedure TTyroMain.Shutdown;
@@ -298,6 +485,17 @@ end;
 constructor TTyroMain.Create(AParent: TTyroLayout);
 begin
   inherited;
+  FControlCapture := nil;
+  FOptions := [moWindow, moOpaque];
+  RayLibrary.Load;
+  Resources := TTyroResources.Create;
+  Resources.WorkSpace := ExtractFilePath(ParamStr(0));
+  FCanvasLock := TCriticalSection.Create;
+  BoundsRect.Width := ScreenWidth;
+  BoundsRect.Height := ScreenHeight;
+  Margin := cMainMargin;
+  FBackColor := clCornflowerBlue;
+
   Margin := Resources.Config.Sections['window'].ReadInteger('margin', 0);
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
@@ -339,8 +537,6 @@ begin
   Physics := TPhysics.Create(Sprites);
   Commands := TConsoleCommands.Create();
   RegisterCommands;
-
-  TTyroPanel.Create(Self);
 end;
 
 destructor TTyroMain.Destroy;
@@ -352,6 +548,7 @@ begin
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
   FreeAndNil(Commands);
+  FreeAndNil(FCanvasLock);
   inherited;
 end;
 
@@ -488,8 +685,117 @@ begin
 end;
 
 procedure TTyroMain.ProcessInput;
+var
+  Shift: TShiftState;
+  Key: TKeyboardKey;
+  ch: Integer;
+  aChar: TUTF8Char;
+  aFocused: TTyroControl;
+  mp: TVector2;
+  mx, my, x, y: Integer;
+  i: Integer;
+  aControl: TTyroControl;
 begin
-  inherited;
+  // Build shift state from RayLib key queries
+  Shift := [];
+  if RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT) then
+    Shift := Shift + [ssShift];
+  if RayLib.IsKeyDown(KEY_LEFT_CONTROL) or RayLib.IsKeyDown(KEY_RIGHT_CONTROL) then
+    Shift := Shift + [ssCtrl];
+  if RayLib.IsKeyDown(KEY_LEFT_ALT) or RayLib.IsKeyDown(KEY_RIGHT_ALT) then
+    Shift := Shift + [ssAlt];
+  if RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT) then
+    Shift := Shift + [ssLeft];
+  if RayLib.IsMouseButtonDown(MOUSE_BUTTON_RIGHT) then
+    Shift := Shift + [ssRight];
+
+  //* Mouse routing: move is sent to the control under the cursor every frame;
+  //* once a left press lands inside a control the pointer is captured to it
+  //* (keeps tracking the cursor while dragging a sizable border) until release.
+  RayLib.SetMouseCursor(Ord(MOUSE_CURSOR_DEFAULT));
+  mp := RayLib.GetMousePosition;
+
+  mx := Round(mp.X);
+  my := Round(mp.Y);
+
+  if FControlCapture <> nil then
+  begin
+    x := mx - FControlCapture.WindowRect.Left;
+    y := my - FControlCapture.WindowRect.Top;
+    FControlCapture.MouseMove(Shift, x, y);
+    if not (ssLeft in Shift) then
+    begin
+      x := mx - FControlCapture.WindowRect.Left;
+      y := my - FControlCapture.WindowRect.Top;
+      FControlCapture.MouseUp(mbLeft, Shift, x, y);
+      FControlCapture := nil;
+    end;
+  end
+  else
+  begin
+    for i := Controls.Count - 1 downto 0 do
+    begin
+      if Controls[i] is TTyroControl then
+      begin
+        aControl := TTyroControl(Controls[i]);
+        if aControl.Visible and
+           (mx >= aControl.WindowRect.Left) and (mx < aControl.WindowRect.Right) and
+           (my >= aControl.WindowRect.Top) and (my < aControl.WindowRect.Bottom) then
+        begin
+          x := mx - aControl.WindowRect.Left;
+          y := my - aControl.WindowRect.Top;
+          aControl.MouseMove(Shift, x, y);
+          if RayLib.IsMouseButtonPressed(MOUSE_BUTTON_LEFT) then
+          begin
+            aControl.MouseDown(mbLeft, Shift, x, y);
+            FControlCapture := aControl;
+          end;
+          Break;
+        end;
+      end;
+    end;
+  end;
+
+  if FocusedControl = nil then
+    Exit;
+
+  // Process key codes (function keys, arrows, etc.)
+  Key := RayLib.GetKeyPressed;
+  while Key <> KEY_NULL do
+  begin
+    case Key of
+      KEY_LEFT_SHIFT, KEY_RIGHT_SHIFT, KEY_LEFT_CONTROL, KEY_RIGHT_CONTROL,
+      KEY_LEFT_ALT, KEY_RIGHT_ALT:
+        begin
+          // Shift keys themselves - skip to avoid sending as regular key
+        end;
+    else
+      if Assigned(FocusedControl) then
+        FocusedControl.KeyDown(Key, Shift);
+    end;
+    Key := RayLib.GetKeyPressed;
+  end;
+
+  // Process character input (printable text, respecting modifiers for shortcuts)
+  ch := RayLib.GetCharPressed;
+  while ch > 0 do
+  begin
+    if ch >= 32 then
+    begin
+      // If Ctrl is held, treat as key shortcut (e.g. Ctrl+V) not text
+      if not (ssCtrl in Shift) then
+      begin
+        aFocused := FocusedControl;
+        if Assigned(aFocused) then
+        begin
+          aChar := CodePointToUTF8(ch);
+          aFocused.KeyPress(aChar);
+        end;
+      end;
+    end;
+    ch := RayLib.GetCharPressed;
+  end;
+
   // F2 toggles the script editor
   if RayLib.IsKeyPressed(KEY_F2) then
     ToggleEditor;
@@ -519,7 +825,24 @@ end;
 
 procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
 begin
-  inherited;
+  FTextureMode := ATextureMode;
+  if Visible then
+  begin
+    SetBoundsRect(Rect(0, 0, AWidth, AHeight));
+    SetWindowSize(AWidth, AHeight);
+  end
+  else
+  begin
+    //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
+    SetBoundsRect(Rect(0, 0, AWidth, AHeight));
+    InitWindow(AWidth, AHeight, PUTF8Char(Title));
+    ClearWindowState([FLAG_WINDOW_HIDDEN]);
+    ShowCursor();
+    PrepareCanvas;
+  end;
+  Visible := True;
+  Resize(AWidth, AHeight);
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
   if AHeight = 0 then
@@ -531,7 +854,13 @@ end;
 
 procedure TTyroMain.Resize(AWidth, AHeight: Integer);
 begin
-  inherited Resize(AWidth, AHeight);
+  if (AWidth <= 0) or (AHeight <= 0) then Exit;
+  if (WindowRect.Width = AWidth) and (WindowRect.Height = AHeight)
+     and (Canvas <> nil) and (Canvas.Width = GetCanvasWidth) and (Canvas.Height = GetCanvasHeight) then
+    Exit;
+  SetWindowRect(Rect(0, 0, AWidth, AHeight));
+  if Canvas <> nil then
+    Canvas.Resize(GetCanvasWidth, GetCanvasHeight);
   if Board <> nil then
     Board.Resize(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin));
   if (Editor <> nil) and Editor.Visible then
@@ -559,7 +888,7 @@ procedure TTyroMain.Terminate;
 begin
   HideWindow;
   Stop;
-  inherited;
+  IsTerminated := True;
 end;
 
 procedure TTyroMain.ShowConsole(AX, AY, AWidth, AHeight: Integer);
