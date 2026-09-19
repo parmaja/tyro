@@ -105,6 +105,7 @@ type
     FAlign: TAlign;
     FParent: TTyroLayout;
     FBoundsRect: TRect;
+    FVisible: Boolean;
     FWindowRect: TRect;
     FState: TTyroLayoutStates;
     FControls: TTyroControls;
@@ -117,6 +118,7 @@ type
     procedure SetMargin(AValue: Integer);
     procedure SetWidth(AValue: Integer);
   protected
+    procedure SetVisible(AValue: Boolean); virtual;
     procedure SetBoundsRect(AValue: TRect);
     procedure SetWindowRect(AValue: TRect);
 
@@ -146,6 +148,7 @@ type
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
     property Width: Integer read GetWidth write SetWidth;
     property Height: Integer read GetHeight write SetHeight;
+    property Visible: Boolean read FVisible write SetVisible;
   end;
 
 
@@ -160,7 +163,6 @@ type
     FBackColor: TColor;
     FWindow: TTyroWindow;
     FCanvas: TTyroCanvas;
-    FVisible: Boolean;
     FResizing: Boolean;
     FResizeSides: TTyroResizeSides;
     FResizeStartRect: TRect;
@@ -177,7 +179,6 @@ type
     FVDragOfs: Integer;
     function GetFocused: Boolean;
     procedure SetBackColor(AValue: TColor);
-    procedure SetVisible(AValue: Boolean);
     procedure SetWindow(AValue: TTyroWindow);
     procedure SetCanvas(AValue: TTyroCanvas);
     procedure SetFocused(AValue: Boolean);
@@ -241,8 +242,6 @@ type
 
     property BackColor: TColor read FBackColor write SetBackColor;
 
-    property Visible: Boolean read FVisible write SetVisible;
-
     //* Own transparent texture buffer. The control content is painted into it
     //* every frame and the buffer is drawn (blitted) on top of the canvas.
     property Canvas: TTyroCanvas read FCanvas write SetCanvas;
@@ -283,23 +282,22 @@ type
   TTyroWindow = class abstract(TTyroLayout)
   private
     FCanvas: TTyroCanvas;
-    FFocused: TTyroControl;
+    FFocusedControl: TTyroControl;
     FTitle: utf8string;
     procedure SetCanvas(AValue: TTyroCanvas);
-    procedure SetFocused(AValue: TTyroControl);
+    procedure SetFocusedControl(AValue: TTyroControl);
     procedure SetTitle(AValue: utf8string);
   protected
     procedure PrepareCanvas; virtual;
     function CreateCanvas: TTyroCanvas; virtual; abstract;
   public
-    Visible: Boolean;
     constructor Create(AParent: TTyroLayout); overload; override;
     constructor Create(AParent: TTyroLayout; AWidth, AHeight: Integer); reintroduce; overload;
     destructor Destroy; override;
     procedure Paint;
     property Canvas: TTyroCanvas read FCanvas write SetCanvas;
     property Title: utf8string read FTitle write SetTitle;
-    property Focused: TTyroControl read FFocused write SetFocused;
+    property FocusedControl: TTyroControl read FFocusedControl  write SetFocusedControl;
   end;
 
   TTyroMainWindowOption = (moWindow, moOpaque, moShowFPS);
@@ -489,8 +487,8 @@ begin
   end;
 
   Resources.Load;
-
   Load;
+
   Start;
   if FPS = 0 then
     SetFPS(FramePerSeconds);
@@ -533,7 +531,7 @@ begin
 
             if moShowFPS in Options then
             begin
-              tw := RayLib.MeasureText('9999 FPS', 20) + 5;
+              tw := RayLib.MeasureText('999 FPS', 20) + 5;
               RayLib.DrawFPS(RayLib.GetScreenWidth - tw, 5);
             end;
           finally
@@ -547,7 +545,9 @@ begin
     finally
     end;
   until Terminated;
+
   Unload;
+
   if Visible then
     RayLib.CloseWindow();
 end;
@@ -926,7 +926,7 @@ end;
 
 function TTyroControl.GetFocused: Boolean;
 begin
-  Result := (Window <> nil) and (Window.Focused = Self);
+  Result := (Window <> nil) and (Window.FocusedControl = Self);
 end;
 
 procedure TTyroControl.SetBackColor(AValue: TColor);
@@ -938,7 +938,7 @@ end;
 procedure TTyroControl.SetFocused(AValue: Boolean);
 begin
   if Window <> nil then
-    Window.Focused := Self;
+    Window.FocusedControl := Self;
 end;
 
 procedure TTyroLayout.SetMargin(AValue: Integer);
@@ -947,17 +947,16 @@ begin
   FMargin:=AValue;
 end;
 
+procedure TTyroLayout.SetVisible(AValue: Boolean);
+begin
+  if FVisible=AValue then Exit;
+  FVisible:=AValue;
+end;
+
 procedure TTyroLayout.SetWidth(AValue: Integer);
 begin
   FBoundsRect.Width := AValue;
   Resize;
-end;
-
-procedure TTyroControl.SetVisible(AValue: Boolean);
-begin
-  if FVisible =AValue then Exit;
-  FVisible := AValue;
-  Invalidate;
 end;
 
 procedure TTyroControl.SetWindow(AValue: TTyroWindow);
@@ -1654,15 +1653,15 @@ begin
   BoundsRect := Rect(0, 0, AWidth, AHeight);
 end;
 
-procedure TTyroWindow.SetFocused(AValue: TTyroControl);
+procedure TTyroWindow.SetFocusedControl(AValue: TTyroControl);
 begin
-  if FFocused =AValue then
+  if FFocusedControl =AValue then
     Exit;
-  if FFocused <> nil then
-    FFocused.FocusChanged;
-  FFocused :=AValue;
-  if FFocused <> nil then
-    FFocused.FocusChanged;
+  if FFocusedControl <> nil then
+    FFocusedControl.FocusChanged;
+  FFocusedControl :=AValue;
+  if FFocusedControl <> nil then
+    FFocusedControl.FocusChanged;
 end;
 
 procedure TTyroMainWindow.ProcessInput;
@@ -1671,7 +1670,7 @@ var
   Key: TKeyboardKey;
   ch: Integer;
   aChar: TUTF8Char;
-  FocusedControl: TTyroControl;
+  aFocused: TTyroControl;
   mp: TVector2;
   mx, my, x, y: Integer;
   i: Integer;
@@ -1737,7 +1736,7 @@ begin
     end;
   end;
 
-  if FFocused = nil then
+  if FFocusedControl = nil then
     Exit;
 
   // Process key codes (function keys, arrows, etc.)
@@ -1751,7 +1750,7 @@ begin
           // Shift keys themselves - skip to avoid sending as regular key
         end;
     else
-      FocusedControl := FFocused;
+      FocusedControl := FFocusedControl;
       if Assigned(FocusedControl) then
         FocusedControl.KeyDown(Key, Shift);
     end;
@@ -1767,11 +1766,11 @@ begin
       // If Ctrl is held, treat as key shortcut (e.g. Ctrl+V) not text
       if not (ssCtrl in Shift) then
       begin
-        FocusedControl := FFocused;
-        if Assigned(FocusedControl) then
+        aFocused := FFocusedControl;
+        if Assigned(aFocused) then
         begin
           aChar := CodePointToUTF8(ch);
-          FocusedControl.KeyPress(aChar);
+          aFocused.KeyPress(aChar);
         end;
       end;
     end;

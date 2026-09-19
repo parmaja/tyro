@@ -62,13 +62,6 @@ type
     function Execute(Name: UTF8String; Params: TStrings = nil): Boolean; overload;
   end;
 
-  TRunHow = (
-    runLint,
-    runCompile,
-    //runLink,
-    runExecute
-  );
-
   { TTyroMain }
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: string) of object;
@@ -110,12 +103,12 @@ type
   public
     RunInMain: Boolean;
     Running: Boolean;
-    How: TRunHow;
-    RunFile: string;//that to run in script
+    RunFile: string;//that to run in ScriptThread
+    //Board is a canvas for ScriptThread draw on it
     Console: TTyroTerminal;
     Output: TTyroOutput;
     Editor: TyroEditor;
-    Graphic: TTyroCanvas;
+    Board: TTyroCanvas;
     Sprites: TSprites;
     Physics: TPhysics;
     constructor Create(AParent: TTyroLayout); override;
@@ -214,13 +207,13 @@ var
   fpd: Double;
   ft, ft2: Double;
 begin
-  if Graphic <> nil then
+  if Board <> nil then
   begin
     CanvasLock.Enter;
     try
       ft := GetTime();
       fpd := (1 / FramePerSeconds);
-      Graphic.BeginDraw;
+      Board.BeginDraw;
       c := 0;
       while Queue.Count > 0 do
       begin
@@ -239,7 +232,7 @@ begin
           break;
         end;
       end;
-      Graphic.EndDraw;
+      Board.EndDraw;
     finally
       CanvasLock.Leave;
     end;
@@ -355,7 +348,7 @@ begin
   //Stop;
   FreeAndNil(Physics);
   FreeAndNil(Sprites);
-  FreeAndNil(Graphic);
+  FreeAndNil(Board);
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
   FreeAndNil(Commands);
@@ -395,11 +388,11 @@ end;
 
    procedure TTyroMain.Draw;
 begin
-  if Graphic <> nil then
+  if Board <> nil then
   begin
-    // Canvas layer sits at the bottom: blit the legacy Graphic first so its
+    // Canvas layer sits at the bottom: blit the legacy Board first so its
     // opaque background does not cover the sprites drawn on top of it.
-    Graphic.PostDraw;
+    Board.PostDraw;
     try
       Sprites.DrawAll;
     except
@@ -410,7 +403,7 @@ begin
       end;
     end;
     // scripted on_draw() overlays run last so they stay above the texture
-    // and the legacy Graphic layer
+    // and the legacy Board layer
     Sprites.DrawScripts;
   end;
   ThreadSwitch; //Yield
@@ -531,7 +524,7 @@ begin
     raise exception.Create('Screen width can not be 0');
   if AHeight = 0 then
     raise exception.Create('Screen height can not be 0');
-  Graphic := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin), True);
+  Board := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin), True);
   //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
   //Console.WindowRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
 end;
@@ -539,8 +532,8 @@ end;
 procedure TTyroMain.Resize(AWidth, AHeight: Integer);
 begin
   inherited Resize(AWidth, AHeight);
-  if Graphic <> nil then
-    Graphic.Resize(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin));
+  if Board <> nil then
+    Board.Resize(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin));
   if (Editor <> nil) and Editor.Visible then
     Editor.BoundsRect := Rect(0, 0, AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin));
 end;

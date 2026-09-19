@@ -843,12 +843,12 @@ begin
   if field = 'effect' then
   begin
     if L.IsString(-1) then
-      FScript.AddQueueObject(TSetEffectObject.Create(Main.Graphic, L.ToString(-1)));
+      FScript.AddQueueObject(TSetEffectObject.Create(Main.Board, L.ToString(-1)));
   end
   else if field = 'value' then
   begin
     if L.IsNumber(-1) then
-      FScript.AddQueueObject(TSetEffectValueObject.Create(Main.Graphic, L.ToNumber(-1)));
+      FScript.AddQueueObject(TSetEffectValueObject.Create(Main.Board, L.ToNumber(-1)));
   end
   else if field = 'area' then
   begin
@@ -871,7 +871,7 @@ begin
       if L.IsNumber(-1) then
         area.height := L.ToNumber(-1);
       lua_pop(L, 1);
-      FScript.AddQueueObject(TSetEffectAreaObject.Create(Main.Graphic, area));
+      FScript.AddQueueObject(TSetEffectAreaObject.Create(Main.Board, area));
     end;
   end;
 end;
@@ -885,24 +885,24 @@ begin
   field := L.ToString(2);
   if field = 'effect' then
   begin
-    if Main.Graphic <> nil then
-      L.PushString(Main.Graphic.GetEffectName)
+    if Main.Board <> nil then
+      L.PushString(Main.Board.GetEffectName)
     else
       L.PushString('none');
     Result := 1;
   end
   else if field = 'value' then
   begin
-    if Main.Graphic <> nil then
-      L.PushNumber(Main.Graphic.GetEffectValue)
+    if Main.Board <> nil then
+      L.PushNumber(Main.Board.GetEffectValue)
     else
       L.PushNumber(1.0);
     Result := 1;
   end
   else if field = 'area' then
   begin
-    if Main.Graphic <> nil then
-      area := Main.Graphic.GetEffectArea
+    if Main.Board <> nil then
+      area := Main.Board.GetEffectArea
     else
     begin
       area := Default(TRectangle);
@@ -926,7 +926,7 @@ function TLuaShader.Load_func(L: PLua_State): integer; cdecl;
 begin
   //Load a custom fragment shader from a file
   if L.IsString(1) then
-    FScript.AddQueueObject(TLoadShaderObject.Create(Main.Graphic, L.ToString(1)));
+    FScript.AddQueueObject(TLoadShaderObject.Create(Main.Board, L.ToString(1)));
   Result := 0;
 end;
 
