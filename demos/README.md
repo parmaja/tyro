@@ -24,6 +24,7 @@ tyro demos/pong.lua
 | `basic_drawing.lua` | All drawing primitives: rectangle, circle, line, point, text, colors |
 | `colors_bar.lua` | Iterate the full color palette |
 | `animated_demo.lua` | Animation loop with random colors and sleep() timing |
+| `cycle_demo.lua` | Per-frame loop using `while cycle do` — one drawing per raylib frame |
 | `test.ls` | Circle animation demo with random sizes and colors |
 
 ### Console

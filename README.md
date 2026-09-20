@@ -283,9 +283,25 @@ shader.area  = {0, 0, canvas.width, canvas.height}
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `sleep(ms)` | — | Pause the script thread for *ms* milliseconds |
+| `cycle` | `true` | **Block** until the next drawing frame completes. Use `while cycle do` (instead of `while true do`) to run the loop body at most once per drawn frame, so drawing commands cannot pile up inside a single raylib drawing cycle |
 | `frametime()` | `number` (seconds) | Time elapsed since the last frame |
 | `time()` | `number` (seconds) | Elapsed time since the window was created |
 | `rand(min, max)` | `integer` | Random integer in [min, max] |
+
+`cycle` is a frame gate: reading it pauses the script thread until the main
+loop has presented the next drawing frame (`EndDrawing`). It never ends on its
+own (`while cycle do` runs forever), and it only waits when a window is being
+drawn — scripts running on the main thread (e.g. console lines) never block.
+
+```lua
+window.show()
+while cycle do                      -- one iteration per drawing frame
+    canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+    canvas.circle(320, 240, 20, true)
+end                                 -- no sleep() needed for ~60 FPS pacing
+```
+
+For sleep-based pacing you can still use the classic loop:
 
 ```lua
 window.show()
@@ -312,6 +328,7 @@ tyro demos/<name>.lua
 | `demos/pong.lua` | Complete Pong game — drawing, keyboard input, AI, physics, collision, sound, scoring |
 | `demos/basic_drawing.lua` | All drawing primitives: rectangle, circle, line, point, text, colors |
 | `demos/animated_demo.lua` | Animation loop with random colors and sleep timing |
+| `demos/cycle_demo.lua` | Per-frame loop using `while cycle do` — one drawing per frame |
 | `demos/sprites_demo.lua` | Sprites system: load, show, hide, move, rotate, scale, named access |
 | `demos/interactive_paint.lua` | Mouse drawing with keyboard color switching (uses input APIs) |
 | `demos/console_demo.lua` | Console output: print, println, log |

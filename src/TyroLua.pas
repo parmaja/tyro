@@ -461,7 +461,20 @@ begin
 
   aName := L.ToString(2);
 
-  //3) Sprites: reuse/create the sprite proxy bound to the found handle
+  //3) 'cycle': the drawing-cycle gate. Reading it blocks the script thread
+  //until the next raylib frame (EndDrawing) completes, so "while cycle do"
+  //runs the loop body at most once per drawn frame instead of queuing many
+  //drawing commands into the same cycle. Never cached: every read waits again.
+  if aName = 'cycle' then
+  begin
+    if (Thread <> nil) and not Main.WaitToNextFrame(Self) then
+      L.PushBoolean(False) //script was stopped while waiting -> end the loop
+    else
+      L.PushBoolean(True);
+    Exit;
+  end;
+
+  //4) Sprites: reuse/create the sprite proxy bound to the found handle
   AHandle := Main.Sprites.FindByName(aName);
   if AHandle > cSpriteInvalid then
   begin
@@ -480,7 +493,7 @@ begin
     Exit;
   end;
 
-  //4) Controls: named controls (Name field set at creation) resolve by name
+  //5) Controls: named controls (Name field set at creation) resolve by name
   AHandle := Controls.FindByName(aName);
   if AHandle > 0 then
   begin
@@ -488,7 +501,7 @@ begin
     Exit;
   end;
 
-  //5) Default pascal side value so missing names never error out
+  //6) Default pascal side value so missing names never error out
   L.NewTable;
 end;
 

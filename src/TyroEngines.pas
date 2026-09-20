@@ -78,6 +78,10 @@ type
     FFPS: Integer;
     FOptions: TTyroMainOptions;
     FBackColor: TColor;
+    //* Signaled by the main loop after every drawing cycle (EndDrawing). The
+    //* Lua 'cycle' gate waits on it so "while cycle do" runs at most once per
+    //* drawn frame. Auto-reset: an unwaited signal is simply lost.
+    FFrameEvent: TEvent;
     //* The control which captured the mouse (e.g. dragging a sizable border).
     //* It keeps receiving MouseMove/MouseUp until the left button is released.
     FControlCapture: TTyroControl;
@@ -154,6 +158,13 @@ type
     procedure Shutdown; virtual;
     procedure LoadConfig;
     procedure Stop; //and wait
+
+    //* Block the calling script (thread) until the next drawing cycle
+    //* (EndDrawing) has completed. Backs the Lua global 'cycle' so scripts can
+    //* write "while cycle do" instead of "while true do". Returns False when
+    //* AScript was stopped while waiting (termination is polled here because
+    //* the Lua debug hook cannot fire while a C function blocks the thread).
+    function WaitToNextFrame(AScript: TTyroScript): Boolean;
 
     procedure StartConsoleRead;
     procedure StartConsoleReadEx(ACallback: TConsoleReadEvent);
@@ -368,6 +379,10 @@ begin
             end;
           finally
             RayLib.EndDrawing();
+            //One drawing cycle completed: wake any script thread blocked on the
+            //Lua 'cycle' gate so "while cycle do" runs at most once per frame.
+            if FFrameEvent <> nil then
+              FFrameEvent.SetEvent;
           end;
         end;
         ProcessInput;
@@ -387,6 +402,28 @@ end;
 function TTyroMain.GetActive: Boolean;
 begin
   Result := Running or ((FScriptThread <> nil) and FScriptThread.Active) or ((FScriptMain <> nil) and (FScriptMain.Active));
+end;
+
+function TTyroMain.WaitToNextFrame(AScript: TTyroScript): Boolean;
+begin
+  Result := True;
+  //No window -> no drawing cycles -> never block the script (behaves like
+  //"while true do" so headless scripts do not hang).
+  if (FFrameEvent = nil) or (not Visible) or (not RayLib.IsWindowReady) then
+    Exit;
+  while True do
+  begin
+    //While our C function blocks, the Lua count hook cannot run, so Stop()
+    //waiting for the script thread would deadlock: poll the script's Active
+    //flag (set False by Stop on the main thread) and let the loop end cleanly.
+    if not AScript.Active then
+    begin
+      Result := False; //script was stopped while waiting: exit the cycle loop
+      Exit;
+    end;
+    if FFrameEvent.WaitFor(50) = wrSignaled then
+      Exit; //the next drawing frame was presented: run one more iteration
+  end;
 end;
 
 procedure TTyroMain.ProcessQueue;
@@ -491,6 +528,9 @@ begin
   Resources := TTyroResources.Create;
   Resources.WorkSpace := ExtractFilePath(ParamStr(0));
   FCanvasLock := TCriticalSection.Create;
+  //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
+  //loop signals it after every EndDrawing.
+  FFrameEvent := TEvent.Create(nil, False, False, '');
   BoundsRect.Width := ScreenWidth;
   BoundsRect.Height := ScreenHeight;
   Margin := cMainMargin;
@@ -549,6 +589,7 @@ begin
   FreeAndNil(FScriptTypes);
   FreeAndNil(Commands);
   FreeAndNil(FCanvasLock);
+  FreeAndNil(FFrameEvent);
   inherited;
 end;
 
