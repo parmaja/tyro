@@ -116,6 +116,7 @@ type
     FScriptMain: TTyroScript; //only if we have main loop
     FScriptTypes: TScriptTypes;
     FReadCallback: TConsoleReadEvent;
+    FWaitingQueueObject: TQueueObject; //the queue object a script thread is blocked waiting on
   protected
     Commands: TConsoleCommands;
     procedure ConsoleInput(AConsole: TTyroTerminal; AInput: string);
@@ -165,6 +166,15 @@ type
     //* AScript was stopped while waiting (termination is polled here because
     //* the Lua debug hook cannot fire while a C function blocks the thread).
     function WaitToNextFrame(AScript: TTyroScript): Boolean;
+
+    //* Register the queue object a script thread is about to block on, so Stop
+    //* can signal its event and unblock the thread (e.g. console read()).
+    //* Returns False when the engine is stopping: the caller must not block.
+    function RegisterWaiting(AQueueObject: TQueueObject): Boolean;
+    //* Clear the registration made by RegisterWaiting.
+    procedure UnregisterWaiting(AQueueObject: TQueueObject);
+    //* Signal the event of the registered waiting queue object (used by Stop).
+    procedure CancelWaiting;
 
     procedure StartConsoleRead;
     procedure StartConsoleReadEx(ACallback: TConsoleReadEvent);
@@ -400,6 +410,46 @@ end;
 function TTyroMain.GetActive: Boolean;
 begin
   Result := Running or ((FScriptThread <> nil) and FScriptThread.Active) or ((FScriptMain <> nil) and (FScriptMain.Active));
+end;
+
+procedure TTyroMain.CancelWaiting;
+begin
+  Lock.Enter;
+  try
+    if FWaitingQueueObject <> nil then
+      FWaitingQueueObject.Cancel; //signal its event: the blocked Wait returns at once
+    FWaitingQueueObject := nil;
+  finally
+    Lock.Leave;
+  end;
+end;
+
+procedure TTyroMain.UnregisterWaiting(AQueueObject: TQueueObject);
+begin
+  if AQueueObject = nil then
+    Exit;
+  Lock.Enter;
+  try
+    if FWaitingQueueObject = AQueueObject then
+      FWaitingQueueObject := nil;
+  finally
+    Lock.Leave;
+  end;
+end;
+
+function TTyroMain.RegisterWaiting(AQueueObject: TQueueObject): Boolean;
+begin
+  Lock.Enter;
+  try
+    //When the engine is stopping do not register: the caller must not block.
+    if Running then
+      FWaitingQueueObject := AQueueObject
+    else
+      FWaitingQueueObject := nil;
+    Result := FWaitingQueueObject = AQueueObject;
+  finally
+    Lock.Leave;
+  end;
 end;
 
 function TTyroMain.WaitToNextFrame(AScript: TTyroScript): Boolean;
@@ -908,6 +958,10 @@ begin
   finally
     Lock.Leave;
   end;
+  //Signal the event of any queue object the script thread is blocked waiting
+  //on (e.g. console read()), so the blocked Wait returns and the thread can
+  //finish instead of hanging the WaitFor below.
+  CancelWaiting;
   if (FScriptThread <> nil) and FScriptThread.Started then
   begin
     FScriptThread.Terminate;
