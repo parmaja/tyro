@@ -242,12 +242,17 @@ type
     function Call_func(L: Plua_State): integer; cdecl;
   end;
 
-  { TLuaButtons }
+  { TLuaControls }
 
-  TLuaButtons = class(TTyroLuaObject)
+  { Generic control creation and inspection. controls.new('button', ...)
+    creates a control by class name ('button', 'panel', 'label', 'checkbox',
+    'edit', 'spectrum'); the returned handle addresses a control owned by the
+    main window. The same object backs both the 'controls' table and the
+    legacy 'buttons' alias table, so old scripts keep working. }
+  TLuaControls = class(TTyroLuaObject)
   private
-    FItems: TList; //of TTyroButton (owned by the main window, not by us)
-    function GetButton(AHandle: Integer): TTyroButton;
+    FItems: TList; //of TTyroControl (owned by the main window, not by us)
+    function GetControl(AHandle: Integer): TTyroControl;
     function FindByName(const AName: string): Integer;
   protected
     function Setter(L: PLua_State): integer; override;
@@ -255,10 +260,23 @@ type
   public
     function New_func(L: Plua_State): integer; cdecl;
     function Caption_func(L: Plua_State): integer; cdecl;
-    function Border_func(L: Plua_State): integer; cdecl;
+    function Text_func(L: Plua_State): integer; cdecl;
+    function Checked_func(L: Plua_State): integer; cdecl;
+    function Position_func(L: Plua_State): integer; cdecl;
+    function Move_func(L: Plua_State): integer; cdecl;
+    function Width_func(L: Plua_State): integer; cdecl;
+    function Height_func(L: Plua_State): integer; cdecl;
+    function Visible_func(L: Plua_State): integer; cdecl;
+    function Show_func(L: Plua_State): integer; cdecl;
+    function Hide_func(L: Plua_State): integer; cdecl;
     function Hover_func(L: Plua_State): integer; cdecl;
     function Down_func(L: Plua_State): integer; cdecl;
     function Clicked_func(L: Plua_State): integer; cdecl;
+    function Focused_func(L: Plua_State): integer; cdecl;
+    function Focus_func(L: Plua_State): integer; cdecl;
+    function Border_func(L: Plua_State): integer; cdecl;
+    function BackColor_func(L: Plua_State): integer; cdecl;
+    function Name_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
@@ -338,7 +356,7 @@ type
     Radio: TLuaRadio;
     Sprite: TLuaSprite;
     Sprites: TLuaSprites;
-    Buttons: TLuaButtons;
+    Controls: TLuaControls;
     Output: TLuaOutput;
     Collision: TLuaCollision;
     Shader: TLuaShader;
@@ -463,9 +481,8 @@ begin
     Exit;
   end;
 
-  //4) Controls: buttons matched by caption -> the button handle
-  //TODO use Main.Controls
-  AHandle := Buttons.FindByName(aName);
+  //4) Controls: named controls (Name field set at creation) resolve by name
+  AHandle := Controls.FindByName(aName);
   if AHandle > 0 then
   begin
     L.PushInteger(AHandle);
@@ -950,7 +967,7 @@ begin
   SpectrumLua := TLuaSpectrum.Create(Self);
   Sprite := TLuaSprite.Create(Self);
   Sprites := TLuaSprites.Create(Self);
-  Buttons := TLuaButtons.Create(Self);
+  Controls := TLuaControls.Create(Self);
   Output := TLuaOutput.Create(Self);
   Collision := TLuaCollision.Create(Self);
   Shader := TLuaShader.Create(Self);
@@ -1024,14 +1041,37 @@ begin
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
   Lua.State.Register('Sprites', '__call', Self, @Sprites.Call_func, True);
 
-  //buttons (controls)
-  Lua.State.Register('buttons', 'new', Buttons, @Buttons.New_func);
-  Lua.State.Register('buttons', 'caption', Buttons, @Buttons.Caption_func);
-  Lua.State.Register('buttons', 'border', Buttons, @Buttons.Border_func);
-  Lua.State.Register('buttons', 'hover', Buttons, @Buttons.Hover_func);
-  Lua.State.Register('buttons', 'down', Buttons, @Buttons.Down_func);
-  Lua.State.Register('buttons', 'clicked', Buttons, @Buttons.Clicked_func);
-  Lua.State.Register('buttons', Buttons); //should be last one
+  //controls (generic control table; 'buttons' is a legacy alias to the same
+  //object so old scripts keep working)
+  Lua.State.RegisterTable('controls');
+  Lua.State.Register('controls', 'new', Controls, @Controls.New_func);
+  Lua.State.Register('controls', 'caption', Controls, @Controls.Caption_func);
+  Lua.State.Register('controls', 'text', Controls, @Controls.Text_func);
+  Lua.State.Register('controls', 'checked', Controls, @Controls.Checked_func);
+  Lua.State.Register('controls', 'position', Controls, @Controls.Position_func);
+  Lua.State.Register('controls', 'move', Controls, @Controls.Move_func);
+  Lua.State.Register('controls', 'width', Controls, @Controls.Width_func);
+  Lua.State.Register('controls', 'height', Controls, @Controls.Height_func);
+  Lua.State.Register('controls', 'visible', Controls, @Controls.Visible_func);
+  Lua.State.Register('controls', 'show', Controls, @Controls.Show_func);
+  Lua.State.Register('controls', 'hide', Controls, @Controls.Hide_func);
+  Lua.State.Register('controls', 'hover', Controls, @Controls.Hover_func);
+  Lua.State.Register('controls', 'down', Controls, @Controls.Down_func);
+  Lua.State.Register('controls', 'clicked', Controls, @Controls.Clicked_func);
+  Lua.State.Register('controls', 'focused', Controls, @Controls.Focused_func);
+  Lua.State.Register('controls', 'focus', Controls, @Controls.Focus_func);
+  Lua.State.Register('controls', 'border', Controls, @Controls.Border_func);
+  Lua.State.Register('controls', 'backcolor', Controls, @Controls.BackColor_func);
+  Lua.State.Register('controls', 'name', Controls, @Controls.Name_func);
+  Lua.State.Register('controls', Controls); //should be last one
+  Lua.State.RegisterTable('buttons');
+  Lua.State.Register('buttons', 'new', Controls, @Controls.New_func);
+  Lua.State.Register('buttons', 'caption', Controls, @Controls.Caption_func);
+  Lua.State.Register('buttons', 'border', Controls, @Controls.Border_func);
+  Lua.State.Register('buttons', 'hover', Controls, @Controls.Hover_func);
+  Lua.State.Register('buttons', 'down', Controls, @Controls.Down_func);
+  Lua.State.Register('buttons', 'clicked', Controls, @Controls.Clicked_func);
+  Lua.State.Register('buttons', Controls); //should be last one
 
   //output (catches print/println/log)
   Lua.State.RegisterTable('output');
@@ -1986,31 +2026,31 @@ begin
   L.Pop(1);
 end;
 
-{ TLuaButtons }
+{ TLuaControls }
 
-constructor TLuaButtons.Create(AScript: TLuaScript);
+constructor TLuaControls.Create(AScript: TLuaScript);
 begin
   inherited Create(AScript);
   FItems := TList.Create;
 end;
 
-function TLuaButtons.GetButton(AHandle: Integer): TTyroButton;
+function TLuaControls.GetControl(AHandle: Integer): TTyroControl;
 begin
   Result := nil;
   if (AHandle >= 1) and (AHandle <= FItems.Count) then
-    Result := TTyroButton(FItems[AHandle - 1]);
+    Result := TTyroControl(FItems[AHandle - 1]);
 end;
 
-function TLuaButtons.FindByName(const AName: string): Integer;
+function TLuaControls.FindByName(const AName: string): Integer;
 var
   i: Integer;
-  b: TTyroButton;
+  c: TTyroControl;
 begin
   Result := 0;
   for i := 0 to FItems.Count - 1 do
   begin
-    b := TTyroButton(FItems[i]);
-    if (b <> nil) and (b.Name = AName) then
+    c := TTyroControl(FItems[i]);
+    if (c <> nil) and (c.Name = AName) then
     begin
       Result := i + 1;
       Exit;
@@ -2018,12 +2058,12 @@ begin
   end;
 end;
 
-function TLuaButtons.Setter(L: PLua_State): integer;
+function TLuaControls.Setter(L: PLua_State): integer;
 begin
   Result := 0;
 end;
 
-function TLuaButtons.Getter(L: PLua_State): integer;
+function TLuaControls.Getter(L: PLua_State): integer;
 begin
   Result := 0;
   if L.ToString(2) = 'count' then
@@ -2033,52 +2073,78 @@ begin
   end;
 end;
 
-// buttons.new(caption, x, y, w?, h?, borderSize?) -> handle (self drawn by the main cycle)
-function TLuaButtons.New_func(L: Plua_State): integer; cdecl;
+//controls.new(class, captionOrText, x?, y?, w?, h?, name?) -> handle
+//(created on the main thread, self-drawn by the main cycle; the returned
+//handle is 1-based over the controls created by this script)
+//legacy call buttons.new(caption, x?, y?, w?, h?, borderSize?) still works
+function TLuaControls.New_func(L: Plua_State): integer; cdecl;
 var
+  clsName, caption, aName: string;
   c: Integer;
-  x, y, w, h, border: Integer;
-  caption: string;
-  CreateObj: TCreateButtonObject;
+  x, y, w, h: Integer;
+  popStart: Integer; //position of the first optional numeric argument
+  CreateObj: TCreateControlObject;
 begin
-  caption := L.ToString(1);
+  Result := 1;
   c := L.Count;
+  caption := L.ToString(1);
+  clsName := LowerCase(caption);
   x := 0;
   y := 0;
-  w := 100;
-  h := 32;
-  border := 4;
-  if c >= 2 then x := round(L.ToNumber(2));
-  if c >= 3 then y := round(L.ToNumber(3));
-  if c >= 4 then w := round(L.ToNumber(4));
-  if c >= 5 then h := round(L.ToNumber(5));
-  if c >= 6 then border := round(L.ToNumber(6));
-  CreateObj := TCreateButtonObject.Create(caption, x, y, w, h, border);
+  aName := '';
+  if (clsName = 'button') or (clsName = 'panel') or (clsName = 'label') or
+     (clsName = 'checkbox') or (clsName = 'edit') or (clsName = 'spectrum') then
+  begin
+    //new style: controls.new(class, captionOrText, x?, y?, w?, h?, name?)
+    clsName := caption;
+    caption := L.ToString(2);
+    popStart := 3;
+    case clsName of
+      'button': begin w := 100; h := 32; end;
+      'panel': begin w := 100; h := 100; end;
+      'label': begin w := 120; h := 24; end;
+      'checkbox': begin w := 120; h := 24; end;
+      'edit': begin w := 140; h := 28; end;
+      'spectrum': begin w := 500; h := 200; end;
+    end;
+    if c >= 7 then
+      aName := L.ToString(7);
+  end
+  else
+  begin
+    //legacy: buttons.new(caption, x?, y?, w?, h?, borderSize?)
+    clsName := 'button';
+    popStart := 2;
+    w := 100;
+    h := 32;
+  end;
+  if c >= popStart then x := round(L.ToNumber(popStart));
+  if c >= popStart + 1 then y := round(L.ToNumber(popStart + 1));
+  if c >= popStart + 2 then w := round(L.ToNumber(popStart + 2));
+  if c >= popStart + 3 then h := round(L.ToNumber(popStart + 3));
+
+  CreateObj := TCreateControlObject.Create(clsName, caption, x, y, w, h, aName);
   try
     CreateObj.Run(Script.Thread); //Will run in Synchronize
-    if CreateObj.Button <> nil then
+    if CreateObj.Control <> nil then
     begin
-      FItems.Add(CreateObj.Button);
-      Result := 1;
-      L.PushInteger(FItems.Count); //handle of the created button
+      FItems.Add(CreateObj.Control);
+      L.PushInteger(FItems.Count); //handle of the created control
     end
     else
-    begin
-      Result := 1;
       L.PushNil;
-    end;
   finally
     CreateObj.Free;
   end;
 end;
 
-//buttons.caption(handle [, text]) -> get/set the caption
-function TLuaButtons.Caption_func(L: Plua_State): integer; cdecl;
+//controls.caption(handle [, text]) -> get/set the caption (button/label/checkbox)
+function TLuaControls.Caption_func(L: Plua_State): integer; cdecl;
 var
-  b: TTyroButton;
+  ctrl: TTyroControl;
 begin
-  b := GetButton(round(L.ToNumber(1)));
-  if b = nil then
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
   begin
     L.PushNil;
     Result := 1;
@@ -2086,67 +2152,334 @@ begin
   end;
   if L.Count >= 2 then
   begin
-    b.Caption := L.ToString(2);
+    ctrl.SetText(L.ToString(2));
     Result := 0;
   end
   else
   begin
-    L.PushString(b.Caption);
+    L.PushString(ctrl.GetText);
     Result := 1;
   end;
 end;
 
-//buttons.border(handle [, size]) -> get/set the border size (drives the rounded corners)
-function TLuaButtons.Border_func(L: Plua_State): integer; cdecl;
-var
-  b: TTyroButton;
+//controls.text(handle [, s]) -> get/set the text (caption for buttons/labels,
+//edited text for edits)
+function TLuaControls.Text_func(L: Plua_State): integer; cdecl;
 begin
-  b := GetButton(round(L.ToNumber(1)));
-  if b = nil then
+  Result := Caption_func(L);
+end;
+
+//controls.checked(handle [, value]) -> get/set the checked state (checkbox)
+function TLuaControls.Checked_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
   begin
     L.PushNil;
     Result := 1;
     Exit;
   end;
+  if L.Count >= 2 then
+  begin
+    ctrl.SetChecked(L.ToBoolean(2));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushBoolean(ctrl.GetChecked);
+    Result := 1;
+  end;
 end;
 
-//buttons.hover(handle) -> is the mouse over the button
-function TLuaButtons.Hover_func(L: Plua_State): integer; cdecl;
+//controls.position(handle) -> x, y ; controls.position(handle, x, y) -> move
+function TLuaControls.Position_func(L: Plua_State): integer; cdecl;
 var
-  b: TTyroButton;
+  ctrl: TTyroControl;
+  r: TRect;
 begin
-  b := GetButton(round(L.ToNumber(1)));
-  if b = nil then
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 3 then
+  begin
+    r := ctrl.BoundsRect;
+    r := Rect(round(L.ToNumber(2)), round(L.ToNumber(3)),
+              round(L.ToNumber(2)) + r.Width, round(L.ToNumber(3)) + r.Height);
+    FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, r));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushInteger(ctrl.BoundsRect.Left);
+    L.PushInteger(ctrl.BoundsRect.Top);
+    Result := 2;
+  end;
+end;
+
+//controls.move(handle, x, y) -> move the control (keeps its size)
+function TLuaControls.Move_func(L: Plua_State): integer; cdecl;
+begin
+  Result := Position_func(L);
+end;
+
+//controls.width(handle [, w]) -> get/set the width
+function TLuaControls.Width_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+  r: TRect;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    r := ctrl.BoundsRect;
+    r.Right := r.Left + round(L.ToNumber(2));
+    FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, r));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushInteger(ctrl.Width);
+    Result := 1;
+  end;
+end;
+
+//controls.height(handle [, h]) -> get/set the height
+function TLuaControls.Height_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+  r: TRect;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    r := ctrl.BoundsRect;
+    r.Bottom := r.Top + round(L.ToNumber(2));
+    FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, r));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushInteger(ctrl.Height);
+    Result := 1;
+  end;
+end;
+
+//controls.visible(handle [, value]) -> get/set visibility
+function TLuaControls.Visible_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    ctrl.Visible := L.ToBoolean(2);
+    Result := 0;
+  end
+  else
+  begin
+    L.PushBoolean(ctrl.Visible);
+    Result := 1;
+  end;
+end;
+
+//controls.show(handle) -> make the control visible
+function TLuaControls.Show_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl <> nil then
+    ctrl.Show;
+  Result := 0;
+end;
+
+//controls.hide(handle) -> make the control invisible
+function TLuaControls.Hide_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl <> nil then
+    ctrl.Hide;
+  Result := 0;
+end;
+
+//controls.hover(handle) -> is the mouse over the control
+function TLuaControls.Hover_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
     L.PushBoolean(False)
   else
-    L.PushBoolean(b.Hover);
+    L.PushBoolean(ctrl.Hover);
   Result := 1;
 end;
 
-//buttons.down(handle) -> is the button pressed (mouse down over it)
-function TLuaButtons.Down_func(L: Plua_State): integer; cdecl;
+//controls.down(handle) -> is the control pressed (mouse down over it)
+function TLuaControls.Down_func(L: Plua_State): integer; cdecl;
 var
-  b: TTyroButton;
+  ctrl: TTyroControl;
 begin
-  b := GetButton(round(L.ToNumber(1)));
-  if b = nil then
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
     L.PushBoolean(False)
   else
-    L.PushBoolean(b.Down);
+    L.PushBoolean(ctrl.Down);
   Result := 1;
 end;
 
-//buttons.clicked(handle) -> true once after the button is released (click)
-function TLuaButtons.Clicked_func(L: Plua_State): integer; cdecl;
+//controls.clicked(handle) -> true once after the control is released (click)
+function TLuaControls.Clicked_func(L: Plua_State): integer; cdecl;
 var
-  b: TTyroButton;
+  ctrl: TTyroControl;
 begin
-  b := GetButton(round(L.ToNumber(1)));
-  if b = nil then
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
     L.PushBoolean(False)
   else
-    L.PushBoolean(b.Clicked);
+    L.PushBoolean(ctrl.Clicked);
   Result := 1;
+end;
+
+//controls.focused(handle) -> is the control focused (owns keyboard input)
+function TLuaControls.Focused_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+    L.PushBoolean(False)
+  else
+    L.PushBoolean(ctrl.Focused);
+  Result := 1;
+end;
+
+//controls.focus(handle) -> move the keyboard focus to the control (on the
+//main thread, like every change of the input state)
+function TLuaControls.Focus_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl <> nil then
+    FScript.RunQueueObject(TSetControlFocusObject.Create(ctrl));
+  Result := 0;
+end;
+
+//controls.border(handle [, style]) -> get/set the border style
+//0=none, 1=thin, 2=thick, 3=sizable
+function TLuaControls.Border_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+  v: Integer;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    v := round(L.ToNumber(2));
+    case v of
+      1: ctrl.Border := brdThin;
+      2: ctrl.Border := brdThick;
+      3: ctrl.Border := brdSizable;
+    else
+      ctrl.Border := brdNone;
+    end;
+    Result := 0;
+  end
+  else
+  begin
+    case ctrl.Border of
+      brdThin: L.PushInteger(1);
+      brdThick: L.PushInteger(2);
+      brdSizable: L.PushInteger(3);
+    else
+      L.PushInteger(0);
+    end;
+    Result := 1;
+  end;
+end;
+
+//controls.backcolor(handle [, color]) -> get/set the back color as an int
+//(use colors.name or an #rrggbb int from the colors table)
+function TLuaControls.BackColor_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    ctrl.BackColor := IntToColor(round(L.ToNumber(2)));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushInteger(ColorToInt(ctrl.BackColor));
+    Result := 1;
+  end;
+end;
+
+//controls.name(handle [, name]) -> get/set the control name (named controls
+//resolve as Lua globals, e.g. controls.new('button', 'OK', 0, 0, ..., 'ok')
+//makes the global 'ok' a handle)
+function TLuaControls.Name_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    ctrl.Name := L.ToString(2);
+    Result := 0;
+  end
+  else
+  begin
+    L.PushString(ctrl.Name);
+    Result := 1;
+  end;
 end;
 
 function TLuaSprite.Load_func(L: Plua_State): integer; cdecl;

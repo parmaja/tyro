@@ -12,7 +12,7 @@ uses
   mnUtils, mnClasses, mnLogs,
   RayLib, RayClasses,
   Melodies, TyroSounds,
-  TyroClasses, TyroControls, TyroTerminal;
+  TyroClasses, TyroControls, TyroTerminal, TyroSpectrum;
 
 type
   { TQueueObject }
@@ -101,20 +101,48 @@ type
      procedure HandleConsoleInput(AConsole: TTyroTerminal; AInput: string);
    end;
 
-   { TCreateButtonObject }
+   { TCreateControlObject }
 
-   { Creates a button control on the main thread (it is painted by the main
-     drawing cycle every frame) and returns the created control. }
-   TCreateButtonObject = class(TQueueObject)
+   { Creates a control by class name on the main thread (it is painted by the
+     main drawing cycle every frame) and returns the created control. Dispatch
+     happens on the main thread so controls always belong to the control tree.
+     Supported classes: 'button', 'panel', 'label', 'checkbox', 'edit',
+     'spectrum'. }
+   TCreateControlObject = class(TQueueObject)
    private
+     FClassName: string;
      FCaption: utf8string;
      FX, FY, FW, FH: Integer;
-     FBorderSize: Integer;
-     FButton: TTyroButton;
+     FName: string;
+     FControl: TTyroControl;
    public
-     constructor Create(const ACaption: utf8string; AX, AY, AW, AH, ABorderSize: Integer);
+     constructor Create(const AClassName: string; const ACaption: utf8string; AX, AY, AW, AH: Integer; const AName: string);
      procedure DoExecute; override;
-     property Button: TTyroButton read FButton;
+     property Control: TTyroControl read FControl;
+   end;
+
+   { TSetControlBoundsObject }
+
+   { Moves/resizes an existing control on the main thread (the control tree is
+     aligned/painted by the main drawing cycle). }
+   TSetControlBoundsObject = class(TQueueObject)
+   private
+     FControl: TTyroControl;
+     FBoundsRect: TRect;
+   public
+     constructor Create(AControl: TTyroControl; ABoundsRect: TRect);
+     procedure DoExecute; override;
+   end;
+
+   { TSetControlFocusObject }
+
+   { Moves the input focus to an existing control on the main thread. }
+   TSetControlFocusObject = class(TQueueObject)
+   private
+     FControl: TTyroControl;
+   public
+     constructor Create(AControl: TTyroControl);
+     procedure DoExecute; override;
    end;
 
   { TDrawSetColorObject }
@@ -724,24 +752,73 @@ begin
   Main.ShowWindow(FW, FH);
 end;
 
-{ TCreateButtonObject }
+{ TCreateControlObject }
 
-constructor TCreateButtonObject.Create(const ACaption: utf8string; AX, AY, AW, AH, ABorderSize: Integer);
+constructor TCreateControlObject.Create(const AClassName: string; const ACaption: utf8string; AX, AY, AW, AH: Integer; const AName: string);
 begin
   inherited Create;
+  FClassName := AClassName;
   FCaption := ACaption;
   FX := AX;
   FY := AY;
   FW := AW;
   FH := AH;
-  FBorderSize := ABorderSize;
+  FName := AName;
 end;
 
-procedure TCreateButtonObject.DoExecute;
+procedure TCreateControlObject.DoExecute;
+var
+  LName: string;
 begin
-  FButton := TTyroButton.Create(Main);
-  FButton.Caption := FCaption;
-  FButton.BoundsRect := Rect(FX, FY, FX + FW, FY + FH);
+  LName := LowerCase(FClassName);
+  if LName = 'button' then
+    FControl := TTyroButton.Create(Main)
+  else if LName = 'panel' then
+    FControl := TTyroPanel.Create(Main)
+  else if LName = 'label' then
+    FControl := TTyroLabel.Create(Main)
+  else if LName = 'checkbox' then
+    FControl := TTyroCheckBox.Create(Main)
+  else if LName = 'edit' then
+    FControl := TTyroEdit.Create(Main)
+  else if LName = 'spectrum' then
+    FControl := TTyroSpectrum.Create(Main)
+  else
+    FControl := nil;
+  if FControl <> nil then
+  begin
+    FControl.SetText(FCaption);
+    if FName <> '' then
+      FControl.Name := FName;
+    FControl.BoundsRect := Rect(FX, FY, FX + FW, FY + FH);
+  end;
+end;
+
+{ TSetControlBoundsObject }
+
+constructor TSetControlBoundsObject.Create(AControl: TTyroControl; ABoundsRect: TRect);
+begin
+  inherited Create;
+  FControl := AControl;
+  FBoundsRect := ABoundsRect;
+end;
+
+procedure TSetControlBoundsObject.DoExecute;
+begin
+  FControl.BoundsRect := FBoundsRect;
+end;
+
+{ TSetControlFocusObject }
+
+constructor TSetControlFocusObject.Create(AControl: TTyroControl);
+begin
+  inherited Create;
+  FControl := AControl;
+end;
+
+procedure TSetControlFocusObject.DoExecute;
+begin
+  FControl.Focused := True;
 end;
 
 { TDrawSetColorObject }

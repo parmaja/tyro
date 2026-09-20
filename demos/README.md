@@ -55,6 +55,12 @@ tyro demos/pong.lua
 |------|---------|
 | `interactive_paint.lua` | Mouse drawing + keyboard color switching (uses input APIs) |
 
+### Controls
+
+| File | Feature |
+|------|---------|
+| `controls.ls` | Generic control table: `controls.new('button'/'label'/'checkbox'/'edit'/'panel', ...)` with text, checked, position/size, visible, hover/down/clicked, focus, border, backcolor, name |
+
 ### Text
 
 | File | Feature |

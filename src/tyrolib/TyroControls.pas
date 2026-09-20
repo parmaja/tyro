@@ -167,6 +167,12 @@ type
     FResizeStartMouse: TVector2;
     FLastMouseX: Integer;
     FLastMouseY: Integer;
+    //* Mouse-over/press/click state, tracked by CheckState every painted frame
+    //* (buttons, checkboxes...). Read-only through Hover/Down/Clicked.
+    FHover: Boolean;
+    FDown: Boolean;
+    FClicked: Boolean;
+    FWasDown: Boolean;
     FHScroll: TTyroScrollInfo;
     FVScroll: TTyroScrollInfo;
     FHScrollHover: Boolean;
@@ -183,6 +189,20 @@ type
   protected
     Style: TTyroControlStyles;
     function GetClientRect: TRect;
+    //* Mouse-over/press/click state used by interactive controls. CheckState is
+    //* called from DoPaint; Hover/Down/Clicked are readable after the call.
+    function IsMouseOver: Boolean; virtual;
+    procedure CheckState; virtual;
+    function GetHover: Boolean; virtual;
+    function GetDown: Boolean; virtual;
+    function GetClicked: Boolean; virtual;
+  public
+    //* Text/caption of the control (buttons, labels, checkboxes, edits). The
+    //* Lua controls table reads/writes it through these virtuals.
+    function GetText: utf8string; virtual;
+    procedure SetText(const AValue: utf8string); virtual;
+    function GetChecked: Boolean; virtual;
+    procedure SetChecked(AValue: Boolean); virtual;
     //* Edges which may be resized when hovering at the local point (X, Y).
     //* brdSizable honors the Align constraint: aligned controls only expose the
     //* single free edge, alClient exposes none, alNone exposes all four.
@@ -240,6 +260,13 @@ type
 
     property BackColor: TColor read FBackColor write SetBackColor;
 
+    //* Shared text: caption for buttons/labels/checkboxes, edited text for edits.
+    property Text: utf8string read GetText write SetText;
+    property Checked: Boolean read GetChecked write SetChecked;
+    property Hover: Boolean read GetHover;
+    property Down: Boolean read GetDown;
+    property Clicked: Boolean read GetClicked;
+
     //* Own transparent texture buffer. The control content is painted into it
     //* every frame and the buffer is drawn (blitted) on top of the canvas.
     property Canvas: TTyroCanvas read FCanvas write SetCanvas;
@@ -258,21 +285,74 @@ type
   TTyroButton = class(TTyroControl)
   private
     FCaption: utf8string;
-    FHover: Boolean;
-    FDown: Boolean;
-    FClicked: Boolean;
-    FWasDown: Boolean;
-    function IsMouseOver: Boolean;
-    procedure CheckState;
     procedure SetCaption(AValue: utf8string);
   protected
     procedure DoPaint(ACanvas: TTyroCanvas); override;
+    function GetText: utf8string; override;
+    procedure SetText(const AValue: utf8string); override;
   public
     constructor Create(AParent: TTyroLayout); override;
     property Caption: utf8string read FCaption write SetCaption;
-    property Hover: Boolean read FHover;
-    property Down: Boolean read FDown;
-    property Clicked: Boolean read FClicked;
+  end;
+
+  { TTyroLabel }
+
+  TTyroLabel = class(TTyroControl)
+  private
+    FCaption: utf8string;
+    procedure SetCaption(AValue: utf8string);
+  protected
+    procedure DoPaint(ACanvas: TTyroCanvas); override;
+    function GetText: utf8string; override;
+    procedure SetText(const AValue: utf8string); override;
+  public
+    constructor Create(AParent: TTyroLayout); override;
+    property Caption: utf8string read FCaption write SetCaption;
+  end;
+
+  { TTyroCheckBox }
+
+  TTyroCheckBox = class(TTyroControl)
+  private
+    FCaption: utf8string;
+    FChecked: Boolean;
+    procedure SetCaption(AValue: utf8string);
+  protected
+    procedure DoPaint(ACanvas: TTyroCanvas); override;
+    function GetText: utf8string; override;
+    procedure SetText(const AValue: utf8string); override;
+    function GetChecked: Boolean; override;
+    procedure SetChecked(AValue: Boolean); override;
+  public
+    constructor Create(AParent: TTyroLayout); override;
+    property Caption: utf8string read FCaption write SetCaption;
+    property Checked: Boolean read GetChecked write SetChecked;
+  end;
+
+  { TTyroEdit }
+
+  TTyroEdit = class(TTyroControl)
+  private
+    FText: utf8string;
+    FCaretPos: Integer; //codepoint index into FText
+    FSelStart: Integer; //selection anchor codepoint, -1 = none
+    FSelEnd: Integer;   //selection end codepoint (exclusive), -1 = none
+    FScrollPos: Integer;//horizontal scroll offset in pixels
+    function PointToCaret(ALocalX: Integer): Integer;
+    function TextWidth(const S: utf8string): Single;
+    procedure DeleteSelection;
+    procedure EnsureCaretVisible;
+  protected
+    procedure DoPaint(ACanvas: TTyroCanvas); override;
+    function GetText: utf8string; override;
+    procedure SetText(const AValue: utf8string); override;
+  public
+    procedure FocusChanged; override;
+    constructor Create(AParent: TTyroLayout); override;
+    procedure KeyPress(var Key: TUTF8Char); override;
+    procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
+    procedure MouseMove(Shift: TShiftState; x, y: integer); override;
   end;
 
   { TTyroWindow }
@@ -299,6 +379,34 @@ type
   end;
 
 implementation
+
+{ Codepoint helpers for UTF-8 strings (same pattern as TyroTerminal) }
+
+function CPCount(const S: utf8string): Integer;
+begin
+  Result := UTF8Length(S);
+end;
+
+function CPSub(const S: utf8string; AStart, ACount: Integer): utf8string; //AStart is 0-based codepoint
+begin
+  if (ACount <= 0) or (AStart < 0) then
+    Result := ''
+  else
+    Result := UTF8Copy(S, AStart + 1, ACount);
+end;
+
+function CPInsert(const S: utf8string; ACol: Integer; const AIns: utf8string): utf8string;
+begin
+  if AIns = '' then
+    Result := S
+  else
+    Result := CPSub(S, 0, ACol) + AIns + CPSub(S, ACol, CPCount(S) - ACol);
+end;
+
+function CPDelete(const S: utf8string; ACol, ACount: Integer): utf8string;
+begin
+  Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, CPCount(S) - ACol - ACount);
+end;
 
 { TTyroLayout }
 
@@ -473,6 +581,7 @@ begin
   inherited;
   Style := [csOpaque];
   Border := brdSizable;
+  BackColor := clGreen;
   BoundsRect := Rect(0 ,0 , 100, 100);
 end;
 
@@ -483,7 +592,7 @@ begin
   inherited;
   r := ClientRect;
   //r.Inflate(-2,-2);
-  ACanvas.DrawRectangle(r, clGreen, True);
+  ACanvas.DrawRectangle(r, BackColor, True);
 end;
 
 { TTyroButton }
@@ -502,24 +611,14 @@ begin
   Invalidate;
 end;
 
-function TTyroButton.IsMouseOver: Boolean;
-var
-  mp: TVector2;
+function TTyroButton.GetText: utf8string;
 begin
-  Result := False;
-  if (WindowRect.Width <= 0) or (WindowRect.Height <= 0) then
-    Exit;
-  mp := TVector2(RayLib.GetMousePosition);
-  Result := (mp.X >= WindowRect.Left) and (mp.X <= WindowRect.Right) and
-            (mp.Y >= WindowRect.Top) and (mp.Y <= WindowRect.Bottom);
+  Result := FCaption;
 end;
 
-procedure TTyroButton.CheckState;
+procedure TTyroButton.SetText(const AValue: utf8string);
 begin
-  FHover := IsMouseOver;
-  FDown := FHover and RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT);
-  FClicked := FWasDown and FHover and (not FDown);
-  FWasDown := FDown;
+  Caption := AValue;
 end;
 
 procedure TTyroButton.DoPaint(ACanvas: TTyroCanvas);
@@ -529,8 +628,6 @@ var
   tx, ty, tw, th: Single;
 begin
   inherited;
-  CheckState;
-
   r := RectangleOf(ClientRect);
   if (r.Width <= 0) or (r.Height <= 0) then
     Exit;
@@ -559,6 +656,460 @@ begin
   if FDown then
     ty := ty + 0.1;
   ACanvas.DrawText(tx, ty, FCaption, foreground);
+end;
+
+{ TTyroLabel }
+
+constructor TTyroLabel.Create(AParent: TTyroLayout);
+begin
+  inherited;
+  Style := [csOpaque];
+  Border := brdNone;
+  BackColor := clDarkblue;
+  BoundsRect := Rect(0, 0, 120, 24);
+end;
+
+procedure TTyroLabel.SetCaption(AValue: utf8string);
+begin
+  if FCaption = AValue then
+    Exit;
+  FCaption := AValue;
+  Invalidate;
+end;
+
+function TTyroLabel.GetText: utf8string;
+begin
+  Result := FCaption;
+end;
+
+procedure TTyroLabel.SetText(const AValue: utf8string);
+begin
+  Caption := AValue;
+end;
+
+procedure TTyroLabel.DoPaint(ACanvas: TTyroCanvas);
+var
+  th: Single;
+begin
+  inherited;
+  th := Resources.Font.Height;
+  ACanvas.DrawText(2, (ClientRect.Height - th) / 2, FCaption, clWhite);
+end;
+
+{ TTyroCheckBox }
+
+constructor TTyroCheckBox.Create(AParent: TTyroLayout);
+begin
+  inherited;
+  Style := [csOpaque];
+  Border := brdNone;
+  BackColor := clLightgray;
+  BoundsRect := Rect(0, 0, 120, 24);
+end;
+
+procedure TTyroCheckBox.SetCaption(AValue: utf8string);
+begin
+  if FCaption = AValue then
+    Exit;
+  FCaption := AValue;
+  Invalidate;
+end;
+
+function TTyroCheckBox.GetText: utf8string;
+begin
+  Result := FCaption;
+end;
+
+procedure TTyroCheckBox.SetText(const AValue: utf8string);
+begin
+  Caption := AValue;
+end;
+
+function TTyroCheckBox.GetChecked: Boolean;
+begin
+  Result := FChecked;
+end;
+
+procedure TTyroCheckBox.SetChecked(AValue: Boolean);
+begin
+  if FChecked = AValue then
+    Exit;
+  FChecked := AValue;
+  Invalidate;
+end;
+
+procedure TTyroCheckBox.DoPaint(ACanvas: TTyroCanvas);
+var
+  r: TRect;
+  box: TRect;
+  boxSize: Integer;
+  th: Single;
+begin
+  inherited;
+  //* Toggle the state once per press-release (FClicked is true for a single
+  //* frame between release and the next painted frame).
+  if FClicked then
+    FChecked := not FChecked;
+
+  r := ClientRect;
+  if (r.Width <= 0) or (r.Height <= 0) then
+    Exit;
+
+  boxSize := r.Height;
+  if boxSize > 16 then
+    boxSize := 16;
+  box := Rect(r.Left, r.Top + (r.Height - boxSize) div 2, r.Left + boxSize, r.Top + (r.Height - boxSize) div 2 + boxSize);
+
+  if FChecked then
+    ACanvas.FillRectangle(box, clSkyBlue)
+  else
+    ACanvas.FillRectangle(box, clWhite);
+  ACanvas.DrawRect(box, 1, clDarkGray);
+  if FHover then
+    ACanvas.DrawRect(Rect(box.Left - 1, box.Top - 1, box.Right + 1, box.Bottom + 1), 1, clSkyBlue);
+
+  if FChecked then
+  begin
+    //check mark: two strokes inside the box
+    ACanvas.DrawLine(box.Left + 3, box.Top + boxSize div 2, box.Left + boxSize div 2, box.Bottom - 3, clBlack);
+    ACanvas.DrawLine(box.Left + boxSize div 2, box.Bottom - 3, box.Right - 2, box.Top + 3, clBlack);
+  end;
+
+  th := Resources.Font.Height;
+  ACanvas.DrawText(box.Right + 6, r.Top + (r.Height - th) / 2, FCaption, clBlack);
+end;
+
+{ TTyroEdit }
+
+constructor TTyroEdit.Create(AParent: TTyroLayout);
+begin
+  inherited;
+  Style := [csClip, csOpaque];
+  Border := brdNone;
+  BackColor := clWhite;
+  BoundsRect := Rect(0, 0, 140, 28);
+end;
+
+function TTyroEdit.GetText: utf8string;
+begin
+  Result := FText;
+end;
+
+procedure TTyroEdit.SetText(const AValue: utf8string);
+begin
+  if FText = AValue then
+    Exit;
+  FText := AValue;
+  if FCaretPos > CPCount(FText) then
+    FCaretPos := CPCount(FText);
+  FSelStart := -1;
+  FSelEnd := -1;
+  EnsureCaretVisible;
+  Invalidate;
+end;
+
+function TTyroEdit.TextWidth(const S: utf8string): Single;
+begin
+  Result := RayLib.MeasureTextEx(Resources.Font.Data, PUTF8Char(S), Resources.Font.Height, 0).x;
+end;
+
+function TTyroEdit.PointToCaret(ALocalX: Integer): Integer;
+var
+  i, n: Integer;
+begin
+  ALocalX := ALocalX + FScrollPos;
+  n := CPCount(FText);
+  Result := n;
+  for i := 0 to n - 1 do
+  begin
+    if TextWidth(CPSub(FText, 0, i + 1)) > ALocalX then
+    begin
+      Result := i;
+      Exit;
+    end;
+  end;
+end;
+
+procedure TTyroEdit.DeleteSelection;
+var
+  a, b: Integer;
+begin
+  if (FSelStart < 0) or (FSelEnd < 0) or (FSelStart = FSelEnd) then
+    Exit;
+  if FSelStart < FSelEnd then
+  begin
+    a := FSelStart;
+    b := FSelEnd;
+  end
+  else
+  begin
+    a := FSelEnd;
+    b := FSelStart;
+  end;
+  FText := CPDelete(FText, a, b - a);
+  FCaretPos := a;
+  FSelStart := -1;
+  FSelEnd := -1;
+  Invalidate;
+end;
+
+procedure TTyroEdit.EnsureCaretVisible;
+var
+  caretX, textW, w: Single;
+  maxScroll: Integer;
+begin
+  caretX := TextWidth(CPSub(FText, 0, FCaretPos));
+  textW := TextWidth(FText);
+  w := ClientRect.Width;
+  maxScroll := Round(textW) - Round(w) + 4;
+  if maxScroll < 0 then
+    maxScroll := 0;
+  if caretX - FScrollPos > w - 4 then
+    FScrollPos := Round(caretX) - Round(w) + 4
+  else if caretX - FScrollPos < 2 then
+    FScrollPos := Round(caretX) - 2;
+  if FScrollPos < 0 then
+    FScrollPos := 0;
+  if FScrollPos > maxScroll then
+    FScrollPos := maxScroll;
+end;
+
+procedure TTyroEdit.FocusChanged;
+begin
+  inherited;
+  Invalidate;
+end;
+
+procedure TTyroEdit.DoPaint(ACanvas: TTyroCanvas);
+var
+  r: TRect;
+  th: Single;
+  textColor: TColor;
+  caretX, selX, selW: Integer;
+  a, b: Integer;
+  sel: Boolean;
+begin
+  inherited;
+  r := ClientRect;
+  if (r.Width <= 0) or (r.Height <= 0) then
+    Exit;
+
+  //field outline
+  ACanvas.DrawRect(r, 1, clDarkGray);
+
+  if Focused then
+    textColor := clBlack
+  else
+    textColor := clDarkGray;
+
+  th := Resources.Font.Height;
+
+  //selection highlight under the text
+  sel := (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd);
+  if sel then
+  begin
+    if FSelStart < FSelEnd then
+    begin
+      a := FSelStart;
+      b := FSelEnd;
+    end
+    else
+    begin
+      a := FSelEnd;
+      b := FSelStart;
+    end;
+    selX := 2 + Round(TextWidth(CPSub(FText, 0, a))) - FScrollPos;
+    selW := Round(TextWidth(CPSub(FText, a, b - a)));
+    ACanvas.FillRectangle(selX + 1, 1, selW, r.Height - 2, clBlue.ReplaceAlpha(90));
+  end;
+
+  ACanvas.DrawText(2 - FScrollPos, (r.Height - th) / 2, FText, textColor);
+
+  if Focused and (Trunc(RayLib.GetTime() * 2) mod 2 = 0) then
+  begin
+    caretX := 2 + Round(TextWidth(CPSub(FText, 0, FCaretPos))) - FScrollPos;
+    ACanvas.FillRectangle(caretX, 1, 1, r.Height - 2, clBlack);
+  end;
+end;
+
+procedure TTyroEdit.KeyPress(var Key: TUTF8Char);
+begin
+  inherited;
+  if Length(Key) = 0 then
+    Exit;
+  //skip single-byte control characters (character input is printable only anyway)
+  if (Length(Key) = 1) and (Ord(Key[1]) < 32) then
+    Exit;
+
+  if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+    DeleteSelection;
+  FText := CPInsert(FText, FCaretPos, Key);
+  Inc(FCaretPos);
+  EnsureCaretVisible;
+  Invalidate;
+end;
+
+procedure TTyroEdit.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
+var
+  n, oldCaret: Integer;
+begin
+  inherited;
+  n := CPCount(FText);
+
+  if ssShift in Shift then
+  begin
+    //move the caret and extend/start the selection anchored at the old position
+    case Key of
+      KEY_LEFT:
+      begin
+        oldCaret := FCaretPos;
+        if FCaretPos > 0 then
+          Dec(FCaretPos);
+        if FSelStart < 0 then
+          FSelStart := oldCaret;
+        FSelEnd := FCaretPos;
+        Invalidate;
+      end;
+      KEY_RIGHT:
+      begin
+        oldCaret := FCaretPos;
+        if FCaretPos < n then
+          Inc(FCaretPos);
+        if FSelStart < 0 then
+          FSelStart := oldCaret;
+        FSelEnd := FCaretPos;
+        Invalidate;
+      end;
+      KEY_HOME:
+      begin
+        oldCaret := FCaretPos;
+        FCaretPos := 0;
+        if FSelStart < 0 then
+          FSelStart := oldCaret;
+        FSelEnd := FCaretPos;
+        Invalidate;
+      end;
+      KEY_END:
+      begin
+        oldCaret := FCaretPos;
+        FCaretPos := n;
+        if FSelStart < 0 then
+          FSelStart := oldCaret;
+        FSelEnd := FCaretPos;
+        Invalidate;
+      end;
+    end;
+    EnsureCaretVisible;
+    Exit;
+  end;
+
+  case Key of
+    KEY_BACKSPACE:
+    begin
+      if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+        DeleteSelection
+      else if FCaretPos > 0 then
+      begin
+        Dec(FCaretPos);
+        FText := CPDelete(FText, FCaretPos, 1);
+        Invalidate;
+      end;
+      EnsureCaretVisible;
+    end;
+    KEY_DELETE:
+    begin
+      if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+        DeleteSelection
+      else if FCaretPos < n then
+      begin
+        FText := CPDelete(FText, FCaretPos, 1);
+        Invalidate;
+      end;
+      EnsureCaretVisible;
+    end;
+    KEY_LEFT:
+    begin
+      if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+      begin
+        if FSelStart < FSelEnd then
+          FCaretPos := FSelStart
+        else
+          FCaretPos := FSelEnd;
+      end
+      else if FCaretPos > 0 then
+        Dec(FCaretPos);
+      FSelStart := -1;
+      FSelEnd := -1;
+      EnsureCaretVisible;
+      Invalidate;
+    end;
+    KEY_RIGHT:
+    begin
+      if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+      begin
+        if FSelStart > FSelEnd then
+          FCaretPos := FSelStart
+        else
+          FCaretPos := FSelEnd;
+      end
+      else if FCaretPos < n then
+        Inc(FCaretPos);
+      FSelStart := -1;
+      FSelEnd := -1;
+      EnsureCaretVisible;
+      Invalidate;
+    end;
+    KEY_HOME:
+    begin
+      FCaretPos := 0;
+      FSelStart := -1;
+      FSelEnd := -1;
+      EnsureCaretVisible;
+      Invalidate;
+    end;
+    KEY_END:
+    begin
+      FCaretPos := n;
+      FSelStart := -1;
+      FSelEnd := -1;
+      EnsureCaretVisible;
+      Invalidate;
+    end;
+  end;
+end;
+
+procedure TTyroEdit.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer);
+begin
+  inherited;
+  if Button = mbLeft then
+  begin
+    if not Focused then
+      Focused := True;
+    FCaretPos := PointToCaret(x);
+    if ssShift in Shift then
+      FSelEnd := FCaretPos
+    else
+    begin
+      FSelStart := -1;
+      FSelEnd := -1;
+    end;
+    EnsureCaretVisible;
+    Invalidate;
+  end;
+end;
+
+procedure TTyroEdit.MouseMove(Shift: TShiftState; x, y: integer);
+begin
+  inherited;
+  if ssLeft in Shift then
+  begin
+    FCaretPos := PointToCaret(x);
+    if FSelStart < 0 then
+      FSelStart := FCaretPos;
+    FSelEnd := FCaretPos;
+    EnsureCaretVisible;
+    Invalidate;
+  end;
 end;
 
 { TTyroControl }
@@ -620,6 +1171,64 @@ procedure TTyroControl.SetFocused(AValue: Boolean);
 begin
   if Window <> nil then
     Window.FocusedControl := Self;
+end;
+
+{ Mouse-over/press/click state, shared by interactive controls. CheckState is
+  called from the base DoPaint every painted frame. }
+
+function TTyroControl.IsMouseOver: Boolean;
+var
+  mp: TVector2;
+begin
+  Result := False;
+  if (WindowRect.Width <= 0) or (WindowRect.Height <= 0) then
+    Exit;
+  mp := TVector2(RayLib.GetMousePosition);
+  Result := (mp.X >= WindowRect.Left) and (mp.X <= WindowRect.Right) and
+            (mp.Y >= WindowRect.Top) and (mp.Y <= WindowRect.Bottom);
+end;
+
+procedure TTyroControl.CheckState;
+begin
+  FHover := IsMouseOver;
+  FDown := FHover and RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+  FClicked := FWasDown and FHover and (not FDown);
+  FWasDown := FDown;
+end;
+
+function TTyroControl.GetHover: Boolean;
+begin
+  Result := FHover;
+end;
+
+function TTyroControl.GetDown: Boolean;
+begin
+  Result := FDown;
+end;
+
+function TTyroControl.GetClicked: Boolean;
+begin
+  Result := FClicked;
+end;
+
+function TTyroControl.GetText: utf8string;
+begin
+  Result := '';
+end;
+
+procedure TTyroControl.SetText(const AValue: utf8string);
+begin
+  Invalidate;
+end;
+
+function TTyroControl.GetChecked: Boolean;
+begin
+  Result := False;
+end;
+
+procedure TTyroControl.SetChecked(AValue: Boolean);
+begin
+  Invalidate;
 end;
 
 procedure TTyroLayout.SetMargin(AValue: Integer);
@@ -1001,7 +1610,8 @@ end;
 
 procedure TTyroControl.DoPaint(ACanvas: TTyroCanvas);
 begin
-
+  //* Track hover/press/click state once per painted frame for every control.
+  CheckState;
 end;
 
 procedure TTyroControl.KeyPress(var Key: TUTF8Char);

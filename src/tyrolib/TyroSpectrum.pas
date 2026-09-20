@@ -40,11 +40,11 @@ const
   cSpectrumRangeDb = 42;         //dB range from silence to full scale
 
 type
-  TTyroSpectrum = class;
+  TTyroSpectrumUpdate = class;
 
-  { TTyroSpectrumPanel }
+  { TTyroSpectrum }
 
-  TTyroSpectrumPanel = class(TTyroControl)
+  TTyroSpectrum = class(TTyroControl)
   private
     procedure DrawBar(ACanvas: TTyroCanvas; X, AWidth, AMaxHeight, ABaseY: Single; ABar: Integer; AChannel: Integer);
   protected
@@ -55,16 +55,16 @@ type
     procedure PaintWindow(ACanvas: TTyroCanvas); override;
   end;
 
-  { TTyroSpectrum }
+  { TTyroSpectrumUpdate }
 
-  TTyroSpectrum = class(TRayUpdate)
+  TTyroSpectrumUpdate = class(TRayUpdate)
   private
     FLock: TCriticalSection;
     FAttachedStream: TAudioStream;
     FAttached: Boolean;
     FSampleRate: Single;
     FActive: Boolean;
-    FPanel: TTyroSpectrumPanel;
+    FPanel: TTyroSpectrum;
     FVisible: Boolean;
     FBars: Integer;
     FRequestedBars: Integer;
@@ -112,16 +112,16 @@ type
   procedure SpectrumProcessor(var bufferData; frames: Cardinal); cdecl;
 
 var
-  Spectrum: TTyroSpectrum = nil;
+  Spectrum: TTyroSpectrumUpdate = nil;
 
 implementation
 
 uses
   TyroEngines;
 
-{ TTyroSpectrumPanel }
+{ TTyroSpectrum }
 
-constructor TTyroSpectrumPanel.Create(AParent: TTyroLayout);
+constructor TTyroSpectrum.Create(AParent: TTyroLayout);
 begin
   inherited;
   Name := 'Spectrum';
@@ -131,17 +131,17 @@ begin
   SetBoundsRect(Rect(0, 0, 500, 500));
 end;
 
-destructor TTyroSpectrumPanel.Destroy;
+destructor TTyroSpectrum.Destroy;
 begin
   inherited Destroy;
 end;
 
-procedure TTyroSpectrumPanel.PaintWindow(ACanvas: TTyroCanvas);
+procedure TTyroSpectrum.PaintWindow(ACanvas: TTyroCanvas);
 begin
   inherited PaintWindow(ACanvas);
 end;
 
-procedure TTyroSpectrumPanel.DrawBar(ACanvas: TTyroCanvas; X, AWidth,
+procedure TTyroSpectrum.DrawBar(ACanvas: TTyroCanvas; X, AWidth,
   AMaxHeight, ABaseY: Single; ABar: Integer; AChannel: Integer);
 var
   Level, Peak: Single;
@@ -173,7 +173,7 @@ begin
   ACanvas.DrawRectangle(X, PeakY, AWidth, 1.5, clWhite, True);
 end;
 
-procedure TTyroSpectrumPanel.DoPaint(ACanvas: TTyroCanvas);
+procedure TTyroSpectrum.DoPaint(ACanvas: TTyroCanvas);
 var
   r: TRect;
   Margin, Gap, HalfWidth, BarWidth, MaxHeight, BaseY, X: Single;
@@ -218,9 +218,9 @@ begin
   end;
 end;
 
-{ TTyroSpectrum }
+{ TTyroSpectrumUpdate }
 
-constructor TTyroSpectrum.Create;
+constructor TTyroSpectrumUpdate.Create;
 var
   i: Integer;
 begin
@@ -246,21 +246,21 @@ begin
   ComputeBands;
 end;
 
-destructor TTyroSpectrum.Destroy;
+destructor TTyroSpectrumUpdate.Destroy;
 begin
   Detach;
   FreeAndNil(FLock);
   inherited Destroy;
 end;
 
-procedure TTyroSpectrum.AllocateRing;
+procedure TTyroSpectrumUpdate.AllocateRing;
 begin
   FRingFrames := cSpectrumRingFrames;
   SetLength(FRing, FRingFrames * 2);
   FWriteIndex := 0;
 end;
 
-procedure TTyroSpectrum.ComputeBands;
+procedure TTyroSpectrumUpdate.ComputeBands;
 var
   b: Integer;
   Ratio, f1: Single;
@@ -287,7 +287,7 @@ begin
       FBandBins[b] := FBandBins[b - 1];
 end;
 
-procedure TTyroSpectrum.Attach(const AStream: TAudioStream);
+procedure TTyroSpectrumUpdate.Attach(const AStream: TAudioStream);
 begin
   Detach;
   FSampleRate := AStream.SampleRate;
@@ -300,7 +300,7 @@ begin
   FAttached := True;
 end;
 
-procedure TTyroSpectrum.Detach;
+procedure TTyroSpectrumUpdate.Detach;
 begin
   if FAttached then
   begin
@@ -319,7 +319,7 @@ begin
   end;
 end;
 
-procedure TTyroSpectrum.Capture(const AData: Pointer; AFrames: Integer);
+procedure TTyroSpectrumUpdate.Capture(const AData: Pointer; AFrames: Integer);
 var
   S: PSingle;
   i, n: Integer;
@@ -358,7 +358,7 @@ begin
   end;
 end;
 
-procedure TTyroSpectrum.ReadWindow;
+procedure TTyroSpectrumUpdate.ReadWindow;
 var
   Start, i, j: Integer;
 begin
@@ -380,7 +380,7 @@ begin
   end;
 end;
 
-procedure TTyroSpectrum.FFT(var Re, Im: array of Single);
+procedure TTyroSpectrumUpdate.FFT(var Re, Im: array of Single);
 var
   i, j, k, Len, Step: Integer;
   c, s, temp, twr, twi, tr, ti: Single;
@@ -432,7 +432,7 @@ begin
   end;
 end;
 
-procedure TTyroSpectrum.AnalyzeChannel(AChannel: Integer);
+procedure TTyroSpectrumUpdate.AnalyzeChannel(AChannel: Integer);
 var
   b, i, Bin, BinEnd, Count: Integer;
   Amp, Level, Abs, Db: Single;
@@ -476,16 +476,16 @@ begin
   end;
 end;
 
-procedure TTyroSpectrum.EnsurePanel;
+procedure TTyroSpectrumUpdate.EnsurePanel;
 begin
   if FPanel = nil then
   begin
-    FPanel := TTyroSpectrumPanel.Create(Main);
+    FPanel := TTyroSpectrum.Create(Main);
     FPanel.Show;
   end;
 end;
 
-procedure TTyroSpectrum.Show(ALeft, ATop, AWidth, AHeight: Integer);
+procedure TTyroSpectrumUpdate.Show(ALeft, ATop, AWidth, AHeight: Integer);
 begin
   EnsurePanel;
   FPanel.BoundsRect := Rect(ALeft, ATop, ALeft + AWidth, ATop + AHeight);
@@ -493,14 +493,14 @@ begin
   FVisible := True;
 end;
 
-procedure TTyroSpectrum.Hide;
+procedure TTyroSpectrumUpdate.Hide;
 begin
   if FPanel <> nil then
     FPanel.Hide;
   FVisible := False;
 end;
 
-procedure TTyroSpectrum.Update;
+procedure TTyroSpectrumUpdate.Update;
 var
   i, ch: Integer;
 begin
@@ -545,7 +545,7 @@ begin
   end;
 end;
 
-function TTyroSpectrum.BarLevel(ABar, AChannel: Integer): Single;
+function TTyroSpectrumUpdate.BarLevel(ABar, AChannel: Integer): Single;
 begin
   if (ABar >= 0) and (ABar < FBars) and (AChannel >= 0) and (AChannel <= 1) then
     Result := FBar[AChannel, ABar]
@@ -553,7 +553,7 @@ begin
     Result := 0;
 end;
 
-function TTyroSpectrum.PeakLevel(ABar, AChannel: Integer): Single;
+function TTyroSpectrumUpdate.PeakLevel(ABar, AChannel: Integer): Single;
 begin
   if (ABar >= 0) and (ABar < FBars) and (AChannel >= 0) and (AChannel <= 1) then
     Result := FPeak[AChannel, ABar]
@@ -570,7 +570,7 @@ begin
 end;
 
 initialization
-  Spectrum := TTyroSpectrum.Create;
+  Spectrum := TTyroSpectrumUpdate.Create;
   RayUpdates.Add(Spectrum);
 
 finalization
