@@ -13,13 +13,15 @@
 --    spectrum.visible              panel is shown
 
 window.show(640, 480)
-
-spectrum.show(120, 80, 400, 200)
+spectrum.show(0, 82, 640, 260)
 spectrum.bars = 32
 
 radio.play("http://countrymusic24.powerstream.de:9000")
+--radio.play("https://streams.80s80s.de/techno/mp3-192")
+--radio.play("https://stream04.pcradio.app/vangelis-med")
+--radio.play("https://server.emancity.com:9992/stream")
 
-while true do
+while cycle do
   -- left/right arrow keys change the number of bars
   if iskeypressed("left") and spectrum.bars > 8 then
     spectrum.bars = spectrum.bars - 8
@@ -30,8 +32,8 @@ while true do
 
   -- status header (cleared with a black box first)
   canvas.color = colors.black
-  canvas.rectangle(0, 0, 640, 60, true)
-  canvas.color = colors.white
+  canvas.rectangle(0, 0, 640, 70, true)
+  canvas.color = colors.green
   canvas.text(8, 8, "Station : " .. radio.station)
   canvas.text(8, 26, "Title   : " .. radio.title)
   canvas.text(8, 44, "State   : " .. radio.state .. "   " .. radio.bitrate)
@@ -45,6 +47,4 @@ while true do
   else
     canvas.text(8, 368, "waiting for the radio stream...")
   end
-
-  sleep(16)
 end

@@ -13,6 +13,7 @@
 --======================================================================
 
 -- The console starts hidden. Show it with a 60x20 character grid.
+window.show()
 console.show(60, 20)
 
 println("Welcome to Tyro Terminal!")
