@@ -268,6 +268,7 @@ type
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
     property PenSize: Integer read FPenSize write SetPenSize;
     property PenColor: TColor read FPenColor write SetPenColor;
+    //Maybe TextColor
     property BackColor: TColor read FBackColor write SetBackColor;
     property Width: Integer read FWidth write SetWidth;
     property Height: Integer read FHeight write SetHeight;
@@ -1080,9 +1081,10 @@ procedure TTyroResources.Load;
 var
   res: TTyroResource;
   aFontName: string;
+  aFontSize: integer;
 begin
-  aFontName := Config.ReadString('font', '');
-  if aFontName = '' then
+  aFontName := Config.Sections.ReadString('font', 'font', '');
+  if (aFontName = '') or not (SysUtils.FileExists(aFontName)) then
   begin
     res := Find('font', 'png');
     if res <> nil then
@@ -1093,7 +1095,10 @@ begin
       Font.LoadDefault;
   end
   else
-    Font.LoadFromFile(WorkSpace + aFontName);
+  begin
+    aFontSize := Config.Sections.ReadInt64('font', 'size', 0);
+    Font.LoadFromFile(WorkSpace + aFontName, aFontSize);
+  end;
 end;
 
 { TTyroResource }

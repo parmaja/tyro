@@ -58,6 +58,7 @@ type
   TTyroControlStyle = (
     csClip,
     csOpaque,
+    csFocus, //Can focus
     csHScroll,
     csVScroll
   );
@@ -600,6 +601,7 @@ end;
 constructor TTyroButton.Create(AParent: TTyroLayout);
 begin
   inherited;
+  Style := Style + [csFocus];
   BoundsRect := Rect(0, 0 , 100, 32);
 end;
 
@@ -663,9 +665,8 @@ end;
 constructor TTyroLabel.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Style := [csOpaque];
+  Style := [];
   Border := brdNone;
-  BackColor := clDarkblue;
   BoundsRect := Rect(0, 0, 120, 24);
 end;
 
@@ -693,7 +694,7 @@ var
 begin
   inherited;
   th := Resources.Font.Height;
-  ACanvas.DrawText(2, (ClientRect.Height - th) / 2, FCaption, clWhite);
+  ACanvas.DrawText(2, (ClientRect.Height - th) / 2, FCaption, ACanvas.PenColor);
 end;
 
 { TTyroCheckBox }
@@ -701,9 +702,8 @@ end;
 constructor TTyroCheckBox.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Style := [csOpaque];
+  Style := [csFocus];
   Border := brdNone;
-  BackColor := clLightgray;
   BoundsRect := Rect(0, 0, 120, 24);
 end;
 
@@ -746,14 +746,7 @@ var
   th: Single;
 begin
   inherited;
-  //* Toggle the state once per press-release (FClicked is true for a single
-  //* frame between release and the next painted frame).
-  if FClicked then
-    FChecked := not FChecked;
-
   r := ClientRect;
-  if (r.Width <= 0) or (r.Height <= 0) then
-    Exit;
 
   boxSize := r.Height;
   if boxSize > 16 then
@@ -764,19 +757,19 @@ begin
     ACanvas.FillRectangle(box, clSkyBlue)
   else
     ACanvas.FillRectangle(box, clWhite);
-  ACanvas.DrawRect(box, 1, clDarkGray);
-  if FHover then
-    ACanvas.DrawRect(Rect(box.Left - 1, box.Top - 1, box.Right + 1, box.Bottom + 1), 1, clSkyBlue);
+  //ACanvas.DrawRect(box, 1, clDarkGray);
+  {if FHover then
+    ACanvas.DrawRect(Rect(box.Left - 1, box.Top - 1, box.Right + 1, box.Bottom + 1), 1, clSkyBlue);   }
 
   if FChecked then
   begin
     //check mark: two strokes inside the box
-    ACanvas.DrawLine(box.Left + 3, box.Top + boxSize div 2, box.Left + boxSize div 2, box.Bottom - 3, clBlack);
-    ACanvas.DrawLine(box.Left + boxSize div 2, box.Bottom - 3, box.Right - 2, box.Top + 3, clBlack);
+    ACanvas.DrawLine(box.Left + 3, box.Top + boxSize div 2, box.Left + boxSize div 2, box.Bottom - 3, ACanvas.PenColor);
+    ACanvas.DrawLine(box.Left + boxSize div 2, box.Bottom - 3, box.Right - 2, box.Top + 3, ACanvas.PenColor);
   end;
 
   th := Resources.Font.Height;
-  ACanvas.DrawText(box.Right + 6, r.Top + (r.Height - th) / 2, FCaption, clBlack);
+  ACanvas.DrawText(box.Right + 6, r.Top + (r.Height - th) / 2, FCaption, ACanvas.PenColor);
 end;
 
 { TTyroEdit }
@@ -784,7 +777,7 @@ end;
 constructor TTyroEdit.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Style := [csClip, csOpaque];
+  Style := [csClip, csOpaque, csFocus];
   Border := brdNone;
   BackColor := clWhite;
   BoundsRect := Rect(0, 0, 140, 28);
@@ -891,16 +884,6 @@ var
 begin
   inherited;
   r := ClientRect;
-  if (r.Width <= 0) or (r.Height <= 0) then
-    Exit;
-
-  //field outline
-  ACanvas.DrawRect(r, 1, clDarkGray);
-
-  if Focused then
-    textColor := clBlack
-  else
-    textColor := clDarkGray;
 
   th := Resources.Font.Height;
 
@@ -923,7 +906,7 @@ begin
     ACanvas.FillRectangle(selX + 1, 1, selW, r.Height - 2, clBlue.ReplaceAlpha(90));
   end;
 
-  ACanvas.DrawText(2 - FScrollPos, (r.Height - th) / 2, FText, textColor);
+  ACanvas.DrawText(2 - FScrollPos, (r.Height - th) / 2, FText, ACanvas.PenColor);
 
   if Focused and (Trunc(RayLib.GetTime() * 2) mod 2 = 0) then
   begin
@@ -1169,7 +1152,7 @@ end;
 
 procedure TTyroControl.SetFocused(AValue: Boolean);
 begin
-  if Window <> nil then
+  if (Window <> nil) and (csFocus in Style) then
     Window.FocusedControl := Self;
 end;
 
@@ -1503,11 +1486,13 @@ var
 begin
   if Visible then
   begin
+    aClientRect := ClientRect;
+    if (aClientRect.Width <= 0) or (aClientRect.Height <= 0) then
+      exit;
     if PrepareCanvas then
     begin
       //* Paint the control content into its own transparent texture buffer,
       //* then draw (blit) that buffer on top of the window canvas.
-      aClientRect := ClientRect;
       Canvas.BeginDraw;
       Canvas.ClearBackground(clBlank);
       try

@@ -326,7 +326,6 @@ type
     procedure DoExecute; override;
   end;
 
-
 { TLuaCollision }
 
   TLuaCollision = class(TTyroLuaObject)
@@ -388,7 +387,7 @@ type
 
 const
   // Integer key base in the Lua registry for "sprite handle -> sprite table"
-  cSpriteRegistryBase = $00700000;
+  cSpriteRegistryBase = $00700000; //HUH
 
 implementation
 
