@@ -349,7 +349,9 @@ const
 var
   Resources: TTyroResources = nil;
   Lock: TCriticalSection = nil;
-  FramePerSeconds: Integer = 60;
+
+const
+  cFramePerSeconds: Integer = 60;
 
 implementation
 
@@ -1084,6 +1086,7 @@ var
   aFontSize: integer;
 begin
   aFontName := Config.Sections.ReadString('font', 'font', '');
+  aFontName := ExpandToPath(aFontName, WorkSpace);
   if (aFontName = '') or not (SysUtils.FileExists(aFontName)) then
   begin
     res := Find('font', 'png');
@@ -1097,7 +1100,7 @@ begin
   else
   begin
     aFontSize := Config.Sections.ReadInt64('font', 'size', 0);
-    Font.LoadFromFile(WorkSpace + aFontName, aFontSize);
+    Font.LoadFromFile(aFontName, aFontSize);
   end;
 end;
 

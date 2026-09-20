@@ -68,7 +68,7 @@ type
 
   { TTyroMain }
 
-  TTyroMainOption = (moWindow, moOpaque, moShowFPS);
+  TTyroMainOption = (moOpaque, moShowFPS);
   TTyroMainOptions = set of TTyroMainOption;
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: string) of object;
@@ -110,6 +110,7 @@ type
     procedure Terminate;
 
   protected
+    FPrepared: Boolean; //InitWindow is used
     FQueue: TQueueObjects;
     FScriptThread: TTyroScriptThread;
     FScriptMain: TTyroScript; //only if we have main loop
@@ -130,34 +131,33 @@ type
     destructor Destroy; override;
 
     //* TextureMode create texture with canvas
-    procedure ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); overload;
+    procedure PrepareWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); overload;
+    procedure ShowWindow(AWidth, AHeight: Integer); overload;
     procedure ShowWindow; overload;
     procedure SetFPS(FPS: Integer); virtual;
     procedure HideWindow; virtual;
 
     //* Resize the window (and canvas) to the given size; canvas is inset by margin + border
-    procedure Resize(AWidth, AHeight: Integer); virtual;
+    procedure ResizeWindow(AWidth, AHeight: Integer); virtual;
 
     //* Before Show window
     procedure Init; virtual;
+    procedure Run;
     //* After window initialized and other resource, load your resources here
-    procedure Load; virtual;
     procedure Start; virtual;
     procedure Update; override;
     procedure PrepareDraw; virtual;
     procedure Draw; virtual;
 
     //When application exit, unload your resources
-    procedure Unload; virtual;
     procedure ProcessQueue;
 
     function Terminated: Boolean; virtual;
     procedure ProcessInput; virtual;
 
-    procedure Run;
-    procedure Shutdown; virtual;
     procedure LoadConfig;
     procedure Stop; //and wait
+    procedure Shutdown; virtual;
 
     //* Block the calling script (thread) until the next drawing cycle
     //* (EndDrawing) has completed. Backs the Lua global 'cycle' so scripts can
@@ -313,87 +313,85 @@ begin
   end;
 end;
 
-procedure TTyroMain.Load;
-begin
-end;
-
 procedure TTyroMain.Run;
 var
   tw: Integer;
 begin
+  PrepareWindow(cDefaultWindowWidth, cDefaultWindowHeight);
+  //InitWindow(cDefaultWindowWidth, cDefaultWindowHeight, PUTF8Char(Title));
   Init;
 
-  if not Visible and (moWindow in Options) then
-  begin
-    ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
-    SetFPS(FramePerSeconds);
-  end;
+  if FPS = 0 then
+    SetFPS(cFramePerSeconds)
+  else
+    SetFPS(FPS);
 
   Resources.Load;
-  Load;
+
+  {if Resources.Config.Sections.ReadBool('show', 'console', False) then
+  begin
+    ShowConsole(0, 0, 0, 0);
+    StartConsoleRead;
+  end;
+
+  if Resources.Config.Sections.ReadBool('show', 'log', False) then
+    Output.Show;}
 
   Start;
-  if FPS = 0 then
-    SetFPS(FramePerSeconds);
   repeat
-    try
-      CheckSynchronize;
-      if WindowShouldClose() then
+    CheckSynchronize;
+    if WindowShouldClose() then
+    begin
+      Shutdown;
+      Terminate;
+    end
+    else
+    begin
+      if Visible and IsWindowReady then
       begin
-        Shutdown;
-        Terminate;
-      end
-      else
-      begin
-        if Visible and IsWindowReady then
-        begin
-          if IsWindowHidden then
-            break;
+        Update;
+        RayUpdates.Update;
+        if IsWindowHidden then
+          break;
 
-          if RayLib.IsWindowResized() then
-            Resize(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
-          PrepareDraw;
-          RayLib.BeginDrawing();
-          if moOpaque in Options then
-            RayLib.ClearBackground(BackColor);
+        if RayLib.IsWindowResized() then
+          ResizeWindow(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
+        PrepareDraw;
+        RayLib.BeginDrawing();
+        if moOpaque in Options then
+          RayLib.ClearBackground(BackColor);
 
-          try
-            Camera2D.Target := Vector2Of(0, 0);
-            Camera2D.Offset := Vector2Of(Margin, Margin);
-            Camera2D.Zoom := 1;
-            Camera2D.Rotation := 0;
+        try
+          Camera2D.Target := Vector2Of(0, 0);
+          Camera2D.Offset := Vector2Of(Margin, Margin);
+          Camera2D.Zoom := 1;
+          Camera2D.Rotation := 0;
 
-            Canvas.BeginDraw;
-            BeginMode2D(Camera2D);
-            Draw;
-            EndMode2D();
-            Canvas.EndDraw;
-            Canvas.PostDraw;
+          Canvas.BeginDraw;
+          BeginMode2D(Camera2D);
+          Draw;
+          EndMode2D();
+          Canvas.EndDraw;
+          Canvas.PostDraw;
 
-            Paint;
+          Paint;
 
-            if moShowFPS in Options then
-            begin
-              tw := RayLib.MeasureText('999 FPS', 20) + 5;
-              RayLib.DrawFPS(RayLib.GetScreenWidth - tw, 5);
-            end;
-          finally
-            RayLib.EndDrawing();
-            //One drawing cycle completed: wake any script thread blocked on the
-            //Lua 'cycle' gate so "while cycle do" runs at most once per frame.
-            if FFrameEvent <> nil then
-              FFrameEvent.SetEvent;
+          if moShowFPS in Options then
+          begin
+            tw := RayLib.MeasureText('999 FPS', 20) + 5;
+            RayLib.DrawFPS(RayLib.GetScreenWidth - tw, 5);
           end;
+        finally
+          RayLib.EndDrawing();
+          //One drawing cycle completed: wake any script thread blocked on the
+          //Lua 'cycle' gate so "while cycle do" runs at most once per frame.
+          if FFrameEvent <> nil then
+            FFrameEvent.SetEvent;
         end;
         ProcessInput;
       end;
-      Update;
-      RayUpdates.Update;
-    finally
     end;
   until Terminated;
-
-  Unload;
 
   if Visible then
     RayLib.CloseWindow();
@@ -438,7 +436,7 @@ begin
     CanvasLock.Enter;
     try
       ft := GetTime();
-      fpd := (1 / FramePerSeconds);
+      fpd := (1 / FPS);
       Board.BeginDraw;
       c := 0;
       while Queue.Count > 0 do
@@ -467,7 +465,6 @@ end;
 
 procedure TTyroMain.Start;
 begin
-  LoadConfig;
   if (FScriptThread <> nil) and not FScriptThread.Started then
     FScriptThread.Start;
 
@@ -482,8 +479,7 @@ var
 begin
   with Resources do
   begin
-    FPS := Config.ReadInteger('fps', FramePerSeconds);
-    FramePerSeconds := FPS;
+    FPS := Config.ReadInteger('fps', cFramePerSeconds);
     IsDebug := Config.ReadBool('debug', IsDebug);
     aColor := Config.ReadString('backcolor', '');
     if aColor <> '' then
@@ -493,20 +489,7 @@ begin
       Options := Options + [moShowFPS]
     else
       Options := Options - [moShowFPS];
-
-    if Config.Sections.ReadBool('show', 'console', False) then
-    begin
-      ShowConsole(0, 0, 0, 0);
-      StartConsoleRead;
-    end;
-
-    if Config.Sections.ReadBool('show', 'log', False) then
-      Output.Show;
   end;
-end;
-
-procedure TTyroMain.Unload;
-begin
 end;
 
 procedure TTyroMain.Shutdown;
@@ -522,9 +505,9 @@ end;
 constructor TTyroMain.Create(AParent: TTyroLayout);
 begin
   inherited;
-  FControlCapture := nil;
-  FOptions := [moWindow, moOpaque];
   RayLibrary.Load;
+  FControlCapture := nil;
+  FOptions := [moOpaque];
   Resources := TTyroResources.Create;
   Resources.WorkSpace := ExtractFilePath(ParamStr(0));
   FCanvasLock := TCriticalSection.Create;
@@ -593,13 +576,34 @@ begin
   inherited;
 end;
 
+procedure TTyroMain.PrepareWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
+begin
+  if AWidth = 0 then
+    raise exception.Create('Screen width can not be 0');
+  if AHeight = 0 then
+    raise exception.Create('Screen height can not be 0');
+
+  FTextureMode := ATextureMode;
+  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  //SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
+  SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
+  BoundsRect := Rect(0, 0, AWidth, AHeight);
+  InitWindow(AWidth, AHeight, PUTF8Char(Title));
+
+  ShowCursor();
+  PrepareCanvas;
+
+  Board := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin), True);
+  FPrepared := True;
+end;
+
 procedure TTyroMain.Init;
 var
   aScriptType: TScriptType;
   aScript: TTyroScript;
 begin
-  Running := True;
-  ShowWindow(ScreenWidth, ScreenHeight); //with option to show window /w
+  LoadConfig;
+  //ShowWindow(ScreenWidth, ScreenHeight); //with option to show window /w
   if RunFile <> '' then
   begin
     Log.WriteLn('File: ' + RunFile);
@@ -622,9 +626,10 @@ begin
     else
       Log.WriteLn('Type of file not found: ' + RunFile);
   end;
+  Running := True;
 end;
 
-   procedure TTyroMain.Draw;
+procedure TTyroMain.Draw;
 begin
   if Board <> nil then
   begin
@@ -864,63 +869,58 @@ begin
   FScriptTypes.Add(Item);
 end;
 
-procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
+procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
 begin
-  FTextureMode := ATextureMode;
-  if Visible then
-  begin
-    SetBoundsRect(Rect(0, 0, AWidth, AHeight));
-    SetWindowSize(AWidth, AHeight);
-  end
-  else
-  begin
-    //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
-    SetBoundsRect(Rect(0, 0, AWidth, AHeight));
-    InitWindow(AWidth, AHeight, PUTF8Char(Title));
-    ClearWindowState([FLAG_WINDOW_HIDDEN]);
-    ShowCursor();
-    PrepareCanvas;
-  end;
   Visible := True;
-  Resize(AWidth, AHeight);
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
   if AHeight = 0 then
     raise exception.Create('Screen height can not be 0');
-  Board := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin), True);
-  //Console.BoundsRect := Rect(Margin, Margin , 50, 50);
-  //Console.WindowRect := Rect(Margin, Margin , AWidth - Margin, AHeight - Margin);
+
+  if Border = brdSizable then
+    SetConfigFlags([FLAG_WINDOW_RESIZABLE]);
+  BoundsRect := Rect(0, 0, AWidth, AHeight);
+  SetWindowSize(AWidth, AHeight);
+  ClearWindowState([FLAG_WINDOW_HIDDEN]);
+  ShowCursor();
 end;
 
-procedure TTyroMain.Resize(AWidth, AHeight: Integer);
+procedure TTyroMain.ResizeWindow(AWidth, AHeight: Integer);
 begin
-  if (AWidth <= 0) or (AHeight <= 0) then Exit;
+  if (AWidth <= 0) or (AHeight <= 0) then
+    Exit;
   if (WindowRect.Width = AWidth) and (WindowRect.Height = AHeight)
      and (Canvas <> nil) and (Canvas.Width = GetCanvasWidth) and (Canvas.Height = GetCanvasHeight) then
     Exit;
-  SetWindowRect(Rect(0, 0, AWidth, AHeight));
+  SetWindowRect(Rect(0, 0, AWidth, AHeight));//TODO SetBoundsRect
   if Canvas <> nil then
     Canvas.Resize(GetCanvasWidth, GetCanvasHeight);
   if Board <> nil then
     Board.Resize(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin));
-  if (Editor <> nil) and Editor.Visible then
-    Editor.BoundsRect := Rect(0, 0, AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin));
 end;
 
 procedure TTyroMain.Stop;
 begin
   Running := False;
-  if FScriptThread <> nil then
+  Lock.Enter;
+  try
+    FQueue.CancelAll;
+  finally
+    Lock.Leave;
+  end;
+  if (FScriptThread <> nil) and FScriptThread.Started then
   begin
     FScriptThread.Terminate;
-    FScriptThread.WaitFor;
+    CheckSynchronize;
+    if FScriptThread.Active then
+      FScriptThread.WaitFor;
     FreeAndNil(FScriptThread);
   end;
 
   if FScriptMain <> nil then
   begin
     FScriptMain.Stop;
+    CheckSynchronize;
     FreeAndNil(FScriptMain);
   end;
 end;

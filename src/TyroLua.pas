@@ -1899,9 +1899,9 @@ begin
     Reader.Run(Script.Thread);
     //TThread.Synchronize(ScriptThread, procedure begin sleep(1000) end);
     // Wait for user to press Enter (signaled from main thread callback)
-    Reader.Wait;
-    // Push the result string to Lua
-    L.PushString(Reader.ResultString);
+    if Reader.Wait then
+      // Push the result string to Lua
+      L.PushString(Reader.ResultString);
     Result := 1;
   finally
     Reader.Free;

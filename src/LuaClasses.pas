@@ -675,7 +675,7 @@ begin
   Result := r = LUA_OK;
   if not Result then
   begin
-    Output := lua_tostring(Self, -1);    ;
+    Output := lua_tostring(Self, -1);
     lua_pop(Self, 1);  //* remove message
   end
   else

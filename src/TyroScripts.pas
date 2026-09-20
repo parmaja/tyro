@@ -30,12 +30,14 @@ type
     procedure Run(Thread: TThread = nil);
     procedure SetEvent;
     function Wait(Timeout: Cardinal = INFINITE): Boolean;
+    procedure Cancel; virtual;
   end;
 
   { TQueueObjects }
 
   TQueueObjects = class(TmnObjectList<TQueueObject>)
   public
+    procedure CancelAll;
   end;
 
   { TDrawObject }
@@ -434,7 +436,8 @@ end;
 
 procedure TTyroScriptThread.TerminatedSet;
 begin
-  Script.Stop;
+  if Script <> nil then
+    Script.Stop;
   inherited;
 end;
 
@@ -456,7 +459,7 @@ end;
 destructor TTyroScriptThread.Destroy;
 begin
   FreeAndNil(Script);
-  inherited Destroy;
+  inherited;
 end;
 
 { TScriptType }
@@ -715,6 +718,11 @@ begin
     Result := True;
 end;
 
+procedure TQueueObject.Cancel;
+begin
+  SetEvent;
+end;
+
 procedure TQueueObject.Execute;
 begin
   try
@@ -736,6 +744,18 @@ procedure TQueueObject.SetEvent;
 begin
   if FEvent <> nil then
     FEvent.SetEvent;
+end;
+
+{ TQueueObjects }
+
+procedure TQueueObjects.CancelAll;
+var
+  itm: TQueueObject;
+begin
+  for itm in Self do
+  begin
+    itm.Cancel;
+  end;
 end;
 
 { TWindowObject }
@@ -1090,10 +1110,13 @@ procedure TTyroScript.Start;
 begin
   FStarted := True;
   FActive := True;
-  BeforeRun;
-  Run;
-  AfterRun;
-  FActive := False;
+  try
+    BeforeRun;
+    Run;
+    AfterRun;
+  finally
+    FActive := False;
+  end;
 end;
 
 procedure TTyroScript.LoadFile(FileName: string);

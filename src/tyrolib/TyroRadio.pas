@@ -12,6 +12,14 @@ unit TyroRadio;
  *  buffer), snapshot it into a Music when enough is buffered, and when the
  *  decoder is about to overtake the snapshot we load a fresh one that keeps an
  *  overlap of already-decoded bytes and seek to the overlap point.
+ *
+ *  Format support: the audio is decoded by the raylib audio backend, which only
+ *  bundles decoders for WAV, OGG (Vorbis), MP3, FLAC, QOA, XM and MOD.
+ *
+ *  Serves Content-Type "audio/aac" - are downloaded and buffered correctly but
+ *  cannot be decoded by raylib. Playback of such a station fails with the error
+ *  "AAC is not supported". Use an MP3/OGG stream instead, or feed the player a
+ *  stream transcoded to a supported format (e.g. via ffmpeg).
  *}
 
 {$ifdef FPC}
@@ -131,7 +139,7 @@ begin
   if Pos('mpeg', s) > 0 then
     Exit('.mp3');
   if Pos('aac', s) > 0 then
-    Exit('.mp3'); //raylib cannot decode aac; it will fail gracefully
+    Exit('.aac'); //raylib cannot decode aac; LoadFromSnapshot reports it clearly
   Result := '.mp3';
 end;
 
@@ -344,6 +352,12 @@ begin
       Exit;
     RayLibSound.Open;
     aExt := GuessFileType;
+    if SameText(aExt, '.aac') then
+    begin
+      //raylib's audio backend has no AAC/ADTS decoder; fail with a clear reason
+      DoError('AAC is not supported: the built-in decoder cannot decode ' + FClient.ContentType + ' streams. Use an MP3/OGG station instead.');
+      Exit;
+    end;
     aNewMusic := LoadMusicStreamFromMemory(PUTF8Char(aExt), aSnap.Memory, Integer(aSnap.Size));
     if aNewMusic.CtxType = 0 then
     begin
