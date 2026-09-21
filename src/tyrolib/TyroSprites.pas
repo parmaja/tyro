@@ -64,6 +64,17 @@ type
     Bouncy: single;
     Radius: single;
     Script: ISpriteScript;
+    // Animation state: when the sprite was loaded from an Aseprite file that
+    // has more than one frame, AnimFrames holds one texture per frame and
+    // Texture is swapped to the current frame by UpdateAnims / SetAnimFrame.
+    AnimFrames: array of TTexture2D;
+    AnimFrameMs: array of Integer;  // per-frame duration in ms (from the file)
+    FrameCount: Integer;            // 0 = not animated (single image)
+    AnimFrame: Integer;             // current frame index
+    AnimTime: Single;               // seconds spent on the current frame
+    AnimSpeed: Single;              // frames-per-second override; 0 = file durations
+    Playing: Boolean;               // true while the animation advances each frame
+    Looping: Boolean;
     constructor Create(AHandle: Integer; ATexture: TTexture2D; const AName: string);
     destructor Destroy; override;
   end;
@@ -77,6 +88,9 @@ type
     FNextHandle: Integer;
     function GetCount: integer;
     function GetItems(Index: Integer): TSprite;
+    // Unloads the GPU textures owned by a sprite (its animation frames and, if
+    // distinct, its single frame texture) and resets the sprite to unloaded.
+    procedure FreeSpriteFrames(ASprite: TSprite);
   public
     constructor Create;
     destructor Destroy; override;
@@ -101,6 +115,24 @@ type
     function GetWidth(Handle: integer): integer;
     function GetHeight(Handle: integer): integer;
     function GetName(Handle: integer): string;
+
+    // Animation: installs a set of frames (one texture per animation frame)
+    // onto a sprite, replacing whatever texture/frames it had. The textures
+    // become owned by the sprite; do not free them afterwards.
+    function InstallFrames(Handle: integer; const AFrames: array of TTexture2D; const AFrameMs: array of Integer): boolean;
+    procedure SetAnimFrame(Handle: integer; AFrame: integer);
+    function GetAnimFrame(Handle: integer): integer;
+    function GetFrameCount(Handle: integer): integer;
+    function GetFrameMs(Handle: integer; AFrame: integer): integer;
+    procedure SetAnimSpeed(Handle: integer; AFPS: single);
+    function GetAnimSpeed(Handle: integer): single;
+    procedure SetPlaying(Handle: integer; APlaying: boolean);
+    function GetPlaying(Handle: integer): boolean;
+    procedure SetLooping(Handle: integer; ALooping: boolean);
+    function GetLooping(Handle: integer): boolean;
+    // Advances all playing animations by DT seconds and swaps each sprite's
+    // Texture to the current frame (called every frame on the main thread).
+    procedure UpdateAnims(DT: single);
 
     // Physics configuration (safely callable from the script thread)
     procedure SetCollide(Handle: integer; ACollide: boolean);
@@ -187,7 +219,7 @@ type
 implementation
 
 uses
-  TyroEngines;
+  TyroEngines, Aseprites;
 
 { TSprite }
 
@@ -209,6 +241,14 @@ begin
   Bouncy := 0.0;
   Radius := 0.0;
   Script := nil;
+  AnimFrames := nil;
+  AnimFrameMs := nil;
+  FrameCount := 0;
+  AnimFrame := 0;
+  AnimTime := 0;
+  AnimSpeed := 0;
+  Playing := False;
+  Looping := True;
 end;
 
 destructor TSprite.Destroy;
@@ -233,7 +273,7 @@ var
 begin
   for Sprite in FItems.Values do
   begin
-    RayLib.UnloadTexture(Sprite.Texture);
+    FreeSpriteFrames(Sprite);
   end;
   FItems.Free;
   FLock.Free;
@@ -259,6 +299,274 @@ begin
   try
     if FItems.TryGetValue(Handle, Sprite) then
       Result := Sprite.Name;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+{ Animation helpers }
+
+procedure TSprites.FreeSpriteFrames(ASprite: TSprite);
+var
+  Unloaded: TList<Cardinal>;
+  I: Integer;
+begin
+  if ASprite = nil then
+    Exit;
+  Unloaded := TList<Cardinal>.Create;
+  try
+    for I := 0 to Length(ASprite.AnimFrames) - 1 do
+      if (ASprite.AnimFrames[I].id > 0) and (Unloaded.IndexOf(ASprite.AnimFrames[I].id) < 0) then
+      begin
+        Unloaded.Add(ASprite.AnimFrames[I].id);
+        RayLib.UnloadTexture(ASprite.AnimFrames[I]);
+      end;
+    if (ASprite.Texture.id > 0) and (Unloaded.IndexOf(ASprite.Texture.id) < 0) then
+      RayLib.UnloadTexture(ASprite.Texture);
+    ASprite.AnimFrames := nil;
+    ASprite.AnimFrameMs := nil;
+    ASprite.FrameCount := 0;
+    ASprite.AnimFrame := 0;
+    ASprite.AnimTime := 0;
+    ASprite.Playing := False;
+    ASprite.Texture := Default(TTexture2D);
+  finally
+    Unloaded.Free;
+  end;
+end;
+
+function TSprites.InstallFrames(Handle: integer; const AFrames: array of TTexture2D; const AFrameMs: array of Integer): boolean;
+var
+  Sprite: TSprite;
+  I: Integer;
+  aMs: Integer;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if not FItems.TryGetValue(Handle, Sprite) then
+      Exit;
+    if Length(AFrames) <= 0 then
+      Exit;
+    FreeSpriteFrames(Sprite);
+    SetLength(Sprite.AnimFrames, Length(AFrames));
+    SetLength(Sprite.AnimFrameMs, Length(AFrames));
+    for I := 0 to Length(AFrames) - 1 do
+    begin
+      Sprite.AnimFrames[I] := AFrames[I];
+      if I < Length(AFrameMs) then
+        aMs := AFrameMs[I]
+      else
+        aMs := 100;
+      if aMs < 1 then
+        aMs := 100;
+      Sprite.AnimFrameMs[I] := aMs;
+    end;
+    Sprite.FrameCount := Length(AFrames);
+    Sprite.AnimFrame := 0;
+    Sprite.AnimTime := 0;
+    Sprite.Playing := False;
+    Sprite.Looping := True;
+    Sprite.Texture := Sprite.AnimFrames[0];
+    Result := True;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetAnimFrame(Handle: integer; AFrame: integer);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+    begin
+      if (Sprite.FrameCount > 0) and (AFrame >= 0) then
+      begin
+        if AFrame >= Sprite.FrameCount then
+          AFrame := Sprite.FrameCount - 1;
+        Sprite.AnimFrame := AFrame;
+        Sprite.AnimTime := 0;
+        Sprite.Texture := Sprite.AnimFrames[AFrame];
+      end;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetAnimFrame(Handle: integer): integer;
+var
+  Sprite: TSprite;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.AnimFrame;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetFrameCount(Handle: integer): integer;
+var
+  Sprite: TSprite;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.FrameCount;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetFrameMs(Handle: integer; AFrame: integer): integer;
+var
+  Sprite: TSprite;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) and (AFrame >= 0) and (AFrame < Length(Sprite.AnimFrameMs)) then
+      Result := Sprite.AnimFrameMs[AFrame];
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetAnimSpeed(Handle: integer; AFPS: single);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.AnimSpeed := AFPS;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetAnimSpeed(Handle: integer): single;
+var
+  Sprite: TSprite;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.AnimSpeed;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetPlaying(Handle: integer; APlaying: boolean);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Playing := APlaying;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetPlaying(Handle: integer): boolean;
+var
+  Sprite: TSprite;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Playing;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetLooping(Handle: integer; ALooping: boolean);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Looping := ALooping;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetLooping(Handle: integer): boolean;
+var
+  Sprite: TSprite;
+begin
+  Result := True;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Looping;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.UpdateAnims(DT: single);
+var
+  Sprite: TSprite;
+  Handles: TArray<Integer>;
+  I: Integer;
+  TimePer: single;
+begin
+  if DT <= 0 then
+    Exit;
+  FLock.Enter;
+  try
+    Handles := FItems.Keys.ToArray;
+    for I := 0 to Length(Handles) - 1 do
+    begin
+      if not FItems.TryGetValue(Handles[I], Sprite) then
+        Continue;
+      if Sprite = nil then
+        Continue;
+      if not Sprite.Playing then
+        Continue;
+      if Sprite.FrameCount <= 0 then
+        Continue;
+      if Sprite.AnimFrame >= Sprite.FrameCount then
+        Sprite.AnimFrame := 0;
+      if Sprite.AnimSpeed > 0 then
+        TimePer := 1 / Sprite.AnimSpeed
+      else
+        TimePer := Sprite.AnimFrameMs[Sprite.AnimFrame] / 1000;
+      if TimePer <= 0 then
+        TimePer := 0.1;
+      Sprite.AnimTime := Sprite.AnimTime + DT;
+      while Sprite.AnimTime >= TimePer do
+      begin
+        Sprite.AnimTime := Sprite.AnimTime - TimePer;
+        if Sprite.AnimFrame + 1 < Sprite.FrameCount then
+          Inc(Sprite.AnimFrame)
+        else if Sprite.Looping then
+          Sprite.AnimFrame := 0
+        else
+        begin
+          Sprite.AnimFrame := Sprite.FrameCount - 1;
+          Sprite.Playing := False;
+          Sprite.AnimTime := 0;
+          Break;
+        end;
+      end;
+      Sprite.Texture := Sprite.AnimFrames[Sprite.AnimFrame];
+    end;
   finally
     FLock.Leave;
   end;
@@ -305,6 +613,9 @@ begin
   try
     if FItems.TryGetValue(Handle, Sprite) then
     begin
+      // replacing an animated sprite with a plain image: drop the old frames
+      if (Length(Sprite.AnimFrames) > 0) then
+        FreeSpriteFrames(Sprite);
       Sprite.Texture := ATexture;
       Result := True;
     end;
@@ -893,9 +1204,42 @@ end;
 procedure TLoadSpriteObject.DoExecute;
 var
   aTexture: TTexture2D;
+  aFrames: TAseTextures;
+  aFrameMs: TAseFrameDurations;
+  aCount: Integer;
+  aHandle: integer;
 begin
-  aTexture := RayLib.LoadTexture(PUTF8Char(FFileName));
-  if aTexture.id > 0 then
+  aTexture := Default(TTexture2D);
+  aFrames := nil;
+  aFrameMs := nil;
+  aCount := 0;
+  if IsAsepriteFile(FFileName) then
+    aCount := AsepriteLoadFrameTextures(FFileName, aFrames, aFrameMs)
+  else
+    aTexture := RayLib.LoadTexture(PUTF8Char(FFileName));
+
+  if aCount > 1 then
+  begin
+    // animated sprite: install every frame (textures become sprite-owned)
+    if FExistingHandle > cSpriteInvalid then
+    begin
+      if Main.Sprites.InstallFrames(FExistingHandle, aFrames, aFrameMs) then
+        FHandleResult := FExistingHandle
+      else
+        FHandleResult := cSpriteInvalid;
+    end
+    else
+    begin
+      aHandle := Main.Sprites.AddEmpty(FName);
+      if (aHandle > cSpriteInvalid) and Main.Sprites.InstallFrames(aHandle, aFrames, aFrameMs) then
+        FHandleResult := aHandle
+      else
+        FHandleResult := cSpriteInvalid;
+    end;
+    if FHandleResult <= cSpriteInvalid then
+      AsepriteFreeTextures(aFrames); // rollback the GPU uploads
+  end
+  else if aTexture.id > 0 then
   begin
     if FExistingHandle > cSpriteInvalid then
     begin

@@ -27,6 +27,12 @@ tyro demos/pong.lua
 | `cycle_demo.lua` | Per-frame loop using `while cycle do` — one drawing per raylib frame |
 | `test.ls` | Circle animation demo with random sizes and colors |
 
+### Animation
+
+| File | Feature |
+|------|---------|
+| `aseprites_demo.ls` | Load and play Aseprite animations from `demos/aseprites/` — `sprite:play(fps)`, `stop`, `looping`, `frames`/`frame` — with a controllable idle/walk/run hero |
+
 ### Console
 
 | File | Feature |

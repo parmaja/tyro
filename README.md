@@ -137,12 +137,15 @@ positioned with `move` or by setting `x`/`y` properties.
 
 | Method | Description |
 |--------|-------------|
-| `sprite:load("image.png")` | Load a texture from file into this sprite. |
+| `sprite:load("image.png")` | Load a texture from file into this sprite. `.aseprite`/`.ase` files load every frame as an animation. |
 | `sprite:show()` | Make the sprite visible (shown by default). |
 | `sprite:hide()` | Hide the sprite from rendering. |
 | `sprite:move(x, y)` | Set the sprite's position. |
 | `sprite:width()` | Return the texture width in pixels. |
 | `sprite:height()` | Return the texture height in pixels. |
+| `sprite:play([fps])` | Restart and play the animation. `fps` overrides the per-frame timings stored in the file (0 or omitted keeps them — needed because Aseprite files often have ~1 ms delays). |
+| `sprite:stop()` | Freeze the animation on the current frame (aliased by `sprite:pause()`). |
+| `sprite:framecount()` | Number of frames in the loaded `.aseprite` animation. |
 
 ## Sprite Properties
 
@@ -153,6 +156,11 @@ positioned with `move` or by setting `x`/`y` properties.
 | `sprite.angle` | `number` | Rotation in degrees (read/write). |
 | `sprite.scale` | `number` | Scale factor, 1.0 = original size (read/write). |
 | `sprite.visible` | `boolean` | Whether the sprite is drawn (read/write). |
+| `sprite.frames` | `number` | Number of animation frames (read-only). |
+| `sprite.frame` | `number` | Current animation frame, 0-based (read/write). |
+| `sprite.playing` | `boolean` | Whether the animation is running (read/write). |
+| `sprite.speed` | `number` | Animation speed in frames-per-second; 0 = use the file timings (read/write). |
+| `sprite.looping` | `boolean` | Whether the animation loops when it reaches the last frame (read/write). |
 
 Image files are searched in the script directory, the workspace `sprites/`
 folder, and the current directory.
@@ -330,6 +338,7 @@ tyro demos/<name>.lua
 | `demos/animated_demo.lua` | Animation loop with random colors and sleep timing |
 | `demos/cycle_demo.lua` | Per-frame loop using `while cycle do` — one drawing per frame |
 | `demos/sprites_demo.lua` | Sprites system: load, show, hide, move, rotate, scale, named access |
+| `demos/aseprites_demo.ls` | Aseprite animations: load `.aseprite` files (all frames as textures), `play(fps)`, `stop`, `looping`, per-frame stepping — idle/walk/run showcase |
 | `demos/interactive_paint.lua` | Mouse drawing with keyboard color switching (uses input APIs) |
 | `demos/console_demo.lua` | Console output: print, println, log |
 | `demos/terminal_demo.lua` | Built-in terminal commands: dir, list, clear, help, exit |

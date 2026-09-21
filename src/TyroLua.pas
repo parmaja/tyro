@@ -231,6 +231,9 @@ type
     function Move_func(L: Plua_State): integer; cdecl;
     function Width_func(L: Plua_State): integer; cdecl;
     function Height_func(L: Plua_State): integer; cdecl;
+    function Play_func(L: Plua_State): integer; cdecl;
+    function Stop_func(L: Plua_State): integer; cdecl;
+    function FrameCount_func(L: Plua_State): integer; cdecl;
   end;
 
   TLuaSprites = class(TTyroLuaObject)
@@ -375,6 +378,7 @@ type
     function FrameTime_func(L: Plua_State): integer; cdecl;
     function TotalTime_func(L: Plua_State): integer; cdecl;
     function RandomValue_func(L: Plua_State): integer; cdecl;
+    function Screenshot_func(L: Plua_State): integer; cdecl;
 
    public
     constructor Create; override;
@@ -770,19 +774,35 @@ begin
   AddColor('white', clWhite);
   AddColor('silver', clLightgray);
   AddColor('gray', clGray);
+  AddColor('grey', clGray);
+  AddColor('lightgray', clLightgray);
+  AddColor('darkgray', clDarkGray);
   AddColor('black', clBlack);
   AddColor('red', clRed);
   AddColor('maroon', clMaroon);
   AddColor('yellow', clYellow);
+  AddColor('gold', clGold);
+  AddColor('orange', clOrange);
+  AddColor('pink', clPink);
   AddColor('olive', clDarkgreen);
   AddColor('lime', clLime);
   AddColor('green', clGreen);
+  AddColor('darkgreen', clDarkgreen);
   AddColor('aqua', clSkyBlue);
+  AddColor('skyblue', clSkyBlue);
   AddColor('teal', clBrown);
   AddColor('blue', clBlue);
+  AddColor('darkblue', clDarkblue);
   AddColor('navy', clViolet);
-  AddColor('fuchsia', clMagenta);
   AddColor('purple', clPurple);
+  AddColor('violet', clViolet);
+  AddColor('darkpurple', clDarkpurple);
+  AddColor('fuchsia', clMagenta);
+  AddColor('magenta', clMagenta);
+  AddColor('brown', clBrown);
+  AddColor('darkbrown', clDarkbrown);
+  AddColor('beige', clBeige);
+  AddColor('raywhite', clRayWhite);
 end;
 
 { TLuaCanvas }
@@ -1045,6 +1065,7 @@ begin
   Lua.State.RegisterGlobal('frametime', @FrameTime_func);
   Lua.State.RegisterGlobal('time', @TotalTime_func);
   Lua.State.RegisterGlobal('rand', @RandomValue_func);
+  Lua.State.RegisterGlobal('screenshot', @Screenshot_func);
 
   // Sprite system: Sprites.new creates a sprite, Sprites("name") finds by name
   Lua.State.RegisterTable('Sprites');
@@ -1881,6 +1902,15 @@ begin
   Result := 1;
 end;
 
+function TLuaScript.Screenshot_func(L: Plua_State): integer; cdecl;
+begin
+  if L.Count > 0 then
+    // TakeScreenshot must run on the main thread after the frame is
+    // presented, so queue the request and let the engine capture it.
+    Main.QueueScreenshot(L.ToString(1));
+  Result := 0;
+end;
+
 function TLuaConsole.Read_func(L: Plua_State): integer; cdecl;
 var
   s: string;
@@ -1949,6 +1979,10 @@ begin
     Lua.State.Register('move', @Move_func);
     Lua.State.Register('width', @Width_func);
     Lua.State.Register('height', @Height_func);
+    Lua.State.Register('play', @Play_func);
+    Lua.State.Register('stop', @Stop_func);
+    Lua.State.Register('pause', @Stop_func);
+    Lua.State.Register('framecount', @FrameCount_func);
 
     //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
     Lua.State.NewTable; //[sprite, sprite, meta]
@@ -2608,6 +2642,44 @@ begin
   Result := 1;
 end;
 
+// sprite:play([fps]) -> restart and play the animation. fps overrides the
+// per-frame durations stored in the .aseprite file; 0 (or omitted) keeps them.
+function TLuaSprite.Play_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+begin
+  handle := GetSpriteHandle(L, 1);
+  if handle > cSpriteInvalid then
+  begin
+    if L.Count >= 2 then
+      Main.Sprites.SetAnimSpeed(handle, L.ToNumber(2));
+    Main.Sprites.SetAnimFrame(handle, 0);
+    Main.Sprites.SetPlaying(handle, True);
+  end;
+  Result := 0;
+end;
+
+// sprite:stop() / sprite:pause() -> freeze the animation on the current frame
+function TLuaSprite.Stop_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+begin
+  handle := GetSpriteHandle(L, 1);
+  if handle > cSpriteInvalid then
+    Main.Sprites.SetPlaying(handle, False);
+  Result := 0;
+end;
+
+// sprite:framecount() -> number of frames in the loaded .aseprite animation
+function TLuaSprite.FrameCount_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+begin
+  handle := GetSpriteHandle(L, 1);
+  L.PushInteger(Main.Sprites.GetFrameCount(handle));
+  Result := 1;
+end;
+
 // Sprite __index: read properties x, y, angle, scale, visible + physics keys; unknown keys raw-read from the sprite table
 function TLuaSprite.Getter(L: Plua_State): integer;
 var
@@ -2678,6 +2750,31 @@ begin
     else if field = 'radius' then
     begin
       L.PushNumber(Main.Sprites.GetRadius(handle));
+      Result := 1;
+    end
+    else if field = 'frames' then
+    begin
+      L.PushInteger(Main.Sprites.GetFrameCount(handle));
+      Result := 1;
+    end
+    else if field = 'frame' then
+    begin
+      L.PushInteger(Main.Sprites.GetAnimFrame(handle));
+      Result := 1;
+    end
+    else if field = 'playing' then
+    begin
+      L.PushBoolean(Main.Sprites.GetPlaying(handle));
+      Result := 1;
+    end
+    else if field = 'speed' then
+    begin
+      L.PushNumber(Main.Sprites.GetAnimSpeed(handle));
+      Result := 1;
+    end
+    else if field = 'looping' then
+    begin
+      L.PushBoolean(Main.Sprites.GetLooping(handle));
       Result := 1;
     end;
   end;
@@ -2761,6 +2858,22 @@ begin
   else if field = 'radius' then
   begin
     Main.Sprites.SetRadius(handle, L.ToNumber(3));
+  end
+  else if field = 'frame' then
+  begin
+    Main.Sprites.SetAnimFrame(handle, L.ToInteger(3));
+  end
+  else if field = 'playing' then
+  begin
+    Main.Sprites.SetPlaying(handle, L.ToBoolean(3));
+  end
+  else if field = 'speed' then
+  begin
+    Main.Sprites.SetAnimSpeed(handle, L.ToNumber(3));
+  end
+  else if field = 'looping' then
+  begin
+    Main.Sprites.SetLooping(handle, L.ToBoolean(3));
   end
   else
   begin

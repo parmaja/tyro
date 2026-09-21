@@ -117,6 +117,7 @@ type
     FScriptTypes: TScriptTypes;
     FReadCallback: TConsoleReadEvent;
     FWaitingQueueObject: TQueueObject; //the queue object a script thread is blocked waiting on
+    FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
   protected
     Commands: TConsoleCommands;
     procedure ConsoleInput(AConsole: TTyroTerminal; AInput: string);
@@ -178,6 +179,10 @@ type
 
     procedure StartConsoleRead;
     procedure StartConsoleReadEx(ACallback: TConsoleReadEvent);
+    //* Request a screenshot of the next presented frame. Safe to call from any
+    //* thread (e.g. the Lua script thread); the file is written right after
+    //* EndDrawing on the main thread.
+    procedure QueueScreenshot(const AFileName: String);
 
   public
     RunInMain: Boolean;
@@ -397,6 +402,21 @@ begin
           //Lua 'cycle' gate so "while cycle do" runs at most once per frame.
           if FFrameEvent <> nil then
             FFrameEvent.SetEvent;
+          //A screenshot requested by Lua screenshot() is captured right after
+          //the frame has been presented, so it sees the finished image.
+          if FQueuedScreenshot <> '' then
+          begin
+            Lock.Enter;
+            try
+              if FQueuedScreenshot <> '' then
+              begin
+                RayLib.TakeScreenshot(PUTF8Char(FQueuedScreenshot));
+                FQueuedScreenshot := '';
+              end;
+            finally
+              Lock.Leave;
+            end;
+          end;
         end;
         ProcessInput;
       end;
@@ -471,6 +491,16 @@ begin
     end;
     if FFrameEvent.WaitFor(50) = wrSignaled then
       Exit; //the next drawing frame was presented: run one more iteration
+  end;
+end;
+
+procedure TTyroMain.QueueScreenshot(const AFileName: String);
+begin
+  Lock.Enter;
+  try
+    FQueuedScreenshot := AFileName;
+  finally
+    Lock.Leave;
   end;
 end;
 
@@ -713,6 +743,9 @@ begin
   try
     if Physics <> nil then
       Physics.Step(RayLib.GetFrameTime());
+    // Advance every playing sprite animation (frame textures swap here)
+    if Sprites <> nil then
+      Sprites.UpdateAnims(RayLib.GetFrameTime());
   except
     on E: Exception do
     begin
