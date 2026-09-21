@@ -45,7 +45,7 @@ local angle = 0
 
 while true do
   -- Clear the screen each frame
-  canvas.color(colors.black)
+  canvas.color =colors.black
   canvas.clear()
 
   -- The engine draws all spirits automatically, so we just update properties

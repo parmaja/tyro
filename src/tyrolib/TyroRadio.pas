@@ -21,6 +21,9 @@ unit TyroRadio;
  *  "AAC is not supported". Use an MP3/OGG stream instead, or feed the player a
  *  stream transcoded to a supported format (e.g. via ffmpeg).
  *}
+{
+  https://streamurl.link
+}
 
 {$ifdef FPC}
 {$mode delphi}

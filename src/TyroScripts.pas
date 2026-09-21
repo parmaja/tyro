@@ -712,21 +712,10 @@ end;
 
 function TQueueObject.Wait(Timeout: Cardinal): Boolean;
 begin
-  Result := True;
-  if FEvent = nil then
-    Exit;
-  //Register with the engine so TTyroMain.Stop can signal our event and unblock
-  //this thread; when the engine is stopping RegisterWaiting returns False and
-  //we do not block at all.
-  if (Main = nil) or Main.RegisterWaiting(Self) then
-  begin
-    try
-      Result := FEvent.WaitFor(Timeout) <> wrSignaled;
-    finally
-      if Main <> nil then
-        Main.UnregisterWaiting(Self);
-    end;
-  end;
+  if FEvent <> nil then
+    Result := FEvent.WaitFor(Timeout) <> wrSignaled
+  else
+    Result := True;
 end;
 
 procedure TQueueObject.Cancel;

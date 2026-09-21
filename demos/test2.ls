@@ -1,4 +1,5 @@
 -- test2.ls - Basic rectangle drawing with colors
+log("Hello word")
 canvas.color = colors.red;
 canvas.rectangle(50, 50, 40, 100, true);
 canvas.color = colors.blue;
