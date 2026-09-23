@@ -1215,7 +1215,16 @@ begin
   aFrameMs := nil;
   aCount := 0;
   if IsAsepriteFile(FFileName) then
-    aCount := AsepriteLoadFrameTextures(FFileName, aFrames, aFrameMs)
+  begin
+    aCount := AsepriteLoadFrameTextures(FFileName, aFrames, aFrameMs);
+    if aCount = 1 then
+    begin
+      //A single-frame .aseprite is a static sprite: hand its frame to the
+      //single-texture path below (nil the slot so a rollback free skips it).
+      aTexture := aFrames[0];
+      aFrames[0] := Default(TTexture2D);
+    end;
+  end
   else
     aTexture := RayLib.LoadTexture(PUTF8Char(FFileName));
 
@@ -1248,13 +1257,18 @@ begin
       if Main.Sprites.SetTexture(FExistingHandle, aTexture) then
         FHandleResult := FExistingHandle
       else
+      begin
+        RayLib.UnloadTexture(aTexture); //store did not take ownership
         FHandleResult := cSpriteInvalid;
+      end;
     end
     else
-      FHandleResult := Main.Sprites.Add(aTexture, FName);
+      FHandleResult := Main.Sprites.Add(aTexture, FName); //takes ownership
   end
   else
   begin
+    if aFrames <> nil then
+      AsepriteFreeTextures(aFrames); //should be empty; free defensively
     if IsConsole then
       WriteLn('Sprite not loaded: ' + FFileName);
     FHandleResult := 0;

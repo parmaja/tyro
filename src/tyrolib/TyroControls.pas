@@ -512,10 +512,12 @@ end;
 
 procedure TTyroLayout.Realign;
 begin
+  //Only parented, aligned controls are repositioned by their parent.
+  //Top-level (Parent = nil) and non-aligned controls keep the rect that was
+  //set directly: SetWindowRect (e.g. ResizeWindow) must NOT be clobbered by
+  //re-applying alignment here. Bounds->window syncing happens in SetBoundsRect.
   if (Align <> alNone) and (Parent <> nil) then
-    Parent.AlignControls
-  else
-    FWindowRect := FBoundsRect;
+    Parent.AlignControls;
 end;
 
 procedure TTyroLayout.AlignControls;
@@ -1102,6 +1104,8 @@ begin
   if FBoundsRect=AValue then
     Exit;
   FBoundsRect := AValue;
+  if Align = alNone then
+    FWindowRect := AValue; //non-aligned (top-level/dragged): keep both in sync
   Resize;
 end;
 

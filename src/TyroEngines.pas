@@ -929,7 +929,7 @@ begin
   inherited;
 
   // Update console (handles caret blinking internally)
-{  try
+  try
     if Console <> nil then
       Console.Update;
   except
@@ -949,7 +949,7 @@ begin
       if IsConsole then WriteLn('EX-EDITOR: ' + E.ClassName + ': ' + E.Message);
       raise;
     end;
-  end;   }
+  end;
   ThreadSwitch; //Yield
 end;
 
@@ -1152,12 +1152,16 @@ end;
 
 procedure TTyroMain.ShowConsole(AX, AY, AWidth, AHeight: Integer);
 begin
+  //w/h are character cells (console.show from Lua); the char size may not be
+  //installed yet, so set it before computing the pixel rect.
+  Console.CharWidth := Resources.Font.Width;
+  Console.CharHeight := Resources.Font.Height;
   if (AWidth <= 0) or (AHeight <= 0) then
   begin
     AWidth := 80;
     AHeight := 25;
   end;
-  Console.BoundsRect := Rect(AX, AY, AX + AWidth, AY + AHeight);
+  Console.BoundsRect := Rect(AX, AY, AX + AWidth * Console.CharWidth, AY + AHeight * Console.CharHeight);
   ShowConsole;
 end;
 

@@ -716,8 +716,12 @@ end;
 function TLuaHelper.RunString(Script: string; out Output: string): Boolean;
 var
   r: integer;
-  Msg: string;
+  base: integer;
 begin
+  //LUA_MULTRET pushes every return value of the chunk onto the persistent
+  //stack; remember the depth we started at so they can be discarded after the
+  //call, otherwise each run leaks values and the stack grows unbounded.
+  base := lua_gettop(Self);
   r := luaL_loadstring(Self, PChar(Script));
   if r = 0 then
     r := lua_pcall(Self, 0, LUA_MULTRET, 0);
@@ -729,6 +733,8 @@ begin
   end
   else
     Output := '';
+  //drop whatever the chunk left behind (return values, or the error message)
+  lua_settop(Self, base);
 end;
 
 procedure TLuaHelper.BeginTable;
