@@ -25,12 +25,12 @@ three parallel read-only explorer passes (controls/terminal; sounds/melodies/spe
 | C7 | `lua_getextraspace` writes `L-8` backward pointer (custom-allocator context) | LuaAPI.pas 739–744 | High (memory corruption when allocator used) | ✅ FIXED (ca8d2c9) |
 | C8 | `AQueueObject.LineNo := ar.currentline` outside `DEBUG_LUA` ifdef → reads uninitialized stack frame | TyroLua.pas 1263–1275 | High (UB in non-debug) | ✅ FIXED |
 | F1 | Console can never be focused (`csFocus` missing in terminal Style; `SetFocused` ignores value; ProcessInput early-exit) → kills console typing, `console.read`, F2/F7/F8 | TyroTerminal.pas 253; TyroControls.pas 1153–1157; TyroEngines.pas 1032–1033 | **High (functional dead path)** | ✅ FIXED |
-| F2 | `Update` for console & editor is commented out (caret, cursor, scroll dead) | TyroEngines.pas 935–955 | Medium (UX) | 🔴 OPEN |
+| F2 | `Update` for console & editor is commented out (caret, cursor, scroll dead) | TyroEngines.pas 935–955 | Medium (UX) | ✅ FIXED (130a81b) |
 | F3 | `DoPaintBorder` is a red-frame stub (no real border rendering) | TyroControls.pas 1842–1885 | Low (cosmetic) | 🔴 OPEN |
-| F4 | Top-level `SetWindowRect`/resize is clobbered by `Realign` (`alClient` resize) | TyroControls.pas 513–519, 1108–1119 | High (functional) | 🔴 OPEN |
-| F5 | `console.show(w, h)` interpreted as pixels, not chars | TyroEngines.pas 1157–1166 | Low (API mismatch) | 🔴 OPEN |
+| F4 | Top-level `SetWindowRect`/resize is clobbered by `Realign` (`alClient` resize) | TyroControls.pas 513–519, 1108–1119 | High (functional) | ✅ FIXED (130a81b) |
+| F5 | `console.show(w, h)` interpreted as pixels, not chars | TyroEngines.pas 1157–1166 | Low (API mismatch) | ✅ FIXED (130a81b) |
 | F6 | `DrawLineTo` applied origin twice | TyroClasses.pas 677–680 | Medium (rendering) | ✅ FIXED |
-| F7 | `RunString` leaks `LUA_MULTRET` results on the persistent stack | LuaClasses.pas 716–732 | Medium (leak) | 🔴 OPEN |
+| F7 | `RunString` leaks `LUA_MULTRET` results on the persistent stack | LuaClasses.pas 716–732 | Medium (leak) | ✅ FIXED (130a81b) |
 
 ## 2. Fixed in `8c9d35b`
 
@@ -76,22 +76,30 @@ three parallel read-only explorer passes (controls/terminal; sounds/melodies/spe
    empty record (`SizeOf = 1`); it would have read/written far before the state block — corrupting
    `global_State` — if that record ever gains a real layout. Behavior is unchanged today; the hazard is removed.
 
-## 4. Open — Functional
+## 4. Fixed in `130a81b`
 
-- **F7 → F2 — `Update` / caret dead** (TyroEngines.pas 935–955): console/editor `Update` calls commented out;
-  caret never blinks (`FCaretVisible` stays initial), cursor/selection/scroll handling is dormant. Note: input
-  itself now works after the F1 fix; only the interactive polish is missing.
-- **F4 — resize clobbered by `Realign`** (TyroControls.pas 513–519, 1108–1119): a window-level `SetWindowRect`
-  is followed by `Realign`, which re-applies `alClient` and overwrites the requested size.
-- **F5 → F6 — `console.show(w, h)` is pixels, not chars** (TyroEngines.pas 1157–1166): `BoundsRect` set from raw
-  w/h; should multiply by `CharWidth`/`CharHeight`.
-- **F5 — single-frame .aseprite never loads** (TyroSprites.pas 1205–1262): a 1-frame file hits a
-  `< 2 frames` rejection / partial-load path; also leaks texture data on failure.
+1. **F7 — `RunString` stack leak.** `TLuaHelper.RunString` captures the persistent-stack depth before
+   `luaL_loadstring`/`lua_pcall(LUA_MULTRET)` and `lua_settop` back to it afterwards — every `run`/`dofile`
+   used to leave all return values on the Lua stack, growing unboundedly across runs.
+2. **F4 — resize clobbered by `Realign`.** `Realign` no longer rewrites `FWindowRect := FBoundsRect` for
+   top-level/non-aligned controls, so `ResizeWindow → SetWindowRect` survives (the `else` used to overwrite the
+   freshly set rect with stale bounds every resize). The `FBoundsRect → FWindowRect` sync for `alNone` controls
+   moved into `SetBoundsRect` (write-time), preserving dragged-window behavior.
+3. **F6 — `console.show(w, h)` in characters.** The 4-arg `ShowConsole` installs `CharWidth`/`CharHeight` from
+   the current font first, then scales `w`/`h` cells to pixels (`80x25` defaults now mean 80×25 chars, not
+   pixels).
+4. **F5 — single-frame .aseprite + failure leak.** A 1-frame `.aseprite` is no longer rejected: `TLoadSpriteObject`
+   hands its single frame to the static-texture path (slot nilled so rollback frees skip it). Also: the texture is
+   unloaded when `SetTexture` refuses it (store never took ownership — old leak), and leftover frames are freed on
+   the failure path.
+5. **F2 — console/editor `Update` re-enabled.** `TTyroMain.Update` calls `Console.Update` and `Editor.Update`
+   again (caret blink, scrollbars, mouse selection) with the original try/except logging preserved.
+
+## 5. Open — Functional
+
 - **F3 — `DoPaintBorder` red-frame stub** (TyroControls.pas 1842–1885): no real border rendering.
-- **F7 → F8 — `RunString` stack leak** (LuaClasses.pas 716–732): `LUA_MULTRET` results left on the persistent
-  Lua state stack after each run; grows with every script run.
 
-## 5. Open — Threading / design notes (lower priority)
+## 6. Open — Threading / design notes (lower priority)
 
 | Note | Location | Why it matters |
 |------|----------|----------------|
@@ -115,10 +123,10 @@ three parallel read-only explorer passes (controls/terminal; sounds/melodies/spe
 | Dead code | TyroClasses.pas 872–881 area (report ref; see note) | The only `try/finally` in TyroClasses.pas is legitimate stream cleanup — flagged item could not be reproduced; re-check if a specific block is meant. |
 | `TCreateControlObject` cleanup | codex01.md | "Main-thread-safe cleanup of partially created or failed `TCreateControlObject` instances remains unresolved." |
 
-## 6. Suggested next steps
+## 7. Suggested next steps
 
-1. ~~**Batch A — memory-safety/crash hardeners:** C2 (radio UAF) → C5 (Aseprites bounds) → C4 (MML overflow) → C7 (extraspace pointer).~~ **DONE — `ca8d2c9`** (this commit; verified clean build, no new warnings, launch smoke test OK).
-2. **Batch B — functional gaps:** F8 (RunString leak) → F4 (resize) → F6 (`console.show` chars) → F5 (single-frame aseprite) → F2 (re-enable updates).
-3. **Batch C — robustness/design:** `ProcessQueue` exception-safety, `FControlCapture` dangle, `luaL_setfuncs`, LuaClasses guards, sprite/update clamps, `SetCanvas` leak, cleanup (Witch typo, dead code, margin default).
+1. ~~**Batch A — memory-safety/crash hardeners:** C2 (radio UAF) → C5 (Aseprites bounds) → C4 (MML overflow) → C7 (extraspace pointer).~~ **DONE — `ca8d2c9`** (clean build, no new warnings, launch smoke test OK).
+2. ~~**Batch B — functional gaps:** F8 (RunString leak) → F4 (resize) → F6 (`console.show` chars) → F5 (single-frame aseprite) → F2 (re-enable updates).~~ **DONE — `130a81b`** (same verification).
+3. **Batch C — robustness/design:** `ProcessQueue` exception-safety, `FControlCapture` dangle, `luaL_setfuncs`, LuaClasses guards, sprite/update clamps, `SetCanvas` leak, F3 `DoPaintBorder`, cleanup (Witch typo, dead code, margin default).
 
 Rebuild + smoke-test after each batch (`lazbuild --build-all --build-mode=Debug tyro.lpi` in `src/`).
