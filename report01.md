@@ -17,12 +17,12 @@ three parallel read-only explorer passes (controls/terminal; sounds/melodies/spe
 | ID | Finding | Location (baseline) | Severity | Status |
 |----|---------|--------------------|----------|--------|
 | C1 | REPL echo: RunChunk reads index `1`, pops 2/iter → wrong echo + returns removed | TyroLua.pas 1219–1226 | High (functional) | ✅ FIXED |
-| C2 | Radio getters: use-after-free TOCTOU on `FClient` vs `FreeAndNil` in Stop/DoError/StreamEnded | TyroRadio.pas 211–254 | **Critical (crash/UAF)** | 🔴 OPEN |
+| C2 | Radio getters: use-after-free TOCTOU on `FClient` vs `FreeAndNil` in Stop/DoError/StreamEnded | TyroRadio.pas 211–254 | **Critical (crash/UAF)** | ✅ FIXED (ca8d2c9) |
 | C3 | Waveform div/mod-by-zero: `SampleRate div round(Frequency)`, `Index mod Round(WaveSamples)`, `Delta := 100/0` | TyroSounds.pas 157–160, 217–220, 490–508 | Critical (crash) | ✅ FIXED |
-| C4 | MML: unvalidated tempo `t0`; `q` via note-number math can overflow Int64 | Melodies.pas 355–356, 605–618 | High (crash/overflow) | 🔴 OPEN |
-| C5 | Aseprites: unbounded palette `SetLength`, unbounded layer-chunk reads, sheet-texture overflow, partial-failure count contract | Aseprites.pas 900–926, 1007–1013, 1536–1542, 1575–1588 | Critical (overflow/OOB reads) | 🔴 OPEN |
+| C4 | MML: unvalidated tempo `t0`; `q` via note-number math can overflow Int64 | Melodies.pas 355–356, 605–618 | High (crash/overflow) | ✅ FIXED (ca8d2c9) |
+| C5 | Aseprites: unbounded palette `SetLength`, unbounded layer-chunk reads, sheet-texture overflow, partial-failure count contract | Aseprites.pas 900–926, 1007–1013, 1536–1542, 1575–1588 | Critical (overflow/OOB reads) | ✅ FIXED (ca8d2c9) |
 | C6 | Single-frame .aseprite never loads; partial-failure leaks sprite | TyroSprites.pas 1205–1262 | Medium (functional + leak) | 🔴 OPEN |
-| C7 | `lua_getextraspace` writes `L-8` backward pointer (custom-allocator context) | LuaAPI.pas 739–744 | High (memory corruption when allocator used) | 🔴 OPEN |
+| C7 | `lua_getextraspace` writes `L-8` backward pointer (custom-allocator context) | LuaAPI.pas 739–744 | High (memory corruption when allocator used) | ✅ FIXED (ca8d2c9) |
 | C8 | `AQueueObject.LineNo := ar.currentline` outside `DEBUG_LUA` ifdef → reads uninitialized stack frame | TyroLua.pas 1263–1275 | High (UB in non-debug) | ✅ FIXED |
 | F1 | Console can never be focused (`csFocus` missing in terminal Style; `SetFocused` ignores value; ProcessInput early-exit) → kills console typing, `console.read`, F2/F7/F8 | TyroTerminal.pas 253; TyroControls.pas 1153–1157; TyroEngines.pas 1032–1033 | **High (functional dead path)** | ✅ FIXED |
 | F2 | `Update` for console & editor is commented out (caret, cursor, scroll dead) | TyroEngines.pas 935–955 | Medium (UX) | 🔴 OPEN |
@@ -50,31 +50,31 @@ three parallel read-only explorer passes (controls/terminal; sounds/melodies/spe
    both endpoints).
 6. **Cleanup.** Removed duplicated `Console.Visible := False; Console.Focused := True;` pair in the constructor.
 
-## 3. Open — Critical / crash-class
+## 3. Fixed in `ca8d2c9`
 
-### C2 — Radio use-after-free race (TyroRadio.pas 211–254)
-Getters check `FClient` and then dereference it without holding the same exclusion as
-`Stop`/`DoError`/`StreamEnded` (which do `FreeAndNil(FClient)`). A stop or stream error can free the client
-between the check and the use → UAF. This is the single concrete violation of the documented
-main-thread-confinement contract reachable from Lua (radio getters are called from script threads).
-**Fix direction:** serialize getter reads with the same lock/queue used by the lifecycle methods, or snapshot
-fields under the lock and return safe defaults when there is no client.
-
-### C5 — Aseprites unbounded/large allocations (Aseprites.pas)
-- `SetLength(Palette, count)` (1007–1013) — palette count comes from the file header, no upper bound → OOM.
-- `ReadLayerChunk` (900–926) — chunk length read from file drives `SetLength`/reads without EOF/bounds checks → OOB read.
-- Sheet texture size from header (1536–1542) — overflow for absurd dimensions.
-- `GetAsepriteFrames`/count contract (1575–1588) — on partial failure the returned count doesn't match allocated frames → dangling/partial state.
-
-### C4 — MML tempo/note math overflow (Melodies.pas)
-- Tempo command `t` not validated (614–618): `t0` divides by zero.
-- `q` computed via note-number math can overflow (355–356, 605–611) for large octaves/note values.
-**Fix direction:** clamp tempo to a sane range (e.g. 1..2000); use floating point for frequency math.
-
-### C7 — `lua_getextraspace` backward pointer (LuaAPI.pas 739–744)
-When a custom allocator is installed, the extra-space pointer is taken from `L - 8` instead of the upvalue/userdata
-slot — a backwards read before the state block. **Fix direction:** index `LUA_EXTRASPACE` relative to the actual
-state block layout used by the allocator (Lua 5.4: `lua_getextraspace(L)` must point inside the allocated block).
+1. **C2 — radio use-after-free race.** `TRadioPlayer` now serializes every `FClient` access behind a
+   `TCriticalSection` (`SyncObjs`): `Play` installs the client under the lock, `Stop`/`DoError`/`StreamEnded`
+   `Close`+`FreeAndNil` under the lock, and all getters (`Title`/`Station`/`Genre`/`Bitrate`/`Buffered`) read
+   under the lock. `Error` and `URL` (refcounted strings written on the main thread, read from script threads)
+   now go through locked getters as well, closing the string tear/race. The script-thread-getter vs
+   main-thread-lifecycle TOCTOU is gone.
+2. **C5 — Aseprite bounds.** Palette chunk `NewSize` (a u32 from the file) is capped at 4096 entries before
+   `SetLength`; layer chunks are capped at 1024 so `FLayers` growth is bounded; the raw file size is capped at
+   512 MB before it is read in; the sheet-texture loader computes `Width * Frames * Height` in `Int64`, rejects
+   > 4096 frames / > 64 M pixels, and nil-checks `MemAlloc` before `FillChar` — oversized/truncated/malicious
+   files now fail gracefully (`AFrameCount = 0`, default texture) instead of overflowing or crashing. (The
+   partial-failure count contract of `AsepriteLoadFrameTextures` is retained: callers already key off
+   `ATextures[i].id`. Raw/compressed cel reads were already bounded by `cMaxDim` + chunk-end checks.)
+3. **C4 — MML overflow.** `PlayNote` was refactored: the shared tail is `QueueSound`; the numeric-note path and
+   the named-note path both verify the index is within `-255..255` before `Power()`/`floor()` (beyond that the
+   result overflows the `Integer` frequency). The `q` command now plays its value as an explicit frequency via
+   `PlayNoteFrequency` (1..32000 Hz, rejects ≤ 0) instead of routing it through the note-index math — `q 440`
+   is a 440 Hz note rather than a 110 GHz overflow. `t` (tempo) is validated to 1..2000, so `BaseTempo / Tempo`
+   can no longer divide by zero (`t0`).
+4. **C7 — `lua_getextraspace`.** Rewritten with explicit byte arithmetic: `PByte(L) - LUA_EXTRASPACE`. The old
+   `L - LUA_EXTRASPACE` on the `Plua_State` pointer only happened to work because `lua_State` is declared as an
+   empty record (`SizeOf = 1`); it would have read/written far before the state block — corrupting
+   `global_State` — if that record ever gains a real layout. Behavior is unchanged today; the hazard is removed.
 
 ## 4. Open — Functional
 
@@ -99,7 +99,7 @@ state block layout used by the allocator (Lua 5.4: `lua_getextraspace(L)` must p
 | Margin default overwrite | TyroEngines.pas 723–726 | `margin = 0` config read overwrites a prior default. |
 | `FControlCapture` dangle | TyroEngines.pas 994–1005 | Capture pointer not cleared if the control is hidden/freed mid-drag. |
 | Hidden-window break | TyroEngines.pas 401–402 | Early-exit path skips input/draw when window hidden — keep in mind for console-only runs. |
-| Radio getter thread reads | TyroLua.pas 1660–1713 | Same root cause as C2; fix C2 first. |
+| Radio getter thread reads | TyroLua.pas 1660–1713 | Serialized behind the `TCriticalSection` added in ca8d2c9 (same root cause as C2). |
 | `luaL_setfuncs` open-array hazard | LuaAPI.pas 967–994 | Passing open arrays when a sentinel is expected. |
 | `lua_register_table_index` mis-guard | LuaClasses.pas 205–228 | Guard tests the wrong condition. |
 | `LuaAlloc` semantics | LuaClasses.pas 312–320 | Allocator realloc/nil handling differs from C contract. |
@@ -117,7 +117,7 @@ state block layout used by the allocator (Lua 5.4: `lua_getextraspace(L)` must p
 
 ## 6. Suggested next steps
 
-1. **Batch A — memory-safety/crash hardeners:** C2 (radio UAF) → C5 (Aseprites bounds) → C4 (MML overflow) → C7 (extraspace pointer).
+1. ~~**Batch A — memory-safety/crash hardeners:** C2 (radio UAF) → C5 (Aseprites bounds) → C4 (MML overflow) → C7 (extraspace pointer).~~ **DONE — `ca8d2c9`** (this commit; verified clean build, no new warnings, launch smoke test OK).
 2. **Batch B — functional gaps:** F8 (RunString leak) → F4 (resize) → F6 (`console.show` chars) → F5 (single-frame aseprite) → F2 (re-enable updates).
 3. **Batch C — robustness/design:** `ProcessQueue` exception-safety, `FControlCapture` dangle, `luaL_setfuncs`, LuaClasses guards, sprite/update clamps, `SetCanvas` leak, cleanup (Witch typo, dead code, margin default).
 
