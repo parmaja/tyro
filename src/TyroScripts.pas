@@ -114,7 +114,7 @@ type
      main drawing cycle every frame) and returns the created control. Dispatch
      happens on the main thread so controls always belong to the control tree.
      Supported classes: 'button', 'panel', 'label', 'checkbox', 'edit',
-     'spectrum'. }
+     'spectrum', 'listbox'. }
    TCreateControlObject = class(TQueueObject)
    private
      FClassName: string;
@@ -217,6 +217,73 @@ type
     FName: string;
   public
     constructor Create(AControl: TTyroControl; const AName: string);
+    procedure DoExecute; override;
+  end;
+
+  { ListBox helpers: the list box is painted by the main cycle, so every
+    mutation is marshalled to the main thread like the other control setters. }
+
+  TSetControlItemsObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FItems: TStringList; //owned copy
+  public
+    constructor Create(AControl: TTyroControl; AItems: TStringList);
+    destructor Destroy; override;
+    procedure DoExecute; override;
+  end;
+
+  TSetControlItemObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FIndex: Integer;
+    FText: utf8string;
+  public
+    constructor Create(AControl: TTyroControl; AIndex: Integer; const AText: utf8string);
+    procedure DoExecute; override;
+  end;
+
+  TAddControlItemObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FText: utf8string;
+  public
+    constructor Create(AControl: TTyroControl; const AText: utf8string);
+    procedure DoExecute; override;
+  end;
+
+  TClearControlItemsObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+  public
+    constructor Create(AControl: TTyroControl);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlViewCountObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FViewCount: Integer;
+  public
+    constructor Create(AControl: TTyroControl; AViewCount: Integer);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlItemHeightObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FItemHeight: Integer;
+  public
+    constructor Create(AControl: TTyroControl; AItemHeight: Integer);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlItemIndexObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FItemIndex: Integer;
+  public
+    constructor Create(AControl: TTyroControl; AItemIndex: Integer);
     procedure DoExecute; override;
   end;
 
@@ -977,7 +1044,9 @@ begin
   else if LName = 'edit' then
     NewControl := TTyroEdit.Create(Main)
   else if LName = 'spectrum' then
-    NewControl := TTyroSpectrum.Create(Main);
+    NewControl := TTyroSpectrum.Create(Main)
+  else if LName = 'listbox' then
+    NewControl := TTyroListBox.Create(Main);
   try
     if NewControl <> nil then
     begin
@@ -1109,6 +1178,111 @@ end;
 procedure TSetControlNameObject.DoExecute;
 begin
   FControl.Name := FName;
+end;
+{ TSetControlItemsObject }
+
+constructor TSetControlItemsObject.Create(AControl: TTyroControl; AItems: TStringList);
+begin
+  inherited Create;
+  FControl := AControl;
+  FItems := TStringList.Create;
+  FItems.Assign(AItems);
+end;
+
+destructor TSetControlItemsObject.Destroy;
+begin
+  FreeAndNil(FItems);
+  inherited;
+end;
+
+procedure TSetControlItemsObject.DoExecute;
+begin
+  TTyroListBox(FControl).Items := FItems;
+end;
+
+{ TSetControlItemObject }
+
+constructor TSetControlItemObject.Create(AControl: TTyroControl; AIndex: Integer; const AText: utf8string);
+begin
+  inherited Create;
+  FControl := AControl;
+  FIndex := AIndex;
+  FText := AText;
+end;
+
+procedure TSetControlItemObject.DoExecute;
+begin
+  if (FIndex >= 0) and (FIndex < TTyroListBox(FControl).Items.Count) then
+    TTyroListBox(FControl).Items[FIndex] := FText;
+end;
+
+{ TAddControlItemObject }
+
+constructor TAddControlItemObject.Create(AControl: TTyroControl; const AText: utf8string);
+begin
+  inherited Create;
+  FControl := AControl;
+  FText := AText;
+end;
+
+procedure TAddControlItemObject.DoExecute;
+begin
+  TTyroListBox(FControl).AddItem(FText);
+end;
+
+{ TClearControlItemsObject }
+
+constructor TClearControlItemsObject.Create(AControl: TTyroControl);
+begin
+  inherited Create;
+  FControl := AControl;
+end;
+
+procedure TClearControlItemsObject.DoExecute;
+begin
+  TTyroListBox(FControl).Clear;
+end;
+
+{ TSetControlViewCountObject }
+
+constructor TSetControlViewCountObject.Create(AControl: TTyroControl; AViewCount: Integer);
+begin
+  inherited Create;
+  FControl := AControl;
+  FViewCount := AViewCount;
+end;
+
+procedure TSetControlViewCountObject.DoExecute;
+begin
+  TTyroListBox(FControl).ViewCount := FViewCount;
+end;
+
+{ TSetControlItemHeightObject }
+
+constructor TSetControlItemHeightObject.Create(AControl: TTyroControl; AItemHeight: Integer);
+begin
+  inherited Create;
+  FControl := AControl;
+  FItemHeight := AItemHeight;
+end;
+
+procedure TSetControlItemHeightObject.DoExecute;
+begin
+  TTyroListBox(FControl).ItemHeight := FItemHeight;
+end;
+
+{ TSetControlItemIndexObject }
+
+constructor TSetControlItemIndexObject.Create(AControl: TTyroControl; AItemIndex: Integer);
+begin
+  inherited Create;
+  FControl := AControl;
+  FItemIndex := AItemIndex;
+end;
+
+procedure TSetControlItemIndexObject.DoExecute;
+begin
+  TTyroListBox(FControl).ItemIndex := FItemIndex;
 end;
 
 { TDrawSetColorObject }

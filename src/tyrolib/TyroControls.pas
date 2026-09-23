@@ -356,6 +356,63 @@ type
     procedure MouseMove(Shift: TShiftState; x, y: integer); override;
   end;
 
+  { TTyroListBox }
+
+  TTyroListBox = class(TTyroControl)
+  private
+    FItems: TStrings;
+    FViewCount: Integer;
+    FItemHeight: Integer;
+    FCustomDraw: Boolean;
+    FTopIndex: Integer;   //first visible item (vertical scroll offset)
+    FItemIndex: Integer;  //selected item, -1 = none
+    function GetRowHeight: Integer;
+    function GetVisibleItems: Integer;
+    function GetMaxTop: Integer;
+    procedure SetItems(AValue: TStrings);
+    procedure SetViewCount(AValue: Integer);
+    procedure SetItemHeight(AValue: Integer);
+    procedure SetCustomDraw(AValue: Boolean);
+    procedure SetItemIndex(AValue: Integer);
+    procedure AutoSizeHeight;
+    procedure ClampTop;
+    procedure UpdateScrollBars;
+  protected
+    procedure DoPaint(ACanvas: TTyroCanvas); override;
+    procedure Resized; override;
+    procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
+    //* Custom per-item painting, called for every visible item when CustomDraw
+    //* is True. Override it in a subclass to paint AItemRect yourself; the
+    //* default does nothing.
+    procedure DoCustomDraw(ACanvas: TTyroCanvas; AIndex: Integer; AItemRect: TRect); virtual;
+    //* Default per-item painting: prints the item text, the selected row is
+    //* highlighted.
+    procedure DoDrawItem(ACanvas: TTyroCanvas; AIndex: Integer; AItemRect: TRect); virtual;
+  public
+    constructor Create(AParent: TTyroLayout); override;
+    destructor Destroy; override;
+    procedure AddItem(const AText: utf8string);
+    procedure DeleteItem(AIndex: Integer);
+    procedure Clear;
+    //* Item index from a client-local Y coordinate, -1 when no item is there.
+    function ItemIndexAt(Y: Integer): Integer;
+    //* Text items shown by the list box.
+    property Items: TStrings read FItems write SetItems;
+    //* Rows the box is sized to display. Setting it to N resizes the control
+    //* height to N * RowHeight. 0 disables auto-sizing: the control keeps the
+    //* size given by its BoundsRect.
+    property ViewCount: Integer read FViewCount write SetViewCount;
+    //* Row height in pixels (0 = derived from the loaded font).
+    property ItemHeight: Integer read FItemHeight write SetItemHeight;
+    property RowHeight: Integer read GetRowHeight;
+    //* When True each visible item is painted by DoCustomDraw instead of the
+    //* default printed text.
+    property CustomDraw: Boolean read FCustomDraw write SetCustomDraw;
+    //* Selected item, -1 = none. Set by clicking on an item.
+    property ItemIndex: Integer read FItemIndex write SetItemIndex;
+  end;
+
   { TTyroWindow }
 
   TTyroWindow = class abstract(TTyroLayout)
@@ -1094,6 +1151,294 @@ begin
     FSelEnd := FCaretPos;
     EnsureCaretVisible;
     Invalidate;
+  end;
+end;
+
+{ TTyroListBox }
+
+constructor TTyroListBox.Create(AParent: TTyroLayout);
+begin
+  inherited;
+  //Allocate the item list first: any property change below that resizes the
+  //control (Border, BoundsRect) runs Resized -> ClampTop -> GetMaxTop, which
+  //reads FItems.
+  FItems := TStringList.Create;
+  Style := [csClip, csOpaque, csVScroll, csFocus];
+  Border := brdThin;
+  BackColor := clWhite;
+  FViewCount := 0;
+  FItemHeight := 0;
+  FCustomDraw := False;
+  FTopIndex := 0;
+  FItemIndex := -1;
+  BoundsRect := Rect(0, 0, 160, 120);
+end;
+
+destructor TTyroListBox.Destroy;
+begin
+  FreeAndNil(FItems);
+  inherited;
+end;
+
+function TTyroListBox.GetRowHeight: Integer;
+begin
+  if FItemHeight > 0 then
+    Result := FItemHeight
+  else if Resources <> nil then
+    Result := Resources.Font.Height
+  else
+    Result := 0;
+  if Result < 10 then
+    Result := 20; //fallback before/beside a loaded font
+end;
+
+function TTyroListBox.GetVisibleItems: Integer;
+begin
+  if RowHeight <= 0 then
+    Exit(1);
+  Result := ClientRect.Height div RowHeight;
+  if Result < 1 then
+    Result := 1;
+end;
+
+function TTyroListBox.GetMaxTop: Integer;
+begin
+  Result := FItems.Count - GetVisibleItems;
+  if Result < 0 then
+    Result := 0;
+end;
+
+procedure TTyroListBox.SetItems(AValue: TStrings);
+begin
+  if AValue = FItems then
+    Exit;
+  FItems.Assign(AValue);
+  if FItemIndex >= FItems.Count then
+    FItemIndex := FItems.Count - 1;
+  if FItemIndex < -1 then
+    FItemIndex := -1;
+  ClampTop;
+  UpdateScrollBars;
+  Invalidate;
+end;
+
+procedure TTyroListBox.SetViewCount(AValue: Integer);
+begin
+  if AValue < 0 then
+    AValue := 0;
+  if FViewCount = AValue then
+    Exit;
+  FViewCount := AValue;
+  AutoSizeHeight;
+  UpdateScrollBars;
+  Invalidate;
+end;
+
+procedure TTyroListBox.SetItemHeight(AValue: Integer);
+begin
+  if AValue < 1 then
+    AValue := 0;
+  if FItemHeight = AValue then
+    Exit;
+  FItemHeight := AValue;
+  AutoSizeHeight;
+  UpdateScrollBars;
+  Invalidate;
+end;
+
+procedure TTyroListBox.SetCustomDraw(AValue: Boolean);
+begin
+  if FCustomDraw = AValue then
+    Exit;
+  FCustomDraw := AValue;
+  Invalidate;
+end;
+
+procedure TTyroListBox.SetItemIndex(AValue: Integer);
+begin
+  if AValue < -1 then
+    AValue := -1;
+  if AValue >= FItems.Count then
+    AValue := FItems.Count - 1;
+  if FItemIndex = AValue then
+    Exit;
+  FItemIndex := AValue;
+  //keep the selected row visible
+  if (FItemIndex >= 0) and (FItemIndex < FTopIndex) then
+    FTopIndex := FItemIndex
+  else if (FItemIndex >= 0) and (FItemIndex >= FTopIndex + GetVisibleItems) then
+    FTopIndex := FItemIndex - GetVisibleItems + 1;
+  ClampTop;
+  UpdateScrollBars;
+  Invalidate;
+end;
+
+function TTyroListBox.ItemIndexAt(Y: Integer): Integer;
+begin
+  Result := -1;
+  if (RowHeight <= 0) or (FItems.Count <= 0) then
+    Exit;
+  Result := FTopIndex + (Y div RowHeight);
+  if (Result < 0) or (Result >= FItems.Count) then
+    Result := -1;
+end;
+
+procedure TTyroListBox.AddItem(const AText: utf8string);
+begin
+  FItems.Add(AText);
+  UpdateScrollBars;
+  Invalidate;
+end;
+
+procedure TTyroListBox.DeleteItem(AIndex: Integer);
+begin
+  if (AIndex < 0) or (AIndex >= FItems.Count) then
+    Exit;
+  FItems.Delete(AIndex);
+  if FItemIndex >= FItems.Count then
+    FItemIndex := FItems.Count - 1;
+  if FItemIndex < -1 then
+    FItemIndex := -1;
+  ClampTop;
+  UpdateScrollBars;
+  Invalidate;
+end;
+
+procedure TTyroListBox.Clear;
+begin
+  FItems.Clear;
+  FItemIndex := -1;
+  FTopIndex := 0;
+  UpdateScrollBars;
+  Invalidate;
+end;
+
+procedure TTyroListBox.ClampTop;
+begin
+  if FTopIndex < 0 then
+    FTopIndex := 0;
+  if FTopIndex > GetMaxTop then
+    FTopIndex := GetMaxTop;
+end;
+
+procedure TTyroListBox.AutoSizeHeight;
+begin
+  if FViewCount > 0 then
+    Height := FViewCount * RowHeight;
+end;
+
+procedure TTyroListBox.UpdateScrollBars;
+var
+  vis, maxTop: Integer;
+begin
+  ClampTop;
+  vis := GetVisibleItems;
+  maxTop := GetMaxTop;
+  if maxTop > 0 then
+  begin
+    ShowScrollBar([sbtVertical], True);
+    SetScrollRange(sbtVertical, 0, maxTop, vis);
+    SetScrollPosition(sbtVertical, FTopIndex, True);
+  end
+  else
+    ShowScrollBar([sbtVertical], False);
+end;
+
+procedure TTyroListBox.Resized;
+begin
+  inherited;
+  ClampTop;
+  UpdateScrollBars;
+end;
+
+procedure TTyroListBox.Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
+var
+  maxTop: Integer;
+begin
+  if Which <> sbtVertical then
+  begin
+    inherited Scroll(Which, ScrollCode, Pos);
+    Exit;
+  end;
+  maxTop := GetMaxTop;
+  case ScrollCode of
+    scrollTOP: FTopIndex := 0;
+    scrollBOTTOM: FTopIndex := maxTop;
+    scrollLINEDOWN: Inc(FTopIndex);
+    scrollLINEUP: Dec(FTopIndex);
+    scrollPAGEDOWN: Inc(FTopIndex, GetVisibleItems);
+    scrollPAGEUP: Dec(FTopIndex, GetVisibleItems);
+    scrollTHUMBPOSITION, scrollTHUMBTRACK: FTopIndex := Pos;
+    scrollENDSCROLL: ;
+  end;
+  ClampTop;
+  UpdateScrollBars;
+  Invalidate;
+end;
+
+procedure TTyroListBox.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer);
+var
+  i: Integer;
+begin
+  inherited;
+  if (Button = mbLeft) and (HitScrollBar(x, y) = []) then
+  begin
+    i := ItemIndexAt(y - (Margin + BorderSize));
+    if i >= 0 then
+      ItemIndex := i;
+  end;
+end;
+
+procedure TTyroListBox.DoDrawItem(ACanvas: TTyroCanvas; AIndex: Integer; AItemRect: TRect);
+var
+  th, ty: Single;
+begin
+  if AIndex = FItemIndex then
+    ACanvas.FillRectangle(AItemRect, clSkyBlue);
+  th := Resources.Font.Height;
+  ty := AItemRect.Top + (AItemRect.Height - th) / 2;
+  if AIndex = FItemIndex then
+    ACanvas.DrawText(AItemRect.Left + 4, ty, FItems[AIndex], clBlack)
+  else
+    ACanvas.DrawText(AItemRect.Left + 4, ty, FItems[AIndex], ACanvas.PenColor);
+end;
+
+procedure TTyroListBox.DoCustomDraw(ACanvas: TTyroCanvas; AIndex: Integer; AItemRect: TRect);
+begin
+  //Override in a subclass to paint the item yourself (see CustomDraw).
+end;
+
+procedure TTyroListBox.DoPaint(ACanvas: TTyroCanvas);
+var
+  r: TRect;
+  n, vis, top, i, hoverIdx: Integer;
+  itemRect: TRect;
+begin
+  inherited;
+  r := ClientRect;
+  n := FItems.Count;
+  if (n <= 0) or (r.Height <= 0) or (RowHeight <= 0) then
+    Exit;
+
+  vis := GetVisibleItems;
+  top := FTopIndex;
+  hoverIdx := -1;
+  if Hover then
+    hoverIdx := ItemIndexAt(FLastMouseY - (Margin + BorderSize));
+
+  for i := 0 to vis - 1 do
+  begin
+    if top + i >= n then
+      Break;
+    itemRect := Rect(0, i * RowHeight, r.Width, (i + 1) * RowHeight);
+    if FCustomDraw then
+      DoCustomDraw(ACanvas, top + i, itemRect)
+    else
+    begin
+      if hoverIdx = top + i then
+        ACanvas.FillRectangle(itemRect, clLightGray.ReplaceAlpha(90));
+      DoDrawItem(ACanvas, top + i, itemRect);
+    end;
   end;
 end;
 

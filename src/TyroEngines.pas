@@ -66,6 +66,35 @@ type
     function Execute(Name: UTF8String; Params: TStrings = nil): Boolean; overload;
   end;
 
+  { TTyroFileList }
+
+  TFilePickEvent = procedure(Sender: TObject; const AFileName: string) of object;
+
+  //The F4 script picker: a list of loadable files (default *.ls) shown centered
+  //over the main window. Keyboard: Up/Down select, Enter picks, Escape cancels.
+  //Clicking a row selects it; clicking the selected row again picks it.
+  TTyroFileList = class(TTyroListBox)
+  private
+    FDirectory: string;
+    FOnPick: TFilePickEvent;
+    FOnDismiss: TNotifyEvent;
+  protected
+    procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
+  public
+    //Rebuild the item list from ADirectory using AMask; returns the number of
+    //files found. The file names stored here are later resolved against this
+    //directory by SelectedFile.
+    function Refresh(const ADirectory: string; const AMask: string): Integer;
+    //Fully qualified name of the selected item, '' when nothing is selected.
+    function SelectedFile: string;
+    property Directory: string read FDirectory;
+    //Fired when an item is confirmed (Enter, or a click on the selected row).
+    property OnPick: TFilePickEvent read FOnPick write FOnPick;
+    //Fired when the user cancels the picker (Escape).
+    property OnDismiss: TNotifyEvent read FOnDismiss write FOnDismiss;
+  end;
+
   { TTyroMain }
 
   TTyroMainOption = (moOpaque, moShowFPS);
@@ -104,6 +133,12 @@ type
     function CloneScript(AScript: TTyroScript): TTyroScript;
     procedure RunLoadedScript;
     procedure StopScriptThread;
+    procedure ShowFileList;
+    procedure HideFileList;
+    procedure ToggleFileList;
+    procedure RefreshFileList;
+    procedure FileListPicked(Sender: TObject; const AFileName: string);
+    procedure FileListDismissed(Sender: TObject);
   protected
     FTextureMode: Boolean;
     IsTerminated: Boolean;
@@ -119,6 +154,9 @@ type
     //Editable/persistent script template. Executed files use a clone in
     //FScriptThread; this object also backs the console REPL state.
     FScriptMain: TTyroScript;
+    //F4 script picker: lists the *.ls files of the current directory; picking
+    //one loads it into FScriptMain so the "run" console command can execute it.
+    FFileList: TTyroFileList;
     FScriptTypes: TScriptTypes;
     FReadCallback: TConsoleReadEvent;
     FWaitingQueueObject: TQueueObject; //the queue object a script thread is blocked waiting on
@@ -768,6 +806,15 @@ begin
   Editor.OnClose := EditorClosed;
   Editor.OnSave := EditorSave;
 
+  //F4 script picker; BoundsRect is recentered every time it is shown so it
+  //follows window resizes. Hidden until the user presses F4.
+  FFileList := TTyroFileList.Create(Self);
+  FFileList.Name := 'FileList';
+  FFileList.BoundsRect := Rect(0, 0, 360, 280);
+  FFileList.Visible := False;
+  FFileList.OnPick := FileListPicked;
+  FFileList.OnDismiss := FileListDismissed;
+
   Sprites := TSprites.Create;
   Physics := TPhysics.Create(Sprites);
   Commands := TConsoleCommands.Create();
@@ -1057,6 +1104,10 @@ begin
   // F8 toggles the console
   if RayLib.IsKeyPressed(KEY_F8) then
     ToggleConsole;
+  // F4 toggles the *.ls script picker: pick a file, then type "run" to execute
+  // it in the script thread.
+  if RayLib.IsKeyPressed(KEY_F4) then
+    ToggleFileList;
   // Handle ESC to hide console when it's active and focused
   if (Console.Visible) and Console.Focused and RayLib.IsKeyPressed(KEY_ESCAPE) then
     HideConsole;
@@ -1209,14 +1260,127 @@ begin
   if Console.Visible then
     HideConsole
   else
+  begin
     ShowConsole;
+    //The console owns the screen while shown: hide the log panel so the two
+    //debug panels don't pile up (F8 and F7 each show only their own panel).
+    if Output.Visible then
+      Output.Visible := False;
+  end;
+end;
+
+procedure TTyroMain.RefreshFileList;
+begin
+  //List the scripts of the current directory first (same source as the console
+  //"list" and "load" commands); fall back to the workspace so F4 still finds
+  //demos when the engine was launched without a script from an empty folder.
+  if FFileList.Refresh(Resources.CurrentDirectory, '*.ls') = 0 then
+    FFileList.Refresh(Resources.WorkSpace, '*.ls');
+end;
+
+procedure TTyroMain.ShowFileList;
+var
+  LW, LH, W, H: Integer;
+begin
+  RefreshFileList;
+  if FFileList.Items.Count = 0 then
+  begin
+    Console.Writeln('No .ls scripts found in: ' + Resources.CurrentDirectory);
+    if not Console.Visible then
+      ToggleConsole;
+    Exit;
+  end;
+  //Center the picker over the main window, keeping a small margin around it.
+  LW := 420;
+  LH := 300;
+  W := Width;
+  H := Height;
+  if LW > W - 40 then
+    LW := W - 40;
+  if LH > H - 40 then
+    LH := H - 40;
+  FFileList.BoundsRect := Rect((W - LW) div 2, (H - LH) div 2,
+                              (W + LW) div 2, (H + LH) div 2);
+  FFileList.Show;
+  FFileList.BringToFront;
+  FFileList.Focused := True;
+end;
+
+procedure TTyroMain.HideFileList;
+begin
+  FFileList.Hide;
+  FFileList.Focused := False;
+  //Return keyboard focus (and a read prompt) to the console when it is shown.
+  if Console.Visible then
+  begin
+    Console.Focused := True;
+    StartConsoleRead;
+  end;
+end;
+
+procedure TTyroMain.ToggleFileList;
+begin
+  if FFileList.Visible then
+    HideFileList
+  else
+    ShowFileList;
+end;
+
+procedure TTyroMain.FileListPicked(Sender: TObject; const AFileName: string);
+var
+  aScriptType: TScriptType;
+  aScript: TTyroScript;
+begin
+  if (AFileName = '') or not SysUtils.FileExists(AFileName) then
+  begin
+    Console.Writeln('Script not found: ' + AFileName);
+    Exit;
+  end;
+  aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(AFileName));
+  if aScriptType = nil then
+  begin
+    Console.Writeln('Unknown script type for: ' + ExtractFileName(AFileName));
+    Exit;
+  end;
+  aScript := aScriptType.ScriptClass.Create;
+  try
+    aScript.LoadFile(AFileName);
+  except
+    on E: Exception do
+    begin
+      Console.Writeln('Unable to load ' + ExtractFileName(AFileName) + ': ' + E.Message);
+      aScript.Free;
+      Exit;
+    end;
+  end;
+  //Replace the current template: stop the worker, swap the script, and leave
+  //it stopped so the user types "run" to start it (or F2 to edit it first).
+  StopScriptThread;
+  FreeAndNil(FScriptMain);
+  FScriptMain := aScript;
+  Resources.CurrentDirectory := ExtractFilePath(AFileName);
+  HideFileList;
+  Console.Writeln('Loaded: ' + ExtractFileName(AFileName) + '. Type "run" to execute it.');
+  if not Console.Visible then
+    ShowConsole;
+end;
+
+procedure TTyroMain.FileListDismissed(Sender: TObject);
+begin
+  HideFileList;
 end;
 
 procedure TTyroMain.ToggleOutput;
 begin
   Output.Visible := not Output.Visible;
   if Output.Visible then
+  begin
     Output.BringToFront;
+    //The log owns the screen while shown: hide the console so the two debug
+    //panels don't pile up (F7 and F8 each show only their own panel).
+    if Console.Visible then
+      HideConsole;
+  end;
 end;
 
 procedure TTyroMain.ShowEditor;
@@ -1398,7 +1562,7 @@ begin
   Commands.Add('clear', ['cls'], Clear_Command, 'List files in current directory');
   Commands.Add('exit', ['quit', 'q'], Exit_Command, 'Hide console and stop');
   Commands.Add('stop', [], Stop_Command, 'Stop current script');
-  Commands.Add('load', [], Load_Command, 'Load script name from current directory');
+  Commands.Add('load', [], Load_Command, 'Load script name from current directory (F4 to pick)');
   Commands.Add('state', [], State_Command, 'State of current directory');
   Commands.Add('run', [], Run_Command, 'Run current loaded script');
   Commands.Add('edit', [], Edit_Command, 'Edit the current loaded script (F2)');
@@ -1573,6 +1737,110 @@ procedure TTyroMain.State_Command(Params: TStrings);
 begin
   if Active and (FScriptMain <> nil) then
     Console.Writeln(FScriptMain.FileName + ' is running');
+end;
+
+{ TTyroFileList }
+
+function TTyroFileList.Refresh(const ADirectory: string; const AMask: string): Integer;
+var
+  sr: TSearchRec;
+  DirPath: string;
+  Temp: TStringList;
+  i: Integer;
+begin
+  Clear;
+  FDirectory := ExcludeTrailingPathDelimiter(ADirectory);
+  Temp := TStringList.Create;
+  try
+    DirPath := FDirectory;
+    if DirPath <> '' then
+    begin
+      if FindFirst(DirPath + PathDelim + AMask, faAnyFile, sr) = 0 then
+      begin
+        try
+          repeat
+            if (sr.Attr and faDirectory) = 0 then
+              Temp.Add(sr.Name);
+          until FindNext(sr) <> 0;
+        finally
+          FindClose(sr);
+        end;
+      end;
+    end;
+    Temp.Sort;
+    for i := 0 to Temp.Count - 1 do
+      AddItem(Temp[i]);
+  finally
+    Temp.Free;
+  end;
+  Result := Items.Count;
+end;
+
+function TTyroFileList.SelectedFile: string;
+begin
+  Result := '';
+  if (ItemIndex >= 0) and (ItemIndex < Items.Count) and (FDirectory <> '') then
+    Result := IncludePathDelimiter(FDirectory) + Items[ItemIndex];
+end;
+
+procedure TTyroFileList.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
+var
+  aFile: string;
+begin
+  inherited;
+  case Key of
+    KEY_UP:
+    begin
+      if ItemIndex > 0 then
+        ItemIndex := ItemIndex - 1
+      else if ItemIndex < 0 then
+        ItemIndex := 0;
+      Key := KEY_NULL;
+    end;
+    KEY_DOWN:
+    begin
+      if ItemIndex < Items.Count - 1 then
+        ItemIndex := ItemIndex + 1;
+      Key := KEY_NULL;
+    end;
+    KEY_ENTER:
+    begin
+      if ItemIndex >= 0 then
+      begin
+        aFile := SelectedFile;
+        if aFile <> '' then
+        begin
+          Key := KEY_NULL;
+          if Assigned(FOnPick) then
+            FOnPick(Self, aFile);
+        end;
+      end;
+    end;
+    KEY_ESCAPE:
+    begin
+      Key := KEY_NULL;
+      if Assigned(FOnDismiss) then
+        FOnDismiss(Self);
+    end;
+  else
+    begin
+      //Other keys are not handled by the picker.
+    end;
+  end;
+end;
+
+procedure TTyroFileList.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer);
+var
+  i: Integer;
+begin
+  inherited;
+  //A click selects the row; clicking the selected row again picks it.
+  if (Button = mbLeft) and (HitScrollBar(x, y) = []) then
+  begin
+    i := ItemIndexAt(y - (Margin + BorderSize));
+    if (i >= 0) and (i = ItemIndex) and Assigned(FOnPick) then
+      FOnPick(Self, SelectedFile);
+  end;
 end;
 
 { TConsoleCommand }

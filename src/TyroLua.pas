@@ -280,6 +280,13 @@ type
     function Border_func(L: Plua_State): integer; cdecl;
     function BackColor_func(L: Plua_State): integer; cdecl;
     function Name_func(L: Plua_State): integer; cdecl;
+    function Items_func(L: Plua_State): integer; cdecl;
+    function Item_func(L: Plua_State): integer; cdecl;
+    function AddItem_func(L: Plua_State): integer; cdecl;
+    function Clear_func(L: Plua_State): integer; cdecl;
+    function ViewCount_func(L: Plua_State): integer; cdecl;
+    function ItemHeight_func(L: Plua_State): integer; cdecl;
+    function ItemIndex_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
     destructor Destroy; override;
   end;
@@ -1097,6 +1104,13 @@ begin
   Lua.State.Register('controls', 'border', Controls, @Controls.Border_func);
   Lua.State.Register('controls', 'backcolor', Controls, @Controls.BackColor_func);
   Lua.State.Register('controls', 'name', Controls, @Controls.Name_func);
+  Lua.State.Register('controls', 'items', Controls, @Controls.Items_func);
+  Lua.State.Register('controls', 'item', Controls, @Controls.Item_func);
+  Lua.State.Register('controls', 'additem', Controls, @Controls.AddItem_func);
+  Lua.State.Register('controls', 'clear', Controls, @Controls.Clear_func);
+  Lua.State.Register('controls', 'viewcount', Controls, @Controls.ViewCount_func);
+  Lua.State.Register('controls', 'itemheight', Controls, @Controls.ItemHeight_func);
+  Lua.State.Register('controls', 'itemindex', Controls, @Controls.ItemIndex_func);
   Lua.State.Register('controls', Controls); //should be last one
   Lua.State.RegisterTable('buttons');
   Lua.State.Register('buttons', 'new', Controls, @Controls.New_func);
@@ -2174,7 +2188,7 @@ begin
   y := 0;
   aName := '';
   if (clsName = 'button') or (clsName = 'panel') or (clsName = 'label') or
-     (clsName = 'checkbox') or (clsName = 'edit') or (clsName = 'spectrum') then
+     (clsName = 'checkbox') or (clsName = 'edit') or (clsName = 'spectrum') or (clsName = 'listbox') then
   begin
     //new style: controls.new(class, captionOrText, x?, y?, w?, h?, name?)
     clsName := caption;
@@ -2187,6 +2201,7 @@ begin
       'checkbox': begin w := 120; h := 24; end;
       'edit': begin w := 140; h := 28; end;
       'spectrum': begin w := 500; h := 200; end;
+      'listbox': begin w := 160; h := 120; end;
     end;
     if c >= 7 then
       aName := L.ToString(7);
@@ -2566,6 +2581,166 @@ begin
   end;
 end;
 
+//controls.items(handle [, item1, item2, ...]) -> replace all items; with no
+//extra arguments returns the number of items
+function TLuaControls.Items_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+  lb: TTyroListBox;
+  i: Integer;
+  Items: TStringList;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if (ctrl = nil) or not (ctrl is TTyroListBox) then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  lb := TTyroListBox(ctrl);
+  if L.Count >= 2 then
+  begin
+    Items := TStringList.Create;
+    try
+      for i := 1 to L.Count - 1 do
+        Items.Add(L.ToString(i + 1));
+      FScript.RunQueueObject(TSetControlItemsObject.Create(lb, Items));
+    finally
+      Items.Free;
+    end;
+    Result := 0;
+  end
+  else
+  begin
+    L.PushInteger(lb.Items.Count);
+    Result := 1;
+  end;
+end;
+
+//controls.item(handle, index [, text]) -> get/set a single item
+function TLuaControls.Item_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+  lb: TTyroListBox;
+  idx: Integer;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if (ctrl = nil) or not (ctrl is TTyroListBox) then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  lb := TTyroListBox(ctrl);
+  idx := round(L.ToNumber(2));
+  if L.Count >= 3 then
+  begin
+    FScript.RunQueueObject(TSetControlItemObject.Create(lb, idx, L.ToString(3)));
+    Result := 0;
+  end
+  else
+  begin
+    if (idx < 0) or (idx >= lb.Items.Count) then
+      L.PushNil
+    else
+      L.PushString(lb.Items[idx]);
+    Result := 1;
+  end;
+end;
+
+//controls.additem(handle, text) -> append an item
+function TLuaControls.AddItem_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if (ctrl <> nil) and (ctrl is TTyroListBox) then
+    FScript.RunQueueObject(TAddControlItemObject.Create(TTyroListBox(ctrl), L.ToString(2)));
+  Result := 0;
+end;
+
+//controls.clear(handle) -> remove all items
+function TLuaControls.Clear_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if (ctrl <> nil) and (ctrl is TTyroListBox) then
+    FScript.RunQueueObject(TClearControlItemsObject.Create(TTyroListBox(ctrl)));
+  Result := 0;
+end;
+
+//controls.viewcount(handle [, n]) -> get/set the visible rows (0 = boundsrect size)
+function TLuaControls.ViewCount_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if (ctrl = nil) or not (ctrl is TTyroListBox) then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    FScript.RunQueueObject(TSetControlViewCountObject.Create(TTyroListBox(ctrl), round(L.ToNumber(2))));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushInteger(TTyroListBox(ctrl).ViewCount);
+    Result := 1;
+  end;
+end;
+
+//controls.itemheight(handle [, n]) -> get/set the row height (0 = from font)
+function TLuaControls.ItemHeight_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if (ctrl = nil) or not (ctrl is TTyroListBox) then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    FScript.RunQueueObject(TSetControlItemHeightObject.Create(TTyroListBox(ctrl), round(L.ToNumber(2))));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushInteger(TTyroListBox(ctrl).ItemHeight);
+    Result := 1;
+  end;
+end;
+
+//controls.itemindex(handle [, n]) -> get/set the selected row (-1 = none)
+function TLuaControls.ItemIndex_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if (ctrl = nil) or not (ctrl is TTyroListBox) then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.Count >= 2 then
+  begin
+    FScript.RunQueueObject(TSetControlItemIndexObject.Create(TTyroListBox(ctrl), round(L.ToNumber(2))));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushInteger(TTyroListBox(ctrl).ItemIndex);
+    Result := 1;
+  end;
+end;
 function TLuaSprite.Load_func(L: Plua_State): integer; cdecl;
 var
   aFile, aName, aScriptFile: string;
