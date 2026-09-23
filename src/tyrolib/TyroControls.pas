@@ -1152,8 +1152,15 @@ end;
 
 procedure TTyroControl.SetFocused(AValue: Boolean);
 begin
+  //Honor the requested value: True steals the window focus (only focusable
+  //controls, i.e. csFocus in Style), False releases it when we own it.
   if (Window <> nil) and (csFocus in Style) then
-    Window.FocusedControl := Self;
+  begin
+    if AValue then
+      Window.FocusedControl := Self
+    else if Window.FocusedControl = Self then
+      Window.FocusedControl := nil;
+  end;
 end;
 
 { Mouse-over/press/click state, shared by interactive controls. CheckState is

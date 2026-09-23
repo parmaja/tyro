@@ -740,9 +740,6 @@ begin
   Console.HighlightColor := clBlue;
   Console.SelectionColor := clWhite;
   Console.Visible := False;
-  Console.Focused := True;
-  Console.Visible := False;
-  Console.Focused := True;
   Console.OnInput := ConsoleInput;
   Console.Margin:= 5;
   Console.Align:= alBottom;
@@ -1029,6 +1026,20 @@ begin
     end;
   end;
 
+  //* Global UI shortcuts work whether or not a control is focused.
+  // F2 toggles the script editor
+  if RayLib.IsKeyPressed(KEY_F2) then
+    ToggleEditor;
+  // F7 toggles the output control
+  if RayLib.IsKeyPressed(KEY_F7) then
+    ToggleOutput;
+  // F8 toggles the console
+  if RayLib.IsKeyPressed(KEY_F8) then
+    ToggleConsole;
+  // Handle ESC to hide console when it's active and focused
+  if (Console.Visible) and Console.Focused and RayLib.IsKeyPressed(KEY_ESCAPE) then
+    HideConsole;
+
   if FocusedControl = nil then
     Exit;
 
@@ -1067,21 +1078,6 @@ begin
       end;
     end;
     ch := RayLib.GetCharPressed;
-  end;
-
-  // F2 toggles the script editor
-  if RayLib.IsKeyPressed(KEY_F2) then
-    ToggleEditor;
-  // F7 toggles the output control
-  if RayLib.IsKeyPressed(KEY_F7) then
-    ToggleOutput;
-  // F8 toggles the console
-  if RayLib.IsKeyPressed(KEY_F8) then
-    ToggleConsole;
-  // Handle ESC to hide console when it's active and focused
-  if (Console.Visible) and Console.Focused and RayLib.IsKeyPressed(KEY_ESCAPE) then
-  begin
-    HideConsole;
   end;
 end;
 
@@ -1171,12 +1167,16 @@ begin
   Console.CharHeight := Resources.Font.Height;
   Console.Show;
   StartConsoleRead;
+  //Route typed input to the console now that it is visible.
+  Console.Focused := True;
 end;
 
 procedure TTyroMain.HideConsole;
 begin
   Console.StopRead;
   Console.Hide;
+  //Release keyboard focus so input doesn't feed an invisible console.
+  Console.Focused := False;
 end;
 
 procedure TTyroMain.ToggleConsole;
@@ -1396,6 +1396,16 @@ end;
 
 procedure TTyroMain.StartConsoleReadEx(ACallback: TConsoleReadEvent);
 begin
+  //console.read() from a script: make sure the console is visible and focused
+  //so the user can actually type a reply. (Do not call StartConsoleRead here;
+  //it would clear the callback we are installing.)
+  if not Console.Visible then
+  begin
+    Console.CharWidth := Resources.Font.Width;
+    Console.CharHeight := Resources.Font.Height;
+    Console.Show;
+  end;
+  Console.Focused := True;
   FReadCallback := ACallback;
   Console.OnInput := ACallback;
   Console.StartRead(sPromptChar);

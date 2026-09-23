@@ -250,7 +250,8 @@ var
   i: Integer;
 begin
   inherited;
-  Style := [csClip, csOpaque, csVScroll];
+  //csFocus lets the console receive keyboard input when it is shown/focused.
+  Style := [csClip, csOpaque, csVScroll, csFocus];
   BackColor := clDarkGray;
 
   FCharWidth := CDefaultCharWidth;

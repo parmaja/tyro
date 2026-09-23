@@ -1220,12 +1220,17 @@ var
       begin
         if i > 1 then
           S := S + #9;
-        p := luaL_tolstring(Lua.State, 1, nil);
+        //luaL_tolstring pushes a string representation of the value at index i
+        //onto the top of the stack; pop that copy and concatenate it. The
+        //original return values remain below and are discarded after the loop.
+        p := luaL_tolstring(Lua.State, i, nil);
         S := S + PUTF8Char(p);
-        lua_pop(Lua.State, 2); //the converted string and the returned value
+        lua_pop(Lua.State, 1);
       end;
       if S <> '' then
         Main.Console.Writeln(S);
+      //Discard the converted return values from the persistent Lua stack.
+      lua_pop(Lua.State, n);
     end
     else
     begin
@@ -1267,10 +1272,13 @@ var
 {$endif}
 begin
   {$ifdef DEBUG_LUA}
+  //Debug-only: stamp the queued command with the offending Lua source line.
   if Lua.State.GetStack(1, ar) then
+  begin
     Lua.State.GetInfo('nSl', ar);
+    AQueueObject.LineNo := ar.currentline;
+  end;
   {$endif}
-  AQueueObject.LineNo := ar.currentline;
   inherited;
 end;
 

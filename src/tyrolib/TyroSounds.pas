@@ -154,7 +154,14 @@ begin
   begin
     Amplitude := (Amplitude * ((Power(2, SampleSize) / 2) - 1) / 100) - 1;
     {$ifdef FADE}
-    WaveSamples := SampleRate div round(Frequency);
+    //Guard degenerate frequencies: round(Frequency)=0 would be a div-by-zero
+    //and WaveSamples<=0 would make Delta = 100/0 = Inf (crash on Round(Inf)).
+    if round(Frequency) > 0 then
+      WaveSamples := SampleRate div round(Frequency)
+    else
+      WaveSamples := SampleRate;
+    if WaveSamples <= 0 then
+      WaveSamples := 1;
     Starting := WaveSamples * 3;
     Ending := SampleCount - WaveSamples * 3;
     Delta := 100 / (WaveSamples * 3);
@@ -214,7 +221,14 @@ begin
     Amplitude := (Amplitude * ((Power(2, Wave.SampleSize) / 2) - 1) / 100) - 1;
 
     {$ifdef FADE}
-    WaveSamples := SampleRate div round(Frequency);
+    //Guard degenerate frequencies: round(Frequency)=0 would be a div-by-zero
+    //and WaveSamples<=0 would make Delta = 100/0 = Inf (crash on Round(Inf)).
+    if round(Frequency) > 0 then
+      WaveSamples := SampleRate div round(Frequency)
+    else
+      WaveSamples := SampleRate;
+    if WaveSamples <= 0 then
+      WaveSamples := 1;
     Starting := WaveSamples * 3;
     Ending := Wave.FrameCount - WaveSamples * 3;
     Delta := 100 / (WaveSamples * 3);
@@ -494,7 +508,9 @@ begin
   if Frequency > 0 then
   begin
     WaveSamples := SampleRate / Frequency;
-    if WaveSamples > 0 then
+    //Round(WaveSamples) can be 0 for Frequency > 2*SampleRate; Index mod 0
+    //would raise an integer division error.
+    if Round(WaveSamples) > 0 then
     begin
       Sample := Index mod Round(WaveSamples);
       Result := Sin(2*Pi * (Sample / WaveSamples));

@@ -676,7 +676,9 @@ end;
 
 procedure TTyroCanvas.DrawLineTo(X2, Y2: Integer; Color: TColor);
 begin
-  DrawLine(FLastX + FOriginX, FLastY + FOriginY, X2 + FOriginX, Y2 + FOriginY, Color);
+  //DrawLine adds the origin to both endpoints; FLastX/FLastY and (X2, Y2) are
+  //already origin-relative, so pass them through unchanged.
+  DrawLine(FLastX, FLastY, X2, Y2, Color);
 end;
 
 procedure TTyroCanvas.FillRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor);
