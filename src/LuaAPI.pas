@@ -740,7 +740,14 @@ function lua_getextraspace(L: Plua_State): Pointer;
 const
   LUA_EXTRASPACE = sizeof(Pointer);
 begin
-   Result := L - LUA_EXTRASPACE;
+  // Lua keeps the extra space in the bytes just before the lua_State block
+  // (lua_newstate allocates sizeof(global_State) + sizeof(lua_State), and the
+  // last bytes of global_State are the extraspace). It must be byte arithmetic:
+  // PByte(L) - LUA_EXTRASPACE. Do NOT write L - LUA_EXTRASPACE on Plua_State:
+  // that scales by SizeOf(lua_State), which is only 1 today because lua_State
+  // is declared as an empty record - it would corrupt global_State if the type
+  // ever gains a real layout.
+  Result := PByte(L) - LUA_EXTRASPACE;
 end;
 
 function lua_tonumber(L: Plua_State; idx: Integer): lua_Number;

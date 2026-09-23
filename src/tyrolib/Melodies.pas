@@ -320,6 +320,13 @@ begin
 end;
 
 function TMelodyChannel.Next: Boolean;
+const
+  //Note indices are used as exponents (2^(index/12)): beyond ~±255 the
+  //Power() result overflows the Integer frequency range.
+  cMinNoteIndex = -255;
+  cMaxNoteIndex = 255;
+  cMaxFrequency = 32000; //Hz cap for the "q" command
+  cMaxTempo = 2000;      //"t" command cap; BaseTempo/Tempo must stay finite
 
   function IndexOfScore(Score: String): Integer;
   var
@@ -340,29 +347,16 @@ function TMelodyChannel.Next: Boolean;
   //playnote('c#', 1, 0, 0)
   //playnote('r', 1)
   //playnote(20, 1) //by number
-  function PlayNote(Note: String; Duration: Single; Offset: Integer = 0; Increase: Single = 0; Connected: Boolean = False): Boolean; overload;
+
+  //Queue one note of the given frequency (Hz) for the given duration.
+  //Tempo is validated on the "t" command, so BaseTempo / Tempo stays finite.
+  function QueueSound(AFrequency: Integer; Duration: Single; Increase: Single; Connected: Boolean): Boolean;
   var
-    f: Integer;
     r: Single;
     d: Single;
-    index: Integer;
   begin
     if Duration = 0 then
       raise EMelodyException.Create('Duration is zero, is it typo?', Line, Current);
-    f := 0;
-    if (Note = 'r') or (Note = 'p') then
-      f := 0
-    else if TryStrToInt(Note, index) then
-      f := floor((BaseNoteIndex + ShiftOctave) * Power(BaseNumber, Index))
-    else
-    begin
-      index := IndexOfScore(Note);
-      if index < 0 then
-        raise Exception.Create('We dont have it in music:' + Note);// ,line, Current)
-      //calc index using current octave
-      index := ((octave + ShiftOctave) - BaseOctave) * 12 + index + offset;
-      f := floor(BaseNoteFreqC4 * power(BaseNumber, index));
-    end;
     //ref: https://music.stackexchange.com/questions/24140/how-can-i-find-the-length-in-seconds-of-a-quarter-note-crotchet-if-i-have-a-te
     //     http://www.sengpielaudio.com/calculator-bpmtempotime.htm
     //4 seconds for tempo = 60 beat per second, so what if tempo 120 and 2 for duration
@@ -381,9 +375,54 @@ function TMelodyChannel.Next: Boolean;
         d := d - r;
       end;
     end;
-
-    SetSound(f, d, r, Connected, Volume);
+    SetSound(AFrequency, d, r, Connected, Volume);
     Result := True;
+  end;
+
+  procedure VerifyNoteIndex(AIndex: Integer; const AWhat: string);
+  begin
+    //The index is an exponent: 2^(index/12) semitones from the base note.
+    //Beyond ~±255 the Power() result overflows the Integer frequency.
+    if (AIndex < cMinNoteIndex) or (AIndex > cMaxNoteIndex) then
+      raise EMelodyException.Create('Note index out of range (' + IntToStr(cMinNoteIndex) +
+        '..' + IntToStr(cMaxNoteIndex) + '): ' + AWhat, Line, Current);
+  end;
+
+  function PlayNote(Note: String; Duration: Single; Offset: Integer = 0; Increase: Single = 0; Connected: Boolean = False): Boolean; overload;
+  var
+    f: Integer;
+    index: Integer;
+  begin
+    f := 0;
+    if (Note = 'r') or (Note = 'p') then
+      f := 0
+    else if TryStrToInt(Note, index) then
+    begin
+      VerifyNoteIndex(index, Note);
+      f := floor((BaseNoteIndex + ShiftOctave) * Power(BaseNumber, index));
+    end
+    else
+    begin
+      index := IndexOfScore(Note);
+      if index < 0 then
+        raise Exception.Create('We dont have it in music:' + Note);// ,line, Current)
+      //calc index using current octave
+      index := ((octave + ShiftOctave) - BaseOctave) * 12 + index + offset;
+      VerifyNoteIndex(index, Note);
+      f := floor(BaseNoteFreqC4 * power(BaseNumber, index));
+    end;
+    Result := QueueSound(f, Duration, Increase, Connected);
+  end;
+
+  //playnote by explicit frequency (Hz); used by the "q" MML command. The old
+  //code routed "q" through the note-number path, which treated e.g. 440 as a
+  //note index and overflowed the Integer frequency.
+  function PlayNoteFrequency(AFrequency: Integer; Duration: Single): Boolean;
+  begin
+    if (AFrequency <= 0) or (AFrequency > cMaxFrequency) then
+      raise EMelodyException.Create('Frequency out of range (1..' + IntToStr(cMaxFrequency) +
+        '): ' + IntToStr(AFrequency), Line, Current);
+    Result := QueueSound(AFrequency, Duration, 0, False);
   end;
 
   function PlayNote(Note: Integer; Duration: Single; Offset: Integer = 0; Increase: Single = 0; Connected: Boolean = False): Boolean; overload;
@@ -608,13 +647,16 @@ begin
       Number := Round(ScanNumber(0, -1));
       if Number = -1 then
         raise EMelodyException.Create('"q" command need a number', Line, Current);
-      Result := playnote(number, NoteLength);
+      Result := PlayNoteFrequency(Number, NoteLength);
       exit;
     end
     else if Chr = 't' then
     begin
       Step;
       Tempo := Round(ScanNumber(0, Tempo));
+      if (Tempo <= 0) or (Tempo > cMaxTempo) then
+        raise EMelodyException.Create('"t" command tempo out of range (1..' +
+          IntToStr(cMaxTempo) + '): ' + IntToStr(Tempo), Line, Current);
     end
     else if Chr = 'l' then
     begin

@@ -173,6 +173,11 @@ const
   cChunkOldPalette8 = $0004;   // 8-bit colors
 
   cMaxDim = 8192;              // sanity cap for sprite/cel dimensions
+  cMaxLayers = 1024;           // cap on layer chunks (guards SetLength growth)
+  cMaxPaletteEntries = 4096;   // cap on palette size (palette chunk declares a u32 size)
+  cMaxFileSize = 512 * 1024 * 1024;          // cap on raw Aseprite file bytes
+  cMaxSheetFrames = 4096;                    // cap on frames in one sheet texture
+  cMaxSheetPixels = 64 * 1024 * 1024;        // cap on sheet texture pixels (RGBA)
 
 type
   TRenderItem = record
@@ -921,6 +926,8 @@ begin
   if (FSpriteFlags and 4) <> 0 then
     FPos := FPos + 16;             // layer UUID
 
+  if Length(FLayers) >= cMaxLayers then
+    Fatal('Too many layers in Aseprite file');
   SetLength(FLayers, Length(FLayers) + 1);
   FLayers[Length(FLayers) - 1] := L;
 end;
@@ -1009,6 +1016,8 @@ begin
   Last := ReadDWord;
   FPos := FPos + 8;                // reserved
 
+  if NewSize > cMaxPaletteEntries then
+    NewSize := cMaxPaletteEntries;
   if NewSize > Cardinal(Length(FPalette)) then
     SetLength(FPalette, NewSize);
 
@@ -1331,6 +1340,8 @@ begin
   FLastError := '';
   Clear;
   try
+    if AStream.Size > cMaxFileSize then
+      Fatal('Aseprite file too large: ' + IntToStr(AStream.Size));
     SetLength(FData, AStream.Size);
     if Length(FData) > 0 then
     begin
@@ -1518,6 +1529,7 @@ var
   I, Y: Integer;
   Img: TImage;
   Buf: PByte;
+  TotalPixels: Int64;
 begin
   Result := Default(TTexture2D);
   AFrameCount := 0;
@@ -1530,16 +1542,26 @@ begin
     AFrameCount := Ase.GetFrameCount;
     if (AFrameCount <= 0) or (Ase.Width <= 0) or (Ase.Height <= 0) then
       Exit;
-    AFrameWidth := Ase.Width;
-    AFrameHeight := Ase.Height;
+    //Compositing every frame side-by-side multiplies the dimensions; do the
+    //math in Int64 and reject files that would exceed sane sheet limits before
+    //the Integer width can overflow or MemAlloc can fail silently.
+    TotalPixels := Int64(Ase.Width) * AFrameCount * Ase.Height;
+    if (AFrameCount > cMaxSheetFrames) or (TotalPixels > cMaxSheetPixels) then
+      Exit;
 
     Img := Default(TImage);
-    Img.Data := RayLib.MemAlloc(Ase.Width * AFrameCount * Ase.Height * 4);
-    Img.Width := Ase.Width * AFrameCount;
+    Img.Width := Integer(TotalPixels div Ase.Height);
     Img.Height := Ase.Height;
     Img.Mipmaps := 1;
     Img.Format := Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-    FillChar(Img.Data^, Img.Width * Img.Height * 4, 0);
+    Img.Data := RayLib.MemAlloc(NativeUInt(TotalPixels) * 4);
+    if Img.Data = nil then
+      Exit; //allocation failed: return "not loaded" instead of crashing later
+    FillChar(Img.Data^, NativeUInt(TotalPixels) * 4, 0);
+
+    //Only claim the frame layout once the texture buffer actually exists.
+    AFrameWidth := Ase.Width;
+    AFrameHeight := Ase.Height;
 
     for I := 0 to AFrameCount - 1 do
     begin

@@ -33,7 +33,7 @@ unit TyroRadio;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, SyncObjs,
   RayLib, RayClasses,
   mnIceCasts,
   TyroSpectrum;
@@ -52,6 +52,7 @@ type
 
   TRadioPlayer = class(TRayUpdate)
   private
+    FLock: TCriticalSection; //serializes FClient (lifecycle vs script-thread getters)
     FClient: TmnIceCastClient;
     FSnapshot: TMemoryStream; //last snapshot handed to raylib (kept for bookkeeping)
     FMusic: TMusic;
@@ -78,6 +79,8 @@ type
     function GetPlaying: Boolean;
     function GetBuffered: Int64;
     function GetStateString: string;
+    function GetError: string;
+    function GetURL: string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -89,12 +92,12 @@ type
 
     property State: TRadioPlayerState read FState;
     property StateString: string read GetStateString;
-    property Error: string read FError;
+    property Error: string read GetError;
     property Title: string read GetTitle;
     property Station: string read GetStation;
     property Genre: string read GetGenre;
     property Bitrate: string read GetBitrate;
-    property URL: string read FURL;
+    property URL: string read GetURL;
     property Playing: Boolean read GetPlaying;
     property Buffered: Int64 read GetBuffered;
     property Volume: Single read FVolume write SetVolume;
@@ -115,6 +118,7 @@ const
 constructor TRadioPlayer.Create;
 begin
   inherited Create;
+  FLock := TCriticalSection.Create;
   FVolume := 1;
   FState := rpIdle;
   FPrerollBytes := cDefaultPreroll;
@@ -126,6 +130,7 @@ end;
 destructor TRadioPlayer.Destroy;
 begin
   Stop;
+  FLock.Free;
   RayUpdates.Remove(Self);
   inherited Destroy;
 end;
@@ -149,12 +154,20 @@ end;
 procedure TRadioPlayer.Play(const AURL: string);
 begin
   Stop;
-  FURL := AURL;
-  FError := '';
   FState := rpBuffering;
   FUserPlaying := True;
-  FClient := TmnIceCastClient.Create;
-  FClient.Open(AURL);
+  //A script thread could be inside a getter reading FClient/FURL/FError;
+  //install the new client under the lock so it never sees a half-created
+  //instance or torn strings.
+  FLock.Enter;
+  try
+    FURL := AURL;
+    FError := '';
+    FClient := TmnIceCastClient.Create;
+    FClient.Open(AURL);
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TRadioPlayer.Pause;
@@ -194,10 +207,17 @@ begin
     FMusicLoaded := False;
   end;
   FreeAndNil(FSnapshot);
-  if FClient <> nil then
-  begin
-    FClient.Close;
-    FreeAndNil(FClient);
+  //Close + free under the lock so an in-flight getter on a script thread can
+  //never dereference a freed client (TOCTOU use-after-free).
+  FLock.Enter;
+  try
+    if FClient <> nil then
+    begin
+      FClient.Close;
+      FreeAndNil(FClient);
+    end;
+  finally
+    FLock.Leave;
   end;
   FState := rpStopped;
 end;
@@ -210,34 +230,54 @@ end;
 
 function TRadioPlayer.GetTitle: string;
 begin
-  if FClient <> nil then
-    Result := FClient.Title
-  else
-    Result := '';
+  FLock.Enter;
+  try
+    if FClient <> nil then
+      Result := FClient.Title
+    else
+      Result := '';
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TRadioPlayer.GetStation: string;
 begin
-  if FClient <> nil then
-    Result := FClient.StationName
-  else
-    Result := '';
+  FLock.Enter;
+  try
+    if FClient <> nil then
+      Result := FClient.StationName
+    else
+      Result := '';
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TRadioPlayer.GetGenre: string;
 begin
-  if FClient <> nil then
-    Result := FClient.Genre
-  else
-    Result := '';
+  FLock.Enter;
+  try
+    if FClient <> nil then
+      Result := FClient.Genre
+    else
+      Result := '';
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TRadioPlayer.GetBitrate: string;
 begin
-  if FClient <> nil then
-    Result := FClient.Bitrate
-  else
-    Result := '';
+  FLock.Enter;
+  try
+    if FClient <> nil then
+      Result := FClient.Bitrate
+    else
+      Result := '';
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TRadioPlayer.GetPlaying: Boolean;
@@ -247,10 +287,35 @@ end;
 
 function TRadioPlayer.GetBuffered: Int64;
 begin
-  if FClient <> nil then
-    Result := FClient.BufferSize
-  else
-    Result := 0;
+  FLock.Enter;
+  try
+    if FClient <> nil then
+      Result := FClient.BufferSize
+    else
+      Result := 0;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TRadioPlayer.GetError: string;
+begin
+  FLock.Enter;
+  try
+    Result := FError;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TRadioPlayer.GetURL: string;
+begin
+  FLock.Enter;
+  try
+    Result := FURL;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TRadioPlayer.GetStateString: string;
@@ -267,7 +332,12 @@ end;
 
 procedure TRadioPlayer.DoError(const AMessage: string);
 begin
-  FError := AMessage;
+  FLock.Enter;
+  try
+    FError := AMessage;
+  finally
+    FLock.Leave;
+  end;
   FState := rpError;
   FUserPlaying := False;
   if FMusicLoaded then
@@ -279,8 +349,13 @@ begin
   end;
   FSnapshot.Free;
   FSnapshot := nil;
-  FClient.Close;
-  FreeAndNil(FClient);
+  FLock.Enter;
+  try
+    FClient.Close;
+    FreeAndNil(FClient);
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TRadioPlayer.StreamEnded;
@@ -295,8 +370,13 @@ begin
   end;
   FSnapshot.Free;
   FSnapshot := nil;
-  FClient.Close;
-  FreeAndNil(FClient);
+  FLock.Enter;
+  try
+    FClient.Close;
+    FreeAndNil(FClient);
+  finally
+    FLock.Leave;
+  end;
   FState := rpStopped;
 end;
 
