@@ -30,8 +30,8 @@ uses
 function KeyNameToEnum(const Name: string): TKeyboardKey;
 
 { Maps a human-readable mouse-button name to a RayLib TMouseButton.
-  Supported: "left" "right" "middle" }
-function MouseButtonNameToEnum(const Name: string): TMouseButton;
+  Returns False for unknown names rather than silently querying left. }
+function TryMouseButtonNameToEnum(const Name: string; out Button: TMouseButton): Boolean;
 
 { --- Query functions (thread-safe atomic reads of RayLib internal state) --- }
 
@@ -109,19 +109,20 @@ begin
     Result := TKeyboardKey(Ord(KEY_F1) + (num - 1));
 end;
 
-function MouseButtonNameToEnum(const Name: string): TMouseButton;
+function TryMouseButtonNameToEnum(const Name: string; out Button: TMouseButton): Boolean;
 var
   n: string;
 begin
   n := LowerCase(Trim(Name));
+  Result := True;
   if n = 'left' then
-    Result := MOUSE_BUTTON_LEFT
+    Button := MOUSE_BUTTON_LEFT
   else if n = 'right' then
-    Result := MOUSE_BUTTON_RIGHT
+    Button := MOUSE_BUTTON_RIGHT
   else if n = 'middle' then
-    Result := MOUSE_BUTTON_MIDDLE
+    Button := MOUSE_BUTTON_MIDDLE
   else
-    Result := MOUSE_BUTTON_LEFT;
+    Result := False;
 end;
 
 function IsKeyPressed(const KeyName: string): Boolean;
@@ -145,8 +146,11 @@ begin
 end;
 
 function IsMouseButtonPressed(const ButtonName: string): Boolean;
+var
+  Button: TMouseButton;
 begin
-  Result := RayLib.IsMouseButtonPressed(MouseButtonNameToEnum(ButtonName));
+  Result := TryMouseButtonNameToEnum(ButtonName, Button) and
+    RayLib.IsMouseButtonPressed(Button);
 end;
 
 function FrameTime: Single;

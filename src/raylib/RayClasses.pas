@@ -127,6 +127,7 @@ type
     Playing: TObjectList;
     procedure Open;
     procedure Close;
+    procedure Shutdown;
     constructor Create;
     destructor Destroy; override;
     procedure PlayMusicFile(FileName: utf8string);
@@ -185,7 +186,15 @@ end;
 
 destructor TRayFont.Destroy;
 begin
-  RayLib.UnloadFont(Data);
+  //The default font belongs to raylib and is released by CloseWindow.
+  if not RefCount then
+    Unload
+  else
+  begin
+    Data := Default(TFont);
+    Width := 0;
+    Height := 0;
+  end;
   inherited Destroy;
 end;
 
@@ -193,13 +202,18 @@ procedure TRayFont.LoadDefault;
 begin
   Unload;
   Data := GetFontDefault();
+  RefCount := True;
   Loaded;
 end;
 
 procedure TRayFont.Unload;
 begin
-  RayLib.UnloadFont(Data);
+  if (Data.Texture.ID <> 0) and not RefCount then
+    RayLib.UnloadFont(Data);
   Data := Default(TFont);
+  RefCount := False;
+  Width := 0;
+  Height := 0;
 end;
 
 procedure TRayFont.LoadFromFile(FileName: utf8string; FontSize: Integer);
@@ -216,6 +230,7 @@ begin
       Data := RayLib.LoadFont(PUTF8Char(FileName))
     else
       Data := RayLib.LoadFontEx(PUTF8Char(FileName), FontSize, nil, 255);
+    RefCount := False;
     if Data.Texture.ID<=2 then
       Log.WriteLn('Fail to load font: ' + FileName);
     //GenTextureMipmaps(Data.texture);
@@ -232,10 +247,19 @@ var
 begin
   Unload;
   img := LoadImageFromMemory('.png', PByte(DataString), Length(DataString));
-  ImageAlphaPremultiply(img);
-  Data := LoadFontFromImage(img, clMagenta, cFirstChar);
-  SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
-  UnloadImage(img);
+  try
+    if img.Data = nil then
+      raise Exception.Create('Unable to decode font image');
+    ImageAlphaPremultiply(img);
+    Data := LoadFontFromImage(img, clMagenta, cFirstChar);
+    RefCount := False;
+    if not IsFontValid(Data) then
+      raise Exception.Create('Unable to load font from image');
+    SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
+  finally
+    if img.Data <> nil then
+      UnloadImage(img);
+  end;
   Loaded;
   //Height := Height * 2;
   //Width := Width * 2;
@@ -245,6 +269,7 @@ procedure TRayFont.LoadFromMemory(FileType: string; const FontData: Pointer; Dat
 begin
   Unload;
   Data := LoadFontFromMemory(PUTF8Char(FileType), FontData, DataSize, FontSize, Codepoints, CodepointsCount);
+  RefCount := False;
   SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
   Loaded;
 end;
@@ -272,11 +297,20 @@ begin
         if FontSize = 0 then
           FontSize := BDF.Height;
 
-        img := LoadImageFromMemory('.png', Stream.Memory, Stream.Size);
+      img := LoadImageFromMemory('.png', Stream.Memory, Stream.Size);
+      try
+        if img.Data = nil then
+          raise Exception.Create('Unable to decode BDF font image');
         //ImageAlphaPremultiply(img);
         Data := LoadFontFromImage(img, clMagenta, cFirstChar);
+        RefCount := False;
+        if not IsFontValid(Data) then
+          raise Exception.Create('Unable to load BDF font image');
         SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
-        UnloadImage(img);
+      finally
+        if img.Data <> nil then
+          UnloadImage(img);
+      end;
         Loaded;
         Log.WriteLn('Font loaded: ' + FileName);
       finally
@@ -335,8 +369,13 @@ end;
 
 destructor TRayAudio.Destroy;
 begin
+  if AudioStream.Buffer <> nil then
+  begin
+    StopAudioStream(AudioStream);
+    UnloadAudioStream(AudioStream);
+    AudioStream := Default(TAudioStream);
+  end;
   inherited Destroy;
-  UnloadAudioStream(AudioStream);
 end;
 
 procedure TRaySound.UpdateData(Data: Pointer; SampleCount: Cardinal);
@@ -387,20 +426,44 @@ end;
 
 destructor TRaySound.Destroy;
 begin
+  if Sound.FrameCount > 0 then
+  begin
+    StopSound(Sound);
+    UnloadSound(Sound);
+    Sound := Default(TSound);
+  end;
   inherited;
-  UnloadSound(Sound);
 end;
 
 { TRayUpdateList }
 
 procedure TRayUpdateList.Update;
 var
+  Snapshot: array of TRayUpdate;
   Item: TRayUpdate;
+  I: Integer;
+  Music: TRayMusic;
 begin
-  for Item in Self do
+  SetLength(Snapshot, Count);
+  for I := 0 to Count - 1 do
+    Snapshot[I] := Items[I];
+  for I := 0 to High(Snapshot) do
   begin
-    Item.Update;
+    Item := Snapshot[I];
+    if IndexOf(Item) >= 0 then
+      Item.Update;
+    // Removed entries are skipped; newly-added entries run next cycle.
   end;
+  // Reclaim one-shot file music only after iteration: its destructor removes
+  // itself from this update list.
+  if (RayLibSound <> nil) and (RayLibSound.Playing <> nil) then
+    for I := RayLibSound.Playing.Count - 1 downto 0 do
+      if TObject(RayLibSound.Playing[I]) is TRayMusic then
+      begin
+        Music := TRayMusic(RayLibSound.Playing[I]);
+        if Music.State = plyStop then
+          RayLibSound.Playing.Delete(I);
+      end;
 end;
 
 { TRayMusic }
@@ -408,7 +471,12 @@ end;
 destructor TRayMusic.Destroy;
 begin
   RayUpdates.Remove(Self);
-  UnloadMusicStream(MusicStream);
+  if MusicStream.Stream.Buffer <> nil then
+  begin
+    StopMusicStream(MusicStream);
+    UnloadMusicStream(MusicStream);
+    MusicStream := Default(TMusic);
+  end;
   inherited;
 end;
 
@@ -437,7 +505,11 @@ end;
 
 procedure TRayMusic.Update;
 begin
+  if State <> plyPlay then
+    Exit;
   UpdateMusicStream(MusicStream);
+  if not IsPlaying then
+    State := plyStop;
 end;
 
 { TRayPlay }
@@ -461,24 +533,18 @@ end;
 
 procedure TRayLibSound.Open;
 begin
-  if FAudioDeviceInitialized = 0 then
-    if not IsAudioDeviceReady then
-      InitAudioDevice;
-  //InterlockedIncrement(FAudioDeviceInitialized);
+  if not IsAudioDeviceReady then
+    InitAudioDevice;
+  if IsAudioDeviceReady then
+    FAudioDeviceInitialized := 1
+  else
+    FAudioDeviceInitialized := 0;
 end;
 
 procedure TRayLibSound.Close;
 begin
-  if FAudioDeviceInitialized > 0 then
-  begin
-    {if FAudioDeviceInitialized = 0 then
-      CloseAudioDevice;} //leave it open
-    {$ifdef FPC}
-    InterlockedDecrement(FAudioDeviceInitialized);
-    {$else}
-    AtomicIncrement(FAudioDeviceInitialized, 1);
-    {$endif}
-  end;
+  //The audio device is process-wide. A finished sound must not close it while
+  //radio, music, or another generated sound still owns backend resources.
 end;
 
 constructor TRayLibSound.Create;
@@ -487,11 +553,21 @@ begin
   Playing := TObjectList.Create;
 end;
 
+procedure TRayLibSound.Shutdown;
+begin
+  if Playing <> nil then
+    Playing.Clear;
+  if IsAudioDeviceReady then
+    CloseAudioDevice;
+  FAudioDeviceInitialized := 0;
+end;
+
 destructor TRayLibSound.Destroy;
 begin
+  //TRayMusic destructors unregister themselves from RayUpdates, so callers
+  //must keep that list alive until this owned list has been released.
+  Shutdown;
   FreeAndNil(Playing);
-  if FAudioDeviceInitialized > 0 then
-    CloseAudioDevice();
   inherited Destroy;
 end;
 
@@ -501,11 +577,19 @@ var
 begin
   Open;
   Music := TRayMusic.Create;
-  Music.MusicStream := LoadMusicStream(PUTF8Char(FileName));
-
-  Playing.Add(Music);
-  RayUpdates.Add(Music);
-  Music.Play;
+  try
+    Music.MusicStream := LoadMusicStream(PUTF8Char(FileName));
+    if Music.MusicStream.Stream.Buffer = nil then
+      raise Exception.Create('Unable to load music: ' + FileName);
+    // music.play() is one-shot; completed streams are reclaimed below.
+    Music.MusicStream.Looping := False;
+    Playing.Add(Music);
+    RayUpdates.Add(Music);
+    Music.Play;
+    Music := nil;
+  finally
+    Music.Free;
+  end;
 end;
 
 function MouseX: Integer;

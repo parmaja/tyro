@@ -28,6 +28,8 @@ type
   lua_CFunction = LuaAPI.lua_CFunction;
   lua_Debug = LuaAPI.lua_Debug;
 
+  TLuaStatus = (luaNone, luaReady, luaRunning, luaTerminated);
+
   { TLuaObject }
 
   TLuaObject = class abstract(TObject)
@@ -50,11 +52,16 @@ type
   TLua = record
   private
     FVersion: Double;
+    function GetStatus: TLuaStatus;
+    procedure SetStatus(AStatus: TLuaStatus);
   public
     State: Plua_State;
     procedure Init;
     procedure Close;
+    procedure SetReady;
+    procedure SetTerminated;
     property Version: Double read FVersion;
+    property Status: TLuaStatus read GetStatus write SetStatus;
   end;
 
   { TLuaParam }
@@ -153,9 +160,6 @@ type
     procedure BeginTable;
     procedure EndTable(Table: string; AObject: TLuaObject = nil);
   end;
-
-procedure LuaSetTerminated;
-procedure LuaSetReady;
 
 implementation
 
@@ -316,26 +320,20 @@ begin
 end;
 
 type
-  TLuaStatus = (luaNone, luaReady, luaRunning, luaTerminated);
+  PLuaStatus = ^LongInt;
 
-var
-  //shared across threads: Stop() runs on the main thread but HookCount
-  //reads the flag on the script thread, so it cannot be a threadvar
-  LuaStatus: TLuaStatus;
-
-procedure LuaSetTerminated;
+function LuaStatusPointer(L: Plua_State): PLuaStatus; inline;
 begin
-  LuaStatus := luaTerminated;
-end;
-
-procedure LuaSetReady;
-begin
-  LuaStatus := luaReady;
+  Result := PLuaStatus(PPointer(lua_getextraspace(L))^);
 end;
 
 procedure HookCount(L: Plua_State; ar: Plua_Debug); cdecl;
+var
+  AStatus: PLuaStatus;
 begin
-  if LuaStatus >= luaTerminated then
+  AStatus := LuaStatusPointer(L);
+  if (AStatus <> nil) and
+     (InterlockedExchangeAdd(AStatus^, 0) = Ord(luaTerminated)) then
     luaL_error(L, PChar('Terminated by user!'));
 end;
 
@@ -420,20 +418,71 @@ end;
 
 { TLua }
 
+function TLua.GetStatus: TLuaStatus;
+var
+  AStatus: PLuaStatus;
+begin
+  if State = nil then
+    Exit(luaNone);
+  AStatus := LuaStatusPointer(State);
+  if AStatus = nil then
+    Exit(luaNone);
+  Result := TLuaStatus(InterlockedExchangeAdd(AStatus^, 0));
+end;
+
+procedure TLua.SetStatus(AStatus: TLuaStatus);
+var
+  AStatusPtr: PLuaStatus;
+begin
+  if State = nil then
+    Exit;
+  AStatusPtr := LuaStatusPointer(State);
+  if AStatusPtr <> nil then
+    InterlockedExchange(AStatusPtr^, Ord(AStatus));
+end;
+
+procedure TLua.SetReady;
+begin
+  SetStatus(luaReady);
+end;
+
+procedure TLua.SetTerminated;
+begin
+  SetStatus(luaTerminated);
+end;
+
 procedure TLua.Init;
+var
+  AStatus: PLuaStatus;
 begin
   Self := Default(TLua);
+  New(AStatus);
+  AStatus^ := Ord(luaNone);
   State := lua_newstate(@LuaAlloc, nil, 0);
+  if State = nil then
+  begin
+    Dispose(AStatus);
+    raise Exception.Create('Unable to create Lua state');
+  end;
+  PPointer(lua_getextraspace(State))^ := AStatus;
   FVersion := lua_version(State);
   //All libraries
   luaL_openselectedlibs(State, -1, 0);
-  LuaStatus := luaReady;
+  SetReady;
   lua_sethook(State, @HookCount, LUA_MASKCOUNT, 100);
 end;
 
 procedure TLua.Close;
+var
+  AStatus: PLuaStatus;
 begin
+  if State = nil then
+    Exit;
+  AStatus := LuaStatusPointer(State);
   lua_close(State);
+  State := nil;
+  if AStatus <> nil then
+    Dispose(AStatus);
 end;
 
 { TLuaParam }

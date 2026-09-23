@@ -5,7 +5,7 @@ unit TyroEngines;
  *
  * @license   MIT
  *
- * @author    Zaher Dirkey 
+ * @author    Zaher Dirkey
  *
  *}
 
@@ -14,7 +14,7 @@ interface
 uses
   Classes, SysUtils, SyncObjs,
   mnLogs, mnUtils, mnConfigs,
-  RayLib, RayClasses, TyroScripts,
+  RayLib, RayClasses, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
   TyroSprites, TyroPhysics,
   TyroEditors,
@@ -101,6 +101,9 @@ type
     procedure EditorClosed(Sender: TObject);
     procedure EditorSave(Sender: TObject);
     procedure ReloadAndRunScript;
+    function CloneScript(AScript: TTyroScript): TTyroScript;
+    procedure RunLoadedScript;
+    procedure StopScriptThread;
   protected
     FTextureMode: Boolean;
     IsTerminated: Boolean;
@@ -113,11 +116,20 @@ type
     FPrepared: Boolean; //InitWindow is used
     FQueue: TQueueObjects;
     FScriptThread: TTyroScriptThread;
-    FScriptMain: TTyroScript; //only if we have main loop
+    //Editable/persistent script template. Executed files use a clone in
+    //FScriptThread; this object also backs the console REPL state.
+    FScriptMain: TTyroScript;
     FScriptTypes: TScriptTypes;
     FReadCallback: TConsoleReadEvent;
     FWaitingQueueObject: TQueueObject; //the queue object a script thread is blocked waiting on
     FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
+    FPresentedFrame: Boolean;
+    FExitAfterScript: Boolean;
+ FShowWindowOverride: Integer; //-1 force hidden, 0 script-controlled, 1 force visible
+    FHadScript: Boolean;
+    FRunning: LongInt;
+    function GetRunning: Boolean;
+    procedure SetRunning(AValue: Boolean);
   protected
     Commands: TConsoleCommands;
     procedure ConsoleInput(AConsole: TTyroTerminal; AInput: string);
@@ -179,6 +191,7 @@ type
 
     procedure StartConsoleRead;
     procedure StartConsoleReadEx(ACallback: TConsoleReadEvent);
+    procedure CancelConsoleRead(AReader: TReadConsoleObject);
     //* Request a screenshot of the next presented frame. Safe to call from any
     //* thread (e.g. the Lua script thread); the file is written right after
     //* EndDrawing on the main thread.
@@ -186,7 +199,6 @@ type
 
   public
     RunInMain: Boolean;
-    Running: Boolean;
     RunFile: string;//that to run in ScriptThread
     //Board is a canvas for ScriptThread draw on it
     Console: TTyroTerminal;
@@ -196,6 +208,7 @@ type
     Sprites: TSprites;
     Physics: TPhysics;
     //property Board: TTyroImage read FBoard;
+    property Running: Boolean read GetRunning write SetRunning;
     property Active: Boolean read GetActive;
 
     procedure RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
@@ -215,6 +228,8 @@ type
     property FPS: Integer read FFPS write SetFPS;
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
+    property ExitAfterScript: Boolean read FExitAfterScript write FExitAfterScript;
+ property ShowWindowOverride: Integer read FShowWindowOverride write FShowWindowOverride;
 
   end;
 {
@@ -226,6 +241,9 @@ var
   Main : TTyroMain = nil;
 
 implementation
+
+uses
+  TyroRadio, TyroSpectrum;
 
 {
 function IntToFPColor(I: Integer): TFPColor;
@@ -324,7 +342,10 @@ begin
   if Visible then
   begin
     Visible := False;
-    CloseWindow;
+    // Keep the graphics context alive until destruction. Canvases, shaders,
+    // textures and fonts must be unloaded before CloseWindow.
+    if RayLib.IsWindowReady then
+      RayLib.SetWindowState([FLAG_WINDOW_HIDDEN]);
   end;
 end;
 
@@ -362,10 +383,15 @@ begin
     end
     else
     begin
+      // Queue work and media updates are independent of presentation. Hidden
+      // mode still owns a live graphics/audio context and must service accepted
+      // script commands before --exit can shut it down.
+      ProcessQueue;
+      Update;
+      RayUpdates.Update;
+
       if Visible and IsWindowReady then
       begin
-        Update;
-        RayUpdates.Update;
         if IsWindowHidden then
           break;
 
@@ -398,6 +424,7 @@ begin
           end;
         finally
           RayLib.EndDrawing();
+          FPresentedFrame := True;
           //One drawing cycle completed: wake any script thread blocked on the
           //Lua 'cycle' gate so "while cycle do" runs at most once per frame.
           if FFrameEvent <> nil then
@@ -420,24 +447,51 @@ begin
         end;
         ProcessInput;
       end;
+
+      // Test completion only after this iteration drained commands the worker
+      // accepted before publishing Completed.
+      if FExitAfterScript and FHadScript and
+         (FScriptThread <> nil) and FScriptThread.Completed then
+      begin
+        // A screenshot is fulfilled only after EndDrawing. If the script
+        // finishes before one visible frame, present once rather than silently
+        // dropping its final screenshot request during --exit.
+        if Visible and RayLib.IsWindowReady and
+           ((FQueuedScreenshot <> '') or not FPresentedFrame) then
+          Continue;
+        Terminate;
+      end;
     end;
   until Terminated;
 
-  if Visible then
-    RayLib.CloseWindow();
 end;
 
 function TTyroMain.GetActive: Boolean;
 begin
-  Result := Running or ((FScriptThread <> nil) and FScriptThread.Active) or ((FScriptMain <> nil) and (FScriptMain.Active));
+  Result := Running;
+end;
+
+function TTyroMain.GetRunning: Boolean;
+begin
+  Result := InterlockedExchangeAdd(FRunning, 0) <> 0;
+end;
+
+procedure TTyroMain.SetRunning(AValue: Boolean);
+begin
+  if AValue then
+    InterlockedExchange(FRunning, 1)
+  else
+    InterlockedExchange(FRunning, 0);
 end;
 
 procedure TTyroMain.CancelWaiting;
 begin
   Lock.Enter;
   try
+    // Keep the lock while cancelling so the waiter cannot unregister and
+    // destroy the object before this call completes.
     if FWaitingQueueObject <> nil then
-      FWaitingQueueObject.Cancel; //signal its event: the blocked Wait returns at once
+      FWaitingQueueObject.Cancel;
     FWaitingQueueObject := nil;
   finally
     Lock.Leave;
@@ -519,15 +573,20 @@ begin
       fpd := (1 / FPS);
       Board.BeginDraw;
       c := 0;
-      while Queue.Count > 0 do
-      begin
-        Lock.Enter;
-        try
-          p := Queue.Extract(Queue[0]);
-        finally
-          Lock.Leave;
-        end;
-        p.Execute;
+    while True do
+    begin
+      Lock.Enter;
+      try
+        if Queue.Count > 0 then
+          p := Queue.Extract(Queue[0])
+        else
+          p := nil;
+      finally
+        Lock.Leave;
+      end;
+      if p = nil then
+        Break;
+      p.Execute;
         p.Free;
         Inc(c);
         ft2 := GetTime() - ft;
@@ -545,12 +604,56 @@ end;
 
 procedure TTyroMain.Start;
 begin
-  if (FScriptThread <> nil) and not FScriptThread.Started then
-    FScriptThread.Start;
+  FHadScript := False;
+  if FScriptMain <> nil then
+    RunLoadedScript;
+end;
 
-  //if (FScriptMain <> nil) and not FScriptMain.Started then
-  if (FScriptMain <> nil) then
-    FScriptMain.Start;
+function TTyroMain.CloneScript(AScript: TTyroScript): TTyroScript;
+begin
+  Result := nil;
+  if AScript = nil then
+    Exit;
+  Result := TTyroScriptClass(AScript.ClassType).Create;
+  Result.Path := AScript.Path;
+  Result.FileName := AScript.FileName;
+  Result.Source.Assign(AScript.Source);
+end;
+
+procedure TTyroMain.StopScriptThread;
+begin
+  if FScriptThread = nil then
+    Exit;
+  FScriptThread.Terminate;
+  CancelWaiting;
+  //A suspended thread must enter ThreadProc after Terminate; ThreadProc then
+  //skips Execute and marks Finished.
+  if not FScriptThread.Started then
+    FScriptThread.Start;
+  //The worker can be blocked in TThread.Synchronize. Keep servicing callbacks
+  //until it has actually exited; Script.Active changes too early for this.
+  while not FScriptThread.Completed do
+    CheckSynchronize(10);
+  FScriptThread.WaitFor;
+  FreeAndNil(FScriptThread);
+end;
+
+procedure TTyroMain.RunLoadedScript;
+var
+  Script: TTyroScript;
+begin
+  if FScriptMain = nil then
+    Exit;
+  StopScriptThread;
+  Script := CloneScript(FScriptMain);
+  try
+    FScriptThread := TTyroScriptThread.Create(Script);
+    Script := nil;
+    FHadScript := True;
+    FScriptThread.Start;
+  finally
+    Script.Free;
+  end;
 end;
 
 procedure TTyroMain.LoadConfig;
@@ -579,12 +682,12 @@ end;
 
 procedure TTyroMain.PrepareDraw;
 begin
-  ProcessQueue;
 end;
 
 constructor TTyroMain.Create(AParent: TTyroLayout);
 begin
   inherited;
+  FShowWindowOverride := 0;
   RayLibrary.Load;
   FControlCapture := nil;
   FOptions := [moOpaque];
@@ -644,18 +747,35 @@ end;
 
 destructor TTyroMain.Destroy;
 begin
-  //Stop;
+  Stop;
+  FreeAndNil(FScriptMain);
+
+  //Detach callbacks and release audio objects while their backing device and
+  //the raylib update list are still alive.
+  if RadioPlayer <> nil then
+    RadioPlayer.Stop;
+  if Spectrum <> nil then
+    Spectrum.Shutdown;
+  ShutdownMelodies;
+  ShutdownWaveforms;
+  if RayLibSound <> nil then
+    RayLibSound.Shutdown;
+
+  //Every object below owns raylib GPU resources. Destroy all of them while
+  //the window/OpenGL context is still alive.
   FreeAndNil(Physics);
   FreeAndNil(Sprites);
   FreeAndNil(Board);
+  FreeAndNil(Resources);
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
   FreeAndNil(Commands);
+  inherited;
+  if RayLib.IsWindowReady then
+    RayLib.CloseWindow;
   FreeAndNil(FCanvasLock);
   FreeAndNil(FFrameEvent);
-  inherited;
 end;
-
 procedure TTyroMain.PrepareWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
 begin
   if AWidth = 0 then
@@ -697,15 +817,17 @@ begin
           RunFile := ExpandFileName(Resources.WorkSpace + RunFile);
         aScript.LoadFile(RunFile);
         Resources.CurrentDirectory := ExtractFilePath(RunFile);
-        if RunInMain then
-          FScriptMain := aScript
-        else
-          FScriptThread := TTyroScriptThread.Create(aScript);
+      //Raylib drawing/input/audio must continue on this thread. Keep the
+      //loaded script as an editable template and execute a worker clone,
+      //including legacy --main requests.
+      FScriptMain := aScript;
       end;
     end
     else
       Log.WriteLn('Type of file not found: ' + RunFile);
   end;
+  if FShowWindowOverride > 0 then
+    ShowWindow;
   Running := True;
 end;
 
@@ -743,6 +865,8 @@ begin
   try
     if Physics <> nil then
       Physics.Step(RayLib.GetFrameTime());
+    UpdateMelodies;
+    UpdateWaveforms;
     // Advance every playing sprite animation (frame textures swap here)
     if Sprites <> nil then
       Sprites.UpdateAnims(RayLib.GetFrameTime());
@@ -809,9 +933,8 @@ begin
     end;
   end;   }
   ThreadSwitch; //Yield
-  if not Active then
-    Terminate;
 end;
+
 
 procedure TTyroMain.ProcessInput;
 var
@@ -954,6 +1077,8 @@ end;
 
 procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
 begin
+  if FShowWindowOverride < 0 then
+    Exit;
   Visible := True;
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
@@ -985,37 +1110,26 @@ end;
 procedure TTyroMain.Stop;
 begin
   Running := False;
-  Lock.Enter;
-  try
-    FQueue.CancelAll;
-  finally
-    Lock.Leave;
-  end;
   //Signal the event of any queue object the script thread is blocked waiting
   //on (e.g. console read()), so the blocked Wait returns and the thread can
   //finish instead of hanging the WaitFor below.
   CancelWaiting;
-  if (FScriptThread <> nil) and FScriptThread.Started then
-  begin
-    FScriptThread.Terminate;
-    CheckSynchronize;
-    if FScriptThread.Active then
-      FScriptThread.WaitFor;
-    FreeAndNil(FScriptThread);
-  end;
-
-  if FScriptMain <> nil then
-  begin
-    FScriptMain.Stop;
-    CheckSynchronize;
-    FreeAndNil(FScriptMain);
+  StopScriptThread;
+  // StopScriptThread can race with a final asynchronous enqueue. Drain only
+  // after it has fully exited so no stale command survives into the next run.
+  Lock.Enter;
+  try
+    FQueue.CancelAll;
+    FQueue.Clear;
+  finally
+    Lock.Leave;
   end;
 end;
 
 procedure TTyroMain.Terminate;
 begin
-  HideWindow;
   Stop;
+  HideWindow;
   IsTerminated := True;
 end;
 
@@ -1060,20 +1174,19 @@ begin
 end;
 
 procedure TTyroMain.ShowEditor;
-var
-  w, h: Integer;
 begin
-  if FScriptThread = nil then
+  if FScriptMain = nil then
   begin
     Log.Writeln('No script loaded. Use "load <script>" first.');
     Exit;
   end;
-  //stop the current run so the edited source is not being executed
-  Editor.FileName := FScriptThread.Script.FileName;
-  Editor.LoadSource(FScriptThread.Script.Source);
+  //Stop the worker before editing its source template.
+  StopScriptThread;
+  Editor.FileName := FScriptMain.FileName;
+  Editor.LoadSource(FScriptMain.Source);
   Editor.BoundsRect := Rect(0, 0, Width, Height);
-  Editor.Margin:= 10;
-  Editor.BackColor:= clBlack;
+  Editor.Margin := 10;
+  Editor.BackColor := clBlack;
   Editor.Visible := True;
   Editor.Focused := True;
 end;
@@ -1125,7 +1238,6 @@ var
 begin
   if FScriptMain = nil then
     Exit;
-  FScriptMain.Stop;
   aFileName := IncludePathDelimiter(FScriptMain.Path) + FScriptMain.FileName;
   try
     FScriptMain.Source.SaveToFile(aFileName);
@@ -1137,7 +1249,8 @@ begin
     end;
   end;
   FScriptMain.LoadFile(aFileName);
-  FScriptMain.Start;
+  Running := True;
+  RunLoadedScript;
 end;
 
 procedure TTyroMain.Edit_Command(Params: TStrings);
@@ -1214,7 +1327,7 @@ begin
     FScriptMain := aScriptType.ScriptClass.Create;
   end;
 
-  if FScriptMain.Started and FScriptMain.Active then
+  if (FScriptThread <> nil) and FScriptThread.Active then
   begin
     Console.Writeln('The script is still running. Use "stop" first.');
     Exit(True);
@@ -1267,6 +1380,17 @@ begin
   Console.StartRead(sPromptChar);
 end;
 
+procedure TTyroMain.CancelConsoleRead(AReader: TReadConsoleObject);
+begin
+  // Only detach this reader when it still owns the terminal callback. This
+  // avoids an old reader cancelling a newer read request.
+  if (AReader <> nil) and (TMethod(FReadCallback).Data = AReader) then
+  begin
+    Console.StopRead;
+    StartConsoleRead;
+  end;
+end;
+
 procedure TTyroMain.Help_Command(Params: TStrings);
 var
   Command: TConsoleCommand;
@@ -1317,7 +1441,6 @@ end;
 procedure TTyroMain.Exit_Command(Params: TStrings);
 begin
   HideConsole;
-  Stop;
   Terminate;
 end;
 
@@ -1325,7 +1448,8 @@ procedure TTyroMain.Run_Command(Params: TStrings);
 begin
   if (FScriptMain <> nil) then
   begin
-    FScriptMain.Start;
+    Running := True;
+    RunLoadedScript;
   end
   else
   begin
@@ -1335,7 +1459,15 @@ end;
 
 procedure TTyroMain.Stop_Command(Params: TStrings);
 begin
-  Stop;
+  CancelWaiting;
+  StopScriptThread;
+  Lock.Enter;
+  try
+    FQueue.CancelAll;
+    FQueue.Clear;
+  finally
+    Lock.Leave;
+  end;
 end;
 
 procedure TTyroMain.Load_Command(Params: TStrings);
@@ -1373,12 +1505,9 @@ begin
   end;
 
   // Stop previous script if running
-  if (FScriptMain <> nil) then
-  begin
-    FScriptMain.Stop;
-    FreeAndNil(FScriptMain);
-  end;
-  Stop;
+  //Stop only the previous script; loading must not terminate the engine loop.
+  StopScriptThread;
+  FreeAndNil(FScriptMain);
   FScriptMain := aScript;
   //Start;
   //FScriptMain.RUNINMAIN := True;

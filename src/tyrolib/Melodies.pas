@@ -84,7 +84,7 @@ type
     Octave: Integer; //current octave
 
     Instrument: String; //for waveform
-    SoundExpired: UInt64; //When the note should be end, by milliseconds
+    SoundExpired: QWord; //When the note should be end, by milliseconds
     SoundDuration: Single; //Duration and Rest by second
     constructor Create(AMelody: TMelody); virtual;
     procedure Update; virtual;
@@ -117,6 +117,10 @@ type
 
   TMelody = class(TObject)
   private
+  FChannels: TMelodyChannels;
+  FPlaying: Boolean;
+  FPlayPrepared: Boolean;
+    procedure FinishPlay;
   protected
     procedure BeforePlay; virtual;
     procedure AfterPlay; virtual;
@@ -127,7 +131,11 @@ type
     destructor Destroy; override;
 
     function CreateChannel: TMelodyChannel; virtual;
+    procedure BeginPlay(Song: TmmlSong);
+    function UpdatePlay: Boolean;
+    procedure Stop;
     procedure Play(Song: TmmlSong);
+    property Playing: Boolean read FPlaying;
   end;
 
   { TMelodyThread }
@@ -135,7 +143,6 @@ type
   TMelodyThread = class(TThread)
   private
     Song: TArray<TmmlNotes>;
-    Melody: TMelody;
   public
     procedure Execute; override;
     constructor Create(Song: TArray<TmmlNotes>);
@@ -225,6 +232,8 @@ end;
 { TMelodyThread }
 
 procedure TMelodyThread.Execute;
+var
+  Melody: TMelody;
 begin
   Melody := TMelody.Create;
   try
@@ -237,6 +246,7 @@ end;
 constructor TMelodyThread.Create(Song: TArray<TmmlNotes>);
 begin
   inherited Create(True);
+  Self.Song := Copy(Song);
 end;
 
 { EMelodyException }
@@ -765,10 +775,14 @@ end;
 constructor TMelody.Create;
 begin
   inherited Create;
+  FChannels := nil;
+  FPlaying := False;
+  FPlayPrepared := False;
 end;
 
 destructor TMelody.Destroy;
 begin
+  Stop;
   inherited Destroy;
 end;
 
@@ -777,50 +791,91 @@ begin
   Result := TMelodyChannel.Create(Self);
 end;
 
-procedure TMelody.Play(Song: TmmlSong);
+procedure TMelody.FinishPlay;
 var
-  Channels: TMelodyChannels;
+  Channel: TMelodyChannel;
+begin
+  if not FPlayPrepared then
+    Exit;
+  FPlaying := False;
+  if FChannels <> nil then
+  begin
+    for Channel in FChannels do
+    begin
+      Channel.StopSound;
+      Channel.Unprepare;
+    end;
+    FreeAndNil(FChannels);
+  end;
+  FPlayPrepared := False;
+  AfterPlay;
+end;
+
+procedure TMelody.BeginPlay(Song: TmmlSong);
+var
   Channel: TMelodyChannel;
   Notes: TmmlNotes;
-  Index: Integer;
-  Busy: Boolean;//At least one of channel is playing
-  SoundDurationMS: Int64;
 begin
-  BeforePlay;
-  Channels := TMelodyChannels.Create;
+  Stop;
+  Terminated := False;
   try
+    BeforePlay;
+    FPlayPrepared := True;
+    FPlaying := True;
+    FChannels := TMelodyChannels.Create;
     for Notes in Song do
     begin
       Channel := CreateChannel;
       Channel.Volume := 100;
       Channel.Finished := False;
       Channel.Name := 'notdefined';
-      Channel.ID := Channels.Add(Channel);
+      Channel.ID := FChannels.Add(Channel);
       Channel.Name := IntToStr(Channel.ID);
       Channel.Notes := Notes;
       Channel.Prepare;
     end;
+    if FChannels.Count = 0 then
+      FinishPlay;
+  except
+    FinishPlay;
+    raise;
+  end;
+end;
 
-    Index := 0;
-    Busy := False;
-    while not CheckTerminated do
+function TMelody.UpdatePlay: Boolean;
+var
+  Channel: TMelodyChannel;
+  Busy: Boolean;
+  SoundDurationMS: Int64;
+begin
+  Result := False;
+  if not FPlaying then
+    Exit;
+  if CheckTerminated then
+  begin
+    FinishPlay;
+    Exit;
+  end;
+
+  Busy := False;
+  try
+    for Channel in FChannels do
     begin
-      Channel := Channels[Index];
       if not Channel.Finished then
       begin
-        //Sleep(1); //make other thread breathing
-        //Channel.Update;
-        if Channel.IsPlaying or (Channel.SoundExpired > TThread.GetTickCount) then //Still waiting to finish playing
+        Channel.Update;
+        if Channel.IsPlaying or
+           (Channel.SoundExpired > TThread.GetTickCount64) then
           Busy := True
         else
         begin
-          Channel.StopSound;//no if we like to make some waves say playing
-          if Channel.Next then //SetSound will be in Next function
+          Channel.StopSound;
+          if Channel.Next then
           begin
-            //Log.WriteLn(ch.name, 'n, freq Hz, len ms, rest ms', ch.pos, ch.sound.pitch, math.floor(ch.sound.length * 100), math.floor(ch.sound.rest * 100))
             Channel.PlaySound;
             SoundDurationMS := Round(Channel.SoundDuration * 1000);
-            Channel.SoundExpired := SoundDurationMS + TThread.GetTickCount + 1; //after playsound to take of full time
+            Channel.SoundExpired := SoundDurationMS +
+              TThread.GetTickCount64 + 1;
             Busy := True;
           end
           else
@@ -831,22 +886,29 @@ begin
           end;
         end;
       end;
-      index := index + 1;
-      if Index >= Channels.Count then
-      begin
-        Index := 0;
-        if not Busy then //after checking busy for all channels, all are not busy
-          break
-        else
-          Busy := False;
-      end;
     end;
-  finally
-    Channels.Free;
-    AfterPlay;
+  except
+    FinishPlay;
+    raise;
   end;
+
+  if not Busy then
+    FinishPlay;
+  Result := FPlaying;
 end;
 
+procedure TMelody.Stop;
+begin
+  Terminated := True;
+  FinishPlay;
+end;
+
+procedure TMelody.Play(Song: TmmlSong);
+begin
+  BeginPlay(Song);
+  while UpdatePlay do
+    Sleep(1);
+end;
 initialization
   BaseNumber := power(2, 1 / 12);
   BaseOctave := 4;

@@ -274,6 +274,7 @@ begin
   for Sprite in FItems.Values do
   begin
     FreeSpriteFrames(Sprite);
+    Sprite.Free;
   end;
   FItems.Free;
   FLock.Free;
@@ -613,9 +614,9 @@ begin
   try
     if FItems.TryGetValue(Handle, Sprite) then
     begin
-      // replacing an animated sprite with a plain image: drop the old frames
-      if (Length(Sprite.AnimFrames) > 0) then
-        FreeSpriteFrames(Sprite);
+      // The store owns every installed texture, including a previous
+      // non-animated one. Drop it before taking ownership of the replacement.
+      FreeSpriteFrames(Sprite);
       Sprite.Texture := ATexture;
       Result := True;
     end;

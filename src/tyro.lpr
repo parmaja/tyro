@@ -136,7 +136,7 @@ begin
   WriteLn('--console -c           Force to show command prompt');
   WriteLn('--debug -d             Run in debug mode');
   WriteLn('--lint -l              Lint to check errors only in script do not run');
-  WriteLn('--main -m              Execute first script in main loop thread');
+  WriteLn('--main -m              Legacy alias (scripts still use safe worker mode)');
   WriteLn('--exit -x              Exit after finish execute');
   WriteLn('--show=true/false -s   Force to show main graphic window');
   WriteLn('--list                 List of programming language supported');
@@ -150,14 +150,14 @@ var
   err: string;
   RunConsole: Boolean;
 const
-  cShortOptions = 'w: m e l d c s: h t';
-  cLongOptions = 'workpath: main execute lint debug console show: help list';
+  cShortOptions = 'w:mxlcdhs:';
+  cLongOptions = 'workpath: main exit execute lint debug console show: help list';
 begin
   inherited Create(AOwner);
   Files := TStringList.Create;
   err := CheckOptions(cShortOptions, cLongOptions);
 
-  RunConsole := HasOption('c', 'console');
+  RunConsole := HasOption(#0, 'console') or HasOption('c', '');
   OpenConsole((err <> '') or RunConsole);
 
   if err <> '' then
@@ -165,33 +165,35 @@ begin
     if IsConsole then
       WriteLn(err);
     PrintHelp;
-    Terminate;
-    exit;
+ Terminate;
+ exit;
   end;
 
   InstallConsoleLog;
 
-  if HasOption('d', 'debug') then
+  if HasOption(#0, 'debug') or HasOption('d', '') then
     IsDebug := True;
 
-  if HasOption('h', 'help') then
+  if HasOption(#0, 'help') or HasOption('h', '') then
   begin
     PrintHelp;
-    Terminate;
-    exit;
+ Terminate;
+ exit;
   end;
 
   if HasOption(#0, 'list') then
   begin
     PrintList;
-    Terminate;
-    exit;
+ Terminate;
+ exit;
   end;
 
   Main.Title := 'Tyro';
 
   //w workpath, d socket
-  GetNonOptions(cShortOptions, [], Files);
+  GetNonOptions(cShortOptions,
+    ['workpath:', 'main', 'exit', 'execute', 'lint', 'debug', 'console',
+     'show:', 'help', 'list'], Files);
   if Files.Count > 0 then
     Main.RunFile := Files[0];
   WorkPaths := GetOptionValues('w', 'workpath');
@@ -207,7 +209,29 @@ begin
     Write(' ' + CollectStrings(WorkPaths));
     WriteLn();
   end;
-  Main.RunInMain := HasOption('m', 'main');
+  Main.RunInMain := HasOption(#0, 'main') or HasOption('m', '');
+  // --main is retained for command-line compatibility. Raylib and control
+  // calls must remain on the application thread, so scripts still use the
+  // worker plus its main-thread dispatch queue.
+  Main.ExitAfterScript := HasOption(#0, 'exit') or HasOption('x', '');
+  if HasOption(#0, 'show') or HasOption('s', '') then
+  begin
+    err := LowerCase(Trim(GetOptionValue('s', 'show')));
+    if (err = '') or (err = 'true') or (err = '1') or (err = 'yes') or
+       (err = 'on') then
+    Main.ShowWindowOverride := 1
+  else if (err = 'false') or (err = '0') or (err = 'no') or
+      (err = 'off') then
+    Main.ShowWindowOverride := -1
+  else
+    begin
+      if IsConsole then
+        WriteLn('Invalid value for --show: ', err);
+      PrintHelp;
+ Terminate;
+ Exit;
+    end;
+  end;
 end;
 
 destructor TTyroApplication.Destroy;
@@ -219,8 +243,12 @@ end;
 
 procedure TTyroApplication.DoRun;
 begin
-  inherited;
-  try
+inherited;
+ if Terminated then
+begin
+ Exit;
+end;
+try
     try
       Main.Run;
     except

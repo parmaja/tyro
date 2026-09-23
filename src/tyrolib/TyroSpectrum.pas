@@ -91,6 +91,9 @@ type
     constructor Create;
     destructor Destroy; override;
 
+    //Release callback/panel references before the engine destroys controls.
+    procedure Shutdown;
+
     procedure Attach(const AStream: TAudioStream);
     procedure Detach;
     procedure Update; override;
@@ -248,9 +251,16 @@ end;
 
 destructor TTyroSpectrumUpdate.Destroy;
 begin
-  Detach;
+  Shutdown;
   FreeAndNil(FLock);
   inherited Destroy;
+end;
+
+procedure TTyroSpectrumUpdate.Shutdown;
+begin
+  Detach;
+  FPanel := nil;
+  FVisible := False;
 end;
 
 procedure TTyroSpectrumUpdate.AllocateRing;

@@ -281,6 +281,7 @@ type
     function BackColor_func(L: Plua_State): integer; cdecl;
     function Name_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
+    destructor Destroy; override;
   end;
 
 { TLuaSpriteScript }
@@ -459,7 +460,7 @@ begin
   //2) Only string names can refer to a sprite/control
   if lua_type(L, 2) <> LUA_TSTRING then
   begin
-    L.NewTable;
+    L.PushNil;
     Exit;
   end;
 
@@ -505,8 +506,8 @@ begin
     Exit;
   end;
 
-  //6) Default pascal side value so missing names never error out
-  L.NewTable;
+  //6) Preserve normal Lua semantics for an unresolved global.
+  L.PushNil;
 end;
 
 // Global environment __newindex: assign the value raw into the globals table.
@@ -1142,7 +1143,23 @@ end;
 
 destructor TLuaScript.Destroy;
 begin
+  // Lua holds light-userdata/method pointers to these facade objects, so close
+  // the state before releasing them.
   Lua.Close;
+  FreeAndNil(Shader);
+  FreeAndNil(Collision);
+  FreeAndNil(Output);
+  FreeAndNil(Controls);
+  FreeAndNil(Sprites);
+  FreeAndNil(Sprite);
+  FreeAndNil(SpectrumLua);
+  FreeAndNil(Radio);
+  FreeAndNil(Music);
+  FreeAndNil(Font);
+  FreeAndNil(Colors);
+  FreeAndNil(Console);
+  FreeAndNil(Window);
+  FreeAndNil(Canvas);
   inherited;
 end;
 
@@ -1156,6 +1173,8 @@ procedure TLuaScript.Run;
 var
   Msg: string;
 begin
+  // A stopped script object may be run again from the interactive console.
+  Lua.SetReady;
   //WriteLn('Run Script');
   //Sleep(1000);
   if not Lua.State.RunString(ScriptText.Text, Msg) then
@@ -1165,8 +1184,8 @@ end;
 procedure TLuaScript.Stop;
 begin
   //abort the running Lua bytecode: HookCount calls luaL_error when
-  //LuaStatus >= luaTerminated, and RunString returns on the next hook tick
-  LuaSetTerminated;
+  //this state's status is terminated, and RunString returns on the next hook tick
+  Lua.SetTerminated;
   inherited;
 end;
 
@@ -1214,9 +1233,9 @@ begin
   AOutput := '';
   if Lua.State = nil then
     Exit;
-  //a previous Stop() left the shared status as terminated and the count hook
-  //would abort this line; the console line opens its own fresh execution
-  LuaSetReady;
+  //A previous Stop() left this state terminated. A console line starts a new
+  //execution in the same persistent Lua state.
+  Lua.SetReady;
   AChunk := ALine;
   if luaL_loadstring(Lua.State, PUTF8Char(AChunk)) = 0 then
     RunChunk
@@ -1624,13 +1643,9 @@ begin
     s := L.ToString(i + 1);
     Song[i] := s;
   end;
-  //FScript.AddQueueObject(TPlayMMLObject.Create(Song));
-  with TPlayMMLObject.Create(Song) do
-    //using current lua thread to not block current thread, or maybe use a thread
-  begin
-    Execute;
-    Free;
-  end;
+  //Audio objects and raylib audio calls stay on the main thread. Playback is
+  //advanced incrementally by TTyroMain.Update, so this does not block drawing.
+  FScript.AddQueueObject(TPlayMMLObject.Create(Song));
   Result := 0;
 end;
 
@@ -2080,6 +2095,12 @@ begin
   FItems := TList.Create;
 end;
 
+destructor TLuaControls.Destroy;
+begin
+  FreeAndNil(FItems);
+  inherited;
+end;
+
 function TLuaControls.GetControl(AHandle: Integer): TTyroControl;
 begin
   Result := nil;
@@ -2174,7 +2195,7 @@ begin
     CreateObj.Run(Script.Thread); //Will run in Synchronize
     if CreateObj.Control <> nil then
     begin
-      FItems.Add(CreateObj.Control);
+      FItems.Add(CreateObj.TakeControl);
       L.PushInteger(FItems.Count); //handle of the created control
     end
     else
@@ -2196,9 +2217,9 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
-  begin
-    ctrl.SetText(L.ToString(2));
+ if L.Count >= 2 then
+ begin
+  FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(2)));
     Result := 0;
   end
   else
@@ -2227,9 +2248,10 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
-  begin
-    ctrl.SetChecked(L.ToBoolean(2));
+ if L.Count >= 2 then
+ begin
+  FScript.RunQueueObject(TSetControlCheckedObject.Create(ctrl,
+    L.ToBoolean(2)));
     Result := 0;
   end
   else
@@ -2340,9 +2362,10 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
-  begin
-    ctrl.Visible := L.ToBoolean(2);
+ if L.Count >= 2 then
+ begin
+  FScript.RunQueueObject(TSetControlVisibleObject.Create(ctrl,
+    L.ToBoolean(2)));
     Result := 0;
   end
   else
@@ -2357,9 +2380,9 @@ function TLuaControls.Show_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
-  if ctrl <> nil then
-    ctrl.Show;
+ ctrl := GetControl(round(L.ToNumber(1)));
+ if ctrl <> nil then
+  FScript.RunQueueObject(TSetControlVisibleObject.Create(ctrl, True));
   Result := 0;
 end;
 
@@ -2368,9 +2391,9 @@ function TLuaControls.Hide_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
-  if ctrl <> nil then
-    ctrl.Hide;
+ ctrl := GetControl(round(L.ToNumber(1)));
+ if ctrl <> nil then
+  FScript.RunQueueObject(TSetControlVisibleObject.Create(ctrl, False));
   Result := 0;
 end;
 
@@ -2454,14 +2477,14 @@ begin
   end;
   if L.Count >= 2 then
   begin
-    v := round(L.ToNumber(2));
-    case v of
-      1: ctrl.Border := brdThin;
-      2: ctrl.Border := brdThick;
-      3: ctrl.Border := brdSizable;
-    else
-      ctrl.Border := brdNone;
-    end;
+  v := round(L.ToNumber(2));
+  case v of
+   1: FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, brdThin));
+   2: FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, brdThick));
+   3: FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, brdSizable));
+  else
+   FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, brdNone));
+  end;
     Result := 0;
   end
   else
@@ -2490,9 +2513,10 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
-  begin
-    ctrl.BackColor := IntToColor(round(L.ToNumber(2)));
+ if L.Count >= 2 then
+ begin
+  FScript.RunQueueObject(TSetControlBackColorObject.Create(ctrl,
+    IntToColor(round(L.ToNumber(2)))));
     Result := 0;
   end
   else
@@ -2516,9 +2540,9 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
-  begin
-    ctrl.Name := L.ToString(2);
+ if L.Count >= 2 then
+ begin
+  FScript.RunQueueObject(TSetControlNameObject.Create(ctrl, L.ToString(2)));
     Result := 0;
   end
   else

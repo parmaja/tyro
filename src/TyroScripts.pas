@@ -20,17 +20,21 @@ type
   TQueueObject = class abstract(TObject)
   private
     FEvent: TEvent;
+    FCancelled: LongInt;
   protected
     function EventNeeded: TEvent; virtual;
     procedure DoExecute; virtual; abstract;
   public
     LineNo: Integer;
+    destructor Destroy; override;
     procedure Execute;
     //Sync to main thread
     procedure Run(Thread: TThread = nil);
     procedure SetEvent;
     function Wait(Timeout: Cardinal = INFINITE): Boolean;
     procedure Cancel; virtual;
+    function GetCancelled: Boolean;
+    property Cancelled: Boolean read GetCancelled;
   end;
 
   { TQueueObjects }
@@ -93,15 +97,16 @@ type
 
    { TReadConsoleObject }
 
-   TReadConsoleObject = class(TQueueObject)
-   public
+  TReadConsoleObject = class(TQueueObject)
+  public
      Prompt: string;
      ResultString: string;
-     constructor Create(APrompt: string);
-     destructor Destroy; override;
-     procedure DoExecute; override;
-     procedure HandleConsoleInput(AConsole: TTyroTerminal; AInput: string);
-   end;
+    constructor Create(APrompt: string);
+    destructor Destroy; override;
+    procedure DoExecute; override;
+    procedure Cancel; override;
+    procedure HandleConsoleInput(AConsole: TTyroTerminal; AInput: string);
+  end;
 
    { TCreateControlObject }
 
@@ -115,12 +120,17 @@ type
      FClassName: string;
      FCaption: utf8string;
      FX, FY, FW, FH: Integer;
-     FName: string;
-     FControl: TTyroControl;
-   public
-     constructor Create(const AClassName: string; const ACaption: utf8string; AX, AY, AW, AH: Integer; const AName: string);
-     procedure DoExecute; override;
-     property Control: TTyroControl read FControl;
+    FName: string;
+    FControl: TTyroControl;
+    FTransferred: Boolean;
+    FExecutionAttempted: Boolean;
+    procedure FreeUntransferredControl;
+  public
+    constructor Create(const AClassName: string; const ACaption: utf8string; AX, AY, AW, AH: Integer; const AName: string);
+    destructor Destroy; override;
+    function TakeControl: TTyroControl;
+    procedure DoExecute; override;
+    property Control: TTyroControl read FControl;
    end;
 
    { TSetControlBoundsObject }
@@ -139,7 +149,7 @@ type
    { TSetControlFocusObject }
 
    { Moves the input focus to an existing control on the main thread. }
-   TSetControlFocusObject = class(TQueueObject)
+  TSetControlFocusObject = class(TQueueObject)
    private
      FControl: TTyroControl;
    public
@@ -153,6 +163,60 @@ type
   public
     fColor: TColor;
     constructor Create(ACanvas: TTyroCanvas; Color: TColor);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlTextObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FText: utf8string;
+  public
+    constructor Create(AControl: TTyroControl; const AText: utf8string);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlCheckedObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FChecked: Boolean;
+  public
+    constructor Create(AControl: TTyroControl; AChecked: Boolean);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlVisibleObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FVisible: Boolean;
+  public
+    constructor Create(AControl: TTyroControl; AVisible: Boolean);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlBorderObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FBorder: TBorder;
+  public
+    constructor Create(AControl: TTyroControl; ABorder: TBorder);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlBackColorObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FColor: TColor;
+  public
+    constructor Create(AControl: TTyroControl; AColor: TColor);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlNameObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FName: string;
+  public
+    constructor Create(AControl: TTyroControl; const AName: string);
     procedure DoExecute; override;
   end;
 
@@ -348,11 +412,12 @@ type
 
   TTyroScript = class abstract(TObject)
   private
-    FActive: Boolean;
-    FStarted: Boolean;
+    FActive: LongInt;
+    FStarted: LongInt;
     FPath: string;
     FFileName: string;
     function GetActive: Boolean;
+ function GetStarted: Boolean;
     procedure ExecuteQueueObject; //this for sync do not call it
     procedure ExecuteQueueObjectNoFree; //this for sync do not call it
   protected
@@ -381,25 +446,30 @@ type
     property Path: string read FPath write FPath;
     property FileName: string read FFileName write FFileName;
     property Active: Boolean read GetActive;
-    property Started: Boolean read FStarted; //started true even after stopped
+    property Started: Boolean read GetStarted; //started true even after stopped
     property Source: TStringList read ScriptText; //the loaded script lines
   end;
 
   { TTyroScriptThread }
 
-  TTyroScriptThread = class(TThread)
-  private
-    FStarted: Boolean;
-    function GetActive: Boolean;
+ TTyroScriptThread = class(TThread)
+ private
+   FStarted: LongInt;
+   FCompleted: LongInt;
+   function GetActive: Boolean;
+   function GetStarted: Boolean;
+   function GetCompleted: Boolean;
   protected
     FScript: TTyroScript;
     procedure TerminatedSet; override;
   public
     procedure Execute; override;
+    procedure Start; reintroduce;
     constructor Create(AScript: TTyroScript); virtual;
     destructor Destroy; override;
-    property Started: Boolean read FStarted;
-    property Active: Boolean read GetActive;
+   property Started: Boolean read GetStarted;
+   property Completed: Boolean read GetCompleted;
+   property Active: Boolean read GetActive;
     property Script: TTyroScript read FScript;
   end;
 
@@ -443,8 +513,37 @@ end;
 
 procedure TTyroScriptThread.Execute;
 begin
-  FStarted := True;
-  Script.Start;
+  try
+    Script.Start;
+  finally
+    // TThread.Finished is a plain Boolean written by the worker. Publish
+    // completion atomically for lifecycle decisions made by the main thread.
+    InterlockedExchange(FCompleted, 1);
+  end;
+end;
+
+procedure TTyroScriptThread.Start;
+begin
+  if InterlockedCompareExchange(FStarted, 1, 0) <> 0 then
+    Exit;
+  // Record the resume request synchronously. Setting this in Execute leaves a
+  // race where Stop sees an apparently unstarted thread that is already live.
+  try
+    inherited Start;
+  except
+    InterlockedExchange(FStarted, 0);
+    raise;
+  end;
+end;
+
+function TTyroScriptThread.GetStarted: Boolean;
+begin
+  Result := InterlockedExchangeAdd(FStarted, 0) <> 0;
+end;
+
+function TTyroScriptThread.GetCompleted: Boolean;
+begin
+  Result := InterlockedExchangeAdd(FCompleted, 0) <> 0;
 end;
 
 constructor TTyroScriptThread.Create(AScript: TTyroScript);
@@ -543,22 +642,51 @@ end;
 
 destructor TReadConsoleObject.Destroy;
 begin
+  Cancel;
   inherited;
 end;
 
 procedure TReadConsoleObject.DoExecute;
 begin
-  // reading input with a custom callback
-  Main.StartConsoleReadEx(HandleConsoleInput);
+  if Cancelled then
+  begin
+    SetEvent;
+    Exit;
+  end;
+  // Register before exposing the callback. Otherwise shutdown can happen
+  // after Synchronize returns but before the script thread enters Wait.
+  if Main.RegisterWaiting(Self) then
+    Main.StartConsoleReadEx(HandleConsoleInput)
+  else
+    SetEvent;
 end;
 
 procedure TReadConsoleObject.HandleConsoleInput(AConsole: TTyroTerminal; AInput: string);
 begin
   ResultString := AInput;
-//  Event.SetEvent;
   // Re-arm for built-in command mode
   Main.StartConsoleRead;
   SetEvent;
+end;
+
+procedure TReadConsoleObject.Cancel;
+begin
+  inherited;
+  // The terminal stores this object's method pointer. Restore the normal
+  // command callback before destruction. The reader normally dies on the
+  // script worker, so marshal detachment to the application thread.
+  if Main <> nil then
+  begin
+    if GetCurrentThreadID = MainThreadID then
+      Main.CancelConsoleRead(Self)
+    else
+ TThread.Synchronize(TThread.CurrentThread,
+        procedure
+        begin
+          if Main <> nil then
+            Main.CancelConsoleRead(Self);
+        end);
+  end;
 end;
 { TBeepObject }
 
@@ -569,7 +697,7 @@ end;
 
 procedure TBeepObject.DoExecute;
 begin
-  PlayWaveform(440, 1);
+  PlayWaveform(440, 1000);
 end;
 
 { TPlayMMLObject }
@@ -580,11 +708,8 @@ begin
 end;
 
 procedure TPlayMMLObject.DoExecute;
-var
-  Melody: TRayMelody;
 begin
-  Melody := TRayMelody.Create;
-  Melody.Play(Song);
+  PlayMML(Song);
 end;
 
 { TLoadFontObject }
@@ -703,6 +828,12 @@ end;
 
 { TQueueObject }
 
+destructor TQueueObject.Destroy;
+begin
+  FreeAndNil(FEvent);
+  inherited;
+end;
+
 function TQueueObject.EventNeeded: TEvent;
 begin
   if FEvent = nil then
@@ -712,19 +843,30 @@ end;
 
 function TQueueObject.Wait(Timeout: Cardinal): Boolean;
 begin
-  if FEvent <> nil then
-    Result := FEvent.WaitFor(Timeout) <> wrSignaled
-  else
-    Result := True;
+  if FEvent = nil then
+    Exit(True);
+
+  if Main = nil then
+    Exit(False);
+  Result := FEvent.WaitFor(Timeout) = wrSignaled;
+  Main.UnregisterWaiting(Self);
 end;
 
 procedure TQueueObject.Cancel;
 begin
+  InterlockedExchange(FCancelled, 1);
   SetEvent;
+end;
+
+function TQueueObject.GetCancelled: Boolean;
+begin
+  Result := InterlockedExchangeAdd(FCancelled, 0) <> 0;
 end;
 
 procedure TQueueObject.Execute;
 begin
+  if Cancelled then
+    Exit;
   try
     DoExecute;
   finally
@@ -750,12 +892,10 @@ end;
 
 procedure TQueueObjects.CancelAll;
 var
-  itm: TQueueObject;
+  I: Integer;
 begin
-  for itm in Self do
-  begin
-    itm.Cancel;
-  end;
+  for I := 0 to Count - 1 do
+    Items[I].Cancel;
 end;
 
 { TWindowObject }
@@ -786,31 +926,65 @@ begin
   FName := AName;
 end;
 
+destructor TCreateControlObject.Destroy;
+begin
+  // Until TakeControl succeeds this helper owns rollback. The helper itself is
+  // normally freed by the worker after Synchronize returns, so marshal an
+  // abandoned parented control back to the application thread.
+  if FExecutionAttempted and (FControl <> nil) and not FTransferred then
+  begin
+    if GetCurrentThreadID = MainThreadID then
+      FreeUntransferredControl
+    else
+      TThread.Synchronize(TThread.CurrentThread, FreeUntransferredControl);
+  end;
+  inherited;
+end;
+
+procedure TCreateControlObject.FreeUntransferredControl;
+begin
+  FreeAndNil(FControl);
+end;
+
+function TCreateControlObject.TakeControl: TTyroControl;
+begin
+  Result := FControl;
+  FTransferred := Result <> nil;
+end;
+
 procedure TCreateControlObject.DoExecute;
 var
   LName: string;
+  NewControl: TTyroControl;
 begin
+  FExecutionAttempted := True;
+  NewControl := nil;
   LName := LowerCase(FClassName);
   if LName = 'button' then
-    FControl := TTyroButton.Create(Main)
+    NewControl := TTyroButton.Create(Main)
   else if LName = 'panel' then
-    FControl := TTyroPanel.Create(Main)
+    NewControl := TTyroPanel.Create(Main)
   else if LName = 'label' then
-    FControl := TTyroLabel.Create(Main)
+    NewControl := TTyroLabel.Create(Main)
   else if LName = 'checkbox' then
-    FControl := TTyroCheckBox.Create(Main)
+    NewControl := TTyroCheckBox.Create(Main)
   else if LName = 'edit' then
-    FControl := TTyroEdit.Create(Main)
+    NewControl := TTyroEdit.Create(Main)
   else if LName = 'spectrum' then
-    FControl := TTyroSpectrum.Create(Main)
-  else
-    FControl := nil;
-  if FControl <> nil then
-  begin
-    FControl.SetText(FCaption);
-    if FName <> '' then
-      FControl.Name := FName;
-    FControl.BoundsRect := Rect(FX, FY, FX + FW, FY + FH);
+    NewControl := TTyroSpectrum.Create(Main);
+  try
+    if NewControl <> nil then
+    begin
+      NewControl.SetText(FCaption);
+      if FName <> '' then
+        NewControl.Name := FName;
+      NewControl.BoundsRect := Rect(FX, FY, FX + FW, FY + FH);
+      FControl := NewControl;
+      NewControl := nil;
+    end;
+  finally
+    // Configuration failure rolls back while still on the application thread.
+    NewControl.Free;
   end;
 end;
 
@@ -839,6 +1013,96 @@ end;
 procedure TSetControlFocusObject.DoExecute;
 begin
   FControl.Focused := True;
+end;
+
+{ TSetControlTextObject }
+
+constructor TSetControlTextObject.Create(AControl: TTyroControl;
+  const AText: utf8string);
+begin
+  inherited Create;
+  FControl := AControl;
+  FText := AText;
+end;
+
+procedure TSetControlTextObject.DoExecute;
+begin
+  FControl.SetText(FText);
+end;
+
+{ TSetControlCheckedObject }
+
+constructor TSetControlCheckedObject.Create(AControl: TTyroControl;
+  AChecked: Boolean);
+begin
+  inherited Create;
+  FControl := AControl;
+  FChecked := AChecked;
+end;
+
+procedure TSetControlCheckedObject.DoExecute;
+begin
+  FControl.SetChecked(FChecked);
+end;
+
+{ TSetControlVisibleObject }
+
+constructor TSetControlVisibleObject.Create(AControl: TTyroControl;
+  AVisible: Boolean);
+begin
+  inherited Create;
+  FControl := AControl;
+  FVisible := AVisible;
+end;
+
+procedure TSetControlVisibleObject.DoExecute;
+begin
+  FControl.Visible := FVisible;
+end;
+
+{ TSetControlBorderObject }
+
+constructor TSetControlBorderObject.Create(AControl: TTyroControl;
+  ABorder: TBorder);
+begin
+  inherited Create;
+  FControl := AControl;
+  FBorder := ABorder;
+end;
+
+procedure TSetControlBorderObject.DoExecute;
+begin
+  FControl.Border := FBorder;
+end;
+
+{ TSetControlBackColorObject }
+
+constructor TSetControlBackColorObject.Create(AControl: TTyroControl;
+  AColor: TColor);
+begin
+  inherited Create;
+  FControl := AControl;
+  FColor := AColor;
+end;
+
+procedure TSetControlBackColorObject.DoExecute;
+begin
+  FControl.BackColor := FColor;
+end;
+
+{ TSetControlNameObject }
+
+constructor TSetControlNameObject.Create(AControl: TTyroControl;
+  const AName: string);
+begin
+  inherited Create;
+  FControl := AControl;
+  FName := AName;
+end;
+
+procedure TSetControlNameObject.DoExecute;
+begin
+  FControl.Name := FName;
 end;
 
 { TDrawSetColorObject }
@@ -1035,7 +1299,12 @@ end;
 
 function TTyroScript.GetActive: Boolean;
 begin
-  Result := FActive;
+  Result := InterlockedExchangeAdd(FActive, 0) <> 0;
+end;
+
+function TTyroScript.GetStarted: Boolean;
+begin
+  Result := InterlockedExchangeAdd(FStarted, 0) <> 0;
 end;
 
 procedure TTyroScript.ExecuteQueueObject;
@@ -1078,11 +1347,20 @@ end;
 
 procedure TTyroScript.AddQueueObject(AQueueObject: TQueueObject);
 begin
+  if AQueueObject = nil then
+    Exit;
   Lock.Enter;
   try
-    Main.Queue.Add(AQueueObject);
+    // A stopped script must not leave main-thread work behind for a later
+    // interactive run. Ownership remains here when the request is rejected.
+    if GetActive and (Main <> nil) and Main.Running then
+    begin
+      Main.Queue.Add(AQueueObject);
+      AQueueObject := nil;
+    end;
   finally
     Lock.Leave;
+    AQueueObject.Free;
   end;
   if Thread <> nil then
     Thread.Yield;
@@ -1091,7 +1369,7 @@ end;
 constructor TTyroScript.Create;
 begin
   inherited Create;
-  FActive := True;
+  InterlockedExchange(FActive, 1);
   ScriptText := TStringList.Create;
 end;
 
@@ -1103,19 +1381,19 @@ end;
 
 procedure TTyroScript.Stop;
 begin
-  FActive := False;
+  InterlockedExchange(FActive, 0);
 end;
 
 procedure TTyroScript.Start;
 begin
-  FStarted := True;
-  FActive := True;
+  InterlockedExchange(FStarted, 1);
+  InterlockedExchange(FActive, 1);
   try
     BeforeRun;
     Run;
     AfterRun;
   finally
-    FActive := False;
+    InterlockedExchange(FActive, 0);
   end;
 end;
 

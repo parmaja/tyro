@@ -113,13 +113,22 @@ type
     property WaveForms: TWaveForms read FWaveForms;
   end;
 
+procedure PlayMML(const Song: TmmlSong);
 procedure PlayWaveform(Freq, Duration: Single);
+procedure UpdateMelodies;
+procedure UpdateWaveforms;
+procedure ShutdownMelodies;
+procedure ShutdownWaveforms;
 
 function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
+
+var
+  PlayingMelodies: TList = nil;
+  PlayingWaveforms: TList = nil;
 
 { TTyroRayAudio }
 
@@ -135,6 +144,8 @@ var
   Delta: Single;
   {$endif}
 begin
+  if (Duration <= 0) or (SampleRate <= 0) or not Assigned(Proc) then
+    Exit;
   aData := nil;
   SampleCount := Round(Duration * SampleRate);
   SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
@@ -165,7 +176,8 @@ begin
     for i := 0 to Length(aData) -1 do
       aData[i] := 0;
   end;
-  UpdateData(@aData[0], SampleCount);
+  if SampleCount > 0 then
+    UpdateData(@aData[0], SampleCount);
 end;
 
 { TTyroRayWave }
@@ -183,13 +195,20 @@ var
   //aData: array of SmallInt;
   aData: PSmallInt;
 begin
+  if (Duration <= 0) or (SampleRate <= 0) or not Assigned(Proc) then
+    Exit;
+  Wave := Default(TWave);
   Wave.FrameCount := Round(Duration * SampleRate);
   Wave.SampleRate := SampleRate; // By default 44100 Hz
   Wave.SampleSize := Sizeof(Smallint) * 8; // I use 16 bit only
   Wave.Channels := 1;                  // By default 1 channel (mono)
   //aData := nil;
   //SetLength(aData, Wave.FrameCount);
+  if Wave.FrameCount = 0 then
+    Exit;
   aData := RayLib.MemAlloc(Wave.FrameCount * SizeOf(SmallInt));
+  if aData = nil then
+    raise Exception.Create('Unable to allocate generated waveform');
   if Frequency <> 0 then
   begin
     Amplitude := (Amplitude * ((Power(2, Wave.SampleSize) / 2) - 1) / 100) - 1;
@@ -218,7 +237,9 @@ begin
       aData[i] := 0;
   Wave.Data := aData;
   //ExportWave(Wave, PChar('c:\temp\'+IntTOStr(round(Frequency))+'.wav'));
-  UnloadSound(Sound);
+  if Sound.FrameCount <> 0 then
+    UnloadSound(Sound);
+  Sound := Default(TSound);
   Sound := LoadSoundFromWave(Wave);
   //RayLib.MemFree(aData);
   //aData := nil;
@@ -361,14 +382,104 @@ begin
   Result := TRayMelodyChannel.Create(Self);
 end;
 
+procedure PlayMML(const Song: TmmlSong);
+var
+  Melody: TRayMelody;
+begin
+  if Length(Song) = 0 then
+    Exit;
+  if PlayingMelodies = nil then
+    Exit;
+  Melody := TRayMelody.Create;
+  try
+    Melody.BeginPlay(Song);
+    if Melody.Playing then
+    begin
+      PlayingMelodies.Add(Melody);
+      Melody := nil;
+    end;
+  finally
+    Melody.Free;
+  end;
+end;
+
 procedure PlayWaveform(Freq, Duration: Single);
 var
   Wave: TTyroRayWave;
 begin
+  if (Duration <= 0) or (Freq < 0) then
+    Exit;
+  if PlayingWaveforms = nil then
+    Exit;
   RayLibSound.Open;
   Wave := TTyroRayWave.Create;
-  Wave.Generate(@Sin_Waveform, Freq, Duration, 100);
-  Wave.Play;
+  try
+    // Lua's music.sound duration is expressed in milliseconds.
+    Wave.Generate(@Sin_Waveform, Freq, Duration / 1000, 100);
+    Wave.Play;
+    PlayingWaveforms.Add(Wave);
+    Wave := nil;
+  finally
+    Wave.Free;
+  end;
+end;
+
+procedure UpdateMelodies;
+var
+  I: Integer;
+  Melody: TRayMelody;
+begin
+  if PlayingMelodies = nil then
+    Exit;
+  for I := PlayingMelodies.Count - 1 downto 0 do
+  begin
+    Melody := TRayMelody(PlayingMelodies[I]);
+    if not Melody.UpdatePlay then
+    begin
+      PlayingMelodies.Delete(I);
+      Melody.Free;
+    end;
+  end;
+end;
+
+procedure UpdateWaveforms;
+var
+  I: Integer;
+  Wave: TTyroRayWave;
+begin
+  if PlayingWaveforms = nil then
+    Exit;
+  for I := PlayingWaveforms.Count - 1 downto 0 do
+  begin
+    Wave := TTyroRayWave(PlayingWaveforms[I]);
+    if not Wave.IsPlaying then
+    begin
+      PlayingWaveforms.Delete(I);
+      Wave.Free;
+    end;
+  end;
+end;
+
+procedure ShutdownWaveforms;
+var
+  I: Integer;
+begin
+  if PlayingWaveforms = nil then
+    Exit;
+  for I := PlayingWaveforms.Count - 1 downto 0 do
+    TObject(PlayingWaveforms[I]).Free;
+  PlayingWaveforms.Clear;
+end;
+
+procedure ShutdownMelodies;
+var
+  I: Integer;
+begin
+  if PlayingMelodies = nil then
+    Exit;
+  for I := PlayingMelodies.Count - 1 downto 0 do
+    TObject(PlayingMelodies[I]).Free;
+  PlayingMelodies.Clear;
 end;
 
 function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -413,5 +524,12 @@ begin
 end;
 
 initialization
+  PlayingMelodies := TList.Create;
+  PlayingWaveforms := TList.Create;
+finalization
+  ShutdownMelodies;
+  ShutdownWaveforms;
+  FreeAndNil(PlayingMelodies);
+  FreeAndNil(PlayingWaveforms);
 end.
 

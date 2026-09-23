@@ -166,7 +166,11 @@ end;
 destructor TPhysics.Destroy;
 begin
   if FSpace <> nil then
+  begin
     RemoveAll;
+    cpSpaceFree(FSpace);
+    FSpace := nil;
+  end;
   FreeAndNil(FEvents);
   FreeAndNil(FScriptedEvents);
   FreeAndNil(FHandleToBody);

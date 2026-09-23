@@ -184,15 +184,16 @@ end;
 procedure TRadioPlayer.Stop;
 begin
   FUserPlaying := False;
+  if Spectrum <> nil then
+    Spectrum.Detach;
   if FMusicLoaded then
   begin
-    Spectrum.Detach; //stop feeding the analyzer before the stream is freed
     StopMusicStream(FMusic);
     UnloadMusicStream(FMusic);
+    FMusic := Default(TMusic);
     FMusicLoaded := False;
   end;
-  FSnapshot.Free;
-  FSnapshot := nil;
+  FreeAndNil(FSnapshot);
   if FClient <> nil then
   begin
     FClient.Close;
@@ -200,7 +201,6 @@ begin
   end;
   FState := rpStopped;
 end;
-
 procedure TRadioPlayer.SetVolume(AVolume: Single);
 begin
   FVolume := AVolume;
