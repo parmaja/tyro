@@ -35,7 +35,7 @@ uses
   {$ENDIF}
   SysUtils, Classes, CustApp, RayLib, mnUtils, Melodies,
   TyroControls, TyroClasses, TyroEditors, mnLogs, TyroEngines,
-  TyroLua, TyroScripts, TyroTerminal, LuaClasses;  //Add all languages units here
+  TyroLua, TyroScripts, TyroTerminal, LuaClasses, LuaAPI;  //Add all languages units here
 
 type
 
@@ -137,12 +137,60 @@ begin
   WriteLn('--debug -d             Run in debug mode');
   WriteLn('--lint -l              Lint to check errors only in script do not run');
   WriteLn('--main -m              Legacy alias (scripts still use safe worker mode)');
-  WriteLn('--exit -x              Exit after finish execute');
+  WriteLn('--execute -e           Alias for --exit (run the script, then exit)');
+  WriteLn('--exit -x              Exit after script execution finishes');
   WriteLn('--show=true/false -s   Force to show main graphic window');
   WriteLn('--list                 List of programming language supported');
 end;
 
 //-w my_workpath ../demos/sin.lua
+
+// Syntax-check a script file with a fresh Lua state without executing it.
+// Returns True when the chunk compiles (no window is opened). Errors are
+// written to the console; a nonzero process exit status is left to the caller.
+function LintLua(const AFileName: string): Boolean;
+var
+  L: Plua_State;
+  Text: TStringList;
+  Msg: string;
+begin
+  Result := False;
+  L := nil;
+  Text := nil;
+  try
+    Text := TStringList.Create;
+    try
+      Text.LoadFromFile(AFileName);
+      L := LuaAPI.luaL_newstate;
+      if L = nil then
+      begin
+        WriteLn('Unable to create Lua state');
+        Exit;
+      end;
+      // Compile-only check: opening the standard libraries is not required.
+      if LuaAPI.luaL_loadstring(L, PUTF8Char(Text.Text)) <> 0 then
+      begin
+        Msg := LuaAPI.lua_tostring(L, -1);
+        LuaAPI.lua_pop(L, 1);
+        WriteLn(AFileName + ': ' + Msg);
+        Exit;
+      end;
+      WriteLn(AFileName + ': syntax OK');
+      Result := True;
+    except
+      on E: Exception do
+      begin
+        if IsConsole then
+          WriteLn(AFileName + ': ' + E.ClassName + ': ' + E.Message);
+      end;
+    end;
+  finally
+    if L <> nil then
+      LuaAPI.lua_close(L);
+    if Text <> nil then
+      Text.Free;
+  end;
+end;
 
 constructor TTyroApplication.Create(AOwner: TComponent);
 var
@@ -150,7 +198,7 @@ var
   err: string;
   RunConsole: Boolean;
 const
-  cShortOptions = 'w:mxlcdhs:';
+  cShortOptions = 'w:mxlcdhes:';
   cLongOptions = 'workpath: main exit execute lint debug console show: help list';
 begin
   inherited Create(AOwner);
@@ -165,8 +213,9 @@ begin
     if IsConsole then
       WriteLn(err);
     PrintHelp;
- Terminate;
- exit;
+    ExitCode := 2;
+    Terminate;
+    exit;
   end;
 
   InstallConsoleLog;
@@ -213,7 +262,8 @@ begin
   // --main is retained for command-line compatibility. Raylib and control
   // calls must remain on the application thread, so scripts still use the
   // worker plus its main-thread dispatch queue.
-  Main.ExitAfterScript := HasOption(#0, 'exit') or HasOption('x', '');
+  Main.ExitAfterScript := HasOption(#0, 'exit') or HasOption('x', '') or
+                          HasOption(#0, 'execute') or HasOption('e', '');
   if HasOption(#0, 'show') or HasOption('s', '') then
   begin
     err := LowerCase(Trim(GetOptionValue('s', 'show')));
@@ -228,8 +278,9 @@ begin
       if IsConsole then
         WriteLn('Invalid value for --show: ', err);
       PrintHelp;
- Terminate;
- Exit;
+      ExitCode := 2;
+      Terminate;
+      Exit;
     end;
   end;
 end;
@@ -243,22 +294,41 @@ end;
 
 procedure TTyroApplication.DoRun;
 begin
-inherited;
- if Terminated then
-begin
- Exit;
-end;
-try
+  inherited;
+  if Terminated then
+    Exit;
+  // Lint mode is a pure syntax check: it never opens a window or runs the
+  // engine loop. Exit status: 0 = clean, 1 = syntax errors, 2 = no file.
+  if HasOption(#0, 'lint') or HasOption('l', '') then
+  begin
+    if Files.Count = 0 then
+    begin
+      if IsConsole then
+        WriteLn('--lint requires a script file');
+      PrintHelp;
+      ExitCode := 2;
+    end
+    else if not LintLua(Files[0]) then
+      ExitCode := 1;
+    Terminate;
+    Exit;
+  end;
+  try
     try
       Main.Run;
     except
-      on E:Exception do
+      on E: Exception do
       begin
         if IsConsole then
           WriteLn('EX: ' + E.ClassName + ': ' + E.Message + ' @' + IntToHex(NativeUInt(ExceptAddr), 16));
+        ExitCode := 1;
       end;
     end;
   finally
+    // A failed script under --exit/--execute becomes a nonzero exit status.
+    // Interactive sessions only report through the console and keep running.
+    if (ExitCode = 0) and Main.ScriptFailed then
+      ExitCode := 1;
     Terminate;
   end;
 end;

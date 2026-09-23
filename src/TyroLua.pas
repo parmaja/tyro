@@ -1175,10 +1175,16 @@ var
 begin
   // A stopped script object may be run again from the interactive console.
   Lua.SetReady;
+  //Publish the failure state for the CLI --exit lifecycle: the worker thread
+  //reads this after the run and the main loop surfaces it as the exit code.
+  FLastError := '';
   //WriteLn('Run Script');
   //Sleep(1000);
   if not Lua.State.RunString(ScriptText.Text, Msg) then
+  begin
+    FLastError := Msg;
     DoError(Msg);
+  end;
 end;
 
 procedure TLuaScript.Stop;

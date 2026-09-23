@@ -424,6 +424,11 @@ type
     QueueObject: TQueueObject;
     Thread: TTyroScriptThread;
     ScriptText: TStringList;
+    //* Error message of the most recent main-chunk execution, or '' when it
+    //* finished without error. Written on the worker thread, published before
+    //* the thread marks itself Completed, read once by the main thread during
+    //* the --exit lifecycle. Not used by the interactive REPL (RunLine).
+    FLastError: string;
 
     procedure RunQueueObject(AQueueObject: TQueueObject);
     procedure RunQueueObjectNoFree(AQueueObject: TQueueObject);
@@ -447,6 +452,7 @@ type
     property FileName: string read FFileName write FFileName;
     property Active: Boolean read GetActive;
     property Started: Boolean read GetStarted; //started true even after stopped
+    property LastError: string read FLastError; //'' when the last run was clean
     property Source: TStringList read ScriptText; //the loaded script lines
   end;
 

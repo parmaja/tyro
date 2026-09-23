@@ -127,6 +127,7 @@ type
     FExitAfterScript: Boolean;
  FShowWindowOverride: Integer; //-1 force hidden, 0 script-controlled, 1 force visible
     FHadScript: Boolean;
+    FScriptFailed: Boolean;
     FRunning: LongInt;
     function GetRunning: Boolean;
     procedure SetRunning(AValue: Boolean);
@@ -229,7 +230,11 @@ type
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
     property ExitAfterScript: Boolean read FExitAfterScript write FExitAfterScript;
- property ShowWindowOverride: Integer read FShowWindowOverride write FShowWindowOverride;
+    //* True when the last run-and-exit script finished with a Lua error. Reset
+    //* at the start of every run; only meaningful for the --exit/--execute CLI
+    //* lifecycle where the main loop inspects it before releasing the worker.
+    property ScriptFailed: Boolean read FScriptFailed;
+    property ShowWindowOverride: Integer read FShowWindowOverride write FShowWindowOverride;
 
   end;
 {
@@ -352,6 +357,7 @@ end;
 procedure TTyroMain.Run;
 var
   tw: Integer;
+  HasScreenshot: Boolean;
 begin
   PrepareWindow(cDefaultWindowWidth, cDefaultWindowHeight);
   //InitWindow(cDefaultWindowWidth, cDefaultWindowHeight, PUTF8Char(Title));
@@ -456,9 +462,23 @@ begin
         // A screenshot is fulfilled only after EndDrawing. If the script
         // finishes before one visible frame, present once rather than silently
         // dropping its final screenshot request during --exit.
+        Lock.Enter;
+        try
+          HasScreenshot := FQueuedScreenshot <> '';
+        finally
+          Lock.Leave;
+        end;
         if Visible and RayLib.IsWindowReady and
-           ((FQueuedScreenshot <> '') or not FPresentedFrame) then
+           (HasScreenshot or not FPresentedFrame) then
           Continue;
+        // Capture the failure state before Stop() releases the worker and its
+        // script clone, so --exit can propagate a nonzero exit status.
+        if (FScriptThread.Script <> nil) and
+           (FScriptThread.Script.LastError <> '') then
+          FScriptFailed := True;
+        // --exit must not cancel commands the worker accepted before it
+        // completed: drain the queue once more, then shut down.
+        ProcessQueue;
         Terminate;
       end;
     end;
@@ -605,6 +625,7 @@ end;
 procedure TTyroMain.Start;
 begin
   FHadScript := False;
+  FScriptFailed := False;
   if FScriptMain <> nil then
     RunLoadedScript;
 end;

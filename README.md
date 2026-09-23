@@ -7,6 +7,36 @@ playing sound using mmf code.
 
 It is More simulating old computer, but with modern languages and graphic.
 
+# Command Line
+
+```
+tyro [<script>] [--workpath=<dir>] [<options>]
+```
+
+Running a `.lua`/`.ls` file executes it in a graphical environment. Without a
+script argument Tyro starts an interactive console session.
+
+| Option | Description |
+|--------|-------------|
+| `--help`, `-h` | Show the help page and exit |
+| `--list` | List the supported programming languages and exit |
+| `--console`, `-c` | Force a command prompt / console output |
+| `--debug`, `-d` | Enable debug logging |
+| `--lint`, `-l` | Syntax-check the script with Lua and exit without running it (nothing is executed, no window opens) |
+| `--main`, `-m` | Legacy compatibility alias; scripts always run on a worker thread with main-thread dispatch |
+| `--exit`, `-x` | Exit automatically after the script finishes |
+| `--execute`, `-e` | Alias for `--exit` (run the script, then exit) |
+| `--show=true/false`, `-s` | Force the window visible/hidden; default keeps script-controlled behavior |
+| `--workpath=<path>` | Workspace directory (defaults to the executable location) |
+
+### Exit statuses
+
+| Status | Meaning |
+|--------|---------|
+| `0` | Success (also `--help`/`--list`, and interactive sessions closed normally) |
+| `1` | Lua runtime error while running with `--exit`/`--execute`, or `--lint` found syntax errors |
+| `2` | Invalid command line usage: unknown option, `--lint` without a script file, or an invalid `--show` value |
+
 # Lua Example
 
 ```lua
@@ -349,6 +379,40 @@ tyro demos/<name>.lua
 | `demos/multiply.lua` | Drawing + MML sound |
 | `demos/text.lua` | Multi-language text rendering |
 | `demos/shader_demo.lua` | Post-processing shaders: water, glow, gray, sepia, invert, vignette, pixelate |
+
+# Threading model & lifecycle
+
+Script source runs on a **worker thread**, never on the render/main thread.
+Every RayLib call and every control/console/audio mutation a script makes is
+packaged as a queue object (`TQueueObject`) and dispatched back to the main
+thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
+
+- **Main-thread confinement.** Window, canvas, sprites, shaders, fonts, music/
+  sound (the audio device), radio, spectrum and the control tree are all owned
+  by the main thread and must only be touched there. The Lua facades hide this:
+  they enqueue `TCreateControlObject`/`TSetControl*Object`/draw/music objects
+  that execute on the main thread.
+- **Worker lifecycle.** `Start` publishes an atomic `started` flag, `Stop`
+  (also triggered by `--exit`/window close) cancels a pending queue wait,
+  signals blocked `console.read()`, then pumps `CheckSynchronize` until the
+  thread has actually finished before `WaitFor` and disposal.
+- **Queue admission.** A stopped/inactive script rejects new asynchronous work
+  (the request is freed immediately instead). Right after the worker exits the
+  engine cancels and clears any stale queue entries so they cannot leak into a
+  later interactive run; under `--exit` a final drain runs first so work the
+  worker accepted before completing is still honored.
+- **Per-state Lua cancellation.** Termination status lives in each Lua state's
+  extra space, so cancelling one script can never affect another state.
+- **Resource release order.** GPU/audio owners (sprites, canvases, shaders,
+  fonts, musicians, generated waveforms, radio, spectrum) are destroyed while
+  the window/OpenGL context and audio device are still alive; the context and
+  device are closed last, after every owner has been released.
+
+The worker thread reads current input/timing values (`iskeydown`, `mousex`,
+`frametime`, ...) and submits drawing/mutation requests through the queue; it
+must not hold references into the control tree or RayLib objects across
+calls. Scripts blocking on `console.read()` or `while cycle do` are cancelled
+by `Stop`, so a shut-down never waits on user input.
 
 # Issues
 
