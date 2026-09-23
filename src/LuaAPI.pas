@@ -972,13 +972,27 @@ begin
 end;
 
 procedure luaL_setfuncs(L: Plua_State; lr: array of luaL_Reg; nup: Integer);
+var
+  A: array of luaL_Reg;
+  I: Integer;
 begin
-   luaL_setfuncs(L, @lr, nup);
+   //C luaL_setfuncs walks an array terminated by a name=nil sentinel; a Pascal
+   //open array has none, so build a terminated copy before delegating to the
+   //external function (the old code passed the address of the descriptor and
+   //could over-read past the last entry when no sentinel happened to exist).
+   if High(lr) < 0 then
+     Exit;
+   SetLength(A, Length(lr) + 1);
+   for I := 0 to High(lr) do
+     A[I] := lr[I];
+   A[High(lr) + 1].name := nil;
+   A[High(lr) + 1].func := nil;
+   luaL_setfuncs(L, @A[0], nup);
 end;
 
 procedure luaL_newlibtable(L: Plua_State; lr: array of luaL_Reg);
 begin
-   lua_createtable(L, 0, High(lr));
+   lua_createtable(L, 0, Length(lr));
 end;
 
 procedure luaL_newlibtable(L: Plua_State; lr: PluaL_Reg);
@@ -997,7 +1011,7 @@ procedure luaL_newlib(L: Plua_State; lr: array of luaL_Reg);
 begin
    luaL_checkversion(L);
    luaL_newlibtable(L, lr);
-   luaL_setfuncs(L, @lr, 0);
+   luaL_setfuncs(L, lr, 0); //open-array overload (builds the sentinel itself)
 end;
 
 procedure luaL_newlib(L: Plua_State; lr: PluaL_Reg);

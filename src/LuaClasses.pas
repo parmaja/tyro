@@ -190,6 +190,24 @@ begin
   lua_setfield(L, -2, PChar(Name));
 end;
 
+//Fetch the global table by name, pushing it. When the global is absent or holds
+//a non-table value (nil/string/number), the old value is discarded and a fresh
+//table is pushed instead. Returns True when the table was just created.
+//The stack is balanced on exit (exactly the table, nothing else), so callers
+//cannot leak the nil that lua_getglobal pushes for a missing global.
+function lua_get_or_create_table(L: Plua_State; const table: string): Boolean;
+begin
+  lua_getglobal(L, PChar(table));
+  if lua_type(L, -1) = LUA_TTABLE then
+    Result := False
+  else
+  begin
+    lua_pop(L, 1); //discard the non-table value (or nil)
+    lua_newtable(L);
+    Result := True;
+  end;
+end;
+
 procedure lua_register_table(L: Plua_State; table: string);
 begin
   //table
@@ -203,13 +221,9 @@ begin
 end;
 
 procedure lua_register_table_index(L: Plua_State; table: string; obj: TLuaObject);
-var
-  new: boolean;
 begin
   //table
-  new := lua_getglobal(L, PChar(table)) = 0; //get table by name
-  if new then
-    lua_newtable(L);
+  lua_get_or_create_table(L, table); //push the table
 
   //metatable
   lua_newtable(L);
@@ -220,20 +234,12 @@ begin
   lua_setmetatable(L, -2);
   //end metatable
 
-  if new then
-    lua_setglobal(L, PChar(table)) //set table name
-  else
-    lua_pop(L, 1); //pop table from stack
-  //end table
+  lua_setglobal(L, PChar(table)); //set table name; pops the table
 end;
 
 procedure lua_register_table_method(L: Plua_State; table: string; Name: string; obj: TObject; method: TLuaMethod; AToMeta: Boolean);
-var
-  new: boolean;
 begin
-  new := lua_getglobal(L, PChar(table)) = 0; //get table by name
-  if new then
-    lua_newtable(L);
+  lua_get_or_create_table(L, table); //push the table
   if AToMeta then
   begin
     if lua_getmetatable(L, -1) = 0 then
@@ -248,29 +254,16 @@ begin
 
   if AToMeta then
     lua_pop(L, 2) //pop table and metatable from stack
-  else if new then
-    lua_setglobal(L, PChar(table))
   else
-    lua_pop(L, 1); //pop table from stack
+    lua_setglobal(L, PChar(table)); //set table name; pops the table
 end;
 
 procedure lua_register_table_value(L: Plua_State; table, Name: string; Value: integer);
-var
-  new: boolean;
 begin
-  //table
-  new := lua_getglobal(L, PChar(table)) = 0; //get table by name
-  if new then
-    lua_newtable(L);
-
+  lua_get_or_create_table(L, table); //push the table
   lua_pushinteger(L, Value);
   lua_setfield(L, -2, PChar(Name));
-
-  if new then
-    lua_setglobal(L, PChar(table))
-  else
-    lua_pop(L, 1); //pop table from stack
-  //end metatable
+  lua_setglobal(L, PChar(table)); //set table name; pops the table
 end;
 
 procedure lua_register_string(L: Plua_State; Name: string; Value: string);
@@ -311,9 +304,21 @@ end;
 
 function LuaAlloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t): Pointer; cdecl;
 begin
+  //C realloc contract used by Lua:
+  //  ptr=nil, nsize>0  -> allocate               (ReallocMem(nil, n) allocates)
+  //  ptr<>nil, nsize>0 -> grow/shrink in place   (may move)
+  //  nsize=0           -> free and return nil    (Lua never keeps a result on free)
+  //Any failure signals Lua by returning nil.
+  Result := nil;
   try
+    if nsize = 0 then
+    begin
+      if ptr <> nil then
+        FreeMem(ptr);
+      Exit;
+    end;
     Result := ptr;
-    ReallocMem(Result, nSize);
+    ReallocMem(Result, nsize);
   except
     Result := nil;
   end;
@@ -455,6 +460,12 @@ procedure TLua.Init;
 var
   AStatus: PLuaStatus;
 begin
+  //Both in-tree call sites keep the record in a zeroed class field, but a
+  //record that already owns a Lua state must release it first: Self :=
+  //Default(TLua) below would otherwise just drop the pointer (leaking the
+  //state, its extraspace status and every allocate).
+  if State <> nil then
+    Close;
   Self := Default(TLua);
   New(AStatus);
   AStatus^ := Ord(luaNone);

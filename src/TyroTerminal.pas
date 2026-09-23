@@ -146,7 +146,7 @@ type
   protected
     procedure UpdateSizes;
     procedure Resized; override;
-    procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
+    procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -542,13 +542,13 @@ begin
     ShowScrollBar([sbtVertical], False);
 end;
 
-procedure TTyroTerminal.Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
+procedure TTyroTerminal.Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
 var
   vis, MaxScroll: Integer;
 begin
-  if Witch <> sbtVertical then
+  if Which <> sbtVertical then
   begin
-    inherited Scroll(Witch, ScrollCode, Pos);
+    inherited Scroll(Which, ScrollCode, Pos);
     Exit;
   end;
   vis := GetVisibleLines;

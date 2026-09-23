@@ -551,9 +551,12 @@ begin
       if TimePer <= 0 then
         TimePer := 0.1;
       Sprite.AnimTime := Sprite.AnimTime + DT;
-      while Sprite.AnimTime >= TimePer do
+      //Clamp catch-up: after a stall (pause, resize, lag) a large DT must not
+      //fast-forward many animation frames in a single tick - advance at most
+      //one frame and drop the excess time.
+      if Sprite.AnimTime >= TimePer then
       begin
-        Sprite.AnimTime := Sprite.AnimTime - TimePer;
+        Sprite.AnimTime := 0;
         if Sprite.AnimFrame + 1 < Sprite.FrameCount then
           Inc(Sprite.AnimFrame)
         else if Sprite.Looping then
@@ -562,8 +565,6 @@ begin
         begin
           Sprite.AnimFrame := Sprite.FrameCount - 1;
           Sprite.Playing := False;
-          Sprite.AnimTime := 0;
-          Break;
         end;
       end;
       Sprite.Texture := Sprite.AnimFrames[Sprite.AnimFrame];
@@ -614,6 +615,13 @@ begin
   try
     if FItems.TryGetValue(Handle, Sprite) then
     begin
+      if (ATexture.id > 0) and (ATexture.id = Sprite.Texture.id) then
+      begin
+        //Re-installing the very texture this sprite already owns: freeing it
+        //first would leave a dangling id (self-texture use-after-free).
+        Result := True;
+        Exit;
+      end;
       // The store owns every installed texture, including a previous
       // non-animated one. Drop it before taking ownership of the replacement.
       FreeSpriteFrames(Sprite);

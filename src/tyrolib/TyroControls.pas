@@ -226,7 +226,7 @@ type
     procedure ShowScrollBar(Which: TScrollbarTypes; Visible: Boolean);
     procedure SetScrollRange(Which: TScrollbarType; AMin, AMax: Integer; APage: Integer);
     procedure SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
-    procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); virtual;
+    procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); virtual;
 
     procedure DoPaintBorder(ACanvas: TTyroCanvas); virtual;
     procedure DoPaintBackground(ACanvas: TTyroCanvas); virtual;
@@ -1322,12 +1322,12 @@ begin
   Invalidate;
 end;
 
-procedure TTyroControl.Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
+procedure TTyroControl.Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
 var
   Info: ^TTyroScrollInfo;
   Current: Integer;
 begin
-  if Witch = sbtVertical then
+  if Which = sbtVertical then
     Info := @FVScroll
   else
     Info := @FHScroll;
@@ -1342,7 +1342,7 @@ begin
     scrollTHUMBPOSITION, scrollTHUMBTRACK: Current := Pos;
     scrollENDSCROLL: ;
   end;
-  SetScrollPosition(Witch, Current, Info^.Visible);
+  SetScrollPosition(Which, Current, Info^.Visible);
 end;
 
 function TTyroControl.ScrollTrackRect(Which: TScrollbarType): TRect;
@@ -1854,22 +1854,31 @@ procedure TTyroControl.DoPaintBorder(ACanvas: TTyroCanvas);
 var
   baseColor, highlightColor: TColor;
   activeSides: TTyroResizeSides;
-  aRect: TRect;
+  w, h, bs: Integer;
 begin
   if Border = brdNone then
     Exit;
 
-  aRect := BorderRect;
-  aRect.Right := aRect.Right + BorderSize;
-  aRect.Bottom := aRect.Bottom + BorderSize;
-  Canvas.DrawRect(aRect, BorderSize, clRed);
-  exit;
+  //The border is painted in the control's own texture buffer, whose origin is
+  //its top-left corner (the client area starts at Margin+BorderSize, applied
+  //by the caller after DoPaintBorder runs).
+  w := ACanvas.Width;
+  h := ACanvas.Height;
+  bs := BorderSize;
+  if (w <= 0) or (h <= 0) or (bs <= 0) then
+    Exit;
 
   baseColor := clDarkGray;
-  //ACanvas.FillRectangle(0, h - bs, w, bs, baseColor);
-  //ACanvas.FillRectangle(0, 0, bs, h, baseColor);
-  //ACanvas.FillRectangle(w - bs, 0, bs, h, baseColor);
-  {
+  highlightColor := clLightGray;
+
+  //Solid frame around the whole control.
+  ACanvas.FillRectangle(Rect(0, 0, w, bs), baseColor);
+  ACanvas.FillRectangle(Rect(0, h - bs, w, h), baseColor);
+  ACanvas.FillRectangle(Rect(0, bs, bs, h - bs), baseColor);
+  ACanvas.FillRectangle(Rect(w - bs, bs, w, h - bs), baseColor);
+
+  //Brighten the side under the cursor (or the one being dragged) so a sizable
+  //border advertises its resize handles.
   if Border = brdSizable then
   begin
     if FResizing then
@@ -1880,19 +1889,15 @@ begin
     else
       activeSides := [];
 
-    if activeSides <> [] then
-    begin
-      highlightColor := clLightgray;
-      if rsRight in activeSides then
-        ACanvas.FillRectangle(w - bs, 0, 1, h, highlightColor);
-      if rsLeft in activeSides then
-        ACanvas.FillRectangle(bs - 1, 0, 1, h, highlightColor);
-      if rsBottom in activeSides then
-        ACanvas.FillRectangle(0, h - bs, w, 1, highlightColor);
-      if rsTop in activeSides then
-        ACanvas.FillRectangle(0, bs - 1, w, 1, highlightColor);
-    end;
-  end;}
+    if rsLeft in activeSides then
+      ACanvas.FillRectangle(Rect(0, 0, bs, h), highlightColor);
+    if rsTop in activeSides then
+      ACanvas.FillRectangle(Rect(0, 0, w, bs), highlightColor);
+    if rsRight in activeSides then
+      ACanvas.FillRectangle(Rect(w - bs, 0, w, h), highlightColor);
+    if rsBottom in activeSides then
+      ACanvas.FillRectangle(Rect(0, h - bs, w, h), highlightColor);
+  end;
 end;
 
 procedure TTyroControl.Created;
@@ -1954,6 +1959,9 @@ end;
 procedure TTyroWindow.SetCanvas(AValue: TTyroCanvas);
 begin
   if FCanvas =AValue then Exit;
+  //Replacing the canvas must not leak the previous one (the control-level
+  //SetCanvas already follows this rule).
+  FreeAndNil(FCanvas);
   FCanvas :=AValue;
 end;
 

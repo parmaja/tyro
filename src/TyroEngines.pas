@@ -606,16 +606,27 @@ begin
       end;
       if p = nil then
         Break;
-      p.Execute;
-        p.Free;
-        Inc(c);
-        ft2 := GetTime() - ft;
-        if ft2 >= fpd then
+      try
+        p.Execute;
+      except
+        on E: Exception do
         begin
-          break;
+          if IsConsole then
+            WriteLn('EX-QUEUE: ' + E.ClassName + ': ' + E.Message);
+          //A failing queue object must not leak, abort the rest of the queue,
+          //or leave the canvas half-drawn (EndDraw below still runs); log and
+          //move on to the next queued object.
         end;
       end;
-      Board.EndDraw;
+      p.Free;
+      Inc(c);
+      ft2 := GetTime() - ft;
+      if ft2 >= fpd then
+      begin
+        break;
+      end;
+    end;
+    Board.EndDraw;
     finally
       CanvasLock.Leave;
     end;
@@ -720,10 +731,10 @@ begin
   FFrameEvent := TEvent.Create(nil, False, False, '');
   BoundsRect.Width := ScreenWidth;
   BoundsRect.Height := ScreenHeight;
-  Margin := cMainMargin;
   FBackColor := clCornflowerBlue;
 
-  Margin := Resources.Config.Sections['window'].ReadInteger('margin', 0);
+  //Configured margin only; absent key must not clobber the default with 0.
+  Margin := Resources.Config.Sections['window'].ReadInteger('margin', cMainMargin);
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -990,15 +1001,25 @@ begin
 
   if FControlCapture <> nil then
   begin
-    x := mx - FControlCapture.WindowRect.Left;
-    y := my - FControlCapture.WindowRect.Top;
-    FControlCapture.MouseMove(Shift, x, y);
-    if not (ssLeft in Shift) then
+    //The captured control can be hidden (F8 console, F2 editor) or destroyed
+    //while the button is still down; a stale pointer must never be dereferenced.
+    if (FControlCapture.Parent = nil) or (not FControlCapture.Visible) then
+    begin
+      //Drop the capture and fall through to normal mouse hit-testing below.
+      FControlCapture := nil;
+    end
+    else
     begin
       x := mx - FControlCapture.WindowRect.Left;
       y := my - FControlCapture.WindowRect.Top;
-      FControlCapture.MouseUp(mbLeft, Shift, x, y);
-      FControlCapture := nil;
+      FControlCapture.MouseMove(Shift, x, y);
+      if not (ssLeft in Shift) then
+      begin
+        x := mx - FControlCapture.WindowRect.Left;
+        y := my - FControlCapture.WindowRect.Top;
+        FControlCapture.MouseUp(mbLeft, Shift, x, y);
+        FControlCapture := nil;
+      end;
     end;
   end
   else

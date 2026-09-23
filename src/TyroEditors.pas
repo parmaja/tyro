@@ -128,7 +128,7 @@ type
     procedure DrawCaret(ACanvas: TTyroCanvas);
   protected
     procedure Resized; override;
-    procedure Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
+    procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -366,7 +366,7 @@ begin
     ShowScrollBar([sbtHorizontal], False);
 end;
 
-procedure TyroEditor.Scroll(Witch: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
+procedure TyroEditor.Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
 var
   vis, cols, maxV, maxH: Integer;
   v: Integer;
@@ -383,7 +383,7 @@ begin
   if maxH < 0 then
     maxH := 0;
 
-  if Witch = sbtVertical then
+  if Which = sbtVertical then
   begin
     v := FTopLine;
     case ScrollCode of
