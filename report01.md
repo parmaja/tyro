@@ -5,9 +5,11 @@
 **Method:** Direct review (TyroEngines, TyroScripts, TyroLua, TyroClasses, tyro.lpr, TyroRadio getters) +
 three parallel read-only explorer passes (controls/terminal; sounds/melodies/spectrum/radio/physics/aseprites; input/lua-classes/editors/lua-api/sprites).
 **Baseline commit:** `9cdc739` (reviewed tree)
-**Fix commit:** `8c9d35b` (quick-win batch, see "Fixed" below)
-**Build check:** `lazbuild --build-all --build-mode=Debug tyro.lpi` — 25464 lines compiled, tyro.exe linked,
-19 warnings / 77 hints / 58 notes (all pre-existing; no new diagnostics from the fix batch).
+**Fix commits:** `8c9d35b` (quick-win) · `ca8d2c9` (Batch A) · `130a81b` (Batch B) · `6111d06` (Batch C)
+**Build check:** `lazbuild --build-all --build-mode=Debug tyro.lpi` — after `6111d06`: 25705 lines compiled, tyro.exe linked,
+19 warnings / 77 hints / 54 notes (baseline 19/77/58; no new diagnostics from any fix batch — two unused locals
+and notes retired by the fixes).
+**Smoke tests:** launch test (8 s run) plus `basic_drawing.ls --exit` and `console_demo.ls --exit` both exit 0.
 **Line numbers** refer to baseline `9cdc739` unless noted.
 
 ---
@@ -21,12 +23,12 @@ three parallel read-only explorer passes (controls/terminal; sounds/melodies/spe
 | C3 | Waveform div/mod-by-zero: `SampleRate div round(Frequency)`, `Index mod Round(WaveSamples)`, `Delta := 100/0` | TyroSounds.pas 157–160, 217–220, 490–508 | Critical (crash) | ✅ FIXED |
 | C4 | MML: unvalidated tempo `t0`; `q` via note-number math can overflow Int64 | Melodies.pas 355–356, 605–618 | High (crash/overflow) | ✅ FIXED (ca8d2c9) |
 | C5 | Aseprites: unbounded palette `SetLength`, unbounded layer-chunk reads, sheet-texture overflow, partial-failure count contract | Aseprites.pas 900–926, 1007–1013, 1536–1542, 1575–1588 | Critical (overflow/OOB reads) | ✅ FIXED (ca8d2c9) |
-| C6 | Single-frame .aseprite never loads; partial-failure leaks sprite | TyroSprites.pas 1205–1262 | Medium (functional + leak) | 🔴 OPEN |
+| C6 | Single-frame .aseprite never loads; partial-failure leaks sprite | TyroSprites.pas 1205–1262 | Medium (functional + leak) | ✅ FIXED (130a81b) |
 | C7 | `lua_getextraspace` writes `L-8` backward pointer (custom-allocator context) | LuaAPI.pas 739–744 | High (memory corruption when allocator used) | ✅ FIXED (ca8d2c9) |
 | C8 | `AQueueObject.LineNo := ar.currentline` outside `DEBUG_LUA` ifdef → reads uninitialized stack frame | TyroLua.pas 1263–1275 | High (UB in non-debug) | ✅ FIXED |
 | F1 | Console can never be focused (`csFocus` missing in terminal Style; `SetFocused` ignores value; ProcessInput early-exit) → kills console typing, `console.read`, F2/F7/F8 | TyroTerminal.pas 253; TyroControls.pas 1153–1157; TyroEngines.pas 1032–1033 | **High (functional dead path)** | ✅ FIXED |
 | F2 | `Update` for console & editor is commented out (caret, cursor, scroll dead) | TyroEngines.pas 935–955 | Medium (UX) | ✅ FIXED (130a81b) |
-| F3 | `DoPaintBorder` is a red-frame stub (no real border rendering) | TyroControls.pas 1842–1885 | Low (cosmetic) | 🔴 OPEN |
+| F3 | `DoPaintBorder` is a red-frame stub (no real border rendering) | TyroControls.pas 1842–1885 | Low (cosmetic) | ✅ FIXED (6111d06) |
 | F4 | Top-level `SetWindowRect`/resize is clobbered by `Realign` (`alClient` resize) | TyroControls.pas 513–519, 1108–1119 | High (functional) | ✅ FIXED (130a81b) |
 | F5 | `console.show(w, h)` interpreted as pixels, not chars | TyroEngines.pas 1157–1166 | Low (API mismatch) | ✅ FIXED (130a81b) |
 | F6 | `DrawLineTo` applied origin twice | TyroClasses.pas 677–680 | Medium (rendering) | ✅ FIXED |
@@ -95,30 +97,43 @@ three parallel read-only explorer passes (controls/terminal; sounds/melodies/spe
 5. **F2 — console/editor `Update` re-enabled.** `TTyroMain.Update` calls `Console.Update` and `Editor.Update`
    again (caret blink, scrollbars, mouse selection) with the original try/except logging preserved.
 
-## 5. Open — Functional
+## 5. Fixed in `6111d06`
 
-- **F3 — `DoPaintBorder` red-frame stub** (TyroControls.pas 1842–1885): no real border rendering.
+1. **`ProcessQueue` exception-safety.** Each queued object runs inside `try/except`: a failing object no longer
+   leaks itself, aborts the rest of the queue, or leaves the canvas half-drawn (`Board.EndDraw` always runs);
+   failures are logged as `EX-QUEUE` (IsConsole only).
+2. **`FControlCapture` dangle.** A control hidden (`F8` console, `F2` editor) or destroyed mid-drag drops the
+   capture and falls back to normal hit-testing instead of being dereferenced next frame.
+3. **Lua registration stack/guard.** `lua_register_table_{index,method,value}` now share a
+   `lua_get_or_create_table` helper: only an existing *table* is reused (the old `= 0` guard treated any
+   non-table as present and could `setmetatable` a non-table), and the `nil` that `lua_getglobal` pushes for a
+   missing global is never left on the stack (1 slot leaked per created table).
+4. **`LuaAlloc` contract.** Explicit C realloc semantics: `nsize = 0` frees and returns nil, otherwise
+   ReallocMem; nil signals failure to Lua.
+5. **`TLua.Init` re-init.** A record that already owns a Lua state is closed before `Self := Default(TLua)`
+   (the Default would otherwise drop the pointer and leak the state + extraspace status).
+6. **`luaL_setfuncs`/`luaL_newlib` open-array wrappers.** A `name=nil` sentinel copy is built before
+   delegating to the C function (open Pascal arrays have no sentinel; the old `@lr` passed the descriptor and
+   could over-read past the last entry); `luaL_newlibtable` prealloc hint counts all entries.
+7. **`TTyroWindow.SetCanvas` leak.** The replaced canvas is freed (matches `TTyroControl.SetCanvas`).
+8. **Sprite `UpdateAnims` clamp.** Catch-up is capped at one frame per tick, so a stall (pause, resize, lag)
+   cannot fast-forward a whole animation; non-looping sprites no longer skip to the end in one tick.
+9. **Sprite `SetTexture` self-UAF.** Re-installing the sprite's own texture id is a no-op instead of freeing
+   the source first.
+10. **F3 — real `DoPaintBorder`.** Replaces the red-frame stub with a solid dark-gray frame in the control's own
+    buffer, brightening the hovered/dragged side for `brdSizable`.
+11. **Cleanup.** `Witch` → `Which` scroll-parameter typo (TyroControls/TyroTerminal/TyroEditors); margin config
+    read default is `cMainMargin` so an absent key can't zero the margin.
 
 ## 6. Open — Threading / design notes (lower priority)
 
 | Note | Location | Why it matters |
 |------|----------|----------------|
-| `ProcessQueue` not exception-safe | TyroEngines.pas 581–623 | An exception in one queued object aborts the rest of the queue. |
-| Margin default overwrite | TyroEngines.pas 723–726 | `margin = 0` config read overwrites a prior default. |
-| `FControlCapture` dangle | TyroEngines.pas 994–1005 | Capture pointer not cleared if the control is hidden/freed mid-drag. |
 | Hidden-window break | TyroEngines.pas 401–402 | Early-exit path skips input/draw when window hidden — keep in mind for console-only runs. |
 | Radio getter thread reads | TyroLua.pas 1660–1713 | Serialized behind the `TCriticalSection` added in ca8d2c9 (same root cause as C2). |
-| `luaL_setfuncs` open-array hazard | LuaAPI.pas 967–994 | Passing open arrays when a sentinel is expected. |
-| `lua_register_table_index` mis-guard | LuaClasses.pas 205–228 | Guard tests the wrong condition. |
-| `LuaAlloc` semantics | LuaClasses.pas 312–320 | Allocator realloc/nil handling differs from C contract. |
-| `TLua.Init` `Default(TLua)` hazard | LuaClasses.pas 454–466 | `Default()` before init can zero active state. |
-| `TTyroWindow.SetCanvas` leak | TyroControls.pas 1943–1947 | Old canvas not freed on replace. |
-| Sprite `UpdateAnims` uncapped catch-up | TyroSprites.pas 523–574 | Large frame deltas advance many frames in one tick — clamp. |
-| `SetTexture` self-texture UAF | TyroSprites.pas 608–626 | Re-assigning own texture can free the source. |
 | Physics unbounded collision queue | TyroPhysics.pas 372 | No cap on colliding-pair queue (locking itself is correct). |
 | Terminal password non-ASCII | TyroTerminal.pas 662, 1196, 1215 | Password chars stored as UTF-8 through single-byte window. |
 | `StartRead` doesn't set focus | TyroTerminal.pas 597–607 | Mitigated by F1 fix (callers manage focus) — consider folding in. |
-| Witch typo | — | Misspelled identifier/comment (cosmetic). |
 | Unit cycles | — | Circular uses between units make refactors harder. |
 | Dead code | TyroClasses.pas 872–881 area (report ref; see note) | The only `try/finally` in TyroClasses.pas is legitimate stream cleanup — flagged item could not be reproduced; re-check if a specific block is meant. |
 | `TCreateControlObject` cleanup | codex01.md | "Main-thread-safe cleanup of partially created or failed `TCreateControlObject` instances remains unresolved." |
@@ -127,6 +142,7 @@ three parallel read-only explorer passes (controls/terminal; sounds/melodies/spe
 
 1. ~~**Batch A — memory-safety/crash hardeners:** C2 (radio UAF) → C5 (Aseprites bounds) → C4 (MML overflow) → C7 (extraspace pointer).~~ **DONE — `ca8d2c9`** (clean build, no new warnings, launch smoke test OK).
 2. ~~**Batch B — functional gaps:** F8 (RunString leak) → F4 (resize) → F6 (`console.show` chars) → F5 (single-frame aseprite) → F2 (re-enable updates).~~ **DONE — `130a81b`** (same verification).
-3. **Batch C — robustness/design:** `ProcessQueue` exception-safety, `FControlCapture` dangle, `luaL_setfuncs`, LuaClasses guards, sprite/update clamps, `SetCanvas` leak, F3 `DoPaintBorder`, cleanup (Witch typo, dead code, margin default).
+3. ~~**Batch C — robustness/design:** `ProcessQueue` exception-safety, `FControlCapture` dangle, `luaL_setfuncs`, LuaClasses guards, sprite/update clamps, `SetCanvas` leak, F3 `DoPaintBorder`, cleanup (Witch typo, dead code, margin default).~~ **DONE — `6111d06`** (same verification; both `--exit` demo runs pass).
+4. **Remaining lower-priority items:** Physics collision-queue cap, terminal password non-ASCII handling, `StartRead` focus folding, unit-cycle refactor, `TCreateControlObject` failed-instance cleanup (codex01.md).
 
 Rebuild + smoke-test after each batch (`lazbuild --build-all --build-mode=Debug tyro.lpi` in `src/`).
