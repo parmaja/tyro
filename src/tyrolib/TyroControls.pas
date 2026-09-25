@@ -59,6 +59,7 @@ type
     csClip,
     csOpaque,
     csFocus, //Can focus
+    csRepeatKeys,
     csHScroll,
     csVScroll
   );
@@ -354,18 +355,24 @@ type
   TTyroEdit = class(TTyroControl)
   private
     FText: utf8string;
+    FPlaceHolder: utf8string;
     FCaretPos: Integer; //codepoint index into FText
     FSelStart: Integer; //selection anchor codepoint, -1 = none
     FSelEnd: Integer;   //selection end codepoint (exclusive), -1 = none
     FScrollPos: Integer;//horizontal scroll offset in pixels
     function PointToCaret(ALocalX: Integer): Integer;
     function TextWidth(const S: utf8string): Single;
+    procedure SetPlaceHolder(AValue: utf8string);
     procedure DeleteSelection;
     procedure EnsureCaretVisible;
   protected
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     function GetText: utf8string; override;
     procedure SetText(const AValue: utf8string); override;
+    //* Placeholder painting, called only while the edit holds no text.
+    //* Override it in a subclass to draw something else than the default
+    //* prompt text at the left edge of the client area.
+    procedure DoDrawPlaceHolder(ACanvas: TTyroCanvas); virtual;
   public
     procedure FocusChanged; override;
     constructor Create(AParent: TTyroLayout); override;
@@ -373,6 +380,9 @@ type
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
     procedure MouseMove(Shift: TShiftState; x, y: integer); override;
+    //* Text shown instead of the (empty) content. Empty (the default) paints
+    //* nothing while the edit is empty.
+    property PlaceHolder: utf8string read FPlaceHolder write SetPlaceHolder;
   end;
 
   { TTyroListBox }
@@ -997,6 +1007,30 @@ begin
   Result := RayLib.MeasureTextEx(Resources.Font.Data, PUTF8Char(S), Resources.Font.Height, 0).x;
 end;
 
+procedure TTyroEdit.SetPlaceHolder(AValue: utf8string);
+begin
+  if FPlaceHolder = AValue then
+    Exit;
+  FPlaceHolder := AValue;
+  Invalidate;
+end;
+
+procedure TTyroEdit.DoDrawPlaceHolder(ACanvas: TTyroCanvas);
+var
+  r: TRect;
+  th: Single;
+begin
+  //Override in a subclass to paint the empty state yourself (see PlaceHolder).
+  if (FPlaceHolder = '') or (Resources = nil) then
+    Exit;
+  r := ClientRect;
+  if (r.Width <= 0) or (r.Height <= 0) then
+    Exit;
+  th := Resources.Font.Height;
+  //Drawn at the text origin, so it lines up with the first typed character.
+  ACanvas.DrawText(2, (r.Height - th) / 2, FPlaceHolder, clGray);
+end;
+
 function TTyroEdit.PointToCaret(ALocalX: Integer): Integer;
 var
   i, n: Integer;
@@ -1097,7 +1131,12 @@ begin
     ACanvas.FillRectangle(selX + 1, 1, selW, r.Height - 2, clBlue.ReplaceAlpha(90));
   end;
 
-  ACanvas.DrawText(2 - FScrollPos, (r.Height - th) / 2, FText, ACanvas.PenColor);
+  if FText = '' then
+    //* Empty: show the prompt instead of nothing, keeping the caret visible
+    //* in front of it.
+    DoDrawPlaceHolder(ACanvas)
+  else
+    ACanvas.DrawText(2 - FScrollPos, (r.Height - th) / 2, FText, ACanvas.PenColor);
 
   if Focused and (Trunc(RayLib.GetTime() * 2) mod 2 = 0) then
   begin

@@ -237,7 +237,8 @@ begin
     Write(' ' + CollectStrings(WorkPaths));
     WriteLn();
   end;
-  Main.RunInMain := HasOption(#0, 'main') or HasOption('m', '');
+  if HasOption(#0, 'main') or HasOption('m', '') then
+    MainOptions := MainOptions + [moInMain];
   // --main is retained for command-line compatibility. Raylib and control
   // calls must remain on the application thread, so scripts still use the
   // worker plus its main-thread dispatch queue.

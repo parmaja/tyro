@@ -326,7 +326,6 @@ type
     Font: TRayFont;
     Config: TConfFile;
     WorkSpace: utf8string;
-    CurrentDirectory: string;
     function GuessFileName(const FileName: string; InDirectory: string = ''): string;
     function Find(const ResName, ResType: string): TTyroResource; overload;
     procedure Load; virtual;
@@ -994,8 +993,8 @@ end;
 constructor TTyroResources.Create;
 begin
   inherited;
-  WorkSpace:= ExtractFilePath(ParamStr(0));
-  CurrentDirectory := GetCurrentDir;
+  //WorkSpace:= ExtractFilePath(ParamStr(0));
+  WorkSpace:= GetCurrentDir;
   Config := TConfFile.Create;
   Font := TRayFont.Create;
   {$include 'font.inc'}
@@ -1019,7 +1018,7 @@ var
 begin
   aFileName := IncludePathDelimiter(WorkSpace) + cConfigFile;
   if not SysUtils.FileExists(aFileName) then
-    aFileName := IncludePathDelimiter(CurrentDirectory) + cConfigFile;
+    aFileName := IncludePathDelimiter(WorkSpace) + cConfigFile;
   try
     if SysUtils.FileExists(aFileName) then
       Config.LoadFromFile(aFileName);
@@ -1045,9 +1044,9 @@ begin
         exit(s);
     end;
 
-    if (InDirectory = '') or (not SameFileName(Resources.CurrentDirectory, InDirectory)) then
+    if (InDirectory = '') or (not SameFileName(Resources.WorkSpace, InDirectory)) then
     begin
-      s := IncludePathDelimiter(Resources.CurrentDirectory) + FileName;
+      s := IncludePathDelimiter(Resources.WorkSpace) + FileName;
       if SysUtils.FileExists(s) then
         exit(s);
     end;

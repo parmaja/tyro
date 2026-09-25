@@ -97,7 +97,7 @@ type
 
   { TTyroMain }
 
-  TTyroMainOption = (moOpaque, moMainWindow, moTerminal, moShowFPS);
+  TTyroMainOption = (moOpaque, moMainWindow, moInMain, moTerminal, moShowFPS);
   TTyroMainOptions = set of TTyroMainOption;
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: string) of object;
@@ -236,7 +236,6 @@ type
     procedure QueueScreenshot(const AFileName: String);
 
   public
-    RunInMain: Boolean;
     RunFile: string;//that to run in ScriptThread
     //Board is a canvas for ScriptThread draw on it
     Console: TTyroTerminal;
@@ -735,7 +734,6 @@ begin
   FOptions := [moOpaque];
   Name := 'Main';
   Resources := TTyroResources.Create;
-  Resources.WorkSpace := ExtractFilePath(ParamStr(0));
   FCanvasLock := TCriticalSection.Create;
   //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
   //loop signals it after every EndDrawing.
@@ -782,6 +780,7 @@ begin
   //follows window resizes. Hidden until the user presses F4.
   FFileList := TTyroFileList.Create(Self);
   FFileList.Name := 'FileList';
+  FFileList.PlaceHolder := 'No Files';
   FFileList.BoundsRect := Rect(0, 0, 360, 280);
   FFileList.Visible := False;
   FFileList.OnPick := FileListPicked;
@@ -862,7 +861,7 @@ begin
         if LeftStr(RunFile, 1) = '.' then
           RunFile := ExpandFileName(Resources.WorkSpace + RunFile);
         aScript.LoadFile(RunFile);
-        Resources.CurrentDirectory := ExtractFilePath(RunFile);
+        Resources.WorkSpace := ExtractFilePath(RunFile);
       //Raylib drawing/input/audio must continue on this thread. Keep the
       //loaded script as an editable template and execute a worker clone,
       //including legacy --main requests.
@@ -1233,8 +1232,7 @@ begin
   //List the scripts of the current directory first (same source as the console
   //"list" and "load" commands); fall back to the workspace so F4 still finds
   //demos when the engine was launched without a script from an empty folder.
-  if FFileList.Refresh(Resources.CurrentDirectory, '*.ls') = 0 then
-    FFileList.Refresh(Resources.WorkSpace, '*.ls');
+  FFileList.Refresh(Resources.WorkSpace, '*.ls');
 end;
 
 procedure TTyroMain.ShowFileList;
@@ -1304,7 +1302,7 @@ begin
   StopScriptThread;
   FreeAndNil(FScriptMain);
   FScriptMain := aScript;
-  Resources.CurrentDirectory := ExtractFilePath(AFileName);
+  Resources.WorkSpace := ExtractFilePath(AFileName);
   HideFileList;
   Console.Writeln('Loaded: ' + ExtractFileName(AFileName) + '. Type "run" to execute it.');
   if not Console.Visible then
@@ -1563,8 +1561,8 @@ var
   sr: TSearchRec;
   aFile: string;
 begin
-  Console.Writeln('Directory: ' + Resources.CurrentDirectory);
-  DirPath := ExcludeTrailingPathDelimiter(Resources.CurrentDirectory);
+  Console.Writeln('Directory: ' + Resources.WorkSpace);
+  DirPath := ExcludeTrailingPathDelimiter(Resources.WorkSpace);
   if Params.Count > 0 then
     aFile := Params[0]
   else
@@ -1637,7 +1635,7 @@ begin
 
   aFile := Params[0];
   aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(aFile));
-  aFileName := IncludePathDelimiter(Resources.CurrentDirectory) + aFile;
+  aFileName := IncludePathDelimiter(Resources.WorkSpace) + aFile;
 
   if SysUtils.FileExists(aFileName) then
   begin
