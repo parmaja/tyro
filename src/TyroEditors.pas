@@ -646,50 +646,54 @@ end;
 
 procedure TyroEditor.InsertText(const S: string);
 var
-  T, Parts: string;
+  T, Head, Tail: string;
   Segments: array of string;
-  I, L, Col: Integer;
+  I, L, Col, Start, P, Nl: Integer;
 begin
   if S = '' then
     Exit;
   T := StringReplace(S, #13#10, #10, [rfReplaceAll]);
   T := StringReplace(T, #13, #10, [rfReplaceAll]);
-  //split preserving tractions
-  Parts := T;
-  SetLength(Segments, 0);
-  while Parts <> '' do
+  { Split into one segment per line: "a", LF, "b" gives "a" and "b", and text
+    ending with a line feed keeps a final empty segment. That is what makes a
+    bare LF (the Enter key) break the line instead of inserting nothing. }
+  Nl := 0;
+  for I := 1 to Length(T) do
+    if T[I] = #10 then
+      Inc(Nl);
+  SetLength(Segments, Nl + 1);
+  Start := 1;
+  for I := 0 to Nl - 1 do
   begin
-    I := Pos(#10, Parts);
-    if I > 0 then
-    begin
-      SetLength(Segments, Length(Segments) + 1);
-      Segments[High(Segments)] := Copy(Parts, 1, I - 1);
-      Delete(Parts, 1, I);
-    end
-    else
-    begin
-      SetLength(Segments, Length(Segments) + 1);
-      Segments[High(Segments)] := Parts;
-      Parts := '';
-    end;
+    P := PosEx(#10, T, Start);
+    Segments[I] := Copy(T, Start, P - Start);
+    Start := P + 1;
   end;
-  if Length(Segments) = 0 then
-    Exit;
+  Segments[Nl] := Copy(T, Start, Length(T) - Start + 1);
+
+  { Split the caret line so the text after the caret follows the insert }
   L := FCaretLine;
   Col := FCaretCol;
-  for I := 0 to High(Segments) do
+  Head := CPSub(FLines[L], 0, Col);
+  Tail := CPSub(FLines[L], Col, CPCount(FLines[L]) - Col);
+  if Nl = 0 then
   begin
-    if I = 0 then
-      FLines[L] := CPInsert(FLines[L], Col, Segments[I])
-    else
+    FLines[L] := Head + Segments[0] + Tail;
+    FCaretCol := Col + CPCount(Segments[0]);
+  end
+  else
+  begin
+    FLines[L] := Head + Segments[0];
+    for I := 1 to Nl do
     begin
-      Inc(L);
-      FLines.Insert(L, Segments[I]);
+      if I = Nl then
+        FLines.Insert(L + I, Segments[I] + Tail)
+      else
+        FLines.Insert(L + I, Segments[I]);
     end;
-    Col := CPCount(Segments[I]);
+    FCaretLine := L + Nl;
+    FCaretCol := CPCount(Segments[Nl]);
   end;
-  FCaretLine := L;
-  FCaretCol := CPCount(Segments[High(Segments)]);
   FDesiredCol := FCaretCol;
 end;
 
@@ -1576,7 +1580,7 @@ begin
         Close;
         Key := KEY_NULL;
       end;
-    KEY_ENTER:
+    KEY_ENTER, KEY_KP_ENTER:
       begin
         BeginEdit;
         if IsSelecting then
