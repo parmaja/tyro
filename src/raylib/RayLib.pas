@@ -1508,7 +1508,7 @@ var
   // Get mouse wheel movement for both X and Y
   GetMouseWheelMoveV: function: TVector2; cdecl = nil;
   // Set mouse cursor
-  SetMouseCursor: procedure(Cursor: Integer); cdecl = nil;
+  SetMouseCursor: procedure(Cursor: TMouseCursor); cdecl = nil;
 
   { Input-related functions: touch }
 

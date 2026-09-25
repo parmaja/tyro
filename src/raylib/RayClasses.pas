@@ -18,7 +18,7 @@ unit RayClasses;
 interface
 
 uses
-  Classes, SysUtils, Contnrs, Math,
+  Classes, SysUtils, Contnrs, Types, Math,
   mnLogs, mnClasses, mnUtils,
   mnBDF,
   RayLib;
@@ -30,6 +30,13 @@ const
   cNumChar   = 95;      // ASCII 32..126 is 95 glyphs
 
 type
+
+  { TRectHelper }
+
+  TRectHelper = record helper for TRect
+    function ToString: string;
+  end;
+
   TRayObject = class(TObject)
   public
     ID: Integer;
@@ -433,6 +440,13 @@ begin
     Sound := Default(TSound);
   end;
   inherited;
+end;
+
+{ TRectHelper }
+
+function TRectHelper.ToString: string;
+begin
+  Result := Format('(%d, %d, %d, %d)', [Self.Left, Self.Top, Self.Right, Self.Bottom]);
 end;
 
 { TRayUpdateList }

@@ -25,6 +25,7 @@ program tyro;
  *}
 
 {$mode objfpc}
+{$modeswitch advancedrecords}
 {$H+}
 
 uses

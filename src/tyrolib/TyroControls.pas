@@ -116,13 +116,15 @@ type
     procedure SetParent(AValue: TTyroLayout);
     procedure SetMargin(AValue: Integer);
     procedure SetWidth(AValue: Integer);
+    procedure SetVisible(AValue: Boolean);
   protected
-    procedure SetVisible(AValue: Boolean); virtual;
+    procedure VisibleChanged; virtual;
+    procedure SizeChanged; virtual;
+
     procedure SetBoundsRect(AValue: TRect);
     procedure SetWindowRect(AValue: TRect);
 
     procedure Resize;
-    procedure Resized; virtual;
 
     procedure AddControl(AControl: TTyroLayout);
     procedure PaintWindow(ACanvas: TTyroCanvas); virtual;
@@ -204,7 +206,7 @@ type
     procedure SetText(const AValue: utf8string); virtual;
     function GetChecked: Boolean; virtual;
     procedure SetChecked(AValue: Boolean); virtual;
-    //* Edges which may be resized when hovering at the local point (X, Y).
+    //* Edges which may be SizeChanged when hovering at the local point (X, Y).
     //* brdSizable honors the Align constraint: aligned controls only expose the
     //* single free edge, alClient exposes none, alNone exposes all four.
     function GetResizeSides(X, Y: Integer): TTyroResizeSides;
@@ -379,7 +381,7 @@ type
     procedure UpdateScrollBars;
   protected
     procedure DoPaint(ACanvas: TTyroCanvas); override;
-    procedure Resized; override;
+    procedure SizeChanged; override;
     procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
     //* Custom per-item painting, called for every visible item when CustomDraw
@@ -564,7 +566,8 @@ end;
 procedure TTyroLayout.AfterConstruction;
 begin
   inherited;
-  FState := FState + [csCreating];
+  FState := FState - [csCreating];
+  AlignControls;
 end;
 
 procedure TTyroLayout.Realign;
@@ -1160,7 +1163,7 @@ constructor TTyroListBox.Create(AParent: TTyroLayout);
 begin
   inherited;
   //Allocate the item list first: any property change below that resizes the
-  //control (Border, BoundsRect) runs Resized -> ClampTop -> GetMaxTop, which
+  //control (Border, BoundsRect) runs SizeChanged -> ClampTop -> GetMaxTop, which
   //reads FItems.
   FItems := TStringList.Create;
   Style := [csClip, csOpaque, csVScroll, csFocus];
@@ -1344,7 +1347,7 @@ begin
     ShowScrollBar([sbtVertical], False);
 end;
 
-procedure TTyroListBox.Resized;
+procedure TTyroListBox.SizeChanged;
 begin
   inherited;
   ClampTop;
@@ -1465,10 +1468,10 @@ begin
   if not(lsAligning in State) then
     Realign;
   AlignControls;
-  Resized;
+  SizeChanged;
 end;
 
-procedure TTyroLayout.Resized;
+procedure TTyroLayout.SizeChanged;
 begin
 end;
 
@@ -1580,6 +1583,11 @@ procedure TTyroLayout.SetVisible(AValue: Boolean);
 begin
   if FVisible=AValue then Exit;
   FVisible:=AValue;
+  VisibleChanged;
+end;
+
+procedure TTyroLayout.VisibleChanged;
+begin
 end;
 
 procedure TTyroLayout.SetWidth(AValue: Integer);
@@ -2048,7 +2056,7 @@ begin
   begin
     FResizing := False;
     FResizeSides := [];
-    RayLib.SetMouseCursor(Ord(MOUSE_CURSOR_DEFAULT));
+    RayLib.SetMouseCursor(MOUSE_CURSOR_DEFAULT);
   end;
 end;
 
@@ -2099,15 +2107,15 @@ begin
     begin
       FResizing := False;
       FResizeSides := [];
-      RayLib.SetMouseCursor(Ord(MOUSE_CURSOR_DEFAULT));
+      RayLib.SetMouseCursor(MOUSE_CURSOR_DEFAULT);
     end;
-    RayLib.SetMouseCursor(Ord(GetCursorForSides(FResizeSides)));
+    RayLib.SetMouseCursor(GetCursorForSides(FResizeSides));
   end
   else if Border = brdSizable then
   begin
     sides := GetResizeSides(x, y);
     if sides <> [] then
-      RayLib.SetMouseCursor(Ord(GetCursorForSides(sides)));
+      RayLib.SetMouseCursor(GetCursorForSides(sides));
   end;
 end;
 

@@ -145,7 +145,7 @@ type
     procedure SetCaretVisible(AValue: Boolean);
   protected
     procedure UpdateSizes;
-    procedure Resized; override;
+    procedure SizeChanged; override;
     procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
   public
     constructor Create(AParent: TTyroLayout); override;
@@ -312,7 +312,7 @@ begin
     FCharHeight := CDefaultCharHeight;
 end;
 
-procedure TTyroTerminal.Resized;
+procedure TTyroTerminal.SizeChanged;
 begin
   inherited;
   ClampScroll;

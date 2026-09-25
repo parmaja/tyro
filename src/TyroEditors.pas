@@ -127,7 +127,7 @@ type
     procedure DrawStatus(ACanvas: TTyroCanvas);
     procedure DrawCaret(ACanvas: TTyroCanvas);
   protected
-    procedure Resized; override;
+    procedure SizeChanged; override;
     procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
   public
     constructor Create(AParent: TTyroLayout); override;
@@ -425,7 +425,7 @@ begin
   Invalidate;
 end;
 
-procedure TyroEditor.Resized;
+procedure TyroEditor.SizeChanged;
 begin
   inherited;
   ScrollCaretVisible;

@@ -408,6 +408,7 @@ begin
 
   Resources.Load;
 
+  Start;
   {if Resources.Config.Sections.ReadBool('show', 'console', False) then
   begin
     ShowConsole(0, 0, 0, 0);
@@ -416,8 +417,6 @@ begin
 
   if Resources.Config.Sections.ReadBool('show', 'log', False) then
     Output.Show;}
-
-  Start;
   repeat
     CheckSynchronize;
     if WindowShouldClose() then
@@ -1040,7 +1039,7 @@ begin
   //* Mouse routing: move is sent to the control under the cursor every frame;
   //* once a left press lands inside a control the pointer is captured to it
   //* (keeps tracking the cursor while dragging a sizable border) until release.
-  RayLib.SetMouseCursor(Ord(MOUSE_CURSOR_DEFAULT));
+  RayLib.SetMouseCursor(MOUSE_CURSOR_DEFAULT);
   mp := RayLib.GetMousePosition;
 
   mx := Round(mp.X);
@@ -1224,16 +1223,7 @@ end;
 
 procedure TTyroMain.ShowConsole(AX, AY, AWidth, AHeight: Integer);
 begin
-  //w/h are character cells (console.show from Lua); the char size may not be
-  //installed yet, so set it before computing the pixel rect.
-  Console.CharWidth := Resources.Font.Width;
-  Console.CharHeight := Resources.Font.Height;
-  if (AWidth <= 0) or (AHeight <= 0) then
-  begin
-    AWidth := 80;
-    AHeight := 25;
-  end;
-  Console.BoundsRect := Rect(AX, AY, AX + AWidth * Console.CharWidth, AY + AHeight * Console.CharHeight);
+  Console.BoundsRect := Rect(AX, AY, AX + AWidth, AY + AHeight);
   ShowConsole;
 end;
 
@@ -1242,9 +1232,11 @@ begin
   Console.CharWidth := Resources.Font.Width;
   Console.CharHeight := Resources.Font.Height;
   Console.Show;
-  StartConsoleRead;
+  Console.BringToFront;
   //Route typed input to the console now that it is visible.
   Console.Focused := True;
+
+  StartConsoleRead;
 end;
 
 procedure TTyroMain.HideConsole;
@@ -1260,13 +1252,7 @@ begin
   if Console.Visible then
     HideConsole
   else
-  begin
     ShowConsole;
-    //The console owns the screen while shown: hide the log panel so the two
-    //debug panels don't pile up (F8 and F7 each show only their own panel).
-    if Output.Visible then
-      Output.Visible := False;
-  end;
 end;
 
 procedure TTyroMain.RefreshFileList;
@@ -1374,13 +1360,7 @@ procedure TTyroMain.ToggleOutput;
 begin
   Output.Visible := not Output.Visible;
   if Output.Visible then
-  begin
     Output.BringToFront;
-    //The log owns the screen while shown: hide the console so the two debug
-    //panels don't pile up (F7 and F8 each show only their own panel).
-    if Console.Visible then
-      HideConsole;
-  end;
 end;
 
 procedure TTyroMain.ShowEditor;
@@ -1397,7 +1377,7 @@ begin
   Editor.BoundsRect := Rect(0, 0, Width, Height);
   Editor.Margin := 10;
   Editor.BackColor := clBlack;
-  Editor.Visible := True;
+  Editor.Show;
   Editor.Focused := True;
 end;
 
@@ -1410,12 +1390,7 @@ begin
       Editor.SaveSource(FScriptMain.Source);
       ReloadAndRunScript;
     end;
-    Editor.Visible := False;
-    if Console.Visible then
-    begin
-      Console.Focused := True;
-      StartConsoleRead;
-    end;
+    Editor.Hide;
   end;
 end;
 
