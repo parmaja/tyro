@@ -16,7 +16,8 @@ window.show(640, 480)
 spectrum.show(0, 82, 640, 260)
 spectrum.bars = 32
 
-radio.play("http://countrymusic24.powerstream.de:9000")
+--radio.play("http://countrymusic24.powerstream.de:9000")
+radio.play("http://solid24.streamupsolutions.com:8026/stream")
 --radio.play("https://streams.80s80s.de/techno/mp3-192")
 --radio.play("https://stream04.pcradio.app/vangelis-med")
 --radio.play("https://server.emancity.com:9992/stream")

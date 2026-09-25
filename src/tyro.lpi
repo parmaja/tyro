@@ -128,6 +128,13 @@
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
+    <Debugger>
+      <ClassConfig Version="1">
+        <Config ConfigName="New" ConfigClass="TFpDebugDebugger" Active="True" UID="{85B6FD9F-BDCA-4930-8BD8-A37A567749C9}">
+          <Properties NextOnlyStopOnStartLine="True" AutoDeref="True"/>
+        </Config>
+      </ClassConfig>
+    </Debugger>
   </ProjectOptions>
   <CompilerOptions>
     <Version Value="11"/>
@@ -161,7 +168,7 @@
       </Debugging>
     </Linking>
     <Other>
-      <CustomOptions Value="-DDebug -Xm"/>
+      <CustomOptions Value="-DDebug"/>
     </Other>
   </CompilerOptions>
   <Debugging>

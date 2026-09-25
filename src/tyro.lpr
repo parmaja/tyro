@@ -205,7 +205,8 @@ begin
     exit;
   end;
 
-  InstallConsoleLog;
+  if RunConsole then
+    InstallConsoleLog;
 
   if HasOption(#0, 'debug') or HasOption('d', '') then
     IsDebug := True;

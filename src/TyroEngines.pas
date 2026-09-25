@@ -27,7 +27,7 @@ const
   sPromptChar: UTF8string = '>';
   sPromptDOT: UTF8string = '*';
 
-  cMainMargin = 32;
+  cMainMargin = 16;
   cDefaultWindowWidth = 640;
   cDefaultWindowHeight = 480;
 
@@ -380,7 +380,7 @@ procedure TTyroMain.HideWindow;
 begin
   if Visible then
   begin
-    Visible := False;
+    Hide;
     // Keep the graphics context alive until destruction. Canvases, shaders,
     // textures and fonts must be unloaded before CloseWindow.
     if RayLib.IsWindowReady then
@@ -733,14 +733,14 @@ begin
   RayLibrary.Load;
   FControlCapture := nil;
   FOptions := [moOpaque];
+  Name := 'Main';
   Resources := TTyroResources.Create;
   Resources.WorkSpace := ExtractFilePath(ParamStr(0));
   FCanvasLock := TCriticalSection.Create;
   //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
   //loop signals it after every EndDrawing.
   FFrameEvent := TEvent.Create(nil, False, False, '');
-  BoundsRect.Width := ScreenWidth;
-  BoundsRect.Height := ScreenHeight;
+  BoundsRect := Rect(0, 0, ScreenWidth, ScreenHeight);
   FBackColor := clCornflowerBlue;
 
   //Configured margin only; absent key must not clobber the default with 0.
@@ -826,8 +826,6 @@ begin
 end;
 
 procedure TTyroMain.PrepareWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
-var
-  pos: TVector2;
 begin
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
@@ -839,9 +837,7 @@ begin
   //SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   RayLib.InitWindow(AWidth, AHeight, PUTF8Char(Title));
-  pos := RayLib.GetWindowPosition(GetCurrentMonitor);
-  BoundsRect := Rect(round(pos.X), round(pos.Y), AWidth, AHeight);
-
+  BoundsRect := Rect(0, 0, AWidth, AHeight);
   PrepareCanvas;
   Board := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin), True);
   FPrepared := True;
@@ -1138,7 +1134,6 @@ procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
 var
   pos: TVector2;
 begin
-  Visible := True;
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
   if AHeight = 0 then
@@ -1148,9 +1143,9 @@ begin
     SetConfigFlags([FLAG_WINDOW_RESIZABLE]);
 
   RayLib.SetWindowSize(AWidth, AHeight);
+  BoundsRect := Rect(0, 0, AWidth, AHeight);
 
-  pos := RayLib.GetWindowPosition(GetCurrentMonitor);
-  BoundsRect := Rect(round(pos.X), round(pos.Y), AWidth, AHeight);
+  Show;
   ClearWindowState([FLAG_WINDOW_HIDDEN]);
   ShowCursor();
 end;
@@ -1225,6 +1220,8 @@ end;
 
 procedure TTyroMain.ToggleConsole;
 begin
+  WriteLn('BoundsRect: ' + BoundsRect.ToString);
+  WriteLn('WindowRect' + WindowRect.ToString);
   if Console.Visible then
     HideConsole
   else
@@ -1341,15 +1338,13 @@ end;
 
 procedure TTyroMain.ShowEditor;
 begin
-  if FScriptMain = nil then
-  begin
-    Log.Writeln('No script loaded. Use "load <script>" first.');
-    Exit;
-  end;
   //Stop the worker before editing its source template.
   StopScriptThread;
-  Editor.FileName := FScriptMain.FileName;
-  Editor.LoadSource(FScriptMain.Source);
+  if FScriptMain <> nil then
+  begin
+    Editor.FileName := FScriptMain.FileName;
+    Editor.LoadSource(FScriptMain.Source);
+  end;
   Editor.BoundsRect := Rect(0, 0, Width, Height);
   Editor.Margin := 10;
   Editor.BackColor := clBlack;
@@ -1856,7 +1851,7 @@ begin
 end;
 
 initialization
-  Main := TTyroMain.Create(nil);
+  Main := TTyroMain.Create;
 finalization
   FreeAndNil(Main);
 end.

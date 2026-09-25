@@ -234,7 +234,7 @@ end;
 constructor TyroEditor.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Style := [csClip, csOpaque, csHScroll, csVScroll];
+  Style := [csClip, csOpaque, csFocus, csHScroll, csVScroll];
   FLines := TStringList.Create;
   FLines.Add('');
   FUndo := TStringList.Create;
