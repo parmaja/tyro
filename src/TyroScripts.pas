@@ -220,6 +220,24 @@ type
     procedure DoExecute; override;
   end;
 
+  TSetControlAlignObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FAlign: TAlign;
+  public
+    constructor Create(AControl: TTyroControl; AAlign: TAlign);
+    procedure DoExecute; override;
+  end;
+
+  TSetControlParentObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FParent: TTyroLayout;
+  public
+    constructor Create(AControl: TTyroControl; AParent: TTyroLayout);
+    procedure DoExecute; override;
+  end;
+
   { ListBox helpers: the list box is painted by the main cycle, so every
     mutation is marshalled to the main thread like the other control setters. }
 
@@ -1179,6 +1197,37 @@ procedure TSetControlNameObject.DoExecute;
 begin
   FControl.Name := FName;
 end;
+
+{ TSetControlAlignObject }
+
+constructor TSetControlAlignObject.Create(AControl: TTyroControl;
+  AAlign: TAlign);
+begin
+  inherited Create;
+  FControl := AControl;
+  FAlign := AAlign;
+end;
+
+procedure TSetControlAlignObject.DoExecute;
+begin
+  FControl.Align := FAlign;
+end;
+
+{ TSetControlParentObject }
+
+constructor TSetControlParentObject.Create(AControl: TTyroControl;
+  AParent: TTyroLayout);
+begin
+  inherited Create;
+  FControl := AControl;
+  FParent := AParent;
+end;
+
+procedure TSetControlParentObject.DoExecute;
+begin
+  FControl.Parent := FParent;
+end;
+
 { TSetControlItemsObject }
 
 constructor TSetControlItemsObject.Create(AControl: TTyroControl; AItems: TStringList);

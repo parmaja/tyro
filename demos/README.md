@@ -67,6 +67,7 @@ tyro demos/pong.lua
 | File | Feature |
 |------|---------|
 | `controls.ls` | Generic control table: `controls.new('button'/'label'/'checkbox'/'edit'/'panel', ...)` with text, checked, position/size, visible, hover/down/clicked, focus, border, backcolor, name |
+| `controls_align.ls` | Nested aligned controls: a panel docked left, buttons docked to its top, and one button docked to its bottom; resizing reflows the whole tree |
 
 ### Text
 

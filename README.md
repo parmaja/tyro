@@ -316,6 +316,45 @@ shader.value = 0.8
 shader.area  = {0, 0, canvas.width, canvas.height}
 ```
 
+# Controls
+
+Controls are created by class name and are owned by the control tree. Panels are
+containers, so a control can be nested inside another control with
+`controls.parent`.
+
+```lua
+panel = controls.new("panel", "", 0, 0, 240, 300)
+controls.align(panel, "left")
+
+top = controls.new("button", "Top", 0, 0, 180, 40)
+controls.parent(top, panel)
+controls.align(top, "top")
+
+bottom = controls.new("button", "Bottom", 0, 0, 180, 40)
+controls.parent(bottom, panel)
+controls.align(bottom, "bottom")
+```
+
+| Function | Description |
+|----------|-------------|
+| `controls.new(class, caption, x, y, w, h, name?)` | Create a `button`, `panel`, `label`, `checkbox`, `edit`, `spectrum`, or `listbox`; returns a handle |
+| `controls.align(handle [, value])` | Get/set `none`, `left`, `top`, `right`, `bottom`, or `client` |
+| `controls.parent(handle [, parentHandle])` | Get/set the container; the getter returns `0` for the main window, and `nil`/`0` moves the control there |
+| `controls.width/height(handle [, value])` | Get/set the preferred size |
+| `controls.position/move(handle, x, y)` | Get/set the preferred position |
+| `controls.text/caption(handle [, value])` | Get/set a caption, label, or edit value |
+| `controls.visible/show/hide(handle)` | Show or hide a control; hidden aligned controls release their space |
+| `controls.hover/down/clicked(handle)` | Read mouse state |
+| `controls.border(handle [, style])` | `0` none, `1` thin, `2` thick, `3` sizable |
+| `controls.backcolor(handle [, color])` | Set a color from the `colors` table |
+
+`BoundsRect` stores a control's preferred position and size. Docking changes only
+its effective `WindowRect`, so `controls.width`, `controls.height`, and
+`controls.position` keep reporting the preferred geometry. Changing a child's
+size realigns its siblings, and resizing the main window propagates through
+every container level. See `demos/controls_align.ls` for a left-docked panel
+with top- and bottom-docked buttons.
+
 # Timing
 
 | Function | Returns | Description |
@@ -368,6 +407,8 @@ tyro demos/<name>.lua
 | `demos/animated_demo.lua` | Animation loop with random colors and sleep timing |
 | `demos/cycle_demo.lua` | Per-frame loop using `while cycle do` — one drawing per frame |
 | `demos/sprites_demo.lua` | Sprites system: load, show, hide, move, rotate, scale, named access |
+| `demos/controls.ls` | Generic buttons, labels, checkboxes, edits, and panels |
+| `demos/controls_align.ls` | Nested controls: a left-docked panel with top- and bottom-docked buttons |
 | `demos/aseprites_demo.ls` | Aseprite animations: load `.aseprite` files (all frames as textures), `play(fps)`, `stop`, `looping`, per-frame stepping — idle/walk/run showcase |
 | `demos/interactive_paint.lua` | Mouse drawing with keyboard color switching (uses input APIs) |
 | `demos/console_demo.lua` | Console output: print, println, log |

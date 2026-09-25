@@ -113,13 +113,14 @@ type
     procedure SetAlign(AValue: TAlign);
     procedure SetBorder(AValue: TBorder);
     procedure SetHeight(AValue: Integer);
-    procedure SetParent(AValue: TTyroLayout);
     procedure SetMargin(AValue: Integer);
     procedure SetWidth(AValue: Integer);
     procedure SetVisible(AValue: Boolean);
+    procedure SetParent(AValue: TTyroLayout);
   protected
     procedure VisibleChanged; virtual;
     procedure SizeChanged; virtual;
+    procedure ParentChanged; virtual;
 
     procedure SetBoundsRect(AValue: TRect);
     procedure SetWindowRect(AValue: TRect);
@@ -186,11 +187,11 @@ type
     FVDragOfs: Integer;
     function GetFocused: Boolean;
     procedure SetBackColor(AValue: TColor);
-    procedure SetWindow(AValue: TTyroWindow);
     procedure SetCanvas(AValue: TTyroCanvas);
     procedure SetFocused(AValue: Boolean);
   protected
     Style: TTyroControlStyles;
+    procedure ParentChanged; override;
     function GetClientRect: TRect;
     //* Mouse-over/press/click state used by interactive controls. CheckState is
     //* called from DoPaint; Hover/Down/Clicked are readable after the call.
@@ -235,7 +236,7 @@ type
     procedure DoPaint(ACanvas: TTyroCanvas); virtual;
 
     procedure Created; override;
-    property Window: TTyroWindow read FWindow write SetWindow;
+    property Window: TTyroWindow read FWindow;
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -250,6 +251,11 @@ type
     //Move the control to the end of the parent's control list (drawn last, on
     //top) when it is not aligned
     procedure BringToFront;
+
+    //* Return the top-most visible control at a window-coordinate point.
+    //* Children are tested before their container and siblings are tested in
+    //* reverse paint order.
+    function MouseTargetAt(AX, AY: Integer): TTyroControl;
 
     procedure KeyPress(var Key: TUTF8Char); virtual;
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); virtual;
@@ -495,20 +501,62 @@ begin
 end;
 
 procedure TTyroLayout.SetHeight(AValue: Integer);
+var
+  aRect: TRect;
 begin
-  FBoundsRect.Height := AValue;
-  Resize;
+  aRect := BoundsRect;
+  aRect.Height := AValue;
+  SetBoundsRect(aRect);
+end;
+
+function IsSelfOrAncestor(ARoot, ALayout: TTyroLayout): Boolean;
+var
+  aCurrent: TTyroLayout;
+begin
+  Result := False;
+  aCurrent := ARoot;
+  while aCurrent <> nil do
+  begin
+    if aCurrent = ALayout then
+      Exit(True);
+    aCurrent := aCurrent.Parent;
+  end;
+end;
+
+function FindWindow(ALayout: TTyroLayout): TTyroWindow;
+var
+  aCurrent: TTyroLayout;
+begin
+  aCurrent := ALayout;
+  while aCurrent <> nil do
+  begin
+    if aCurrent is TTyroWindow then
+      Exit(TTyroWindow(aCurrent));
+    aCurrent := aCurrent.Parent;
+  end;
+  Result := nil;
 end;
 
 procedure TTyroLayout.SetParent(AValue: TTyroLayout);
+var
+  aOldParent: TTyroLayout;
 begin
+  //A control cannot become its own parent (directly or through its subtree).
+  if (AValue = Self) then
+    Exit;
+
   if FParent = AValue then
     Exit;
-  if FParent <> nil then
-    FParent.Controls.Extract(Self);
-  FParent :=AValue;
+
+  aOldParent := FParent;
+  if aOldParent <> nil then
+    aOldParent.Controls.Extract(Self);
+
+  FParent := AValue;
   if FParent <> nil then
     FParent.AddControl(Self);
+  ParentChanged;
+  FParent.AlignControls;
 end;
 
 procedure TTyroLayout.AddControl(AControl: TTyroLayout);
@@ -566,7 +614,7 @@ end;
 procedure TTyroLayout.AfterConstruction;
 begin
   inherited;
-  FState := FState - [csCreating];
+  FState := FState - [csCreating] + [csCreated];
   AlignControls;
 end;
 
@@ -586,49 +634,55 @@ var
   aRect: TRect;
 begin
   //* Align child controls within this parent's WindowRect.
-  //* Each child's WindowRect is updated to position it according
-  //* to its Align property.
-  if FControls = nil then
+  //* Alignment only changes each child's effective WindowRect. BoundsRect
+  //* remains the control's original/preferred geometry.
+  if (FControls = nil) or (csCreating in State) or (csDestroying in State) then
     Exit;
 
   aRect := FWindowRect;
 
   for aControl in FControls do
   begin
-    if aControl.Align <> alNone then
-      aControl.FState := aControl.FState + [lsAligning];
-    try
-      case aControl.Align of
-        alLeft:
-        begin
-          aControl.SetWindowRect(Rect(aRect.Left, aRect.Top, aRect.Left + aControl.WindowRect.Width, aRect.Bottom));
-          aRect.Left := aRect.Left + aControl.WindowRect.Width;
-        end;
-        alTop:
-        begin
-          aControl.SetWindowRect(Rect(aRect.Left, aRect.Top, aRect.Right, aRect.Top + aControl.WindowRect.Height));
-          aRect.Top := aRect.Top + aControl.WindowRect.Height;
-        end;
-        alRight:
-        begin
-          aControl.SetWindowRect(Rect(aRect.Right - aControl.WindowRect.Width, aRect.Top, aRect.Right, aRect.Bottom));
-          aRect.Right := aRect.Right - aControl.WindowRect.Width;
-        end;
-        alBottom:
-        begin
-          aControl.SetWindowRect(Rect(aRect.Left, aRect.Bottom - aControl.WindowRect.Height, aRect.Right, aRect.Bottom));
-          aRect.Bottom := aRect.Bottom - aControl.WindowRect.Height;
-        end;
-        alClient:
-        begin
-          aControl.SetWindowRect(aRect);
-        end;
-        alNone:
-          aControl.SetWindowRect(aControl.BoundsRect);
-      end;
-    finally
+    //Controls that are not fully constructed must not be aligned yet. Hidden
+    //controls do not consume space in the remaining alignment rectangle.
+    if aControl.Visible and not (csCreating in aControl.State)
+      and not (csDestroying in aControl.State) then
+    begin
       if aControl.Align <> alNone then
-        aControl.FState := aControl.FState - [lsAligning];
+        aControl.FState := aControl.FState + [lsAligning];
+      try
+        case aControl.Align of
+          alLeft:
+          begin
+            aControl.SetWindowRect(Rect(aRect.Left, aRect.Top, aRect.Left + aControl.WindowRect.Width, aRect.Bottom));
+            aRect.Left := aRect.Left + aControl.WindowRect.Width;
+          end;
+          alTop:
+          begin
+            aControl.SetWindowRect(Rect(aRect.Left, aRect.Top, aRect.Right, aRect.Top + aControl.WindowRect.Height));
+            aRect.Top := aRect.Top + aControl.WindowRect.Height;
+          end;
+          alRight:
+          begin
+            aControl.SetWindowRect(Rect(aRect.Right - aControl.WindowRect.Width, aRect.Top, aRect.Right, aRect.Bottom));
+            aRect.Right := aRect.Right - aControl.WindowRect.Width;
+          end;
+          alBottom:
+          begin
+            aControl.SetWindowRect(Rect(aRect.Left, aRect.Bottom - aControl.WindowRect.Height, aRect.Right, aRect.Bottom));
+            aRect.Bottom := aRect.Bottom - aControl.WindowRect.Height;
+          end;
+          alClient:
+          begin
+            aControl.SetWindowRect(aRect);
+          end;
+          alNone:
+            aControl.SetWindowRect(aControl.BoundsRect);
+        end;
+      finally
+        if aControl.Align <> alNone then
+          aControl.FState := aControl.FState - [lsAligning];
+      end;
     end;
   end;
 end;
@@ -1449,7 +1503,7 @@ end;
 
 procedure TTyroLayout.SetBoundsRect(AValue: TRect);
 begin
-  if FBoundsRect=AValue then
+  if FBoundsRect = AValue then
     Exit;
   FBoundsRect := AValue;
   if Align = alNone then
@@ -1473,6 +1527,11 @@ end;
 
 procedure TTyroLayout.SizeChanged;
 begin
+end;
+
+procedure TTyroLayout.ParentChanged;
+begin
+
 end;
 
 function GetCursorForSides(Sides: TTyroResizeSides): TMouseCursor;
@@ -1575,8 +1634,9 @@ end;
 
 procedure TTyroLayout.SetMargin(AValue: Integer);
 begin
-  if FMargin=AValue then Exit;
-  FMargin:=AValue;
+  if FMargin = AValue then
+    Exit;
+  FMargin := AValue;  
 end;
 
 procedure TTyroLayout.SetVisible(AValue: Boolean);
@@ -1588,18 +1648,29 @@ end;
 
 procedure TTyroLayout.VisibleChanged;
 begin
+  if (Parent <> nil) then
+    Parent.AlignControls;
 end;
 
 procedure TTyroLayout.SetWidth(AValue: Integer);
+var
+  aRect: TRect;
 begin
-  FBoundsRect.Width := AValue;
-  Resize;
+  aRect := BoundsRect;
+  aRect.Width := AValue;
+  SetBoundsRect(aRect);
 end;
 
-procedure TTyroControl.SetWindow(AValue: TTyroWindow);
+procedure TTyroControl.ParentChanged;
 begin
-  if FWindow =AValue then Exit;
-  FWindow :=AValue;
+  inherited;
+  if FParent <> nil then
+  begin
+    if (Parent is TTyroWindow) then
+      FWindow := (Parent as TTyroWindow)
+    else if (Parent is TTyroControl) then
+      FWindow := (Parent as TTyroControl).Window;
+  end;
 end;
 
 function TTyroControl.GetClientRect: TRect;
@@ -1847,6 +1918,7 @@ end;
 procedure TTyroControl.PaintWindow(ACanvas: TTyroCanvas);
 var
   aClientRect: TRect;
+  aControl: TTyroLayout;
 begin
   if Visible then
   begin
@@ -1876,12 +1948,13 @@ begin
       finally
         Canvas.EndDraw;
       end;
+      {while aControl in Controls do
+        aControl.PaintWindow(ACanvas);}
       Canvas.PostDraw(WindowRect.Left, WindowRect.Top);
     end
     else
     begin
       //* No own texture could be created: paint directly as a fallback.
-      ACanvas.SetOrigin(WindowRect.Left, WindowRect.Top);
       ACanvas.ResetOrigin;
       if csClip in Style then
         RayLib.BeginScissorMode(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top, aClientRect.Width, aClientRect.Height);
@@ -1908,6 +1981,7 @@ begin
   Result := (w >= 1) and (h >= 1);
   if not Result then
     Exit;
+
   if (FCanvas = nil) or (FCanvas.Width <> w) or (FCanvas.Height <> h) then
   begin
     FreeAndNil(FCanvas);
@@ -1949,6 +2023,28 @@ begin
     FParent.FControls.Move(I, FParent.FControls.Count - 1);
     Invalidate;
   end;
+end;
+
+function TTyroControl.MouseTargetAt(AX, AY: Integer): TTyroControl;
+var
+  I: Integer;
+begin
+  Result := nil;
+  if not Visible or not PtInRect(WindowRect, Point(AX, AY)) then
+    Exit;
+
+  //Later siblings are on top. Test a container's children before the container
+  //itself so transparent panel backgrounds do not intercept their buttons.
+  for I := Controls.Count - 1 downto 0 do
+  begin
+    if Controls[I] is TTyroControl then
+    begin
+      Result := TTyroControl(Controls[I]).MouseTargetAt(AX, AY);
+      if Result <> nil then
+        Exit;
+    end;
+  end;
+  Result := Self;
 end;
 
 procedure TTyroControl.DoPaintBackground(ACanvas: TTyroCanvas);
@@ -2261,12 +2357,13 @@ constructor TTyroControl.Create(AParent: TTyroLayout);
 begin
   inherited;
   FState := FState + [csCreating];
-  FParent := AParent;
-  if (Parent is TTyroWindow) then
-    FWindow := (Parent as TTyroWindow);
+  FLastMouseX := -1;
+  FLastMouseY := -1;
   FVisible := True;
   Created;
-  FState := FState - [csCreating] + [csCreated];
+  //Do not clear csCreating here. The most-derived constructor has not returned
+  //yet; TTyroLayout.AfterConstruction clears it only after full construction.
+  SetParent(AParent);
 end;
 
 destructor TTyroControl.Destroy;

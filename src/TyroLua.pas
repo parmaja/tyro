@@ -280,6 +280,8 @@ type
     function Border_func(L: Plua_State): integer; cdecl;
     function BackColor_func(L: Plua_State): integer; cdecl;
     function Name_func(L: Plua_State): integer; cdecl;
+    function Align_func(L: Plua_State): integer; cdecl;
+    function Parent_func(L: Plua_State): integer; cdecl;
     function Items_func(L: Plua_State): integer; cdecl;
     function Item_func(L: Plua_State): integer; cdecl;
     function AddItem_func(L: Plua_State): integer; cdecl;
@@ -1104,6 +1106,8 @@ begin
   Lua.State.Register('controls', 'border', Controls, @Controls.Border_func);
   Lua.State.Register('controls', 'backcolor', Controls, @Controls.BackColor_func);
   Lua.State.Register('controls', 'name', Controls, @Controls.Name_func);
+  Lua.State.Register('controls', 'align', Controls, @Controls.Align_func);
+  Lua.State.Register('controls', 'parent', Controls, @Controls.Parent_func);
   Lua.State.Register('controls', 'items', Controls, @Controls.Items_func);
   Lua.State.Register('controls', 'item', Controls, @Controls.Item_func);
   Lua.State.Register('controls', 'additem', Controls, @Controls.AddItem_func);
@@ -2578,6 +2582,119 @@ begin
   begin
     L.PushString(ctrl.Name);
     Result := 1;
+  end;
+end;
+
+//controls.align(handle [, value]) -> get/set the docking edge of a control.
+//Values: 'none', 'left', 'top', 'right', 'bottom', 'client' (or 0..5).
+function TLuaControls.Align_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+  s: string;
+  n: Integer;
+  aAlign: TAlign;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+
+  if L.Count >= 2 then
+  begin
+    s := LowerCase(Trim(L.ToString(2)));
+    aAlign := alNone;
+    if TryStrToInt(s, n) and (n >= Ord(alNone)) and (n <= Ord(alClient)) then
+      aAlign := TAlign(n)
+    else if s = 'none' then
+      aAlign := alNone
+    else if s = 'left' then
+      aAlign := alLeft
+    else if s = 'top' then
+      aAlign := alTop
+    else if s = 'right' then
+      aAlign := alRight
+    else if s = 'bottom' then
+      aAlign := alBottom
+    else if s = 'client' then
+      aAlign := alClient
+    else
+    begin
+      L.PushNil;
+      Result := 1;
+      Exit;
+    end;
+    FScript.RunQueueObject(TSetControlAlignObject.Create(ctrl, aAlign));
+    Result := 0;
+  end
+  else
+  begin
+    case ctrl.Align of
+      alLeft: L.PushString('left');
+      alTop: L.PushString('top');
+      alRight: L.PushString('right');
+      alBottom: L.PushString('bottom');
+      alClient: L.PushString('client');
+    else
+      L.PushString('none');
+    end;
+    Result := 1;
+  end;
+end;
+
+//controls.parent(handle [, parentHandle]) -> get/set the container. The getter
+//returns 0 when the control belongs to the main window, and the setter moves
+//it back there for a nil or zero handle.
+function TLuaControls.Parent_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+  parentCtrl: TTyroControl;
+  newParent: TTyroLayout;
+  i: Integer;
+begin
+  ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+
+  if L.Count >= 2 then
+  begin
+    if lua_isnil(L, 2) or (round(L.ToNumber(2)) <= 0) then
+      newParent := Main
+    else
+    begin
+      parentCtrl := GetControl(round(L.ToNumber(2)));
+      if parentCtrl = nil then
+      begin
+        L.PushNil;
+        Result := 1;
+        Exit;
+      end;
+      newParent := parentCtrl;
+    end;
+    FScript.RunQueueObject(TSetControlParentObject.Create(ctrl, newParent));
+    Result := 0;
+  end
+  else
+  begin
+    //Return 0 for the main window so the result can be passed straight back
+    //to the setter.
+    L.PushInteger(0);
+    Result := 1;
+    for i := 0 to FItems.Count - 1 do
+    begin
+      parentCtrl := TTyroControl(FItems[i]);
+      if (parentCtrl <> nil) and (parentCtrl = ctrl.Parent) then
+      begin
+        L.PushInteger(i + 1);
+        Break;
+      end;
+    end;
   end;
 end;
 

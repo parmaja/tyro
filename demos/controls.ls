@@ -19,6 +19,8 @@
 --    controls.border(handle [,style])  0=none 1=thin 2=thick 3=sizable
 --    controls.backcolor(handle [,color])  color from the colors table
 --    controls.name(handle [,name])  named controls resolve as Lua globals
+--    controls.align(handle [,value])  'none'/'left'/'top'/'right'/'bottom'/'client'
+--    controls.parent(handle [,parent])  nest a control in a panel/container
 --    controls.count                  number of created controls
 --
 --  Legacy alias: buttons.new("caption", x, y, w, h, borderSize) still works;

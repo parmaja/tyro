@@ -97,7 +97,7 @@ type
 
   { TTyroMain }
 
-  TTyroMainOption = (moOpaque, moShowFPS);
+  TTyroMainOption = (moOpaque, moMainWindow, moTerminal, moShowFPS);
   TTyroMainOptions = set of TTyroMainOption;
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: string) of object;
@@ -162,8 +162,6 @@ type
     FWaitingQueueObject: TQueueObject; //the queue object a script thread is blocked waiting on
     FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
     FPresentedFrame: Boolean;
-    FExitAfterScript: Boolean;
- FShowWindowOverride: Integer; //-1 force hidden, 0 script-controlled, 1 force visible
     FHadScript: Boolean;
     FScriptFailed: Boolean;
     FRunning: LongInt;
@@ -171,6 +169,7 @@ type
     procedure SetRunning(AValue: Boolean);
   protected
     Commands: TConsoleCommands;
+    procedure SizeChanged; override;
     procedure ConsoleInput(AConsole: TTyroTerminal; AInput: string);
     procedure ExecuteCommand(ACommand: string);
     //If the word typed is not a builtin command it is treated as a one line
@@ -195,7 +194,7 @@ type
 
     //* Before Show window
     procedure Init; virtual;
-    procedure Run;
+    procedure Run(AOptions: TTyroMainOptions);
     //* After window initialized and other resource, load your resources here
     procedure Start; virtual;
     procedure Update; override;
@@ -267,13 +266,10 @@ type
     property FPS: Integer read FFPS write SetFPS;
     property Queue: TQueueObjects read FQueue;
     property ScriptTypes: TScriptTypes read FScriptTypes;
-    property ExitAfterScript: Boolean read FExitAfterScript write FExitAfterScript;
     //* True when the last run-and-exit script finished with a Lua error. Reset
     //* at the start of every run; only meaningful for the --exit/--execute CLI
     //* lifecycle where the main loop inspects it before releasing the worker.
     property ScriptFailed: Boolean read FScriptFailed;
-    property ShowWindowOverride: Integer read FShowWindowOverride write FShowWindowOverride;
-
   end;
 {
   function IntToFPColor(I: Integer): TFPColor;
@@ -392,13 +388,11 @@ begin
   end;
 end;
 
-procedure TTyroMain.Run;
+procedure TTyroMain.Run(AOptions: TTyroMainOptions);
 var
   tw: Integer;
-  HasScreenshot: Boolean;
 begin
   PrepareWindow(cDefaultWindowWidth, cDefaultWindowHeight);
-  //InitWindow(cDefaultWindowWidth, cDefaultWindowHeight, PUTF8Char(Title));
   Init;
 
   if FPS = 0 then
@@ -408,7 +402,11 @@ begin
 
   Resources.Load;
 
+  Options := Options + AOptions;
+
   Start;
+  if moMainWindow in AOptions then
+    ShowWindow;
   {if Resources.Config.Sections.ReadBool('show', 'console', False) then
   begin
     ShowConsole(0, 0, 0, 0);
@@ -490,37 +488,8 @@ begin
         end;
         ProcessInput;
       end;
-
-      // Test completion only after this iteration drained commands the worker
-      // accepted before publishing Completed.
-      if FExitAfterScript and FHadScript and
-         (FScriptThread <> nil) and FScriptThread.Completed then
-      begin
-        // A screenshot is fulfilled only after EndDrawing. If the script
-        // finishes before one visible frame, present once rather than silently
-        // dropping its final screenshot request during --exit.
-        Lock.Enter;
-        try
-          HasScreenshot := FQueuedScreenshot <> '';
-        finally
-          Lock.Leave;
-        end;
-        if Visible and RayLib.IsWindowReady and
-           (HasScreenshot or not FPresentedFrame) then
-          Continue;
-        // Capture the failure state before Stop() releases the worker and its
-        // script clone, so --exit can propagate a nonzero exit status.
-        if (FScriptThread.Script <> nil) and
-           (FScriptThread.Script.LastError <> '') then
-          FScriptFailed := True;
-        // --exit must not cancel commands the worker accepted before it
-        // completed: drain the queue once more, then shut down.
-        ProcessQueue;
-        Terminate;
-      end;
     end;
   until Terminated;
-
 end;
 
 function TTyroMain.GetActive: Boolean;
@@ -539,6 +508,11 @@ begin
     InterlockedExchange(FRunning, 1)
   else
     InterlockedExchange(FRunning, 0);
+end;
+
+procedure TTyroMain.SizeChanged;
+begin
+  inherited;
 end;
 
 procedure TTyroMain.CancelWaiting;
@@ -756,7 +730,6 @@ end;
 constructor TTyroMain.Create(AParent: TTyroLayout);
 begin
   inherited;
-  FShowWindowOverride := 0;
   RayLibrary.Load;
   FControlCapture := nil;
   FOptions := [moOpaque];
@@ -851,7 +824,10 @@ begin
   FreeAndNil(FCanvasLock);
   FreeAndNil(FFrameEvent);
 end;
+
 procedure TTyroMain.PrepareWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
+var
+  pos: TVector2;
 begin
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
@@ -862,12 +838,11 @@ begin
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   //SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
-  BoundsRect := Rect(0, 0, AWidth, AHeight);
-  InitWindow(AWidth, AHeight, PUTF8Char(Title));
+  RayLib.InitWindow(AWidth, AHeight, PUTF8Char(Title));
+  pos := RayLib.GetWindowPosition(GetCurrentMonitor);
+  BoundsRect := Rect(round(pos.X), round(pos.Y), AWidth, AHeight);
 
-  ShowCursor();
   PrepareCanvas;
-
   Board := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin), True);
   FPrepared := True;
 end;
@@ -901,8 +876,6 @@ begin
     else
       Log.WriteLn('Type of file not found: ' + RunFile);
   end;
-  if FShowWindowOverride > 0 then
-    ShowWindow;
   Running := True;
 end;
 
@@ -1074,10 +1047,8 @@ begin
     begin
       if Controls[i] is TTyroControl then
       begin
-        aControl := TTyroControl(Controls[i]);
-        if aControl.Visible and
-           (mx >= aControl.WindowRect.Left) and (mx < aControl.WindowRect.Right) and
-           (my >= aControl.WindowRect.Top) and (my < aControl.WindowRect.Bottom) then
+        aControl := TTyroControl(Controls[i]).MouseTargetAt(mx, my);
+        if aControl <> nil then
         begin
           x := mx - aControl.WindowRect.Left;
           y := my - aControl.WindowRect.Top;
@@ -1164,9 +1135,9 @@ begin
 end;
 
 procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
+var
+  pos: TVector2;
 begin
-  if FShowWindowOverride < 0 then
-    Exit;
   Visible := True;
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
@@ -1175,8 +1146,11 @@ begin
 
   if Border = brdSizable then
     SetConfigFlags([FLAG_WINDOW_RESIZABLE]);
-  BoundsRect := Rect(0, 0, AWidth, AHeight);
-  SetWindowSize(AWidth, AHeight);
+
+  RayLib.SetWindowSize(AWidth, AHeight);
+
+  pos := RayLib.GetWindowPosition(GetCurrentMonitor);
+  BoundsRect := Rect(round(pos.X), round(pos.Y), AWidth, AHeight);
   ClearWindowState([FLAG_WINDOW_HIDDEN]);
   ShowCursor();
 end;
@@ -1188,7 +1162,9 @@ begin
   if (WindowRect.Width = AWidth) and (WindowRect.Height = AHeight)
      and (Canvas <> nil) and (Canvas.Width = GetCanvasWidth) and (Canvas.Height = GetCanvasHeight) then
     Exit;
-  SetWindowRect(Rect(0, 0, AWidth, AHeight));//TODO SetBoundsRect
+  //The window is the layout root, so its BoundsRect and WindowRect stay in
+  //sync. Its Resize call then propagates the new dimensions to all children.
+  BoundsRect := Rect(0, 0, AWidth, AHeight);
   if Canvas <> nil then
     Canvas.Resize(GetCanvasWidth, GetCanvasHeight);
   if Board <> nil then
