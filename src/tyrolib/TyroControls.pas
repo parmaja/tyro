@@ -140,7 +140,7 @@ type
     procedure AfterConstruction; override;
 
     procedure Show;
-    procedure Hide;
+    procedure Hide; virtual;
 
     procedure Realign; virtual;
     procedure AlignControls; virtual;
@@ -259,6 +259,9 @@ type
 
     //Move the control to the end of the parent's control list (drawn last, on
     //top) when it is not aligned
+    procedure Hide; override;
+
+    procedure SetFocus;
     procedure BringToFront;
 
     //* Return the top-most visible control at a window-coordinate point.
@@ -380,6 +383,7 @@ type
     FViewCount: Integer;
     FItemHeight: Integer;
     FCustomDraw: Boolean;
+    FPlaceHolder: utf8string;
     FTopIndex: Integer;   //first visible item (vertical scroll offset)
     FItemIndex: Integer;  //selected item, -1 = none
     function GetRowHeight: Integer;
@@ -390,6 +394,7 @@ type
     procedure SetItemHeight(AValue: Integer);
     procedure SetCustomDraw(AValue: Boolean);
     procedure SetItemIndex(AValue: Integer);
+    procedure SetPlaceHolder(AValue: utf8string);
     procedure AutoSizeHeight;
     procedure ClampTop;
     procedure UpdateScrollBars;
@@ -405,6 +410,10 @@ type
     //* Default per-item painting: prints the item text, the selected row is
     //* highlighted.
     procedure DoDrawItem(ACanvas: TTyroCanvas; AIndex: Integer; AItemRect: TRect); virtual;
+    //* Placeholder painting, called only while the list box holds no items.
+    //* Override it in a subclass to draw something else than the default text
+    //* centered in the client area.
+    procedure DoDrawPlaceHolder(ACanvas: TTyroCanvas); virtual;
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -427,6 +436,9 @@ type
     property CustomDraw: Boolean read FCustomDraw write SetCustomDraw;
     //* Selected item, -1 = none. Set by clicking on an item.
     property ItemIndex: Integer read FItemIndex write SetItemIndex;
+    //* Text painted centered in the box when Items is empty. Empty (the
+    //* default) paints nothing while the list is empty.
+    property PlaceHolder: utf8string read FPlaceHolder write SetPlaceHolder;
   end;
 
   { TTyroWindow }
@@ -1289,6 +1301,7 @@ begin
   FViewCount := 0;
   FItemHeight := 0;
   FCustomDraw := False;
+  FPlaceHolder := '';
   FTopIndex := 0;
   FItemIndex := -1;
   BoundsRect := Rect(0, 0, 160, 120);
@@ -1390,6 +1403,14 @@ begin
     FTopIndex := FItemIndex - GetVisibleItems + 1;
   ClampTop;
   UpdateScrollBars;
+  Invalidate;
+end;
+
+procedure TTyroListBox.SetPlaceHolder(AValue: utf8string);
+begin
+  if FPlaceHolder = AValue then
+    Exit;
+  FPlaceHolder := AValue;
   Invalidate;
 end;
 
@@ -1528,6 +1549,26 @@ begin
   //Override in a subclass to paint the item yourself (see CustomDraw).
 end;
 
+procedure TTyroListBox.DoDrawPlaceHolder(ACanvas: TTyroCanvas);
+var
+  r: TRect;
+  tx, ty, tw, th: Single;
+begin
+  //Override in a subclass to paint the empty state yourself (see PlaceHolder).
+  if (FPlaceHolder = '') or (Resources = nil) then
+    Exit;
+  r := ClientRect;
+  if (r.Width <= 0) or (r.Height <= 0) then
+    Exit;
+  th := Resources.Font.Height;
+  tw := RayLib.MeasureTextEx(Resources.Font.Data, PUTF8Char(FPlaceHolder), Resources.Font.Height, 0).x;
+  tx := (r.Width - tw) / 2;
+  if tx < 0 then
+    tx := 0; //longer than the box: keep it left aligned instead of half clipped
+  ty := (r.Height - th) / 2;
+  ACanvas.DrawText(tx, ty, FPlaceHolder, clGray);
+end;
+
 procedure TTyroListBox.DoPaint(ACanvas: TTyroCanvas);
 var
   r: TRect;
@@ -1537,7 +1578,14 @@ begin
   inherited;
   r := ClientRect;
   n := FItems.Count;
-  if (n <= 0) or (r.Height <= 0) or (RowHeight <= 0) then
+  if n <= 0 then
+  begin
+    //* Nothing to list: paint the placeholder centered in the box instead of
+    //* leaving it blank.
+    DoDrawPlaceHolder(ACanvas);
+    Exit;
+  end;
+  if (r.Height <= 0) or (RowHeight <= 0) then
     Exit;
 
   vis := GetVisibleItems;
@@ -2064,6 +2112,17 @@ end;
 
 procedure TTyroControl.FocusChanged;
 begin
+end;
+
+procedure TTyroControl.Hide;
+begin
+  inherited;
+  Focused := False;
+end;
+
+procedure TTyroControl.SetFocus;
+begin
+  Focused := True;
 end;
 
 procedure TTyroControl.BringToFront;

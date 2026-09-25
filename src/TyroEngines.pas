@@ -1242,13 +1242,6 @@ var
   LW, LH, W, H: Integer;
 begin
   RefreshFileList;
-  if FFileList.Items.Count = 0 then
-  begin
-    Console.Writeln('No .ls scripts found in: ' + Resources.CurrentDirectory);
-    if not Console.Visible then
-      ToggleConsole;
-    Exit;
-  end;
   //Center the picker over the main window, keeping a small margin around it.
   LW := 420;
   LH := 300;
@@ -1262,19 +1255,13 @@ begin
                               (W + LW) div 2, (H + LH) div 2);
   FFileList.Show;
   FFileList.BringToFront;
-  FFileList.Focused := True;
+  FFileList.SetFocus;
 end;
 
 procedure TTyroMain.HideFileList;
 begin
   FFileList.Hide;
-  FFileList.Focused := False;
   //Return keyboard focus (and a read prompt) to the console when it is shown.
-  if Console.Visible then
-  begin
-    Console.Focused := True;
-    StartConsoleRead;
-  end;
 end;
 
 procedure TTyroMain.ToggleFileList;
