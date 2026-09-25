@@ -126,6 +126,16 @@ tyro demos/terminal_demo.lua
 # then type "dir" at the console prompt
 ```
 
+Holding a key auto-repeats it at the prompt: typed characters, `BACKSPACE`,
+`DELETE`, the arrow keys and `HOME`/`END` keep repeating after a short delay.
+`ENTER`, `ESC` and `CTRL` shortcuts stay one-shot.
+
+Text at the prompt can be selected with `SHIFT`+`LEFT`/`RIGHT`/`HOME`/`END` (a
+plain arrow press jumps to the edge of the selection), with `CTRL`+`A`, or by
+dragging with the mouse. Typing, `BACKSPACE`, `DELETE` or pasting replaces the
+selection, and it is copied/pasted with `CTRL`+`C` / `CTRL`+`V` or with the
+traditional console keys `CTRL`+`INSERT` / `SHIFT`+`INSERT`.
+
 ### Console API
 
 | Function | Description |

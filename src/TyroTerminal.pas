@@ -12,6 +12,7 @@ unit TyroTerminal;
  *    - the current command word is syntax highlighted when it matches a
  *      registered builtin command
  *    - up/down arrows browse the command history
+ *    - holding a key auto-repeats it (text, backspace, arrows, history)
  *    - console.read() (Lua) works through StartRead/StopRead
  *
  *  TTyroOutput - the small script output panel (moved here from the old
@@ -41,6 +42,10 @@ const
   CCaretBlinkInterval = 0.5;
   { Minimum dim factor (0.0 = fully dimmed, 1.0 = full brightness) }
   CCaretMinDim = 0.2;
+
+  { Auto-repeat timing (in seconds) }
+  CRepeatDelay = 0.5;     //hold time before a held key starts repeating
+  CRepeatInterval = 0.03; //delay between repeats
 
   { Default values }
   CDefaultLineCount = 1000;
@@ -83,6 +88,7 @@ type
     FInputScroll: Integer;            // first visible codepoint of the input line
     FInputSelStart: Integer;          // -1 = no selection
     FInputSelEnd: Integer;
+    FInputSelAnchor: Integer;         // the fixed end of the selection, -1 = none
     FPasswordMode: Boolean;
     FPasswordChar: TUTF8Char;
 
@@ -94,6 +100,12 @@ type
     FCaretTimer: Double;
     FCaretDim: Double;
     FCaretVisible: Boolean;
+
+    { Key auto-repeat: the last accepted key stays armed while it is physically
+      held down, then its action is replayed every CRepeatInterval seconds. }
+    FRepeatKey: TKeyboardKey;  //KEY_NULL = nothing to repeat
+    FRepeatChar: string;       //text to replay ('' = replay the key action instead)
+    FRepeatTimer: Double;
 
     FOnInput: EOnTerminalInput;
     FOnInputChange: EOnTerminalInputChange;
@@ -116,6 +128,13 @@ type
     function CharAtPixel(AX: Integer): Integer;
     procedure UpdateInputScroll;
 
+    procedure ClearKeyRepeat;
+    function IsRepeatableKey(AKey: TKeyboardKey): Boolean;
+    procedure TrackKeyRepeat(AKey: TKeyboardKey; AChar: string);
+    procedure UpdateKeyRepeat;
+    procedure ProcessChar(var Key: TUTF8Char);
+    procedure ProcessKey(var Key: TKeyboardKey; Shift: TShiftState);
+
     procedure AddLine(const ALine: string);
     procedure AppendText(const S: string);
     procedure TrimLines;
@@ -123,7 +142,8 @@ type
     procedure UpdateScrollBars;
 
     procedure ClearInputSelection;
-    procedure SetInputSelection(AStart, AEnd: Integer);
+    procedure SetInputSelection(AAnchor, ACaret: Integer);
+    function SelectionAnchor: Integer;
     function InputSelectionText: string;
     procedure DeleteInputSelection;
     procedure SelectInputAll;
@@ -133,6 +153,7 @@ type
     procedure ExtendSelectionTo(AX, AY: Integer);
     function OutputSelectionText: string;
     procedure CopySelection;
+    procedure PasteClipboard;
 
     procedure HistoryUp;
     procedure HistoryDown;
@@ -242,6 +263,22 @@ begin
   Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, CPCount(S) - ACol - ACount);
 end;
 
+{ Maps a typed character back to the key that produced it, so auto-repeat can
+  poll IsKeyDown(). RayLib key codes for printable ASCII are the ASCII value of
+  the character. Input that is not a plain ASCII key (accented or any other
+  multi-byte character) returns KEY_NULL and is therefore typed only once. }
+function CPToKey(const S: string): TKeyboardKey;
+var
+  c: Char;
+begin
+  Result := KEY_NULL;
+  if Length(S) <> 1 then
+    Exit;
+  c := S[1];
+  if (c >= ' ') and (c <= '~') then
+    Result := TKeyboardKey(Ord(c));
+end;
+
 { TTyroTerminal }
 
 constructor TTyroTerminal.Create(AParent: TTyroLayout);
@@ -270,6 +307,7 @@ begin
   FInputScroll := 0;
   FInputSelStart := -1;
   FInputSelEnd := -1;
+  FInputSelAnchor := -1;
   FPasswordMode := False;
   FPasswordChar := '*';
 
@@ -285,6 +323,10 @@ begin
   FCaretTimer := 0;
   FCaretDim := 1;
   FCaretVisible := True;
+
+  FRepeatKey := KEY_NULL;
+  FRepeatChar := '';
+  FRepeatTimer := 0;
 
   FSelActive := False;
   FMouseButtonDown := False;
@@ -578,6 +620,7 @@ begin
   FInputPos := 0;
   FInputScroll := 0;
   ClearInputSelection;
+  ClearKeyRepeat;
   FSelActive := False;
   Invalidate;
 end;
@@ -602,6 +645,7 @@ begin
   FInputPos := 0;
   FInputScroll := 0;
   ClearInputSelection;
+  ClearKeyRepeat;
   FInputOn := True;
   FHistoryPos := -1;
   Invalidate;
@@ -610,6 +654,7 @@ end;
 procedure TTyroTerminal.StopRead;
 begin
   FInputOn := False;
+  ClearKeyRepeat;
   Invalidate;
 end;
 
@@ -631,27 +676,51 @@ procedure TTyroTerminal.ClearInputSelection;
 begin
   FInputSelStart := -1;
   FInputSelEnd := -1;
+  FInputSelAnchor := -1;
 end;
 
-procedure TTyroTerminal.SetInputSelection(AStart, AEnd: Integer);
+{ Selects from the anchor to the caret (both in codepoints) and moves the caret
+  there, clamped to the input line. The anchor is remembered, so a following
+  shift+arrow/shift+home/shift+end keeps growing the same selection in either
+  direction. A zero-length selection clears it. }
+procedure TTyroTerminal.SetInputSelection(AAnchor, ACaret: Integer);
+var
+  L: Integer;
 begin
-  if AStart < 0 then
-    AStart := 0;
-  if AEnd < AStart then
+  L := CPCount(FInputBuffer);
+  if AAnchor < 0 then
+    AAnchor := 0;
+  if AAnchor > L then
+    AAnchor := L;
+  if ACaret < 0 then
+    ACaret := 0;
+  if ACaret > L then
+    ACaret := L;
+  FInputSelAnchor := AAnchor;
+  FInputPos := ACaret;
+  if ACaret < AAnchor then
   begin
-    FInputSelStart := AEnd;
-    FInputSelEnd := AStart;
+    FInputSelStart := ACaret;
+    FInputSelEnd := AAnchor;
   end
   else
   begin
-    FInputSelStart := AStart;
-    FInputSelEnd := AEnd;
+    FInputSelStart := AAnchor;
+    FInputSelEnd := ACaret;
   end;
   if FInputSelStart = FInputSelEnd then
-  begin
-    FInputSelStart := -1;
-    FInputSelEnd := -1;
-  end;
+    ClearInputSelection;
+  UpdateInputScroll;
+end;
+
+{ The end the caret moves away from: the selection anchor while a selection
+  exists, the caret itself otherwise. }
+function TTyroTerminal.SelectionAnchor: Integer;
+begin
+  if FInputSelStart >= 0 then
+    Result := FInputSelAnchor
+  else
+    Result := FInputPos;
 end;
 
 function TTyroTerminal.InputSelectionText: string;
@@ -677,8 +746,6 @@ end;
 procedure TTyroTerminal.SelectInputAll;
 begin
   SetInputSelection(0, CPCount(FInputBuffer));
-  FInputPos := CPCount(FInputBuffer);
-  UpdateInputScroll;
 end;
 
 procedure TTyroTerminal.PlaceInputCaretAt(AX: Integer);
@@ -788,6 +855,33 @@ begin
     RayLib.SetClipboardText(PUTF8Char(InputSelectionText));
 end;
 
+{ Inserts the clipboard at the caret, replacing the input selection. Line ends
+  are dropped: the command line is a single line. }
+procedure TTyroTerminal.PasteClipboard;
+var
+  P: PUTF8Char;
+  S: string;
+begin
+  P := RayLib.GetClipboardText;
+  S := '';
+  if P <> nil then
+    S := PUTF8Char(P);
+  S := StringReplace(S, #13, '', [rfReplaceAll]);
+  S := StringReplace(S, #10, '', [rfReplaceAll]);
+  if S = '' then
+    Exit;
+  if FInputSelStart >= 0 then
+    DeleteInputSelection;
+  FInputBuffer := CPInsert(FInputBuffer, FInputPos, S);
+  Inc(FInputPos, CPCount(S));
+  UpdateInputScroll;
+  if Assigned(FOnInputChange) then
+    FOnInputChange(Self, FInputBuffer);
+  if Assigned(FOnAny) then
+    FOnAny(Self, FInputBuffer);
+  Invalidate;
+end;
+
 { history }
 
 procedure TTyroTerminal.HistoryUp;
@@ -847,15 +941,101 @@ begin
   FInputPos := 0;
   FInputScroll := 0;
   ClearInputSelection;
+  ClearKeyRepeat;
   FInputOn := False;
   if Assigned(FOnInput) then
     FOnInput(Self, s);
   Invalidate;
 end;
 
+{ key auto-repeat }
+
+procedure TTyroTerminal.ClearKeyRepeat;
+begin
+  FRepeatKey := KEY_NULL;
+  FRepeatChar := '';
+  FRepeatTimer := 0;
+end;
+
+function TTyroTerminal.IsRepeatableKey(AKey: TKeyboardKey): Boolean;
+begin
+  //Enter submits the line, Escape wipes it and Tab indents - holding any of
+  //them down must not submit/wipe/indent over and over. INSERT is a one-shot
+  //too: holding it would paste the clipboard again and again.
+  Result := (AKey <> KEY_NULL) and (AKey <> KEY_ENTER) and (AKey <> KEY_KP_ENTER)
+    and (AKey <> KEY_ESCAPE) and (AKey <> KEY_TAB) and (AKey <> KEY_INSERT);
+end;
+
+procedure TTyroTerminal.TrackKeyRepeat(AKey: TKeyboardKey; AChar: string);
+begin
+  ClearKeyRepeat;
+  if not IsRepeatableKey(AKey) then
+    Exit;
+  FRepeatKey := AKey;
+  FRepeatChar := AChar;
+  FRepeatTimer := CRepeatDelay;
+end;
+
+procedure TTyroTerminal.UpdateKeyRepeat;
+var
+  Shift: TShiftState;
+  Key: TKeyboardKey;
+  Ch: TUTF8Char;
+begin
+  //nothing is armed, or the terminal no longer takes input: stop repeating
+  if (FRepeatKey = KEY_NULL) or (not FInputOn) or (not Focused) or (not Visible) then
+  begin
+    ClearKeyRepeat;
+    Exit;
+  end;
+  if not RayLib.IsKeyDown(FRepeatKey) then
+  begin
+    ClearKeyRepeat;
+    Exit;
+  end;
+  FRepeatTimer := FRepeatTimer - RayLib.GetFrameTime();
+  if FRepeatTimer > 0 then
+    Exit;
+  //drop the missed repeats of a long frame instead of replaying in a burst
+  FRepeatTimer := CRepeatInterval;
+  if FRepeatChar <> '' then
+  begin
+    Ch := FRepeatChar;
+    ProcessChar(Ch);
+  end
+  else
+  begin
+    Key := FRepeatKey;
+    //rebuild the shift state live so Shift+arrow keeps extending on repeat
+    Shift := [];
+    if RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT) then
+      Shift := Shift + [ssShift];
+    if RayLib.IsKeyDown(KEY_LEFT_CONTROL) or RayLib.IsKeyDown(KEY_RIGHT_CONTROL) then
+      Shift := Shift + [ssCtrl];
+    if RayLib.IsKeyDown(KEY_LEFT_ALT) or RayLib.IsKeyDown(KEY_RIGHT_ALT) then
+      Shift := Shift + [ssAlt];
+    ProcessKey(Key, Shift);
+  end;
+end;
+
 { input }
 
 procedure TTyroTerminal.KeyPress(var Key: TUTF8Char);
+var
+  S: string;
+begin
+  if not FInputOn then
+    Exit;
+  S := Key;
+  if S = '' then
+    Exit;
+  //arm auto-repeat for this character; the same physical key is also reported
+  //as a key press (without a character) right before it
+  TrackKeyRepeat(CPToKey(S), S);
+  ProcessChar(Key);
+end;
+
+procedure TTyroTerminal.ProcessChar(var Key: TUTF8Char);
 var
   S: string;
 begin
@@ -889,9 +1069,6 @@ begin
 end;
 
 procedure TTyroTerminal.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
-var
-  P: PUTF8Char;
-  S: string;
 begin
   if not FInputOn then
   begin
@@ -899,6 +1076,20 @@ begin
     Exit;
   end;
 
+  //Ctrl/Alt combinations are one-shot shortcuts (copy/paste/select-all) and
+  //must not repeat; a character typed with AltGr still arms the repeat through
+  //KeyPress, which arrives right after this key press
+  if (ssCtrl in Shift) or (ssAlt in Shift) then
+    ClearKeyRepeat
+  else
+    TrackKeyRepeat(Key, '');
+
+  ProcessKey(Key, Shift);
+  inherited KeyDown(Key, Shift);
+end;
+
+procedure TTyroTerminal.ProcessKey(var Key: TKeyboardKey; Shift: TShiftState);
+begin
   case Key of
     KEY_ENTER:
     begin
@@ -976,47 +1167,65 @@ begin
     end;
     KEY_LEFT:
     begin
-      if FInputPos > 0 then
+      if ssShift in Shift then
       begin
-        Dec(FInputPos);
+        //the anchor stays where the selection started, the caret walks away
+        //from it, so repeated presses grow the selection in both directions
+        SetInputSelection(SelectionAnchor, FInputPos - 1);
+      end
+      else
+      begin
+        if FInputSelStart >= 0 then
+          FInputPos := FInputSelStart //jump to the low edge of the selection
+        else if FInputPos > 0 then
+          Dec(FInputPos);
+        ClearInputSelection;
         UpdateInputScroll;
       end;
-      if ssShift in Shift then
-        SetInputSelection(FInputPos, FInputPos + 1)
-      else
-        ClearInputSelection;
       Invalidate;
       Key := KEY_NULL;
     end;
     KEY_RIGHT:
     begin
-      if FInputPos < CPCount(FInputBuffer) then
+      if ssShift in Shift then
       begin
-        Inc(FInputPos);
+        SetInputSelection(SelectionAnchor, FInputPos + 1);
+      end
+      else
+      begin
+        if FInputSelStart >= 0 then
+          FInputPos := FInputSelEnd //jump to the high edge of the selection
+        else if FInputPos < CPCount(FInputBuffer) then
+          Inc(FInputPos);
+        ClearInputSelection;
         UpdateInputScroll;
       end;
-      if ssShift in Shift then
-        SetInputSelection(FInputPos - 1, FInputPos)
-      else
-        ClearInputSelection;
       Invalidate;
       Key := KEY_NULL;
     end;
     KEY_HOME:
     begin
-      FInputPos := 0;
-      UpdateInputScroll;
-      if not (ssShift in Shift) then
+      if ssShift in Shift then
+        SetInputSelection(SelectionAnchor, 0) //select back to the start
+      else
+      begin
+        FInputPos := 0;
         ClearInputSelection;
+        UpdateInputScroll;
+      end;
       Invalidate;
       Key := KEY_NULL;
     end;
     KEY_END:
     begin
-      FInputPos := CPCount(FInputBuffer);
-      UpdateInputScroll;
-      if not (ssShift in Shift) then
+      if ssShift in Shift then
+        SetInputSelection(SelectionAnchor, CPCount(FInputBuffer)) //select to the end
+      else
+      begin
+        FInputPos := CPCount(FInputBuffer);
         ClearInputSelection;
+        UpdateInputScroll;
+      end;
       Invalidate;
       Key := KEY_NULL;
     end;
@@ -1050,32 +1259,27 @@ begin
     begin
       if ssCtrl in Shift then
       begin
-        P := RayLib.GetClipboardText;
-        S := '';
-        if P <> nil then
-          S := PUTF8Char(P);
-        S := StringReplace(S, #13, '', [rfReplaceAll]);
-        S := StringReplace(S, #10, '', [rfReplaceAll]);
-        if S <> '' then
-        begin
-          if FInputSelStart >= 0 then
-            DeleteInputSelection;
-          FInputBuffer := CPInsert(FInputBuffer, FInputPos, S);
-          Inc(FInputPos, CPCount(S));
-          UpdateInputScroll;
-          if Assigned(FOnInputChange) then
-            FOnInputChange(Self, FInputBuffer);
-          if Assigned(FOnAny) then
-            FOnAny(Self, FInputBuffer);
-          Invalidate;
-        end;
+        PasteClipboard;
+        Key := KEY_NULL;
+      end;
+    end;
+    KEY_INSERT:
+    begin
+      //the traditional console keys: CTRL+INSERT copies, SHIFT+INSERT pastes
+      if ssCtrl in Shift then
+      begin
+        CopySelection;
+        Key := KEY_NULL;
+      end
+      else if ssShift in Shift then
+      begin
+        PasteClipboard;
         Key := KEY_NULL;
       end;
     end;
   else
     ;
   end;
-  inherited KeyDown(Key, Shift);
 end;
 
 { paint }
@@ -1302,8 +1506,12 @@ var
 begin
   UpdateSizes;
   if not Visible then
+  begin
+    ClearKeyRepeat; //a hidden terminal must not keep replaying a held key
     Exit;
+  end;
   UpdateScrollBars;
+  UpdateKeyRepeat;
 
   // caret blink
   if Focused then
@@ -1344,8 +1552,8 @@ begin
       end
       else if FInputOn then
       begin
-        PlaceInputCaretAt(lx);
-        ClearInputSelection;
+        //drop any selection and arm a drag selection at the click point
+        SetInputSelection(CharAtPixel(lx), CharAtPixel(lx));
         FSelActive := False;
       end
       else
@@ -1364,7 +1572,14 @@ begin
         ExtendSelectionTo(lx, ly)
       else if FInputOn and (ly >= inputTop) then
       begin
-        PlaceInputCaretAt(lx);
+        //drag: grow the selection away from the point the drag started at,
+        //which is the caret itself while nothing is selected yet
+        if FInputSelStart >= 0 then
+          SetInputSelection(FInputSelAnchor, CharAtPixel(lx))
+        else if CharAtPixel(lx) <> FInputPos then
+          SetInputSelection(FInputPos, CharAtPixel(lx))
+        else
+          PlaceInputCaretAt(lx);
         if FSelActive then
           FSelActive := False;
       end;
