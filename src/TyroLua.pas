@@ -1187,7 +1187,7 @@ end;
 
 procedure TLuaScript.Run;
 var
-  Msg: string;
+  Msg: utf8string;
 begin
   // A stopped script object may be run again from the interactive console.
   Lua.SetReady;
