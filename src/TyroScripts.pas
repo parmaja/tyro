@@ -527,7 +527,7 @@ type
     destructor Destroy; override;
     procedure Stop; virtual;
     procedure Start; virtual;
-    procedure LoadFile(FileName: string); overload;
+    procedure LoadFile(AFileName: string); overload;
 
     //Execute a single line of source on the persistent script state so globals
     //(e.g. x = 5) survive across lines; used by the console REPL. AOutput is
@@ -1626,11 +1626,13 @@ begin
   end;
 end;
 
-procedure TTyroScript.LoadFile(FileName: string);
+procedure TTyroScript.LoadFile(AFileName: string);
 begin
-  ScriptText.LoadFromFile(FileName);
-  Path := ExtractFilePath(FileName);
-  FileName := ExtractFileName(FileName);
+  ScriptText.LoadFromFile(AFileName);
+  Path := ExtractFilePath(AFileName);
+  //Must not be named FileName: that parameter would shadow the property of
+  //the same name and the field would keep its initial empty value.
+  FileName := ExtractFileName(AFileName);
 end;
 
 function TTyroScript.RunLine(const ALine: string; out AOutput: string): Boolean;

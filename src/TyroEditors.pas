@@ -25,8 +25,6 @@ const
   cEditorTabWidth = 4;
   cEditorMaxUndo = 100;
   cEditorCaretBlink = 0.5;
-  cEditorRepeatDelay = 0.5;      //seconds before a held key starts repeating
-  cEditorRepeatInterval = 0.03;  //seconds between repeats
 
   cEditorCaretLineColor = $FF141414;  //subtle highlight for the caret line
 
@@ -70,8 +68,6 @@ type
     FFileName: string;
     FOnClose: TEditorCloseEvent;
     FOnSave: TEditorSaveEvent;
-    FRepeatKey: TKeyboardKey;
-    FRepeatTimer: Double;
     function GetLineCount: Integer;
     function GetLineLength(ALine: Integer): Integer;
     function GetGutterWidth: Integer;
@@ -121,7 +117,6 @@ type
     procedure UpdateScrollBars;
     function GetMaxCol: Integer;
     procedure ProcessKey(var Key: TKeyboardKey; Shift: TShiftState);
-    procedure UpdateKeyRepeat;
 
     procedure DrawLine(ACanvas: TTyroCanvas; ALine: Integer; aY: Integer; aGutterWidth: Integer);
     procedure DrawStatus(ACanvas: TTyroCanvas);
@@ -133,7 +128,7 @@ type
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
 
-    procedure Update; override; //caret blink and mouse (called from the main loop)
+    procedure Update; override; //key auto-repeat, caret blink and mouse
     procedure DoPaintBackground(ACanvas: TTyroCanvas); override;
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     procedure KeyPress(var Key: TUTF8Char); override;
@@ -234,7 +229,8 @@ end;
 constructor TyroEditor.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Style := [csClip, csOpaque, csFocus, csHScroll, csVScroll];
+  //csRepeatKeys replays a key (text, backspace, arrows) while it is held down
+  Style := [csClip, csOpaque, csFocus, csHScroll, csVScroll, csRepeatKeys];
   FLines := TStringList.Create;
   FLines.Add('');
   FUndo := TStringList.Create;
@@ -255,8 +251,6 @@ begin
   FAnchorCol := 0;
   FSelecting := False;
   FMouseDown := False;
-  FRepeatKey := KEY_NULL;
-  FRepeatTimer := 0;
   FFileName := '';
   BackColor := clDarkGray;
   SetBoundsRect(Rect(0, 0, 400, 300));
@@ -1472,6 +1466,7 @@ var
   lx, ly: Integer;
   wheel: Single;
 begin
+  inherited; //replays a held key (csRepeatKeys), clears it when unfocused/hidden
   if Visible and Focused then
   begin
     UpdateSizes;
@@ -1483,7 +1478,6 @@ begin
     FCaretDim := 0.3 + (FCaretDim + 1) / 2 * 0.7;
     FCaretVisible := True;
     Invalidate;
-    UpdateKeyRepeat;
 
     mp := RayLib.GetMousePosition;
     lx := Round(mp.X) - WindowRect.Left - ClientRect.Left;
@@ -1535,7 +1529,6 @@ begin
   end
   else
   begin
-    FRepeatKey := KEY_NULL;
     FCaretTimer := 0;
     FCaretDim := 1;
     FCaretVisible := True;
@@ -1559,12 +1552,12 @@ end;
 
 procedure TyroEditor.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
 begin
-  //remember the key for auto-repeat while it stays held down (no Ctrl, no Insert)
-  if not (ssCtrl in Shift) and (Key <> KEY_INSERT) and (Key <> KEY_ESCAPE) then
-  begin
-    FRepeatKey := Key;
-    FRepeatTimer := cEditorRepeatDelay;
-  end;
+  //remember the key for auto-repeat while it stays held down; Ctrl/Alt
+  //combinations are one-shot shortcuts and must not repeat
+  if (ssCtrl in Shift) or (ssAlt in Shift) then
+    ClearKeyRepeat
+  else
+    TrackKeyRepeat(Key, '');
   ProcessKey(Key, Shift);
   inherited KeyDown(Key, Shift);
 end;
@@ -1691,32 +1684,6 @@ begin
         Key := KEY_NULL;
       end;
   end;
-end;
-
-procedure TyroEditor.UpdateKeyRepeat;
-var
-  dt: Double;
-  Key: TKeyboardKey;
-  Shift: TShiftState;
-begin
-  if FRepeatKey = KEY_NULL then
-    Exit;
-  if not RayLib.IsKeyDown(FRepeatKey) then
-  begin
-    FRepeatKey := KEY_NULL;
-    Exit;
-  end;
-  dt := RayLib.GetFrameTime();
-  FRepeatTimer := FRepeatTimer - dt;
-  if FRepeatTimer > 0 then
-    Exit;
-  FRepeatTimer := FRepeatTimer + cEditorRepeatInterval;
-  //rebuild the shift state live so Shift+arrow keeps extending on repeat
-  Shift := [];
-  if RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT) then
-    Shift := Shift + [ssShift];
-  Key := FRepeatKey;
-  ProcessKey(Key, Shift);
 end;
 
 procedure TyroEditor.LoadSource(ASource: TStringList);

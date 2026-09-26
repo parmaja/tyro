@@ -43,10 +43,6 @@ const
   { Minimum dim factor (0.0 = fully dimmed, 1.0 = full brightness) }
   CCaretMinDim = 0.2;
 
-  { Auto-repeat timing (in seconds) }
-  CRepeatDelay = 0.5;     //hold time before a held key starts repeating
-  CRepeatInterval = 0.03; //delay between repeats
-
   { Default values }
   CDefaultLineCount = 1000;
   CDefaultHistoryCount = 200;
@@ -101,12 +97,6 @@ type
     FCaretDim: Double;
     FCaretVisible: Boolean;
 
-    { Key auto-repeat: the last accepted key stays armed while it is physically
-      held down, then its action is replayed every CRepeatInterval seconds. }
-    FRepeatKey: TKeyboardKey;  //KEY_NULL = nothing to repeat
-    FRepeatChar: string;       //text to replay ('' = replay the key action instead)
-    FRepeatTimer: Double;
-
     FOnInput: EOnTerminalInput;
     FOnInputChange: EOnTerminalInputChange;
     FOnAny: EOnTerminalInputChange;
@@ -128,10 +118,6 @@ type
     function CharAtPixel(AX: Integer): Integer;
     procedure UpdateInputScroll;
 
-    procedure ClearKeyRepeat;
-    function IsRepeatableKey(AKey: TKeyboardKey): Boolean;
-    procedure TrackKeyRepeat(AKey: TKeyboardKey; AChar: string);
-    procedure UpdateKeyRepeat;
     procedure ProcessChar(var Key: TUTF8Char);
     procedure ProcessKey(var Key: TKeyboardKey; Shift: TShiftState);
 
@@ -172,7 +158,7 @@ type
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
 
-    procedure Update; override; //caret blink + mouse interaction (called from the main loop)
+    procedure Update; override; //key auto-repeat + caret blink + mouse interaction
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     procedure KeyPress(var Key: TUTF8Char); override;
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
@@ -263,22 +249,6 @@ begin
   Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, CPCount(S) - ACol - ACount);
 end;
 
-{ Maps a typed character back to the key that produced it, so auto-repeat can
-  poll IsKeyDown(). RayLib key codes for printable ASCII are the ASCII value of
-  the character. Input that is not a plain ASCII key (accented or any other
-  multi-byte character) returns KEY_NULL and is therefore typed only once. }
-function CPToKey(const S: string): TKeyboardKey;
-var
-  c: Char;
-begin
-  Result := KEY_NULL;
-  if Length(S) <> 1 then
-    Exit;
-  c := S[1];
-  if (c >= ' ') and (c <= '~') then
-    Result := TKeyboardKey(Ord(c));
-end;
-
 { TTyroTerminal }
 
 constructor TTyroTerminal.Create(AParent: TTyroLayout);
@@ -287,8 +257,10 @@ var
   i: Integer;
 begin
   inherited;
-  //csFocus lets the console receive keyboard input when it is shown/focused.
-  Style := [csClip, csOpaque, csVScroll, csFocus];
+  //csFocus lets the console receive keyboard input when it is shown/focused,
+  //csRepeatKeys replays a key (text, backspace, arrows, history) while it is
+  //held down.
+  Style := [csClip, csOpaque, csVScroll, csFocus, csRepeatKeys];
   BackColor := clDarkGray;
 
   FCharWidth := CDefaultCharWidth;
@@ -323,10 +295,6 @@ begin
   FCaretTimer := 0;
   FCaretDim := 1;
   FCaretVisible := True;
-
-  FRepeatKey := KEY_NULL;
-  FRepeatChar := '';
-  FRepeatTimer := 0;
 
   FSelActive := False;
   FMouseButtonDown := False;
@@ -948,76 +916,6 @@ begin
   Invalidate;
 end;
 
-{ key auto-repeat }
-
-procedure TTyroTerminal.ClearKeyRepeat;
-begin
-  FRepeatKey := KEY_NULL;
-  FRepeatChar := '';
-  FRepeatTimer := 0;
-end;
-
-function TTyroTerminal.IsRepeatableKey(AKey: TKeyboardKey): Boolean;
-begin
-  //Enter submits the line, Escape wipes it and Tab indents - holding any of
-  //them down must not submit/wipe/indent over and over. INSERT is a one-shot
-  //too: holding it would paste the clipboard again and again.
-  Result := (AKey <> KEY_NULL) and (AKey <> KEY_ENTER) and (AKey <> KEY_KP_ENTER)
-    and (AKey <> KEY_ESCAPE) and (AKey <> KEY_TAB) and (AKey <> KEY_INSERT);
-end;
-
-procedure TTyroTerminal.TrackKeyRepeat(AKey: TKeyboardKey; AChar: string);
-begin
-  ClearKeyRepeat;
-  if not IsRepeatableKey(AKey) then
-    Exit;
-  FRepeatKey := AKey;
-  FRepeatChar := AChar;
-  FRepeatTimer := CRepeatDelay;
-end;
-
-procedure TTyroTerminal.UpdateKeyRepeat;
-var
-  Shift: TShiftState;
-  Key: TKeyboardKey;
-  Ch: TUTF8Char;
-begin
-  //nothing is armed, or the terminal no longer takes input: stop repeating
-  if (FRepeatKey = KEY_NULL) or (not FInputOn) or (not Focused) or (not Visible) then
-  begin
-    ClearKeyRepeat;
-    Exit;
-  end;
-  if not RayLib.IsKeyDown(FRepeatKey) then
-  begin
-    ClearKeyRepeat;
-    Exit;
-  end;
-  FRepeatTimer := FRepeatTimer - RayLib.GetFrameTime();
-  if FRepeatTimer > 0 then
-    Exit;
-  //drop the missed repeats of a long frame instead of replaying in a burst
-  FRepeatTimer := CRepeatInterval;
-  if FRepeatChar <> '' then
-  begin
-    Ch := FRepeatChar;
-    ProcessChar(Ch);
-  end
-  else
-  begin
-    Key := FRepeatKey;
-    //rebuild the shift state live so Shift+arrow keeps extending on repeat
-    Shift := [];
-    if RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT) then
-      Shift := Shift + [ssShift];
-    if RayLib.IsKeyDown(KEY_LEFT_CONTROL) or RayLib.IsKeyDown(KEY_RIGHT_CONTROL) then
-      Shift := Shift + [ssCtrl];
-    if RayLib.IsKeyDown(KEY_LEFT_ALT) or RayLib.IsKeyDown(KEY_RIGHT_ALT) then
-      Shift := Shift + [ssAlt];
-    ProcessKey(Key, Shift);
-  end;
-end;
-
 { input }
 
 procedure TTyroTerminal.KeyPress(var Key: TUTF8Char);
@@ -1031,7 +929,7 @@ begin
     Exit;
   //arm auto-repeat for this character; the same physical key is also reported
   //as a key press (without a character) right before it
-  TrackKeyRepeat(CPToKey(S), S);
+  TrackKeyRepeat(CharToKey(S), S);
   ProcessChar(Key);
 end;
 
@@ -1510,8 +1408,12 @@ begin
     ClearKeyRepeat; //a hidden terminal must not keep replaying a held key
     Exit;
   end;
+  //replay a held key (csRepeatKeys) only while a read accepts input
+  if FInputOn then
+    inherited
+  else
+    ClearKeyRepeat;
   UpdateScrollBars;
-  UpdateKeyRepeat;
 
   // caret blink
   if Focused then

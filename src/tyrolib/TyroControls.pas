@@ -31,6 +31,11 @@ const
   cScrollSize = 7;        //* scrollbar thickness in pixels
   cScrollMinThumb = 8;    //* minimum thumb length in pixels
 
+  //* Key auto-repeat timing (in seconds), used by every control that has
+  //* csRepeatKeys in Style.
+  cKeyRepeatDelay = 0.5;     //hold time before a held key starts repeating
+  cKeyRepeatInterval = 0.03; //delay between repeats
+
 type
   {$ifdef FPC}
   TUTF8Char = LCLType.TUTF8Char;
@@ -59,6 +64,10 @@ type
     csClip,
     csOpaque,
     csFocus, //Can focus
+    //* A held key auto-repeats: the last accepted key press stays armed while
+    //* the physical key is down, then it is replayed every cKeyRepeatInterval
+    //* seconds. Arm it from the control's own KeyPress/KeyDown with
+    //* TrackKeyRepeat; Update pumps it once per frame.
     csRepeatKeys,
     csHScroll,
     csVScroll
@@ -146,6 +155,10 @@ type
     procedure Realign; virtual;
     procedure AlignControls; virtual;
     property Controls: TTyroControls read FControls;
+    //* Per-frame work: Update of this layout and, depth first, of every child
+    //* control. Called once per frame by the main loop, so a control does not
+    //* have to be known by the engine to receive its Update.
+    procedure UpdateControls; virtual;
     procedure Update; virtual;
     //WindowRect aligned rect, is Virtual changed by RealignControls of parent used paint control
     property WindowRect: TRect read FWindowRect;
@@ -198,6 +211,13 @@ type
     FVDrag: Boolean;
     FHDragOfs: Integer;
     FVDragOfs: Integer;
+    //* Key auto-repeat (csRepeatKeys): the last accepted key stays armed while
+    //* it is physically held down, then its action is replayed every
+    //* cKeyRepeatInterval seconds.
+    FRepeatKey: TKeyboardKey; //KEY_NULL = nothing to repeat
+    FRepeatChar: utf8string;  //text to replay ('' = replay the key action)
+    FRepeatTimer: Double;
+    FRepeating: Boolean;      //True while a replay runs through KeyPress/KeyDown
     function GetFocused: Boolean;
     procedure SetBackColor(AValue: TColor);
     procedure SetCanvas(AValue: TTyroCanvas);
@@ -212,6 +232,24 @@ type
     function GetHover: Boolean; virtual;
     function GetDown: Boolean; virtual;
     function GetClicked: Boolean; virtual;
+    //* Key auto-repeat, shared by every control with csRepeatKeys in Style.
+    //* Call TrackKeyRepeat from the control's own KeyPress/KeyDown for each
+    //* accepted key; Update then replays it once per frame while the physical
+    //* key stays down.
+    procedure ClearKeyRepeat;
+    function IsRepeatableKey(AKey: TKeyboardKey): Boolean; virtual;
+    //* Arm the repeat for an accepted key press; AChar is the text the key
+    //* produced ('' replays the key action instead). Ignored while a replay is
+    //* running, so a replayed key does not restart the delay.
+    procedure TrackKeyRepeat(AKey: TKeyboardKey; AChar: utf8string);
+    //* Advance the auto-repeat by one frame and replay the armed key when its
+    //* delay has passed. Does nothing without csRepeatKeys in Style.
+    procedure UpdateKeyRepeat;
+    //* Map a typed character back to the key that produced it, so the repeat
+    //* can poll IsKeyDown().
+    function CharToKey(const AChar: utf8string): TKeyboardKey;
+    //* Shift state as it is right now, used for a replayed key.
+    function CurrentShiftState: TShiftState;
   public
     //* Text/caption of the control (buttons, labels, checkboxes, edits). The
     //* Lua controls table reads/writes it through these virtuals.
@@ -253,6 +291,9 @@ type
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
     procedure Invalidate; virtual;
+
+    //Per frame (called by UpdateControls). Pumps the key auto-repeat.
+    procedure Update; override;
 
     procedure PaintWindow(ACanvas: TTyroCanvas); override;
 
@@ -776,6 +817,21 @@ procedure TTyroLayout.Update;
 begin
 end;
 
+procedure TTyroLayout.UpdateControls;
+var
+  aControl: TTyroLayout;
+begin
+  //Depth first: the control's own per-frame work (Update is virtual, so the
+  //terminal, the editor and every subclass keep their extra work), then its
+  //children. The layout itself must not call Update here - for the main
+  //window that is the caller, so it would recurse forever.
+  for aControl in FControls do
+  begin
+    aControl.Update;
+    aControl.UpdateControls;
+  end;
+end;
+
 { TTyroWindow }
 
 constructor TTyroPanel.Create(AParent: TTyroLayout);
@@ -978,7 +1034,8 @@ end;
 constructor TTyroEdit.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Style := [csClip, csOpaque, csFocus];
+  //csRepeatKeys lets a held key (text, backspace, arrows) repeat in the edit.
+  Style := [csClip, csOpaque, csFocus, csRepeatKeys];
   Border := brdNone;
   BackColor := clWhite;
   BoundsRect := Rect(0, 0, 140, 28);
@@ -1154,6 +1211,9 @@ begin
   if (Length(Key) = 1) and (Ord(Key[1]) < 32) then
     Exit;
 
+  //arm auto-repeat for this character; the same physical key is also reported
+  //as a key press (without a character) right before it
+  TrackKeyRepeat(CharToKey(Key), Key);
   if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
     DeleteSelection;
   FText := CPInsert(FText, FCaretPos, Key);
@@ -1167,6 +1227,13 @@ var
   n, oldCaret: Integer;
 begin
   inherited;
+  //Ctrl/Alt combinations are one-shot shortcuts and must not repeat; a
+  //character typed with AltGr still arms the repeat through KeyPress, which
+  //arrives right after this key press
+  if (ssCtrl in Shift) or (ssAlt in Shift) then
+    ClearKeyRepeat
+  else
+    TrackKeyRepeat(Key, '');
   n := CPCount(FText);
 
   if ssShift in Shift then
@@ -1768,6 +1835,129 @@ end;
 function TTyroControl.GetClicked: Boolean;
 begin
   Result := FClicked;
+end;
+
+{ key auto-repeat, shared by every control with csRepeatKeys in Style }
+
+procedure TTyroControl.Update;
+begin
+  //* The auto-repeat is the only per-frame work every control shares; a
+  //* control opts in through csRepeatKeys.
+  UpdateKeyRepeat;
+end;
+
+procedure TTyroControl.ClearKeyRepeat;
+begin
+  FRepeatKey := KEY_NULL;
+  FRepeatChar := '';
+  FRepeatTimer := 0;
+end;
+
+function TTyroControl.IsRepeatableKey(AKey: TKeyboardKey): Boolean;
+begin
+  //Enter submits the line, Escape wipes it and Tab indents - holding any of
+  //them down must not submit/wipe/indent over and over. INSERT is a one-shot
+  //too: holding it would paste the clipboard again and again.
+  Result := (AKey <> KEY_NULL) and (AKey <> KEY_ENTER) and (AKey <> KEY_KP_ENTER)
+    and (AKey <> KEY_ESCAPE) and (AKey <> KEY_TAB) and (AKey <> KEY_INSERT);
+end;
+
+procedure TTyroControl.TrackKeyRepeat(AKey: TKeyboardKey; AChar: utf8string);
+begin
+  //A replay goes back through KeyPress/KeyDown, so it must keep the running
+  //timer instead of arming a fresh delay.
+  if FRepeating then
+    Exit;
+  ClearKeyRepeat;
+  if not (csRepeatKeys in Style) or not IsRepeatableKey(AKey) then
+    Exit;
+  FRepeatKey := AKey;
+  FRepeatChar := AChar;
+  FRepeatTimer := cKeyRepeatDelay;
+end;
+
+function TTyroControl.CharToKey(const AChar: utf8string): TKeyboardKey;
+var
+  c: Char;
+begin
+  //RayLib reports the *unshifted* key code of a character, so a typed letter
+  //has to be uppercased to land on KEY_A..KEY_Z (65..90). Digits and
+  //punctuation already are their own key code, and the unshifted punctuation
+  //characters (for example ; on a US layout) match too. Anything else -
+  //Shift+2 producing '@', a dead key, any other multi-byte character - has no
+  //key of its own and is therefore typed only once.
+  Result := KEY_NULL;
+  if Length(AChar) <> 1 then
+    Exit;
+  c := AChar[1];
+  if (c >= 'a') and (c <= 'z') then
+    Result := TKeyboardKey(Ord(c) - 32)
+  else if (c >= '0') and (c <= '9') then
+    Result := TKeyboardKey(Ord(c))
+  else if (c >= ' ') and (c <= '~') then
+    Result := TKeyboardKey(Ord(c));
+end;
+
+function TTyroControl.CurrentShiftState: TShiftState;
+begin
+  //Rebuilt live on every replay, so Shift+arrow keeps extending a selection
+  //while it repeats.
+  Result := [];
+  if RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT) then
+    Result := Result + [ssShift];
+  if RayLib.IsKeyDown(KEY_LEFT_CONTROL) or RayLib.IsKeyDown(KEY_RIGHT_CONTROL) then
+    Result := Result + [ssCtrl];
+  if RayLib.IsKeyDown(KEY_LEFT_ALT) or RayLib.IsKeyDown(KEY_RIGHT_ALT) then
+    Result := Result + [ssAlt];
+end;
+
+procedure TTyroControl.UpdateKeyRepeat;
+var
+  Shift: TShiftState;
+  Key: TKeyboardKey;
+  Ch: TUTF8Char;
+begin
+  //Only a control that asked for it through csRepeatKeys replays keys.
+  if not (csRepeatKeys in Style) then
+  begin
+    ClearKeyRepeat;
+    Exit;
+  end;
+  //Nothing is armed, or the control no longer takes input (unfocused, hidden):
+  //stop repeating.
+  if (FRepeatKey = KEY_NULL) or (not Focused) or (not Visible) then
+  begin
+    ClearKeyRepeat;
+    Exit;
+  end;
+  if not RayLib.IsKeyDown(FRepeatKey) then
+  begin
+    ClearKeyRepeat;
+    Exit;
+  end;
+  FRepeatTimer := FRepeatTimer - RayLib.GetFrameTime();
+  if FRepeatTimer > 0 then
+    Exit;
+  //Drop the missed repeats of a long frame instead of replaying in a burst.
+  FRepeatTimer := cKeyRepeatInterval;
+  //The replay travels through the same KeyPress/KeyDown a real key press takes,
+  //so every handler behaves exactly as it does for a typed key.
+  FRepeating := True;
+  try
+    if FRepeatChar <> '' then
+    begin
+      Ch := FRepeatChar;
+      KeyPress(Ch);
+    end
+    else
+    begin
+      Key := FRepeatKey;
+      Shift := CurrentShiftState;
+      KeyDown(Key, Shift);
+    end;
+  finally
+    FRepeating := False;
+  end;
 end;
 
 function TTyroControl.GetText: utf8string;

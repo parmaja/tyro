@@ -953,25 +953,13 @@ begin
   end;
   inherited;
 
-  // Update console (handles caret blinking internally)
+  // Per-frame work of every control (key auto-repeat, caret blink, mouse)
   try
-    if Console <> nil then
-      Console.Update;
+    UpdateControls;
   except
     on E: Exception do
     begin
-      if IsConsole then WriteLn('EX-CONSOLE: ' + E.ClassName + ': ' + E.Message);
-      raise;
-    end;
-  end;
-  // Update editor (caret blink and mouse interaction)
-  try
-    if Editor <> nil then
-      Editor.Update;
-  except
-    on E: Exception do
-    begin
-      if IsConsole then WriteLn('EX-EDITOR: ' + E.ClassName + ': ' + E.Message);
+      if IsConsole then WriteLn('EX-CONTROL: ' + E.ClassName + ': ' + E.Message);
       raise;
     end;
   end;
@@ -1219,8 +1207,6 @@ end;
 
 procedure TTyroMain.ToggleConsole;
 begin
-  WriteLn('BoundsRect: ' + BoundsRect.ToString);
-  WriteLn('WindowRect' + WindowRect.ToString);
   if Console.Visible then
     HideConsole
   else
