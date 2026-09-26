@@ -432,7 +432,7 @@ type
   private
     FItems: TStrings;
     FViewCount: Integer;
-    FItemHeight: Integer;
+    FExtraHeight: Integer;
     FCustomDraw: Boolean;
     FPlaceHolder: utf8string;
     FTopIndex: Integer;   //first visible item (vertical scroll offset)
@@ -442,7 +442,7 @@ type
     function GetMaxTop: Integer;
     procedure SetItems(AValue: TStrings);
     procedure SetViewCount(AValue: Integer);
-    procedure SetItemHeight(AValue: Integer);
+    procedure SetExtraHeight(AValue: Integer);
     procedure SetCustomDraw(AValue: Boolean);
     procedure SetItemIndex(AValue: Integer);
     procedure SetPlaceHolder(AValue: utf8string);
@@ -480,7 +480,7 @@ type
     //* size given by its BoundsRect.
     property ViewCount: Integer read FViewCount write SetViewCount;
     //* Row height in pixels (0 = derived from the loaded font).
-    property ItemHeight: Integer read FItemHeight write SetItemHeight;
+    property ExtraHeight: Integer read FExtraHeight write SetExtraHeight;
     property RowHeight: Integer read GetRowHeight;
     //* When True each visible item is painted by DoCustomDraw instead of the
     //* default printed text.
@@ -1404,7 +1404,7 @@ begin
   Border := brdThin;
   BackColor := clWhite;
   FViewCount := 0;
-  FItemHeight := 0;
+  FExtraHeight := 0;
   FCustomDraw := False;
   FPlaceHolder := '';
   FTopIndex := 0;
@@ -1420,14 +1420,7 @@ end;
 
 function TTyroListBox.GetRowHeight: Integer;
 begin
-  if FItemHeight > 0 then
-    Result := FItemHeight
-  else if Resources <> nil then
-    Result := Resources.Font.Height
-  else
-    Result := 0;
-  if Result < 10 then
-    Result := 20; //fallback before/beside a loaded font
+  Result := Resources.Font.Height + FExtraHeight
 end;
 
 function TTyroListBox.GetVisibleItems: Integer;
@@ -1472,13 +1465,13 @@ begin
   Invalidate;
 end;
 
-procedure TTyroListBox.SetItemHeight(AValue: Integer);
+procedure TTyroListBox.SetExtraHeight(AValue: Integer);
 begin
   if AValue < 1 then
     AValue := 0;
-  if FItemHeight = AValue then
+  if FExtraHeight = AValue then
     Exit;
-  FItemHeight := AValue;
+  FExtraHeight := AValue;
   AutoSizeHeight;
   UpdateScrollBars;
   Invalidate;

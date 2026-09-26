@@ -22,6 +22,7 @@ uses
   Melodies, TyroSounds;
 
 const
+  cTyroDefaultFont = 'spleen-8x16.bdf';
   clFrenchSkyBlue: TRGBAColor = (Red: $77; Green: $B5; Blue: $FE; Alpha: $FF);
   clCornflowerBlue: TRGBAColor = (Red: $5d; Green: $9f; Blue: $f9; Alpha: $FF);
 
@@ -1086,7 +1087,7 @@ var
   aFontName: string;
   aFontSize: integer;
 begin
-  aFontName := Config.Sections.ReadString('font', 'font', '');
+  aFontName := Config.Sections.ReadString('font', 'font', cTyroDefaultFont);
   aFontName := GuessFileName(aFontName);
   if (aFontName = '') or not (SysUtils.FileExists(aFontName)) then
   begin

@@ -20,7 +20,7 @@ end
 function on_draw()
   -- overlay drawn after the texture blit, in sprite/world coordinates
   draw.circle(self.x, self.y, self.radius + 4, colors.yellow, false)
-  draw.text(self.x - self.radius, self.y - 48, "bounces " .. bounces, colors.white)
+  draw.text(self.x - self.radius, self.y - 48, "bounces " .. bounces, colors.black)
 end
 
 function on_collide(other, state)

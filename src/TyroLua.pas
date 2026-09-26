@@ -287,7 +287,6 @@ type
     function AddItem_func(L: Plua_State): integer; cdecl;
     function Clear_func(L: Plua_State): integer; cdecl;
     function ViewCount_func(L: Plua_State): integer; cdecl;
-    function ItemHeight_func(L: Plua_State): integer; cdecl;
     function ItemIndex_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
     destructor Destroy; override;
@@ -1113,7 +1112,6 @@ begin
   Lua.State.Register('controls', 'additem', Controls, @Controls.AddItem_func);
   Lua.State.Register('controls', 'clear', Controls, @Controls.Clear_func);
   Lua.State.Register('controls', 'viewcount', Controls, @Controls.ViewCount_func);
-  Lua.State.Register('controls', 'itemheight', Controls, @Controls.ItemHeight_func);
   Lua.State.Register('controls', 'itemindex', Controls, @Controls.ItemIndex_func);
   Lua.State.Register('controls', Controls); //should be last one
   Lua.State.RegisterTable('buttons');
@@ -2807,30 +2805,6 @@ begin
   else
   begin
     L.PushInteger(TTyroListBox(ctrl).ViewCount);
-    Result := 1;
-  end;
-end;
-
-//controls.itemheight(handle [, n]) -> get/set the row height (0 = from font)
-function TLuaControls.ItemHeight_func(L: Plua_State): integer; cdecl;
-var
-  ctrl: TTyroControl;
-begin
-  ctrl := GetControl(round(L.ToNumber(1)));
-  if (ctrl = nil) or not (ctrl is TTyroListBox) then
-  begin
-    L.PushNil;
-    Result := 1;
-    Exit;
-  end;
-  if L.Count >= 2 then
-  begin
-    FScript.RunQueueObject(TSetControlItemHeightObject.Create(TTyroListBox(ctrl), round(L.ToNumber(2))));
-    Result := 0;
-  end
-  else
-  begin
-    L.PushInteger(TTyroListBox(ctrl).ItemHeight);
     Result := 1;
   end;
 end;

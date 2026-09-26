@@ -287,12 +287,13 @@ type
     procedure DoExecute; override;
   end;
 
+  { TSetControlItemHeightObject }
+
   TSetControlItemHeightObject = class(TQueueObject)
   private
     FControl: TTyroControl;
-    FItemHeight: Integer;
   public
-    constructor Create(AControl: TTyroControl; AItemHeight: Integer);
+    constructor Create(AControl: TTyroControl);
     procedure DoExecute; override;
   end;
 
@@ -1308,16 +1309,15 @@ end;
 
 { TSetControlItemHeightObject }
 
-constructor TSetControlItemHeightObject.Create(AControl: TTyroControl; AItemHeight: Integer);
+constructor TSetControlItemHeightObject.Create(AControl: TTyroControl);
 begin
   inherited Create;
   FControl := AControl;
-  FItemHeight := AItemHeight;
 end;
 
 procedure TSetControlItemHeightObject.DoExecute;
 begin
-  TTyroListBox(FControl).ItemHeight := FItemHeight;
+  //TTyroListBox(FControl)
 end;
 
 { TSetControlItemIndexObject }

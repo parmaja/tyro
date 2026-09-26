@@ -237,11 +237,6 @@ begin
     Write(' ' + CollectStrings(WorkPaths));
     WriteLn();
   end;
-  if HasOption(#0, 'main') or HasOption('m', '') then
-    MainOptions := MainOptions + [moInMain];
-  // --main is retained for command-line compatibility. Raylib and control
-  // calls must remain on the application thread, so scripts still use the
-  // worker plus its main-thread dispatch queue.
   if HasOption(#0, 'window') or HasOption('w', '') then
     MainOptions := MainOptions + [moMainWindow];
   if HasOption(#0, 'terminal') or HasOption('t', '') then

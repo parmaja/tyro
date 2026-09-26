@@ -1779,55 +1779,55 @@ var
   // Create an image from text (custom sprite font)
   ImageTextEx: function(font: TFont; const text: PUTF8Char; fontSize: Single; spacing: Single; tint: TColor): TImage; cdecl = nil;
   // Convert image to POT (power-of-two)
-  ImageToPOT: procedure(image: PImage; fillColor: TColor); cdecl = nil;
+  ImageToPOT: procedure(var image: TImage; fillColor: TColor); cdecl = nil;
   // Convert image data to desired format
-  ImageFormat: procedure(image: PImage; newFormat: Integer); cdecl = nil;
+  ImageFormat: procedure(var image: TImage; newFormat: Integer); cdecl = nil;
   // Crop an image to a defined rectangle
-  ImageCrop: procedure(image: PImage; crop: TRectangle); cdecl = nil;
+  ImageCrop: procedure(var image: TImage; crop: TRectangle); cdecl = nil;
   // Crop image depending on alpha value
-  ImageAlphaCrop: procedure(image: PImage; threshold: Single); cdecl = nil;
+  ImageAlphaCrop: procedure(var image: TImage; threshold: Single); cdecl = nil;
   // Clear alpha channel to desired color
-  ImageAlphaClear: procedure(image: PImage; color: TColor; threshold: Single); cdecl = nil;
+  ImageAlphaClear: procedure(var image: TImage; color: TColor; threshold: Single); cdecl = nil;
   // Apply alpha mask to image
-  ImageAlphaMask: procedure(image: PImage; alphaMask: TImage); cdecl = nil;
+  ImageAlphaMask: procedure(var image: TImage; alphaMask: TImage); cdecl = nil;
   // Premultiply alpha channel
   ImageAlphaPremultiply: procedure(var image: TImage); cdecl = nil;
   // Apply Gaussian blur using a box blur approximation
-  ImageBlurGaussian: procedure(image: PImage; blurSize: integer); cdecl = nil;
+  ImageBlurGaussian: procedure(var image: TImage; blurSize: integer); cdecl = nil;
   // Apply custom square convolution kernel to image
-  ImageKernelConvolution: procedure(image: PImage; Kernel: PSingle; kernelSize: Integer); cdecl = nil;
+  ImageKernelConvolution: procedure(var image: TImage; Kernel: PSingle; kernelSize: Integer); cdecl = nil;
   // Resize image (Bicubic scaling algorithm)
-  ImageResize: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl = nil;
+  ImageResize: procedure(var image: TImage; newWidth: Integer; newHeight: Integer); cdecl = nil;
   // Resize image (Nearest-Neighbor scaling algorithm)
-  ImageResizeNN: procedure(image: PImage; newWidth: Integer; newHeight: Integer); cdecl = nil;
+  ImageResizeNN: procedure(var image: TImage; newWidth: Integer; newHeight: Integer); cdecl = nil;
   // Resize canvas and fill with color
-  ImageResizeCanvas: procedure(image: PImage; newWidth: Integer; newHeight: Integer; offsetX: Integer; offsetY: Integer; color: TColor); cdecl = nil;
+  ImageResizeCanvas: procedure(var image: TImage; newWidth: Integer; newHeight: Integer; offsetX: Integer; offsetY: Integer; color: TColor); cdecl = nil;
   // Compute all mipmap levels for a provided image
-  ImageMipmaps: procedure(image: PImage); cdecl = nil;
+  ImageMipmaps: procedure(var image: TImage); cdecl = nil;
   // Dither image data to 16bpp or lower (Floyd-Steinberg dithering)
-  ImageDither: procedure(image: PImage; rBpp: Integer; gBpp: Integer; bBpp: Integer; aBpp: Integer); cdecl = nil;
+  ImageDither: procedure(var image: TImage; rBpp: Integer; gBpp: Integer; bBpp: Integer; aBpp: Integer); cdecl = nil;
   // Flip image vertically
-  ImageFlipVertical: procedure(image: PImage); cdecl = nil;
+  ImageFlipVertical: procedure(var image: TImage); cdecl = nil;
   // Flip image horizontally
-  ImageFlipHorizontal: procedure(image: PImage); cdecl = nil;
+  ImageFlipHorizontal: procedure(var image: TImage); cdecl = nil;
   // Rotate image by input angle in degrees (-359 to 359)
-  ImageRotate: procedure(image: PImage; degrees: Integer); cdecl = nil;
+  ImageRotate: procedure(var image: TImage; degrees: Integer); cdecl = nil;
   // Rotate image clockwise 90deg
-  ImageRotateCW: procedure(image: PImage); cdecl = nil;
+  ImageRotateCW: procedure(var image: TImage); cdecl = nil;
   // Rotate image counter-clockwise 90deg
-  ImageRotateCCW: procedure(image: PImage); cdecl = nil;
+  ImageRotateCCW: procedure(var image: TImage); cdecl = nil;
   // Modify image color: tint
-  ImageColorTint: procedure(image: PImage; color: TColor); cdecl = nil;
+  ImageColorTint: procedure(var image: TImage; color: TColor); cdecl = nil;
   // Modify image color: invert
-  ImageColorInvert: procedure(image: PImage); cdecl = nil;
+  ImageColorInvert: procedure(var image: TImage); cdecl = nil;
   // Modify image color: grayscale
-  ImageColorGrayscale: procedure(image: PImage); cdecl = nil;
+  ImageColorGrayscale: procedure(var image: TImage); cdecl = nil;
   // Modify image color: contrast (-100 to 100)
-  ImageColorContrast: procedure(image: PImage; contrast: Single); cdecl = nil;
+  ImageColorContrast: procedure(var image: TImage; contrast: Single); cdecl = nil;
   // Modify image color: brightness (-255 to 255)
-  ImageColorBrightness: procedure(image: PImage; brightness: Integer); cdecl = nil;
+  ImageColorBrightness: procedure(var image: TImage; brightness: Integer); cdecl = nil;
   // Modify image color: replace color
-  ImageColorReplace: procedure(image: PImage; color: TColor; replace: TColor); cdecl = nil;
+  ImageColorReplace: procedure(var image: TImage; color: TColor; replace: TColor); cdecl = nil;
   // Get pixel data from image as a Color struct array
   LoadImageColors: function(image: TImage): PColor; cdecl = nil;
   // Extract color palette from image to maximum size (memory should be freed)
