@@ -71,7 +71,8 @@ type
   TFilePickEvent = procedure(Sender: TObject; const AFileName: string) of object;
 
   //The F4 script picker: a list of loadable files (default *.ls) shown centered
-  //over the main window. Keyboard: Up/Down select, Enter picks, Escape cancels.
+  //over the main window. Keyboard: Up/Down/PageUp/PageDown/Home/End select (from
+  //TTyroListBox), Enter picks, Escape cancels.
   //Clicking a row selects it; clicking the selected row again picks it.
   TTyroFileList = class(TTyroListBox)
   private
@@ -1643,22 +1644,10 @@ procedure TTyroFileList.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
 var
   aFile: string;
 begin
-  inherited;
+  //Up/Down/PageUp/PageDown/Home/End and the clipboard keys come from
+  //TTyroListBox; this adds what only the picker needs.
+  inherited KeyDown(Key, Shift);
   case Key of
-    KEY_UP:
-    begin
-      if ItemIndex > 0 then
-        ItemIndex := ItemIndex - 1
-      else if ItemIndex < 0 then
-        ItemIndex := 0;
-      Key := KEY_NULL;
-    end;
-    KEY_DOWN:
-    begin
-      if ItemIndex < Items.Count - 1 then
-        ItemIndex := ItemIndex + 1;
-      Key := KEY_NULL;
-    end;
     KEY_ENTER:
     begin
       if ItemIndex >= 0 then

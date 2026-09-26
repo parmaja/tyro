@@ -406,6 +406,14 @@ type
     procedure SetPlaceHolder(AValue: utf8string);
     procedure DeleteSelection;
     procedure EnsureCaretVisible;
+    //* Selection/clipboard (Ctrl+A/C/X/V, Ctrl+Insert, Shift+Insert)
+    function HasSelection: Boolean;
+    function GetSelRange(out AFrom, ATo: Integer): Boolean;
+    function SelectedText: utf8string;
+    procedure SelectAll;
+    procedure CopySelection;
+    procedure CutSelection;
+    procedure PasteText;
   protected
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     function GetText: utf8string; override;
@@ -449,10 +457,18 @@ type
     procedure AutoSizeHeight;
     procedure ClampTop;
     procedure UpdateScrollBars;
+    //* Move the selection by AStep rows (negative is up). APage also scrolls
+    //* the view by the same amount, so a page key advances exactly one screen.
+    //* A step past either end stops there; a list with no selection starts at
+    //* the first item.
+    procedure MoveSelection(AStep: Integer; APage: Boolean);
+    //* Copy the text of the selected item to the clipboard.
+    procedure CopyItem;
   protected
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     procedure SizeChanged; override;
     procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
+    procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
     //* Custom per-item painting, called for every visible item when CustomDraw
     //* is True. Override it in a subclass to paint AItemRect yourself; the
@@ -1108,22 +1124,99 @@ procedure TTyroEdit.DeleteSelection;
 var
   a, b: Integer;
 begin
-  if (FSelStart < 0) or (FSelEnd < 0) or (FSelStart = FSelEnd) then
+  if not GetSelRange(a, b) then
     Exit;
-  if FSelStart < FSelEnd then
-  begin
-    a := FSelStart;
-    b := FSelEnd;
-  end
-  else
-  begin
-    a := FSelEnd;
-    b := FSelStart;
-  end;
   FText := CPDelete(FText, a, b - a);
   FCaretPos := a;
   FSelStart := -1;
   FSelEnd := -1;
+  Invalidate;
+end;
+
+{ True while the anchor and the caret span a non-empty range. }
+function TTyroEdit.HasSelection: Boolean;
+begin
+  Result := (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd);
+end;
+
+{ The selection in document order, so it can be dragged backwards. False when
+  there is nothing selected, leaving AFrom/ATo untouched. }
+function TTyroEdit.GetSelRange(out AFrom, ATo: Integer): Boolean;
+begin
+  Result := HasSelection;
+  if not Result then
+    Exit;
+  if FSelStart < FSelEnd then
+  begin
+    AFrom := FSelStart;
+    ATo := FSelEnd;
+  end
+  else
+  begin
+    AFrom := FSelEnd;
+    ATo := FSelStart;
+  end;
+end;
+
+function TTyroEdit.SelectedText: utf8string;
+var
+  a, b: Integer;
+begin
+  Result := '';
+  if not GetSelRange(a, b) then
+    Exit;
+  Result := CPSub(FText, a, b - a);
+end;
+
+procedure TTyroEdit.SelectAll;
+begin
+  if FText = '' then
+    Exit;
+  FSelStart := 0;
+  FSelEnd := CPCount(FText);
+  FCaretPos := FSelEnd;
+  EnsureCaretVisible;
+  Invalidate;
+end;
+
+procedure TTyroEdit.CopySelection;
+var
+  S: utf8string;
+begin
+  S := SelectedText;
+  if S <> '' then
+    RayLib.SetClipboardText(PUTF8Char(S));
+end;
+
+procedure TTyroEdit.CutSelection;
+begin
+  if not HasSelection then
+    Exit;
+  CopySelection;
+  DeleteSelection;
+  EnsureCaretVisible;
+end;
+
+{ Inserts the clipboard at the caret, replacing the selection. Line ends are
+  dropped: a TTyroEdit holds a single line. }
+procedure TTyroEdit.PasteText;
+var
+  P: PUTF8Char;
+  S: utf8string;
+begin
+  P := RayLib.GetClipboardText;
+  S := '';
+  if P <> nil then
+    S := PUTF8Char(P);
+  S := StringReplace(S, #13#10, '', [rfReplaceAll]);
+  S := StringReplace(S, #13, '', [rfReplaceAll]);
+  S := StringReplace(S, #10, '', [rfReplaceAll]);
+  if S = '' then
+    Exit;
+  DeleteSelection;
+  FText := CPInsert(FText, FCaretPos, S);
+  Inc(FCaretPos, CPCount(S));
+  EnsureCaretVisible;
   Invalidate;
 end;
 
@@ -1161,7 +1254,6 @@ var
   textColor: TColor;
   caretX, selX, selW: Integer;
   a, b: Integer;
-  sel: Boolean;
 begin
   inherited;
   r := ClientRect;
@@ -1169,19 +1261,8 @@ begin
   th := Resources.Font.Height;
 
   //selection highlight under the text
-  sel := (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd);
-  if sel then
+  if GetSelRange(a, b) then
   begin
-    if FSelStart < FSelEnd then
-    begin
-      a := FSelStart;
-      b := FSelEnd;
-    end
-    else
-    begin
-      a := FSelEnd;
-      b := FSelStart;
-    end;
     selX := 2 + Round(TextWidth(CPSub(FText, 0, a))) - FScrollPos;
     selW := Round(TextWidth(CPSub(FText, a, b - a)));
     ACanvas.FillRectangle(selX + 1, 1, selW, r.Height - 2, clBlue.ReplaceAlpha(90));
@@ -1213,7 +1294,7 @@ begin
   //arm auto-repeat for this character; the same physical key is also reported
   //as a key press (without a character) right before it
   TrackKeyRepeat(CharToKey(Key), Key);
-  if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+  if HasSelection then
     DeleteSelection;
   FText := CPInsert(FText, FCaretPos, Key);
   Inc(FCaretPos);
@@ -1235,8 +1316,33 @@ begin
     TrackKeyRepeat(Key, '');
   n := CPCount(FText);
 
+  //Clipboard shortcuts come first, so Ctrl+Shift+C/V/A/X keep working the way
+  //every other application answers them. A Ctrl key this edit does not know
+  //about falls through to the selection keys below.
+  if ssCtrl in Shift then
+  begin
+    case Key of
+      KEY_A: SelectAll;
+      KEY_C: CopySelection;
+      KEY_X: CutSelection;
+      KEY_V: PasteText;
+      KEY_INSERT: CopySelection; //the traditional console key: CTRL+INSERT copies
+    else
+      Exit;
+    end;
+    Key := KEY_NULL;
+    Exit;
+  end;
+
   if ssShift in Shift then
   begin
+    //the traditional console key: SHIFT+INSERT pastes
+    if Key = KEY_INSERT then
+    begin
+      PasteText;
+      Key := KEY_NULL;
+      Exit;
+    end;
     //move the caret and extend/start the selection anchored at the old position
     case Key of
       KEY_LEFT:
@@ -1285,7 +1391,7 @@ begin
   case Key of
     KEY_BACKSPACE:
     begin
-      if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+      if HasSelection then
         DeleteSelection
       else if FCaretPos > 0 then
       begin
@@ -1297,7 +1403,7 @@ begin
     end;
     KEY_DELETE:
     begin
-      if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+      if HasSelection then
         DeleteSelection
       else if FCaretPos < n then
       begin
@@ -1308,7 +1414,7 @@ begin
     end;
     KEY_LEFT:
     begin
-      if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+      if HasSelection then
       begin
         if FSelStart < FSelEnd then
           FCaretPos := FSelStart
@@ -1324,7 +1430,7 @@ begin
     end;
     KEY_RIGHT:
     begin
-      if (FSelStart >= 0) and (FSelEnd >= 0) and (FSelStart <> FSelEnd) then
+      if HasSelection then
       begin
         if FSelStart > FSelEnd then
           FCaretPos := FSelStart
@@ -1400,7 +1506,9 @@ begin
   //control (Border, BoundsRect) runs SizeChanged -> ClampTop -> GetMaxTop, which
   //reads FItems.
   FItems := TStringList.Create;
-  Style := [csClip, csOpaque, csVScroll, csFocus];
+  //csRepeatKeys lets a held arrow walk through the items without the user
+  //having to tap it again for every row.
+  Style := [csClip, csOpaque, csVScroll, csFocus, csRepeatKeys];
   Border := brdThin;
   BackColor := clWhite;
   FViewCount := 0;
@@ -1588,6 +1696,82 @@ begin
   inherited;
   ClampTop;
   UpdateScrollBars;
+end;
+
+procedure TTyroListBox.MoveSelection(AStep: Integer; APage: Boolean);
+var
+  i: Integer;
+begin
+  if FItems.Count <= 0 then
+    Exit;
+  if FItemIndex < 0 then
+  begin
+    ItemIndex := 0;
+    Exit;
+  end;
+  if APage then
+  begin
+    //Scroll the view along with the selection first. SetItemIndex only moves
+    //the view as far as it must to reveal the row, which for a page key would
+    //leave the selection at the bottom edge instead of advancing a full page.
+    Inc(FTopIndex, AStep);
+    ClampTop;
+  end;
+  i := FItemIndex + AStep;
+  if i < 0 then
+    i := 0
+  else if i > FItems.Count - 1 then
+    i := FItems.Count - 1;
+  ItemIndex := i;
+end;
+
+procedure TTyroListBox.CopyItem;
+begin
+  if (FItemIndex < 0) or (FItemIndex >= FItems.Count) then
+    Exit;
+  //An empty row must not wipe the clipboard of a real copy
+  if FItems[FItemIndex] <> '' then
+    RayLib.SetClipboardText(PUTF8Char(FItems[FItemIndex]));
+end;
+
+procedure TTyroListBox.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
+begin
+  inherited;
+  //Ctrl/Alt combinations are one-shot shortcuts and must not repeat, so a held
+  //Ctrl+C copies once. Every other key is armed for the auto-repeat, which is
+  //what makes a held arrow or page key keep walking the list.
+  if (ssCtrl in Shift) or (ssAlt in Shift) then
+    ClearKeyRepeat
+  else
+    TrackKeyRepeat(Key, '');
+
+  if ssCtrl in Shift then
+  begin
+    case Key of
+      KEY_C, KEY_INSERT: CopyItem; //CTRL+INSERT is the traditional copy key
+    else
+      Exit;
+    end;
+    Key := KEY_NULL;
+    Exit;
+  end;
+
+  case Key of
+    KEY_UP: MoveSelection(-1, False);
+    KEY_DOWN: MoveSelection(1, False);
+    KEY_PAGE_UP: MoveSelection(-GetVisibleItems, True);
+    KEY_PAGE_DOWN: MoveSelection(GetVisibleItems, True);
+    KEY_HOME:
+      if FItems.Count > 0 then
+        ItemIndex := 0;
+    KEY_END:
+      if FItems.Count > 0 then
+        ItemIndex := FItems.Count - 1;
+  else
+    //Every other key is none of the list box's business, leave it alone.
+    Exit;
+  end;
+  Key := KEY_NULL;
 end;
 
 procedure TTyroListBox.Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer);
