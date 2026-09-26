@@ -746,7 +746,6 @@ begin
     if aCount = 0 then
       exit; //Finally will be called, dont worry
 
-    WriteLn(ClassName + ': AlignControls');
     ir := InnerRect;
     cr := ClientRect;
 
@@ -799,7 +798,7 @@ begin
       begin
         tr := cr;
         tr.Offset(ir.Left, ir.Top);
-        aControl.SetWindowRect(cr);
+        aControl.SetWindowRect(tr);
       end;
     end;
 

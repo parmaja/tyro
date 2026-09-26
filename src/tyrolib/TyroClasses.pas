@@ -1087,7 +1087,7 @@ var
   aFontSize: integer;
 begin
   aFontName := Config.Sections.ReadString('font', 'font', '');
-  aFontName := ExpandToPath(aFontName, WorkSpace);
+  aFontName := GuessFileName(aFontName);
   if (aFontName = '') or not (SysUtils.FileExists(aFontName)) then
   begin
     res := Find('font', 'png');

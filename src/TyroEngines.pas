@@ -774,6 +774,9 @@ begin
   Editor.BoundsRect := Rect(0, 0, 200, 200);
   Editor.Visible := False;
   Editor.OnClose := EditorClosed;
+  Editor.Border:= brdSizable;
+  Editor.Margin:= 5;
+  Editor.Align := alClient;
   Editor.OnSave := EditorSave;
 
   //F4 script picker; BoundsRect is recentered every time it is shown so it
