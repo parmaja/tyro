@@ -554,14 +554,14 @@ type
   protected
     FScript: TTyroScript;
     procedure TerminatedSet; override;
-  public
     procedure Execute; override;
+  public
     procedure Start; reintroduce;
     constructor Create(AScript: TTyroScript); virtual;
     destructor Destroy; override;
-   property Started: Boolean read GetStarted;
-   property Completed: Boolean read GetCompleted;
-   property Active: Boolean read GetActive;
+    property Started: Boolean read GetStarted;
+    property Completed: Boolean read GetCompleted;
+    property Active: Boolean read GetActive;
     property Script: TTyroScript read FScript;
   end;
 

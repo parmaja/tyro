@@ -2481,6 +2481,7 @@ function Vector2Of(X, Y: Single): TVector2;
 function Vector3Of(X, Y, Z: Single): TVector3;
 function RectangleOf(X, Y, W, H: Single): TRectangle; overload;
 function RectangleOf(ARect: TRect): TRectangle; overload;
+function PointOf(Vector2: TVector2): TPoint;
 
 procedure InitLibrary;
 
@@ -2504,6 +2505,11 @@ end;
 function RectangleOf(ARect: TRect): TRectangle; overload;
 begin
   Result := TRectangle.Create(ARect.Left, ARect.Top, ARect.Width, ARect.Height);
+end;
+
+function PointOf(Vector2: TVector2): TPoint;
+begin
+  Result := Point(Round(Vector2.X), Round(Vector2.Y));
 end;
 
 function TColorHelper.SetAlpha(AAlpha: Byte): TColor;

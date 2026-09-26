@@ -1796,12 +1796,12 @@ end;
 
 function TTyroControl.IsMouseOver: Boolean;
 var
-  mp: TVector2;
+  mp: TPoint;
 begin
   Result := False;
   if (WindowRect.Width <= 0) or (WindowRect.Height <= 0) then
     Exit;
-  mp := TVector2(RayLib.GetMousePosition);
+  mp := PointOf(RayLib.GetMousePosition);
   Result := (mp.X >= WindowRect.Left) and (mp.X <= WindowRect.Right) and
             (mp.Y >= WindowRect.Top) and (mp.Y <= WindowRect.Bottom);
 end;
