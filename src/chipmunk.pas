@@ -14,15 +14,15 @@ unit chipmunk;
 interface
 
 uses
-  mnLibraries, SysUtils;
+  mnLibraries, SysUtils, Types;
 
 type
   cpFloat = Double;
   cpBool = Byte;
   cpBitmask = Cardinal;
   cpTimestamp = Cardinal;
-  cpGroup = PtrUInt;
-  cpCollisionType = PtrUInt;
+  cpGroup = UIntPtr;
+  cpCollisionType = UIntPtr;
   cpDataPointer = Pointer;
 
   cpSpace = Pointer;

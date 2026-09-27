@@ -326,7 +326,8 @@ type
   public
     Font: TRayFont;
     Config: TConfFile;
-    WorkSpace: utf8string;
+    WorkPath: utf8string;
+    AppPath: utf8string;
     function GuessFileName(const FileName: string; InDirectory: string = ''): string;
     function Find(const ResName, ResType: string): TTyroResource; overload;
     procedure Load; virtual;
@@ -994,8 +995,8 @@ end;
 constructor TTyroResources.Create;
 begin
   inherited;
-  //WorkSpace:= ExtractFilePath(ParamStr(0));
-  WorkSpace:= GetCurrentDir;
+  AppPath:= IncludePathDelimiter(ExtractFilePath(ParamStr(0)));
+  WorkPath:= GetCurrentDir;
   Config := TConfFile.Create;
   Font := TRayFont.Create;
   {$include 'font.inc'}
@@ -1017,9 +1018,9 @@ const
 var
   aFileName: string;
 begin
-  aFileName := IncludePathDelimiter(WorkSpace) + cConfigFile;
+  aFileName := IncludePathDelimiter(WorkPath) + cConfigFile;
   if not SysUtils.FileExists(aFileName) then
-    aFileName := IncludePathDelimiter(WorkSpace) + cConfigFile;
+    aFileName := IncludePathDelimiter(AppPath) + cConfigFile;
   try
     if SysUtils.FileExists(aFileName) then
       Config.LoadFromFile(aFileName);
@@ -1045,18 +1046,18 @@ begin
         exit(s);
     end;
 
-    if (InDirectory = '') or (not SameFileName(Resources.WorkSpace, InDirectory)) then
+    if (InDirectory = '') or (not SameFileName(Resources.WorkPath, InDirectory)) then
     begin
-      s := IncludePathDelimiter(Resources.WorkSpace) + FileName;
+      s := IncludePathDelimiter(Resources.WorkPath) + FileName;
       if SysUtils.FileExists(s) then
         exit(s);
     end;
 
-    s := IncludePathDelimiter(Resources.WorkSpace) + 'assets' + PathDelim + FileName;
+    s := IncludePathDelimiter(Resources.WorkPath) + 'assets' + PathDelim + FileName;
     if SysUtils.FileExists(s) then
       Exit(s);
 
-    s := IncludePathDelimiter(Resources.WorkSpace) + FileName;
+    s := IncludePathDelimiter(Resources.AppPath) + FileName;
     if SysUtils.FileExists(s) then
       Exit(s);
 
@@ -1094,8 +1095,6 @@ begin
     res := Find('font', 'png');
     if res <> nil then
       Font.LoadFromString(res.ResData, 16)
-    else if SysUtils.FileExists(WorkSpace + 'font.png') then
-      Font.LoadFromFile(WorkSpace + 'font.png')
     else
       Font.LoadDefault;
   end

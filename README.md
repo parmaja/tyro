@@ -326,6 +326,41 @@ shader.value = 0.8
 shader.area  = {0, 0, canvas.width, canvas.height}
 ```
 
+# Screen Shake
+
+`shake` jolts the world, the way an accident or an error should feel. Every
+frame the canvas and the sprites are moved by a random offset that fades out
+until the time is up; the terminal and the other controls stay glued to the
+window.
+
+| Function | Description |
+|----------|-------------|
+| `shake(ms [, power])` | Shake the world for *ms* milliseconds; `power` is the maximum offset in pixels (10 by default) |
+| `window.shake(ms [, power])` | The same function on the `window` table |
+| `window.shaking` | Read-only boolean — `true` while a shake is still running |
+| `shake(0)` | Stop a running shake |
+
+A new call restarts the shake, so a longer or harder one simply wins. See
+`demos/shake_demo.ls`.
+
+```lua
+window.show(640, 480)
+
+-- an accident: a long, hard jolt
+shake(800, 40)
+
+while cycle do
+    canvas.color = colors.black
+    canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+    canvas.color = colors.red
+    canvas.circle(300, 240, 30, true)
+
+    if iskeypressed("space") then
+        window.shake(400)  -- 400ms with the default power
+    end
+end
+```
+
 # Controls
 
 Controls are created by class name and are owned by the control tree. Panels are
@@ -430,6 +465,7 @@ tyro demos/<name>.lua
 | `demos/multiply.lua` | Drawing + MML sound |
 | `demos/text.lua` | Multi-language text rendering |
 | `demos/shader_demo.lua` | Post-processing shaders: water, glow, gray, sepia, invert, vignette, pixelate |
+| `demos/shake_demo.ls` | Screen shake: `shake(ms, power)` / `window.shake(ms, power)` — the world jolts like an accident or an error |
 
 # Threading model & lifecycle
 

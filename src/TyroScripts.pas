@@ -8,7 +8,7 @@ unit TyroScripts;
 interface
 
 uses
-  Classes, SysUtils, SyncObjs,
+  Classes, SysUtils, SyncObjs, Types,
   mnUtils, mnClasses, mnLogs,
   RayLib, RayClasses,
   Melodies, TyroSounds,
@@ -610,32 +610,32 @@ begin
   finally
     // TThread.Finished is a plain Boolean written by the worker. Publish
     // completion atomically for lifecycle decisions made by the main thread.
-    InterlockedExchange(FCompleted, 1);
+    TInterlocked.Exchange(FCompleted, 1);
   end;
 end;
 
 procedure TTyroScriptThread.Start;
 begin
-  if InterlockedCompareExchange(FStarted, 1, 0) <> 0 then
+  if TInterlocked.CompareExchange(FStarted, 1, 0) <> 0 then
     Exit;
   // Record the resume request synchronously. Setting this in Execute leaves a
   // race where Stop sees an apparently unstarted thread that is already live.
   try
     inherited Start;
   except
-    InterlockedExchange(FStarted, 0);
+    TInterlocked.Exchange(FStarted, 0);
     raise;
   end;
 end;
 
 function TTyroScriptThread.GetStarted: Boolean;
 begin
-  Result := InterlockedExchangeAdd(FStarted, 0) <> 0;
+  Result := TInterlocked.Add(FStarted, 0) <> 0;
 end;
 
 function TTyroScriptThread.GetCompleted: Boolean;
 begin
-  Result := InterlockedExchangeAdd(FCompleted, 0) <> 0;
+  Result := TInterlocked.Add(FCompleted, 0) <> 0;
 end;
 
 constructor TTyroScriptThread.Create(AScript: TTyroScript);
@@ -769,7 +769,7 @@ begin
   // script worker, so marshal detachment to the application thread.
   if Main <> nil then
   begin
-    if GetCurrentThreadID = MainThreadID then
+    if TThread.Current.ThreadID = MainThreadID then
       Main.CancelConsoleRead(Self)
     else
  TThread.Synchronize(TThread.CurrentThread,
@@ -946,13 +946,13 @@ end;
 
 procedure TQueueObject.Cancel;
 begin
-  InterlockedExchange(FCancelled, 1);
+  TInterlocked.Exchange(FCancelled, 1);
   SetEvent;
 end;
 
 function TQueueObject.GetCancelled: Boolean;
 begin
-  Result := InterlockedExchangeAdd(FCancelled, 0) <> 0;
+  Result := TInterlocked.Add(FCancelled, 0) <> 0;
 end;
 
 procedure TQueueObject.Execute;
@@ -1025,7 +1025,7 @@ begin
   // abandoned parented control back to the application thread.
   if FExecutionAttempted and (FControl <> nil) and not FTransferred then
   begin
-    if GetCurrentThreadID = MainThreadID then
+    if TThread.Current.ThreadID = MainThreadID then
       FreeUntransferredControl
     else
       TThread.Synchronize(TThread.CurrentThread, FreeUntransferredControl);
@@ -1528,12 +1528,12 @@ end;
 
 function TTyroScript.GetActive: Boolean;
 begin
-  Result := InterlockedExchangeAdd(FActive, 0) <> 0;
+  Result := TInterlocked.Add(FActive, 0) <> 0;
 end;
 
 function TTyroScript.GetStarted: Boolean;
 begin
-  Result := InterlockedExchangeAdd(FStarted, 0) <> 0;
+  Result := TInterlocked.Add(FStarted, 0) <> 0;
 end;
 
 procedure TTyroScript.ExecuteQueueObject;
@@ -1598,7 +1598,7 @@ end;
 constructor TTyroScript.Create;
 begin
   inherited Create;
-  InterlockedExchange(FActive, 1);
+  TInterlocked.Exchange(FActive, 1);
   ScriptText := TStringList.Create;
 end;
 
@@ -1610,19 +1610,19 @@ end;
 
 procedure TTyroScript.Stop;
 begin
-  InterlockedExchange(FActive, 0);
+  TInterlocked.Exchange(FActive, 0);
 end;
 
 procedure TTyroScript.Start;
 begin
-  InterlockedExchange(FStarted, 1);
-  InterlockedExchange(FActive, 1);
+  TInterlocked.Exchange(FStarted, 1);
+  TInterlocked.Exchange(FActive, 1);
   try
     BeforeRun;
     Run;
     AfterRun;
   finally
-    InterlockedExchange(FActive, 0);
+    TInterlocked.Exchange(FActive, 0);
   end;
 end;
 

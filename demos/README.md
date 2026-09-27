@@ -55,6 +55,7 @@ tyro demos/pong.lua
 | File | Feature |
 |------|---------|
 | `shader_demo.lua` | Post-processing shaders: `shader.effect`, `shader.value`, `shader.area` and `shader.load("custom.frag")` |
+| `shake_demo.ls` | Screen shake: `shake(ms, power)` / `window.shake(ms, power)`, `window.shaking` — the world jolts and fades out, like an accident or an error |
 
 ### Input
 

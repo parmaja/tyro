@@ -647,7 +647,7 @@ begin
   if ((AData[0] and $0F) <> 8) or (((Integer(AData[0]) shl 8) or AData[1]) mod 31 <> 0) or
      ((AData[1] and $20) <> 0) then
     Exit;
-  Result := GetMem(AExpected);
+  Result := GetMemory(AExpected);
   N := InflateRaw(AData + 2, ASrcSize - 2, Result, AExpected);
   if N <> AExpected then
   begin
@@ -963,7 +963,7 @@ begin
         begin
           Cel.Width := W;
           Cel.Height := H;
-          Cel.Pixels := GetMem(PixelCount * 4);
+          Cel.Pixels := GetMemory(PixelCount * 4);
           DecodeToRGBA(@FData[FPos], PixelCount, Cel.Pixels, IsBackgroundLayer(Cel.LayerIndex));
           FPos := FPos + SrcBytes;
         end
@@ -985,7 +985,7 @@ begin
           begin
             Cel.Width := W;
             Cel.Height := H;
-            Cel.Pixels := GetMem(PixelCount * 4);
+            Cel.Pixels := GetMemory(PixelCount * 4);
             DecodeToRGBA(Raw, PixelCount, Cel.Pixels, IsBackgroundLayer(Cel.LayerIndex));
             FreeMem(Raw);
           end;

@@ -14,7 +14,7 @@ interface
 uses
   Classes, SysUtils,
   RayLib, Generics.Collections,
-  TyroControls, TyroClasses, TyroSounds;
+  TyroEngines, TyroControls, TyroClasses, TyroSounds;
 
 type
   TEdge = (egLeft, egTop, egRight, egBottom);
@@ -24,7 +24,7 @@ type
 
   TCells = TObjectList<TCell>;
 
-  TCell = class
+  TCell = class(TObject)
   public
     Row: Integer;
     Col: Integer;
@@ -38,10 +38,9 @@ type
     function Check: TCell;
   end;
 
-  TMain = class(TTyroMainWindow)
+  TMain = class(TTyroMain)
   public
     M: TMusic;
-    procedure Init; override;
     procedure Load; override;
     procedure Update; override;
     procedure Draw; override;
@@ -153,7 +152,7 @@ var
   c: TColor;
   x, y, w: Single;
 begin
-  with Canvas do
+  with Main.Canvas do
   begin
     w := Self.Width;
     x := Col*w;
@@ -210,10 +209,13 @@ begin
   end;
 end;
 
-procedure TMain.Init;
+procedure TMain.Load;
 begin
   inherited;
   InitAudioDevice;
+  FPS := 10;
+//  M := LoadMusicStream(PUTF8Char('D:\lab\pascal\tyro\demos\willtell.xm'));
+//  PlayMusicStream(M);
   FCW := FWidth div FCols;
   Cells := TObjectList<TCell>.Create;
   Stack := TStack<TCell>.Create;
@@ -225,15 +227,6 @@ begin
       Cells.Add(TCell.Create(row, col, FCW));
 
   FCurrent := Cells[0];
-end;
-
-procedure TMain.Load;
-begin
-  inherited;
-  SetFPS(10);
-  Options := Options + [moShowFPS];
-//  M := LoadMusicStream(PUTF8Char('D:\lab\pascal\tyro\demos\willtell.xm'));
-//  PlayMusicStream(M);
 end;
 
 procedure TMain.Unload;

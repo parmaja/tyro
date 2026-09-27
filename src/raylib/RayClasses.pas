@@ -156,7 +156,7 @@ type
     procedure LoadFromFile(FileName: utf8string; FontSize: Integer = 0);
     procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
     procedure LoadFromBDF(FileName: utf8string; FontSize: Integer = 0);
-    procedure LoadFromMemory(FileType: string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger = nil; CodepointsCount: Integer = 0);
+    procedure LoadFromMemory(FileType: utf8string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger = nil; CodepointsCount: Integer = 0);
     procedure LoadDefault;
     procedure Unload;
   end;
@@ -272,7 +272,7 @@ begin
   //Width := Width * 2;
 end;
 
-procedure TRayFont.LoadFromMemory(FileType: string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger; CodepointsCount: Integer);
+procedure TRayFont.LoadFromMemory(FileType: utf8string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger; CodepointsCount: Integer);
 begin
   Unload;
   Data := LoadFontFromMemory(PUTF8Char(FileType), FontData, DataSize, FontSize, Codepoints, CodepointsCount);

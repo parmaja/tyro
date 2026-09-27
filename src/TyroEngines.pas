@@ -1,5 +1,7 @@
 unit TyroEngines;
+{$ifdef FPC}
 {$MODE DELPHI} {$H+}
+{$endif}
  {**
  *  This file is part of the "Tyro"
  *
@@ -12,7 +14,7 @@ unit TyroEngines;
 interface
 
 uses
-  Classes, SysUtils, SyncObjs,
+  Classes, SysUtils, SyncObjs, StrUtils,
   mnLogs, mnUtils, mnConfigs,
   RayLib, RayClasses, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
@@ -30,6 +32,8 @@ const
   cMainMargin = 16;
   cDefaultWindowWidth = 640;
   cDefaultWindowHeight = 480;
+  //Default screen shake amplitude in pixels (used when Shake gets no power)
+  cShakePower = 10;
 
 var
   // Debug switch: when True, DBG messages are written to the console.
@@ -42,7 +46,7 @@ type
 
   TConsoleCommand = class(TmnNamedObject)
   public
-    Alts: TStringArray;
+    Alts: TArray<string>;
     Proc: TProcedureObject;
     Note: string;
     SyncIt: Boolean;
@@ -60,8 +64,8 @@ type
 
   TConsoleCommands = class(TmnNamedObjectList<TConsoleCommand>)
   public
-    function Add(Sync: Boolean; Name: UTF8String; Alts: TStringArray; Proc: TProcedureObject; ANote: string = ''): TConsoleCommand; overload;
-    function Add(Name: UTF8String; Alts: TStringArray; Proc: TProcedureObject; ANote: string = ''): TConsoleCommand; overload;
+    function Add(Sync: Boolean; Name: UTF8String; Alts: TArray<string>; Proc: TProcedureObject; ANote: string = ''): TConsoleCommand; overload;
+    function Add(Name: UTF8String; Alts: TArray<string>; Proc: TProcedureObject; ANote: string = ''): TConsoleCommand; overload;
     function Find(const Name: string): TConsoleCommand; overload;
     function Execute(Name: UTF8String; Params: TStrings = nil): Boolean; overload;
   end;
@@ -165,8 +169,15 @@ type
     FPresentedFrame: Boolean;
     FScriptFailed: Boolean;
     FRunning: LongInt;
+    //* Screen shake state (see Shake). FShakeTime counts the seconds left,
+    //* FShakeDuration the full length of the current shake so the amplitude can
+    //* fade out, and FShakeX/FShakeY hold this frame's random offset in pixels.
+    FShakeTime, FShakeDuration: Double;
+    FShakePower: Integer;
+    FShakeX, FShakeY: Integer;
     function GetRunning: Boolean;
     procedure SetRunning(AValue: Boolean);
+    function GetShaking: Boolean;
   protected
     Commands: TConsoleCommands;
     procedure SizeChanged; override;
@@ -193,13 +204,19 @@ type
     procedure ResizeWindow(AWidth, AHeight: Integer); virtual;
 
     //* Before Show window
-    procedure Init; virtual;
+    procedure Load; virtual;
     procedure Run(AOptions: TTyroMainOptions);
+    procedure Unload; virtual;
     //* After window initialized and other resource, load your resources here
     procedure Start; virtual;
     procedure Update; override;
     procedure PrepareDraw; virtual;
     procedure Draw; virtual;
+
+    //* Advance the screen shake by ADeltaTime seconds and pick a new random
+    //* offset for this frame (FShakeX/FShakeY). Returns True while the shake is
+    //* still running, so the drawing cycle can offset the world camera.
+    function UpdateShake(ADeltaTime: Double): Boolean;
 
     //When application exit, unload your resources
     procedure ProcessQueue;
@@ -235,6 +252,18 @@ type
     //* EndDrawing on the main thread.
     procedure QueueScreenshot(const AFileName: String);
 
+    //* Shake the world (canvas + sprites) for ATimeMS milliseconds, the jolt of
+    //* an accident or an error: every frame the world camera is moved by a
+    //* random offset that fades out until the time is up. APower is the maximum
+    //* offset in pixels (0 = cShakePower). A new call restarts the shake, so a
+    //* longer/harder one simply wins. Safe to call from any thread (e.g. the
+    //* Lua script thread); ATimeMS <= 0 stops the shake.
+    procedure Shake(ATimeMS: Integer; APower: Integer = 0);
+    //* Stop a running shake at once.
+    procedure StopShake;
+    //* True while a shake is still running.
+    property Shaking: Boolean read GetShaking;
+
   public
     RunFile: string;//that to run in ScriptThread
     //Board is a canvas for ScriptThread draw on it
@@ -248,7 +277,7 @@ type
     property Running: Boolean read GetRunning write SetRunning;
     property Active: Boolean read GetActive;
 
-    procedure RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
+    procedure RegisterLanguage(ATitle: string; AExtentions: TArray<string>; AScriptClass: TTyroScriptClass);
 
     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
     procedure ShowConsole; overload;
@@ -392,7 +421,7 @@ var
   tw: Integer;
 begin
   PrepareWindow(cDefaultWindowWidth, cDefaultWindowHeight);
-  Init;
+  Load;
 
   if FPS = 0 then
     SetFPS(cFramePerSeconds)
@@ -448,6 +477,12 @@ begin
           Camera2D.Zoom := 1;
           Camera2D.Rotation := 0;
 
+          //A running shake (accident/error feedback) jitters the world camera,
+          //so the canvas and the sprites move together while the terminal and
+          //the other controls stay glued to the window.
+          if UpdateShake(RayLib.GetFrameTime()) then
+            Camera2D.Offset := Vector2Of(Margin + FShakeX, Margin + FShakeY);
+
           Canvas.BeginDraw;
           BeginMode2D(Camera2D);
           Draw;
@@ -489,6 +524,8 @@ begin
       end;
     end;
   until Terminated;
+
+  Unload;
 end;
 
 function TTyroMain.GetActive: Boolean;
@@ -498,15 +535,15 @@ end;
 
 function TTyroMain.GetRunning: Boolean;
 begin
-  Result := InterlockedExchangeAdd(FRunning, 0) <> 0;
+  Result := TInterlocked.Add(FRunning, 0) <> 0;
 end;
 
 procedure TTyroMain.SetRunning(AValue: Boolean);
 begin
   if AValue then
-    InterlockedExchange(FRunning, 1)
+    TInterlocked.Exchange(FRunning, 1)
   else
-    InterlockedExchange(FRunning, 0);
+    TInterlocked.Exchange(FRunning, 0);
 end;
 
 procedure TTyroMain.SizeChanged;
@@ -588,10 +625,88 @@ begin
   end;
 end;
 
+procedure TTyroMain.Shake(ATimeMS: Integer; APower: Integer);
+begin
+  if ATimeMS <= 0 then
+  begin
+    StopShake;
+    Exit;
+  end;
+  Lock.Enter;
+  try
+    //Called from any thread (script worker), so the state is published under
+    //the engine lock and only read by the drawing cycle.
+    FShakeTime := ATimeMS / 1000;
+    FShakeDuration := FShakeTime;
+    if APower > 0 then
+      FShakePower := APower
+    else
+      FShakePower := cShakePower;
+  finally
+    Lock.Leave;
+  end;
+end;
+
+procedure TTyroMain.StopShake;
+begin
+  Lock.Enter;
+  try
+    FShakeTime := 0;
+    FShakeDuration := 0;
+    FShakeX := 0;
+    FShakeY := 0;
+  finally
+    Lock.Leave;
+  end;
+end;
+
+function TTyroMain.GetShaking: Boolean;
+begin
+  Lock.Enter;
+  try
+    Result := FShakeTime > 0;
+  finally
+    Lock.Leave;
+  end;
+end;
+
+function TTyroMain.UpdateShake(ADeltaTime: Double): Boolean;
+var
+  a: Integer;
+begin
+  Lock.Enter;
+  try
+    Result := False;
+    if FShakeTime <= 0 then
+    begin
+      FShakeX := 0;
+      FShakeY := 0;
+      Exit;
+    end;
+    FShakeTime := FShakeTime - ADeltaTime;
+    if FShakeTime <= 0 then
+    begin
+      //Time is up: leave the world exactly where it started.
+      FShakeTime := 0;
+      FShakeDuration := 0;
+      FShakeX := 0;
+      FShakeY := 0;
+      Exit;
+    end;
+    Result := True;
+    //Amplitude fades out with the remaining time, so the shake settles instead
+    //of stopping dead. Random(a * 2) - a gives an offset in [-a, a).
+    a := Round(FShakePower * FShakeTime / FShakeDuration);
+    FShakeX := Random(a * 2) - a;
+    FShakeY := Random(a * 2) - a;
+  finally
+    Lock.Leave;
+  end;
+end;
+
 procedure TTyroMain.ProcessQueue;
 var
   p: TQueueObject;
-  c: Integer;
   fpd: Double;
   ft, ft2: Double;
 begin
@@ -602,7 +717,6 @@ begin
       ft := GetTime();
       fpd := (1 / FPS);
       Board.BeginDraw;
-      c := 0;
     while True do
     begin
       Lock.Enter;
@@ -629,7 +743,6 @@ begin
         end;
       end;
       p.Free;
-      Inc(c);
       ft2 := GetTime() - ft;
       if ft2 >= fpd then
       begin
@@ -822,12 +935,16 @@ begin
   FPrepared := True;
 end;
 
-procedure TTyroMain.Init;
+procedure TTyroMain.Load;
 begin
   LoadConfig;
   //ShowWindow(ScreenWidth, ScreenHeight); //with option to show window /w
   LoadScriptThread;
   Running := True;
+end;
+
+procedure TTyroMain.Unload;
+begin
 end;
 
 procedure TTyroMain.Draw;
@@ -850,7 +967,7 @@ begin
     // and the legacy Board layer
     Sprites.DrawScripts;
   end;
-  ThreadSwitch; //Yield
+  TThread.Yield
 end;
 
 procedure TTyroMain.Update;
@@ -919,7 +1036,7 @@ begin
       raise;
     end;
   end;
-  ThreadSwitch; //Yield
+  TThread.Yield;
 end;
 
 
@@ -1062,7 +1179,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.RegisterLanguage(ATitle: string; AExtentions: TStringArray; AScriptClass: TTyroScriptClass);
+procedure TTyroMain.RegisterLanguage(ATitle: string; AExtentions: TArray<string>; AScriptClass: TTyroScriptClass);
 var
   Item: TScriptType;
 begin
@@ -1074,8 +1191,6 @@ begin
 end;
 
 procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
-var
-  pos: TVector2;
 begin
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
@@ -1174,7 +1289,7 @@ begin
   //List the scripts of the current directory first (same source as the console
   //"list" and "load" commands); fall back to the workspace so F4 still finds
   //demos when the engine was launched without a script from an empty folder.
-  FFileList.Refresh(Resources.WorkSpace, '*.ls');
+  FFileList.Refresh(Resources.WorkPath, '*.ls');
 end;
 
 procedure TTyroMain.ShowFileList;
@@ -1242,7 +1357,7 @@ begin
   //Replace the current template: stop the worker, swap the script, and leave
   //it stopped so the user types "run" to start it (or F2 to edit it first).
   StopScriptThread;
-  Resources.WorkSpace := ExtractFilePath(AFileName);
+  Resources.WorkPath := ExtractFilePath(AFileName);
   HideFileList;
   Console.Writeln('Loaded: ' + ExtractFileName(AFileName) + '. Type "run" to execute it.');
   if not Console.Visible then
@@ -1384,9 +1499,9 @@ begin
     begin
       Log.WriteLn('File: ' + RunFile);
       if LeftStr(RunFile, 1) = '.' then
-        RunFile := ExpandFileName(Resources.WorkSpace + RunFile);
+        RunFile := ExpandFileName(Resources.WorkPath + RunFile);
       aScript.LoadFile(RunFile);
-      Resources.WorkSpace := ExtractFilePath(RunFile);
+      Resources.WorkPath := ExtractFilePath(RunFile);
       FScriptThread := TTyroScriptThread.Create(aScript);
       exit;
     end;
@@ -1510,8 +1625,8 @@ var
   sr: TSearchRec;
   aFile: string;
 begin
-  Console.Writeln('Directory: ' + Resources.WorkSpace);
-  DirPath := ExcludeTrailingPathDelimiter(Resources.WorkSpace);
+  Console.Writeln('Directory: ' + Resources.WorkPath);
+  DirPath := ExcludeTrailingPathDelimiter(Resources.WorkPath);
   if Params.Count > 0 then
     aFile := Params[0]
   else
@@ -1565,8 +1680,6 @@ end;
 procedure TTyroMain.Load_Command(Params: TStrings);
 var
   aFile, aFileName: string;
-  aScriptType: TScriptType;
-  aScript: TTyroScript;
 begin
   if (Params.Count = 0) then
   begin
@@ -1575,7 +1688,7 @@ begin
   end;
 
   aFile := Params[0];
-  aFileName := IncludePathDelimiter(Resources.WorkSpace) + aFile;
+  aFileName := IncludePathDelimiter(Resources.WorkPath) + aFile;
 
   if SysUtils.FileExists(aFileName) then
   begin
@@ -1704,7 +1817,7 @@ end;
 
 { TConsoleCommands }
 
-function TConsoleCommands.Add(Sync: Boolean; Name: UTF8String; Alts: TStringArray; Proc: TProcedureObject; ANote: string): TConsoleCommand;
+function TConsoleCommands.Add(Sync: Boolean; Name: UTF8String; Alts: TArray<string>; Proc: TProcedureObject; ANote: string): TConsoleCommand;
 begin
   Result := TConsoleCommand.Create;
   Result.Name := Name;
@@ -1715,7 +1828,7 @@ begin
   inherited Add(Result);
 end;
 
-function TConsoleCommands.Add(Name: UTF8String; Alts: TStringArray; Proc: TProcedureObject; ANote: string): TConsoleCommand;
+function TConsoleCommands.Add(Name: UTF8String; Alts: TArray<string>; Proc: TProcedureObject; ANote: string): TConsoleCommand;
 begin
   Result := Add(False, Name, Alts, Proc, ANote);
 end;

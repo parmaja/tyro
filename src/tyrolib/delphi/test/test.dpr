@@ -7,6 +7,7 @@ program test;
 uses
   System.SysUtils,
   RayLib,
+  TyroEngines,
   TyroClasses,
   TyroControls,
   Generics.Collections,
@@ -20,7 +21,7 @@ begin
   //Main := Print10.TMain.Create;
   //Main := Perceptron.TMain.Create;
   try
-    Main.Run;
+    Main.Run([moShowFPS]);
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);

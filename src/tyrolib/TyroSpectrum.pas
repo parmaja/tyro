@@ -21,7 +21,7 @@ unit TyroSpectrum;
 {$mode delphi}
 {$H+}{$M+}
 {$endif}
-
+{$POINTERMATH ON}
 interface
 
 uses

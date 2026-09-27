@@ -108,6 +108,7 @@ type
     constructor Create(AScript: TLuaScript); override;
   published
     function Window_func(L: Plua_State): integer; cdecl;
+    function Shake_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaFont }
@@ -672,6 +673,11 @@ begin
       L.PushInteger(Main.Height);
       Result := 1;
     end;
+    'shaking':
+    begin
+      L.PushBoolean(Main.Shaking);
+      Result := 1;
+    end;
   end;
 end;
 
@@ -1015,6 +1021,9 @@ begin
 
   //window
   Lua.State.Register('window', 'show', Window, @Window.Window_func);
+  //Screen shake: window.shake(ms [, power]) and the global shake(ms [, power])
+  Lua.State.Register('window', 'shake', Window, @Window.Shake_func);
+  Lua.State.RegisterGlobal('shake', @Window.Shake_func);
   Lua.State.Register('window', Window); //Should be last one for window
 
   //global functions
@@ -1317,6 +1326,26 @@ begin
   if c > 1 then
     h := round(L.Params[2].AsNumber);
   FScript.RunQueueObject(TWindowObject.Create(w, h));
+  Result := 0;
+end;
+
+// window.shake(ms [, power]) / shake(ms [, power])
+// Jolt the world like an accident or an error. Works as a plain function too,
+// so the first argument is always the time in milliseconds.
+function TLuaWindow.Shake_func(L: Plua_State): integer; cdecl;
+var
+  ms, power: Integer;
+begin
+  ms := 0;
+  power := 0;
+  if L.Count > 0 then
+    ms := Round(L.ToNumber(1));
+  if L.Count > 1 then
+    power := Round(L.ToNumber(2));
+  if Main <> nil then
+    //Thread safe: the engine takes the request from the script thread and
+    //jitters the world camera on the next frames.
+    Main.Shake(ms, power);
   Result := 0;
 end;
 

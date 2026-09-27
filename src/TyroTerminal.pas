@@ -28,8 +28,11 @@ unit TyroTerminal;
 interface
 
 uses
-  Classes, SysUtils, SyncObjs,
+  Classes, SysUtils, SyncObjs, Types,
+  mnUtils,
+  {$ifdef FPC}
   LazUTF8,
+  {$endif}
   RayLib, RayClasses,
   TyroClasses, TyroControls;
 
@@ -223,11 +226,6 @@ implementation
 
 { Codepoint helpers for UTF-8 strings }
 
-function CPCount(const S: string): Integer;
-begin
-  Result := UTF8Length(S);
-end;
-
 function CPSub(const S: string; AStart, ACount: Integer): string; //AStart is 0-based codepoint
 begin
   if (ACount <= 0) or (AStart < 0) then
@@ -241,12 +239,12 @@ begin
   if AIns = '' then
     Result := S
   else
-    Result := CPSub(S, 0, ACol) + AIns + CPSub(S, ACol, CPCount(S) - ACol);
+    Result := CPSub(S, 0, ACol) + AIns + CPSub(S, ACol, UTF8Length(S) - ACol);
 end;
 
 function CPDelete(const S: string; ACol, ACount: Integer): string;
 begin
-  Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, CPCount(S) - ACol - ACount);
+  Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
 end;
 
 { TTyroTerminal }
@@ -364,7 +362,7 @@ begin
   ALeading := '';
   AWord := '';
   ARest := '';
-  L := CPCount(S);
+  L := UTF8Length(S);
   P := 0;
   while P < L do
   begin
@@ -382,7 +380,7 @@ begin
       Break;
     Inc(P);
   end;
-  AWord := CPSub(S, CPCount(ALeading), P - CPCount(ALeading));
+  AWord := CPSub(S, UTF8Length(ALeading), P - UTF8Length(ALeading));
   ARest := CPSub(S, P, L - P);
 end;
 
@@ -394,7 +392,7 @@ begin
   ARuns := nil;
   if FPasswordMode then
   begin
-    L := CPCount(FInputBuffer);
+    L := UTF8Length(FInputBuffer);
     if L > 0 then
     begin
       SetLength(ARuns, 1);
@@ -411,14 +409,14 @@ begin
   begin
     SetLength(ARuns, Length(ARuns) + 1);
     ARuns[High(ARuns)].Start := 0;
-    ARuns[High(ARuns)].Count := CPCount(Leading);
+    ARuns[High(ARuns)].Count := UTF8Length(Leading);
     ARuns[High(ARuns)].Color := FTextColor;
   end;
   if Word <> '' then
   begin
     SetLength(ARuns, Length(ARuns) + 1);
-    ARuns[High(ARuns)].Start := CPCount(Leading);
-    ARuns[High(ARuns)].Count := CPCount(Word);
+    ARuns[High(ARuns)].Start := UTF8Length(Leading);
+    ARuns[High(ARuns)].Count := UTF8Length(Word);
     if IsCommandName(Word) then
       ARuns[High(ARuns)].Color := FHighlightColor
     else
@@ -427,16 +425,16 @@ begin
   if Rest <> '' then
   begin
     SetLength(ARuns, Length(ARuns) + 1);
-    ARuns[High(ARuns)].Start := CPCount(Leading) + CPCount(Word);
-    ARuns[High(ARuns)].Count := CPCount(Rest);
+    ARuns[High(ARuns)].Start := UTF8Length(Leading) + UTF8Length(Word);
+    ARuns[High(ARuns)].Count := UTF8Length(Rest);
     ARuns[High(ARuns)].Color := FTextColor;
   end;
 end;
 
 function TTyroTerminal.GetPromptX: Integer;
 begin
-  Result := CPCount(FPrompt) * FCharWidth;
-  if (FPrompt <> '') and (CPSub(FPrompt, CPCount(FPrompt) - 1, 1) <> ' ') then
+  Result := UTF8Length(FPrompt) * FCharWidth;
+  if (FPrompt <> '') and (CPSub(FPrompt, UTF8Length(FPrompt) - 1, 1) <> ' ') then
     Result := Result + FCharWidth; //a trailing space after the prompt
 end;
 
@@ -444,7 +442,7 @@ function TTyroTerminal.CharAtPixel(AX: Integer): Integer;
 var
   L: Integer;
 begin
-  L := CPCount(FInputBuffer);
+  L := UTF8Length(FInputBuffer);
   Result := FInputScroll + ((AX - GetPromptX) div FCharWidth);
   if Result < FInputScroll then
     Result := FInputScroll;
@@ -655,7 +653,7 @@ procedure TTyroTerminal.SetInputSelection(AAnchor, ACaret: Integer);
 var
   L: Integer;
 begin
-  L := CPCount(FInputBuffer);
+  L := UTF8Length(FInputBuffer);
   if AAnchor < 0 then
     AAnchor := 0;
   if AAnchor > L then
@@ -713,7 +711,7 @@ end;
 
 procedure TTyroTerminal.SelectInputAll;
 begin
-  SetInputSelection(0, CPCount(FInputBuffer));
+  SetInputSelection(0, UTF8Length(FInputBuffer));
 end;
 
 procedure TTyroTerminal.PlaceInputCaretAt(AX: Integer);
@@ -746,8 +744,8 @@ begin
     Col := AX div FCharWidth;
     if Col < 0 then
       Col := 0;
-    if Col > CPCount(FLines[Line]) then
-      Col := CPCount(FLines[Line]);
+    if Col > UTF8Length(FLines[Line]) then
+      Col := UTF8Length(FLines[Line]);
   end;
   FSelAnchorLine := Line;
   FSelAnchorCol := Col;
@@ -773,8 +771,8 @@ begin
     Col := AX div FCharWidth;
     if Col < 0 then
       Col := 0;
-    if Col > CPCount(FLines[Line]) then
-      Col := CPCount(FLines[Line]);
+    if Col > UTF8Length(FLines[Line]) then
+      Col := UTF8Length(FLines[Line]);
   end;
   FSelCurLine := Line;
   FSelCurCol := Col;
@@ -807,7 +805,7 @@ begin
     if i > l1 then
       Result := Result + #13#10;
     if i = l1 then
-      Result := Result + CPSub(FLines[i], c1, CPCount(FLines[i]) - c1)
+      Result := Result + CPSub(FLines[i], c1, UTF8Length(FLines[i]) - c1)
     else if i = l2 then
       Result := Result + CPSub(FLines[i], 0, c2)
     else
@@ -841,7 +839,7 @@ begin
   if FInputSelStart >= 0 then
     DeleteInputSelection;
   FInputBuffer := CPInsert(FInputBuffer, FInputPos, S);
-  Inc(FInputPos, CPCount(S));
+  Inc(FInputPos, UTF8Length(S));
   UpdateInputScroll;
   if Assigned(FOnInputChange) then
     FOnInputChange(Self, FInputBuffer);
@@ -861,7 +859,7 @@ begin
   else if FHistoryPos > 0 then
     Dec(FHistoryPos);
   FInputBuffer := FHistory[FHistoryPos];
-  FInputPos := CPCount(FInputBuffer);
+  FInputPos := UTF8Length(FInputBuffer);
   UpdateInputScroll;
   ClearInputSelection;
   Invalidate;
@@ -879,7 +877,7 @@ begin
   end
   else
     FInputBuffer := FHistory[FHistoryPos];
-  FInputPos := CPCount(FInputBuffer);
+  FInputPos := UTF8Length(FInputBuffer);
   UpdateInputScroll;
   ClearInputSelection;
   Invalidate;
@@ -1051,7 +1049,7 @@ begin
     begin
       if FInputSelStart >= 0 then
         DeleteInputSelection
-      else if FInputPos < CPCount(FInputBuffer) then
+      else if FInputPos < UTF8Length(FInputBuffer) then
       begin
         FInputBuffer := CPDelete(FInputBuffer, FInputPos, 1);
         UpdateInputScroll;
@@ -1093,7 +1091,7 @@ begin
       begin
         if FInputSelStart >= 0 then
           FInputPos := FInputSelEnd //jump to the high edge of the selection
-        else if FInputPos < CPCount(FInputBuffer) then
+        else if FInputPos < UTF8Length(FInputBuffer) then
           Inc(FInputPos);
         ClearInputSelection;
         UpdateInputScroll;
@@ -1117,10 +1115,10 @@ begin
     KEY_END:
     begin
       if ssShift in Shift then
-        SetInputSelection(SelectionAnchor, CPCount(FInputBuffer)) //select to the end
+        SetInputSelection(SelectionAnchor, UTF8Length(FInputBuffer)) //select to the end
       else
       begin
-        FInputPos := CPCount(FInputBuffer);
+        FInputPos := UTF8Length(FInputBuffer);
         ClearInputSelection;
         UpdateInputScroll;
       end;
@@ -1217,7 +1215,7 @@ begin
       if ALine = l2 then
         selEnd := c2
       else
-        selEnd := CPCount(S);
+        selEnd := UTF8Length(S);
       if selEnd < selStart then
         selEnd := selStart;
     end;
@@ -1226,7 +1224,7 @@ begin
   if S = '' then
     Exit;
 
-  L := CPCount(S);
+  L := UTF8Length(S);
   if (selStart >= 0) and (selEnd > selStart) then
   begin
     Prefix := CPSub(S, 0, selStart);
@@ -1260,15 +1258,15 @@ begin
   if FPrompt <> '' then
   begin
     disp := FPrompt;
-    if CPSub(disp, CPCount(disp) - 1, 1) <> ' ' then
+    if CPSub(disp, UTF8Length(disp) - 1, 1) <> ' ' then
       disp := disp + ' ';
     ACanvas.DrawText(0, AY, disp, FHighlightColor);
-    promptX := CPCount(disp) * FCharWidth;
+    promptX := UTF8Length(disp) * FCharWidth;
   end;
 
   if FInputBuffer = '' then
     Exit;
-  L := CPCount(FInputBuffer);
+  L := UTF8Length(FInputBuffer);
   maxVis := (ClientRect.Width - promptX) div FCharWidth;
   if maxVis < 1 then
     maxVis := 1;

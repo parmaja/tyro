@@ -14,8 +14,7 @@ interface
 uses
   Classes, SysUtils, Math,
   RayLib, Generics.Collections,
-  Melodies,
-  TyroControls, TyroClasses;
+  Melodies, TyroEngines, TyroControls, TyroClasses;
 
 type
 
@@ -41,13 +40,12 @@ type
 
   end;
 
-  TMain = class(TTyroMainWindow)
+  TMain = class(TTyroMain)
   public
     X, Y: Integer;
     Spacing: Integer;
     Perceptron: TPerceptron;
     Points: TPoints;
-    procedure Init; override;
     procedure Load; override;
     procedure Draw; override;
     procedure Unload; override;
@@ -82,14 +80,16 @@ begin
   end;
 end;
 
-procedure TMain.Init;
+procedure TMain.Load;
 begin
   inherited;
+  Randomize;
+  SetFPS(10);
   X := 0;
   Y := 0;
   Spacing := 10;
   Margin:= 10;
-  ShowWindow(400, 400, True);
+  ShowWindow(400, 400);
 
   Perceptron := TPerceptron.Create;
 
@@ -100,16 +100,6 @@ begin
     Points[i].Y := Random(Canvas.Height);
   end;
 
-end;
-
-procedure TMain.Load;
-begin
-  inherited;
-  Randomize;
-  SetFPS(10);
-
-//  Canvas.BackColor := clWhite;
-//  Canvas.PenColor := clBlack;
 end;
 
 procedure TMain.Unload;

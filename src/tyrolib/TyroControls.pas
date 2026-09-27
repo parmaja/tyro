@@ -19,7 +19,7 @@ uses
   Classes, SysUtils, Types,
   mnUtils, mnClasses,
   {$ifdef FPC}
-   LCLType, LazUTF8,
+   LCLType, LazUTF8, //Keep it after mnUtils
   {$endif}
   RayLib, RayClasses,
   TyroClasses;
@@ -535,11 +535,6 @@ implementation
 
 { Codepoint helpers for UTF-8 strings (same pattern as TyroTerminal) }
 
-function CPCount(const S: utf8string): Integer;
-begin
-  Result := UTF8Length(S);
-end;
-
 function CPSub(const S: utf8string; AStart, ACount: Integer): utf8string; //AStart is 0-based codepoint
 begin
   if (ACount <= 0) or (AStart < 0) then
@@ -553,12 +548,12 @@ begin
   if AIns = '' then
     Result := S
   else
-    Result := CPSub(S, 0, ACol) + AIns + CPSub(S, ACol, CPCount(S) - ACol);
+    Result := CPSub(S, 0, ACol) + AIns + CPSub(S, ACol, UTF8Length(S) - ACol);
 end;
 
 function CPDelete(const S: utf8string; ACol, ACount: Integer): utf8string;
 begin
-  Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, CPCount(S) - ACol - ACount);
+  Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
 end;
 
 { TTyroLayout }
@@ -1066,8 +1061,8 @@ begin
   if FText = AValue then
     Exit;
   FText := AValue;
-  if FCaretPos > CPCount(FText) then
-    FCaretPos := CPCount(FText);
+  if FCaretPos > UTF8Length(FText) then
+    FCaretPos := UTF8Length(FText);
   FSelStart := -1;
   FSelEnd := -1;
   EnsureCaretVisible;
@@ -1108,7 +1103,7 @@ var
   i, n: Integer;
 begin
   ALocalX := ALocalX + FScrollPos;
-  n := CPCount(FText);
+  n := UTF8Length(FText);
   Result := n;
   for i := 0 to n - 1 do
   begin
@@ -1173,7 +1168,7 @@ begin
   if FText = '' then
     Exit;
   FSelStart := 0;
-  FSelEnd := CPCount(FText);
+  FSelEnd := UTF8Length(FText);
   FCaretPos := FSelEnd;
   EnsureCaretVisible;
   Invalidate;
@@ -1215,7 +1210,7 @@ begin
     Exit;
   DeleteSelection;
   FText := CPInsert(FText, FCaretPos, S);
-  Inc(FCaretPos, CPCount(S));
+  Inc(FCaretPos, UTF8Length(S));
   EnsureCaretVisible;
   Invalidate;
 end;
@@ -1314,7 +1309,7 @@ begin
     ClearKeyRepeat
   else
     TrackKeyRepeat(Key, '');
-  n := CPCount(FText);
+  n := UTF8Length(FText);
 
   //Clipboard shortcuts come first, so Ctrl+Shift+C/V/A/X keep working the way
   //every other application answers them. A Ctrl key this edit does not know
@@ -2054,7 +2049,7 @@ end;
 
 function TTyroControl.CharToKey(const AChar: utf8string): TKeyboardKey;
 var
-  c: Char;
+  c: UTF8Char;
 begin
   //RayLib reports the *unshifted* key code of a character, so a typed letter
   //has to be uppercased to land on KEY_A..KEY_Z (65..90). Digits and

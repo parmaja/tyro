@@ -15,18 +15,16 @@ uses
   Classes, SysUtils,
   RayLib, Generics.Collections,
   Melodies,
-  TyroControls, TyroClasses;
+  TyroEngines, TyroControls, TyroClasses;
 
 type
 
-  TMain = class(TTyroMainWindow)
+  TMain = class(TTyroMain)
   public
     X, Y: Integer;
     Spacing: Integer;
-    procedure Init; override;
     procedure Load; override;
     procedure Draw; override;
-    procedure Unload; override;
   end;
 
 implementation
@@ -52,19 +50,13 @@ begin
   end;
 end;
 
-procedure TMain.Init;
+procedure TMain.Load;
 begin
   inherited;
   X := 0;
   Y := 0;
   Spacing := 10;
   Margin:= 10;
-  ShowWindow(400, 400, True);
-end;
-
-procedure TMain.Load;
-begin
-  inherited;
   Randomize;
   SetFPS(20);
 
@@ -72,12 +64,8 @@ begin
   Canvas.BackColor := clWhite;
   Canvas.PenColor := clBlack;
   //Options := Options + [moShowFPS];
+  ShowWindow(400, 400);
 end;
 
-procedure TMain.Unload;
-begin
-  inherited;
-
-end;
 
 end.

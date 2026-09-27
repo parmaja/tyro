@@ -1,5 +1,8 @@
 unit TyroEditors;
-
+{$ifdef FPC}
+{$MODE DELPHI}
+{$endif}
+{$H+}{$M+}
 {**
  *  This file is part of the "Tyro"
  *
@@ -11,13 +14,14 @@ unit TyroEditors;
  *  Opened with F2 or the "edit" console command.
  *}
 
-{$MODE DELPHI}{$H+}{$M+}
-
 interface
 
 uses
   Classes, SysUtils, Types, StrUtils,
+  mnUtils,
+  {$ifdef FPC}
   LCLType, LazUTF8,
+  {$endif}
   RayLib, RayClasses,
   TyroClasses, TyroControls;
 
@@ -149,11 +153,6 @@ implementation
 
 { Codepoint helpers for UTF-8 strings }
 
-function CPCount(const S: string): Integer;
-begin
-  Result := UTF8Length(S);
-end;
-
 function CPSub(const S: string; AStart, ACount: Integer): string; //AStart is 0-based codepoint
 begin
   if (ACount <= 0) or (AStart < 0) then
@@ -186,12 +185,12 @@ begin
   if AIns = '' then
     Result := S
   else
-    Result := CPSub(S, 0, ACol) + AIns + CPSub(S, ACol, CPCount(S) - ACol);
+    Result := CPSub(S, 0, ACol) + AIns + CPSub(S, ACol, UTF8Length(S) - ACol);
 end;
 
 function CPDelete(const S: string; ACol, ACount: Integer): string;
 begin
-  Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, CPCount(S) - ACol - ACount);
+  Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
 end;
 
 function ExpandPrefix(const S: string; AMaxCol: Integer): string; //expand tabs for the first AMaxCol codepoints
@@ -273,7 +272,7 @@ end;
 function TyroEditor.GetLineLength(ALine: Integer): Integer;
 begin
   if (ALine >= 0) and (ALine < FLines.Count) then
-    Result := CPCount(FLines[ALine])
+    Result := UTF8Length(FLines[ALine])
   else
     Result := 0;
 end;
@@ -319,7 +318,7 @@ begin
   Result := 0;
   for I := 0 to FLines.Count - 1 do
   begin
-    L := CPCount(FLines[I]);
+    L := UTF8Length(FLines[I]);
     if L > Result then
       Result := L;
   end;
@@ -476,7 +475,7 @@ begin
     if I > l1 then
       Result := Result + #13#10;
     if I = l1 then
-      Result := Result + CPSub(FLines[I], c1, CPCount(FLines[I]) - c1)
+      Result := Result + CPSub(FLines[I], c1, UTF8Length(FLines[I]) - c1)
     else if I = l2 then
       Result := Result + CPSub(FLines[I], 0, c2)
     else
@@ -489,7 +488,7 @@ begin
   FAnchorLine := 0;
   FAnchorCol := 0;
   FCaretLine := FLines.Count - 1;
-  FCaretCol := CPCount(FLines[FLines.Count - 1]);
+  FCaretCol := UTF8Length(FLines[FLines.Count - 1]);
   FSelecting := True;
   FDesiredCol := FCaretCol;
   Invalidate;
@@ -531,8 +530,8 @@ begin
   if gx < 0 then
     gx := 0;
   Col := FLeftCol + (gx div FCharWidth);
-  if Col > CPCount(FLines[Line]) then
-    Col := CPCount(FLines[Line]);
+  if Col > UTF8Length(FLines[Line]) then
+    Col := UTF8Length(FLines[Line]);
   FCaretLine := Line;
   FCaretCol := Col;
   FDesiredCol := Col;
@@ -634,7 +633,7 @@ end;
 procedure TyroEditor.InsertSingleChar(const AChar: string);
 begin
   FLines[FCaretLine] := CPInsert(FLines[FCaretLine], FCaretCol, AChar);
-  Inc(FCaretCol, CPCount(AChar));
+  Inc(FCaretCol, UTF8Length(AChar));
   FDesiredCol := FCaretCol;
 end;
 
@@ -669,11 +668,11 @@ begin
   L := FCaretLine;
   Col := FCaretCol;
   Head := CPSub(FLines[L], 0, Col);
-  Tail := CPSub(FLines[L], Col, CPCount(FLines[L]) - Col);
+  Tail := CPSub(FLines[L], Col, UTF8Length(FLines[L]) - Col);
   if Nl = 0 then
   begin
     FLines[L] := Head + Segments[0] + Tail;
-    FCaretCol := Col + CPCount(Segments[0]);
+    FCaretCol := Col + UTF8Length(Segments[0]);
   end
   else
   begin
@@ -686,7 +685,7 @@ begin
         FLines.Insert(L + I, Segments[I]);
     end;
     FCaretLine := L + Nl;
-    FCaretCol := CPCount(Segments[Nl]);
+    FCaretCol := UTF8Length(Segments[Nl]);
   end;
   FDesiredCol := FCaretCol;
 end;
@@ -707,7 +706,7 @@ begin
     FLines[l1] := CPDelete(FLines[l1], c1, c2 - c1)
   else
   begin
-    FLines[l1] := CPSub(FLines[l1], 0, c1) + CPSub(FLines[l2], c2, CPCount(FLines[l2]) - c2);
+    FLines[l1] := CPSub(FLines[l1], 0, c1) + CPSub(FLines[l2], c2, UTF8Length(FLines[l2]) - c2);
     while l2 > l1 do
     begin
       FLines.Delete(l2);
@@ -754,7 +753,7 @@ begin
     FLines[FCaretLine - 1] := FLines[FCaretLine - 1] + FLines[FCaretLine];
     FLines.Delete(FCaretLine);
     Dec(FCaretLine);
-    FCaretCol := CPCount(FLines[FCaretLine]);
+    FCaretCol := UTF8Length(FLines[FCaretLine]);
     FDesiredCol := FCaretCol;
   end;
 end;
@@ -768,7 +767,7 @@ begin
   else if FCaretLine > 0 then
   begin
     Dec(FCaretLine);
-    FCaretCol := CPCount(FLines[FCaretLine]);
+    FCaretCol := UTF8Length(FLines[FCaretLine]);
   end;
   FDesiredCol := FCaretCol;
   ScrollCaretVisible;
@@ -800,7 +799,7 @@ var
     b: Byte;
     S: string;
   begin
-    if (AC < 0) or (AC >= CPCount(FLines[AL])) then
+    if (AC < 0) or (AC >= UTF8Length(FLines[AL])) then
       Result := False
     else
     begin
@@ -1026,12 +1025,12 @@ end;
 
 function TyroEditor.IsApiName(const AWord: string): Boolean;
 const
-  Words: array[0..39] of string = ('version', 'log', 'sleep', 'print', 'println',
+  Words: array[0..40] of string = ('version', 'log', 'sleep', 'print', 'println',
     'iskeypressed', 'iskeydown', 'mousex', 'mousey', 'ismousepressed', 'frametime',
     'time', 'rand', 'window', 'console', 'canvas', 'shader', 'font', 'music',
     'sprites', 'buttons', 'new', 'find', 'caption', 'border', 'clear', 'text',
     'circle', 'rectangle', 'line', 'point', 'load', 'show', 'read', 'play',
-    'beep', 'sound', 'mml', 'hide', 'spectrum');
+    'beep', 'sound', 'mml', 'hide', 'spectrum', 'shake');
 var
   I: Integer;
 begin
@@ -1337,7 +1336,7 @@ begin
     if ALine = l1 then
     begin
       SelFrom := c1;
-      SelTo := CPCount(FLines[ALine]);
+      SelTo := UTF8Length(FLines[ALine]);
     end
     else if ALine = l2 then
     begin
@@ -1347,7 +1346,7 @@ begin
     else if (ALine > l1) and (ALine < l2) then
     begin
       SelFrom := 0;
-      SelTo := CPCount(FLines[ALine]);
+      SelTo := UTF8Length(FLines[ALine]);
     end;
     if (SelFrom >= 0) and (SelTo > SelFrom) then
     begin

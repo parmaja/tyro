@@ -1,4 +1,4 @@
-unit Melodies;
+﻿unit Melodies;
 {$IFDEF FPC}
 {$MODE delphi}
 {$ENDIF}
@@ -84,7 +84,7 @@ type
     Octave: Integer; //current octave
 
     Instrument: String; //for waveform
-    SoundExpired: QWord; //When the note should be end, by milliseconds
+    SoundExpired: UInt64; //When the note should be end, by milliseconds
     SoundDuration: Single; //Duration and Rest by second
     constructor Create(AMelody: TMelody); virtual;
     procedure Update; virtual;
