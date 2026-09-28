@@ -223,7 +223,7 @@ begin
   //w workpath, d socket
   GetNonOptions(cShortOptions, ['workpath:', 'debug', 'console', 'window', 'help', 'list'], Files);
   if Files.Count > 0 then
-    Main.RunFile := Files[0];
+    Main.ScriptFile := Files[0];
   WorkPaths := GetOptionValues('p', 'workpath');
   if Length(WorkPaths) > 0  then
     Resources.WorkPath := WorkPaths[0]

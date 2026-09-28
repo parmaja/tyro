@@ -30,9 +30,6 @@ interface
 uses
   Classes, SysUtils, SyncObjs, Types,
   mnUtils,
-  {$ifdef FPC}
-  LazUTF8,
-  {$endif}
   RayLib, RayClasses,
   TyroClasses, TyroControls;
 
@@ -224,29 +221,6 @@ type
 
 implementation
 
-{ Codepoint helpers for UTF-8 strings }
-
-function CPSub(const S: string; AStart, ACount: Integer): string; //AStart is 0-based codepoint
-begin
-  if (ACount <= 0) or (AStart < 0) then
-    Result := ''
-  else
-    Result := UTF8Copy(S, AStart + 1, ACount);
-end;
-
-function CPInsert(const S: string; ACol: Integer; const AIns: string): string;
-begin
-  if AIns = '' then
-    Result := S
-  else
-    Result := CPSub(S, 0, ACol) + AIns + CPSub(S, ACol, UTF8Length(S) - ACol);
-end;
-
-function CPDelete(const S: string; ACol, ACount: Integer): string;
-begin
-  Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
-end;
-
 { TTyroTerminal }
 
 constructor TTyroTerminal.Create(AParent: TTyroLayout);
@@ -366,22 +340,22 @@ begin
   P := 0;
   while P < L do
   begin
-    Ch := CPSub(S, P, 1);
+    Ch := UTF8SubStr(S, P, 1);
     if (Ch = ' ') or (Ch = #9) then
       Inc(P)
     else
       Break;
   end;
-  ALeading := CPSub(S, 0, P);
+  ALeading := UTF8SubStr(S, 0, P);
   while P < L do
   begin
-    Ch := CPSub(S, P, 1);
+    Ch := UTF8SubStr(S, P, 1);
     if (Ch = ' ') or (Ch = #9) then
       Break;
     Inc(P);
   end;
-  AWord := CPSub(S, UTF8Length(ALeading), P - UTF8Length(ALeading));
-  ARest := CPSub(S, P, L - P);
+  AWord := UTF8SubStr(S, UTF8Length(ALeading), P - UTF8Length(ALeading));
+  ARest := UTF8SubStr(S, P, L - P);
 end;
 
 procedure TTyroTerminal.BuildInputRuns(out ARuns: TTermRuns);
@@ -434,7 +408,7 @@ end;
 function TTyroTerminal.GetPromptX: Integer;
 begin
   Result := UTF8Length(FPrompt) * FCharWidth;
-  if (FPrompt <> '') and (CPSub(FPrompt, UTF8Length(FPrompt) - 1, 1) <> ' ') then
+  if (FPrompt <> '') and (UTF8SubStr(FPrompt, UTF8Length(FPrompt) - 1, 1) <> ' ') then
     Result := Result + FCharWidth; //a trailing space after the prompt
 end;
 
@@ -697,14 +671,14 @@ begin
   if FPasswordMode then
     Result := StringOfChar(Char(FPasswordChar[1]), FInputSelEnd - FInputSelStart)
   else
-    Result := CPSub(FInputBuffer, FInputSelStart, FInputSelEnd - FInputSelStart);
+    Result := UTF8SubStr(FInputBuffer, FInputSelStart, FInputSelEnd - FInputSelStart);
 end;
 
 procedure TTyroTerminal.DeleteInputSelection;
 begin
   if FInputSelStart < 0 then
     Exit;
-  FInputBuffer := CPDelete(FInputBuffer, FInputSelStart, FInputSelEnd - FInputSelStart);
+  FInputBuffer := UTF8Delete(FInputBuffer, FInputSelStart, FInputSelEnd - FInputSelStart);
   FInputPos := FInputSelStart;
   ClearInputSelection;
 end;
@@ -805,9 +779,9 @@ begin
     if i > l1 then
       Result := Result + #13#10;
     if i = l1 then
-      Result := Result + CPSub(FLines[i], c1, UTF8Length(FLines[i]) - c1)
+      Result := Result + UTF8SubStr(FLines[i], c1, UTF8Length(FLines[i]) - c1)
     else if i = l2 then
-      Result := Result + CPSub(FLines[i], 0, c2)
+      Result := Result + UTF8SubStr(FLines[i], 0, c2)
     else
       Result := Result + FLines[i];
   end;
@@ -838,7 +812,7 @@ begin
     Exit;
   if FInputSelStart >= 0 then
     DeleteInputSelection;
-  FInputBuffer := CPInsert(FInputBuffer, FInputPos, S);
+  FInputBuffer := UTF8Insert(FInputBuffer, FInputPos, S);
   Inc(FInputPos, UTF8Length(S));
   UpdateInputScroll;
   if Assigned(FOnInputChange) then
@@ -944,7 +918,7 @@ begin
   begin
     if FInputSelStart >= 0 then
       DeleteInputSelection;
-    FInputBuffer := CPInsert(FInputBuffer, FInputPos, S);
+    FInputBuffer := UTF8Insert(FInputBuffer, FInputPos, S);
     Inc(FInputPos);
     UpdateInputScroll;
   end
@@ -952,7 +926,7 @@ begin
   begin
     if FInputSelStart >= 0 then
       DeleteInputSelection;
-    FInputBuffer := CPInsert(FInputBuffer, FInputPos, S);
+    FInputBuffer := UTF8Insert(FInputBuffer, FInputPos, S);
     Inc(FInputPos);
     UpdateInputScroll;
   end;
@@ -1017,7 +991,7 @@ begin
       begin
         if FInputSelStart >= 0 then
           DeleteInputSelection;
-        FInputBuffer := CPInsert(FInputBuffer, FInputPos, '    ');
+        FInputBuffer := UTF8Insert(FInputBuffer, FInputPos, '    ');
         Inc(FInputPos, 4);
         UpdateInputScroll;
         if Assigned(FOnInputChange) then
@@ -1035,7 +1009,7 @@ begin
       else if FInputPos > 0 then
       begin
         Dec(FInputPos);
-        FInputBuffer := CPDelete(FInputBuffer, FInputPos, 1);
+        FInputBuffer := UTF8Delete(FInputBuffer, FInputPos, 1);
         UpdateInputScroll;
       end;
       if Assigned(FOnInputChange) then
@@ -1051,7 +1025,7 @@ begin
         DeleteInputSelection
       else if FInputPos < UTF8Length(FInputBuffer) then
       begin
-        FInputBuffer := CPDelete(FInputBuffer, FInputPos, 1);
+        FInputBuffer := UTF8Delete(FInputBuffer, FInputPos, 1);
         UpdateInputScroll;
       end;
       if Assigned(FOnInputChange) then
@@ -1227,9 +1201,9 @@ begin
   L := UTF8Length(S);
   if (selStart >= 0) and (selEnd > selStart) then
   begin
-    Prefix := CPSub(S, 0, selStart);
-    SelText := CPSub(S, selStart, selEnd - selStart);
-    Suffix := CPSub(S, selEnd, L - selEnd);
+    Prefix := UTF8SubStr(S, 0, selStart);
+    SelText := UTF8SubStr(S, selStart, selEnd - selStart);
+    Suffix := UTF8SubStr(S, selEnd, L - selEnd);
     if Prefix <> '' then
       ACanvas.DrawText(0, AY, Prefix, c);
     ACanvas.DrawRectangle(selStart * FCharWidth, AY, (selEnd - selStart) * FCharWidth, FCharHeight, FSelectionColor, True);
@@ -1258,7 +1232,7 @@ begin
   if FPrompt <> '' then
   begin
     disp := FPrompt;
-    if CPSub(disp, UTF8Length(disp) - 1, 1) <> ' ' then
+    if UTF8SubStr(disp, UTF8Length(disp) - 1, 1) <> ' ' then
       disp := disp + ' ';
     ACanvas.DrawText(0, AY, disp, FHighlightColor);
     promptX := UTF8Length(disp) * FCharWidth;
@@ -1296,7 +1270,7 @@ begin
     if FPasswordMode then
       ACanvas.DrawText(x, AY, StringOfChar(Char(FPasswordChar[1]), cnt), Runs[i].Color)
     else
-      ACanvas.DrawText(x, AY, CPSub(FInputBuffer, dStart, cnt), Runs[i].Color);
+      ACanvas.DrawText(x, AY, UTF8SubStr(FInputBuffer, dStart, cnt), Runs[i].Color);
   end;
 
   //selection background in the input line
@@ -1315,7 +1289,7 @@ begin
       if FPasswordMode then
         ACanvas.DrawText(x, AY, StringOfChar(Char(FPasswordChar[1]), sE - Sc), BackColor)
       else
-        ACanvas.DrawText(x, AY, CPSub(FInputBuffer, Sc, sE - Sc), BackColor);
+        ACanvas.DrawText(x, AY, UTF8SubStr(FInputBuffer, Sc, sE - Sc), BackColor);
     end;
   end;
 end;

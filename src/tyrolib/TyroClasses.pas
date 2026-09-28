@@ -340,6 +340,13 @@ type
   function IntToColor(I: Integer): TColor;
   function ColorToInt(C: TColor): Integer;
 
+{ Codepoint helpers for UTF-8 strings }
+
+function UTF8SubStr(const S: string; AStart, ACount: Integer): string; //AStart is 0-based codepoint
+function UTF8SizeAt(const S: string; ACol: Integer): Integer; //bytes of the char at codepoint ACol
+function UTF8Insert(const S: string; ACol: Integer; const AIns: string): string;
+function UTF8Delete(const S: string; ACol, ACount: Integer): string;
+
 const
   ScreenCharWidth = 40;
   ScreenCharHeight = 30;
@@ -456,6 +463,48 @@ begin
   Result := Result or C.RGBA.Green;
   Result := Result shl 8;
   Result := Result or C.RGBA.Red;
+end;
+
+{ Codepoint helpers for UTF-8 strings }
+
+function UTF8SubStr(const S: string; AStart, ACount: Integer): string; //AStart is 0-based codepoint
+begin
+  if (ACount <= 0) or (AStart < 0) then
+    Result := ''
+  else
+    Result := UTF8Copy(S, AStart + 1, ACount);
+end;
+
+function UTF8SizeAt(const S: string; ACol: Integer): Integer; //bytes of the char at codepoint ACol
+var
+  P, I, L: Integer;
+begin
+  Result := 0;
+  L := Length(S);
+  if (ACol < 0) or (S = '') then
+    Exit;
+  P := 1;
+  I := 0;
+  while (I < ACol) and (P <= L) do
+  begin
+    Inc(P, UTF8CodepointSize(@S[P]));
+    Inc(I);
+  end;
+  if P <= L then
+    Result := UTF8CodepointSize(@S[P]);
+end;
+
+function UTF8Insert(const S: string; ACol: Integer; const AIns: string): string;
+begin
+  if AIns = '' then
+    Result := S
+  else
+    Result := UTF8SubStr(S, 0, ACol) + AIns + UTF8SubStr(S, ACol, UTF8Length(S) - ACol);
+end;
+
+function UTF8Delete(const S: string; ACol, ACount: Integer): string;
+begin
+  Result := UTF8SubStr(S, 0, ACol) + UTF8SubStr(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
 end;
 
 { TTyroImage }
@@ -1031,6 +1080,7 @@ begin
       Exit;
     end;
   end;
+  mnConfigs.MergeArguments(Config);
 end;
 
 function TTyroResources.GuessFileName(const FileName: string; InDirectory: string): string;

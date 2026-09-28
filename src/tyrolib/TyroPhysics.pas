@@ -27,8 +27,8 @@ type
   TBodyConfig = record
     Kind: TSpriteKind;
     IsCircle: Boolean;
-    ShapeA: single; // circle: radius, box: width (scaled)
-    ShapeB: single; // box: height (scaled)
+    ShapeA: Single; // circle: radius, box: width (scaled)
+    ShapeB: Single; // box: height (scaled)
   end;
 
   { TPhysics: Chipmunk2D world, driven by the engine's main thread.

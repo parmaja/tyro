@@ -124,7 +124,7 @@ type
     function GetFrameCount: Integer;
     function GetFrameDuration(AFrame: Integer): Integer;
     // Renders frame AFrame into a newly allocated RGBA8 buffer (Width*Height*4
-    // bytes, straight alpha). The caller owns the buffer and must FreeMem it.
+    // bytes, straight alpha). The caller owns the buffer and must FreeMemory it.
     function RenderBuffer(AFrame: Integer): PByte;
     // Renders a frame into a raylib TImage; caller must UnloadImage() it.
     function RenderImage(AFrame: Integer): TImage;
@@ -651,7 +651,7 @@ begin
   N := InflateRaw(AData + 2, ASrcSize - 2, Result, AExpected);
   if N <> AExpected then
   begin
-    FreeMem(Result);
+    FreeMemory(Result);
     Result := nil;
     Exit;
   end;
@@ -659,7 +659,7 @@ begin
        (Cardinal(AData[ASrcSize - 2]) shl 8) or AData[ASrcSize - 1];
   if A <> Adler32(Result, N) then
   begin
-    FreeMem(Result);
+    FreeMemory(Result);
     Result := nil;
   end;
 end;
@@ -728,7 +728,7 @@ begin
     for J := 0 to Length(FFrames[I].Cels) - 1 do
       if FFrames[I].Cels[J].Pixels <> nil then
       begin
-        FreeMem(FFrames[I].Cels[J].Pixels);
+        FreeMemory(FFrames[I].Cels[J].Pixels);
         FFrames[I].Cels[J].Pixels := nil;
       end;
   FFrames := nil;
@@ -987,7 +987,7 @@ begin
             Cel.Height := H;
             Cel.Pixels := GetMemory(PixelCount * 4);
             DecodeToRGBA(Raw, PixelCount, Cel.Pixels, IsBackgroundLayer(Cel.LayerIndex));
-            FreeMem(Raw);
+            FreeMemory(Raw);
           end;
         end;
         FPos := ChunkEnd;

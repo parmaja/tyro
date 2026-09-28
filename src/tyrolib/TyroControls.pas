@@ -19,7 +19,7 @@ uses
   Classes, SysUtils, Types,
   mnUtils, mnClasses,
   {$ifdef FPC}
-   LCLType, LazUTF8, //Keep it after mnUtils
+  LCLType, //LazUTF8, //Keep it after mnUtils
   {$endif}
   RayLib, RayClasses,
   TyroClasses;
@@ -140,8 +140,10 @@ type
 
     procedure AddControl(AControl: TTyroLayout);
     procedure PaintWindow(ACanvas: TTyroCanvas); virtual;
+
     function BorderSize: Integer;
     function BorderRect: TRect;
+    function OuterSize: Integer;
     function GetInnerRect: TRect; virtual;
     function GetClientRect: TRect; virtual;
   public
@@ -669,6 +671,11 @@ begin
   Result.Inflate(-Margin, -Margin);
 end;
 
+function TTyroLayout.OuterSize: Integer;
+begin
+  Result := Margin + BorderSize;
+end;
+
 function TTyroLayout.GetClientRect: TRect;
 begin
   Result := InnerRect;
@@ -679,7 +686,7 @@ end;
 function TTyroLayout.GetInnerRect: TRect;
 begin
   Result := WindowRect;
-  Result.Inflate(-Margin - BorderSize, - Margin - BorderSize);
+  Result.Inflate(-OuterSize, -OuterSize);
 end;
 
 constructor TTyroLayout.Create(AParent: TTyroLayout);
@@ -1801,7 +1808,7 @@ begin
   inherited;
   if (Button = mbLeft) and (HitScrollBar(x, y) = []) then
   begin
-    i := ItemIndexAt(y - (Margin + BorderSize));
+    i := ItemIndexAt(y - OuterSize);
     if i >= 0 then
       ItemIndex := i;
   end;
@@ -1869,7 +1876,7 @@ begin
   top := FTopIndex;
   hoverIdx := -1;
   if Hover then
-    hoverIdx := ItemIndexAt(FLastMouseY - (Margin + BorderSize));
+    hoverIdx := ItemIndexAt(FLastMouseY - OuterSize);
 
   for i := 0 to vis - 1 do
   begin
@@ -2382,7 +2389,7 @@ var
   P: TPoint;
 begin
   Result := [];
-  Ofs := Margin + BorderSize;
+  Ofs := OuterSize;
   P := Point(X - Ofs, Y - Ofs);
   if (csVScroll in Style) and FVScroll.Visible and PtInRect(ScrollTrackRect(sbtVertical), P) then
     Include(Result, sbtVertical);
@@ -2446,7 +2453,7 @@ begin
       Canvas.ClearBackground(clBlank);
       try
         DoPaintBorder(Canvas);
-        Canvas.SetOrigin(Margin + BorderSize, Margin + BorderSize);
+        Canvas.SetOrigin(OuterSize, OuterSize);
         if csClip in Style then
           Canvas.BeginClip(aClientRect);
         try
@@ -2600,7 +2607,7 @@ begin
     Hit := HitScrollBar(x, y);
     if (sbtVertical in Hit) and (FVScroll.Max > FVScroll.Min) then
     begin
-      Ofs := Margin + BorderSize;
+      Ofs := OuterSize;
       lx := x - Ofs;
       ly := y - Ofs;
       Thumb := ScrollThumbRect(sbtVertical);
@@ -2617,7 +2624,7 @@ begin
     end
     else if (sbtHorizontal in Hit) and (FHScroll.Max > FHScroll.Min) then
     begin
-      Ofs := Margin + BorderSize;
+      Ofs := OuterSize;
       lx := x - Ofs;
       ly := y - Ofs;
       Thumb := ScrollThumbRect(sbtHorizontal);
@@ -2687,7 +2694,7 @@ begin
   begin
     if ssLeft in Shift then
     begin
-      Ofs := Margin + BorderSize;
+      Ofs := OuterSize;
       ly := y - Ofs;
       Scroll(sbtVertical, scrollTHUMBTRACK, ScrollThumbToPos(sbtVertical, ly - FVDragOfs));
     end
@@ -2700,7 +2707,7 @@ begin
   begin
     if ssLeft in Shift then
     begin
-      Ofs := Margin + BorderSize;
+      Ofs := OuterSize;
       lx := x - Ofs;
       Scroll(sbtHorizontal, scrollTHUMBTRACK, ScrollThumbToPos(sbtHorizontal, lx - FHDragOfs));
     end
@@ -2823,7 +2830,7 @@ begin
     Exit;
 
   //The border is painted in the control's own texture buffer, whose origin is
-  //its top-left corner (the client area starts at Margin+BorderSize, applied
+  //its top-left corner (the client area starts at OuterSize, applied
   //by the caller after DoPaintBorder runs).
   w := ACanvas.Width;
   h := ACanvas.Height;
@@ -2832,7 +2839,6 @@ begin
     Exit;
 
   baseColor := clDarkGray;
-  highlightColor := clLightGray;
 
   //Solid frame around the whole control.
   ACanvas.FillRectangle(Rect(0, 0, w, bs), baseColor);
@@ -2844,6 +2850,7 @@ begin
   //border advertises its resize handles.
   if Border = brdSizable then
   begin
+    highlightColor := clLightGray;
     if FResizing then
       activeSides := FResizeSides
     else if (FLastMouseX >= 0) and (FLastMouseX < w) and

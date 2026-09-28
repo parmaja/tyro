@@ -19,9 +19,6 @@ interface
 uses
   Classes, SysUtils, Types, StrUtils,
   mnUtils,
-  {$ifdef FPC}
-  LCLType, LazUTF8,
-  {$endif}
   RayLib, RayClasses,
   TyroClasses, TyroControls;
 
@@ -150,48 +147,6 @@ type
   end;
 
 implementation
-
-{ Codepoint helpers for UTF-8 strings }
-
-function CPSub(const S: string; AStart, ACount: Integer): string; //AStart is 0-based codepoint
-begin
-  if (ACount <= 0) or (AStart < 0) then
-    Result := ''
-  else
-    Result := UTF8Copy(S, AStart + 1, ACount);
-end;
-
-function CPSizeAt(const S: string; ACol: Integer): Integer; //bytes of the char at codepoint ACol
-var
-  P, I, L: Integer;
-begin
-  Result := 0;
-  L := Length(S);
-  if (ACol < 0) or (S = '') then
-    Exit;
-  P := 1;
-  I := 0;
-  while (I < ACol) and (P <= L) do
-  begin
-    Inc(P, UTF8CodepointSize(@S[P]));
-    Inc(I);
-  end;
-  if P <= L then
-    Result := UTF8CodepointSize(@S[P]);
-end;
-
-function CPInsert(const S: string; ACol: Integer; const AIns: string): string;
-begin
-  if AIns = '' then
-    Result := S
-  else
-    Result := CPSub(S, 0, ACol) + AIns + CPSub(S, ACol, UTF8Length(S) - ACol);
-end;
-
-function CPDelete(const S: string; ACol, ACount: Integer): string;
-begin
-  Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
-end;
 
 function ExpandPrefix(const S: string; AMaxCol: Integer): string; //expand tabs for the first AMaxCol codepoints
 var
@@ -475,9 +430,9 @@ begin
     if I > l1 then
       Result := Result + #13#10;
     if I = l1 then
-      Result := Result + CPSub(FLines[I], c1, UTF8Length(FLines[I]) - c1)
+      Result := Result + UTF8SubStr(FLines[I], c1, UTF8Length(FLines[I]) - c1)
     else if I = l2 then
-      Result := Result + CPSub(FLines[I], 0, c2)
+      Result := Result + UTF8SubStr(FLines[I], 0, c2)
     else
       Result := Result + FLines[I];
   end;
@@ -632,7 +587,7 @@ end;
 
 procedure TyroEditor.InsertSingleChar(const AChar: string);
 begin
-  FLines[FCaretLine] := CPInsert(FLines[FCaretLine], FCaretCol, AChar);
+  FLines[FCaretLine] := UTF8Insert(FLines[FCaretLine], FCaretCol, AChar);
   Inc(FCaretCol, UTF8Length(AChar));
   FDesiredCol := FCaretCol;
 end;
@@ -667,8 +622,8 @@ begin
   { Split the caret line so the text after the caret follows the insert }
   L := FCaretLine;
   Col := FCaretCol;
-  Head := CPSub(FLines[L], 0, Col);
-  Tail := CPSub(FLines[L], Col, UTF8Length(FLines[L]) - Col);
+  Head := UTF8SubStr(FLines[L], 0, Col);
+  Tail := UTF8SubStr(FLines[L], Col, UTF8Length(FLines[L]) - Col);
   if Nl = 0 then
   begin
     FLines[L] := Head + Segments[0] + Tail;
@@ -692,7 +647,7 @@ end;
 
 procedure TyroEditor.DeleteCharAt(ALine, ACol: Integer);
 begin
-  FLines[ALine] := CPDelete(FLines[ALine], ACol, 1);
+  FLines[ALine] := UTF8Delete(FLines[ALine], ACol, 1);
 end;
 
 procedure TyroEditor.DeleteSelected;
@@ -703,10 +658,10 @@ begin
     Exit;
   GetSelection(l1, c1, l2, c2);
   if l1 = l2 then
-    FLines[l1] := CPDelete(FLines[l1], c1, c2 - c1)
+    FLines[l1] := UTF8Delete(FLines[l1], c1, c2 - c1)
   else
   begin
-    FLines[l1] := CPSub(FLines[l1], 0, c1) + CPSub(FLines[l2], c2, UTF8Length(FLines[l2]) - c2);
+    FLines[l1] := UTF8SubStr(FLines[l1], 0, c1) + UTF8SubStr(FLines[l2], c2, UTF8Length(FLines[l2]) - c2);
     while l2 > l1 do
     begin
       FLines.Delete(l2);
@@ -803,7 +758,7 @@ var
       Result := False
     else
     begin
-      S := CPSub(FLines[AL], AC, 1);
+      S := UTF8SubStr(FLines[AL], AC, 1);
       if S = '' then
         Result := False
       else
@@ -922,7 +877,7 @@ begin
   W := GetLineLength(FCaretLine);
   if (FCaretCol > 0) and (W > 0) then
   begin
-    while (I < W) and (CPSub(FLines[FCaretLine], I, 1) = ' ') do
+    while (I < W) and (UTF8SubStr(FLines[FCaretLine], I, 1) = ' ') do
       Inc(I);
     if I >= W then
       I := 0
@@ -1323,7 +1278,7 @@ begin
     if ToCol <= From then
       Continue;
     x := textStart + (From - FLeftCol) * FCharWidth;
-    glyph := CPSub(FLines[ALine], From, ToCol - From);
+    glyph := UTF8SubStr(FLines[ALine], From, ToCol - From);
     ACanvas.DrawText(x, aY, glyph, Runs[I].Color);
   end;
 
@@ -1370,7 +1325,7 @@ begin
           if ToCol <= From then
             Continue;
           x := textStart + (From - FLeftCol) * FCharWidth;
-          glyph := CPSub(FLines[ALine], From, ToCol - From);
+          glyph := UTF8SubStr(FLines[ALine], From, ToCol - From);
           ACanvas.DrawText(x, aY, glyph, clWhite);
         end;
       end;
@@ -1589,7 +1544,7 @@ begin
         if ssShift in Shift then
         begin
           //Shift+Tab: un-indent (remove up to TabWidth leading spaces)
-          while (FCaretCol > 0) and (FCaretCol mod FTabWidth <> 0) and (CPSub(FLines[FCaretLine], FCaretCol - 1, 1) = ' ') do
+          while (FCaretCol > 0) and (FCaretCol mod FTabWidth <> 0) and (UTF8SubStr(FLines[FCaretLine], FCaretCol - 1, 1) = ' ') do
           begin
             Dec(FCaretCol);
             DeleteCharAt(FCaretLine, FCaretCol);

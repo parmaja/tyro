@@ -18,8 +18,7 @@ uses
   mnLogs, mnUtils, mnConfigs,
   RayLib, RayClasses, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
-  TyroSprites, TyroPhysics,
-  TyroEditors,
+  TyroSprites, TyroPhysics, TyroEditors,
   mnClasses;
 
 const
@@ -84,9 +83,9 @@ type
     FOnPick: TFilePickEvent;
     FOnDismiss: TNotifyEvent;
   protected
+  public
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
-  public
     //Rebuild the item list from ADirectory using AMask; returns the number of
     //files found. The file names stored here are later resolved against this
     //directory by SelectedFile.
@@ -265,7 +264,7 @@ type
     property Shaking: Boolean read GetShaking;
 
   public
-    RunFile: string;//that to run in ScriptThread
+    ScriptFile: string;//that to run in ScriptThread
     //Board is a canvas for ScriptThread draw on it
     Console: TTyroTerminal;
     Output: TTyroOutput;
@@ -421,17 +420,14 @@ var
   tw: Integer;
 begin
   PrepareWindow(cDefaultWindowWidth, cDefaultWindowHeight);
+
+  LoadConfig;
+  //ShowWindow(ScreenWidth, ScreenHeight); //with option to show window /w
+  Running := True;
   Load;
-
-  if FPS = 0 then
-    SetFPS(cFramePerSeconds)
-  else
-    SetFPS(FPS);
-
   Resources.Load;
-
+  LoadScriptThread;
   Options := Options + AOptions;
-
   Start;
   if moMainWindow in AOptions then
     ShowWindow;
@@ -937,10 +933,6 @@ end;
 
 procedure TTyroMain.Load;
 begin
-  LoadConfig;
-  //ShowWindow(ScreenWidth, ScreenHeight); //with option to show window /w
-  LoadScriptThread;
-  Running := True;
 end;
 
 procedure TTyroMain.Unload;
@@ -1482,31 +1474,31 @@ var
   aScriptType: TScriptType;
   aScript: TTyroScript;
 begin
-  if RunFile = '' then
+  if ScriptFile = '' then
     exit;
 
   if FScriptThread <> nil then
   begin
-    Log.WriteLn('Already running a file: ' + RunFile);
+    Log.WriteLn('Already running a file: ' + ScriptFile);
     exit;
   end;
 
-  aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(RunFile));
+  aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
   if aScriptType <> nil then
   begin
     aScript := aScriptType.ScriptClass.Create;
-    if SysUtils.FileExists(RunFile) then
+    if SysUtils.FileExists(ScriptFile) then
     begin
-      Log.WriteLn('File: ' + RunFile);
-      if LeftStr(RunFile, 1) = '.' then
-        RunFile := ExpandFileName(Resources.WorkPath + RunFile);
-      aScript.LoadFile(RunFile);
-      Resources.WorkPath := ExtractFilePath(RunFile);
+      Log.WriteLn('File: ' + ScriptFile);
+      if LeftStr(ScriptFile, 1) = '.' then
+        ScriptFile := ExpandFileName(Resources.WorkPath + ScriptFile);
+      aScript.LoadFile(ScriptFile);
+      Resources.WorkPath := ExtractFilePath(ScriptFile);
       FScriptThread := TTyroScriptThread.Create(aScript);
       exit;
     end;
   end;
-  Log.WriteLn('Type of file not found: ' + RunFile);
+  Log.WriteLn('Type of file not found: ' + ScriptFile);
 end;
 
 procedure TTyroMain.RunScriptThread;
@@ -1693,7 +1685,7 @@ begin
   if SysUtils.FileExists(aFileName) then
   begin
     StopScriptThread;
-    RunFile := aFileName;
+    ScriptFile := aFileName;
     LoadScriptThread;
   end
   else
@@ -1759,7 +1751,7 @@ var
 begin
   //Up/Down/PageUp/PageDown/Home/End and the clipboard keys come from
   //TTyroListBox; this adds what only the picker needs.
-  inherited KeyDown(Key, Shift);
+  inherited;
   case Key of
     KEY_ENTER:
     begin
