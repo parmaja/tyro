@@ -76,23 +76,7 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="TyroLua.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="TyroEditors.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="TyroEngines.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="TyroInput.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="TyroScripts.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
@@ -101,10 +85,6 @@
       </Unit>
       <Unit>
         <Filename Value="tyrolib\TyroRadio.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="TyroTerminal.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
@@ -121,10 +101,6 @@
       </Unit>
       <Unit>
         <Filename Value="chipmunk.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="LuaClasses.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
@@ -144,7 +120,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="raylib;tyrolib"/>
+      <OtherUnitFiles Value="raylib;lua;tyrolib"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

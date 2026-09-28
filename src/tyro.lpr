@@ -35,8 +35,8 @@ uses
   cthreads,
   {$ENDIF}
   SysUtils, Classes, CustApp, RayLib, mnUtils, Melodies,
-  TyroControls, TyroClasses, TyroEditors, mnLogs, TyroEngines,
-  TyroLua, TyroScripts, TyroTerminal, LuaClasses, LuaAPI;  //Add all languages units here
+  TyroControls, TyroClasses, mnLogs, TyroEngines,
+  LuaAPI;  //Add all languages units here
 
 type
 
