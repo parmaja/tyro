@@ -212,15 +212,14 @@ type
   }
   TTyroCanvas = class abstract(TObject)
   private
-    FOriginX, FOriginY: Integer;
-    FLastX, FLastY: Integer;
+    FOriginPoint: TPoint;
+    FCurrentPoint: TPoint;
     FPenColor: TColor;
     FBackColor: TColor;
     FPenSize: Integer;
     FWidth, FHeight: Integer;
     function OffsetRect(const ARect: TRect): TRectangle; overload;
     function OffsetRect(const ARect: TRectangle): TRectangle; overload;
-    procedure SetCurrentPoint(X, Y: Integer);
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
     procedure SetHeight(AValue: Integer);
@@ -228,10 +227,12 @@ type
     procedure SetPenSize(AValue: Integer);
     procedure SetWidth(AValue: Integer);
     procedure SetBackColor(const Value: TColor);
+  protected
   public
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
 
+    procedure SetCurrent(X, Y: Integer);
     procedure SetOrigin(X, Y: Integer);
     procedure ResetOrigin;
     procedure BeginDraw; virtual;
@@ -586,10 +587,8 @@ end;
 constructor TTyroCanvas.Create(AWidth, AHeight: Integer);
 begin
   inherited Create;
-  FOriginX := 0;
-  FOriginY := 0;
-  FLastX := 0;
-  FLastY := 0;
+  SetOrigin(0, 0);
+  SetCurrent(0 ,0);
   FWidth := AWidth;
   FHeight := AHeight;
   FPenSize := 1;
@@ -612,30 +611,27 @@ end;
 
 procedure TTyroCanvas.SetOrigin(X, Y: Integer);
 begin
-  FOriginX := X;
-  FOriginY := Y;
+  FOriginPoint := Point(X, Y);
 end;
 
 procedure TTyroCanvas.ResetOrigin;
 begin
-  FOriginX := 0;
-  FOriginY := 0;
+  FOriginPoint := Point(0, 0);
 end;
 
 function TTyroCanvas.OffsetRect(const ARect: TRect): TRectangle;
 begin
-  Result := RectangleOf(ARect.Left + FOriginX, ARect.Top + FOriginY, ARect.Width, ARect.Height);
+  Result := RectangleOf(ARect.Left + FOriginPoint.X, ARect.Top + FOriginPoint.Y, ARect.Width, ARect.Height);
 end;
 
 function TTyroCanvas.OffsetRect(const ARect: TRectangle): TRectangle;
 begin
-  Result := RectangleOf(ARect.X + FOriginX, ARect.Y + FOriginY, ARect.Width, ARect.Height);
+  Result := RectangleOf(ARect.X + FOriginPoint.X, ARect.Y + FOriginPoint.Y, ARect.Width, ARect.Height);
 end;
 
-procedure TTyroCanvas.SetCurrentPoint(X, Y: Integer);
+procedure TTyroCanvas.SetCurrent(X, Y: Integer);
 begin
-  FLastX := X;
-  FLastY := Y;
+  FCurrentPoint := Point(X, Y);
 end;
 
 procedure TTyroCanvas.BeginDraw;
@@ -649,19 +645,19 @@ end;
 procedure TTyroCanvas.DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
 begin
   if Fill then
-    RayLib.DrawCircle(X + FOriginX, Y + FOriginY, R, Color)
+    RayLib.DrawCircle(X + FOriginPoint.X, Y + FOriginPoint.Y, R, Color)
   else
-    RayLib.DrawCircleLines(X + FOriginX, Y + FOriginY, R, Color);
-  SetCurrentPoint(X, Y);
+    RayLib.DrawCircleLines(X + FOriginPoint.X, Y + FOriginPoint.Y, R, Color);
+  SetCurrent(X, Y);
 end;
 
 procedure TTyroCanvas.DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
 begin
   if Fill then
-    RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color)
+    RayLib.DrawRectangle(X + FOriginPoint.X, Y + FOriginPoint.Y, AWidth, AHeight, Color)
   else
-    RayLib.DrawRectangleLinesEx(RectangleOf(X + FOriginX, Y + FOriginY, AWidth, AHeight), PenSize, Color);
-  SetCurrentPoint(X + AWidth, Y + AHeight);
+    RayLib.DrawRectangleLinesEx(RectangleOf(X + FOriginPoint.X, Y + FOriginPoint.Y, AWidth, AHeight), PenSize, Color);
+  SetCurrent(X + AWidth, Y + AHeight);
 end;
 
 procedure TTyroCanvas.DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean);
@@ -681,13 +677,13 @@ end;
 
 procedure TTyroCanvas.DrawRect(ARectangle: TRect; Size: Integer; Color: TColor);
 begin
-  RayLib.DrawRectangleLinesEx(RectangleOf(ARectangle.Left + FOriginX, ARectangle.Top + FOriginY, ARectangle.Width-Size, ARectangle.Height-Size), Size, Color);
-  SetCurrentPoint(ARectangle.Right, ARectangle.Bottom);
+  RayLib.DrawRectangleLinesEx(RectangleOf(ARectangle.Left + FOriginPoint.X, ARectangle.Top + FOriginPoint.Y, ARectangle.Width-Size, ARectangle.Height-Size), Size, Color);
+  SetCurrent(ARectangle.Right, ARectangle.Bottom);
 end;
 
 procedure TTyroCanvas.BeginClip(ARectangle: TRect);
 begin
-  BeginScissorMode(ARectangle.Left + FOriginX, ARectangle.Top + FOriginY, ARectangle.Width, ARectangle.Height);
+  BeginScissorMode(ARectangle.Left + FOriginPoint.X, ARectangle.Top + FOriginPoint.Y, ARectangle.Width, ARectangle.Height);
 end;
 
 procedure TTyroCanvas.EndClip;
@@ -704,7 +700,7 @@ begin
     RayLib.DrawRectangleRec(R, Color)
   else
     RayLib.DrawRectangleLinesEx(R, PenSize, Color);
-  SetCurrentPoint(Round(ARectangle.X + ARectangle.Width), Round(ARectangle.Y + ARectangle.Height));
+  SetCurrent(Round(ARectangle.X + ARectangle.Width), Round(ARectangle.Y + ARectangle.Height));
 end;
 
 procedure TTyroCanvas.FillRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor);
@@ -720,24 +716,24 @@ end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: utf8string; Color: TColor);
 begin
-  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginX, y + FOriginY), Resources.Font.Height, 0, Color);
+  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginPoint.X, y + FOriginPoint.Y), Resources.Font.Height, 0, Color);
 end;
 
 procedure TTyroCanvas.DrawText(X, Y: Single; S: utf8string; Color: TColor);
 begin
-  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginX, y + FOriginY), Resources.Font.Height, 0, Color);
+  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginPoint.X, y + FOriginPoint.Y), Resources.Font.Height, 0, Color);
 end;
 
 procedure TTyroCanvas.DrawPixel(X, Y: Integer; Color: TColor);
 begin
-  RayLib.DrawPixel(X + FOriginX, Y + FOriginY, Color);
-  SetCurrentPoint(X, Y);
+  RayLib.DrawPixel(X + FOriginPoint.X, Y + FOriginPoint.Y, Color);
+  SetCurrent(X, Y);
 end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
 begin
-  RayLib.DrawLineEx(Vector2Of(X1 + FOriginX, Y1 + FOriginY), Vector2Of(X2 + FOriginX, Y2 + FOriginY), PenSize, Color);
-  SetCurrentPoint(X2, Y2);
+  RayLib.DrawLineEx(Vector2Of(X1 + FOriginPoint.X, Y1 + FOriginPoint.Y), Vector2Of(X2 + FOriginPoint.X, Y2 + FOriginPoint.Y), PenSize, Color);
+  SetCurrent(X2, Y2);
 end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer);
@@ -752,27 +748,27 @@ end;
 
 procedure TTyroCanvas.DrawLineF(X1, Y1, X2, Y2: Single; Color: TColor);
 begin
-  DrawLineEx(TVector2.Create(X1 + FOriginX, Y1 + FOriginY), TVector2.Create(X2 + FOriginX, Y2 + FOriginY), PenSize, Color);
-  SetCurrentPoint(Round(X2), Round(Y2));
+  DrawLineEx(TVector2.Create(X1 + FOriginPoint.X, Y1 + FOriginPoint.Y), TVector2.Create(X2 + FOriginPoint.X, Y2 + FOriginPoint.Y), PenSize, Color);
+  SetCurrent(Round(X2), Round(Y2));
 end;
 
 procedure TTyroCanvas.DrawLineTo(X2, Y2: Integer; Color: TColor);
 begin
   {FLastX/FLastY and (X2, Y2) are both in canvas coordinates, so DrawLine
    applies the origin to both endpoints and no correction is needed here.}
-  DrawLine(FLastX, FLastY, X2, Y2, Color);
+  DrawLine(FCurrentPoint.X, FCurrentPoint.Y, X2, Y2, Color);
 end;
 
 procedure TTyroCanvas.FillRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor);
 begin
-  RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color);
-  SetCurrentPoint(X + AWidth, Y + AHeight);
+  RayLib.DrawRectangle(X + FOriginPoint.X, Y + FOriginPoint.Y, AWidth, AHeight, Color);
+  SetCurrent(X + AWidth, Y + AHeight);
 end;
 
 procedure TTyroCanvas.FillRectangle(Rect: TRect; Color: TColor);
 begin
-  RayLib.DrawRectangle(Rect.Left + FOriginX, Rect.Top + FOriginY, Rect.Width, Rect.Height, Color);
-  SetCurrentPoint(Rect.Right, Rect.Bottom);
+  RayLib.DrawRectangle(Rect.Left + FOriginPoint.X, Rect.Top + FOriginPoint.Y, Rect.Width, Rect.Height, Color);
+  SetCurrent(Rect.Right, Rect.Bottom);
 end;
 
 procedure TTyroCanvas.PostDraw(AX: Integer = 0; AY: Integer = 0);
@@ -794,7 +790,7 @@ end;
 procedure TTyroCanvas.ClearBackground(const AColor: TColor);
 begin
   RayLib.ClearBackground(AColor);
-  SetCurrentPoint(0, 0);
+  SetCurrent(0, 0);
 end;
 
 procedure TTyroCanvas.SetEffect(const AEffectName: string);
