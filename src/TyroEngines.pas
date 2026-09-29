@@ -800,6 +800,10 @@ begin
       Options := Options + [moShowFPS]
     else
       Options := Options - [moShowFPS];
+    if Config.Sections.ReadBool('show', 'window', True) then
+      Options := Options + [moShowFPS]
+    else
+      Options := Options - [moShowFPS];
   end;
 end;
 
@@ -1829,7 +1833,7 @@ function TConsoleCommands.Find(const Name: string): TConsoleCommand;
 var
   i: integer;
 begin
-	if Name <> '' then
+    if Name <> '' then
     for i := 0 to Count - 1 do
     begin
       if SameText(Name, Items[i].Name) or IsStrInArray(Name, Items[i].Alts) then
@@ -1859,5 +1863,3 @@ initialization
 finalization
   FreeAndNil(Main);
 end.
-
-
