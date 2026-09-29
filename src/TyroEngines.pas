@@ -425,19 +425,19 @@ begin
   //ShowWindow(ScreenWidth, ScreenHeight); //with option to show window /w
   Running := True;
   Load;
-  Resources.Load;
+  Res.Load;
   LoadScriptThread;
   Options := Options + AOptions;
   Start;
   if moMainWindow in AOptions then
     ShowWindow;
-  {if Resources.Config.Sections.ReadBool('show', 'console', False) then
+  {if Res.Config.Sections.ReadBool('show', 'console', False) then
   begin
     ShowConsole(0, 0, 0, 0);
     StartConsoleRead;
   end;
 
-  if Resources.Config.Sections.ReadBool('show', 'log', False) then
+  if Res.Config.Sections.ReadBool('show', 'log', False) then
     Output.Show;}
   repeat
     CheckSynchronize;
@@ -788,7 +788,7 @@ procedure TTyroMain.LoadConfig;
 var
   aColor: string;
 begin
-  with Resources do
+  with Res do
   begin
     FPS := Config.ReadInteger('fps', cFramePerSeconds);
     IsDebug := Config.ReadBool('debug', IsDebug);
@@ -823,7 +823,7 @@ begin
   FControlCapture := nil;
   FOptions := [moOpaque];
   Name := 'Main';
-  Resources := TTyroResources.Create;
+  Res := TTyroResources.Create;
   FCanvasLock := TCriticalSection.Create;
   //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
   //loop signals it after every EndDrawing.
@@ -832,7 +832,7 @@ begin
   FBackColor := clCornflowerBlue;
 
   //Configured margin only; absent key must not clobber the default with 0.
-  Margin := Resources.Config.Sections['window'].ReadInteger('margin', cMainMargin);
+  Margin := Res.Config.Sections['window'].ReadInteger('margin', cMainMargin);
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -901,12 +901,12 @@ begin
   if RayLibSound <> nil then
     RayLibSound.Shutdown;
 
-  //Every object below owns raylib GPU resources. Destroy all of them while
+  //Every object below owns raylib GPU Res. Destroy all of them while
   //the window/OpenGL context is still alive.
   FreeAndNil(Physics);
   FreeAndNil(Sprites);
   FreeAndNil(Board);
-  FreeAndNil(Resources);
+  FreeAndNil(Res);
   FreeAndNil(FQueue);
   FreeAndNil(FScriptTypes);
   FreeAndNil(Commands);
@@ -1254,8 +1254,8 @@ end;
 
 procedure TTyroMain.ShowConsole;
 begin
-  Console.CharWidth := Resources.Font.Width;
-  Console.CharHeight := Resources.Font.Height;
+  Console.CharWidth := Res.Font.Width;
+  Console.CharHeight := Res.Font.Height;
   Console.Show;
   Console.BringToFront;
   //Route typed input to the console now that it is visible.
@@ -1285,7 +1285,7 @@ begin
   //List the scripts of the current directory first (same source as the console
   //"list" and "load" commands); fall back to the workspace so F4 still finds
   //demos when the engine was launched without a script from an empty folder.
-  FFileList.Refresh(Resources.WorkPath, '*.ls');
+  FFileList.Refresh(Res.WorkPath, '*.ls');
 end;
 
 procedure TTyroMain.ShowFileList;
@@ -1353,7 +1353,7 @@ begin
   //Replace the current template: stop the worker, swap the script, and leave
   //it stopped so the user types "run" to start it (or F2 to edit it first).
   StopScriptThread;
-  Resources.WorkPath := ExtractFilePath(AFileName);
+  Res.WorkPath := ExtractFilePath(AFileName);
   HideFileList;
   Console.Writeln('Loaded: ' + ExtractFileName(AFileName) + '. Type "run" to execute it.');
   if not Console.Visible then
@@ -1495,9 +1495,9 @@ begin
     begin
       Log.WriteLn('File: ' + ScriptFile);
       if LeftStr(ScriptFile, 1) = '.' then
-        ScriptFile := ExpandFileName(Resources.WorkPath + ScriptFile);
+        ScriptFile := ExpandFileName(Res.WorkPath + ScriptFile);
       aScript.LoadFile(ScriptFile);
-      Resources.WorkPath := ExtractFilePath(ScriptFile);
+      Res.WorkPath := ExtractFilePath(ScriptFile);
       FScriptThread := TTyroScriptThread.Create(aScript);
       exit;
     end;
@@ -1581,8 +1581,8 @@ begin
   //it would clear the callback we are installing.)
   if not Console.Visible then
   begin
-    Console.CharWidth := Resources.Font.Width;
-    Console.CharHeight := Resources.Font.Height;
+    Console.CharWidth := Res.Font.Width;
+    Console.CharHeight := Res.Font.Height;
     Console.Show;
   end;
   Console.Focused := True;
@@ -1621,8 +1621,8 @@ var
   sr: TSearchRec;
   aFile: string;
 begin
-  Console.Writeln('Directory: ' + Resources.WorkPath);
-  DirPath := ExcludeTrailingPathDelimiter(Resources.WorkPath);
+  Console.Writeln('Directory: ' + Res.WorkPath);
+  DirPath := ExcludeTrailingPathDelimiter(Res.WorkPath);
   if Params.Count > 0 then
     aFile := Params[0]
   else
@@ -1684,7 +1684,7 @@ begin
   end;
 
   aFile := Params[0];
-  aFileName := IncludePathDelimiter(Resources.WorkPath) + aFile;
+  aFileName := IncludePathDelimiter(Res.WorkPath) + aFile;
 
   if SysUtils.FileExists(aFileName) then
   begin

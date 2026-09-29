@@ -340,6 +340,7 @@ type
     Config: TConfFile;
     WorkPath: utf8string;
     AppPath: utf8string;
+    AppName: utf8string;
     function GuessFileName(const FileName: string; InDirectory: string = ''): string;
     function Find(const ResName, ResType: string): TTyroResource; overload;
     procedure Load; virtual;
@@ -367,7 +368,7 @@ const
   ScreenHeight: Integer = ScreenCharHeight * ScreenFontSize;
 
 var
-  Resources: TTyroResources = nil;
+  Res: TTyroResources = nil;
   Lock: TCriticalSection = nil;
 
 const
@@ -716,12 +717,12 @@ end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: utf8string; Color: TColor);
 begin
-  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginPoint.X, y + FOriginPoint.Y), Resources.Font.Height, 0, Color);
+  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginPoint.X, y + FOriginPoint.Y), Res.Font.Height, 0, Color);
 end;
 
 procedure TTyroCanvas.DrawText(X, Y: Single; S: utf8string; Color: TColor);
 begin
-  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginPoint.X, y + FOriginPoint.Y), Resources.Font.Height, 0, Color);
+  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginPoint.X, y + FOriginPoint.Y), Res.Font.Height, 0, Color);
 end;
 
 procedure TTyroCanvas.DrawPixel(X, Y: Integer; Color: TColor);
@@ -984,7 +985,7 @@ var
   fs: TFileStream;
   Code: rawbytestring;
 begin
-  s := Resources.GuessFileName(AFileName, '');
+  s := Res.GuessFileName(AFileName, '');
   if not SysUtils.FileExists(s) then
     Exit;
   fs := TFileStream.Create(s, fmOpenRead or fmShareDenyNone);
@@ -1072,6 +1073,7 @@ constructor TTyroResources.Create;
 begin
   inherited;
   AppPath:= IncludePathDelimiter(ExtractFilePath(ParamStr(0)));
+  AppName := ChangeFileExt(ExtractFileName(ParamStr(0)), '');
   WorkPath:= GetCurrentDir;
   Config := TConfFile.Create;
   Font := TRayFont.Create;
@@ -1083,31 +1085,24 @@ destructor TTyroResources.Destroy;
 begin
   FreeAndNil(Font);
   FreeAndNil(Config);
-  if Resources = Self then
-    Resources := nil;
+  if Res = Self then
+    Res := nil;
   inherited;
 end;
 
 procedure TTyroResources.LoadConfig;
-const
-  cConfigFile = 'tyro.conf';
 var
+  aConfigFile: string;
   aFileName: string;
 begin
-  aFileName := IncludePathDelimiter(WorkPath) + cConfigFile;
-  if not SysUtils.FileExists(aFileName) then
-    aFileName := IncludePathDelimiter(AppPath) + cConfigFile;
-  try
-    if SysUtils.FileExists(aFileName) then
-      Config.LoadFromFile(aFileName);
-  except
-    on E: Exception do
-    begin
-      Log.WriteLn('Config: ' + E.Message);
-      Exit;
-    end;
-  end;
-  mnConfigs.MergeArguments(Config);
+  aConfigFile := AppName + '.conf';
+  aFileName := IncludePathDelimiter(AppPath) + aConfigFile;
+  if SysUtils.FileExists(aFileName) then
+    Config.MergeFromFile(aFileName);
+  aFileName := IncludePathDelimiter(WorkPath) + aConfigFile;
+  if SysUtils.FileExists(aFileName) then
+    Config.MergeFromFile(aFileName);
+  Config.MergeArguments;
 end;
 
 function TTyroResources.GuessFileName(const FileName: string; InDirectory: string): string;
@@ -1123,18 +1118,18 @@ begin
         exit(s);
     end;
 
-    if (InDirectory = '') or (not SameFileName(Resources.WorkPath, InDirectory)) then
+    if (InDirectory = '') or (not SameFileName(Res.WorkPath, InDirectory)) then
     begin
-      s := IncludePathDelimiter(Resources.WorkPath) + FileName;
+      s := IncludePathDelimiter(Res.WorkPath) + FileName;
       if SysUtils.FileExists(s) then
         exit(s);
     end;
 
-    s := IncludePathDelimiter(Resources.WorkPath) + 'assets' + PathDelim + FileName;
+    s := IncludePathDelimiter(Res.WorkPath) + 'assets' + PathDelim + FileName;
     if SysUtils.FileExists(s) then
       Exit(s);
 
-    s := IncludePathDelimiter(Resources.AppPath) + FileName;
+    s := IncludePathDelimiter(Res.AppPath) + FileName;
     if SysUtils.FileExists(s) then
       Exit(s);
 

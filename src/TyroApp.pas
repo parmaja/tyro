@@ -243,7 +243,7 @@ begin
   Main.Title := 'Tyro';
 
   Main.ScriptFile := Arguments.ReadString(''); //File come without switch name
-  Resources.WorkPath := Arguments.ReadPath('-workpath', Location);
+  Res.WorkPath := Arguments.ReadPath('-workpath', Location);
 
   if RunConsole then
     WriteLn('Starting');

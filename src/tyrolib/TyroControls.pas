@@ -925,8 +925,8 @@ begin
   RayLib.DrawRectangleRounded(r, 0.5, 15, body);
   RayLib.DrawRectangleRoundedLinesEx(r, 0.5, 15, 0.4, border);
 
-  th := Resources.Font.Height;
-  tw := RayLib.MeasureTextEx(Resources.Font.Data, PUTF8Char(FCaption), Resources.Font.Height, 0).x;
+  th := Res.Font.Height;
+  tw := RayLib.MeasureTextEx(Res.Font.Data, PUTF8Char(FCaption), Res.Font.Height, 0).x;
   tx := r.X + (r.Width - tw) / 2;
   ty := r.Y + (r.Height - th) / 2;
   if FDown then
@@ -967,7 +967,7 @@ var
   th: Single;
 begin
   inherited;
-  th := Resources.Font.Height;
+  th := Res.Font.Height;
   ACanvas.DrawText(2, (ClientRect.Height - th) / 2, FCaption, ACanvas.PenColor);
 end;
 
@@ -1042,7 +1042,7 @@ begin
     ACanvas.DrawLine(box.Left + boxSize div 2, box.Bottom - 3, box.Right - 2, box.Top + 3, ACanvas.PenColor);
   end;
 
-  th := Resources.Font.Height;
+  th := Res.Font.Height;
   ACanvas.DrawText(box.Right + 6, r.Top + (r.Height - th) / 2, FCaption, ACanvas.PenColor);
 end;
 
@@ -1078,7 +1078,7 @@ end;
 
 function TTyroEdit.TextWidth(const S: utf8string): Single;
 begin
-  Result := RayLib.MeasureTextEx(Resources.Font.Data, PUTF8Char(S), Resources.Font.Height, 0).x;
+  Result := RayLib.MeasureTextEx(Res.Font.Data, PUTF8Char(S), Res.Font.Height, 0).x;
 end;
 
 procedure TTyroEdit.SetPlaceHolder(AValue: utf8string);
@@ -1095,12 +1095,12 @@ var
   th: Single;
 begin
   //Override in a subclass to paint the empty state yourself (see PlaceHolder).
-  if (FPlaceHolder = '') or (Resources = nil) then
+  if (FPlaceHolder = '') or (Res = nil) then
     Exit;
   r := ClientRect;
   if (r.Width <= 0) or (r.Height <= 0) then
     Exit;
-  th := Resources.Font.Height;
+  th := Res.Font.Height;
   //Drawn at the text origin, so it lines up with the first typed character.
   ACanvas.DrawText(2, (r.Height - th) / 2, FPlaceHolder, clGray);
 end;
@@ -1260,7 +1260,7 @@ begin
   inherited;
   r := ClientRect;
 
-  th := Resources.Font.Height;
+  th := Res.Font.Height;
 
   //selection highlight under the text
   if GetSelRange(a, b) then
@@ -1530,7 +1530,7 @@ end;
 
 function TTyroListBox.GetRowHeight: Integer;
 begin
-  Result := Resources.Font.Height + FExtraHeight
+  Result := Res.Font.Height + FExtraHeight
 end;
 
 function TTyroListBox.GetVisibleItems: Integer;
@@ -1820,7 +1820,7 @@ var
 begin
   if AIndex = FItemIndex then
     ACanvas.FillRectangle(AItemRect, clSkyBlue);
-  th := Resources.Font.Height;
+  th := Res.Font.Height;
   ty := AItemRect.Top + (AItemRect.Height - th) / 2;
   if AIndex = FItemIndex then
     ACanvas.DrawText(AItemRect.Left + 4, ty, FItems[AIndex], clBlack)
@@ -1839,13 +1839,13 @@ var
   tx, ty, tw, th: Single;
 begin
   //Override in a subclass to paint the empty state yourself (see PlaceHolder).
-  if (FPlaceHolder = '') or (Resources = nil) then
+  if (FPlaceHolder = '') or (Res = nil) then
     Exit;
   r := ClientRect;
   if (r.Width <= 0) or (r.Height <= 0) then
     Exit;
-  th := Resources.Font.Height;
-  tw := RayLib.MeasureTextEx(Resources.Font.Data, PUTF8Char(FPlaceHolder), Resources.Font.Height, 0).x;
+  th := Res.Font.Height;
+  tw := RayLib.MeasureTextEx(Res.Font.Data, PUTF8Char(FPlaceHolder), Res.Font.Height, 0).x;
   tx := (r.Width - tw) / 2;
   if tx < 0 then
     tx := 0; //longer than the box: keep it left aligned instead of half clipped

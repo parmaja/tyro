@@ -284,12 +284,12 @@ end;
 
 procedure TTyroTerminal.UpdateSizes;
 begin
-  if Resources.Font.Width > 0 then
-    FCharWidth := Resources.Font.Width
+  if Res.Font.Width > 0 then
+    FCharWidth := Res.Font.Width
   else
     FCharWidth := CDefaultCharWidth;
-  if Resources.Font.Height > 0 then
-    FCharHeight := Resources.Font.Height
+  if Res.Font.Height > 0 then
+    FCharHeight := Res.Font.Height
   else
     FCharHeight := CDefaultCharHeight;
 end;
@@ -1564,7 +1564,7 @@ begin
     Exit;
   if FBackColor.RGBA.Alpha > 0 then
     ACanvas.DrawRectangle(r.Left, r.Top, r.Width, r.Height, FBackColor, True);
-  ch := Resources.Font.Height;
+  ch := Res.Font.Height;
   if ch <= 0 then
     ch := CDefaultCharHeight;
   if ch <= 0 then

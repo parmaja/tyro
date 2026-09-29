@@ -256,12 +256,12 @@ end;
 
 procedure TyroEditor.UpdateSizes;
 begin
-  if Resources.Font.Width > 0 then
-    FCharWidth := Resources.Font.Width
+  if Res.Font.Width > 0 then
+    FCharWidth := Res.Font.Width
   else
     FCharWidth := 8;
-  if Resources.Font.Height > 0 then
-    FCharHeight := Resources.Font.Height
+  if Res.Font.Height > 0 then
+    FCharHeight := Res.Font.Height
   else
     FCharHeight := 8;
 end;

@@ -815,7 +815,7 @@ end;
 
 procedure TLoadFontObject.DoExecute;
 begin
-  Resources.Font.LoadFromFile(FileName, FontSize);
+  Res.Font.LoadFromFile(FileName, FontSize);
 end;
 
 { TSetEffectObject }
