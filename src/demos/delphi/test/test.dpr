@@ -17,13 +17,17 @@ uses
 
 begin
   Randomize;
-  //Main := TestMaze.TMain.Create;
-  Main := Print10.TMain.Create;
+  Main := TestMaze.TMain.Create;
+  //Main := Print10.TMain.Create;
   //Main := Perceptron.TMain.Create;
   try
-    Main.Run([moShowFPS]);
-  except
-    on E: Exception do
-      Writeln(E.ClassName, ': ', E.Message);
+    try
+      Main.Run([moShowFPS]);
+    except
+      on E: Exception do
+        Writeln(E.ClassName, ': ', E.Message);
+    end;
+  finally
+    FreeAndNil(Main);
   end;
 end.

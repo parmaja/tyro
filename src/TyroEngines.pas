@@ -204,7 +204,7 @@ type
 
     //* Before Show window
     procedure Load; virtual;
-    procedure Run(AOptions: TTyroMainOptions);
+    procedure Run(AOptions: TTyroMainOptions = [moMainWindow, moShowFPS]);
     procedure Unload; virtual;
     //* After window initialized and other resource, load your resources here
     procedure Start; virtual;
@@ -1859,7 +1859,6 @@ begin
 end;
 
 initialization
-  Main := TTyroMain.Create;
 finalization
   FreeAndNil(Main);
 end.
