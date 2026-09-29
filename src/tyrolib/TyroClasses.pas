@@ -202,6 +202,14 @@ type
 
   TTyroEffect = (fxNone, fxWater, fxGlow, fxGray, fxSepia, fxInvert, fxVignette, fxPixelate, fxCustom);
 
+  { TTyroCanvas }
+  {
+    All drawing methods take arguments in canvas coordinates, i.e. the origin
+    set by SetOrigin is applied by the drawing method itself and never by the
+    caller. FLastX/FLastY is the "current point" left behind by a draw call and
+    is stored in the same canvas coordinates, so DrawLineTo can pass it straight
+    to DrawLine without applying the origin twice.
+  }
   TTyroCanvas = class abstract(TObject)
   private
     FOriginX, FOriginY: Integer;
@@ -210,6 +218,9 @@ type
     FBackColor: TColor;
     FPenSize: Integer;
     FWidth, FHeight: Integer;
+    function OffsetRect(const ARect: TRect): TRectangle; overload;
+    function OffsetRect(const ARect: TRectangle): TRectangle; overload;
+    procedure SetCurrentPoint(X, Y: Integer);
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
     procedure SetHeight(AValue: Integer);
@@ -575,6 +586,10 @@ end;
 constructor TTyroCanvas.Create(AWidth, AHeight: Integer);
 begin
   inherited Create;
+  FOriginX := 0;
+  FOriginY := 0;
+  FLastX := 0;
+  FLastY := 0;
   FWidth := AWidth;
   FHeight := AHeight;
   FPenSize := 1;
@@ -607,6 +622,22 @@ begin
   FOriginY := 0;
 end;
 
+function TTyroCanvas.OffsetRect(const ARect: TRect): TRectangle;
+begin
+  Result := RectangleOf(ARect.Left + FOriginX, ARect.Top + FOriginY, ARect.Width, ARect.Height);
+end;
+
+function TTyroCanvas.OffsetRect(const ARect: TRectangle): TRectangle;
+begin
+  Result := RectangleOf(ARect.X + FOriginX, ARect.Y + FOriginY, ARect.Width, ARect.Height);
+end;
+
+procedure TTyroCanvas.SetCurrentPoint(X, Y: Integer);
+begin
+  FLastX := X;
+  FLastY := Y;
+end;
+
 procedure TTyroCanvas.BeginDraw;
 begin
 end;
@@ -621,17 +652,16 @@ begin
     RayLib.DrawCircle(X + FOriginX, Y + FOriginY, R, Color)
   else
     RayLib.DrawCircleLines(X + FOriginX, Y + FOriginY, R, Color);
-  FLastX := X;
-  FLastY := Y;
+  SetCurrentPoint(X, Y);
 end;
 
 procedure TTyroCanvas.DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
 begin
   if Fill then
-    RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color);
-  RayLib.DrawRectangleLinesEx(RectangleOf(X + FOriginX, Y + FOriginY, AWidth, AHeight), PenSize, Color);
-  FLastX := X + AWidth;
-  FLastY := Y + AHeight;
+    RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color)
+  else
+    RayLib.DrawRectangleLinesEx(RectangleOf(X + FOriginX, Y + FOriginY, AWidth, AHeight), PenSize, Color);
+  SetCurrentPoint(X + AWidth, Y + AHeight);
 end;
 
 procedure TTyroCanvas.DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean);
@@ -652,8 +682,7 @@ end;
 procedure TTyroCanvas.DrawRect(ARectangle: TRect; Size: Integer; Color: TColor);
 begin
   RayLib.DrawRectangleLinesEx(RectangleOf(ARectangle.Left + FOriginX, ARectangle.Top + FOriginY, ARectangle.Width-Size, ARectangle.Height-Size), Size, Color);
-  FLastX := FOriginX + ARectangle.Right;
-  FLastY := FOriginY + ARectangle.Bottom;
+  SetCurrentPoint(ARectangle.Right, ARectangle.Bottom);
 end;
 
 procedure TTyroCanvas.BeginClip(ARectangle: TRect);
@@ -667,11 +696,15 @@ begin
 end;
 
 procedure TTyroCanvas.DrawRectangle(ARectangle: TRectangle; Color: TColor; Fill: Boolean);
+var
+  R: TRectangle;
 begin
+  R := OffsetRect(ARectangle);
   if Fill then
-    RayLib.DrawRectangleRec(ARectangle, Color);
-
-  RayLib.DrawRectangleLinesEx(ARectangle, PenSize, Color);
+    RayLib.DrawRectangleRec(R, Color)
+  else
+    RayLib.DrawRectangleLinesEx(R, PenSize, Color);
+  SetCurrentPoint(Round(ARectangle.X + ARectangle.Width), Round(ARectangle.Y + ARectangle.Height));
 end;
 
 procedure TTyroCanvas.FillRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor);
@@ -698,15 +731,13 @@ end;
 procedure TTyroCanvas.DrawPixel(X, Y: Integer; Color: TColor);
 begin
   RayLib.DrawPixel(X + FOriginX, Y + FOriginY, Color);
-  FLastX := X;
-  FLastY := Y;
+  SetCurrentPoint(X, Y);
 end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
 begin
   RayLib.DrawLineEx(Vector2Of(X1 + FOriginX, Y1 + FOriginY), Vector2Of(X2 + FOriginX, Y2 + FOriginY), PenSize, Color);
-  FLastX := X2;
-  FLastY := Y2;
+  SetCurrentPoint(X2, Y2);
 end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer);
@@ -722,27 +753,26 @@ end;
 procedure TTyroCanvas.DrawLineF(X1, Y1, X2, Y2: Single; Color: TColor);
 begin
   DrawLineEx(TVector2.Create(X1 + FOriginX, Y1 + FOriginY), TVector2.Create(X2 + FOriginX, Y2 + FOriginY), PenSize, Color);
+  SetCurrentPoint(Round(X2), Round(Y2));
 end;
 
 procedure TTyroCanvas.DrawLineTo(X2, Y2: Integer; Color: TColor);
 begin
-  //DrawLine adds the origin to both endpoints; FLastX/FLastY and (X2, Y2) are
-  //already origin-relative, so pass them through unchanged.
+  {FLastX/FLastY and (X2, Y2) are both in canvas coordinates, so DrawLine
+   applies the origin to both endpoints and no correction is needed here.}
   DrawLine(FLastX, FLastY, X2, Y2, Color);
 end;
 
 procedure TTyroCanvas.FillRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor);
 begin
   RayLib.DrawRectangle(X + FOriginX, Y + FOriginY, AWidth, AHeight, Color);
-  FLastX := FOriginX + X + AWidth;
-  FLastY := FOriginY + Y + AHeight;
+  SetCurrentPoint(X + AWidth, Y + AHeight);
 end;
 
 procedure TTyroCanvas.FillRectangle(Rect: TRect; Color: TColor);
 begin
   RayLib.DrawRectangle(Rect.Left + FOriginX, Rect.Top + FOriginY, Rect.Width, Rect.Height, Color);
-  FLastX := FOriginX + Rect.Right;
-  FLastY := FOriginY + Rect.Bottom;
+  SetCurrentPoint(Rect.Right, Rect.Bottom);
 end;
 
 procedure TTyroCanvas.PostDraw(AX: Integer = 0; AY: Integer = 0);
@@ -764,6 +794,7 @@ end;
 procedure TTyroCanvas.ClearBackground(const AColor: TColor);
 begin
   RayLib.ClearBackground(AColor);
+  SetCurrentPoint(0, 0);
 end;
 
 procedure TTyroCanvas.SetEffect(const AEffectName: string);
