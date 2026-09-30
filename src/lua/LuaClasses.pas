@@ -68,17 +68,6 @@ type
 
   { TLuaParam }
 
-  TLuaParam = record
-  private
-    Index: Integer;
-    State: Plua_State;
-  public
-    function AsInteger: lua_Integer;
-    function AsNumber: Double;
-    function AsString: UTF8String;
-    function AsBoolean: Boolean;
-  end;
-
   TLuaMethod = function(L: Plua_State): integer of object cdecl;
   TLuaFunction = lua_CFunction;
 
@@ -86,11 +75,9 @@ type
 
   TLuaHelper = record helper for lua_State
   private
-    function GetParams(Index: Integer): TLuaParam;
-    function GetCount: Integer;
+    function GetArgsCount: Integer;
   public
-    property Count: Integer read GetCount;
-    property Params[Index: Integer]: TLuaParam read GetParams;
+    property ArgsCount: Integer read GetArgsCount;
 
     function FunctionExists(const FunctionName: UTF8String): Boolean;
 
@@ -133,27 +120,39 @@ type
     procedure RegisterMeta(const Name: UTF8String; Method: TLuaMethod); overload;
 
     //Low-level stack access used by the C callbacks; keeps the callers independent of LuaAPI
-    function ToString(Index: Integer): UTF8String;
-    function ToInteger(Index: Integer): lua_Integer;
+    function ToString(Index: Integer): UTF8String; overload;
+    function ToString(Index: Integer; const Name: UTF8String): UTF8String; overload;
+    function PopString: UTF8String;
+
     function ToNumber(Index: Integer): Double;
+
     function ToBoolean(Index: Integer): Boolean;
+
+    function ToInteger(Index: Integer): lua_Integer; overload;
+    function ToInteger(Index: Integer; const Name: utf8string): Integer; overload;
+    function PopInteger: Integer; overload;
 
     function IsInteger(Index: Integer): Boolean;
     function IsNumber(Index: Integer): Boolean;
+    function IsNil(Index: Integer): Boolean;
     function IsString(Index: Integer): Boolean;
+    function IsTable(Index: Integer): Boolean;
 
     procedure PushBoolean(Value: Boolean);
     procedure PushInteger(Value: lua_Integer);
     procedure PushNumber(Value: Double);
     procedure PushString(const Value: UTF8String);
     procedure PushNil;
+
     procedure PushValue(Index: Integer);
 
-    procedure Pop(N: Integer);
+    procedure Pop(Count: Integer = 1);
+
     procedure NewTable;
 
     procedure GetField(Index: Integer; const Name: UTF8String);
     procedure SetField(Index: Integer; const Name: UTF8String);
+
     procedure SetMetaTable(Index: Integer);
     procedure Remove(Index: Integer);
 
@@ -429,7 +428,7 @@ end;
 constructor TLuaObject.Create;
 begin
   inherited Create;
-  EnumMethods;
+//  EnumMethods; not yet
 end;
 
 { TLua }
@@ -507,38 +506,9 @@ begin
     Dispose(AStatus);
 end;
 
-{ TLuaParam }
-
-function TLuaParam.AsInteger: lua_Integer;
-begin
-  Result := lua_tointeger(State, Index);
-end;
-
-function TLuaParam.AsNumber: Double;
-begin
-  Result := lua_tonumber(State, Index);
-end;
-
-function TLuaParam.AsString: UTF8String;
-begin
-  Result := lua_tostring(State, Index);
-end;
-
-function TLuaParam.AsBoolean: Boolean;
-begin
-  Result := lua_toboolean(State, Index);
-end;
-
 { TLuaHelper }
 
-function TLuaHelper.GetParams(Index: Integer): TLuaParam;
-begin
-  Result := Default(TLuaParam);
-  Result.State := @Self;
-  Result.Index := Index;
-end;
-
-function TLuaHelper.GetCount: Integer;
+function TLuaHelper.GetArgsCount: Integer;
 begin
   Result := lua_gettop(@Self);
 end;
@@ -649,14 +619,31 @@ begin
   Result := lua_tonumber(@Self, Index);
 end;
 
+function TLuaHelper.ToString(Index: Integer; const Name: utf8string): UTF8String;
+begin
+  GetField(Index, Name);
+  Result := PopString;
+end;
+
 function TLuaHelper.ToBoolean(Index: Integer): Boolean;
 begin
   Result := lua_toboolean(@Self, Index);
 end;
 
+function TLuaHelper.ToInteger(Index: Integer; const Name: utf8string): Integer;
+begin
+  GetField(Index, Name);
+  Result := PopInteger;
+end;
+
 function TLuaHelper.IsInteger(Index: Integer): Boolean;
 begin
   Result := lua_isinteger(@Self, Index);
+end;
+
+function TLuaHelper.IsNil(Index: Integer): Boolean;
+begin
+  Result := lua_isnil(@Self, Index);
 end;
 
 function TLuaHelper.IsNumber(Index: Integer): Boolean;
@@ -667,6 +654,11 @@ end;
 function TLuaHelper.IsString(Index: Integer): Boolean;
 begin
   Result := lua_isstring(@Self, Index);
+end;
+
+function TLuaHelper.IsTable(Index: Integer): Boolean;
+begin
+  lua_istable(@Self, Index);
 end;
 
 procedure TLuaHelper.PushBoolean(Value: Boolean);
@@ -699,9 +691,21 @@ begin
   lua_pushvalue(@Self, Index);
 end;
 
-procedure TLuaHelper.Pop(N: Integer);
+procedure TLuaHelper.Pop(Count: Integer);
 begin
-  lua_pop(@Self, N);
+  lua_pop(@Self, Count);
+end;
+
+function TLuaHelper.PopInteger: Integer;
+begin
+  Result := ToInteger(-1);
+  Pop(1);
+end;
+
+function TLuaHelper.PopString: UTF8String;
+begin
+  Result := ToString(-1);
+  Pop(1);
 end;
 
 procedure TLuaHelper.NewTable;
