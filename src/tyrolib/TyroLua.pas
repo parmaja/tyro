@@ -1,4 +1,4 @@
-unit TyroLua;
+﻿unit TyroLua;
 {**
  *  This file is part of the "Tyro"
  *
@@ -10,17 +10,20 @@ unit TyroLua;
  *  TODO  http://docwiki.embarcadero.com/RADStudio/Rio/en/Supporting_Properties_and_Methods_in_Custom_Variants
  *}
 
-{$mode objfpc}{$H+}{$M+}
+{$ifdef FPC}
+{$mode delphi}
 {$WARN 5024 off : Parameter "$1" not used}
+{$endif}
+{$H+}{$M+}
 {$define DEBUG_LUA}
 
 interface
 
 uses
-  Classes, SysUtils,
-  LuaClasses, LuaAPI, FPImage,
+  Classes, SysUtils, Types,
+  LuaAPI, LuaClasses,
   RayLib, RayClasses, //remove it
-  mnUtils,
+  mnUtils, mnLogs,
   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroPhysics,
   TyroControls, TyroEngines, TyroInput,
   TyroRadio, TyroSpectrum;
@@ -311,7 +314,7 @@ type
     procedure BuildGlobals; // global helpers shared from the main script state (time, rand, println)
     procedure BuildColors; // registers the colors global table
     procedure BuildDraw; // registers the draw global table
-    procedure CallHandler(const AName: string; AArgs: Integer); // pcall a global handler (args already on stack), ignore if not a function
+    procedure CallHandler(const AName: utf8string; AArgs: Integer); // pcall a global handler (args already on stack), ignore if not a function
   public
     constructor Create(AScript: TLuaScript; AHandle: Integer; const AFileName: string);
     destructor Destroy; override;
@@ -375,11 +378,10 @@ type
     SpectrumLua: TLuaSpectrum;
     procedure DoError(S: string);
     procedure Run; override;
-    procedure Stop; override;
-    function RunLine(const ALine: string; out AOutput: string): Boolean; override;
   protected
 
     //input & timing
+
     function IsKeyPressed_func(L: Plua_State): integer; cdecl;
     function IsKeyDown_func(L: Plua_State): integer; cdecl;
     function MouseX_func(L: Plua_State): integer; cdecl;
@@ -393,10 +395,14 @@ type
    public
     constructor Create; override;
     destructor Destroy; override;
+    procedure Stop; override;
+    function RunLine(const ALine: string; out AOutput: string): Boolean; override;
+
     procedure AddQueueObject(AQueueObject: TQueueObject); override;
     //Global environment hooks: unresolved globals resolve to sprites/controls by name
     function __global_getter(L: Plua_State): integer; cdecl;
     function __global_setter(L: Plua_State): integer; cdecl;
+
   end;
 
 const
@@ -410,7 +416,7 @@ function sleep_func(L: Plua_State): integer; cdecl;
 var
   n: int64;
 begin
-  n := round(L.Params[1].AsInteger);
+  n := L.ToInteger(1);
   sleep(n);
   Result := 0;
 end;
@@ -428,11 +434,11 @@ begin
       s := s + #9;
     s := s + L.Params[i].AsString;
     if IsConsole then
-      WriteLn(L.Params[i].AsString);
+      Log.WriteLn(L.Params[i].AsString);
   end;
   //mirror the log line to the Output control too
-  if (Main <> nil) and (Main.Output <> nil) then
-    Main.Output.Writeln(s);
+  {if (Main <> nil) and (Main.Output <> nil) then
+    Main.Output.Writeln(s);}
   Result := 0;
 end;
 
@@ -533,7 +539,6 @@ function TLuaConsole.Setter(L: PLua_State): integer;
 var
   i: integer;
   field: string;
-  color: string;
 begin
   Result := 0;
   field := L.ToString(2);
@@ -570,48 +575,46 @@ end;
 
 function TLuaConsole.Getter(L: PLua_State): integer;
 var
-  i: integer;
-  field: string;
+  i: Integer;
+  field: UTF8String;
 begin
   Result := 0;
-  field := L.ToString(2);
-  case field of
-    'active':
-    begin
-      L.PushBoolean(Main.Console.Visible);
-      Result := 1;
+  field := lua_tostring(L, 2);
+  if field = 'active' then
+  begin
+    lua_pushboolean(L, Main.Console.Visible);
+    Result := 1;
+  end
+  else if field = 'align' then
+  begin
+    // TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
+    i := Ord(Main.Console.Align);
+    case i of
+      0: lua_pushstring(L, 'none');
+      1: lua_pushstring(L, 'left');
+      2: lua_pushstring(L, 'top');
+      3: lua_pushstring(L, 'right');
+      4: lua_pushstring(L, 'bottom');
+      5: lua_pushstring(L, 'client');
+    else
+      lua_pushstring(L, 'none');
     end;
-    'align':
-    begin
-      //* TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
-      i := Ord(Main.Console.Align);
-      case i of
-        0: L.PushString('none');
-        1: L.PushString('left');
-        2: L.PushString('top');
-        3: L.PushString('right');
-        4: L.PushString('bottom');
-        5: L.PushString('client');
-        else
-          L.PushString('none');
-      end;
-      Result := 1;
-    end;
-    'height':
-    begin
-      L.PushInteger(Main.Console.Height);
-      Result := 1;
-    end;
-    'width':
-    begin
-      L.PushInteger(Main.Console.Width);
-      Result := 1;
-    end;
-    'margin':
-    begin
-      L.PushInteger(Main.Console.Margin);
-      Result := 1;
-    end;
+    Result := 1;
+  end
+  else if field = 'height' then
+  begin
+    lua_pushinteger(L, Main.Console.Height);
+    Result := 1;
+  end
+  else if field = 'width' then
+  begin
+    lua_pushinteger(L, Main.Console.Width);
+    Result := 1;
+  end
+  else if field = 'margin' then
+  begin
+    lua_pushinteger(L, Main.Console.Margin);
+    Result := 1;
   end;
 end;
 
@@ -646,38 +649,37 @@ begin
   end;
 end;
 
-function TLuaWindow.Getter(L: PLua_State): integer;
+function TLuaWindow.Getter(L: PLua_State): Integer;
 var
   field: string;
 begin
   Result := 0;
   field := L.ToString(2);
-  case field of
-    'margin':
-    begin
-      L.PushInteger(Main.Margin);
-      Result := 1;
-    end;
-    'backcolor':
-    begin
-      L.PushInteger(ColorToInt(Main.BackColor));
-      Result := 1;
-    end;
-    'width':
-    begin
-      L.PushInteger(Main.Width);
-      Result := 1;
-    end;
-    'height':
-    begin
-      L.PushInteger(Main.Height);
-      Result := 1;
-    end;
-    'shaking':
-    begin
-      L.PushBoolean(Main.Shaking);
-      Result := 1;
-    end;
+
+  if field = 'margin' then
+  begin
+    L.PushInteger(Main.Margin);
+    Result := 1;
+  end
+  else if field = 'backcolor' then
+  begin
+    L.PushInteger(ColorToInt(Main.BackColor));
+    Result := 1;
+  end
+  else if field = 'width' then
+  begin
+    L.PushInteger(Main.Width);
+    Result := 1;
+  end
+  else if field = 'height' then
+  begin
+    L.PushInteger(Main.Height);
+    Result := 1;
+  end
+  else if field = 'shaking' then
+  begin
+    L.PushBoolean(Main.Shaking);
+    Result := 1;
   end;
 end;
 
@@ -753,7 +755,7 @@ begin
   Result := 0;
   if L.IsNumber(2) then
   begin
-    index := round(L.ToInteger(2));
+    index := L.ToInteger(2);
     if index < Length(Colors) then
     begin
       c := ColorToInt(Colors[index].Color);
@@ -764,12 +766,10 @@ begin
   else
   begin
     field := L.ToString(2);
-    case field of
-      'count':
-      begin
-        L.PushInteger(Length(Colors));
-        Result := 1;
-      end;
+    if field = 'count' then
+    begin
+      L.PushInteger(Length(Colors));
+      Result := 1;
     end;
   end;
 end;
@@ -822,66 +822,66 @@ end;
 
 { TLuaCanvas }
 
-function TLuaCanvas.Setter(L: PLua_State): integer;
+function TLuaCanvas.Setter(L: PLua_State): Integer;
 var
-  i: integer;
+  i: Integer;
   field: string;
 begin
   Result := 0;
   field := L.ToString(2);
+
   if L.IsInteger(-1) then
-    case field of
-      'color':
-      begin
-        i := L.ToInteger(-1);
-        FScript.AddQueueObject(TDrawSetColorObject.Create(Main.Canvas, IntToColor(i)));
-        Result := 1;
-      end;
-      'alpha':
-      begin
-        i := L.ToInteger(-1);
-        FScript.AddQueueObject(TDrawSetAlphaObject.Create(Main.Canvas, i));
-        Result := 1;
-      end;
-      'backcolor':
-      begin
-        i := L.ToInteger(-1);
-        //Main.Canvas.BackgroundColor := RayColorOf(IntToColor(i));//thread unsafe
-        Result := 1;
-      end;
+  begin
+    if field = 'color' then
+    begin
+      i := L.ToInteger(-1);
+      FScript.AddQueueObject(TDrawSetColorObject.Create(Main.Canvas, IntToColor(i)));
+      Result := 1;
+    end
+    else if field = 'alpha' then
+    begin
+      i := L.ToInteger(-1);
+      FScript.AddQueueObject(TDrawSetAlphaObject.Create(Main.Canvas, i));
+      Result := 1;
+    end
+    else if field = 'backcolor' then
+    begin
+      i := L.ToInteger(-1);
+      //Main.Canvas.BackgroundColor := RayColorOf(IntToColor(i)); //thread unsafe
+      Result := 1;
     end;
+  end;
 end;
 
-function TLuaCanvas.Getter(L: PLua_State): integer;
+function TLuaCanvas.Getter(L: PLua_State): Integer;
 var
-  i: integer;
+  i: Integer;
   field: string;
 begin
   Result := 0;
   field := L.ToString(2);
-  case field of
-    'color':
-    begin
-      i := ColorToInt(Main.Canvas.PenColor);
-      L.PushInteger(i);
-      Result := 1;
-    end;
-    'backcolor':
-    begin
-      i := ColorToInt(Main.Canvas.BackColor);
-      L.PushInteger(i);
-      Result := 1;
-    end;
-    'width':
-    begin
-      L.PushInteger(Main.Canvas.Width);
-      Result := 1;
-    end;
-    'height':
-    begin
-      L.PushInteger(Main.Canvas.Height);
-      Result := 1;
-    end;
+
+  if field = 'color' then
+  begin
+    i := ColorToInt(Main.Canvas.PenColor);
+    L.PushInteger(i);
+    Result := 1;
+  end
+  else if field = 'backcolor' then
+  begin
+    i := ColorToInt(Main.Canvas.BackColor);
+    L.PushInteger(i);
+    Result := 1;
+  end
+  else if field = 'width' then
+  begin
+    L.PushInteger(Main.Canvas.Width);
+    Result := 1;
+  end
+  else if field = 'height' then
+  begin
+    L.PushInteger(Main.Canvas.Height);
+    Result := 1;
   end;
 end;
 
@@ -1020,127 +1020,127 @@ begin
   Shader := TLuaShader.Create(Self);
 
   //window
-  Lua.State.Register('window', 'show', Window, @Window.Window_func);
+  Lua.State.Register('window', 'show', Window, Window.Window_func);
   //Screen shake: window.shake(ms [, power]) and the global shake(ms [, power])
-  Lua.State.Register('window', 'shake', Window, @Window.Shake_func);
-  Lua.State.RegisterGlobal('shake', @Window.Shake_func);
+  Lua.State.Register('window', 'shake', Window, Window.Shake_func);
+  Lua.State.RegisterGlobal('shake', Window.Shake_func);
   Lua.State.Register('window', Window); //Should be last one for window
 
   //global functions
-  Lua.State.RegisterGlobal('print', @Console.PrintOut_func);
-  Lua.State.RegisterGlobal('println', @Console.PrintLnOut_func);
+  Lua.State.RegisterGlobal('print', Console.PrintOut_func);
+  Lua.State.RegisterGlobal('println', Console.PrintLnOut_func);
 
   //console
-  Lua.State.Register('console', 'print', Console, @Console.Print_func);
-  Lua.State.Register('console', 'println', Console, @Console.PrintLn_func);
-  Lua.State.Register('console', 'show', Console, @Console.Show_func);
-  Lua.State.Register('console', 'read', Console, @Console.Read_func);
+  Lua.State.Register('console', 'print', Console, Console.Print_func);
+  Lua.State.Register('console', 'println', Console, Console.PrintLn_func);
+  Lua.State.Register('console', 'show', Console, Console.Show_func);
+  Lua.State.Register('console', 'read', Console, Console.Read_func);
   Lua.State.Register('console', Console); //Should be last one
 
   //canvas
-  Lua.State.Register('canvas', 'clear', Canvas, @Canvas.Clear_func);
-  Lua.State.Register('canvas', 'text', Canvas, @Canvas.Text_func);
-  Lua.State.Register('canvas', 'circle', Canvas, @Canvas.Circle_func);
-  Lua.State.Register('canvas', 'rectangle', Canvas, @Canvas.Rectangle_func);
-  Lua.State.Register('canvas', 'line', Canvas, @Canvas.Line_func);
-  Lua.State.Register('canvas', 'point', Canvas, @Canvas.Point_func);
+  Lua.State.Register('canvas', 'clear', Canvas, Canvas.Clear_func);
+  Lua.State.Register('canvas', 'text', Canvas, Canvas.Text_func);
+  Lua.State.Register('canvas', 'circle', Canvas, Canvas.Circle_func);
+  Lua.State.Register('canvas', 'rectangle', Canvas, Canvas.Rectangle_func);
+  Lua.State.Register('canvas', 'line', Canvas, Canvas.Line_func);
+  Lua.State.Register('canvas', 'point', Canvas, Canvas.Point_func);
   Lua.State.Register('canvas', Canvas); //Should be last one
 
   //shader (property-style: shader.effect, shader.value, shader.area)
-  Lua.State.Register('shader', 'load', Shader, @Shader.Load_func);
+  Lua.State.Register('shader', 'load', Shader, Shader.Load_func);
   Lua.State.Register('shader', Shader); //Should be last one
 
   //font
-  Lua.State.Register('font', 'load', Font, @Font.Load_func);
+  Lua.State.Register('font', 'load', Font, Font.Load_func);
   Lua.State.Register('font', Font); //Should be last one
 
   //music
-  Lua.State.Register('music', 'beep', Music, @Music.Beep_func);
-  Lua.State.Register('music', 'sound', Music, @Music.Sound_func);
-  Lua.State.Register('music', 'play', Music, @Music.Play_func);
-  Lua.State.Register('music', 'mml', Music, @Music.MML_func);
+  Lua.State.Register('music', 'beep', Music, Music.Beep_func);
+  Lua.State.Register('music', 'sound', Music, Music.Sound_func);
+  Lua.State.Register('music', 'play', Music, Music.Play_func);
+  Lua.State.Register('music', 'mml', Music, Music.MML_func);
 
   //radio (radio.play(url), radio.pause(), radio.resume(), radio.stop()
   // + getters: radio.title, radio.station, radio.state, radio.playing ...)
-  Lua.State.Register('radio', 'play', Radio, @Radio.Play_func);
-  Lua.State.Register('radio', 'pause', Radio, @Radio.Pause_func);
-  Lua.State.Register('radio', 'resume', Radio, @Radio.Resume_func);
-  Lua.State.Register('radio', 'stop', Radio, @Radio.Stop_func);
+  Lua.State.Register('radio', 'play', Radio, Radio.Play_func);
+  Lua.State.Register('radio', 'pause', Radio, Radio.Pause_func);
+  Lua.State.Register('radio', 'resume', Radio, Radio.Resume_func);
+  Lua.State.Register('radio', 'stop', Radio, Radio.Stop_func);
   Lua.State.Register('radio', Radio); //Should be last one
 
   //spectrum (spectrum.show(x, y, w, h), spectrum.hide()
   // + getters/setters: spectrum.bars, spectrum.active, spectrum.visible)
-  Lua.State.Register('spectrum', 'show', SpectrumLua, @SpectrumLua.Show_func);
-  Lua.State.Register('spectrum', 'hide', SpectrumLua, @SpectrumLua.Hide_func);
+  Lua.State.Register('spectrum', 'show', SpectrumLua, SpectrumLua.Show_func);
+  Lua.State.Register('spectrum', 'hide', SpectrumLua, SpectrumLua.Hide_func);
   Lua.State.Register('spectrum', SpectrumLua); //Should be last one
 
   //input & timing (global functions)
-  Lua.State.RegisterGlobal('iskeypressed', @IsKeyPressed_func);
-  Lua.State.RegisterGlobal('iskeydown', @IsKeyDown_func);
-  Lua.State.RegisterGlobal('mousex', @MouseX_func);
-  Lua.State.RegisterGlobal('mousey', @MouseY_func);
-  Lua.State.RegisterGlobal('ismousepressed', @IsMouseButtonPressed_func);
-  Lua.State.RegisterGlobal('frametime', @FrameTime_func);
-  Lua.State.RegisterGlobal('time', @TotalTime_func);
-  Lua.State.RegisterGlobal('rand', @RandomValue_func);
-  Lua.State.RegisterGlobal('screenshot', @Screenshot_func);
+  Lua.State.RegisterGlobal('iskeypressed', IsKeyPressed_func);
+  Lua.State.RegisterGlobal('iskeydown', IsKeyDown_func);
+  Lua.State.RegisterGlobal('mousex', MouseX_func);
+  Lua.State.RegisterGlobal('mousey', MouseY_func);
+  Lua.State.RegisterGlobal('ismousepressed', IsMouseButtonPressed_func);
+  Lua.State.RegisterGlobal('frametime', FrameTime_func);
+  Lua.State.RegisterGlobal('time', TotalTime_func);
+  Lua.State.RegisterGlobal('rand', RandomValue_func);
+  Lua.State.RegisterGlobal('screenshot', Screenshot_func);
 
   // Sprite system: Sprites.new creates a sprite, Sprites("name") finds by name
   Lua.State.RegisterTable('Sprites');
-  Lua.State.Register('Sprites', 'new', Self, @Sprites.New_func);
-  Lua.State.Register('Sprites', 'find', Self, @Sprites.Find_func);
+  Lua.State.Register('Sprites', 'new', Self, Sprites.New_func);
+  Lua.State.Register('Sprites', 'find', Self, Sprites.Find_func);
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
-  Lua.State.Register('Sprites', '__call', Self, @Sprites.Call_func, True);
+  Lua.State.Register('Sprites', '__call', Self, Sprites.Call_func, True);
 
   //controls (generic control table; 'buttons' is a legacy alias to the same
   //object so old scripts keep working)
   Lua.State.RegisterTable('controls');
-  Lua.State.Register('controls', 'new', Controls, @Controls.New_func);
-  Lua.State.Register('controls', 'caption', Controls, @Controls.Caption_func);
-  Lua.State.Register('controls', 'text', Controls, @Controls.Text_func);
-  Lua.State.Register('controls', 'checked', Controls, @Controls.Checked_func);
-  Lua.State.Register('controls', 'position', Controls, @Controls.Position_func);
-  Lua.State.Register('controls', 'move', Controls, @Controls.Move_func);
-  Lua.State.Register('controls', 'width', Controls, @Controls.Width_func);
-  Lua.State.Register('controls', 'height', Controls, @Controls.Height_func);
-  Lua.State.Register('controls', 'visible', Controls, @Controls.Visible_func);
-  Lua.State.Register('controls', 'show', Controls, @Controls.Show_func);
-  Lua.State.Register('controls', 'hide', Controls, @Controls.Hide_func);
-  Lua.State.Register('controls', 'hover', Controls, @Controls.Hover_func);
-  Lua.State.Register('controls', 'down', Controls, @Controls.Down_func);
-  Lua.State.Register('controls', 'clicked', Controls, @Controls.Clicked_func);
-  Lua.State.Register('controls', 'focused', Controls, @Controls.Focused_func);
-  Lua.State.Register('controls', 'focus', Controls, @Controls.Focus_func);
-  Lua.State.Register('controls', 'border', Controls, @Controls.Border_func);
-  Lua.State.Register('controls', 'backcolor', Controls, @Controls.BackColor_func);
-  Lua.State.Register('controls', 'name', Controls, @Controls.Name_func);
-  Lua.State.Register('controls', 'align', Controls, @Controls.Align_func);
-  Lua.State.Register('controls', 'parent', Controls, @Controls.Parent_func);
-  Lua.State.Register('controls', 'items', Controls, @Controls.Items_func);
-  Lua.State.Register('controls', 'item', Controls, @Controls.Item_func);
-  Lua.State.Register('controls', 'additem', Controls, @Controls.AddItem_func);
-  Lua.State.Register('controls', 'clear', Controls, @Controls.Clear_func);
-  Lua.State.Register('controls', 'viewcount', Controls, @Controls.ViewCount_func);
-  Lua.State.Register('controls', 'itemindex', Controls, @Controls.ItemIndex_func);
+  Lua.State.Register('controls', 'new', Controls, Controls.New_func);
+  Lua.State.Register('controls', 'caption', Controls, Controls.Caption_func);
+  Lua.State.Register('controls', 'text', Controls, Controls.Text_func);
+  Lua.State.Register('controls', 'checked', Controls, Controls.Checked_func);
+  Lua.State.Register('controls', 'position', Controls, Controls.Position_func);
+  Lua.State.Register('controls', 'move', Controls, Controls.Move_func);
+  Lua.State.Register('controls', 'width', Controls, Controls.Width_func);
+  Lua.State.Register('controls', 'height', Controls, Controls.Height_func);
+  Lua.State.Register('controls', 'visible', Controls, Controls.Visible_func);
+  Lua.State.Register('controls', 'show', Controls, Controls.Show_func);
+  Lua.State.Register('controls', 'hide', Controls, Controls.Hide_func);
+  Lua.State.Register('controls', 'hover', Controls, Controls.Hover_func);
+  Lua.State.Register('controls', 'down', Controls, Controls.Down_func);
+  Lua.State.Register('controls', 'clicked', Controls, Controls.Clicked_func);
+  Lua.State.Register('controls', 'focused', Controls, Controls.Focused_func);
+  Lua.State.Register('controls', 'focus', Controls, Controls.Focus_func);
+  Lua.State.Register('controls', 'border', Controls, Controls.Border_func);
+  Lua.State.Register('controls', 'backcolor', Controls, Controls.BackColor_func);
+  Lua.State.Register('controls', 'name', Controls, Controls.Name_func);
+  Lua.State.Register('controls', 'align', Controls, Controls.Align_func);
+  Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
+  Lua.State.Register('controls', 'items', Controls, Controls.Items_func);
+  Lua.State.Register('controls', 'item', Controls, Controls.Item_func);
+  Lua.State.Register('controls', 'additem', Controls, Controls.AddItem_func);
+  Lua.State.Register('controls', 'clear', Controls, Controls.Clear_func);
+  Lua.State.Register('controls', 'viewcount', Controls, Controls.ViewCount_func);
+  Lua.State.Register('controls', 'itemindex', Controls, Controls.ItemIndex_func);
   Lua.State.Register('controls', Controls); //should be last one
   Lua.State.RegisterTable('buttons');
-  Lua.State.Register('buttons', 'new', Controls, @Controls.New_func);
-  Lua.State.Register('buttons', 'caption', Controls, @Controls.Caption_func);
-  Lua.State.Register('buttons', 'border', Controls, @Controls.Border_func);
-  Lua.State.Register('buttons', 'hover', Controls, @Controls.Hover_func);
-  Lua.State.Register('buttons', 'down', Controls, @Controls.Down_func);
-  Lua.State.Register('buttons', 'clicked', Controls, @Controls.Clicked_func);
+  Lua.State.Register('buttons', 'new', Controls, Controls.New_func);
+  Lua.State.Register('buttons', 'caption', Controls, Controls.Caption_func);
+  Lua.State.Register('buttons', 'border', Controls, Controls.Border_func);
+  Lua.State.Register('buttons', 'hover', Controls, Controls.Hover_func);
+  Lua.State.Register('buttons', 'down', Controls, Controls.Down_func);
+  Lua.State.Register('buttons', 'clicked', Controls, Controls.Clicked_func);
   Lua.State.Register('buttons', Controls); //should be last one
 
   //output (catches print/println/log)
-  Lua.State.RegisterTable('output');
-  Lua.State.Register('output', 'show', Output, @Output.Show_func);
-  Lua.State.Register('output', 'hide', Output, @Output.Hide_func);
-  Lua.State.Register('output', 'clear', Output, @Output.Clear_func);
+{  Lua.State.RegisterTable('output');
+  Lua.State.Register('output', 'show', Output, Output.Show_func);
+  Lua.State.Register('output', 'hide', Output, Output.Hide_func);
+  Lua.State.Register('output', 'clear', Output, Output.Clear_func);
   Lua.State.Register('output', Output); //should be last one
-
+}
   // Collision system: collision.pump() drains events and fires sprite.onCollide(other, state)
-  Lua.State.Register('collision', 'pump', Collision, @Collision.Pump_func);
+  Lua.State.Register('collision', 'pump', Collision, Collision.Pump_func);
   Lua.State.Register('collision', Collision); // should be last — wires getter/setter metamethods
 
   Lua.State.BeginTable;
@@ -1154,15 +1154,24 @@ begin
   //for Lua 5.5 compatibility; __index/__newindex use raw access (no recursion).
   lua_rawgeti(Lua.State, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS); //[globals]
   Lua.State.NewTable; //[globals, meta]
-  lua_pushlightuserdata(Lua.State, TMethod(@__global_getter).Data);
-  lua_pushlightuserdata(Lua.State, TMethod(@__global_getter).Code);
-  lua_pushcclosure(Lua.State, @global_meta_callback, 2); //[globals, meta, getter]
-  lua_setfield(Lua.State, -2, '__index'); //[globals, meta]
-  lua_pushlightuserdata(Lua.State, TMethod(@__global_setter).Data);
-  lua_pushlightuserdata(Lua.State, TMethod(@__global_setter).Code);
-  lua_pushcclosure(Lua.State, @global_meta_callback, 2); //[globals, meta, setter]
-  lua_setfield(Lua.State, -2, '__newindex'); //[globals, meta]
+
+  {lua_pushlightuserdata(Lua.State, @Self);
+  lua_pushlightuserdata(Lua.State, @TLuaScript.__global_getter);
+  lua_pushcclosure(Lua.State, global_meta_callback, 2); //[globals, meta, getter]
+  lua_setfield(Lua.State, -2, '__index'); //[globals, meta]}
+  Lua.State.Register('__index', __global_getter);
+
+//  lua_pushlightuserdata(Lua.State, TMethod(__global_setter).Data);
+//  lua_pushlightuserdata(Lua.State, TMethod(__global_setter).Code);
+
+{  lua_pushlightuserdata(Lua.State, @Self);
+  lua_pushlightuserdata(Lua.State, @TLuaScript.__global_setter);
+  lua_pushcclosure(Lua.State, global_meta_callback, 2); //[globals, meta, setter]
+  lua_setfield(Lua.State, -2, '__newindex'); //[globals, meta]}
+  Lua.State.Register('__newindex', __global_setter);
+
   lua_setmetatable(Lua.State, -2); //globals.metatable = meta -> [globals]
+
   lua_pop(Lua.State, 1); //[]
 end;
 
@@ -1565,53 +1574,51 @@ begin
   end;
 end;
 
-function TLuaOutput.Getter(L: PLua_State): integer;
+function TLuaOutput.Getter(L: Plua_State): Integer;
 var
   field: string;
 begin
   Result := 0;
-  field := L.ToString(2);
-  case field of
-    'visible':
-    begin
-      L.PushBoolean(Main.Output.Visible);
-      Result := 1;
-    end;
-    'height':
-    begin
-      L.PushInteger(Main.Output.Height);
-      Result := 1;
-    end;
-    'width':
-    begin
-      L.PushInteger(Main.Output.Width);
-      Result := 1;
-    end;
-    'left':
-    begin
-      L.PushInteger(Main.Output.BoundsRect.Left);
-      Result := 1;
-    end;
-    'top':
-    begin
-      L.PushInteger(Main.Output.BoundsRect.Top);
-      Result := 1;
-    end;
-    'lines':
-    begin
-      L.PushInteger(Main.Output.LineCount);
-      Result := 1;
-    end;
-    'maxlines':
-    begin
-      L.PushInteger(Main.Output.MaxLines);
-      Result := 1;
-    end;
-    'margin':
-    begin
-      L.PushInteger(Main.Output.Margin);
-      Result := 1;
-    end;
+  field := lua_tostring(L, 2);
+  if field = 'visible' then
+  begin
+    lua_pushboolean(L, Main.Output.Visible);
+    Result := 1;
+  end
+  else if field = 'height' then
+  begin
+    lua_pushinteger(L, Main.Output.Height);
+    Result := 1;
+  end
+  else if field = 'width' then
+  begin
+    lua_pushinteger(L, Main.Output.Width);
+    Result := 1;
+  end
+  else if field = 'left' then
+  begin
+    lua_pushinteger(L, Main.Output.BoundsRect.Left);
+    Result := 1;
+  end
+  else if field = 'top' then
+  begin
+    lua_pushinteger(L, Main.Output.BoundsRect.Top);
+    Result := 1;
+  end
+  else if field = 'lines' then
+  begin
+    lua_pushinteger(L, Main.Output.LineCount);
+    Result := 1;
+  end
+  else if field = 'maxlines' then
+  begin
+    lua_pushinteger(L, Main.Output.MaxLines);
+    Result := 1;
+  end
+  else if field = 'margin' then
+  begin
+    lua_pushinteger(L, Main.Output.Margin);
+    Result := 1;
   end;
 end;
 
@@ -1683,7 +1690,7 @@ var
   s: string;
 begin
   s := L.ToString(1);
-  s := Resources.GuessFileName(s, Script.Path);
+  s := Res.GuessFileName(s, Script.Path);
   FScript.AddQueueObject(TPlayMusicFileObject.Create(s));
   Result := 0;
 end;
@@ -1710,58 +1717,56 @@ end;
 
 { TLuaRadio }
 
-function TLuaRadio.Getter(L: PLua_State): integer;
+function TLuaRadio.Getter(L: Plua_State): Integer;
 var
   field: string;
 begin
   Result := 0;
-  field := L.ToString(2);
-  case field of
-    'title':
-    begin
-      L.PushString(RadioPlayer.Title);
-      Result := 1;
-    end;
-    'station':
-    begin
-      L.PushString(RadioPlayer.Station);
-      Result := 1;
-    end;
-    'genre':
-    begin
-      L.PushString(RadioPlayer.Genre);
-      Result := 1;
-    end;
-    'bitrate':
-    begin
-      L.PushString(RadioPlayer.Bitrate);
-      Result := 1;
-    end;
-    'url':
-    begin
-      L.PushString(RadioPlayer.URL);
-      Result := 1;
-    end;
-    'state':
-    begin
-      L.PushString(RadioPlayer.StateString);
-      Result := 1;
-    end;
-    'error':
-    begin
-      L.PushString(RadioPlayer.Error);
-      Result := 1;
-    end;
-    'playing':
-    begin
-      L.PushBoolean(RadioPlayer.Playing);
-      Result := 1;
-    end;
-    'buffered':
-    begin
-      L.PushInteger(RadioPlayer.Buffered);
-      Result := 1;
-    end;
+  field := lua_tostring(L, 2);
+  if field = 'title' then
+  begin
+    lua_pushstring(L, PAnsiChar(AnsiString(RadioPlayer.Title)));
+    Result := 1;
+  end
+  else if field = 'station' then
+  begin
+    lua_pushstring(L, PAnsiChar(AnsiString(RadioPlayer.Station)));
+    Result := 1;
+  end
+  else if field = 'genre' then
+  begin
+    lua_pushstring(L, PAnsiChar(AnsiString(RadioPlayer.Genre)));
+    Result := 1;
+  end
+  else if field = 'bitrate' then
+  begin
+    lua_pushstring(L, PAnsiChar(AnsiString(RadioPlayer.Bitrate)));
+    Result := 1;
+  end
+  else if field = 'url' then
+  begin
+    lua_pushstring(L, PAnsiChar(AnsiString(RadioPlayer.URL)));
+    Result := 1;
+  end
+  else if field = 'state' then
+  begin
+    lua_pushstring(L, PAnsiChar(AnsiString(RadioPlayer.StateString)));
+    Result := 1;
+  end
+  else if field = 'error' then
+  begin
+    lua_pushstring(L, PAnsiChar(AnsiString(RadioPlayer.Error)));
+    Result := 1;
+  end
+  else if field = 'playing' then
+  begin
+    lua_pushboolean(L, RadioPlayer.Playing);
+    Result := 1;
+  end
+  else if field = 'buffered' then
+  begin
+    lua_pushinteger(L, RadioPlayer.Buffered);
+    Result := 1;
   end;
 end;
 
@@ -1827,28 +1832,26 @@ begin
   inherited Create(AScript);
 end;
 
-function TLuaSpectrum.Getter(L: PLua_State): integer;
+function TLuaSpectrum.Getter(L: Plua_State): Integer;
 var
   field: string;
 begin
   Result := 0;
-  field := L.ToString(2);
-  case field of
-    'active':
-    begin
-      L.PushBoolean(Spectrum.Active);
-      Result := 1;
-    end;
-    'bars':
-    begin
-      L.PushInteger(Spectrum.Bars);
-      Result := 1;
-    end;
-    'visible':
-    begin
-      L.PushBoolean(Spectrum.Visible);
-      Result := 1;
-    end;
+  field := lua_tostring(L, 2);
+  if field = 'active' then
+  begin
+    lua_pushboolean(L, Spectrum.Active);
+    Result := 1;
+  end
+  else if field = 'bars' then
+  begin
+    lua_pushinteger(L, Spectrum.Bars);
+    Result := 1;
+  end
+  else if field = 'visible' then
+  begin
+    lua_pushboolean(L, Spectrum.Visible);
+    Result := 1;
   end;
 end;
 
@@ -2019,7 +2022,7 @@ var
 begin
   aFile := L.ToString(1);
   // Load font from current directory (ScriptPath or WorkSpace)
-  aFile := Resources.GuessFileName(aFile, Script.Path);
+  aFile := Res.GuessFileName(aFile, Script.Path);
   if L.IsNumber(2) then
     aSize := L.ToInteger(2) //LoadFontEx
   else
@@ -2046,22 +2049,22 @@ begin
     Lua.State.SetField(-2, '__handle'); //sprite.__handle = AHandle
 
     //methods receive the sprite table injected as argument 1
-    Lua.State.Register('load', @Load_func);
-    Lua.State.Register('loadscript', @LoadScript_func);
-    Lua.State.Register('show', @Show_func);
-    Lua.State.Register('hide', @Hide_func);
-    Lua.State.Register('move', @Move_func);
-    Lua.State.Register('width', @Width_func);
-    Lua.State.Register('height', @Height_func);
-    Lua.State.Register('play', @Play_func);
-    Lua.State.Register('stop', @Stop_func);
-    Lua.State.Register('pause', @Stop_func);
-    Lua.State.Register('framecount', @FrameCount_func);
+    Lua.State.Register('load', Load_func);
+    Lua.State.Register('loadscript', LoadScript_func);
+    Lua.State.Register('show', Show_func);
+    Lua.State.Register('hide', Hide_func);
+    Lua.State.Register('move', Move_func);
+    Lua.State.Register('width', Width_func);
+    Lua.State.Register('height', Height_func);
+    Lua.State.Register('play', Play_func);
+    Lua.State.Register('stop', Stop_func);
+    Lua.State.Register('pause', Stop_func);
+    Lua.State.Register('framecount', FrameCount_func);
 
     //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
     Lua.State.NewTable; //[sprite, sprite, meta]
-    Lua.State.RegisterMeta('__index', @__getter);
-    Lua.State.RegisterMeta('__newindex', @__setter);
+    Lua.State.RegisterMeta('__index', __getter);
+    Lua.State.RegisterMeta('__newindex', __setter);
     Lua.State.SetMetaTable(-2); //sprite.metatable = meta
 
     // remember this sprite table so collision.pump() can find it by handle
@@ -2218,6 +2221,7 @@ begin
   x := 0;
   y := 0;
   aName := '';
+  w := 500; h := 200;
   if (clsName = 'button') or (clsName = 'panel') or (clsName = 'label') or
      (clsName = 'checkbox') or (clsName = 'edit') or (clsName = 'spectrum') or (clsName = 'listbox') then
   begin
@@ -2225,16 +2229,35 @@ begin
     clsName := caption;
     caption := L.ToString(2);
     popStart := 3;
-    case clsName of
-      'button': begin w := 100; h := 32; end;
-      'panel': begin w := 100; h := 100; end;
-      'label': begin w := 120; h := 24; end;
-      'checkbox': begin w := 120; h := 24; end;
-      'edit': begin w := 140; h := 28; end;
-      'spectrum': begin w := 500; h := 200; end;
-      'listbox': begin w := 160; h := 120; end;
+    if clsName = 'button' then
+    begin
+      w := 100; h := 32;
+    end
+    else if clsName = 'panel' then
+    begin
+      w := 100; h := 100;
+    end
+    else if clsName = 'label' then
+    begin
+      w := 120; h := 24;
+    end
+    else if clsName = 'checkbox' then
+    begin
+      w := 120; h := 24;
+    end
+    else if clsName = 'edit' then
+    begin
+      w := 140; h := 28;
+    end
+    else if clsName = 'spectrum' then
+    begin
+      w := 500; h := 200;
+    end
+    else if clsName = 'listbox' then
+    begin
+      w := 160; h := 120;
     end;
-    if c >= 7 then
+      if c >= 7 then
       aName := L.ToString(7);
   end
   else
@@ -2242,9 +2265,9 @@ begin
     //legacy: buttons.new(caption, x?, y?, w?, h?, borderSize?)
     clsName := 'button';
     popStart := 2;
-    w := 100;
-    h := 32;
+    w := 100; h := 32;
   end;
+
   if c >= popStart then x := round(L.ToNumber(popStart));
   if c >= popStart + 1 then y := round(L.ToNumber(popStart + 1));
   if c >= popStart + 2 then w := round(L.ToNumber(popStart + 2));
@@ -2632,7 +2655,6 @@ begin
   if L.Count >= 2 then
   begin
     s := LowerCase(Trim(L.ToString(2)));
-    aAlign := alNone;
     if TryStrToInt(s, n) and (n >= Ord(alNone)) and (n <= Ord(alClient)) then
       aAlign := TAlign(n)
     else if s = 'none' then
@@ -2868,7 +2890,7 @@ var
   LoadObj: TLoadSpriteObject;
   ScriptObj: TLoadSpriteScriptObject;
 begin
-  aFile := Resources.GuessFileName(L.ToString(2));
+  aFile := Res.GuessFileName(L.ToString(2));
   if L.Count >= 3 then
     aScriptFile := L.ToString(3);
   L.GetField(1, '__name');
@@ -3243,14 +3265,19 @@ begin
   L.PushString(Main.Sprites.GetName(AHandle));
   L.SetField(-2, '__name'); //t.__name = sprite name -> [t]
   L.NewTable; //[t, meta]
-  lua_pushlightuserdata(L, TMethod(@ASprite.__getter).Data);
-  lua_pushlightuserdata(L, TMethod(@ASprite.__getter).Code);
+
+  {lua_pushlightuserdata(L, @ASprite);
+  lua_pushlightuserdata(L, @TLuaSprite.__getter);
   lua_pushcclosure(L, @sprite_script_method_callback, 2);
-  lua_setfield(L, -2, '__index'); //[t, meta]
-  lua_pushlightuserdata(L, TMethod(@ASprite.__setter).Data);
-  lua_pushlightuserdata(L, TMethod(@ASprite.__setter).Code);
+  lua_setfield(L, -2, '__index'); //[t, meta]}
+  L.Register('__index', ASprite.__getter);
+
+  {lua_pushlightuserdata(L, ASprite);
+  lua_pushlightuserdata(L, @TLuaSprite.__setter);
   lua_pushcclosure(L, @sprite_script_method_callback, 2);
-  lua_setfield(L, -2, '__newindex'); //[t, meta]
+  lua_setfield(L, -2, '__newindex'); //[t, meta]}
+  L.Register('__newindex', ASprite.__setter);
+
   lua_setmetatable(L, -2); //t.metatable = meta -> [t]
 end;
 
@@ -3301,7 +3328,7 @@ begin
   Result := False;
   if FFileName = '' then
     Exit;
-  FFileName := Resources.GuessFileName(FFileName);
+  FFileName := Res.GuessFileName(FFileName);
   if luaL_dofile(FLua.State, PUTF8Char(FFileName)) <> 0 then
   begin
     Msg := FLua.State.ToString(-1);
@@ -3322,9 +3349,9 @@ procedure TLuaSpriteScript.BuildGlobals;
 begin
   // Reuse the main script's globals so per-sprite states can call the same
   // helpers (the bound FScript outlives this state).
-  FLua.State.RegisterGlobal('time', @FScript.TotalTime_func);
-  FLua.State.RegisterGlobal('rand', @FScript.RandomValue_func);
-  FLua.State.RegisterGlobal('println', @FScript.Console.PrintLn_func);
+  FLua.State.RegisterGlobal('time', FScript.TotalTime_func);
+  FLua.State.RegisterGlobal('rand', FScript.RandomValue_func);
+  FLua.State.RegisterGlobal('println', FScript.Console.PrintLn_func);
 end;
 
 procedure TLuaSpriteScript.BuildColors;
@@ -3340,16 +3367,16 @@ end;
 procedure TLuaSpriteScript.BuildDraw;
 begin
   FLua.State.RegisterTable('draw');
-  FLua.State.Register('draw', 'circle', Self, @Circle_func);
-  FLua.State.Register('draw', 'rectangle', Self, @Rectangle_func);
-  FLua.State.Register('draw', 'line', Self, @Line_func);
-  FLua.State.Register('draw', 'text', Self, @Text_func);
+  FLua.State.Register('draw', 'circle', Self, Circle_func);
+  FLua.State.Register('draw', 'rectangle', Self, Rectangle_func);
+  FLua.State.Register('draw', 'line', Self, Line_func);
+  FLua.State.Register('draw', 'text', Self, Text_func);
 end;
 
 // Look up the global handler AName and pcall it. The caller has pushed the
 // arguments (AArgs of them) below the handler position; an absent/ non-
 // function handler just drains the stack and is ignored.
-procedure TLuaSpriteScript.CallHandler(const AName: string; AArgs: Integer);
+procedure TLuaSpriteScript.CallHandler(const AName: utf8string; AArgs: Integer);
 var
   Msg: string;
 begin
@@ -3437,7 +3464,7 @@ end;
 // draw.text(x, y, text, color)
 function TLuaSpriteScript.Text_func(L: Plua_State): integer; cdecl;
 begin
-  RayLib.DrawTextEx(Resources.Font.Data, PUTF8Char(L.ToString(3)), Vector2Of(L.ToNumber(1), L.ToNumber(2)), Resources.Font.Height, 0, SpriteColorValue(L, 4));
+  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(L.ToString(3)), Vector2Of(L.ToNumber(1), L.ToNumber(2)), Res.Font.Height, 0, SpriteColorValue(L, 4));
   Result := 0;
 end;
 
@@ -3576,5 +3603,5 @@ begin
 end;
 
 initialization
-  Main.RegisterLanguage('Lua', ['.ls', '.lua', '.pluto'], TLuaScript);
+  ScriptTypes.RegisterLanguage('Lua', ['.ls', '.lua', '.pluto'], TLuaScript);
 end.
