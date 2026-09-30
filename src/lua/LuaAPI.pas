@@ -197,26 +197,26 @@ type
   lua_Alloc = function(ud, ptr: Pointer; osize, nsize: size_t): Pointer; cdecl;
 
 const
-   // basic types
-   LUA_TNONE          = -1;
-   LUA_TNIL           = 0;
-   LUA_TBOOLEAN       = 1;
-   LUA_TLIGHTUSERDATA = 2;
-   LUA_TNUMBER        = 3;
-   LUA_TSTRING        = 4;
-   LUA_TTABLE         = 5;
-   LUA_TFUNCTION      = 6;
-   LUA_TUSERDATA      = 7;
-   LUA_TTHREAD        = 8;
-   LUA_NUMTAGS        = 9;
+  // basic types
+  LUA_TNONE          = -1;
+  LUA_TNIL           = 0;
+  LUA_TBOOLEAN       = 1;
+  LUA_TLIGHTUSERDATA = 2;
+  LUA_TNUMBER        = 3;
+  LUA_TSTRING        = 4;
+  LUA_TTABLE         = 5;
+  LUA_TFUNCTION      = 6;
+  LUA_TUSERDATA      = 7;
+  LUA_TTHREAD        = 8;
+  LUA_NUMTAGS        = 9;
 
-   // minimum Lua stack available to a C function
-   LUA_MINSTACK = 20;
+  // minimum Lua stack available to a C function
+  LUA_MINSTACK = 20;
 
-    // predefined values in the registry */
-    LUA_RIDX_GLOBALS    = 2;
-    LUA_RIDX_MAINTHREAD = 3;
-    LUA_RIDX_LAST       = 3;
+  // predefined values in the registry */
+  LUA_RIDX_GLOBALS    = 2;
+  LUA_RIDX_MAINTHREAD = 3;
+  LUA_RIDX_LAST       = 3;
 
 // state manipulation
 function lua_newstate(f: lua_Alloc; ud: Pointer; seed: LongWord): Plua_state; cdecl;
@@ -260,20 +260,20 @@ function lua_topointer(L: Plua_State; idx: Integer): Pointer; cdecl;
 
 //  Arithmetic functions
 const
-   LUA_OPADD  = 0; (* ORDER TM, ORDER OP *)
-   LUA_OPSUB  = 1;
-   LUA_OPMUL  = 2;
-   LUA_OPMOD  = 3;
-   LUA_OPPOW  = 4;
-   LUA_OPDIV  = 5;
-   LUA_OPIDIV = 6;
-   LUA_OPBAND = 7;
-   LUA_OPBOR  = 8;
-   LUA_OPBXOR = 9;
-   LUA_OPSHL  = 10;
-   LUA_OPSHR  = 11;
-   LUA_OPUNM  = 12;
-   LUA_OPBNOT = 13;
+  LUA_OPADD  = 0; (* ORDER TM, ORDER OP *)
+  LUA_OPSUB  = 1;
+  LUA_OPMUL  = 2;
+  LUA_OPMOD  = 3;
+  LUA_OPPOW  = 4;
+  LUA_OPDIV  = 5;
+  LUA_OPIDIV = 6;
+  LUA_OPBAND = 7;
+  LUA_OPBOR  = 8;
+  LUA_OPBXOR = 9;
+  LUA_OPSHL  = 10;
+  LUA_OPSHR  = 11;
+  LUA_OPUNM  = 12;
+  LUA_OPBNOT = 13;
 
 procedure lua_arith(L: Plua_State; op: Integer); cdecl;
 
@@ -347,25 +347,25 @@ function lua_isyieldable(L: Plua_State): LongBool; cdecl;
 
 //  garbage-collection function and options
 const
-   LUA_GCSTOP        = 0;
-   LUA_GCRESTART     = 1;
-   LUA_GCCOLLECT     = 2;
-   LUA_GCCOUNT       = 3;
-   LUA_GCCOUNTB      = 4;
-   LUA_GCSTEP        = 5;
-   LUA_GCISRUNNING   = 6;
-   LUA_GCGEN         = 7;
-   LUA_GCINC         = 8;
-   LUA_GCPARAM       = 9;
+  LUA_GCSTOP        = 0;
+  LUA_GCRESTART     = 1;
+  LUA_GCCOLLECT     = 2;
+  LUA_GCCOUNT       = 3;
+  LUA_GCCOUNTB      = 4;
+  LUA_GCSTEP        = 5;
+  LUA_GCISRUNNING   = 6;
+  LUA_GCGEN         = 7;
+  LUA_GCINC         = 8;
+  LUA_GCPARAM       = 9;
 
-   // garbage-collection parameters (used with LUA_GCPARAM)
-   LUA_GCPMINORMUL   = 0;  // control minor collections
-   LUA_GCPMAJORMINOR = 1;  // control shift major->minor
-   LUA_GCPMINORMAJOR = 2;  // control shift minor->major
-   LUA_GCPPAUSE      = 3;  // size of pause between successive GCs
-   LUA_GCPSTEPMUL    = 4;  // GC "speed"
-   LUA_GCPSTEPSIZE    = 5;  // GC granularity
-   LUA_GCPN          = 6;   // number of parameters
+  // garbage-collection parameters (used with LUA_GCPARAM)
+  LUA_GCPMINORMUL   = 0;  // control minor collections
+  LUA_GCPMAJORMINOR = 1;  // control shift major->minor
+  LUA_GCPMINORMAJOR = 2;  // control shift minor->major
+  LUA_GCPPAUSE      = 3;  // size of pause between successive GCs
+  LUA_GCPSTEPMUL    = 4;  // GC "speed"
+  LUA_GCPSTEPSIZE    = 5;  // GC granularity
+  LUA_GCPN          = 6;   // number of parameters
 
 function lua_gc(L: Plua_State; what: Integer): Integer; cdecl; varargs;
 
@@ -416,20 +416,20 @@ function lua_tostring(L: Plua_State; i: Integer): PUTF8Char; inline;
 
 // Debug API
 const
-   // Event codes
-   LUA_HOOKCALL     = 0;
-   LUA_HOOKRET      = 1;
-   LUA_HOOKLINE     = 2;
-   LUA_HOOKCOUNT    = 3;
-   LUA_HOOKTAILCALL = 4;
+  // Event codes
+  LUA_HOOKCALL     = 0;
+  LUA_HOOKRET      = 1;
+  LUA_HOOKLINE     = 2;
+  LUA_HOOKCOUNT    = 3;
+  LUA_HOOKTAILCALL = 4;
 
-   // Event masks
-   LUA_MASKCALL  = 1 shl Ord(LUA_HOOKCALL);
-   LUA_MASKRET   = 1 shl Ord(LUA_HOOKRET);
-   LUA_MASKLINE  = 1 shl Ord(LUA_HOOKLINE);
-   LUA_MASKCOUNT = 1 shl Ord(LUA_HOOKCOUNT);
+  // Event masks
+  LUA_MASKCALL  = 1 shl Ord(LUA_HOOKCALL);
+  LUA_MASKRET   = 1 shl Ord(LUA_HOOKRET);
+  LUA_MASKLINE  = 1 shl Ord(LUA_HOOKLINE);
+  LUA_MASKCOUNT = 1 shl Ord(LUA_HOOKCOUNT);
 
-   LUA_IDSIZE = 60;
+  LUA_IDSIZE = 60;
 
 type
   lua_Debug = record
@@ -454,27 +454,30 @@ type
     i_ci: Pointer;  // active function (struct CallInfo *)
   end;
 
- { lua_Debug = packed record     (* activation record *)
-      event: Integer;
-      name: PUTF8Char;           (* (n) *)
-      namewhat: PUTF8Char;       (* (n) `global', `local', `field', `method' *)
-      what: PUTF8Char;           (* (S) `Lua', `C', `main', `tail'*)
-      source: PUTF8Char;         (* (S) *)
-      currentline: Integer;      (* (l) *)
-      linedefined: Integer;      (* (S) *)
-      lastlinedefined: Integer;  (* (S) *)
-      nups: Byte;                (* (u) number of upvalues *)
-      nparams: Byte;             (* (u) number of parameters *)
-      isvararg: ByteBool;        (* (u) *)
-      istailcall: ByteBool;      (* (t) *)
-      short_src: packed array[0..LUA_IDSIZE - 1] of AnsiChar; (* (S) *)
-      (* private part *)
-      i_ci: Pointer;             (* active function *)  // ptr to struct CallInfo
-   end;}
-   Plua_Debug = ^lua_Debug;
+{
+lua_Debug = packed record     (* activation record *)
+  event: Integer;
+  name: PUTF8Char;           (* (n) *)
+  namewhat: PUTF8Char;       (* (n) `global', `local', `field', `method' *)
+  what: PUTF8Char;           (* (S) `Lua', `C', `main', `tail'*)
+  source: PUTF8Char;         (* (S) *)
+  currentline: Integer;      (* (l) *)
+  linedefined: Integer;      (* (S) *)
+  lastlinedefined: Integer;  (* (S) *)
+  nups: Byte;                (* (u) number of upvalues *)
+  nparams: Byte;             (* (u) number of parameters *)
+  isvararg: ByteBool;        (* (u) *)
+  istailcall: ByteBool;      (* (t) *)
+  short_src: packed array[0..LUA_IDSIZE - 1] of AnsiChar; (* (S) *)
+  (* private part *)
+  i_ci: Pointer;             (* active function *)  // ptr to struct CallInfo
+  end;
+}
 
-   // Functions to be called by the debugger in specific events
-   lua_Hook = procedure(L: Plua_State; ar: Plua_Debug); cdecl;
+  Plua_Debug = ^lua_Debug;
+
+  // Functions to be called by the debugger in specific events
+  lua_Hook = procedure(L: Plua_State; ar: Plua_Debug); cdecl;
 
 function lua_getstack(L: Plua_State; level: Integer; var ar: lua_Debug): Integer; cdecl;
 function lua_getinfo(L: Plua_State; const what: PUTF8Char; var ar: lua_Debug): Integer; cdecl;
@@ -491,17 +494,17 @@ function lua_gethookcount(L: Plua_State): Integer; cdecl;
 
 // pre-defined references
 const
-   LUA_NOREF  = -2;
-   LUA_REFNIL = -1;
+  LUA_NOREF  = -2;
+  LUA_REFNIL = -1;
 
-   LUAL_NUMSIZES = sizeof(lua_Integer)*16 + sizeof(lua_Number);
+  LUAL_NUMSIZES = sizeof(lua_Integer)*16 + sizeof(lua_Number);
 
 type
-   luaL_Reg = packed record
-      name: PUTF8Char;
-      func: lua_CFunction;
-   end;
-   PluaL_Reg = ^luaL_Reg;
+  luaL_Reg = packed record
+    name: PUTF8Char;
+    func: lua_CFunction;
+  end;
+  PluaL_Reg = ^luaL_Reg;
 
 procedure luaL_checkversion_(L: Plua_State; ver: lua_Number; sz: size_t); cdecl;
 procedure luaL_checkversion(L: Plua_State); inline;
@@ -563,15 +566,15 @@ procedure luaL_pushfail(L: Plua_State); inline;
 function luaL_intop(op: Integer; v1, v2: lua_Integer): lua_Integer; inline;
 
 const
-   LUA_COLIBNAME   = 'coroutine';
-   LUA_TABLIBNAME  = 'table';
-   LUA_IOLIBNAME   = 'io';
-   LUA_OSLIBNAME   = 'os';
-   LUA_STRLIBNAME  = 'string';
-   LUA_UTF8LIBNAME = 'utf8';
-   LUA_MATHLIBNAME = 'math';
-   LUA_DBLIBNAME   = 'debug';
-   LUA_LOADLIBNAME = 'package';
+  LUA_COLIBNAME   = 'coroutine';
+  LUA_TABLIBNAME  = 'table';
+  LUA_IOLIBNAME   = 'io';
+  LUA_OSLIBNAME   = 'os';
+  LUA_STRLIBNAME  = 'string';
+  LUA_UTF8LIBNAME = 'utf8';
+  LUA_MATHLIBNAME = 'math';
+  LUA_DBLIBNAME   = 'debug';
+  LUA_LOADLIBNAME = 'package';
 
 function luaopen_base(L: Plua_State): Integer; cdecl;
 function luaopen_coroutine(L: Plua_State): Integer; cdecl;
@@ -814,32 +817,32 @@ end;
 
 function lua_isthread(L: Plua_State; n: Integer): Boolean;
 begin
-   Result := lua_type(L, n) = LUA_TTHREAD;
+  Result := lua_type(L, n) = LUA_TTHREAD;
 end;
 
 function lua_isnone(L: Plua_State; n: Integer): Boolean;
 begin
-   Result := lua_type(L, n) = LUA_TNONE;
+  Result := lua_type(L, n) = LUA_TNONE;
 end;
 
 function lua_isnoneornil(L: Plua_State; n: Integer): Boolean;
 begin
-   Result := lua_type(L, n) <= 0;
+  Result := lua_type(L, n) <= 0;
 end;
 
 procedure lua_pushliteral(L: Plua_State; s: PUTF8Char);
 begin
-   lua_pushlstring(L, s, Length(s));
+  lua_pushlstring(L, s, Length(s));
 end;
 
 procedure lua_pushglobaltable(L: Plua_State);
 begin
-   lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+  lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
 end;
 
 function lua_tostring(L: Plua_State; i: Integer): PUTF8Char;
 begin
-   Result := lua_tolstring(L, i, nil);
+  Result := lua_tolstring(L, i, nil);
 end;
 
 function lua_getstack(L: Plua_State; level: Integer; var ar: lua_Debug): Integer; cdecl; external LUA_LIB_NAME;
@@ -859,7 +862,7 @@ procedure luaL_checkversion_(L: Plua_State; ver: lua_Number; sz: size_t); cdecl;
 
 procedure luaL_checkversion(L: Plua_State);
 begin
-   luaL_checkversion_(L, LUA_VERSION_NUM, LUAL_NUMSIZES);
+  luaL_checkversion_(L, LUA_VERSION_NUM, LUAL_NUMSIZES);
 end;
 
 procedure luaL_traceback(L, L1: Plua_State; msg: PUTF8Char; level: Integer); cdecl; external LUA_LIB_NAME;
@@ -884,8 +887,8 @@ function luaL_optinteger(L: Plua_State; arg: Integer; def: lua_Integer): lua_Int
 
 procedure luaL_argcheck(L: Plua_State; cond: Boolean; arg: Integer; extramsg: PUTF8Char);
 begin
-   if not cond then
-      luaL_argerror(L, arg, extramsg);
+  if not cond then
+    luaL_argerror(L, arg, extramsg);
 end;
 
 function luaL_checkstring(L: Plua_State; n: Integer): PUTF8Char;
@@ -895,31 +898,31 @@ end;
 
 function luaL_optstring(L: Plua_State; n: Integer; d: PUTF8Char): PUTF8Char;
 begin
-   Result := luaL_optlstring(L, n, d, nil);
+  Result := luaL_optlstring(L, n, d, nil);
 end;
 
 function luaL_typename(L: Plua_State; i: Integer): PUTF8Char;
 begin
-   Result := lua_typename(L, lua_type(L, i));
+  Result := lua_typename(L, lua_type(L, i));
 end;
 
 function luaL_dofile(L: Plua_State; const filename: PUTF8Char): Integer;
 begin
-   Result := luaL_loadfile(L, filename);
-   if Result = 0 then
-      Result := lua_pcall(L, 0, LUA_MULTRET, 0);
+  Result := luaL_loadfile(L, filename);
+  if Result = 0 then
+    Result := lua_pcall(L, 0, LUA_MULTRET, 0);
 end;
 
 function luaL_dostring(L: Plua_State; const str: PUTF8Char): Integer;
 begin
-   Result := luaL_loadstring(L, str);
-   if Result = 0 then
-      Result := lua_pcall(L, 0, LUA_MULTRET, 0);
+  Result := luaL_loadstring(L, str);
+  if Result = 0 then
+    Result := lua_pcall(L, 0, LUA_MULTRET, 0);
 end;
 
 procedure luaL_getmetatable(L: Plua_State; tname: PUTF8Char);
 begin
-   lua_getfield(L, LUA_REGISTRYINDEX, tname);
+  lua_getfield(L, LUA_REGISTRYINDEX, tname);
 end;
 
 function luaL_fileresult(L: Plua_State; stat: Integer; const fname: PUTF8Char): Integer; cdecl; external LUA_LIB_NAME;
@@ -953,22 +956,22 @@ end;
 
 function luaL_intop(op: Integer; v1, v2: lua_Integer): lua_Integer;
 begin
-   // Perform arithmetic on lua_Integer with wrap-around semantics, as Lua core does.
-   case op of
-      LUA_OPADD: Result := lua_Integer(lua_Unsigned(v1) + lua_Unsigned(v2));
-      LUA_OPSUB: Result := lua_Integer(lua_Unsigned(v1) - lua_Unsigned(v2));
-      LUA_OPMUL: Result := lua_Integer(lua_Unsigned(v1) * lua_Unsigned(v2));
-      LUA_OPMOD: Result := lua_Integer(lua_Unsigned(v1) mod lua_Unsigned(v2));
-      LUA_OPBAND: Result := lua_Integer(lua_Unsigned(v1) and lua_Unsigned(v2));
-      LUA_OPBOR:  Result := lua_Integer(lua_Unsigned(v1) or  lua_Unsigned(v2));
-      LUA_OPBXOR: Result := lua_Integer(lua_Unsigned(v1) xor lua_Unsigned(v2));
-      LUA_OPSHL:  Result := lua_Integer(lua_Unsigned(v1) shl (v2 and 63));
-      LUA_OPSHR:  Result := lua_Integer(lua_Unsigned(v1) shr (v2 and 63));
-      LUA_OPUNM: Result := lua_Integer(-lua_Unsigned(v1));
-      LUA_OPBNOT: Result := lua_Integer(not lua_Unsigned(v1));
-   else
-      Result := v1;
-   end;
+  // Perform arithmetic on lua_Integer with wrap-around semantics, as Lua core does.
+  case op of
+    LUA_OPADD: Result := lua_Integer(lua_Unsigned(v1) + lua_Unsigned(v2));
+    LUA_OPSUB: Result := lua_Integer(lua_Unsigned(v1) - lua_Unsigned(v2));
+    LUA_OPMUL: Result := lua_Integer(lua_Unsigned(v1) * lua_Unsigned(v2));
+    LUA_OPMOD: Result := lua_Integer(lua_Unsigned(v1) mod lua_Unsigned(v2));
+    LUA_OPBAND: Result := lua_Integer(lua_Unsigned(v1) and lua_Unsigned(v2));
+    LUA_OPBOR:  Result := lua_Integer(lua_Unsigned(v1) or  lua_Unsigned(v2));
+    LUA_OPBXOR: Result := lua_Integer(lua_Unsigned(v1) xor lua_Unsigned(v2));
+    LUA_OPSHL:  Result := lua_Integer(lua_Unsigned(v1) shl (v2 and 63));
+    LUA_OPSHR:  Result := lua_Integer(lua_Unsigned(v1) shr (v2 and 63));
+    LUA_OPUNM: Result := lua_Integer(-lua_Unsigned(v1));
+    LUA_OPBNOT: Result := lua_Integer(not lua_Unsigned(v1));
+  else
+    Result := v1;
+  end;
 end;
 
 procedure luaL_setfuncs(L: Plua_State; lr: array of luaL_Reg; nup: Integer);
@@ -976,23 +979,23 @@ var
   A: array of luaL_Reg;
   I: Integer;
 begin
-   //C luaL_setfuncs walks an array terminated by a name=nil sentinel; a Pascal
-   //open array has none, so build a terminated copy before delegating to the
-   //external function (the old code passed the address of the descriptor and
-   //could over-read past the last entry when no sentinel happened to exist).
-   if High(lr) < 0 then
-     Exit;
-   SetLength(A, Length(lr) + 1);
-   for I := 0 to High(lr) do
-     A[I] := lr[I];
-   A[High(lr) + 1].name := nil;
-   A[High(lr) + 1].func := nil;
-   luaL_setfuncs(L, @A[0], nup);
+  //C luaL_setfuncs walks an array terminated by a name=nil sentinel; a Pascal
+  //open array has none, so build a terminated copy before delegating to the
+  //external function (the old code passed the address of the descriptor and
+  //could over-read past the last entry when no sentinel happened to exist).
+  if High(lr) < 0 then
+    Exit;
+  SetLength(A, Length(lr) + 1);
+  for I := 0 to High(lr) do
+    A[I] := lr[I];
+  A[High(lr) + 1].name := nil;
+  A[High(lr) + 1].func := nil;
+  luaL_setfuncs(L, @A[0], nup);
 end;
 
 procedure luaL_newlibtable(L: Plua_State; lr: array of luaL_Reg);
 begin
-   lua_createtable(L, 0, Length(lr));
+  lua_createtable(L, 0, Length(lr));
 end;
 
 procedure luaL_newlibtable(L: Plua_State; lr: PluaL_Reg);
@@ -1001,24 +1004,24 @@ var
 begin
   n := 0;
   while lr^.name <> nil do begin
-     inc(n);
-     inc(lr);
+    inc(n);
+    inc(lr);
   end;
   lua_createtable(L, 0, n);
 end;
 
 procedure luaL_newlib(L: Plua_State; lr: array of luaL_Reg);
 begin
-   luaL_checkversion(L);
-   luaL_newlibtable(L, lr);
-   luaL_setfuncs(L, lr, 0); //open-array overload (builds the sentinel itself)
+  luaL_checkversion(L);
+  luaL_newlibtable(L, lr);
+  luaL_setfuncs(L, lr, 0); //open-array overload (builds the sentinel itself)
 end;
 
 procedure luaL_newlib(L: Plua_State; lr: PluaL_Reg);
 begin
-   luaL_checkversion(L);
-   luaL_newlibtable(L, lr);
-   luaL_setfuncs(L, lr, 0);
+  luaL_checkversion(L);
+  luaL_newlibtable(L, lr);
+  luaL_setfuncs(L, lr, 0);
 end;
 
 function luaL_gsub(L: Plua_State; const s, p, r: PUTF8Char): PUTF8Char; cdecl; external LUA_LIB_NAME;
