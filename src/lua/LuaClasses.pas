@@ -40,12 +40,12 @@ type
     function Setter(L: PLua_State): integer; virtual;
     function Getter(L: PLua_State): integer; virtual;
     procedure EnumMethods;
-    procedure RegisterMethod(const AName: UTF8String; AParams: TStringList); virtual;
+    procedure RegisterMethod(const AName: string; AParams: TStringList); virtual;
   public
     function __setter(L: PLua_State): integer; cdecl;
     function __getter(L: PLua_State): integer; cdecl;
   public
-    //Name: UTF8String;
+    //Name: string;
     procedure Register; virtual;
     constructor Create;
   published
@@ -73,23 +73,28 @@ type
 
   { TLuaHelper }
 
+  { Every string in TLuaHelper is declared as plain `string` so the same code
+    compiles for both FPC and Delphi: `string` is AnsiString under FPC and
+    UnicodeString under Delphi. The UTF8String conversion happens once, at
+    each LuaApi call site, instead of leaking UTF8String through the public
+    API and forcing every caller to convert by hand. }
   TLuaHelper = record helper for lua_State
   private
     function GetArgsCount: Integer;
   public
     property ArgsCount: Integer read GetArgsCount;
 
-    function FunctionExists(const FunctionName: UTF8String): Boolean;
+    function FunctionExists(const FunctionName: string): Boolean;
 
-    procedure RegisterGlobal(const Name: UTF8String; LuaFunction: TLuaFunction); overload;
-    procedure RegisterGlobal(const Name: UTF8String; Method: TLuaMethod); overload;
-    procedure RegisterGlobal(const Name: UTF8String; Value: UTF8String); overload;
-    procedure RegisterGlobal(const Name: UTF8String; Value: Integer); overload;
-    procedure RegisterGlobal(const Name: UTF8String; Value: Double); overload;
+    procedure RegisterGlobal(const Name: string; LuaFunction: TLuaFunction); overload;
+    procedure RegisterGlobal(const Name: string; Method: TLuaMethod); overload;
+    procedure RegisterGlobal(const Name: string; Value: string); overload;
+    procedure RegisterGlobal(const Name: string; Value: Integer); overload;
+    procedure RegisterGlobal(const Name: string; Value: Double); overload;
 
-    procedure Register(const Name: UTF8String; Value: UTF8String); overload;
-    procedure Register(const Name: UTF8String; Value: Integer); overload;
-    procedure Register(const Name: UTF8String; Value: Double); overload;
+    procedure Register(const Name: string; Value: string); overload;
+    procedure Register(const Name: string; Value: Integer); overload;
+    procedure Register(const Name: string; Value: Double); overload;
 {
     RegisterMethod_1 gives the C callback access to the actual Lua table, not just the underlying C/Delphi object.
     RegisterMethod_2 only knows the C object.
@@ -107,29 +112,29 @@ type
     Summary: Use RegisterMethod_2 for pure C-side logic. Use RegisterMethod_1 when the method needs to interact with the Lua-side wrapper.
 }
     //RegisterMethod_1
-    procedure Register(const Name: UTF8String; Method: TLuaMethod); overload;
+    procedure Register(const Name: string; Method: TLuaMethod); overload;
 
-    procedure RegisterMethod(const Name: UTF8String; Method: TLuaMethod); overload;
+    procedure RegisterMethod(const Name: string; Method: TLuaMethod); overload;
     //
     //RegisterMethod_2
-    procedure Register(const Table, Name: UTF8String; AObject:TObject; Method: TLuaMethod; AToMeta: Boolean = False); overload;
-    procedure Register(const Name: UTF8String; LuaFunction: TLuaFunction); overload;
+    procedure Register(const Table, Name: string; AObject:TObject; Method: TLuaMethod; AToMeta: Boolean = False); overload;
+    procedure Register(const Name: string; LuaFunction: TLuaFunction); overload;
     //Must be last one after object fields
-    procedure Register(const Table: UTF8String; AObject: TLuaObject); overload;
+    procedure Register(const Table: string; AObject: TLuaObject); overload;
     //Set a method into the table that is just below the top of the stack (no self table injected); used for metamethods
-    procedure RegisterMeta(const Name: UTF8String; Method: TLuaMethod); overload;
+    procedure RegisterMeta(const Name: string; Method: TLuaMethod); overload;
 
     //Low-level stack access used by the C callbacks; keeps the callers independent of LuaAPI
-    function ToString(Index: Integer): UTF8String; overload;
-    function ToString(Index: Integer; const Name: UTF8String): UTF8String; overload;
-    function PopString: UTF8String;
+    function ToString(Index: Integer): string; overload;
+    function ToString(Index: Integer; const Name: string): string; overload;
+    function PopString: string;
 
     function ToNumber(Index: Integer): Double;
 
     function ToBoolean(Index: Integer): Boolean;
 
     function ToInteger(Index: Integer): lua_Integer; overload;
-    function ToInteger(Index: Integer; const Name: utf8string): Integer; overload;
+    function ToInteger(Index: Integer; const Name: string): Integer; overload;
     function PopInteger: Integer; overload;
 
     function IsInteger(Index: Integer): Boolean;
@@ -141,7 +146,7 @@ type
     procedure PushBoolean(Value: Boolean);
     procedure PushInteger(Value: lua_Integer);
     procedure PushNumber(Value: Double);
-    procedure PushString(const Value: UTF8String);
+    procedure PushString(const Value: string);
     procedure PushNil;
 
     procedure PushValue(Index: Integer);
@@ -150,25 +155,25 @@ type
 
     procedure NewTable;
 
-    procedure GetField(Index: Integer; const Name: UTF8String);
-    procedure SetField(Index: Integer; const Name: UTF8String);
+    procedure GetField(Index: Integer; const Name: string);
+    procedure SetField(Index: Integer; const Name: string);
 
     procedure SetMetaTable(Index: Integer);
     procedure Remove(Index: Integer);
 
     function GetStack(Level: Integer; var AInfo: lua_Debug): Boolean;
-    function GetInfo(const What: UTF8String; var AInfo: lua_Debug): Boolean;
+    function GetInfo(const What: string; var AInfo: lua_Debug): Boolean;
 
-    procedure RegisterTable(Table: UTF8String);
+    procedure RegisterTable(Table: string);
     //Run
-    function LoadString(const Script: UTF8String): Integer;
+    function LoadString(const Script: string): Integer;
 
-    function Run(Ref: Integer; out Output: UTF8String): Boolean; overload;
+    function Run(Ref: Integer; out Output: string): Boolean; overload;
 
-    function RunString(Script: UTF8String; out Output: UTF8String): Boolean;
+    function RunString(Script: string; out Output: string): Boolean;
 
     procedure BeginTable;
-    procedure EndTable(Table: UTF8String; AObject: TLuaObject = nil);
+    procedure EndTable(Table: string; AObject: TLuaObject = nil);
   end;
 
 implementation
@@ -184,30 +189,30 @@ begin
   Result := TLuaMethod(Method)(L);
 end;
 
-procedure lua_register_global_method(L: Plua_State; Name: UTF8String; Method: TLuaMethod);
+procedure lua_register_global_method(L: Plua_State; Name: string; Method: TLuaMethod);
 begin
   lua_pushlightuserdata(L, TMethod(method).Data);
   lua_pushlightuserdata(L, TMethod(method).Code);
   lua_pushcclosure(L, @lua_table_method_callback, 2);
-  lua_setglobal(L, PUTF8Char(Name));
+  lua_setglobal(L, PUTF8Char(UTF8String(Name)));
 end;
 
-procedure lua_push_method(L: Plua_State; Name: UTF8String; method: TLuaMethod);
+procedure lua_push_method(L: Plua_State; Name: string; method: TLuaMethod);
 begin
   lua_pushlightuserdata(L, TMethod(method).Data);
   lua_pushlightuserdata(L, TMethod(method).Code);
   lua_pushcclosure(L, @lua_table_method_callback, 2);
-  lua_setfield(L, -2, PUTF8Char(Name));
+  lua_setfield(L, -2, PUTF8Char(UTF8String(Name)));
 end;
 
 //Fetch the global table by name, pushing it. When the global is absent or holds
-//a non-table value (nil/UTF8String/number), the old value is discarded and a fresh
+//a non-table value (nil/string/number), the old value is discarded and a fresh
 //table is pushed instead. Returns True when the table was just created.
 //The stack is balanced on exit (exactly the table, nothing else), so callers
 //cannot leak the nil that lua_getglobal pushes for a missing global.
-function lua_get_or_create_table(L: Plua_State; const table: UTF8String): Boolean;
+function lua_get_or_create_table(L: Plua_State; const table: string): Boolean;
 begin
-  lua_getglobal(L, PUTF8Char(table));
+  lua_getglobal(L, PUTF8Char(UTF8String(table)));
   if lua_type(L, -1) = LUA_TTABLE then
     Result := False
   else
@@ -218,7 +223,7 @@ begin
   end;
 end;
 
-procedure lua_register_table(L: Plua_State; table: UTF8String);
+procedure lua_register_table(L: Plua_State; table: string);
 begin
   //table
   lua_newtable(L);
@@ -226,11 +231,11 @@ begin
   lua_newtable(L); //Yes again
   lua_setmetatable(L, -2);
   //end metatable
-  lua_setglobal(L, PUTF8Char(table)); //set table name
+  lua_setglobal(L, PUTF8Char(UTF8String(table))); //set table name
   //end table
 end;
 
-procedure lua_register_table_index(L: Plua_State; table: UTF8String; obj: TLuaObject);
+procedure lua_register_table_index(L: Plua_State; table: string; obj: TLuaObject);
 begin
   //table
   lua_get_or_create_table(L, table); //push the table
@@ -244,10 +249,10 @@ begin
   lua_setmetatable(L, -2);
   //end metatable
 
-  lua_setglobal(L, PUTF8Char(table)); //set table name; pops the table
+  lua_setglobal(L, PUTF8Char(UTF8String(table))); //set table name; pops the table
 end;
 
-procedure lua_register_table_method(L: Plua_State; table: UTF8String; Name: UTF8String; obj: TObject; method: TLuaMethod; AToMeta: Boolean);
+procedure lua_register_table_method(L: Plua_State; table: string; Name: string; obj: TObject; method: TLuaMethod; AToMeta: Boolean);
 begin
   lua_get_or_create_table(L, table); //push the table
   if AToMeta then
@@ -260,56 +265,56 @@ begin
       lua_getmetatable(L, -1);
     end;
   end;
-  lua_push_method(L, PUTF8Char(Name), method);
+  lua_push_method(L, Name, method);
 
   if AToMeta then
     lua_pop(L, 2) //pop table and metatable from stack
   else
-    lua_setglobal(L, PUTF8Char(table)); //set table name; pops the table
+    lua_setglobal(L, PUTF8Char(UTF8String(table))); //set table name; pops the table
 end;
 
-procedure lua_register_table_value(L: Plua_State; table, Name: UTF8String; Value: integer);
+procedure lua_register_table_value(L: Plua_State; table, Name: string; Value: integer);
 begin
   lua_get_or_create_table(L, table); //push the table
   lua_pushinteger(L, Value);
-  lua_setfield(L, -2, PUTF8Char(Name));
-  lua_setglobal(L, PUTF8Char(table)); //set table name; pops the table
+  lua_setfield(L, -2, PUTF8Char(UTF8String(Name)));
+  lua_setglobal(L, PUTF8Char(UTF8String(table))); //set table name; pops the table
 end;
 
-procedure lua_register_string(L: Plua_State; Name: UTF8String; Value: UTF8String);
+procedure lua_register_string(L: Plua_State; Name: string; Value: string);
 begin
-  lua_pushstring(L, Value);
-  lua_setfield(L, -2, PUTF8Char(Name));
+  lua_pushstring(L, PUTF8Char(UTF8String(Value)));
+  lua_setfield(L, -2, PUTF8Char(UTF8String(Name)));
 end;
 
-procedure lua_register_integer(L: Plua_State; Name: UTF8String; Value: integer);
-begin
-  lua_pushinteger(L, Value);
-  lua_setfield(L, -2, PUTF8Char(Name));
-end;
-
-procedure lua_register_number(L: Plua_State; Name: UTF8String; Value: Double);
-begin
-  lua_pushnumber(L, Value);
-  lua_setfield(L, -2, PUTF8Char(Name));
-end;
-
-procedure lua_register_global_integer(L: Plua_State; Name: UTF8String; Value: integer);
+procedure lua_register_integer(L: Plua_State; Name: string; Value: integer);
 begin
   lua_pushinteger(L, Value);
-  lua_setglobal(L, PUTF8Char(Name));
+  lua_setfield(L, -2, PUTF8Char(UTF8String(Name)));
 end;
 
-procedure lua_register_global_number(L: Plua_State; Name: UTF8String; Value: double);
+procedure lua_register_number(L: Plua_State; Name: string; Value: Double);
 begin
   lua_pushnumber(L, Value);
-  lua_setglobal(L, PUTF8Char(Name));
+  lua_setfield(L, -2, PUTF8Char(UTF8String(Name)));
 end;
 
-procedure lua_register_global_string(L: Plua_State; Name: UTF8String; Value: UTF8String);
+procedure lua_register_global_integer(L: Plua_State; Name: string; Value: integer);
 begin
-  lua_pushstring(L, Value);
-  lua_setglobal(L, PUTF8Char(Name));
+  lua_pushinteger(L, Value);
+  lua_setglobal(L, PUTF8Char(UTF8String(Name)));
+end;
+
+procedure lua_register_global_number(L: Plua_State; Name: string; Value: double);
+begin
+  lua_pushnumber(L, Value);
+  lua_setglobal(L, PUTF8Char(UTF8String(Name)));
+end;
+
+procedure lua_register_global_string(L: Plua_State; Name: string; Value: string);
+begin
+  lua_pushstring(L, PUTF8Char(UTF8String(Value)));
+  lua_setglobal(L, PUTF8Char(UTF8String(Name)));
 end;
 
 function LuaAlloc({%H-}ud, ptr: Pointer; {%H-}osize, nsize: size_t): Pointer; cdecl;
@@ -416,7 +421,7 @@ begin
   end;
 end;
 
-procedure TLuaObject.RegisterMethod(const AName: UTF8String; AParams: TStringList);
+procedure TLuaObject.RegisterMethod(const AName: string; AParams: TStringList);
 begin
 
 end;
@@ -513,42 +518,42 @@ begin
   Result := lua_gettop(@Self);
 end;
 
-procedure TLuaHelper.RegisterGlobal(const Name: UTF8String; Method: TLuaMethod);
+procedure TLuaHelper.RegisterGlobal(const Name: string; Method: TLuaMethod);
 begin
   lua_register_global_method(@Self, Name, Method);
 end;
 
-procedure TLuaHelper.RegisterGlobal(const Name: UTF8String; LuaFunction: TLuaFunction);
+procedure TLuaHelper.RegisterGlobal(const Name: string; LuaFunction: TLuaFunction);
 begin
-  lua_reg_global_function(@Self, PUTF8Char(Name), LuaFunction);
+  lua_reg_global_function(@Self, PUTF8Char(UTF8String(Name)), LuaFunction);
 end;
 
-procedure TLuaHelper.RegisterGlobal(const Name: UTF8String; Value: UTF8String);
+procedure TLuaHelper.RegisterGlobal(const Name: string; Value: string);
 begin
   lua_register_global_string(@Self, Name, Value);
 end;
 
-procedure TLuaHelper.RegisterGlobal(const Name: UTF8String; Value: Integer);
+procedure TLuaHelper.RegisterGlobal(const Name: string; Value: Integer);
 begin
   lua_register_global_integer(@Self, Name, Value);
 end;
 
-procedure TLuaHelper.RegisterGlobal(const Name: UTF8String; Value: Double);
+procedure TLuaHelper.RegisterGlobal(const Name: string; Value: Double);
 begin
   lua_register_global_number(@Self, Name, Value);
 end;
 
-procedure TLuaHelper.Register(const Name: UTF8String; Value: UTF8String);
+procedure TLuaHelper.Register(const Name: string; Value: string);
 begin
   lua_register_string(@Self, Name, Value);
 end;
 
-procedure TLuaHelper.Register(const Name: UTF8String; Value: Integer);
+procedure TLuaHelper.Register(const Name: string; Value: Integer);
 begin
   lua_register_integer(@Self, Name, Value);
 end;
 
-procedure TLuaHelper.Register(const Name: UTF8String; Value: Double);
+procedure TLuaHelper.Register(const Name: string; Value: Double);
 begin
   lua_register_number(@Self, Name, Value);
 end;
@@ -577,36 +582,37 @@ begin
   Result := TLuaMethod(Method)(L);
 end;
 
-procedure TLuaHelper.Register(const Name: UTF8String; Method: TLuaMethod);
+procedure TLuaHelper.Register(const Name: string; Method: TLuaMethod);
 begin
   lua_pushlightuserdata(@Self, TMethod(method).Data);
   lua_pushlightuserdata(@Self, TMethod(method).Code);
   lua_pushvalue(@Self, -3);
   lua_pushcclosure(@Self, @lua_method_callback_index, 3);
-  lua_setfield(@Self, -2, PUTF8Char(Name));
+  lua_setfield(@Self, -2, PUTF8Char(UTF8String(Name)));
 end;
 
-procedure TLuaHelper.RegisterMethod(const Name: UTF8String; Method: TLuaMethod);
+procedure TLuaHelper.RegisterMethod(const Name: string; Method: TLuaMethod);
 begin
   lua_pushlightuserdata(@Self, TMethod(method).Data);
   lua_pushlightuserdata(@Self, TMethod(method).Code);
   lua_pushcclosure(@Self, @lua_method_callback, 2);
-  lua_setfield(@Self, -2, PUTF8Char(Name));
+  lua_setfield(@Self, -2, PUTF8Char(UTF8String(Name)));
 end;
 
-procedure TLuaHelper.Register(const Table, Name: UTF8String; AObject: TObject; Method: TLuaMethod; AToMeta: Boolean);
+procedure TLuaHelper.Register(const Table, Name: string; AObject: TObject; Method: TLuaMethod; AToMeta: Boolean);
 begin
   lua_register_table_method(@Self, Table, Name, AObject, Method, AToMeta);
 end;
 
-procedure TLuaHelper.RegisterMeta(const Name: UTF8String; Method: TLuaMethod);
+procedure TLuaHelper.RegisterMeta(const Name: string; Method: TLuaMethod);
 begin
   lua_push_method(@Self, Name, Method);
 end;
 
-function TLuaHelper.ToString(Index: Integer): UTF8String;
+function TLuaHelper.ToString(Index: Integer): string;
 begin
-  Result := lua_tostring(@Self, Index);
+  //lua_tostring returns the PChar straight from Lua, so it is already UTF-8
+  Result := string(UTF8String(lua_tostring(@Self, Index)));
 end;
 
 function TLuaHelper.ToInteger(Index: Integer): lua_Integer;
@@ -619,7 +625,7 @@ begin
   Result := lua_tonumber(@Self, Index);
 end;
 
-function TLuaHelper.ToString(Index: Integer; const Name: utf8string): UTF8String;
+function TLuaHelper.ToString(Index: Integer; const Name: string): string;
 begin
   GetField(Index, Name);
   Result := PopString;
@@ -630,7 +636,7 @@ begin
   Result := lua_toboolean(@Self, Index);
 end;
 
-function TLuaHelper.ToInteger(Index: Integer; const Name: utf8string): Integer;
+function TLuaHelper.ToInteger(Index: Integer; const Name: string): Integer;
 begin
   GetField(Index, Name);
   Result := PopInteger;
@@ -676,9 +682,9 @@ begin
   lua_pushnumber(@Self, Value);
 end;
 
-procedure TLuaHelper.PushString(const Value: UTF8String);
+procedure TLuaHelper.PushString(const Value: string);
 begin
-  lua_pushstring(@Self, PUTF8Char(Value));
+  lua_pushstring(@Self, PUTF8Char(UTF8String(Value)));
 end;
 
 procedure TLuaHelper.PushNil;
@@ -702,7 +708,7 @@ begin
   Pop(1);
 end;
 
-function TLuaHelper.PopString: UTF8String;
+function TLuaHelper.PopString: string;
 begin
   Result := ToString(-1);
   Pop(1);
@@ -713,14 +719,14 @@ begin
   lua_newtable(@Self);
 end;
 
-procedure TLuaHelper.GetField(Index: Integer; const Name: UTF8String);
+procedure TLuaHelper.GetField(Index: Integer; const Name: string);
 begin
-  lua_getfield(@Self, Index, PUTF8Char(Name));
+  lua_getfield(@Self, Index, PUTF8Char(UTF8String(Name)));
 end;
 
-procedure TLuaHelper.SetField(Index: Integer; const Name: UTF8String);
+procedure TLuaHelper.SetField(Index: Integer; const Name: string);
 begin
-  lua_setfield(@Self, Index, PUTF8Char(Name));
+  lua_setfield(@Self, Index, PUTF8Char(UTF8String(Name)));
 end;
 
 procedure TLuaHelper.SetMetaTable(Index: Integer);
@@ -738,29 +744,29 @@ begin
   Result := lua_getstack(@Self, Level, AInfo) > 0;
 end;
 
-function TLuaHelper.GetInfo(const What: UTF8String; var AInfo: lua_Debug): Boolean;
+function TLuaHelper.GetInfo(const What: string; var AInfo: lua_Debug): Boolean;
 begin
-  Result := lua_getinfo(@Self, PUTF8Char(What), AInfo) > 0;
+  Result := lua_getinfo(@Self, PUTF8Char(UTF8String(What)), AInfo) > 0;
 end;
 
-procedure TLuaHelper.Register(const Name: UTF8String; LuaFunction: TLuaFunction);
+procedure TLuaHelper.Register(const Name: string; LuaFunction: TLuaFunction);
 begin
-  lua_reg_function(@Self, PUTF8Char(Name), LuaFunction);
+  lua_reg_function(@Self, PUTF8Char(UTF8String(Name)), LuaFunction);
 end;
 
-procedure TLuaHelper.Register(const Table: UTF8String; AObject: TLuaObject);
+procedure TLuaHelper.Register(const Table: string; AObject: TLuaObject);
 begin
   lua_register_table_index(@Self, Table, AObject); //Should be last one for window
 end;
 
-procedure TLuaHelper.RegisterTable(Table: UTF8String);
+procedure TLuaHelper.RegisterTable(Table: string);
 begin
   lua_register_table(@Self, Table);
 end;
 
-function TLuaHelper.LoadString(const Script: UTF8String): Integer;  // returns registry ref
+function TLuaHelper.LoadString(const Script: string): Integer;  // returns registry ref
 begin
-  if luaL_loadstring(@Self, PAnsiChar(Script)) <> LUA_OK then
+  if luaL_loadstring(@Self, PUTF8Char(UTF8String(Script))) <> LUA_OK then
   begin
     lua_pop(@Self, 1);
     Result := LUA_NOREF;
@@ -769,7 +775,7 @@ begin
     Result := luaL_ref(@Self, LUA_REGISTRYINDEX);
 end;
 
-function TLuaHelper.Run(Ref: Integer; out Output: UTF8String): Boolean;
+function TLuaHelper.Run(Ref: Integer; out Output: string): Boolean;
 begin
   lua_rawgeti(@Self, LUA_REGISTRYINDEX, Ref);  // push compiled chunk
   Result := lua_pcall(@Self, 0, LUA_MULTRET, 0) = LUA_OK;
@@ -778,14 +784,15 @@ begin
   else
   begin
     if lua_isstring(@Self, -1) then
-      Output := UTF8String(lua_tostring(@Self, -1))
+      //lua_tostring returns the PChar straight from Lua, so it is already UTF-8
+      Output := string(UTF8String(lua_tostring(@Self, -1)))
     else
       Output := '(unknown error)';
     lua_pop(@Self, 1);
   end;
 end;
 
-function TLuaHelper.RunString(Script: UTF8String; out Output: UTF8String): Boolean;
+function TLuaHelper.RunString(Script: string; out Output: string): Boolean;
 var
   Ref: Integer;
 begin
@@ -796,9 +803,9 @@ begin
     Result := False;
 end;
 
-function TLuaHelper.FunctionExists(const FunctionName: UTF8String): Boolean;
+function TLuaHelper.FunctionExists(const FunctionName: string): Boolean;
 begin
-  lua_getglobal(@Self, PUTF8Char(FunctionName));
+  lua_getglobal(@Self, PUTF8Char(UTF8String(FunctionName)));
   Result := lua_isfunction(@Self, -1);
   lua_pop(@Self, 1);
 end;
@@ -808,9 +815,9 @@ begin
   lua_newtable(@Self);
 end;
 
-procedure TLuaHelper.EndTable(Table: UTF8String; AObject: TLuaObject);
+procedure TLuaHelper.EndTable(Table: string; AObject: TLuaObject);
 begin
-  lua_setglobal(@Self, PUTF8Char(Table));
+  lua_setglobal(@Self, PUTF8Char(UTF8String(Table)));
   if AObject <> nil then
     Register(Table, AObject); //Should be last one
 end;
