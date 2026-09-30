@@ -101,7 +101,7 @@ type
 
   { TTyroMain }
 
-  TTyroMainOption = (moOpaque, moMainWindow, moTerminal, moShowFPS);
+  TTyroMainOption = (moOpaque, moMainWindow, moShowTerminal, moShowFPS);
   TTyroMainOptions = set of TTyroMainOption;
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: string) of object;
@@ -161,7 +161,6 @@ type
     FScriptREPL: TTyroScript;
     //F4 script picker: lists the *.ls files of the current directory; picking
     FFileList: TTyroFileList;
-    FScriptTypes: TScriptTypes;
     FReadCallback: TConsoleReadEvent;
     FWaitingQueueObject: TQueueObject; //the queue object a script thread is blocked waiting on
     FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
@@ -276,8 +275,6 @@ type
     property Running: Boolean read GetRunning write SetRunning;
     property Active: Boolean read GetActive;
 
-    procedure RegisterLanguage(ATitle: string; AExtentions: TArray<string>; AScriptClass: TTyroScriptClass);
-
     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
     procedure ShowConsole; overload;
     procedure HideConsole;
@@ -292,7 +289,6 @@ type
     property BackColor: TColor read FBackColor write FBackColor;
     property FPS: Integer read FFPS write SetFPS;
     property Queue: TQueueObjects read FQueue;
-    property ScriptTypes: TScriptTypes read FScriptTypes;
     //* True when the last run-and-exit script finished with a Lua error. Reset
     //* at the start of every run; only meaningful for the --exit/--execute CLI
     //* lifecycle where the main loop inspects it before releasing the worker.
@@ -836,7 +832,6 @@ begin
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
-  FScriptTypes := TScriptTypes.Create(true);
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
@@ -908,7 +903,6 @@ begin
   FreeAndNil(Board);
   FreeAndNil(Res);
   FreeAndNil(FQueue);
-  FreeAndNil(FScriptTypes);
   FreeAndNil(Commands);
   inherited;
   if RayLib.IsWindowReady then
@@ -1173,17 +1167,6 @@ begin
     end;
     ch := RayLib.GetCharPressed;
   end;
-end;
-
-procedure TTyroMain.RegisterLanguage(ATitle: string; AExtentions: TArray<string>; AScriptClass: TTyroScriptClass);
-var
-  Item: TScriptType;
-begin
-  Item := TScriptType.Create;
-  Item.Title := ATitle;
-  Item.Extentions := AExtentions;
-  Item.ScriptClass := AScriptClass;
-  FScriptTypes.Add(Item);
 end;
 
 procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);

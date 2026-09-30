@@ -888,7 +888,7 @@ function TMelody.UpdatePlay: Boolean;
 var
   Channel: TMelodyChannel;
   Busy: Boolean;
-  SoundDurationMS: Int64;
+  SoundDurationMS: UInt64;
 begin
   Result := False;
   if not FPlaying then
@@ -916,8 +916,7 @@ begin
           begin
             Channel.PlaySound;
             SoundDurationMS := Round(Channel.SoundDuration * 1000);
-            Channel.SoundExpired := SoundDurationMS +
-              TThread.GetTickCount64 + 1;
+            Channel.SoundExpired := SoundDurationMS + TThread.GetTickCount64 + 1;
             Busy := True;
           end
           else

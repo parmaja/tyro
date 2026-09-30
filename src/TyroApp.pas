@@ -38,6 +38,7 @@ uses
   {$endif}
   SysUtils, Classes, RayLib, mnUtils, mnConfigs,
   Melodies, TyroControls, TyroClasses, mnLogs, TyroEngines,
+  TyroLua,
   LuaAPI;  //Add all languages units here
 
 type
@@ -67,6 +68,14 @@ type
     property Title: string read FTitle write SetTitle;
   end;
 
+  { TTyroConsoleLog }
+
+  TTyroConsoleLog = class(TInterfacedPersistent, ILog)
+  private
+    procedure LogWrite(LogLevel: TLogLevel; S: string);
+  public
+  end;
+
 var
   Application: TTyroApplication = nil;
 
@@ -77,112 +86,93 @@ implementation
 procedure TTyroApplication.SetTitle(const AValue: string);
 begin
   FTitle := AValue;;
-  Main.Title := AValue;
+  if Main <> nil then
+    Main.Title := AValue;
 end;
 
 {$ifdef MSWINDOWS}
 var
   OwnConsole: Boolean = False;
   OwnConsoleAllocated: Boolean = False;
-{$ifdef FPC}
+
 function OpenConsole(Force: Boolean): Boolean;
-begin
-  if not IsConsole then
+
+  procedure SetTextHandle(var T:Text; H: THandle);
   begin
-    if AttachConsole(ATTACH_PARENT_PROCESS) then
-    begin
-      OwnConsole := True;
-
-      StdOutputHandle := THandle(GetStdHandle(cardinal(STD_OUTPUT_HANDLE)));
-      Assign(Output, '');
-      Rewrite(Output);
-      TextRec(Output).Handle := StdOutputHandle;
-
-      StdErrorHandle := THandle(GetStdHandle(cardinal(STD_ERROR_HANDLE)));
-      Assign(ErrOutput, '');
-      Rewrite(ErrOutput);
-      TextRec(ErrOutput).Handle := StdErrorHandle;
-
-      IsConsole := True;
-    end
-    else if Force then
-    begin
-      OwnConsole := True;
-      OwnConsoleAllocated := AllocConsole;
-
-      StdOutputHandle := THandle(GetStdHandle(cardinal(STD_OUTPUT_HANDLE)));
-      Assign(Output, '');
-      Rewrite(Output);
-      TextRec(Output).Handle := StdOutputHandle;
-
-      StdErrorHandle := THandle(GetStdHandle(cardinal(STD_ERROR_HANDLE)));
-      Assign(ErrOutput, '');
-      Rewrite(ErrOutput);
-      TextRec(ErrOutput).Handle := StdErrorHandle;
-
-      IsConsole := True;
-    end;
+    {$ifdef FPC}
+    TextRec(T).Handle := H;
+    {$else}
+    TTextRec(T).Handle := H;
+    {$endif}
   end;
-  Result := IsConsole;
-end;
 
-procedure CloseConsole;
-begin
-  if OwnConsole then
+  procedure AssignHandles;
+  var
+    aStdInputHandle: THandle;
+    aStdOutputHandle: THandle;
+    aStdErrorHandle: THandle;
   begin
-    Flush(Output);
-    Close(Output);
-    Close(ErrOutput);
+    aStdInputHandle := THandle(GetStdHandle(cardinal(STD_INPUT_HANDLE)));
+    {$ifdef FPC}
+    StdInputHandle := aStdInputHandle;
+    {$endif}
+    Assign(Input, 'CONOUT$'); //'CONOUT$'
+    Reset(Input);
+    SetTextHandle(Input, aStdInputHandle);
+
+    aStdOutputHandle := THandle(GetStdHandle(cardinal(STD_OUTPUT_HANDLE)));
+    {$ifdef FPC}
+    StdOutputHandle := aStdOutputHandle;
+    {$endif}
+//  SetStdHandle(STD_OUTPUT_HANDLE, CreateFile('CONOUT$', GENERIC_READ or GENERIC_WRITE, FILE_SHARE_READ or FILE_SHARE_WRITE, nil, OPEN_EXISTING, 0, 0));
+    Assign(Output, ''); //'CONOUT$'
+    Rewrite(Output);
+    SetTextHandle(Output, aStdOutputHandle);
+
+    aStdErrorHandle := THandle(GetStdHandle(cardinal(STD_ERROR_HANDLE)));
+    {$ifdef FPC}
+    StdErrorHandle := aStdErrorHandle;
+    {$endif}
+//  SetStdHandle(STD_ERROR_HANDLE, CreateFile('CONOUT$', GENERIC_READ or GENERIC_WRITE, FILE_SHARE_READ or FILE_SHARE_WRITE, nil, OPEN_EXISTING, 0, 0));
+    Assign(ErrOutput, ''); //'CONOUT$'
+    Rewrite(ErrOutput);
+    SetTextHandle(ErrOutput, aStdErrorHandle);
+
+    {$ifdef FPC}
+    IsConsole := True;
+    {$endif}
   end;
-  if OwnConsoleAllocated then
-    FreeConsole;
-end;
-{$else}
-function OpenConsole(Force: Boolean): Boolean;
 var
-  StdOutputHandle: THandle;
-  StdErrorHandle: THandle;
   ConsoleWindow: THandle;
+  IsVisible: Boolean;
 begin
-  // IsConsole is read-only in Delphi. We check both the system flag and our own tracking variable.
-  if not (IsConsole or OwnConsole) then
+  if IsConsole then
+    exit(True);
+
+  if AttachConsole(ATTACH_PARENT_PROCESS) then
   begin
-    if AttachConsole(ATTACH_PARENT_PROCESS) then
+    ConsoleWindow := GetConsoleWindow;
+    //Delphi is debugging Win64 with hidden console :(
+    IsVisible :=  (ConsoleWindow <> 0) and IsWindowVisible(ConsoleWindow);
+    if IsVisible then
     begin
-      WriteLn('AttachConsole');
       OwnConsole := True;
-
-      StdOutputHandle := GetStdHandle(STD_OUTPUT_HANDLE);
-      AssignFile(Output, '');
-      Rewrite(Output);
-      TTextRec(Output).Handle := StdOutputHandle;
-
-      StdErrorHandle := GetStdHandle(STD_ERROR_HANDLE);
-      AssignFile(ErrOutput, '');
-      Rewrite(ErrOutput);
-      TTextRec(ErrOutput).Handle := StdErrorHandle;
-      WriteLn('AttachConsole2');
-//      ConsoleWindow := GetConsoleWindow();
-//      ShowWindow(ConsoleWindow, SW_SHOW)
+      AssignHandles;
+      Result := True;
+      exit;
     end
     else if Force then
-    begin
-      OwnConsole := True;
-      OwnConsoleAllocated := AllocConsole;
-
-      StdOutputHandle := GetStdHandle(STD_OUTPUT_HANDLE);
-      AssignFile(Output, '');
-      Rewrite(Output);
-      TTextRec(Output).Handle := StdOutputHandle;
-
-      StdErrorHandle := GetStdHandle(STD_ERROR_HANDLE);
-      AssignFile(ErrOutput, '');
-      Rewrite(ErrOutput);
-      TTextRec(ErrOutput).Handle := StdErrorHandle;
-    end;
+      FreeConsole;
   end;
-
-  Result := IsConsole or OwnConsole;
+  if Force then
+  begin
+    OwnConsole := True;
+    OwnConsoleAllocated := AllocConsole;
+    AssignHandles;
+    Result := True;
+  end
+  else
+    Result := False;
 end;
 
 procedure CloseConsole;
@@ -192,7 +182,7 @@ begin
     Flush(Output);
     CloseFile(Output);
     CloseFile(ErrOutput);
-    OwnConsole := False; // Reset state
+    OwnConsole := False;
   end;
 
   if OwnConsoleAllocated then
@@ -201,8 +191,6 @@ begin
     OwnConsoleAllocated := False; // Reset state
   end;
 end;
-{$endif}
-
 {$endif}
 
 procedure PrintHelp;
@@ -218,6 +206,9 @@ begin
 end;
 
 constructor TTyroApplication.Create;
+var
+  LogLevel: TLogLevel;
+  s: string;
 begin
   inherited;
   FLocation := ExtractFilePath(ParamStr(0));
@@ -226,9 +217,20 @@ begin
   RunConsole := Arguments.ReadSwitch('-console') or Arguments.ReadSwitch('-c');
   OpenConsole(RunConsole);
   RunConsole := RunConsole or IsConsole;
-
   if RunConsole then
+  begin
+    WriteLn('Tyro version 0.1');
     InstallConsoleLog;
+  end;
+
+  LogLevel := lglInfo;
+  if (Arguments.ReadSwitch('-log') or Arguments.ReadSwitch('-loglevel')) then
+  begin
+    s := Arguments.ReadString('-loglevel');
+    if s <> '' then
+      LogLevel := StrToLogLevel(s);
+  end;
+  Log.Install(LogLevel, TTyroConsoleLog.Create);
 
   if Arguments.ReadSwitch('-debug') or Arguments.ReadSwitch('-d') then
     IsDebug := True;
@@ -240,17 +242,17 @@ begin
     exit;
   end;
 
-  Main.Title := 'Tyro';
+  Main := TTyroMain.Create;
+
+  Main.Title := Title;
 
   Main.ScriptFile := Arguments.ReadString(''); //File come without switch name
   Res.WorkPath := Arguments.ReadPath('-workpath', Location);
 
-  if RunConsole then
-    WriteLn('Starting');
-  if Arguments.ReadSwitch('-window', true) or Arguments.ReadSwitch('-w', true) then
+  if {(Main.ScriptFile = '') or} Arguments.ReadSwitch('-window', true) or Arguments.ReadSwitch('-w', true) then
     MainOptions := MainOptions + [moMainWindow];
   if Arguments.ReadSwitch('-terminal') or Arguments.ReadSwitch('-t') then
-    MainOptions := MainOptions + [moTerminal];
+    MainOptions := MainOptions + [moShowTerminal];
 end;
 
 destructor TTyroApplication.Destroy;
@@ -293,6 +295,13 @@ end;
 procedure TTyroApplication.Terminate;
 begin
   FTerminated := True;
+end;
+
+{ TTyroConsoleLog }
+
+procedure TTyroConsoleLog.LogWrite(LogLevel: TLogLevel; S: string);
+begin
+  //Main.Console.Write(S);
 end;
 
 end.

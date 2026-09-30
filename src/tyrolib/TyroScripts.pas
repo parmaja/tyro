@@ -581,8 +581,12 @@ type
 
   TScriptTypes = class(TmnObjectList<TScriptType>)
   public
+    procedure RegisterLanguage(ATitle: string; AExtentions: TArray<string>; AScriptClass: TTyroScriptClass);
     function FindByExtension(Extension: string): TScriptType;
   end;
+
+var
+  ScriptTypes: TScriptTypes = nil;
 
 implementation
 
@@ -1366,6 +1370,17 @@ begin
   end;
 end;
 
+procedure TScriptTypes.RegisterLanguage(ATitle: string; AExtentions: TArray<string>; AScriptClass: TTyroScriptClass);
+var
+  Item: TScriptType;
+begin
+  Item := TScriptType.Create;
+  Item.Title := ATitle;
+  Item.Extentions := AExtentions;
+  Item.ScriptClass := AScriptClass;
+  Add(Item);
+end;
+
 { TDrawPointObject }
 
 constructor TDrawPointObject.Create(ACanvas: TTyroCanvas; X, Y: Integer);
@@ -1641,5 +1656,9 @@ begin
   AOutput := '';
 end;
 
+initialization
+  ScriptTypes := TScriptTypes.Create;
+finalization
+  FreeAndNil(ScriptTypes);
 end.
 

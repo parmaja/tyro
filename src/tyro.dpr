@@ -1,6 +1,8 @@
 program tyro;
 
-{.$apptype console}
+{$ifopt D+}
+{$apptype console}
+{$endif}
 
 {$R *.res}
 

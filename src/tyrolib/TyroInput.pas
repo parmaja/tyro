@@ -11,7 +11,10 @@ unit TyroInput;
  *  map to RayLib TKeyboardKey / TMouseButton enums.
  *}
 
-{$mode delphi}{$H+}
+{$ifdef FPC}
+{$mode delphi}
+{$endif}
+{$H+}
 
 interface
 

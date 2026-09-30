@@ -10,7 +10,9 @@ program tyro;
  *
 }
 
-{.$apptype console}
+{$ifopt D+}
+{$apptype console}
+{$endif}
 
 {$mode objfpc}
 {$modeswitch advancedrecords}
