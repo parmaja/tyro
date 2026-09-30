@@ -436,23 +436,11 @@ begin
     if IsConsole then
       Log.WriteLn(L.Params[i].AsString);
   end;
-  //mirror the log line to the Output control too
-  {if (Main <> nil) and (Main.Output <> nil) then
-    Main.Output.Writeln(s);}
+  //mirror the log line to the Output control too (TTyroOutput is locked, it is
+  //called from the script thread)
+  if (Main <> nil) and (Main.Output <> nil) then
+    Main.Output.Writeln(s);
   Result := 0;
-end;
-
-// Callback trampoline for the global-environment hooks: binds a TLuaScript
-// method to a Lua C-closure (mirrors the internal one in LuaClasses).
-function global_meta_callback(L: Plua_State): integer; cdecl;
-var
-  Method: TMethod;
-begin
-  Method.Data := lua_topointer(L, lua_upvalueindex(1));
-  Method.Code := lua_topointer(L, lua_upvalueindex(2));
-  if Method.Data = nil then
-    raise Exception.Create('Lua: cannot execute global hook!');
-  Result := TLuaMethod(Method)(L);
 end;
 
 // Global environment __index: called when a global name is not stored raw in
@@ -755,8 +743,9 @@ begin
   Result := 0;
   if L.IsNumber(2) then
   begin
+    //colors[0] is the first entry (the same order as the raw colors table)
     index := L.ToInteger(2);
-    if index < Length(Colors) then
+    if (index >= 0) and (index < Length(Colors)) then
     begin
       c := ColorToInt(Colors[index].Color);
       L.PushInteger(c);
@@ -1133,12 +1122,11 @@ begin
   Lua.State.Register('buttons', Controls); //should be last one
 
   //output (catches print/println/log)
-{  Lua.State.RegisterTable('output');
+  Lua.State.RegisterTable('output');
   Lua.State.Register('output', 'show', Output, Output.Show_func);
   Lua.State.Register('output', 'hide', Output, Output.Hide_func);
   Lua.State.Register('output', 'clear', Output, Output.Clear_func);
   Lua.State.Register('output', Output); //should be last one
-}
   // Collision system: collision.pump() drains events and fires sprite.onCollide(other, state)
   Lua.State.Register('collision', 'pump', Collision, Collision.Pump_func);
   Lua.State.Register('collision', Collision); // should be last — wires getter/setter metamethods
@@ -1150,29 +1138,21 @@ begin
 
   //Attach a metatable to the global environment so an unresolved global name
   //resolves to a sprite or control by name (e.g. richard.move(...) when
-  //"richard" is a sprite). The globals table is fetched via LUA_RIDX_GLOBALS
-  //for Lua 5.5 compatibility; __index/__newindex use raw access (no recursion).
-  lua_rawgeti(Lua.State, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS); //[globals]
+  //"richard" is a sprite). The globals table is fetched with
+  //lua_pushglobaltable (LUA_RIDX_GLOBALS) for Lua 5.5 compatibility;
+  //__index/__newindex use raw access (no recursion).
+  //
+  //Metamethods MUST be registered with RegisterMeta: the plain
+  //Register(Name, Method) injects the table as an extra first argument, which
+  //is what "obj:method()" needs, but it shifts the metamethod arguments to
+  //(table, table, key[, value]) and __newindex would then leave two values on
+  //the Lua stack (corrupting it).
+  lua_pushglobaltable(Lua.State); //[globals]
   Lua.State.NewTable; //[globals, meta]
-
-  {lua_pushlightuserdata(Lua.State, @Self);
-  lua_pushlightuserdata(Lua.State, @TLuaScript.__global_getter);
-  lua_pushcclosure(Lua.State, global_meta_callback, 2); //[globals, meta, getter]
-  lua_setfield(Lua.State, -2, '__index'); //[globals, meta]}
-  Lua.State.Register('__index', __global_getter);
-
-//  lua_pushlightuserdata(Lua.State, TMethod(__global_setter).Data);
-//  lua_pushlightuserdata(Lua.State, TMethod(__global_setter).Code);
-
-{  lua_pushlightuserdata(Lua.State, @Self);
-  lua_pushlightuserdata(Lua.State, @TLuaScript.__global_setter);
-  lua_pushcclosure(Lua.State, global_meta_callback, 2); //[globals, meta, setter]
-  lua_setfield(Lua.State, -2, '__newindex'); //[globals, meta]}
-  Lua.State.Register('__newindex', __global_setter);
-
-  lua_setmetatable(Lua.State, -2); //globals.metatable = meta -> [globals]
-
-  lua_pop(Lua.State, 1); //[]
+  Lua.State.RegisterMeta('__index', __global_getter);
+  Lua.State.RegisterMeta('__newindex', __global_setter);
+  Lua.State.SetMetaTable(-2); //globals.metatable = meta -> [globals]
+  Lua.State.Pop(1); //[]
 end;
 
 destructor TLuaScript.Destroy;
@@ -1550,12 +1530,12 @@ begin
       Main.Output.Height := i
     else if field = 'width' then
       Main.Output.Width := i
-    else if field = 'left' then
+    else if (field = 'left') or (field = 'x') then
     begin
       r := Main.Output.BoundsRect;
       Main.Output.BoundsRect := Rect(i, r.Top, i + r.Width, r.Bottom);
     end
-    else if field = 'top' then
+    else if (field = 'top') or (field = 'y') then
     begin
       r := Main.Output.BoundsRect;
       Main.Output.BoundsRect := Rect(r.Left, i, r.Right, i + r.Height);
@@ -1563,7 +1543,16 @@ begin
     else if field = 'margin' then
       Main.Output.Margin := i
     else if field = 'maxlines' then
-      Main.Output.MaxLines := i;
+      Main.Output.MaxLines := i
+    else if field = 'border' then
+      //* 0=none, 1=thin, 2=thick, 3=sizable
+      case i of
+        1: Main.Output.Border := brdThin;
+        2: Main.Output.Border := brdThick;
+        3: Main.Output.Border := brdSizable;
+      else
+        Main.Output.Border := brdNone;
+      end;
   end
   else if L.IsString(-1) then
   begin
@@ -1595,14 +1584,25 @@ begin
     lua_pushinteger(L, Main.Output.Width);
     Result := 1;
   end
-  else if field = 'left' then
+  else if (field = 'left') or (field = 'x') then
   begin
     lua_pushinteger(L, Main.Output.BoundsRect.Left);
     Result := 1;
   end
-  else if field = 'top' then
+  else if (field = 'top') or (field = 'y') then
   begin
     lua_pushinteger(L, Main.Output.BoundsRect.Top);
+    Result := 1;
+  end
+  else if field = 'border' then
+  begin
+    case Main.Output.Border of
+      brdThin: lua_pushinteger(L, 1);
+      brdThick: lua_pushinteger(L, 2);
+      brdSizable: lua_pushinteger(L, 3);
+    else
+      lua_pushinteger(L, 0);
+    end;
     Result := 1;
   end
   else if field = 'lines' then
@@ -2257,7 +2257,7 @@ begin
     begin
       w := 160; h := 120;
     end;
-      if c >= 7 then
+    if c >= 7 then
       aName := L.ToString(7);
   end
   else
@@ -3241,19 +3241,6 @@ end;
 
 { TLuaSpriteScript }
 
-// Callback trampoline: Lua C-closure bound to an object method. Mirrors the
-// internal one in LuaClasses, used to back the self/other sprite tables.
-function sprite_script_method_callback(L: Plua_State): integer; cdecl;
-var
-  Method: TMethod;
-begin
-  Method.Data := lua_topointer(L, lua_upvalueindex(1));
-  Method.Code := lua_topointer(L, lua_upvalueindex(2));
-  if Method.Data = nil then
-    raise Exception.Create('Lua: cannot execute sprite script method!');
-  Result := TLuaMethod(Method)(L);
-end;
-
 // Builds a sprite table (like Sprites.new returns) bound to AHandle and leaves
 // it on the Lua stack. Properties route through the proxy TLuaSprite getter/
 // setter, so self.x / self.kind / ... work and unknown keys are raw-stored.
@@ -3266,19 +3253,12 @@ begin
   L.SetField(-2, '__name'); //t.__name = sprite name -> [t]
   L.NewTable; //[t, meta]
 
-  {lua_pushlightuserdata(L, @ASprite);
-  lua_pushlightuserdata(L, @TLuaSprite.__getter);
-  lua_pushcclosure(L, @sprite_script_method_callback, 2);
-  lua_setfield(L, -2, '__index'); //[t, meta]}
-  L.Register('__index', ASprite.__getter);
+  //RegisterMeta, not Register: Lua already passes the table as argument 1 to
+  //__index/__newindex, so the table must not be injected a second time.
+  L.RegisterMeta('__index', ASprite.__getter);
+  L.RegisterMeta('__newindex', ASprite.__setter);
 
-  {lua_pushlightuserdata(L, ASprite);
-  lua_pushlightuserdata(L, @TLuaSprite.__setter);
-  lua_pushcclosure(L, @sprite_script_method_callback, 2);
-  lua_setfield(L, -2, '__newindex'); //[t, meta]}
-  L.Register('__newindex', ASprite.__setter);
-
-  lua_setmetatable(L, -2); //t.metatable = meta -> [t]
+  L.SetMetaTable(-2); //t.metatable = meta -> [t]
 end;
 
 // draw.* color for sprite scripts: the colors table stores AARRGGBB as a Lua

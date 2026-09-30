@@ -47,7 +47,7 @@ while true do
     timer = 0
   end
 
-  if iskeypressed(keys.space) then
+  if iskeypressed("space") then
     println("space pressed at time " .. time())
   end
 
