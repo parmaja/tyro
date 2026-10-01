@@ -1,5 +1,4 @@
 unit Aseprites;
-
 {**
  *  Aseprite (.ase / .aseprite) file support for Tyro
  *

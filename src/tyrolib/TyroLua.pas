@@ -1248,8 +1248,8 @@ var
     end
     else
     begin
-      AOutput := lua_tostring(Lua.State, -1);
-      lua_pop(Lua.State, 1);
+      AOutput := Lua.State.ToString(-1);
+      Lua.State.Pop(1);
     end;
   end;
 
@@ -1568,7 +1568,7 @@ var
   field: string;
 begin
   Result := 0;
-  field := lua_tostring(L, 2);
+  field := L.ToString(2);
   if field = 'visible' then
   begin
     lua_pushboolean(L, Main.Output.Visible);
@@ -1722,7 +1722,7 @@ var
   field: string;
 begin
   Result := 0;
-  field := lua_tostring(L, 2);
+  field := L.ToString(2);
   if field = 'title' then
   begin
     lua_pushstring(L, PAnsiChar(AnsiString(RadioPlayer.Title)));
@@ -1837,7 +1837,7 @@ var
   field: string;
 begin
   Result := 0;
-  field := lua_tostring(L, 2);
+  field := L.ToString(2);
   if field = 'active' then
   begin
     lua_pushboolean(L, Spectrum.Active);

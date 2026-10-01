@@ -169,9 +169,9 @@ type
   TSetControlTextObject = class(TQueueObject)
   private
     FControl: TTyroControl;
-    FText: utf8string;
+    FText: string;
   public
-    constructor Create(AControl: TTyroControl; const AText: utf8string);
+    constructor Create(AControl: TTyroControl; const AText: string);
     procedure DoExecute; override;
   end;
 
@@ -1115,8 +1115,7 @@ end;
 
 { TSetControlTextObject }
 
-constructor TSetControlTextObject.Create(AControl: TTyroControl;
-  const AText: utf8string);
+constructor TSetControlTextObject.Create(AControl: TTyroControl; const AText: string);
 begin
   inherited Create;
   FControl := AControl;
