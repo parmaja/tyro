@@ -286,7 +286,6 @@ var
   BDF: TBDF;
   img: TImage;
   Stream: TMemoryStream;
-  i: Integer;
 begin
   Unload;
   //Codepoints := nil;
@@ -295,8 +294,8 @@ begin
     BDF := TBDF.Create;
     try
       BDF.LoadFromFile(FileName);
+      Stream := BDF.EncodeToPNG;
       try
-        Stream := BDF.EncodeToPNG;
         Stream.Position:= 0;
         //Stream.SaveToFile('c:\temp\1.png');
         //Stream.Position:= 0;
@@ -304,20 +303,20 @@ begin
         if FontSize = 0 then
           FontSize := BDF.Height;
 
-      img := LoadImageFromMemory('.png', Stream.Memory, Stream.Size);
-      try
-        if img.Data = nil then
-          raise Exception.Create('Unable to decode BDF font image');
-        //ImageAlphaPremultiply(img);
-        Data := LoadFontFromImage(img, clMagenta, cFirstChar);
-        RefCount := False;
-        if not IsFontValid(Data) then
-          raise Exception.Create('Unable to load BDF font image');
-        SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
-      finally
-        if img.Data <> nil then
-          UnloadImage(img);
-      end;
+        img := LoadImageFromMemory('.png', Stream.Memory, Stream.Size);
+        try
+          if img.Data = nil then
+            raise Exception.Create('Unable to decode BDF font image');
+          //ImageAlphaPremultiply(img);
+          Data := LoadFontFromImage(img, clMagenta, cFirstChar);
+          RefCount := False;
+          if not IsFontValid(Data) then
+            raise Exception.Create('Unable to load BDF font image');
+          SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
+        finally
+          if img.Data <> nil then
+            UnloadImage(img);
+        end;
         Loaded;
         Log.WriteLn('Font loaded: ' + FileName);
       finally

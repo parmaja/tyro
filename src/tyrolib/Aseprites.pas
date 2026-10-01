@@ -791,7 +791,7 @@ begin
     SetLength(S, L);
     Move(FData[FPos], S[1], L);
     Inc(FPos, L);
-    Result := S;   // keep the UTF-8 bytes as-is (names are cosmetic)
+    Result := String(S);   // keep the UTF-8 bytes as-is (names are cosmetic)
   end;
 end;
 
@@ -837,11 +837,11 @@ end;
 procedure TAseprite.ReadFrame;
 var
   FrameStart, FrameEnd, ChunkStart: Integer;
-  BytesInFrame: Cardinal;
+  BytesInFrame: Integer;
   FrameMagic: Word;
   OldCount, NewCount, Count: Cardinal;
   Duration: Word;
-  ChunkSize: Cardinal;
+  ChunkSize: Integer;
   ChunkType: Word;
   F: TAseFrame;
   I: Integer;
@@ -1336,7 +1336,7 @@ function TAseprite.LoadFromStream(AStream: TStream): Boolean;
 var
   N: Integer;
 begin
-  Result := False;
+//  Result := False;
   FLastError := '';
   Clear;
   try

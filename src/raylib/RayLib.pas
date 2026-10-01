@@ -1,7 +1,7 @@
 ﻿unit RayLib;
 {$ifdef fpc}
 {$mode delphi}
-{.$packrecords c}
+{.$packrecords c} //NO
 {$else}
 {$endif}
 {$POINTERMATH ON}

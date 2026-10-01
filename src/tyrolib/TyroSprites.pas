@@ -192,10 +192,11 @@ type
     FName: string;
     FExistingHandle: integer;
     FHandleResult: integer;
+  protected
+    procedure DoExecute; override;
   public
     constructor Create(AFileName: string; const AName: string; AExistingHandle: integer = 0);
     destructor Destroy; override;
-    procedure DoExecute; override;
     property FileName: string read FFileName;
     property Name: string read FName;
     property HandleResult: integer read FHandleResult;
@@ -594,7 +595,7 @@ function TSprites.AddEmpty(const AName: string): integer;
 var
   EmptyTexture: TTexture2D;
 begin
-  Result := cSpriteInvalid;
+//  Result := cSpriteInvalid;
   EmptyTexture := Default(TTexture2D);
   FLock.Enter;
   try
@@ -1234,7 +1235,7 @@ begin
     end;
   end
   else
-    aTexture := RayLib.LoadTexture(PUTF8Char(FFileName));
+    aTexture := RayLib.LoadTexture(PUTF8Char(UTF8String(FFileName)));
 
   if aCount > 1 then
   begin

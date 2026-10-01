@@ -664,7 +664,7 @@ end;
 
 function TLuaHelper.IsTable(Index: Integer): Boolean;
 begin
-  lua_istable(@Self, Index);
+  Result := lua_istable(@Self, Index);
 end;
 
 procedure TLuaHelper.PushBoolean(Value: Boolean);

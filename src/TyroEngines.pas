@@ -504,7 +504,7 @@ begin
             try
               if FQueuedScreenshot <> '' then
               begin
-                RayLib.TakeScreenshot(PUTF8Char(FQueuedScreenshot));
+                RayLib.TakeScreenshot(PUTF8Char(UTF8String(FQueuedScreenshot)));
                 FQueuedScreenshot := '';
               end;
             finally

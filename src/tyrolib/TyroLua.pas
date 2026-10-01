@@ -426,15 +426,15 @@ var
   i, c: integer;
   s: string;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   s := '';
   for i := 1 to c do
   begin
     if i > 1 then
       s := s + #9;
-    s := s + L.Params[i].AsString;
+    s := s + L.ToString(i);
     if IsConsole then
-      Log.WriteLn(L.Params[i].AsString);
+      Log.WriteLn(L.ToString(i));
   end;
   //mirror the log line to the Output control too (TTyroOutput is locked, it is
   //called from the script thread)
@@ -1217,7 +1217,7 @@ function TLuaScript.RunLine(const ALine: string; out AOutput: string): Boolean;
 var
   n: Integer;
   p: PUTF8Char;
-  S, Msg, AChunk: string;
+  S, Msg, AChunk: UTF8String;
 
   //pcall the chunk already loaded on the stack and echo any return values
   //(REPL style); runtime errors are reported through AOutput
@@ -1307,13 +1307,13 @@ var
   c: integer;
   w, h: integer;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   w := ScreenWidth;
   h := ScreenHeight;
   if c > 0 then
-    w := round(L.Params[1].AsNumber);
+    w := round(L.ToNumber(1));
   if c > 1 then
-    h := round(L.Params[2].AsNumber);
+    h := round(L.ToNumber(2));
   FScript.RunQueueObject(TWindowObject.Create(w, h));
   Result := 0;
 end;
@@ -1327,9 +1327,9 @@ var
 begin
   ms := 0;
   power := 0;
-  if L.Count > 0 then
+  if L.ArgsCount > 0 then
     ms := Round(L.ToNumber(1));
-  if L.Count > 1 then
+  if L.ArgsCount > 1 then
     power := Round(L.ToNumber(2));
   if Main <> nil then
     //Thread safe: the engine takes the request from the script thread and
@@ -1343,7 +1343,7 @@ var
   c: integer;
   x, y, w, h: integer;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   x := 0;
   y := 0;
   w := 0;
@@ -1384,7 +1384,7 @@ var
   f: boolean;
 begin
   f := False;
-  c := L.Count;
+  c := L.ArgsCount;
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
   r := round(L.ToNumber(3));
@@ -1401,7 +1401,7 @@ var
   f: boolean;
 begin
   f := False;
-  c := L.Count;
+  c := L.ArgsCount;
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
   w := round(L.ToNumber(3));
@@ -1417,7 +1417,7 @@ var
   c: integer;
   x1, y1, x2, y2: integer;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   x1 := round(L.ToNumber(1));
   y1 := round(L.ToNumber(2));
   if c = 4 then
@@ -1446,7 +1446,7 @@ var
   i, c: integer;
   s: string;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   s := '';
   for i := 1 to c do
   begin
@@ -1463,13 +1463,13 @@ var
   i, c: integer;
   s: string;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   s := '';
   for i := 1 to c do
   begin
     if i > 1 then
       s := s + #9;
-    s := s + L.Params[i].AsString;
+    s := s + L.ToString(i);
   end;
   FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
   Result := 0;
@@ -1480,7 +1480,7 @@ var
   i, c: integer;
   s: string;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   s := '';
   for i := 1 to c do
   begin
@@ -1498,13 +1498,13 @@ var
   i, c: integer;
   s: string;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   s := '';
   for i := 1 to c do
   begin
     if i > 1 then
       s := s + #9;
-    s := s + L.Params[i].AsString;
+    s := s + L.ToString(i);
   end;
   FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
   FScript.AddQueueObject(TOutputPrintObject.Create(Main.Canvas, s, True));
@@ -1633,7 +1633,7 @@ var
   c: integer;
   x, y, w, h: integer;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   x := 0;
   y := 0;
   w := 0;
@@ -1702,7 +1702,7 @@ var
   Song: TmmlSong;
 begin
   Song := nil;
-  c := L.Count;
+  c := L.ArgsCount;
   SetLength(Song, c);
   for i := 0 to c - 1 do
   begin
@@ -1870,7 +1870,7 @@ var
   c: integer;
   x, y, w, h: integer;
 begin
-  c := L.Count;
+  c := L.ArgsCount;
   x := 120;
   y := 80;
   w := 400;
@@ -1981,7 +1981,7 @@ end;
 
 function TLuaScript.Screenshot_func(L: Plua_State): integer; cdecl;
 begin
-  if L.Count > 0 then
+  if L.ArgsCount > 0 then
     // TakeScreenshot must run on the main thread after the frame is
     // presented, so queue the request and let the engine capture it.
     Main.QueueScreenshot(L.ToString(1));
@@ -1995,7 +1995,7 @@ var
   Reader: TReadConsoleObject;
 begin
   s := '> ';
-  c := L.Count;
+  c := L.ArgsCount;
   if c > 0 then
     s := L.ToString(1);
 
@@ -2040,7 +2040,7 @@ begin
   with Script do
   begin
     Lua.State.BeginTable; //[sprite]
-    base := Lua.State.Count; //index of the sprite table
+    base := Lua.State.ArgsCount; //index of the sprite table
 
     //keep a duplicate, the -2/-3 addressing in Register() hits the sprite table
     Lua.State.PushValue(-1); //[sprite, sprite]
@@ -2086,7 +2086,7 @@ var
   handle: integer;
   CreateObj: TCreateSpriteObject;
 begin
-  if L.Count >= 1 then
+  if L.ArgsCount >= 1 then
     aName := L.ToString(1)
   else
     aName := '';
@@ -2144,9 +2144,7 @@ end;
 
 function GetSpriteHandle(L: Plua_State; idx: integer): integer;
 begin
-  L.GetField(idx, '__handle');
-  Result := L.ToInteger(-1);
-  L.Pop(1);
+  Result := L.ToInteger(idx, '__handle');
 end;
 
 { TLuaControls }
@@ -2215,7 +2213,7 @@ var
   CreateObj: TCreateControlObject;
 begin
   Result := 1;
-  c := L.Count;
+  c := L.ArgsCount;
   caption := L.ToString(1);
   clsName := LowerCase(caption);
   x := 0;
@@ -2300,7 +2298,7 @@ begin
     Result := 1;
     Exit;
   end;
- if L.Count >= 2 then
+ if L.ArgsCount >= 2 then
  begin
   FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(2)));
     Result := 0;
@@ -2331,7 +2329,7 @@ begin
     Result := 1;
     Exit;
   end;
- if L.Count >= 2 then
+ if L.ArgsCount >= 2 then
  begin
   FScript.RunQueueObject(TSetControlCheckedObject.Create(ctrl,
     L.ToBoolean(2)));
@@ -2357,7 +2355,7 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 3 then
+  if L.ArgsCount >= 3 then
   begin
     r := ctrl.BoundsRect;
     r := Rect(round(L.ToNumber(2)), round(L.ToNumber(3)),
@@ -2392,7 +2390,7 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
+  if L.ArgsCount >= 2 then
   begin
     r := ctrl.BoundsRect;
     r.Right := r.Left + round(L.ToNumber(2));
@@ -2419,7 +2417,7 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
+  if L.ArgsCount >= 2 then
   begin
     r := ctrl.BoundsRect;
     r.Bottom := r.Top + round(L.ToNumber(2));
@@ -2445,7 +2443,7 @@ begin
     Result := 1;
     Exit;
   end;
- if L.Count >= 2 then
+ if L.ArgsCount >= 2 then
  begin
   FScript.RunQueueObject(TSetControlVisibleObject.Create(ctrl,
     L.ToBoolean(2)));
@@ -2558,7 +2556,7 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
+  if L.ArgsCount >= 2 then
   begin
   v := round(L.ToNumber(2));
   case v of
@@ -2596,7 +2594,7 @@ begin
     Result := 1;
     Exit;
   end;
- if L.Count >= 2 then
+ if L.ArgsCount >= 2 then
  begin
   FScript.RunQueueObject(TSetControlBackColorObject.Create(ctrl,
     IntToColor(round(L.ToNumber(2)))));
@@ -2623,9 +2621,9 @@ begin
     Result := 1;
     Exit;
   end;
- if L.Count >= 2 then
+ if L.ArgsCount >= 2 then
  begin
-  FScript.RunQueueObject(TSetControlNameObject.Create(ctrl, L.ToString(2)));
+    FScript.RunQueueObject(TSetControlNameObject.Create(ctrl, L.ToString(2)));
     Result := 0;
   end
   else
@@ -2652,7 +2650,7 @@ begin
     Exit;
   end;
 
-  if L.Count >= 2 then
+  if L.ArgsCount >= 2 then
   begin
     s := LowerCase(Trim(L.ToString(2)));
     if TryStrToInt(s, n) and (n >= Ord(alNone)) and (n <= Ord(alClient)) then
@@ -2711,7 +2709,7 @@ begin
     Exit;
   end;
 
-  if L.Count >= 2 then
+  if L.ArgsCount >= 2 then
   begin
     if lua_isnil(L, 2) or (round(L.ToNumber(2)) <= 0) then
       newParent := Main
@@ -2764,11 +2762,11 @@ begin
     Exit;
   end;
   lb := TTyroListBox(ctrl);
-  if L.Count >= 2 then
+  if L.ArgsCount >= 2 then
   begin
     Items := TStringList.Create;
     try
-      for i := 1 to L.Count - 1 do
+      for i := 1 to L.ArgsCount - 1 do
         Items.Add(L.ToString(i + 1));
       FScript.RunQueueObject(TSetControlItemsObject.Create(lb, Items));
     finally
@@ -2799,7 +2797,7 @@ begin
   end;
   lb := TTyroListBox(ctrl);
   idx := round(L.ToNumber(2));
-  if L.Count >= 3 then
+  if L.ArgsCount >= 3 then
   begin
     FScript.RunQueueObject(TSetControlItemObject.Create(lb, idx, L.ToString(3)));
     Result := 0;
@@ -2848,7 +2846,7 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
+  if L.ArgsCount >= 2 then
   begin
     FScript.RunQueueObject(TSetControlViewCountObject.Create(TTyroListBox(ctrl), round(L.ToNumber(2))));
     Result := 0;
@@ -2872,7 +2870,7 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.Count >= 2 then
+  if L.ArgsCount >= 2 then
   begin
     FScript.RunQueueObject(TSetControlItemIndexObject.Create(TTyroListBox(ctrl), round(L.ToNumber(2))));
     Result := 0;
@@ -2891,7 +2889,7 @@ var
   ScriptObj: TLoadSpriteScriptObject;
 begin
   aFile := Res.GuessFileName(L.ToString(2));
-  if L.Count >= 3 then
+  if L.ArgsCount >= 3 then
     aScriptFile := L.ToString(3);
   L.GetField(1, '__name');
   if L.IsString(-1) then
@@ -3006,7 +3004,7 @@ begin
   handle := GetSpriteHandle(L, 1);
   if handle > cSpriteInvalid then
   begin
-    if L.Count >= 2 then
+    if L.ArgsCount >= 2 then
       Main.Sprites.SetAnimSpeed(handle, L.ToNumber(2));
     Main.Sprites.SetAnimFrame(handle, 0);
     Main.Sprites.SetPlaying(handle, True);
@@ -3309,7 +3307,7 @@ begin
   if FFileName = '' then
     Exit;
   FFileName := Res.GuessFileName(FFileName);
-  if luaL_dofile(FLua.State, PUTF8Char(FFileName)) <> 0 then
+  if luaL_dofile(FLua.State, PUTF8Char(UTF8String(FFileName))) <> 0 then
   begin
     Msg := FLua.State.ToString(-1);
     FLua.State.Pop(1);
@@ -3402,7 +3400,7 @@ begin
   x := L.ToNumber(1);
   y := L.ToNumber(2);
   r := L.ToNumber(3);
-  if L.Count >= 5 then
+  if L.ArgsCount >= 5 then
     f := L.ToBoolean(5)
   else
     f := True;
@@ -3423,7 +3421,7 @@ begin
   y := round(L.ToNumber(2));
   w := round(L.ToNumber(3));
   h := round(L.ToNumber(4));
-  if L.Count >= 6 then
+  if L.ArgsCount >= 6 then
     f := L.ToBoolean(6)
   else
     f := True;
@@ -3444,7 +3442,7 @@ end;
 // draw.text(x, y, text, color)
 function TLuaSpriteScript.Text_func(L: Plua_State): integer; cdecl;
 begin
-  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(L.ToString(3)), Vector2Of(L.ToNumber(1), L.ToNumber(2)), Res.Font.Height, 0, SpriteColorValue(L, 4));
+  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(UTF8String(L.ToString(3))), Vector2Of(L.ToNumber(1), L.ToNumber(2)), Res.Font.Height, 0, SpriteColorValue(L, 4));
   Result := 0;
 end;
 
@@ -3523,7 +3521,7 @@ procedure TLuaCollision.FireEvent(L: Plua_State; AHandle, AOtherHandle: Integer;
 begin
   // get the target sprite table from the registry
   lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + AHandle);
-  if not lua_istable(L, -1) then
+  if not L.IsTable(-1) then
   begin
     L.Pop(1);
     Exit;

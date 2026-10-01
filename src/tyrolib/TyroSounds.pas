@@ -192,11 +192,11 @@ end;
 procedure TTyroRayWave.Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single; SampleRate: Integer; BitRate: Integer);
 var
   Wave: TWave;
-  i: Integer;
+  i: Cardinal;
   v: Smallint;
   {$ifdef FADE}
-  WaveSamples: Integer;
-  Starting, Ending: Integer;
+  WaveSamples: Cardinal;
+  Starting, Ending: Cardinal;
   Delta: Single;
   {$endif}
   //aData: array of SmallInt;

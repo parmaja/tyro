@@ -441,7 +441,7 @@ begin
       DoError('AAC is not supported: the built-in decoder cannot decode ' + FClient.ContentType + ' streams. Use an MP3/OGG station instead.');
       Exit;
     end;
-    aNewMusic := LoadMusicStreamFromMemory(PUTF8Char(aExt), aSnap.Memory, Integer(aSnap.Size));
+    aNewMusic := LoadMusicStreamFromMemory(PUTF8Char(UTF8String(aExt)), aSnap.Memory, Integer(aSnap.Size));
     if aNewMusic.CtxType = 0 then
     begin
       DoError('Cannot decode audio format: ' + FClient.ContentType);

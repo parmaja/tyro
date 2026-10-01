@@ -221,7 +221,7 @@ var
 
 implementation
 
-function CharToStr(C: UTF8Char):String;
+function CharToStr(C: UTF8Char): String;
 begin
   if C <= #32 then
     Result := '#' + IntToStr(Ord(C))
@@ -393,7 +393,6 @@ const
     f: Integer;
     index: Integer;
   begin
-    f := 0;
     if (Note = 'r') or (Note = 'p') then
       f := 0
     else if TryStrToInt(Note, index) then
