@@ -117,6 +117,7 @@
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_ExeOutput>..\bin</DCC_ExeOutput>
         <Debugger_RunParams>&quot;D:\lab\pascal\tyro\demos\t.ls&quot;</Debugger_RunParams>
+        <DCC_DUPLICATE_CTOR_DTOR>false</DCC_DUPLICATE_CTOR_DTOR>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -151,28 +152,7 @@
                 <Source>
                     <Source Name="MainSource">tyro.dpr</Source>
                 </Source>
-                <Excluded_Packages>
-                    <Excluded_Packages Name="w:\system\win32\dwsLibDesignOnly.bpl">DelphiWebScript Runtime</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\cseLib.bpl">(untitled)</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\csLibDesign.bpl">CS Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\cseLibDesign.bpl">CSE Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\csaLibDesign.bpl">CSE Accounts Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\cposLibDesign.bpl">CS POS Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\cseMainLibDesign.bpl">CSE Main Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\csrLibDesign.bpl">CSE Archives Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\agnLibDesign.bpl">CSE Agneda Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\srvLibDesign.bpl">CSE Services Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\grntLibDesign.bpl">CSE Guarantee Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\stcLibDesign.bpl">CSE Stocks Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\smpsLibDesign.bpl">CSE Simple Stocks Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\ordLibDesign.bpl">CSE Orders Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\salLibDesign.bpl">CSE Salary Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\medLibDesign.bpl">CSE Medicals Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\dasLibDesign.bpl">CSE DATA SYNC Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\cdbaDesign.bpl">CSE DBAdmin Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\trsLibDesign.bpl">CSE Tours Lib</Excluded_Packages>
-                    <Excluded_Packages Name="W:\system\win32\cspLibDesign.bpl">CSE Protection Lib</Excluded_Packages>
-                </Excluded_Packages>
+                <Excluded_Packages/>
             </Delphi.Personality>
             <Deployment Version="5"/>
             <Platforms>

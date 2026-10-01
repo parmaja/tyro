@@ -1253,7 +1253,6 @@ procedure TTyroEdit.DoPaint(ACanvas: TTyroCanvas);
 var
   r: TRect;
   th: Single;
-  textColor: TColor;
   caretX, selX, selW: Integer;
   a, b: Integer;
 begin
@@ -1733,7 +1732,7 @@ begin
     Exit;
   //An empty row must not wipe the clipboard of a real copy
   if FItems[FItemIndex] <> '' then
-    RayLib.SetClipboardText(PUTF8Char(FItems[FItemIndex]));
+    RayLib.SetClipboardText(PUTF8Char(UTF8String(FItems[FItemIndex])));
 end;
 
 procedure TTyroListBox.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);
@@ -2438,7 +2437,6 @@ end;
 procedure TTyroControl.PaintWindow(ACanvas: TTyroCanvas);
 var
   aClientRect: TRect;
-  aControl: TTyroLayout;
 begin
   if Visible then
   begin

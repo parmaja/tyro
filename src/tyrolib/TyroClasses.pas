@@ -218,8 +218,6 @@ type
     FBackColor: TColor;
     FPenSize: Integer;
     FWidth, FHeight: Integer;
-    function OffsetRect(const ARect: TRect): TRectangle; overload;
-    function OffsetRect(const ARect: TRectangle): TRectangle; overload;
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
     procedure SetHeight(AValue: Integer);
@@ -228,6 +226,8 @@ type
     procedure SetWidth(AValue: Integer);
     procedure SetBackColor(const Value: TColor);
   protected
+    function OffsetRect(const ARect: TRect): TRectangle; overload;
+    function OffsetRect(const ARect: TRectangle): TRectangle; overload;
   public
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;

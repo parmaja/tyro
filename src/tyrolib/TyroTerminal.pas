@@ -51,10 +51,10 @@ type
   TTyroTerminal = class;
 
   { EOnTerminalInput - Event handler for terminal input completion }
-  EOnTerminalInput = procedure(ATerminal: TTyroTerminal; Input: string) of object;
+  EOnTerminalInput = procedure(ATerminal: TTyroTerminal; Input: utf8string) of object;
 
   { EOnTerminalInputChange - Event handler for input buffer changes }
-  EOnTerminalInputChange = procedure(ATerminal: TTyroTerminal; const InputData: string) of object;
+  EOnTerminalInputChange = procedure(ATerminal: TTyroTerminal; const InputData: utf8string) of object;
 
   { one run of same-colored characters (columns are UTF-8 codepoints) }
   TTermRun = record
@@ -78,8 +78,8 @@ type
     FScrollBack: Integer;             // 0 = stick to bottom, >0 = lines scrolled up
 
     FInputOn: Boolean;                // true when we accept a command line
-    FPrompt: string;
-    FInputBuffer: string;             // the current command line (UTF-8)
+    FPrompt: utf8string;
+    FInputBuffer: utf8string;             // the current command line (UTF-8)
     FInputPos: Integer;               // caret position in codepoints
     FInputScroll: Integer;            // first visible codepoint of the input line
     FInputSelStart: Integer;          // -1 = no selection
@@ -112,8 +112,8 @@ type
     function GetLineCount: Integer;
     function GetVisibleLines: Integer;
     function GetPromptX: Integer;
-    function IsCommandName(const AWord: string): Boolean;
-    procedure SplitFirstWord(const S: string; out ALeading, AWord, ARest: string);
+    function IsCommandName(const AWord: utf8string): Boolean;
+    procedure SplitFirstWord(const S: utf8string; out ALeading, AWord, ARest: utf8string);
     procedure BuildInputRuns(out ARuns: TTermRuns);
     function CharAtPixel(AX: Integer): Integer;
     procedure UpdateInputScroll;
@@ -121,8 +121,8 @@ type
     procedure ProcessChar(var Key: TUTF8Char);
     procedure ProcessKey(var Key: TKeyboardKey; Shift: TShiftState);
 
-    procedure AddLine(const ALine: string);
-    procedure AppendText(const S: string);
+    procedure AddLine(const ALine: utf8string);
+    procedure AppendText(const S: utf8string);
     procedure TrimLines;
     procedure ClampScroll;
     procedure UpdateScrollBars;
@@ -130,14 +130,14 @@ type
     procedure ClearInputSelection;
     procedure SetInputSelection(AAnchor, ACaret: Integer);
     function SelectionAnchor: Integer;
-    function InputSelectionText: string;
+    function InputSelectionText: utf8string;
     procedure DeleteInputSelection;
     procedure SelectInputAll;
 
     procedure PlaceInputCaretAt(AX: Integer);
     procedure SetSelectionAnchor(AX, AY: Integer);
     procedure ExtendSelectionTo(AX, AY: Integer);
-    function OutputSelectionText: string;
+    function OutputSelectionText: utf8string;
     procedure CopySelection;
     procedure PasteClipboard;
 
@@ -164,12 +164,12 @@ type
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
 
     procedure Clear;
-    procedure Write(s: string);
-    procedure Writeln(s: string);
+    procedure Write(s: utf8string);
+    procedure Writeln(s: utf8string);
 
-    procedure StartRead(const Desc: string);
+    procedure StartRead(const Desc: utf8string);
     procedure StopRead;
-    procedure SaveToFile(AFileName: string);
+    procedure SaveToFile(AFileName: utf8string);
 
     { All colors are control properties; code only reads these }
     property TextColor: TColor read FTextColor write FTextColor;
@@ -210,8 +210,8 @@ type
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
-    procedure Write(S: string);
-    procedure Writeln(S: string);
+    procedure Write(S: utf8string);
+    procedure Writeln(S: utf8string);
     procedure Clear;
     property MaxLines: Integer read FMaxLines write FMaxLines default 500;
     property LineCount: Integer read GetLineCount;
@@ -225,7 +225,7 @@ implementation
 
 constructor TTyroTerminal.Create(AParent: TTyroLayout);
 var
-  Builtin: array of string;
+  Builtin: array of utf8string;
   i: Integer;
 begin
   inherited;
@@ -316,7 +316,7 @@ begin
     Result := 1;
 end;
 
-function TTyroTerminal.IsCommandName(const AWord: string): Boolean;
+function TTyroTerminal.IsCommandName(const AWord: utf8string): Boolean;
 var
   i: Integer;
 begin
@@ -328,10 +328,10 @@ begin
   Result := False;
 end;
 
-procedure TTyroTerminal.SplitFirstWord(const S: string; out ALeading, AWord, ARest: string);
+procedure TTyroTerminal.SplitFirstWord(const S: utf8string; out ALeading, AWord, ARest: utf8string);
 var
   L, P: Integer;
-  Ch: string;
+  Ch: utf8string;
 begin
   ALeading := '';
   AWord := '';
@@ -360,7 +360,7 @@ end;
 
 procedure TTyroTerminal.BuildInputRuns(out ARuns: TTermRuns);
 var
-  Leading, Word, Rest: string;
+  Leading, Word, Rest: utf8string;
   L: Integer;
 begin
   ARuns := nil;
@@ -443,12 +443,12 @@ begin
     FInputScroll := 0;
 end;
 
-procedure TTyroTerminal.AddLine(const ALine: string);
+procedure TTyroTerminal.AddLine(const ALine: utf8string);
 begin
   FLines.Add(ALine);
 end;
 
-procedure TTyroTerminal.AppendText(const S: string);
+procedure TTyroTerminal.AppendText(const S: utf8string);
 var
   P, l: Integer;
 begin
@@ -565,20 +565,20 @@ begin
   Invalidate;
 end;
 
-procedure TTyroTerminal.Write(s: string);
+procedure TTyroTerminal.Write(s: utf8string);
 begin
   AppendText(s);
   ClampScroll;
   Invalidate;
 end;
 
-procedure TTyroTerminal.Writeln(s: string);
+procedure TTyroTerminal.Writeln(s: utf8string);
 begin
   Write(s);
   Write(#10);
 end;
 
-procedure TTyroTerminal.StartRead(const Desc: string);
+procedure TTyroTerminal.StartRead(const Desc: utf8string);
 begin
   FPrompt := Desc;
   FInputBuffer := '';
@@ -598,7 +598,7 @@ begin
   Invalidate;
 end;
 
-procedure TTyroTerminal.SaveToFile(AFileName: string);
+procedure TTyroTerminal.SaveToFile(AFileName: utf8string);
 var
   Txt: System.Text;
   i: Integer;
@@ -663,7 +663,7 @@ begin
     Result := FInputPos;
 end;
 
-function TTyroTerminal.InputSelectionText: string;
+function TTyroTerminal.InputSelectionText: utf8string;
 begin
   Result := '';
   if FInputSelStart < 0 then
@@ -752,7 +752,7 @@ begin
   FSelCurCol := Col;
 end;
 
-function TTyroTerminal.OutputSelectionText: string;
+function TTyroTerminal.OutputSelectionText: utf8string;
 var
   l1, c1, l2, c2, i: Integer;
 begin
@@ -800,7 +800,7 @@ end;
 procedure TTyroTerminal.PasteClipboard;
 var
   P: PUTF8Char;
-  S: string;
+  S: utf8string;
 begin
   P := RayLib.GetClipboardText;
   S := '';
@@ -859,7 +859,7 @@ end;
 
 procedure TTyroTerminal.SubmitInput;
 var
-  s: string;
+  s: utf8string;
 begin
   if not FInputOn then
     Exit;
@@ -892,7 +892,7 @@ end;
 
 procedure TTyroTerminal.KeyPress(var Key: TUTF8Char);
 var
-  S: string;
+  S: utf8string;
 begin
   if not FInputOn then
     Exit;
@@ -907,7 +907,7 @@ end;
 
 procedure TTyroTerminal.ProcessChar(var Key: TUTF8Char);
 var
-  S: string;
+  S: utf8string;
 begin
   if not FInputOn then
     Exit;
@@ -1156,10 +1156,10 @@ end;
 
 procedure TTyroTerminal.DrawOutputLine(ACanvas: TTyroCanvas; ALine, AY: Integer);
 var
-  S: string;
+  S: utf8string;
   c: TColor;
   l1, c1, l2, c2, selStart, selEnd, L: Integer;
-  Prefix, SelText, Suffix: string;
+  Prefix, SelText, Suffix: utf8string;
 begin
   if (ALine < 0) or (ALine >= FLines.Count) then
     Exit;
@@ -1220,7 +1220,7 @@ procedure TTyroTerminal.DrawInputLine(ACanvas: TTyroCanvas; AY: Integer);
 var
   Runs: TTermRuns;
   promptX, L, maxVis, vStart, vEnd, i, rStart, rEnd, dStart, cnt: Integer;
-  disp: string;
+  disp: utf8string;
   x: Integer;
   Sc, sE: Integer;
 begin
@@ -1510,7 +1510,7 @@ begin
     FLines.Delete(0);
 end;
 
-procedure TTyroOutput.Write(S: string);
+procedure TTyroOutput.Write(S: utf8string);
 begin
   if S = '' then
     Exit;
@@ -1525,7 +1525,7 @@ begin
   end;
 end;
 
-procedure TTyroOutput.Writeln(S: string);
+procedure TTyroOutput.Writeln(S: utf8string);
 begin
   FLock.Enter;
   try

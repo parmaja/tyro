@@ -104,7 +104,7 @@ type
   TTyroMainOption = (moOpaque, moMainWindow, moShowTerminal, moShowFPS);
   TTyroMainOptions = set of TTyroMainOption;
 
-  TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: string) of object;
+  TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: UTF8String) of object;
 
   TTyroMain = class(TTyroWindow)
   private
@@ -179,7 +179,7 @@ type
   protected
     Commands: TConsoleCommands;
     procedure SizeChanged; override;
-    procedure ConsoleInput(AConsole: TTyroTerminal; AInput: string);
+    procedure ConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
     procedure ExecuteCommand(ACommand: string);
     //If the word typed is not a builtin command it is treated as a one line
     //Lua script run on FScriptREPL's Lua state, so variables assigned in the
@@ -1410,7 +1410,7 @@ begin
   ShowEditor;
 end;
 
-procedure TTyroMain.ConsoleInput(AConsole: TTyroTerminal; AInput: string);
+procedure TTyroMain.ConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
 begin
   // The terminal echoes the submitted command line itself, so only execute it
   if Assigned(FReadCallback) then

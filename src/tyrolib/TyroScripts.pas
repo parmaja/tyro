@@ -105,7 +105,7 @@ type
     destructor Destroy; override;
     procedure DoExecute; override;
     procedure Cancel; override;
-    procedure HandleConsoleInput(AConsole: TTyroTerminal; AInput: string);
+    procedure HandleConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
   end;
 
    { TCreateControlObject }
@@ -757,7 +757,7 @@ begin
     SetEvent;
 end;
 
-procedure TReadConsoleObject.HandleConsoleInput(AConsole: TTyroTerminal; AInput: string);
+procedure TReadConsoleObject.HandleConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
 begin
   ResultString := AInput;
   // Re-arm for built-in command mode
