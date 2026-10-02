@@ -306,6 +306,15 @@ type
     procedure DoExecute; override;
   end;
 
+  TSetControlPlaceHolderObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FPlaceHolder: string;
+  public
+    constructor Create(AControl: TTyroControl; const APlaceHolder: string);
+    procedure DoExecute; override;
+  end;
+
   { TDrawSetAlphaObject }
 
   TDrawSetAlphaObject = class(TDrawObject)
@@ -1335,6 +1344,23 @@ end;
 procedure TSetControlItemIndexObject.DoExecute;
 begin
   TTyroListBox(FControl).ItemIndex := FItemIndex;
+end;
+
+{ TSetControlPlaceHolderObject }
+
+constructor TSetControlPlaceHolderObject.Create(AControl: TTyroControl; const APlaceHolder: string);
+begin
+  inherited Create;
+  FControl := AControl;
+  FPlaceHolder := APlaceHolder;
+end;
+
+procedure TSetControlPlaceHolderObject.DoExecute;
+begin
+  if FControl is TTyroEdit then
+    TTyroEdit(FControl).PlaceHolder := FPlaceHolder
+  else if FControl is TTyroListBox then
+    TTyroListBox(FControl).PlaceHolder := FPlaceHolder;
 end;
 
 { TDrawSetColorObject }

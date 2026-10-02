@@ -1,0 +1,11 @@
+local f = io.open("D:\\test_list.txt", "w")
+f:write("start\n")
+local l = controls.new("listbox", "", 0,0,200,100, "lst")
+f:write("ok\n")
+controls.additem(lst, "a")
+controls.additem(lst, "b")
+f:write(tostring(lst.itemindex) .. "\n")
+lst.itemindex = 1
+f:write(tostring(lst.itemindex) .. "\n")
+f:write(tostring(controls.itemindex(lst)) .. "\n")
+f:close()

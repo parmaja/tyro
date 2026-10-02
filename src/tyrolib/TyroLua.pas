@@ -261,10 +261,12 @@ type
     FItems: TList; //of TTyroControl (owned by the main window, not by us)
     function GetControl(AHandle: Integer): TTyroControl;
     function FindByName(const AName: string): Integer;
+    function GetControlHandle(AControl: TTyroControl): Integer;
   protected
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
   public
+    function RegisterControl(AHandle: Integer): Integer;
     function New_func(L: Plua_State): integer; cdecl;
     function Caption_func(L: Plua_State): integer; cdecl;
     function Text_func(L: Plua_State): integer; cdecl;
@@ -408,6 +410,8 @@ type
 const
   // Integer key base in the Lua registry for "sprite handle -> sprite table"
   cSpriteRegistryBase = $00700000; //HUH
+  // Integer key base in the Lua registry for "control handle -> control table"
+  cControlRegistryBase = $00800000;
 
 implementation
 
@@ -505,7 +509,16 @@ begin
   AHandle := Controls.FindByName(aName);
   if AHandle > 0 then
   begin
-    L.PushInteger(AHandle);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, cControlRegistryBase + AHandle);
+    if not lua_istable(L, -1) then
+    begin
+      L.Pop(1);
+      Controls.RegisterControl(AHandle);
+    end;
+    L.PushValue(-1);
+    L.PushValue(2);
+    lua_rawset(L, 1);
+    L.Remove(1); L.Remove(1);
     Exit;
   end;
 
@@ -2147,6 +2160,11 @@ begin
   Result := L.ToInteger(idx, '__handle');
 end;
 
+function GetControlTableHandle(L: Plua_State; idx: integer): integer;
+begin
+  Result := L.ToInteger(idx, '__handle');
+end;
+
 { TLuaControls }
 
 constructor TLuaControls.Create(AScript: TLuaScript);
@@ -2177,7 +2195,22 @@ begin
   for i := 0 to FItems.Count - 1 do
   begin
     c := TTyroControl(FItems[i]);
-    if (c <> nil) and (c.Name = AName) then
+    if (c <> nil) and (SameText(c.Name, AName)) then
+    begin
+      Result := i + 1;
+      Exit;
+    end;
+  end;
+end;
+
+function TLuaControls.GetControlHandle(AControl: TTyroControl): Integer;
+var
+  i: Integer;
+begin
+  Result := 0;
+  for i := 0 to FItems.Count - 1 do
+  begin
+    if TTyroControl(FItems[i]) = AControl then
     begin
       Result := i + 1;
       Exit;
@@ -2186,16 +2219,306 @@ begin
 end;
 
 function TLuaControls.Setter(L: PLua_State): integer;
+var
+  ctrl: TTyroControl;
+  field: string;
 begin
   Result := 0;
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+    Exit;
+  field := LowerCase(L.ToString(2));
+  if (field = 'text') or (field = 'caption') then
+  begin
+    FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(3)));
+    Exit;
+  end
+  else if (ctrl is TTyroEdit) and (field = 'placeholder') then
+  begin
+    FScript.RunQueueObject(TSetControlPlaceHolderObject.Create(ctrl, L.ToString(3)));
+    Exit;
+  end
+  else if (ctrl is TTyroListBox) then
+  begin
+    if (field = 'itemindex') then
+    begin
+      FScript.RunQueueObject(TSetControlItemIndexObject.Create(ctrl, round(L.ToNumber(3))));
+      Exit;
+    end
+    else if (field = 'viewcount') then
+    begin
+      FScript.RunQueueObject(TSetControlViewCountObject.Create(ctrl, round(L.ToNumber(3))));
+      Exit;
+    end;
+  end
+  else if field = 'checked' then
+  begin
+    FScript.RunQueueObject(TSetControlCheckedObject.Create(ctrl, L.ToBoolean(3)));
+    Exit;
+  end
+  else if (field = 'x') or (field = 'left') or (field = 'top') or (field = 'y') or (field = 'width') or (field = 'height') or (field = 'position') then
+  begin
+    // handle position/size
+    if (field = 'x') or (field = 'left') then
+    begin
+      with ctrl.BoundsRect do
+        FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, Rect(round(L.ToNumber(3)), Top, Right, Bottom)));
+    end
+    else if (field = 'y') or (field = 'top') then
+    begin
+      with ctrl.BoundsRect do
+        FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, Rect(Left, round(L.ToNumber(3)), Right, Bottom)));
+    end
+    else if field = 'width' then
+    begin
+      with ctrl.BoundsRect do
+        FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, Rect(Left, Top, Left + round(L.ToNumber(3)), Bottom)));
+    end
+    else if field = 'height' then
+    begin
+      with ctrl.BoundsRect do
+        FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, Rect(Left, Top, Right, Top + round(L.ToNumber(3)))));
+    end;
+    Exit;
+  end
+  else if field = 'visible' then
+  begin
+    FScript.RunQueueObject(TSetControlVisibleObject.Create(ctrl, L.ToBoolean(3)));
+    Exit;
+  end
+  else if field = 'border' then
+  begin
+    // simple numeric/string
+    Exit;
+  end
+  else if field = 'backcolor' then
+  begin
+    if L.IsNumber(3) then
+      FScript.RunQueueObject(TSetControlBackColorObject.Create(ctrl, IntToColor(round(L.ToNumber(3)))));
+    Exit;
+  end
+  else if field = 'name' then
+  begin
+    FScript.RunQueueObject(TSetControlNameObject.Create(ctrl, L.ToString(3)));
+    Exit;
+  end
+  else if field = 'align' then
+  begin
+    // handle align
+    Exit;
+  end
+  else if field = 'parent' then
+  begin
+    Exit;
+  end;
+  // fallback: store raw
+  L.PushValue(2); L.PushValue(3); lua_rawset(L, 1);
 end;
 
 function TLuaControls.Getter(L: PLua_State): integer;
+var
+  ctrl: TTyroControl;
+  field: string;
 begin
   Result := 0;
-  if L.ToString(2) = 'count' then
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
+  field := LowerCase(L.ToString(2));
+  if field = 'count' then
   begin
     L.PushInteger(FItems.Count);
+    Result := 1;
+    Exit;
+  end;
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if (field = 'text') or (field = 'caption') then
+  begin
+    L.PushString(ctrl.GetText);
+    Result := 1;
+    Exit;
+  end
+  // subclass: TTyroEdit
+  else if (ctrl is TTyroEdit) and (field = 'placeholder') then
+  begin
+    L.PushString(TTyroEdit(ctrl).PlaceHolder);
+    Result := 1;
+    Exit;
+  end
+  // subclass: TTyroListBox
+  else if (ctrl is TTyroListBox) then
+  begin
+    if field = 'itemindex' then
+    begin
+      L.PushInteger(TTyroListBox(ctrl).ItemIndex);
+      Result := 1;
+      Exit;
+    end
+    else if field = 'viewcount' then
+    begin
+      L.PushInteger(TTyroListBox(ctrl).ViewCount);
+      Result := 1;
+      Exit;
+    end
+    else if field = 'items' then
+    begin
+      L.PushInteger(TTyroListBox(ctrl).Items.Count);
+      Result := 1;
+      Exit;
+    end
+    else if field = 'count' then
+    begin
+      L.PushInteger(TTyroListBox(ctrl).Items.Count);
+      Result := 1;
+      Exit;
+    end;
+  end
+  else if field = 'checked' then
+  begin
+    L.PushBoolean(ctrl.GetChecked);
+    Result := 1;
+    Exit;
+  end
+  else if (field = 'x') or (field = 'left') then
+  begin
+    L.PushInteger(ctrl.BoundsRect.Left);
+    Result := 1;
+    Exit;
+  end
+  else if (field = 'y') or (field = 'top') then
+  begin
+    L.PushInteger(ctrl.BoundsRect.Top);
+    Result := 1;
+    Exit;
+  end
+  else if field = 'width' then
+  begin
+    L.PushInteger(ctrl.Width);
+    Result := 1;
+    Exit;
+  end
+  else if field = 'height' then
+  begin
+    L.PushInteger(ctrl.Height);
+    Result := 1;
+    Exit;
+  end
+  else if field = 'visible' then
+  begin
+    L.PushBoolean(ctrl.Visible);
+    Result := 1;
+    Exit;
+  end
+  else if field = 'hover' then
+  begin
+    L.PushBoolean(ctrl.Hover);
+    Result := 1;
+    Exit;
+  end
+  else if field = 'down' then
+  begin
+    L.PushBoolean(ctrl.Down);
+    Result := 1;
+    Exit;
+  end
+  else if field = 'clicked' then
+  begin
+    L.PushBoolean(ctrl.Clicked);
+    Result := 1;
+    Exit;
+  end
+  else if field = 'focused' then
+  begin
+    L.PushBoolean(ctrl.Focused);
+    Result := 1;
+    Exit;
+  end
+  else if field = 'name' then
+  begin
+    L.PushString(ctrl.Name);
+    Result := 1;
+    Exit;
+  end
+  else if field = 'border' then
+  begin
+    case ctrl.Border of
+      brdThin: L.PushInteger(1);
+      brdThick: L.PushInteger(2);
+      brdSizable: L.PushInteger(3);
+    else
+      L.PushInteger(0);
+    end;
+    Result := 1;
+    Exit;
+  end
+  else if field = 'backcolor' then
+  begin
+    L.PushInteger(ColorToInt(ctrl.BackColor));
+    Result := 1;
+    Exit;
+  end
+  else if field = 'align' then
+  begin
+    case ctrl.Align of
+      alLeft: L.PushString('left');
+      alTop: L.PushString('top');
+      alRight: L.PushString('right');
+      alBottom: L.PushString('bottom');
+      alClient: L.PushString('client');
+    else
+      L.PushString('none');
+    end;
+    Result := 1;
+    Exit;
+  end;
+  // fallback
+  L.PushValue(2); lua_rawget(L, 1); Result := 1;
+end;
+
+function TLuaControls.RegisterControl(AHandle: Integer): Integer;
+var
+  ctrl: TTyroControl;
+  base: Integer;
+begin
+  with Script do
+  begin
+    Lua.State.BeginTable;
+    base := Lua.State.ArgsCount;
+
+    Lua.State.PushValue(-1);
+    Lua.State.PushInteger(AHandle);
+    Lua.State.SetField(-2, '__handle');
+
+    ctrl := GetControl(AHandle);
+    if ctrl <> nil then
+    begin
+      Lua.State.PushString(ctrl.Name);
+      Lua.State.SetField(-2, '__name');
+    end;
+
+    // Register common methods/properties via control table - but we want object-like
+    // For now, we'll set metatable that routes to control methods
+    Lua.State.NewTable;
+    Lua.State.RegisterMeta('__index', Controls.__getter);
+    Lua.State.RegisterMeta('__newindex', Controls.__setter);
+    Lua.State.SetMetaTable(-2);
+
+    if AHandle >= 1 then
+    begin
+      Lua.State.PushValue(-1);
+      lua_rawseti(Lua.State, LUA_REGISTRYINDEX, cControlRegistryBase + AHandle);
+    end;
+
+    Lua.State.Remove(base);
     Result := 1;
   end;
 end;
@@ -2277,7 +2600,8 @@ begin
     if CreateObj.Control <> nil then
     begin
       FItems.Add(CreateObj.TakeControl);
-      L.PushInteger(FItems.Count); //handle of the created control
+      RegisterControl(FItems.Count); //push control table
+      Result := 1;
     end
     else
       L.PushNil;
@@ -2291,7 +2615,10 @@ function TLuaControls.Caption_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2322,7 +2649,10 @@ function TLuaControls.Checked_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2348,7 +2678,10 @@ var
   ctrl: TTyroControl;
   r: TRect;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2383,7 +2716,10 @@ var
   ctrl: TTyroControl;
   r: TRect;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2410,7 +2746,10 @@ var
   ctrl: TTyroControl;
   r: TRect;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2436,7 +2775,10 @@ function TLuaControls.Visible_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2483,7 +2825,10 @@ function TLuaControls.Hover_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
     L.PushBoolean(False)
   else
@@ -2496,7 +2841,10 @@ function TLuaControls.Down_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
     L.PushBoolean(False)
   else
@@ -2509,7 +2857,10 @@ function TLuaControls.Clicked_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
     L.PushBoolean(False)
   else
@@ -2522,7 +2873,10 @@ function TLuaControls.Focused_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
     L.PushBoolean(False)
   else
@@ -2536,7 +2890,10 @@ function TLuaControls.Focus_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl <> nil then
     FScript.RunQueueObject(TSetControlFocusObject.Create(ctrl));
   Result := 0;
@@ -2549,7 +2906,10 @@ var
   ctrl: TTyroControl;
   v: Integer;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2587,7 +2947,10 @@ function TLuaControls.BackColor_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2614,7 +2977,10 @@ function TLuaControls.Name_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2642,7 +3008,10 @@ var
   n: Integer;
   aAlign: TAlign;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2701,7 +3070,10 @@ var
   newParent: TTyroLayout;
   i: Integer;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if ctrl = nil then
   begin
     L.PushNil;
@@ -2711,19 +3083,22 @@ begin
 
   if L.ArgsCount >= 2 then
   begin
-    if lua_isnil(L, 2) or (round(L.ToNumber(2)) <= 0) then
-      newParent := Main
-    else
+    if lua_isnil(L, 2) or (L.IsNumber(2) and (round(L.ToNumber(2)) <= 0)) then
+    newParent := Main
+  else
+  begin
+    if L.IsTable(2) then
+    parentCtrl := GetControl(GetControlTableHandle(L, 2))
+  else
+    parentCtrl := GetControl(round(L.ToNumber(2)));
+    if parentCtrl = nil then
     begin
-      parentCtrl := GetControl(round(L.ToNumber(2)));
-      if parentCtrl = nil then
-      begin
-        L.PushNil;
-        Result := 1;
-        Exit;
-      end;
-      newParent := parentCtrl;
+      L.PushNil;
+      Result := 1;
+      Exit;
     end;
+    newParent := parentCtrl;
+  end;
     FScript.RunQueueObject(TSetControlParentObject.Create(ctrl, newParent));
     Result := 0;
   end
@@ -2754,7 +3129,10 @@ var
   i: Integer;
   Items: TStringList;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if (ctrl = nil) or not (ctrl is TTyroListBox) then
   begin
     L.PushNil;
@@ -2766,8 +3144,8 @@ begin
   begin
     Items := TStringList.Create;
     try
-      for i := 1 to L.ArgsCount - 1 do
-        Items.Add(L.ToString(i + 1));
+      for i := 2 to L.ArgsCount do
+        Items.Add(L.ToString(i));
       FScript.RunQueueObject(TSetControlItemsObject.Create(lb, Items));
     finally
       Items.Free;
@@ -2788,7 +3166,10 @@ var
   lb: TTyroListBox;
   idx: Integer;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if (ctrl = nil) or not (ctrl is TTyroListBox) then
   begin
     L.PushNil;
@@ -2817,7 +3198,10 @@ function TLuaControls.AddItem_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if (ctrl <> nil) and (ctrl is TTyroListBox) then
     FScript.RunQueueObject(TAddControlItemObject.Create(TTyroListBox(ctrl), L.ToString(2)));
   Result := 0;
@@ -2828,7 +3212,10 @@ function TLuaControls.Clear_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if (ctrl <> nil) and (ctrl is TTyroListBox) then
     FScript.RunQueueObject(TClearControlItemsObject.Create(TTyroListBox(ctrl)));
   Result := 0;
@@ -2839,7 +3226,10 @@ function TLuaControls.ViewCount_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if (ctrl = nil) or not (ctrl is TTyroListBox) then
   begin
     L.PushNil;
@@ -2863,7 +3253,10 @@ function TLuaControls.ItemIndex_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
-  ctrl := GetControl(round(L.ToNumber(1)));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
   if (ctrl = nil) or not (ctrl is TTyroListBox) then
   begin
     L.PushNil;
