@@ -58,7 +58,7 @@ type
     procedure SetStatus(AStatus: TLuaStatus);
   public
     State: Plua_State;
-    procedure Init;
+    procedure Init(SafeMode: Boolean = False; HookCount: Integer = 0);
     procedure Close;
     procedure SetReady;
     procedure SetTerminated;
@@ -347,7 +347,7 @@ begin
   Result := PLuaStatus(PPointer(lua_getextraspace(L))^);
 end;
 
-procedure HookCount(L: Plua_State; ar: Plua_Debug); cdecl;
+procedure HookCallback(L: Plua_State; ar: Plua_Debug); cdecl;
 var
   AStatus: PLuaStatus;
 begin
@@ -471,7 +471,7 @@ begin
   SetStatus(luaTerminated);
 end;
 
-procedure TLua.Init;
+procedure TLua.Init(SafeMode: Boolean; HookCount: Integer);
 var
   AStatus: PLuaStatus;
 begin
@@ -497,26 +497,30 @@ begin
   //Remove direct file system access through io and os: openfile() is the only
   //way a script gets at a file, and it refuses anything outside the workspace
   lua_pushnil(State);
-  lua_setglobal(State, PUTF8Char('io'));
-  lua_pushnil(State);
-  lua_setglobal(State, PUTF8Char('os'));
-  //Close the loaders that would walk around that guard: dofile and loadfile run
-  //any Lua file on disk and require can pull in a native module. require itself
-  //is put back by the script class with a loader that only reads inside the
-  //workspace and the app folder; see TLuaScript.Require_func.
-  //debug goes too, since it reaches the registry and the call stack.
-  lua_pushnil(State);
-  lua_setglobal(State, PUTF8Char('dofile'));
-  lua_pushnil(State);
-  lua_setglobal(State, PUTF8Char('loadfile'));
-  lua_pushnil(State);
-  lua_setglobal(State, PUTF8Char('require'));
-  lua_pushnil(State);
-  lua_setglobal(State, PUTF8Char('package'));
-  lua_pushnil(State);
-  lua_setglobal(State, PUTF8Char('debug'));
+  if SafeMode then
+  begin
+    lua_setglobal(State, PUTF8Char('io'));
+    lua_pushnil(State);
+    lua_setglobal(State, PUTF8Char('os'));
+    //Close the loaders that would walk around that guard: dofile and loadfile run
+    //any Lua file on disk and require can pull in a native module. require itself
+    //is put back by the script class with a loader that only reads inside the
+    //workspace and the app folder; see TLuaScript.Require_func.
+    lua_pushnil(State);
+    lua_setglobal(State, PUTF8Char('dofile'));
+    lua_pushnil(State);
+    lua_setglobal(State, PUTF8Char('loadfile'));
+    lua_pushnil(State);
+    lua_setglobal(State, PUTF8Char('require'));
+    //lua_pushnil(State);
+    //lua_setglobal(State, PUTF8Char('package'));
+    //lua_pushnil(State);
+    //debug goes too, since it reaches the registry and the call stack.
+    //lua_setglobal(State, PUTF8Char('debug'));
+  end;
   SetReady;
-  lua_sethook(State, @HookCount, LUA_MASKCOUNT, 100);
+  if HookCount > 0 then
+    lua_sethook(State, @HookCallback, LUA_MASKCOUNT, HookCount);
 end;
 
 procedure TLua.Close;

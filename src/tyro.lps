@@ -172,7 +172,7 @@
         <EditorIndex Value="2"/>
         <TopLine Value="872"/>
         <CursorPos X="45" Y="894"/>
-        <UsageCount Value="98"/>
+        <UsageCount Value="99"/>
         <Bookmarks Count="3">
           <Item0 X="3" Y="1167" Left="1" Top="1165" ID="3"/>
           <Item1 X="3" Y="676" Left="1" Top="663" ID="9"/>
@@ -322,9 +322,9 @@
       <Unit>
         <Filename Value="lua\LuaAPI.pas"/>
         <EditorIndex Value="8"/>
-        <TopLine Value="295"/>
-        <CursorPos X="24" Y="322"/>
-        <UsageCount Value="52"/>
+        <TopLine Value="121"/>
+        <CursorPos X="3" Y="137"/>
+        <UsageCount Value="53"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -379,18 +379,15 @@
         <EditorIndex Value="1"/>
         <TopLine Value="1139"/>
         <CursorPos X="31" Y="1155"/>
-        <UsageCount Value="12"/>
+        <UsageCount Value="13"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="tyrolib\TyroLua.pas"/>
         <IsVisibleTab Value="True"/>
-        <TopLine Value="2608"/>
-        <CursorPos X="51" Y="2633"/>
-        <UsageCount Value="39"/>
-        <Bookmarks Count="1">
-          <Item0 X="14" Y="230" Left="1" Top="220" ID="1"/>
-        </Bookmarks>
+        <TopLine Value="2737"/>
+        <CursorPos Y="2766"/>
+        <UsageCount Value="40"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -432,135 +429,133 @@
       <Unit>
         <Filename Value="lua\LuaClasses.pas"/>
         <EditorIndex Value="5"/>
-        <TopLine Value="161"/>
-        <CursorPos X="84" Y="188"/>
-        <UsageCount Value="37"/>
+        <TopLine Value="491"/>
+        <CursorPos X="7" Y="515"/>
+        <UsageCount Value="38"/>
+        <Bookmarks Count="1">
+          <Item0 X="7" Y="520" Left="1" Top="507" ID="1"/>
+        </Bookmarks>
         <Loaded Value="True"/>
       </Unit>
     </Units>
     <Debugger>
       <Backend Value="{3DBF02D4-0BC1-485B-B33B-8F4BED366C5F}"/>
     </Debugger>
-    <JumpHistory HistoryIndex="28">
+    <JumpHistory HistoryIndex="29">
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="267" Column="14" TopLine="250"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="2285" Column="3" TopLine="2273"/>
+        <Caret Line="446" TopLine="421"/>
       </Position>
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="272" Column="14" TopLine="251"/>
+        <Caret Line="1198" Column="27" TopLine="1177"/>
       </Position>
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="2608" Column="3" TopLine="2601"/>
+        <Caret Line="1203" Column="3" TopLine="1190"/>
       </Position>
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="271" Column="14" TopLine="256"/>
       </Position>
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="2576" Column="3" TopLine="2571"/>
+        <Caret Line="1199" Column="44" TopLine="1173"/>
       </Position>
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="272" Column="14" TopLine="255"/>
+        <Caret Line="2774" Column="47" TopLine="2748"/>
       </Position>
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="2605" Column="3" TopLine="2601"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroScripts.pas"/>
-        <Caret Line="187" Column="45" TopLine="164"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroScripts.pas"/>
-        <Caret Line="1161" TopLine="1145"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroScripts.pas"/>
-        <Caret Line="202" Column="28" TopLine="184"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroScripts.pas"/>
-        <Caret Line="187" Column="44" TopLine="167"/>
+        <Caret Line="3180" Column="47" TopLine="3154"/>
       </Position>
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="2624" Column="27" TopLine="2601"/>
+        <Caret Line="3966" Column="39" TopLine="3940"/>
       </Position>
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="2621" Column="29" TopLine="2601"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="327" Column="34" TopLine="311"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="274" Column="34" TopLine="274"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="388" Column="14" TopLine="373"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="993" Column="3" TopLine="991"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="383" TopLine="372"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="974" TopLine="958"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="2122" TopLine="2106"/>
-      </Position>
-      <Position>
-        <Filename Value="tyrolib\TyroScripts.pas"/>
-        <Caret Line="1155" Column="31" TopLine="1139"/>
+        <Caret Line="4575" Column="35" TopLine="4548"/>
       </Position>
       <Position>
         <Filename Value="tyrolib\TyroLua.pas"/>
-        <Caret Line="2624" Column="44" TopLine="2609"/>
+        <Caret Line="4590" Column="35" TopLine="4563"/>
       </Position>
       <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="381" Column="3" TopLine="364"/>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+        <Caret Line="589" Column="37" TopLine="574"/>
       </Position>
       <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="427" Column="22" TopLine="401"/>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+        <Caret Line="608" Column="37" TopLine="582"/>
       </Position>
       <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="428" Column="24" TopLine="402"/>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+        <Caret Line="1199" Column="44" TopLine="1173"/>
       </Position>
       <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="469" Column="22" TopLine="443"/>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+        <Caret Line="2774" Column="47" TopLine="2748"/>
       </Position>
       <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="470" Column="24" TopLine="444"/>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+        <Caret Line="3180" Column="47" TopLine="3154"/>
       </Position>
       <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="899" Column="6" TopLine="872"/>
+        <Filename Value="tyrolib\TyroLua.pas"/>
       </Position>
       <Position>
-        <Filename Value="tyrolib\TyroControls.pas"/>
-        <Caret Line="204" Column="5" TopLine="189"/>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+        <Caret Line="589" Column="20" TopLine="563"/>
+      </Position>
+      <Position>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+        <Caret Line="589" Column="39" TopLine="563"/>
+      </Position>
+      <Position>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+        <Caret Line="467" Column="16" TopLine="446"/>
+      </Position>
+      <Position>
+        <Filename Value="lua\LuaClasses.pas"/>
+        <Caret Line="188" Column="22" TopLine="176"/>
+      </Position>
+      <Position>
+        <Filename Value="lua\LuaClasses.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="lua\LuaClasses.pas"/>
+        <Caret Line="61" Column="24" TopLine="34"/>
+      </Position>
+      <Position>
+        <Filename Value="lua\LuaClasses.pas"/>
+        <Caret Line="607" Column="56" TopLine="585"/>
+      </Position>
+      <Position>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+        <Caret Line="1191" TopLine="1173"/>
+      </Position>
+      <Position>
+        <Filename Value="tyrolib\TyroLua.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="lua\LuaClasses.pas"/>
+        <Caret Line="572" Column="3" TopLine="552"/>
+      </Position>
+      <Position>
+        <Filename Value="lua\LuaClasses.pas"/>
+        <Caret Line="61" Column="15" TopLine="45"/>
+      </Position>
+      <Position>
+        <Filename Value="lua\LuaClasses.pas"/>
+        <Caret Line="24" Column="17" TopLine="14"/>
+      </Position>
+      <Position>
+        <Filename Value="lua\LuaClasses.pas"/>
+        <Caret Line="209" Column="17" TopLine="194"/>
       </Position>
     </JumpHistory>
     <RunParams>

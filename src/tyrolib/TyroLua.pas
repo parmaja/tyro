@@ -440,6 +440,9 @@ type
     function TotalTime_func(L: Plua_State): integer; cdecl;
     function RandomValue_func(L: Plua_State): integer; cdecl;
     function Screenshot_func(L: Plua_State): integer; cdecl;
+    function Exit_func(L: Plua_State): integer; cdecl;
+    function Clock_func(L: Plua_State): integer; cdecl;
+    function Time_func(L: Plua_State): integer; cdecl;
 
     //file access
 
@@ -1184,6 +1187,9 @@ begin
   Lua.State.RegisterGlobal('time', TotalTime_func);
   Lua.State.RegisterGlobal('rand', RandomValue_func);
   Lua.State.RegisterGlobal('screenshot', Screenshot_func);
+  Lua.State.RegisterGlobal('exit', Exit_func);
+  Lua.State.RegisterGlobal('clock', Clock_func);
+  Lua.State.RegisterGlobal('time', Time_func);
 
   //file access: openfile(name [, mode]) -> file handle, or nil + error
   //This is the only way a script reaches the file system; the io/os libraries
@@ -2098,6 +2104,30 @@ begin
   minv := round(L.ToNumber(1));
   maxv := round(L.ToNumber(2));
   L.PushInteger(TyroInput.RandomValue(minv, maxv));
+  Result := 1;
+end;
+
+function TLuaScript.Exit_func(L: PLua_State): integer; cdecl;
+begin
+  //Stop the script as soon as the current call finishes
+  Stop;
+  Result := 0;
+end;
+
+function TLuaScript.Clock_func(L: Plua_State): integer; cdecl;
+begin
+  L.PushNumber(GetTickCount / 1000.0);
+  Result := 1;
+end;
+
+function TLuaScript.Time_func(L: PLua_State): integer; cdecl;
+var
+  t: TDateTime;
+  secs: Int64;
+begin
+  t := Now;
+  secs := Trunc(t * 86400);
+  L.PushInteger(secs);
   Result := 1;
 end;
 
