@@ -257,8 +257,6 @@ type
     //* Lua controls table reads/writes it through these virtuals.
     function GetText: utf8string; virtual;
     procedure SetText(const AValue: utf8string); virtual;
-    function GetChecked: Boolean; virtual;
-    procedure SetChecked(AValue: Boolean); virtual;
     //* Edges which may be SizeChanged when hovering at the local point (X, Y).
     //* brdSizable honors the Align constraint: aligned controls only expose the
     //* single free edge, alClient exposes none, alNone exposes all four.
@@ -326,7 +324,6 @@ type
 
     //* Shared text: caption for buttons/labels/checkboxes, edited text for edits.
     property Text: utf8string read GetText write SetText;
-    property Checked: Boolean read GetChecked write SetChecked;
     property Hover: Boolean read GetHover;
     property Down: Boolean read GetDown;
     property Clicked: Boolean read GetClicked;
@@ -344,52 +341,51 @@ type
     procedure DoPaint(ACanvas: TTyroCanvas); override;
   end;
 
-  { TTyroButton }
+  { TTyroCaptionControl }
 
-  TTyroButton = class(TTyroControl)
+  TTyroCaptionControl =class abstract(TTyroControl)
   private
     FCaption: utf8string;
     procedure SetCaption(AValue: utf8string);
+  public
+    property Caption: utf8string read FCaption write SetCaption;
+  end;
+
+  { TTyroButton }
+
+  TTyroButton = class(TTyroCaptionControl)
+  private
   protected
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     function GetText: utf8string; override;
     procedure SetText(const AValue: utf8string); override;
   public
     constructor Create(AParent: TTyroLayout); override;
-    property Caption: utf8string read FCaption write SetCaption;
   end;
 
   { TTyroLabel }
 
-  TTyroLabel = class(TTyroControl)
+  TTyroLabel = class(TTyroCaptionControl)
   private
-    FCaption: utf8string;
-    procedure SetCaption(AValue: utf8string);
   protected
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     function GetText: utf8string; override;
     procedure SetText(const AValue: utf8string); override;
   public
     constructor Create(AParent: TTyroLayout); override;
-    property Caption: utf8string read FCaption write SetCaption;
   end;
 
   { TTyroCheckBox }
 
-  TTyroCheckBox = class(TTyroControl)
+  TTyroCheckBox = class(TTyroCaptionControl)
   private
-    FCaption: utf8string;
     FChecked: Boolean;
-    procedure SetCaption(AValue: utf8string);
   protected
     procedure DoPaint(ACanvas: TTyroCanvas); override;
-    function GetText: utf8string; override;
-    procedure SetText(const AValue: utf8string); override;
-    function GetChecked: Boolean; override;
-    procedure SetChecked(AValue: Boolean); override;
+    function GetChecked: Boolean;
+    procedure SetChecked(AValue: Boolean);
   public
     constructor Create(AParent: TTyroLayout); override;
-    property Caption: utf8string read FCaption write SetCaption;
     property Checked: Boolean read GetChecked write SetChecked;
   end;
 
@@ -879,14 +875,6 @@ begin
   BoundsRect := Rect(0, 0 , 100, 32);
 end;
 
-procedure TTyroButton.SetCaption(AValue: utf8string);
-begin
-  if FCaption = AValue then
-    Exit;
-  FCaption := AValue;
-  Invalidate;
-end;
-
 function TTyroButton.GetText: utf8string;
 begin
   Result := FCaption;
@@ -944,14 +932,6 @@ begin
   BoundsRect := Rect(0, 0, 120, 24);
 end;
 
-procedure TTyroLabel.SetCaption(AValue: utf8string);
-begin
-  if FCaption = AValue then
-    Exit;
-  FCaption := AValue;
-  Invalidate;
-end;
-
 function TTyroLabel.GetText: utf8string;
 begin
   Result := FCaption;
@@ -971,6 +951,16 @@ begin
   ACanvas.DrawText(2, (ClientRect.Height - th) / 2, FCaption, ACanvas.PenColor);
 end;
 
+{ TTyroCaptionControl }
+
+procedure TTyroCaptionControl.SetCaption(AValue: utf8string);
+begin
+  if FCaption = AValue then
+    Exit;
+  FCaption := AValue;
+  Invalidate;
+end;
+
 { TTyroCheckBox }
 
 constructor TTyroCheckBox.Create(AParent: TTyroLayout);
@@ -979,24 +969,6 @@ begin
   Style := [csFocus];
   Border := brdNone;
   BoundsRect := Rect(0, 0, 120, 24);
-end;
-
-procedure TTyroCheckBox.SetCaption(AValue: utf8string);
-begin
-  if FCaption = AValue then
-    Exit;
-  FCaption := AValue;
-  Invalidate;
-end;
-
-function TTyroCheckBox.GetText: utf8string;
-begin
-  Result := FCaption;
-end;
-
-procedure TTyroCheckBox.SetText(const AValue: utf8string);
-begin
-  Caption := AValue;
 end;
 
 function TTyroCheckBox.GetChecked: Boolean;
@@ -2143,16 +2115,6 @@ begin
 end;
 
 procedure TTyroControl.SetText(const AValue: utf8string);
-begin
-  Invalidate;
-end;
-
-function TTyroControl.GetChecked: Boolean;
-begin
-  Result := False;
-end;
-
-procedure TTyroControl.SetChecked(AValue: Boolean);
 begin
   Invalidate;
 end;

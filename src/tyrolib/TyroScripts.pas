@@ -166,21 +166,25 @@ type
     procedure DoExecute; override;
   end;
 
+  { TSetControlTextObject }
+
   TSetControlTextObject = class(TQueueObject)
   private
-    FControl: TTyroControl;
-    FText: string;
+    FControl: TTyroCaptionControl;
+    FCaption: string;
   public
-    constructor Create(AControl: TTyroControl; const AText: string);
+    constructor Create(AControl: TTyroCaptionControl; const ACaption: string);
     procedure DoExecute; override;
   end;
 
+  { TSetControlCheckedObject }
+
   TSetControlCheckedObject = class(TQueueObject)
   private
-    FControl: TTyroControl;
+    FControl: TTyroCheckBox;
     FChecked: Boolean;
   public
-    constructor Create(AControl: TTyroControl; AChecked: Boolean);
+    constructor Create(AControl: TTyroCheckBox; AChecked: Boolean);
     procedure DoExecute; override;
   end;
 
@@ -1124,21 +1128,21 @@ end;
 
 { TSetControlTextObject }
 
-constructor TSetControlTextObject.Create(AControl: TTyroControl; const AText: string);
+constructor TSetControlTextObject.Create(AControl: TTyroCaptionControl; const ACaption: string);
 begin
   inherited Create;
   FControl := AControl;
-  FText := AText;
+  FCaption := ACaption;
 end;
 
 procedure TSetControlTextObject.DoExecute;
 begin
-  FControl.SetText(FText);
+  FControl.Caption := FCaption;
 end;
 
 { TSetControlCheckedObject }
 
-constructor TSetControlCheckedObject.Create(AControl: TTyroControl;
+constructor TSetControlCheckedObject.Create(AControl: TTyroCheckBox;
   AChecked: Boolean);
 begin
   inherited Create;
@@ -1148,13 +1152,12 @@ end;
 
 procedure TSetControlCheckedObject.DoExecute;
 begin
-  FControl.SetChecked(FChecked);
+  FControl.Checked := FChecked;
 end;
 
 { TSetControlVisibleObject }
 
-constructor TSetControlVisibleObject.Create(AControl: TTyroControl;
-  AVisible: Boolean);
+constructor TSetControlVisibleObject.Create(AControl: TTyroControl; AVisible: Boolean);
 begin
   inherited Create;
   FControl := AControl;

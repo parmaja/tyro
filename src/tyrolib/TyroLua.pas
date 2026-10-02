@@ -269,7 +269,6 @@ type
     function RegisterControl(AHandle: Integer): Integer;
     function New_func(L: Plua_State): integer; cdecl;
     function Caption_func(L: Plua_State): integer; cdecl;
-    function Text_func(L: Plua_State): integer; cdecl;
     function Checked_func(L: Plua_State): integer; cdecl;
     function Position_func(L: Plua_State): integer; cdecl;
     function Move_func(L: Plua_State): integer; cdecl;
@@ -1098,9 +1097,6 @@ begin
   //object so old scripts keep working)
   Lua.State.RegisterTable('controls');
   Lua.State.Register('controls', 'new', Controls, Controls.New_func);
-  Lua.State.Register('controls', 'caption', Controls, Controls.Caption_func);
-  Lua.State.Register('controls', 'text', Controls, Controls.Text_func);
-  Lua.State.Register('controls', 'checked', Controls, Controls.Checked_func);
   Lua.State.Register('controls', 'position', Controls, Controls.Position_func);
   Lua.State.Register('controls', 'move', Controls, Controls.Move_func);
   Lua.State.Register('controls', 'width', Controls, Controls.Width_func);
@@ -1118,21 +1114,8 @@ begin
   Lua.State.Register('controls', 'name', Controls, Controls.Name_func);
   Lua.State.Register('controls', 'align', Controls, Controls.Align_func);
   Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
-  Lua.State.Register('controls', 'items', Controls, Controls.Items_func);
-  Lua.State.Register('controls', 'item', Controls, Controls.Item_func);
-  Lua.State.Register('controls', 'additem', Controls, Controls.AddItem_func);
-  Lua.State.Register('controls', 'clear', Controls, Controls.Clear_func);
-  Lua.State.Register('controls', 'viewcount', Controls, Controls.ViewCount_func);
-  Lua.State.Register('controls', 'itemindex', Controls, Controls.ItemIndex_func);
   Lua.State.Register('controls', Controls); //should be last one
-  Lua.State.RegisterTable('buttons');
-  Lua.State.Register('buttons', 'new', Controls, Controls.New_func);
-  Lua.State.Register('buttons', 'caption', Controls, Controls.Caption_func);
-  Lua.State.Register('buttons', 'border', Controls, Controls.Border_func);
-  Lua.State.Register('buttons', 'hover', Controls, Controls.Hover_func);
-  Lua.State.Register('buttons', 'down', Controls, Controls.Down_func);
-  Lua.State.Register('buttons', 'clicked', Controls, Controls.Clicked_func);
-  Lua.State.Register('buttons', Controls); //should be last one
+
 
   //output (catches print/println/log)
   Lua.State.RegisterTable('output');
@@ -2231,35 +2214,8 @@ begin
   if ctrl = nil then
     Exit;
   field := LowerCase(L.ToString(2));
-  if (field = 'text') or (field = 'caption') then
-  begin
-    FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(3)));
-    Exit;
-  end
-  else if (ctrl is TTyroEdit) and (field = 'placeholder') then
-  begin
-    FScript.RunQueueObject(TSetControlPlaceHolderObject.Create(ctrl, L.ToString(3)));
-    Exit;
-  end
-  else if (ctrl is TTyroListBox) then
-  begin
-    if (field = 'itemindex') then
-    begin
-      FScript.RunQueueObject(TSetControlItemIndexObject.Create(ctrl, round(L.ToNumber(3))));
-      Exit;
-    end
-    else if (field = 'viewcount') then
-    begin
-      FScript.RunQueueObject(TSetControlViewCountObject.Create(ctrl, round(L.ToNumber(3))));
-      Exit;
-    end;
-  end
-  else if field = 'checked' then
-  begin
-    FScript.RunQueueObject(TSetControlCheckedObject.Create(ctrl, L.ToBoolean(3)));
-    Exit;
-  end
-  else if (field = 'x') or (field = 'left') or (field = 'top') or (field = 'y') or (field = 'width') or (field = 'height') or (field = 'position') then
+
+  if (field = 'x') or (field = 'left') or (field = 'top') or (field = 'y') or (field = 'width') or (field = 'height') or (field = 'position') then
   begin
     // handle position/size
     if (field = 'x') or (field = 'left') then
@@ -2341,54 +2297,8 @@ begin
     Result := 1;
     Exit;
   end;
-  if (field = 'text') or (field = 'caption') then
-  begin
-    L.PushString(ctrl.GetText);
-    Result := 1;
-    Exit;
-  end
-  // subclass: TTyroEdit
-  else if (ctrl is TTyroEdit) and (field = 'placeholder') then
-  begin
-    L.PushString(TTyroEdit(ctrl).PlaceHolder);
-    Result := 1;
-    Exit;
-  end
-  // subclass: TTyroListBox
-  else if (ctrl is TTyroListBox) then
-  begin
-    if field = 'itemindex' then
-    begin
-      L.PushInteger(TTyroListBox(ctrl).ItemIndex);
-      Result := 1;
-      Exit;
-    end
-    else if field = 'viewcount' then
-    begin
-      L.PushInteger(TTyroListBox(ctrl).ViewCount);
-      Result := 1;
-      Exit;
-    end
-    else if field = 'items' then
-    begin
-      L.PushInteger(TTyroListBox(ctrl).Items.Count);
-      Result := 1;
-      Exit;
-    end
-    else if field = 'count' then
-    begin
-      L.PushInteger(TTyroListBox(ctrl).Items.Count);
-      Result := 1;
-      Exit;
-    end;
-  end
-  else if field = 'checked' then
-  begin
-    L.PushBoolean(ctrl.GetChecked);
-    Result := 1;
-    Exit;
-  end
-  else if (field = 'x') or (field = 'left') then
+
+  if (field = 'x') or (field = 'left') then
   begin
     L.PushInteger(ctrl.BoundsRect.Left);
     Result := 1;
@@ -2519,40 +2429,41 @@ begin
     end
     else if ctrl is TTyroCheckBox then
     begin
+      Lua.State.Register('caption', Caption_func);
       Lua.State.Register('checked', Checked_func);
-      Lua.State.Register('focus', Focus_func);
-      Lua.State.Register('focused', Focused_func);
     end
     else if ctrl is TTyroButton then
     begin
+      Lua.State.Register('caption', Caption_func);
       Lua.State.Register('down', Down_func);
       Lua.State.Register('clicked', Clicked_func);
       Lua.State.Register('hover', Hover_func);
-      Lua.State.Register('focus', Focus_func);
-      Lua.State.Register('focused', Focused_func);
-    end
-    else
+    end;
+
+    if ctrl is TTyroControl then
     begin
       Lua.State.Register('focus', Focus_func);
       Lua.State.Register('focused', Focused_func);
     end;
-    Lua.State.Register('show', Show_func);
-    Lua.State.Register('hide', Hide_func);
-    Lua.State.Register('move', Move_func);
-    Lua.State.Register('position', Position_func);
-    Lua.State.Register('width', Width_func);
-    Lua.State.Register('height', Height_func);
-    Lua.State.Register('visible', Visible_func);
-    Lua.State.Register('border', Border_func);
-    Lua.State.Register('backcolor', BackColor_func);
-    Lua.State.Register('name', Name_func);
-    Lua.State.Register('align', Align_func);
-    Lua.State.Register('parent', Parent_func);
-    Lua.State.Register('caption', Caption_func);
-    Lua.State.Register('text', Text_func);
-    Lua.State.Register('hover', Hover_func);
-    Lua.State.Register('down', Down_func);
-    Lua.State.Register('clicked', Clicked_func);
+
+    if ctrl is TTyroLayout then
+    begin
+      Lua.State.Register('name', Name_func);
+      Lua.State.Register('align', Align_func);
+      Lua.State.Register('show', Show_func);
+      Lua.State.Register('hide', Hide_func);
+      Lua.State.Register('move', Move_func);
+      Lua.State.Register('position', Position_func);
+      Lua.State.Register('width', Width_func);
+      Lua.State.Register('height', Height_func);
+      Lua.State.Register('visible', Visible_func);
+      Lua.State.Register('border', Border_func);
+      Lua.State.Register('backcolor', BackColor_func);
+      Lua.State.Register('parent', Parent_func);
+      Lua.State.Register('hover', Hover_func);
+      Lua.State.Register('down', Down_func);
+      Lua.State.Register('clicked', Clicked_func);
+    end;
 
     Lua.State.NewTable;
     Lua.State.RegisterMeta('__index', Controls.__getter);
@@ -2672,26 +2583,21 @@ begin
     Result := 1;
     Exit;
   end;
- if L.ArgsCount >= 2 then
- begin
-  FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(2)));
-    Result := 0;
-  end
-  else
+  if ctrl is TTyroCaptionControl then
   begin
-    L.PushString(ctrl.GetText);
-    Result := 1;
+    if L.ArgsCount >= 2 then
+    begin
+      FScript.RunQueueObject(TSetControlTextObject.Create(ctrl as TTyroCaptionControl, L.ToString(2)));
+      Result := 0;
+    end
+    else
+    begin
+      L.PushString((ctrl as TTyroCaptionControl).Caption);
+      Result := 1;
+    end;
   end;
 end;
 
-//controls.text(handle [, s]) -> get/set the text (caption for buttons/labels,
-//edited text for edits)
-function TLuaControls.Text_func(L: Plua_State): integer; cdecl;
-begin
-  Result := Caption_func(L);
-end;
-
-//controls.checked(handle [, value]) -> get/set the checked state (checkbox)
 function TLuaControls.Checked_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -2706,16 +2612,18 @@ begin
     Result := 1;
     Exit;
   end;
- if L.ArgsCount >= 2 then
- begin
-  FScript.RunQueueObject(TSetControlCheckedObject.Create(ctrl,
-    L.ToBoolean(2)));
-    Result := 0;
-  end
-  else
+  if ctrl is TTyroCheckBox then
   begin
-    L.PushBoolean(ctrl.GetChecked);
-    Result := 1;
+    if L.ArgsCount >= 2 then
+    begin
+      FScript.RunQueueObject(TSetControlCheckedObject.Create(ctrl as TTyroCheckBox, L.ToBoolean(2)));
+      Result := 0;
+    end
+    else
+    begin
+      L.PushBoolean((ctrl as TTyroCheckBox).Checked);
+      Result := 1;
+    end;
   end;
 end;
 
