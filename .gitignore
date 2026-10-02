@@ -66,3 +66,5 @@ __recovery/
 *.stat
 /src/raylib/lib
 /src/lib
+/bin/*.obj
+/src/*.lps
