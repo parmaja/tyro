@@ -2507,6 +2507,53 @@ begin
 
     // Register common methods/properties via control table - but we want object-like
     // For now, we'll set metatable that routes to control methods
+    // add instance methods based on control type
+    if ctrl is TTyroListBox then
+    begin
+      Lua.State.Register('clear', Clear_func);
+      Lua.State.Register('additem', AddItem_func);
+      Lua.State.Register('item', Item_func);
+      Lua.State.Register('items', Items_func);
+      Lua.State.Register('viewcount', ViewCount_func);
+      Lua.State.Register('itemindex', ItemIndex_func);
+    end
+    else if ctrl is TTyroCheckBox then
+    begin
+      Lua.State.Register('checked', Checked_func);
+      Lua.State.Register('focus', Focus_func);
+      Lua.State.Register('focused', Focused_func);
+    end
+    else if ctrl is TTyroButton then
+    begin
+      Lua.State.Register('down', Down_func);
+      Lua.State.Register('clicked', Clicked_func);
+      Lua.State.Register('hover', Hover_func);
+      Lua.State.Register('focus', Focus_func);
+      Lua.State.Register('focused', Focused_func);
+    end
+    else
+    begin
+      Lua.State.Register('focus', Focus_func);
+      Lua.State.Register('focused', Focused_func);
+    end;
+    Lua.State.Register('show', Show_func);
+    Lua.State.Register('hide', Hide_func);
+    Lua.State.Register('move', Move_func);
+    Lua.State.Register('position', Position_func);
+    Lua.State.Register('width', Width_func);
+    Lua.State.Register('height', Height_func);
+    Lua.State.Register('visible', Visible_func);
+    Lua.State.Register('border', Border_func);
+    Lua.State.Register('backcolor', BackColor_func);
+    Lua.State.Register('name', Name_func);
+    Lua.State.Register('align', Align_func);
+    Lua.State.Register('parent', Parent_func);
+    Lua.State.Register('caption', Caption_func);
+    Lua.State.Register('text', Text_func);
+    Lua.State.Register('hover', Hover_func);
+    Lua.State.Register('down', Down_func);
+    Lua.State.Register('clicked', Clicked_func);
+
     Lua.State.NewTable;
     Lua.State.RegisterMeta('__index', Controls.__getter);
     Lua.State.RegisterMeta('__newindex', Controls.__setter);
