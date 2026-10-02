@@ -1,0 +1,15 @@
+Sprites type = table
+Sprites.new type = function
+Sprites.find type = function
+Created spirit: table: 0000000005E413A0
+player type = table
+player.load type = function
+player.move type = function
+player.show type = function
+load ok=true err=nil
+width=170 height=204
+After move, x=100.0 y=200.0
+angle=0.0 scale=1.0
+Found by name: table: 0000000005E41120
+Found angle=45.0
+Test complete

@@ -27,7 +27,7 @@
         <Filename Value="tyrolib\TyroClasses.pas"/>
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="6"/>
-        <TopLine Value="231"/>
+        <TopLine Value="233"/>
         <CursorPos X="65" Y="254"/>
         <UsageCount Value="212"/>
         <Loaded Value="True"/>
@@ -169,11 +169,10 @@
       </Unit>
       <Unit>
         <Filename Value="tyrolib\TyroControls.pas"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="2"/>
         <TopLine Value="872"/>
         <CursorPos X="45" Y="894"/>
-        <UsageCount Value="97"/>
+        <UsageCount Value="98"/>
         <Bookmarks Count="3">
           <Item0 X="3" Y="1167" Left="1" Top="1165" ID="3"/>
           <Item1 X="3" Y="676" Left="1" Top="663" ID="9"/>
@@ -325,7 +324,7 @@
         <EditorIndex Value="8"/>
         <TopLine Value="295"/>
         <CursorPos X="24" Y="322"/>
-        <UsageCount Value="51"/>
+        <UsageCount Value="52"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -380,14 +379,15 @@
         <EditorIndex Value="1"/>
         <TopLine Value="1139"/>
         <CursorPos X="31" Y="1155"/>
-        <UsageCount Value="11"/>
+        <UsageCount Value="12"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="tyrolib\TyroLua.pas"/>
+        <IsVisibleTab Value="True"/>
         <TopLine Value="2608"/>
-        <CursorPos X="3" Y="2623"/>
-        <UsageCount Value="38"/>
+        <CursorPos X="51" Y="2633"/>
+        <UsageCount Value="39"/>
         <Bookmarks Count="1">
           <Item0 X="14" Y="230" Left="1" Top="220" ID="1"/>
         </Bookmarks>
@@ -433,8 +433,8 @@
         <Filename Value="lua\LuaClasses.pas"/>
         <EditorIndex Value="5"/>
         <TopLine Value="161"/>
-        <CursorPos X="77" Y="185"/>
-        <UsageCount Value="36"/>
+        <CursorPos X="84" Y="188"/>
+        <UsageCount Value="37"/>
         <Loaded Value="True"/>
       </Unit>
     </Units>

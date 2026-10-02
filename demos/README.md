@@ -76,6 +76,14 @@ tyro demos/pong.lua
 |------|---------|
 | `text.lua` | Multi-language text rendering, colors, alpha |
 
+### Files
+
+| File | Feature |
+|------|---------|
+| `test_openfile.ls` | `openfile` smoke test: text and binary reads, numbers, append, `f:lines()`, chained writes and the names that are refused for leaving the workspace. Results land in `openfile_out.txt`. |
+| `rawio_test.ls` | Minimal `openfile` write with `flush()` in between |
+| `diag_sprite.ls` | `openfile` used as the log file for a sprite load diagnosis |
+
 ## Running
 
 Place the Tyro executable and `raylib.dll` in the same directory as the script,

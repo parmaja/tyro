@@ -1,0 +1,37 @@
+io = nil
+os = nil
+openfile = function
+read l  = "line one"
+read L  = "line two\
+"
+read a  = "no newline at the end"
+at eof  = nil
+closed  = 1 value(s)
+line: "line one"
+line: "line two"
+line: "no newline at the end"
+num1 = 10
+num2 = 20.5
+num3 = -3
+num4 = nil
+after append = "line one\13\
+line two\13\
+no newline at the end\13\
+appended\13\
+"
+png: first 8 = 8 bytes, rest = 28112 bytes
+chain = chained
+openfile_new.txt a second time -> nil / openfile: cannot open 'openfile_new.txt' (file already exists)
+openfile_new.txt = created once
+dot spelling = dotted
+after close -> nil
+closed  -> true
+refused "../outside.txt"                 -> nil / openfile: '../outside.txt' resolves outside the workspace
+refused "..\\outside.txt"                -> nil / openfile: '..\outside.txt' resolves outside the workspace
+refused "demos/../../outside.txt"        -> nil / openfile: 'demos/../../outside.txt' resolves outside the workspace
+refused "C:\\Windows\\win.ini"           -> nil / openfile: 'C:\Windows\win.ini' resolves outside the workspace
+refused "\\\\?\\C:\\Windows\\win.ini"    -> nil / openfile: '\\?\C:\Windows\win.ini' resolves outside the workspace
+refused ""                               -> nil / openfile: '' resolves outside the workspace
+openfile_inside.txt written through a '..' that stays in the workspace
+missing file -> nil / openfile: cannot open 'does_not_exist_here.txt' (Unable to open file "D:\lab\pascal\tyro\demos\does_not_exist_here.txt": The system cannot find the file specified.)
+no arguments -> openfile: missing file name

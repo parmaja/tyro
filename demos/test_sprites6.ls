@@ -8,7 +8,7 @@ local player = Sprites.new("player")
 log("Created spirit, handle check via width before load: " .. player:width())
 
 -- Check file existence
-local f = io.open("richard-say.png", "rb")
+local f = openfile("richard-say.png", "rb")
 if f then
   log("File richard-say.png exists in current dir")
   f:close()

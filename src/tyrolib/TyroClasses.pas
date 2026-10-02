@@ -342,6 +342,8 @@ type
     AppPath: utf8string;
     AppName: utf8string;
     function GuessFileName(const FileName: string; InDirectory: string = ''): string;
+    function IsPathInside(const AFileName, ARoot: string): Boolean;
+    function IsPathInsideWorkspace(const AFileName: string): Boolean;
     function Find(const ResName, ResType: string): TTyroResource; overload;
     procedure Load; virtual;
     procedure Add(const ResName, ResType: string; const ResData: rawbytestring); overload;
@@ -1137,6 +1139,39 @@ begin
   end
   else
     Result := FileName;
+end;
+
+// True when AFileName resolves to a location inside ARoot. The name is fully
+// expanded first, so relative names, "." / ".." segments and drive-relative forms
+// cannot smuggle the target outside the root: the containment test is a plain
+// case-insensitive prefix match on the two expanded paths, with a separator check
+// so "C:\work" never matches "C:\workspace".
+function TTyroResources.IsPathInside(const AFileName, ARoot: string): Boolean;
+var
+  AbsPath: string;
+  AbsRoot: string;
+begin
+  Result := False;
+  if (AFileName = '') or (ARoot = '') then
+    Exit;
+  // ExpandFileName resolves "..", relative and UNC forms to one absolute path
+  AbsPath := ExcludeTrailingPathDelimiter(ExpandFileName(AFileName));
+  AbsRoot := ExcludeTrailingPathDelimiter(ExpandFileName(IncludePathDelimiter(ARoot)));
+  if SameFileName(AbsPath, AbsRoot) then
+  begin
+    // The root itself counts as inside
+    Result := True;
+    Exit;
+  end;
+  Result := (Length(AbsPath) > Length(AbsRoot)) and
+    SameFileName(Copy(AbsPath, 1, Length(AbsRoot)), AbsRoot) and
+    (AbsPath[Length(AbsRoot) + 1] = PathDelim);
+end;
+
+// True when AFileName resolves to a location inside the workspace (WorkPath).
+function TTyroResources.IsPathInsideWorkspace(const AFileName: string): Boolean;
+begin
+  Result := IsPathInside(AFileName, WorkPath);
 end;
 
 function TTyroResources.Find(const ResName, ResType: string): TTyroResource;

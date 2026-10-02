@@ -1,4 +1,4 @@
-local f = io.open("D:\\test_edit.txt", "w")
+local f = openfile("test_edit.txt", "w")
 f:write("start\n")
 local e = controls.new("edit", "txt", 0,0,100,20, "e1")
 f:write("ok1\n")

@@ -1,0 +1,51 @@
+--======================================================================
+-- move_sprite.lua  Moving sprite across the screen
+--======================================================================
+-- A single spirit moves from the left edge to the right edge
+-- over exactly 10 seconds, at 60 FPS.
+--======================================================================
+
+window.show(640, 480)
+
+-- Create a spirit and load the image
+local bg = Sprites.new("bg")
+bg.load("richard-say.png")
+bg.show()
+bg.scale = 2.0
+
+-- Starting position: off-screen left
+local startX = -bg.width() * 2
+local endX = 640
+local startY = 200
+
+bg.move(startX, startY)
+
+local duration = 10.0        -- 10 seconds
+local fps = 60
+local frameTime = 1.0 / fps  -- seconds per frame
+local totalFrames = duration * fps  -- 600 frames
+local stepX = (endX - startX) / totalFrames
+
+-- Hide the mouse cursor for a clean demo
+--cursor.hide()
+
+for i = 1, totalFrames do
+  bg.x = startX + (i - 1) * stepX
+
+  canvas.color = black
+  canvas.clear()
+
+  -- engine draws all visible spirits automatically
+
+  canvas.color = white
+  canvas.text(10, 10, "Moving... frame " .. i .. "/600")
+  canvas.text(10, 30, "x = " .. math.floor(bg.x))
+
+  sleep(frameTime * 1000)
+end
+
+-- Done!
+canvas.color = colors.black
+canvas.clear()
+canvas.color = colors.white
+canvas.text(10, 240, "10 seconds elapsed - spirit reached the right edge!")

@@ -1,0 +1,5 @@
+https://github.com/GuvaCode/Ray4Laz/issues/5
+https://github.com/FluidSynth/fluidsynth/
+
+https://sourceforge.net/p/tralala/code/HEAD/tree/
+You should manage the compilation of "Impulsive Tracker" in \src\ui\impulsive

@@ -2,7 +2,7 @@ window.show(640, 480)
 canvas.color = colors.black
 canvas.clear()
 
-local f = io.open("sprites_test_output.txt", "w")
+local f = openfile("sprites_test_output.txt", "w")
 
 f:write("Sprites type = " .. type(Sprites) .. "\n")
 if type(Sprites) ~= "table" then

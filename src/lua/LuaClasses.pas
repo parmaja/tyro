@@ -494,6 +494,27 @@ begin
   FVersion := lua_version(State);
   //All libraries
   luaL_openselectedlibs(State, -1, 0);
+  //Remove direct file system access through io and os: openfile() is the only
+  //way a script gets at a file, and it refuses anything outside the workspace
+  lua_pushnil(State);
+  lua_setglobal(State, PUTF8Char('io'));
+  lua_pushnil(State);
+  lua_setglobal(State, PUTF8Char('os'));
+  //Close the loaders that would walk around that guard: dofile and loadfile run
+  //any Lua file on disk and require can pull in a native module. require itself
+  //is put back by the script class with a loader that only reads inside the
+  //workspace and the app folder; see TLuaScript.Require_func.
+  //debug goes too, since it reaches the registry and the call stack.
+  lua_pushnil(State);
+  lua_setglobal(State, PUTF8Char('dofile'));
+  lua_pushnil(State);
+  lua_setglobal(State, PUTF8Char('loadfile'));
+  lua_pushnil(State);
+  lua_setglobal(State, PUTF8Char('require'));
+  lua_pushnil(State);
+  lua_setglobal(State, PUTF8Char('package'));
+  lua_pushnil(State);
+  lua_setglobal(State, PUTF8Char('debug'));
   SetReady;
   lua_sethook(State, @HookCount, LUA_MASKCOUNT, 100);
 end;

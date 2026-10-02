@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectSession>
+    <PathDelim Value="\"/>
+    <Version Value="12"/>
+    <BuildModes Active="Debug"/>
+    <Units>
+      <Unit>
+        <Filename Value="audio_raw_stream.lpr"/>
+        <IsPartOfProject Value="True"/>
+        <CursorPos X="106" Y="13"/>
+        <UsageCount Value="114"/>
+        <Loaded Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\RayLib3.pas"/>
+        <EditorIndex Value="-1"/>
+        <CursorPos X="37" Y="10"/>
+        <UsageCount Value="108"/>
+        <Bookmarks Count="1">
+          <Item0 X="3" Y="2486" ID="1"/>
+        </Bookmarks>
+      </Unit>
+      <Unit>
+        <Filename Value="d:\home\cpp\raylib\examples\audio\audio_raw_stream.c"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="106"/>
+        <CursorPos X="76" Y="144"/>
+        <UsageCount Value="42"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\..\..\..\programs\fpc\3.3\src\rtl\inc\systemh.inc"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="690"/>
+        <CursorPos X="3" Y="719"/>
+        <UsageCount Value="42"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\..\..\..\programs\fpc\3.3\src\rtl\win\sysutils.pp"/>
+        <UnitName Value="SysUtils"/>
+        <EditorIndex Value="-1"/>
+        <UsageCount Value="1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\..\..\..\programs\fpc\3.3\src\rtl\win32\classes.pp"/>
+        <UnitName Value="Classes"/>
+        <EditorIndex Value="-1"/>
+        <CursorPos X="31" Y="8"/>
+        <UsageCount Value="1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\..\..\..\programs\fpc\3.3\src\rtl\objpas\sysutils\sysstrh.inc"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="117"/>
+        <CursorPos Y="140"/>
+        <UsageCount Value="1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\ref\raylib2.6.pas"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="407"/>
+        <CursorPos X="31" Y="452"/>
+        <UsageCount Value="1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\ref\raylib2.5.pas"/>
+        <EditorIndex Value="-1"/>
+        <UsageCount Value="1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\ref\raylib_drezgames.pas"/>
+        <UnitName Value="raylib"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="525"/>
+        <CursorPos X="15" Y="554"/>
+        <UsageCount Value="1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\ref\raylib.h"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="1423"/>
+        <CursorPos Y="1445"/>
+        <UsageCount Value="1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\..\..\minilib\lib\mnLibraries.pas"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="122"/>
+        <CursorPos X="3" Y="159"/>
+        <UsageCount Value="1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\..\..\..\programs\lazarus\ide\sourceeditor.pp"/>
+        <ComponentName Value="SourceNotebook"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <UnitName Value="SourceEditor"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="3653"/>
+        <CursorPos X="7" Y="3665"/>
+        <UsageCount Value="0"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\..\..\..\programs\fpc\3.3\src\rtl\inc\heaph.inc"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="61"/>
+        <CursorPos X="10" Y="98"/>
+        <UsageCount Value="0"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\..\..\..\..\programs\fpc\3.3\src\rtl\inc\ctypes.pp"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="80"/>
+        <CursorPos X="3" Y="100"/>
+        <UsageCount Value="7"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\..\RayLib.pas"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="175"/>
+        <CursorPos X="61" Y="188"/>
+        <UsageCount Value="12"/>
+        <Loaded Value="True"/>
+      </Unit>
+    </Units>
+    <JumpHistory HistoryIndex="29">
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="2435" Column="54" TopLine="2413"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="2437" Column="50" TopLine="2415"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="2439" Column="55" TopLine="2417"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="2451" Column="17" TopLine="2425"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="2448" Column="20" TopLine="2430"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="2450" Column="61" TopLine="2430"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="2452" Column="61" TopLine="2430"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="3221" Column="48" TopLine="3200"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="3222" Column="49" TopLine="3201"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="3223" Column="52" TopLine="3202"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="3224" Column="52" TopLine="3203"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="3225" Column="53" TopLine="3204"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="3226" Column="48" TopLine="3205"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="3227" Column="50" TopLine="3206"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="3240" Column="32" TopLine="3215"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="2"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="523" Column="17" TopLine="501"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="537" Column="15" TopLine="511"/>
+      </Position>
+      <Position>
+        <Filename Value="audio_raw_stream.lpr"/>
+        <Caret Line="43" Column="17" TopLine="30"/>
+      </Position>
+      <Position>
+        <Filename Value="audio_raw_stream.lpr"/>
+        <Caret Line="80" Column="27" TopLine="67"/>
+      </Position>
+      <Position>
+        <Filename Value="audio_raw_stream.lpr"/>
+        <Caret Line="146" Column="5" TopLine="133"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="1159" Column="37" TopLine="1146"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="148" Column="3" TopLine="122"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="..\..\RayLib.pas"/>
+        <Caret Line="34" Column="67" TopLine="12"/>
+      </Position>
+      <Position>
+        <Filename Value="audio_raw_stream.lpr"/>
+        <Caret Line="146" Column="28" TopLine="133"/>
+      </Position>
+      <Position>
+        <Filename Value="audio_raw_stream.lpr"/>
+        <Caret Line="148" Column="108" TopLine="135"/>
+      </Position>
+      <Position>
+        <Filename Value="audio_raw_stream.lpr"/>
+        <Caret Line="149" Column="78" TopLine="136"/>
+      </Position>
+      <Position>
+        <Filename Value="audio_raw_stream.lpr"/>
+        <Caret Line="157" Column="33" TopLine="144"/>
+      </Position>
+      <Position>
+        <Filename Value="audio_raw_stream.lpr"/>
+        <Caret Line="52" Column="3" TopLine="33"/>
+      </Position>
+    </JumpHistory>
+    <RunParams>
+      <FormatVersion Value="2"/>
+      <Modes ActiveMode=""/>
+    </RunParams>
+  </ProjectSession>
+  <Debugging>
+    <Watches>
+      <Item>
+        <Expression Value="@InitAudioStream"/>
+      </Item>
+      <Item>
+        <Expression Value="data[i*MAX_SAMPLES div screenWidth]"/>
+      </Item>
+    </Watches>
+  </Debugging>
+</CONFIG>

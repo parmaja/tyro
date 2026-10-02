@@ -1,0 +1,72 @@
+--======================================================================
+--  controls_align.ls - Nested controls and alignment
+--======================================================================
+--  The panel is docked to the left edge of the main window. Its buttons are
+--  children of that panel: the first three dock to the top and the last one
+--  docks to the bottom. Resize the window, drag the panel's right border, or
+--  change a button height to see the layout reflow through both levels.
+
+window.show(860, 520)
+
+panel = controls.new("panel", "", 0, 0, 100, 300)
+controls.align(panel, "left")
+controls.border(panel, 3) -- sizable: drag the panel's right edge
+controls.backcolor(panel, colors.silver)
+
+newButton = controls.new("button", "New", 0, 0, 180, 40)
+controls.parent(newButton, panel)
+controls.align(newButton, "top")
+
+openButton = controls.new("button", "Open", 0, 0, 180, 40)
+controls.parent(openButton, panel)
+controls.align(openButton, "top")
+
+tallButton = controls.new("button", "Make middle button taller", 0, 0, 180, 40)
+controls.parent(tallButton, panel)
+controls.align(tallButton, "top")
+
+closeButton = controls.new("button", "Close at bottom", 0, 0, 180, 40)
+controls.parent(closeButton, panel)
+controls.align(closeButton, "bottom")
+
+clicks = 0
+middleTall = false
+
+while true do
+  if controls.clicked(newButton) then
+    clicks = clicks + 1
+    controls.text(newButton, "New (" .. clicks .. ")")
+  end
+
+  -- Changing a child's preferred height makes its parent realign the siblings.
+  if controls.clicked(tallButton) then
+    middleTall = not middleTall
+    if middleTall then
+      controls.height(tallButton, 72)
+      controls.text(tallButton, "Back to 40 px")
+    else
+      controls.height(tallButton, 40)
+      controls.text(tallButton, "Make middle button taller")
+    end
+  end
+
+  if controls.clicked(closeButton) then
+    controls.text(closeButton, "Bottom clicks=" .. (clicks + 1))
+    clicks = clicks + 1
+  end
+
+  canvas.color = colors.white
+  canvas.rectangle(260, 40, 540, 190, true)
+  canvas.color = colors.black
+  canvas.text(280, 60, "Nested aligned controls")
+  canvas.text(280, 90, "panel align: " .. controls.align(panel))
+  canvas.text(280, 115, "top button: " .. controls.align(newButton))
+  canvas.text(280, 140, "bottom button: " .. controls.align(closeButton))
+  canvas.text(280, 170, "panel preferred width: " .. controls.width(panel))
+  canvas.text(280, 195, "middle preferred height: " .. controls.height(tallButton))
+  canvas.text(280, 235, "Resize the window or drag the panel's right border.")
+  canvas.text(280, 260, "The panel BoundsRect is unchanged by alignment;")
+  canvas.text(280, 285, "alignment updates only each control's effective WindowRect.")
+
+  sleep(16)
+end

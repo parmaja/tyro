@@ -1,4 +1,4 @@
-﻿unit TyroLua;
+unit TyroLua;
 {**
  *  This file is part of the "Tyro"
  *
@@ -343,6 +343,51 @@ type
     procedure DoExecute; override;
   end;
 
+  { TLuaFile }
+
+  { A file handle handed to the script by openfile(). The object owns the
+    stream; the Lua table registered for it keeps closures pointing at this
+    instance, so the owning script frees every handle after closing its state.
+    Binary modes ('b' in the mode string) read and write raw bytes, the
+    remaining modes add the newline translation io does. }
+  TLuaFile = class(TTyroLuaObject)
+  private
+    FFileName: string;
+    FMode: string;
+    //All reads and writes go through this one stream; text mode only adds
+    //newline translation (see ReadTextFormat / Write_func)
+    FStream: TFileStream;
+    FIsText: Boolean;
+    FIsOpen: Boolean;
+    FError: string;
+    //A pending f:lines() iterator; TStringList holds the lines it still owes
+    FLines: TStringList;
+    //How many of those lines LinesNext_func has handed out already. The position
+    //lives here rather than in the loop control variable because Pluto's generic
+    //for does not pass the value the iterator returned back to the next call.
+    FLinesPos: Integer;
+    function ModeFlag(const AFlag: Char): Boolean;
+    //Reads one token ('n') or one line ('l'/'L') and pushes exactly one value
+    function ReadTextFormat(L: PLua_State; const AFormat: Char): Boolean;
+    //Index of the first value the script passed; see the implementation
+    function FirstArgIndex(L: PLua_State): Integer;
+  public
+    //Opens the (already validated) path; returns False and sets Error on failure
+    function Open(const AFileName, AMode: string): Boolean;
+    function Read_func(L: Plua_State): integer; cdecl;
+    function Write_func(L: Plua_State): integer; cdecl;
+    function Close_func(L: Plua_State): integer; cdecl;
+    function Flush_func(L: Plua_State): integer; cdecl;
+    function Lines_func(L: Plua_State): integer; cdecl;
+    constructor Create(AScript: TLuaScript); override;
+    destructor Destroy; override;
+    //Iterates the lines that Lines_func has already queued, so a plain
+    //"for line in f:lines()" loop works. Returns nil once the list is drained.
+    function LinesNext_func(L: Plua_State): integer; cdecl;
+    property IsOpen: Boolean read FIsOpen;
+    property Error: string read FError;
+  end;
+
 { TLuaCollision }
 
   TLuaCollision = class(TTyroLuaObject)
@@ -377,6 +422,9 @@ type
     Collision: TLuaCollision;
     Shader: TLuaShader;
     SpectrumLua: TLuaSpectrum;
+    //Owns every TLuaFile handed out by openfile(); freed after Lua.Close,
+    //because the Lua closures hold pointers into those objects
+    Files: TList;
     procedure DoError(S: string);
     procedure Run; override;
   protected
@@ -392,6 +440,11 @@ type
     function TotalTime_func(L: Plua_State): integer; cdecl;
     function RandomValue_func(L: Plua_State): integer; cdecl;
     function Screenshot_func(L: Plua_State): integer; cdecl;
+
+    //file access
+
+    function OpenFile_func(L: Plua_State): integer; cdecl;
+    function Require_func(L: Plua_State): integer; cdecl;
 
    public
     constructor Create; override;
@@ -411,6 +464,8 @@ const
   cSpriteRegistryBase = $00700000; //HUH
   // Integer key base in the Lua registry for "control handle -> control table"
   cControlRegistryBase = $00800000;
+  // Key in the Lua registry for the table that caches what require already ran
+  cRequireCache = 'tyro.require.cache';
 
 implementation
 
@@ -422,6 +477,49 @@ begin
   n := L.ToInteger(1);
   sleep(n);
   Result := 0;
+end;
+
+// True when FileName already carries a drive ("C:\x", "C:x") or a UNC root
+// ("\\host\x"), and so has to be used as it stands. Pasting such a name onto a
+// base folder only builds a name that cannot exist, and saying "outside the
+// workspace" is the honest answer instead.
+function IsRootedName(const FileName: string): Boolean;
+begin
+  Result := (Length(FileName) > 1) and ((FileName[2] = ':') or
+    ((FileName[1] = '\') and (FileName[2] = '\')));
+end;
+
+// Resolves a script-supplied file name to an absolute path and returns it only
+// when it lands inside the workspace, or '' when no candidate did. The bases are
+// tried in the order the rest of Tyro does: the name as given (against the
+// process directory), then the script folder (ABasePath), then the workspace
+// root. Every candidate is expanded before the containment test, so a name built
+// from "..", a drive-relative form or a UNC path cannot slip past it.
+function ResolveAndValidatePath(const FileName, ABasePath: string): string;
+var
+  Candidates: array[0..2] of string;
+  Candidate: string;
+  i: Integer;
+begin
+  Result := '';
+  if (FileName = '') or (Res = nil) then
+    Exit;
+  if IsRootedName(FileName) then
+  begin
+    Candidate := ExpandFileName(FileName);
+    if Res.IsPathInsideWorkspace(Candidate) then
+      Result := Candidate;
+    Exit;
+  end;
+  Candidates[0] := FileName;
+  Candidates[1] := IncludePathDelimiter(ABasePath) + FileName;
+  Candidates[2] := IncludePathDelimiter(Res.WorkPath) + FileName;
+  for i := Low(Candidates) to High(Candidates) do
+    if Candidates[i] <> '' then
+      // ExpandFileName collapses "..", relative and UNC forms, so the
+      // containment test can trust a plain prefix comparison.
+      if Res.IsPathInsideWorkspace(ExpandFileName(Candidates[i])) then
+        Exit(ExpandFileName(Candidates[i]));
 end;
 
 function log_func(L: Plua_State): integer; cdecl;
@@ -1019,6 +1117,7 @@ begin
   Output := TLuaOutput.Create(Self);
   Collision := TLuaCollision.Create(Self);
   Shader := TLuaShader.Create(Self);
+  Files := TList.Create; //of TLuaFile, freed in Destroy
 
   //window
   Lua.State.Register('window', 'show', Window, Window.Window_func);
@@ -1086,6 +1185,19 @@ begin
   Lua.State.RegisterGlobal('rand', RandomValue_func);
   Lua.State.RegisterGlobal('screenshot', Screenshot_func);
 
+  //file access: openfile(name [, mode]) -> file handle, or nil + error
+  //This is the only way a script reaches the file system; the io/os libraries
+  //are removed in TLua.Init, so nothing here can be bypassed from Lua.
+  Lua.State.RegisterGlobal('openfile', OpenFile_func);
+
+  //require(name) is the stock loader's replacement: the Lua one is removed in
+  //TLua.Init along with dofile/loadfile/package, and this one reads only from
+  //the workspace and the app folder. The table that remembers what already ran
+  //lives in the registry, since package.loaded is no longer there to hold it.
+  Lua.State.RegisterGlobal('require', Require_func);
+  lua_newtable(Lua.State); //[cache]
+  lua_setfield(Lua.State, LUA_REGISTRYINDEX, PUTF8Char(cRequireCache));
+
   // Sprite system: Sprites.new creates a sprite, Sprites("name") finds by name
   Lua.State.RegisterTable('Sprites');
   Lua.State.Register('Sprites', 'new', Self, Sprites.New_func);
@@ -1152,10 +1264,24 @@ begin
 end;
 
 destructor TLuaScript.Destroy;
+var
+  aFile: TLuaFile;
 begin
   // Lua holds light-userdata/method pointers to these facade objects, so close
   // the state before releasing them.
   Lua.Close;
+  //Any file still open is closed and released here; the closures that referenced
+  //it died with the state, so nothing can call back into it afterwards.
+  if Files <> nil then
+  begin
+    while Files.Count > 0 do
+    begin
+      aFile := TLuaFile(Files[Files.Count - 1]);
+      Files.Delete(Files.Count - 1);
+      aFile.Free;
+    end;
+    FreeAndNil(Files);
+  end;
   FreeAndNil(Shader);
   FreeAndNil(Collision);
   FreeAndNil(Output);
@@ -1982,6 +2108,662 @@ begin
     // presented, so queue the request and let the engine capture it.
     Main.QueueScreenshot(L.ToString(1));
   Result := 0;
+end;
+
+{ TLuaFile }
+
+// Pushes AData onto the Lua stack with its exact byte count, so binary content
+// that holds #0 bytes survives the trip. PushString goes through a
+// null-terminated PChar and would cut the string at the first #0.
+procedure PushBytes(L: PLua_State; const AData: AnsiString);
+begin
+  if Length(AData) > 0 then
+    lua_pushlstring(L, PUTF8Char(PAnsiChar(@AData[1])), Length(AData))
+  else
+    lua_pushstring(L, PUTF8Char(''));
+end;
+
+// Drops the ACount values Lua passed in as arguments, so a function that built
+// its own table on top of them leaves exactly that table as the result. lua_pop
+// would take from the top and eat the new table instead, so the arguments are
+// removed one by one from the bottom, where lua_remove shifts them down.
+procedure PopArgs(L: PLua_State; ACount: Integer);
+begin
+  while ACount > 0 do
+  begin
+    L.Remove(1);
+    Dec(ACount);
+  end;
+end;
+
+function TLuaFile.ModeFlag(const AFlag: Char): Boolean;
+begin
+  Result := Pos(AFlag, LowerCase(FMode)) > 0;
+end;
+
+//Index of the first value the script really passed. Register() injects the
+//handle table as argument 1, so "f.write('x')" has its value at index 2 while
+//the natural colon spelling "f:write('x')" repeats the table at index 2 and
+//starts at 3. Comparing argument 2 with the injected table tells the two apart,
+//so both spellings read the same values.
+function TLuaFile.FirstArgIndex(L: PLua_State): Integer;
+begin
+  if lua_rawequal(L, 1, 2) then
+    Result := 3
+  else
+    Result := 2;
+end;
+
+constructor TLuaFile.Create(AScript: TLuaScript);
+begin
+  inherited Create(AScript);
+  FIsOpen := False;
+end;
+
+destructor TLuaFile.Destroy;
+begin
+  FreeAndNil(FLines);
+  if FStream <> nil then
+  begin
+    FreeAndNil(FStream); //also flushes whatever the script left buffered
+    FIsOpen := False;
+  end;
+  inherited Destroy;
+end;
+
+//Opens AFileName with the mode letters io.open understands: 'r' (default),
+//'w' (truncate), 'a' (append), 'x' (create, never overwrite), an optional '+'
+//(also readable) and an optional 'b'. Everything runs through TFileStream; 'b'
+//only switches off the newline translation that the text modes apply. AFileName
+//has already passed ResolveAndValidatePath, so it is known to be inside the
+//workspace.
+function TLuaFile.Open(const AFileName, AMode: string): Boolean;
+var
+  Flags: Integer;
+begin
+  Result := False;
+  FError := '';
+  FFileName := AFileName;
+  FMode := AMode;
+  if AFileName = '' then
+  begin
+    FError := 'no file name';
+    Exit;
+  end;
+  FIsText := not ModeFlag('b');
+
+  if ModeFlag('x') then
+  begin
+    //exclusive create: a file that is already there is never touched
+    if SysUtils.FileExists(AFileName) then
+    begin
+      FError := 'file already exists';
+      Exit;
+    end;
+    if ModeFlag('+') then
+      Flags := fmOpenReadWrite or fmCreate or fmShareDenyWrite
+    else
+      Flags := fmCreate or fmShareDenyWrite; //create or truncate, still readable
+  end
+  else if ModeFlag('w') then
+    Flags := fmCreate or fmShareDenyWrite //create or truncate, still readable
+  else if ModeFlag('a') and ModeFlag('+') then
+    Flags := fmOpenReadWrite or fmShareDenyWrite
+  else if ModeFlag('a') then
+  begin
+    //append: update an existing file, create it when it is missing
+    if SysUtils.FileExists(AFileName) then
+      Flags := fmOpenReadWrite or fmShareDenyWrite
+    else
+      Flags := fmCreate or fmShareDenyWrite
+  end
+  else if ModeFlag('+') then
+    //read and write, without truncating
+    Flags := fmOpenReadWrite or fmShareDenyWrite
+  else
+    Flags := fmOpenRead or fmShareDenyWrite;
+
+  try
+    FStream := TFileStream.Create(AFileName, Flags);
+  except
+    on E: Exception do
+    begin
+      FStream := nil;
+      FError := E.Message;
+      Exit;
+    end;
+  end;
+  if ModeFlag('a') then
+  begin
+    try
+      FStream.Seek(0, soEnd); //append always writes at the end
+    except
+      on E: Exception do
+      begin
+        FError := E.Message;
+        FreeAndNil(FStream);
+        Exit;
+      end;
+    end;
+  end;
+  FIsOpen := True;
+  Result := True;
+end;
+
+//Reads one token ("n") or one line ("l" without the newline, "L" with it) and
+//pushes exactly one value, following the io library's text-mode conventions: at
+//the end of the stream it pushes nil, and a number it cannot parse pushes nil
+//plus a message (and returns False so the caller returns two values).
+function TLuaFile.ReadTextFormat(L: PLua_State; const AFormat: Char): Boolean;
+var
+  Buf: AnsiString;
+  Num: Double;
+  Whole: Int64;
+  c: Char;
+  StartPos: Int64;
+begin
+  Result := True;
+  Buf := '';
+  StartPos := FStream.Position;
+
+  if AFormat = 'n' then
+  begin
+    //"n" is a token read, not a line read: drop the blanks first, then take
+    //everything up to the next one
+    while FStream.Position < FStream.Size do
+    begin
+      c := #0;
+      FStream.ReadBuffer(c, 1);
+      if c > ' ' then
+      begin
+        Buf := c;
+        Break;
+      end;
+    end;
+    if Buf = '' then
+    begin
+      L.PushNil; //nothing but blanks left, like io
+      Exit;
+    end;
+    while FStream.Position < FStream.Size do
+    begin
+      c := #0;
+      FStream.ReadBuffer(c, 1);
+      if c <= ' ' then
+        Break;
+      Buf := Buf + c;
+    end;
+  end
+  else
+  begin
+    //"l"/"L" are line reads: stop at the newline, or at the end of the file
+    while FStream.Position < FStream.Size do
+    begin
+      c := #0;
+      FStream.ReadBuffer(c, 1);
+      if c = #10 then
+        Break;
+      Buf := Buf + c;
+    end;
+    if FStream.Position = StartPos then
+    begin
+      L.PushNil; //end of the file, like io
+      Exit;
+    end;
+    //a trailing #13 belongs to the CRLF pair, never to the returned text
+    if (Buf <> '') and (Buf[Length(Buf)] = #13) then
+      Delete(Buf, Length(Buf), 1);
+    if AFormat = 'L' then
+      Buf := Buf + #10;
+  end;
+
+  if AFormat = 'n' then
+  begin
+    //A whole number comes back as an integer, the way io.read("n") hands it over;
+    //the spellings TryStrToInt64 rejects (a fraction, an exponent) go on as a float
+    if TryStrToInt64(Buf, Whole) then
+      L.PushInteger(Whole)
+    else if TryStrToFloat(Buf, Num) then
+      L.PushNumber(Num)
+    else
+    begin
+      L.PushNil;
+      L.PushString('malformed number near ''' + Buf + '''');
+      Result := False;
+    end;
+  end
+  else
+    PushBytes(L, Buf);
+end;
+
+//file:read([what [, ...]]) with the io.read formats: "a"/"*a" for everything
+//left, "l"/"*l" for one line, "L"/"*L" for a line keeping its newline, "n" for
+//the next number (io style) and a plain number for that many bytes. Formats
+//only apply to text streams; on a binary stream they read raw bytes.
+function TLuaFile.Read_func(L: PLua_State): integer; cdecl;
+var
+  Format: AnsiString;
+  Fmt: Char;
+  Count: Int64;
+  Buf: AnsiString;
+  idx: Integer;
+begin
+  if not FIsOpen then
+  begin
+    L.PushNil;
+    L.PushString('file is closed');
+    Exit(2);
+  end;
+  idx := FirstArgIndex(L);
+  if L.ArgsCount < idx then
+    Format := 'l'
+  else
+    Format := AnsiString(L.ToString(idx));
+  if (Format <> '') and (Format[1] = '*') then
+    Delete(Format, 1, 1);
+  if Format = '' then
+    Format := 'l';
+  //The letter keeps the case the script wrote, because that is what tells "l"
+  //from "L"; the other letters are accepted in either case.
+  Fmt := Format[1];
+
+  if FIsText and (Fmt in ['l', 'L', 'n']) then
+  begin
+    //the text formats push one value, or nil plus a message on a bad number
+    if ReadTextFormat(L, Fmt) then
+      Exit(1)
+    else
+      Exit(2);
+  end;
+
+  if (Fmt = 'a') or (Fmt = 'A') then
+  begin
+    Buf := '';
+    Count := FStream.Size - FStream.Position;
+    SetLength(Buf, Count);
+    if Count > 0 then
+      FStream.ReadBuffer(Buf[1], Count);
+    PushBytes(L, Buf);
+    Exit(1);
+  end;
+
+  if not TryStrToInt64(Format, Count) then
+    Count := 0;
+  if Count <= 0 then
+  begin
+    L.PushNil;
+    L.PushString('invalid format');
+    Exit(2);
+  end;
+  if Count > FStream.Size - FStream.Position then
+    Count := FStream.Size - FStream.Position;
+  Buf := '';
+  SetLength(Buf, Count);
+  if Count > 0 then
+    FStream.ReadBuffer(Buf[1], Count);
+  PushBytes(L, Buf);
+  Result := 1;
+end;
+
+//file:write(...) -> the file handle, so calls chain: f:write(..):close().
+//A leading number is the byte count of the string that follows it, matching
+//io.write. The values start at FirstArgIndex, so "f:write(x)" and
+//"f.write(f, x)" behave the same.
+function TLuaFile.Write_func(L: PLua_State): integer; cdecl;
+var
+  i, first: Integer;
+  Buf, OutBuf: AnsiString;
+begin
+  if not FIsOpen then
+  begin
+    L.PushNil;
+    L.PushString('file is closed');
+    Exit(2);
+  end;
+  Buf := '';
+  first := FirstArgIndex(L);
+  i := first;
+  while i <= L.ArgsCount do
+  begin
+    //"f:write(#s, s)" writes only the first n bytes of s
+    if (i = first) and L.IsNumber(i) and (L.ToInteger(i) < L.ArgsCount) then
+    begin
+      Inc(i); //now on the string that follows the count
+      Buf := Buf + Copy(AnsiString(L.ToString(i)), 1, Integer(L.ToInteger(first)));
+      Inc(i);
+    end
+    else
+    begin
+      Buf := Buf + AnsiString(L.ToString(i));
+      Inc(i);
+    end;
+  end;
+
+  if FIsText and (Buf <> '') then
+  begin
+    //a text stream writes CRLF: put a #13 in front of every #10 that does not
+    //already have one, so a script writing "\r\n" does not get "\r\r\n"
+    OutBuf := '';
+    for i := 1 to Length(Buf) do
+    begin
+      if (Buf[i] = #10) and ((i = 1) or (Buf[i - 1] <> #13)) then
+        OutBuf := OutBuf + #13;
+      OutBuf := OutBuf + Buf[i];
+    end;
+    Buf := OutBuf;
+  end;
+
+  if Length(Buf) > 0 then
+    //Writing past the end extends the file by itself, and growing it through
+    //TStream.Size would also move the file pointer, which is not what a write
+    //in the middle of the stream should do
+    FStream.WriteBuffer(Buf[1], Length(Buf));
+  L.PushValue(1); //the handle table, for chaining
+  Result := 1;
+end;
+
+function TLuaFile.Flush_func(L: PLua_State): integer; cdecl;
+begin
+  if FIsOpen then
+    FStream.Flush;
+  L.PushValue(1); //the handle table, for chaining
+  Result := 1;
+end;
+
+function TLuaFile.Close_func(L: PLua_State): integer; cdecl;
+begin
+  if FIsOpen then
+  begin
+    FreeAndNil(FStream); //also flushes the buffered tail
+    FIsOpen := False;
+  end;
+  //true, not the handle: closing is the end of the road, and a script that
+  //chains on it should not end up writing to a handle that is already gone
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+//file:lines() -> an iterator over the lines that are left, so "for line in
+//f:lines()" works. What remains is read once into FLines and handed out one line
+//per step; a second call replaces the pending iterator, like the io library.
+function TLuaFile.Lines_func(L: PLua_State): integer; cdecl;
+var
+  Buf: AnsiString;
+  LineStr: AnsiString;
+  Start, I, Len, idx: Integer;
+  base: Integer;
+begin
+  if not FIsOpen then
+  begin
+    L.PushNil;
+    L.PushString('file is closed');
+    Exit(2);
+  end;
+  if FLines = nil then
+    FLines := TStringList.Create
+  else
+    FLines.Clear;
+  FLinesPos := 0;
+
+  //Take what is left in one go and cut it into lines by hand; TextString would
+  //stop at a #0 byte and lose the rest of a binary file.
+  Buf := '';
+  Len := FStream.Size - FStream.Position;
+  SetLength(Buf, Len);
+  if Len > 0 then
+    FStream.ReadBuffer(Buf[1], Len);
+
+  Start := 1;
+  for I := 1 to Len do
+    if Buf[I] = #10 then
+    begin
+      LineStr := Copy(Buf, Start, I - Start - 1);
+      if (LineStr <> '') and (LineStr[Length(LineStr)] = #13) then
+        Delete(LineStr, Length(LineStr), 1);
+      FLines.Add(LineStr);
+      Start := I + 1;
+    end;
+  //a last line without a trailing newline still counts
+  if Start <= Len then
+  begin
+    LineStr := Copy(Buf, Start, Len - Start + 1);
+    if (LineStr <> '') and (LineStr[Length(LineStr)] = #13) then
+      Delete(LineStr, Length(LineStr), 1);
+    FLines.Add(LineStr);
+  end;
+
+  //Return the same three values the io library does: the step function, the
+  //state handed back on every step, and the control variable. Lua takes the top
+  //Result values as they stand, so they go on the stack function first and
+  //control last.
+  base := L.ArgsCount; //the arguments are still on the stack
+  L.BeginTable; //[.., iterator]
+  L.Register('linesnext', LinesNext_func);
+  idx := base + 1; //where the iterator table sits
+  L.PushValue(idx); //[.., iterator, iterator] a copy to read the field from
+  L.GetField(L.ArgsCount, 'linesnext'); //[.., iterator, iterator, step]
+  L.Remove(L.ArgsCount - 1); //[.., iterator, step] drop the copy
+  lua_insert(L, idx); //[.., step, iterator] the step function has to come first
+  L.PushInteger(0); //[.., step, iterator, 0] the control variable
+  PopArgs(L, base); //[step, iterator, 0]
+  Result := 3;
+end;
+
+//One step of the f:lines() iterator: it hands out the next queued line and the
+//count of lines done so far, and yields nil once the queue is drained. The count
+//is only returned for the callers that drive the iterator themselves; Pluto's
+//generic for hands the previous line back instead of it, which is why the
+//position is kept in FLinesPos and not taken from an argument.
+function TLuaFile.LinesNext_func(L: PLua_State): integer; cdecl;
+begin
+  if (FLines = nil) or (FLinesPos < 0) or (FLinesPos >= FLines.Count) then
+  begin
+    L.PushNil;
+    Exit(1);
+  end;
+  L.PushString(FLines[FLinesPos]);
+  Inc(FLinesPos);
+  L.PushInteger(FLinesPos);
+  Result := 2;
+end;
+
+//openfile(name [, mode]) -> a file handle, or nil plus an error message.
+//This is the only file access a script has: TLua.Init removes the io and os
+//libraries from the globals, so nothing here can be bypassed from Lua code.
+function TLuaScript.OpenFile_func(L: PLua_State): integer; cdecl;
+var
+  aName, aMode, Resolved: string;
+  aFile: TLuaFile;
+  base: Integer;
+begin
+  if L.ArgsCount < 1 then
+  begin
+    L.PushNil;
+    L.PushString('openfile: missing file name');
+    Exit(2);
+  end;
+  aName := L.ToString(1);
+  aMode := 'r';
+  if (L.ArgsCount >= 2) and (L.ToString(2) <> '') then
+    aMode := L.ToString(2);
+
+  //Expand the name first (relative, "." / ".." and drive-relative forms) and
+  //keep it only when it lands inside the workspace. The check runs on the
+  //expanded path, so a name that walks out of the workspace is refused before
+  //any handle exists.
+  Resolved := ResolveAndValidatePath(aName, Path);
+  if Resolved = '' then
+  begin
+    L.PushNil;
+    L.PushString('openfile: ''' + aName + ''' resolves outside the workspace');
+    Exit(2);
+  end;
+
+  aFile := TLuaFile.Create(Self);
+  if not aFile.Open(Resolved, aMode) then
+  begin
+    L.PushNil;
+    L.PushString('openfile: cannot open ''' + aName + ''' (' + aFile.Error + ')');
+    aFile.Free;
+    Exit(2);
+  end;
+  //the script owns the handle for as long as its state lives; Destroy frees them
+  Files.Add(aFile);
+
+  base := L.ArgsCount; //the arguments are still on the stack
+  Lua.State.BeginTable; //[file]
+  //Register injects the table as argument 1, so every method below reads its own
+  //arguments from index 2, the way the rest of the Tyro bindings do.
+  Lua.State.Register('read', aFile.Read_func);
+  Lua.State.Register('write', aFile.Write_func);
+  Lua.State.Register('flush', aFile.Flush_func);
+  Lua.State.Register('close', aFile.Close_func);
+  Lua.State.Register('lines', aFile.Lines_func);
+  PopArgs(L, base); //leave the handle table as the only value
+  Result := 1;
+end;
+
+//Turns a module name into the file it stands for, without the ending: "foo.bar"
+//is "foo\bar", the way the stock require reads it. A name that already carries an
+//ending keeps its folder part and loses the ".lua" or ".ls", so both spellings
+//find the same file. Nothing is opened here, the name only becomes a path; the
+//containment check decides whether the path may be used at all.
+function ModuleStem(const AName: string): string;
+var
+  s: string;
+  i: Integer;
+  c: Char;
+begin
+  s := AName;
+  if LowerCase(ExtractFileExt(s)) = '.lua' then
+    s := Copy(s, 1, Length(s) - 4)
+  else if LowerCase(ExtractFileExt(s)) = '.ls' then
+    s := Copy(s, 1, Length(s) - 3);
+  //dots that are part of ".." must stay; other dots become the path separator
+  Result := '';
+  i := 1;
+  while i <= Length(s) do
+  begin
+    c := s[i];
+    if (c = '.') and (i + 1 <= Length(s)) and (s[i + 1] = '.') then
+    begin
+      //double dot: keep both as dots (and let ExpandFileName collapse them)
+      Result := Result + '..';
+      Inc(i, 2);
+      Continue;
+    end;
+    if c = '.' then
+    begin
+      Result := Result + PathDelim;
+      Inc(i);
+      Continue;
+    end;
+    //treat slashes and backslashes the same as path delimiters too
+    if (c = '/') or (c = '\') then
+    begin
+      Result := Result + PathDelim;
+      Inc(i);
+      Continue;
+    end;
+    Result := Result + c;
+    Inc(i);
+  end;
+end;
+
+//Expands <root>\<name> and returns it only when it lands inside root, so a name
+//built from "..", a drive letter or a UNC root cannot walk out of the folder it
+//is checked against.
+function ResolveInRoot(const FileName, ARoot: string): string;
+var
+  Candidate: string;
+begin
+  Result := '';
+  if (FileName = '') or (ARoot = '') or (Res = nil) then
+    Exit;
+  if IsRootedName(FileName) then
+    Candidate := ExpandFileName(FileName)
+  else
+    Candidate := ExpandFileName(IncludePathDelimiter(ARoot) + FileName);
+  if Res.IsPathInside(Candidate, ARoot) then
+    Result := Candidate;
+end;
+
+//require("name") -> runs a Lua file from the workspace or the app folder and
+//returns whatever it returned, the same contract the stock require has. The
+//stock one is gone (see TLua.Init) because it can load a native module from
+//anywhere on disk: this loader expands the name first and refuses anything that
+//does not land inside the workspace or the app folder. A module that returned a
+//value is remembered in the registry under the file it came from, so the second
+//require hands that value straight back and "m" and "m.lua" share one entry.
+function TLuaScript.Require_func(L: Plua_State): integer; cdecl;
+var
+  aName, Stem, Resolved, aMsg: string;
+  Roots: array[0..1] of string;
+  Extensions: array[0..1] of string;
+  i, j: Integer;
+begin
+  if L.ArgsCount < 1 then
+  begin
+    L.PushNil;
+    L.PushString('require: missing module name');
+    Exit(2);
+  end;
+  aName := L.ToString(1);
+
+  //the workspace comes first, then the app folder; inside each, a .ls file comes
+  //before one of Tyro's own .lua scripts
+  if Resolved = '' then
+    Resolved := ResolveInRoot(Stem + '.ls', Res.WorkPath);
+  if Resolved = '' then
+    Resolved := ResolveInRoot(Stem + '.lua', Res.WorkPath);
+  if Resolved = '' then
+    Resolved := ResolveInRoot(Stem + '.ls', Res.AppPath);
+  if Resolved = '' then
+    Resolved := ResolveInRoot(Stem + '.lua', Res.AppPath);
+  if Resolved = '' then
+  begin
+    L.PushNil;
+    L.PushString('require: ''' + aName + ''' is not a .lua or .ls file inside the workspace or the app folder');
+    Exit(2);
+  end;
+
+  //already run? the cached value is the answer, as it is with the stock loader
+  lua_getfield(L, LUA_REGISTRYINDEX, PUTF8Char(cRequireCache)); //[cache]
+  lua_pushstring(L, PUTF8Char(UTF8String(Resolved))); //[cache, path]
+  lua_rawget(L, -2); //[cache, value]
+  if not lua_isnil(L, -1) then
+  begin
+    Result := 1;
+    Exit;
+  end;
+  lua_pop(L, 2); //[]
+
+  if luaL_loadfile(L, PUTF8Char(UTF8String(Resolved))) <> LUA_OK then
+  begin
+    //the loader left its message on the stack; hand it back the way the stock
+    //require does, nil plus a message
+    aMsg := 'require: ' + aName + ': ' + L.ToString(-1);
+    L.Pop(1);
+    L.PushNil;
+    L.PushString(aMsg);
+    Exit(2);
+  end;
+  //the stock require calls the chunk with the module name as its argument
+  lua_pushstring(L, PUTF8Char(UTF8String(aName))); //[chunk, name]
+  lua_call(L, 1, 1); //[value]
+
+  if lua_isnil(L, -1) then
+    //a module that returns nothing runs again on the next require, as before
+    L.Pop(1)
+  else
+  begin
+    lua_getfield(L, LUA_REGISTRYINDEX, PUTF8Char(cRequireCache)); //[value, cache]
+    lua_pushstring(L, PUTF8Char(UTF8String(Resolved))); //[value, cache, path]
+    lua_pushvalue(L, -3); //[value, cache, path, value]
+    lua_rawset(L, -3); //cache[path] = value -> [value, cache]
+    L.Pop(1); //[value]
+  end;
+  Result := 1;
 end;
 
 function TLuaConsole.Read_func(L: Plua_State): integer; cdecl;
