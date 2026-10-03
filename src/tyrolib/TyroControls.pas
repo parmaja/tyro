@@ -636,7 +636,12 @@ begin
   if FParent <> nil then
     FParent.AddControl(Self);
   ParentChanged;
-  FParent.AlignControls;
+  //Only a parent that is now in place has children to realign. Detaching (AValue
+  //= nil) is what TTyroControl.Destroy does, and AlignControls is virtual: the
+  //call on a nil parent is an access violation, so freeing a parented control
+  //crashed.
+  if FParent <> nil then
+    FParent.AlignControls;
 end;
 
 procedure TTyroLayout.AddControl(AControl: TTyroLayout);

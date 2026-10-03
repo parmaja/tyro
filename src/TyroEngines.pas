@@ -141,6 +141,10 @@ type
     procedure RunScriptThread;
     procedure StopScriptRun;
     procedure StopScriptThread;
+    procedure ClearRunCanvases;
+    procedure WipeCanvas(ACanvas: TTyroCanvas);
+    procedure ClearScriptSprites;
+    function EngineControl(AControl: TTyroLayout): Boolean;
     procedure ShowWindowAfterScript;
 
     procedure ShowFileList;
@@ -191,6 +195,10 @@ type
     function GetShaking: Boolean;
   protected
     Commands: TConsoleCommands;
+    //* Free the controls a finished run left in the window. Every run calls this
+    //* before it starts the next one; it is protected so a test can drive the
+    //* same step without starting a worker.
+    procedure ClearScriptControls;
     procedure SizeChanged; override;
     procedure ConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
     procedure ExecuteCommand(ACommand: string);
@@ -1540,8 +1548,88 @@ begin
   //a rerun never executes a stale template.
   SaveEditorSource;
   StopScriptRun;
+  //The finished run left the window full of its own controls, a sprite store full
+  //of its own sprites and canvases full of its own pixels. Drop all three, or the
+  //new script inherits them.
+  ClearScriptControls;
+  ClearScriptSprites;
+  ClearRunCanvases;
   FScriptThread := TTyroScriptThread.Create(CloneScript(FScriptMain));
   FScriptThread.Start;
+end;
+
+//True for the controls the engine creates itself and that therefore outlive a run
+function TTyroMain.EngineControl(AControl: TTyroLayout): Boolean;
+begin
+  Result := (AControl = Console) or (AControl = Output) or
+    (AControl = Editor) or (AControl = FFileList);
+end;
+
+//Free the controls the previous run created, so a rerun does not draw the old UI
+//under the new one. Only the controls the engine owns (console, output, editor,
+//file picker) are kept: they are created once and hold engine state, not script
+//state, while everything else parented to the window came from the script.
+procedure TTyroMain.ClearScriptControls;
+var
+  i: Integer;
+begin
+  //Keyboard focus and the mouse capture can point at a control that is about to
+  //disappear. SetFocusedControl calls FocusChanged on the control it replaces, so
+  //the focus has to go while the old control is still alive. An engine control is
+  //staying, and so keeps both.
+  if (FocusedControl <> nil) and not EngineControl(FocusedControl) then
+    FocusedControl := nil;
+  if (FControlCapture <> nil) and not EngineControl(FControlCapture) then
+    FControlCapture := nil;
+  //A freed control removes itself from Controls (TTyroControl.Destroy clears its
+  //parent), so walking backwards keeps the remaining indexes valid.
+  for i := Controls.Count - 1 downto 0 do
+    if not EngineControl(Controls[i]) then
+      Controls[i].Free;
+end;
+
+//Free the sprites the previous run created, so a rerun does not keep animating and
+//colliding with them. Physics goes first: its bodies are keyed by the sprite
+//handles that are about to disappear. The store hands out fresh handles, so the
+//new run starts from an empty one.
+procedure TTyroMain.ClearScriptSprites;
+begin
+  if Physics <> nil then
+    Physics.RemoveAll;
+  if Sprites <> nil then
+    Sprites.Clear;
+end;
+
+//Wipe the pixels the previous run left on the two canvases it draws through:
+//Board, the texture the script's drawing queue fills, and Canvas, the window
+//canvas it is blitted to. Both keep their content between frames, so without this
+//the new script starts on top of the old one.
+procedure TTyroMain.ClearRunCanvases;
+begin
+  //Same lock the queue processing takes while it draws into Board.
+  CanvasLock.Enter;
+  try
+    WipeCanvas(Board);
+    WipeCanvas(Canvas);
+  finally
+    CanvasLock.Leave;
+  end;
+end;
+
+//Clear one canvas in place. A texture canvas is only bound to its render texture
+//between BeginDraw and EndDraw, so the clear has to happen inside that pair:
+//outside it ClearBackground would wipe the window backbuffer and leave the canvas
+//content on screen.
+procedure TTyroMain.WipeCanvas(ACanvas: TTyroCanvas);
+begin
+  if ACanvas = nil then
+    Exit;
+  ACanvas.BeginDraw;
+  try
+    ACanvas.Clear;
+  finally
+    ACanvas.EndDraw;
+  end;
 end;
 
 //Copy the editor buffer back into the script it edits. The worker runs a clone,

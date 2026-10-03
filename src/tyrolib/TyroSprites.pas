@@ -94,6 +94,11 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+    //* Free every sprite: the GPU textures it owns are unloaded and the store is
+    //* empty again (an engine rerun does this to leave no sprite of the finished
+    //* run behind). Handles are not reused, so a handle a script still holds can
+    //* never address a sprite of a later run.
+    procedure Clear;
     // Add a loaded texture to the store, returns a handle
     function Add(ATexture: TTexture2D; const AName: string = ''): integer;
     // Add a texture-less sprite (script-only markers, etc.), returns a handle
@@ -269,17 +274,30 @@ begin
 end;
 
 destructor TSprites.Destroy;
-var
-  Sprite: TSprite;
 begin
-  for Sprite in FItems.Values do
-  begin
-    FreeSpriteFrames(Sprite);
-    Sprite.Free;
-  end;
+  Clear;
   FItems.Free;
   FLock.Free;
   inherited;
+end;
+
+procedure TSprites.Clear;
+var
+  Sprite: TSprite;
+begin
+  //The dictionary is emptied after the walk, not while iterating it. Frames go
+  //first: they are the sprite's own GPU textures.
+  FLock.Enter;
+  try
+    for Sprite in FItems.Values do
+    begin
+      FreeSpriteFrames(Sprite);
+      Sprite.Free;
+    end;
+    FItems.Clear;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TSprites.GetCount: integer;

@@ -93,7 +93,9 @@ These work while the engine is running, whatever has the keyboard focus:
 
 The script that is edited and rerun is the one loaded with `load` or picked with
 `F4`; every run gets a fresh copy of its source, so the editor never changes a
-running script.
+running script. A run starts from a clean window: the controls and the sprites the
+previous run created are freed and both canvases (board and window) are cleared,
+while the console, the output panel, the editor and the `F4` picker stay put.
 
 ```lua
 window.show()
@@ -558,6 +560,13 @@ thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
   clones that template and starts a new worker on the clone. The worker owns and
   frees its clone, so the template — and the editor buffer saved into it —
   survives a stop and is never written by a running script.
+- **Clean slate per run.** Before the clone starts, the run frees the controls the
+  finished run left in the window and the sprites it left in the sprite store
+  (physics bodies first, since they are keyed by sprite handle), then wipes both
+  canvases. The engine controls (console, output, editor, file picker) are kept,
+  and keyboard focus and the mouse capture are dropped while the control they point
+  at is still alive. Canvas clearing happens inside `BeginDraw`/`EndDraw`, which is
+  the only window in which a texture canvas is bound to its render texture.
 - **Resource release order.** GPU/audio owners (sprites, canvases, shaders,
   fonts, musicians, generated waveforms, radio, spectrum) are destroyed while
   the window/OpenGL context and audio device are still alive; the context and
