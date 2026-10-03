@@ -135,8 +135,11 @@ type
     procedure EditorClosed(Sender: TObject);
     procedure EditorSave(Sender: TObject);
 
+    function CloneScript(AScript: TTyroScript): TTyroScript;
+    procedure SaveEditorSource;
     procedure LoadScriptThread;
     procedure RunScriptThread;
+    procedure StopScriptRun;
     procedure StopScriptThread;
     procedure ShowWindowAfterScript;
 
@@ -157,6 +160,12 @@ type
   protected
     FPrepared: Boolean; //InitWindow is used
     FQueue: TQueueObjects;
+    //* The loaded script, kept as the editable template: it owns the source
+    //* (from the file or from the editor) and outlives every run, so a script can
+    //* be edited and rerun after its worker is gone.
+    FScriptMain: TTyroScript;
+    //* The current worker. It owns the script clone it executes and frees it
+    //* with the thread, hence a run is always a fresh clone + a fresh thread.
     FScriptThread: TTyroScriptThread;
     //Command line script, should run in main thread only
     FScriptREPL: TTyroScript;
@@ -892,6 +901,7 @@ end;
 destructor TTyroMain.Destroy;
 begin
   Stop;
+  FreeAndNil(FScriptMain);
   FreeAndNil(FScriptREPL);
 
   //Detach callbacks and release audio objects while their backing device and
@@ -1120,6 +1130,9 @@ begin
   end;
 
   //* Global UI shortcuts work whether or not a control is focused.
+  // F5 reruns the loaded script on a new script thread
+  if RayLib.IsKeyPressed(KEY_F5) then
+    RunScriptThread;
   // F2 toggles the script editor
   if RayLib.IsKeyPressed(KEY_F2) then
     ToggleEditor;
@@ -1316,36 +1329,32 @@ begin
 end;
 
 procedure TTyroMain.FileListPicked(Sender: TObject; const AFileName: string);
-var
-  aScriptType: TScriptType;
-  aScript: TTyroScript;
 begin
   if (AFileName = '') or not SysUtils.FileExists(AFileName) then
   begin
     Console.Writeln('Script not found: ' + AFileName);
     Exit;
   end;
-  aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(AFileName));
-  if aScriptType = nil then
+  if ScriptTypes.FindByExtension(ExtractFileExt(AFileName)) = nil then
   begin
     Console.Writeln('Unknown script type for: ' + ExtractFileName(AFileName));
     Exit;
   end;
-  aScript := aScriptType.ScriptClass.Create;
+  //Replace the current template with the picked file: LoadScriptThread stops the
+  //worker and swaps FScriptMain, leaving it stopped so the user types "run" to
+  //start it (or F2 to edit it first, which reruns it).
+  ScriptFile := AFileName;
   try
-    aScript.LoadFile(AFileName);
+    LoadScriptThread;
   except
     on E: Exception do
     begin
       Console.Writeln('Unable to load ' + ExtractFileName(AFileName) + ': ' + E.Message);
-      aScript.Free;
       Exit;
     end;
   end;
-  //Replace the current template: stop the worker, swap the script, and leave
-  //it stopped so the user types "run" to start it (or F2 to edit it first).
-  StopScriptThread;
-  Res.WorkPath := ExtractFilePath(AFileName);
+  if FScriptMain = nil then
+    Exit;
   HideFileList;
   Console.Writeln('Loaded: ' + ExtractFileName(AFileName) + '. Type "run" to execute it.');
   if not Console.Visible then
@@ -1366,13 +1375,17 @@ end;
 
 procedure TTyroMain.ShowEditor;
 begin
-  //Stop the worker before editing its source template.
-  StopScriptThread;
-  if FScriptThread <> nil then
+  //Edit the template, not the running script: the worker executes a clone, so
+  //the source stays safe to change. Stop the run so it is not executing while
+  //the source is being edited.
+  StopScriptRun;
+  if FScriptMain = nil then
   begin
-    Editor.FileName := FScriptThread.Script.FileName;
-    Editor.LoadSource(FScriptThread.Script.Source);
+    Log.WriteLn('No script loaded. Use "load <script>" first.');
+    Exit;
   end;
+  Editor.FileName := FScriptMain.FileName;
+  Editor.LoadSource(FScriptMain.Source);
   Editor.BoundsRect := Rect(0, 0, Width, Height);
   Editor.Margin := 10;
   Editor.BackColor := clBlack;
@@ -1384,12 +1397,12 @@ procedure TTyroMain.HideEditor;
 begin
   if Editor.Visible then
   begin
-    if FScriptThread <> nil then
-    begin
-      Editor.SaveSource(FScriptThread.Script.Source);
-      //Rerun;
-    end;
+    //Copy the buffer back first: it is the script source from here on, and it
+    //is what the rerun below has to execute.
+    SaveEditorSource;
     Editor.Hide;
+    //Run the edited source, exactly like F5 does.
+    RunScriptThread;
   end;
 end;
 
@@ -1408,10 +1421,9 @@ end;
 
 procedure TTyroMain.EditorSave(Sender: TObject);
 begin
-  if FScriptThread <> nil then
-  begin
-    Editor.SaveSource(FScriptThread.Script.Source);
-  end;
+  //RunScriptThread copies the buffer into the script and runs it (CTRL+S while
+  //the editor is showing).
+  RunScriptThread;
 end;
 
 procedure TTyroMain.Edit_Command(Params: TStrings);
@@ -1465,6 +1477,21 @@ begin
   end;
 end;
 
+//Make a runnable copy of a script: same class, path and source. The worker owns
+//its clone, so every run gets a clean script instance (and a clean Lua state).
+function TTyroMain.CloneScript(AScript: TTyroScript): TTyroScript;
+begin
+  Result := nil;
+  if AScript = nil then
+    Exit;
+  Result := TTyroScriptClass(AScript.ClassType).Create;
+  Result.Path := AScript.Path;
+  Result.FileName := AScript.FileName;
+  Result.Source.Assign(AScript.Source);
+end;
+
+//Load ScriptFile into the editable template. The worker is not created here:
+//RunScriptThread clones the template for every run.
 procedure TTyroMain.LoadScriptThread;
 var
   aScriptType: TScriptType;
@@ -1473,34 +1500,71 @@ begin
   if ScriptFile = '' then
     exit;
 
-  if FScriptThread <> nil then
-  begin
-    Log.WriteLn('Already running a file: ' + ScriptFile);
-    exit;
-  end;
-
   aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
-  if aScriptType <> nil then
+  if (aScriptType <> nil) and SysUtils.FileExists(ScriptFile) then
   begin
+    Log.WriteLn('File: ' + ScriptFile);
+    if LeftStr(ScriptFile, 1) = '.' then
+      ScriptFile := ExpandFileName(Res.WorkPath + ScriptFile);
+    //Read first: a failed load leaves the currently loaded script in place.
     aScript := aScriptType.ScriptClass.Create;
-    if SysUtils.FileExists(ScriptFile) then
-    begin
-      Log.WriteLn('File: ' + ScriptFile);
-      if LeftStr(ScriptFile, 1) = '.' then
-        ScriptFile := ExpandFileName(Res.WorkPath + ScriptFile);
+    try
       aScript.LoadFile(ScriptFile);
-      Res.WorkPath := ExtractFilePath(ScriptFile);
-      FScriptThread := TTyroScriptThread.Create(aScript);
-      exit;
+    except
+      on E: Exception do
+      begin
+        aScript.Free;
+        raise;
+      end;
     end;
+    Res.WorkPath := ExtractFilePath(ScriptFile);
+    //Only now release the previous run: the worker executes a clone of the
+    //template, so it is stopped before that template is dropped.
+    StopScriptRun;
+    FreeAndNil(FScriptMain);
+    FScriptMain := aScript;
+    exit;
   end;
   Log.WriteLn('Type of file not found: ' + ScriptFile);
 end;
 
+//(Re)start the loaded script: stop whatever is running, then hand a fresh clone
+//of the template to a new worker. A thread can only be started once and it owns
+//the script it runs, so a rerun is always a new thread (F5, "run", and hiding the
+//editor all come through here).
 procedure TTyroMain.RunScriptThread;
 begin
-  if FScriptThread <> nil then
-    FScriptThread.Start;
+  if FScriptMain = nil then
+    exit;
+  //With the editor open its buffer is the current source: take it over first so
+  //a rerun never executes a stale template.
+  SaveEditorSource;
+  StopScriptRun;
+  FScriptThread := TTyroScriptThread.Create(CloneScript(FScriptMain));
+  FScriptThread.Start;
+end;
+
+//Copy the editor buffer back into the script it edits. The worker runs a clone,
+//so this is the only place where the edited source reaches the template.
+procedure TTyroMain.SaveEditorSource;
+begin
+  if Editor.Visible and (FScriptMain <> nil) then
+    Editor.SaveSource(FScriptMain.Source);
+end;
+
+//Stop the running worker and drop the main-thread work it may still have queued,
+//so a following run starts from a clean slate.
+procedure TTyroMain.StopScriptRun;
+begin
+  CancelWaiting;
+  StopScriptThread;
+  Lock.Enter;
+  try
+    FQueue.CancelAll;
+    FQueue.Clear;
+  finally
+    Lock.Leave;
+  end;
 end;
 
 //Called from the main loop while the window is still hidden. A script file given
@@ -1671,15 +1735,7 @@ end;
 
 procedure TTyroMain.Stop_Command(Params: TStrings);
 begin
-  CancelWaiting;
-  StopScriptThread;
-  Lock.Enter;
-  try
-    FQueue.CancelAll;
-    FQueue.Clear;
-  finally
-    Lock.Leave;
-  end;
+  StopScriptRun;
 end;
 
 procedure TTyroMain.Load_Command(Params: TStrings);
@@ -1697,9 +1753,13 @@ begin
 
   if SysUtils.FileExists(aFileName) then
   begin
-    StopScriptThread;
     ScriptFile := aFileName;
-    LoadScriptThread;
+    try
+      LoadScriptThread;
+    except
+      on E: Exception do
+        Console.Writeln('Unable to load ' + aFile + ': ' + E.Message);
+    end;
   end
   else
   begin
@@ -1710,8 +1770,14 @@ end;
 
 procedure TTyroMain.State_Command(Params: TStrings);
 begin
-  if Active and (FScriptThread <> nil) then
-    Console.Writeln(FScriptThread.Script.FileName + ' is running');
+  if not Active then
+    Exit;
+  if FScriptMain = nil then
+    Console.Writeln('No script loaded')
+  else if (FScriptThread <> nil) and FScriptThread.Active then
+    Console.Writeln(FScriptMain.FileName + ' is running')
+  else
+    Console.Writeln(FScriptMain.FileName + ' is loaded');
 end;
 
 { TTyroFileList }

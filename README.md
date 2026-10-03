@@ -78,6 +78,23 @@ Supported key names: letters `a`-`z`, digits `0`-`9`, `space`, `enter`, `tab`,
 `escape`, `backspace`, `delete`, `insert`, `up`, `down`, `left`, `right`,
 `f1`-`f12`, `shift`, `ctrl`, `alt`.
 
+### Engine shortcuts
+
+These work while the engine is running, whatever has the keyboard focus:
+
+| Key | Description |
+|-----|-------------|
+| `F2` | Toggle the script editor. Opening it stops the script; closing it (also with `ESC`) saves the edited source back to the script and runs it |
+| `F4` | Toggle the `*.ls` script picker |
+| `F5` | Rerun the loaded script on a new script thread |
+| `F7` | Toggle the output panel |
+| `F8` | Toggle the console |
+| `CTRL`+`S` | In the editor: save the source back and rerun the script |
+
+The script that is edited and rerun is the one loaded with `load` or picked with
+`F4`; every run gets a fresh copy of its source, so the editor never changes a
+running script.
+
 ```lua
 window.show()
 while true do
@@ -158,6 +175,11 @@ The following commands are built in:
 | `dir`, `list`, `ls` | List files in the current directory |
 | `clear`, `cls` | Clear the console output |
 | `help`, `?` | Show available commands |
+| `load <script>` | Load a script from the current directory (F4 to pick one) |
+| `run` | Run the loaded script (like `F5`; reruns it when it is already running) |
+| `stop` | Stop the running script |
+| `state` | Show which script is loaded and whether it is running |
+| `edit` | Open the script editor (like `F2`) |
 | `exit`, `quit` | Hide the console and stop the engine |
 | `ESC` | Hide the console (keybinding) |
 
@@ -531,6 +553,11 @@ thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
   worker accepted before completing is still honored.
 - **Per-state Lua cancellation.** Termination status lives in each Lua state's
   extra space, so cancelling one script can never affect another state.
+- **Loaded script vs. worker.** `load`/`F4` fill a template script that owns the
+  source; every run (`run`, `F5`, closing the editor) stops the current worker,
+  clones that template and starts a new worker on the clone. The worker owns and
+  frees its clone, so the template — and the editor buffer saved into it —
+  survives a stop and is never written by a running script.
 - **Resource release order.** GPU/audio owners (sprites, canvases, shaders,
   fonts, musicians, generated waveforms, radio, spectrum) are destroyed while
   the window/OpenGL context and audio device are still alive; the context and
