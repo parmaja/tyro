@@ -1234,7 +1234,6 @@ begin
   Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
   Lua.State.Register('controls', Controls); //should be last one
 
-
   //output (catches print/println/log)
   Lua.State.RegisterTable('output');
   Lua.State.Register('output', 'show', Output, Output.Show_func);
@@ -1248,7 +1247,7 @@ begin
   Lua.State.BeginTable;
   for i := 0 to Length(Colors.Colors) - 1 do
     Lua.State.Register(Colors.Colors[i].Name, ColorToInt(Colors.Colors[i].Color));
-  Lua.State.EndTable('colors', Colors);
+  Lua.State.EndTableGlobal('colors', Colors);
 
   //Attach a metatable to the global environment so an unresolved global name
   //resolves to a sprite or control by name (e.g. richard.move(...) when

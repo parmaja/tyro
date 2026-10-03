@@ -154,11 +154,14 @@ type
     procedure Pop(Count: Integer = 1);
 
     procedure NewTable;
+    procedure BeginTable;
+    procedure SetMetaTable(Index: Integer);
+    procedure EndTableGlobal(Table: string; AObject: TLuaObject = nil);
 
     procedure GetField(Index: Integer; const Name: string);
     procedure SetField(Index: Integer; const Name: string);
 
-    procedure SetMetaTable(Index: Integer);
+
     procedure Remove(Index: Integer);
 
     function GetStack(Level: Integer; var AInfo: lua_Debug): Boolean;
@@ -172,8 +175,6 @@ type
 
     function RunString(Script: string; out Output: string): Boolean;
 
-    procedure BeginTable;
-    procedure EndTable(Table: string; AObject: TLuaObject = nil);
   end;
 
 implementation
@@ -840,7 +841,7 @@ begin
   lua_newtable(@Self);
 end;
 
-procedure TLuaHelper.EndTable(Table: string; AObject: TLuaObject);
+procedure TLuaHelper.EndTableGlobal(Table: string; AObject: TLuaObject);
 begin
   lua_setglobal(@Self, PUTF8Char(UTF8String(Table)));
   if AObject <> nil then

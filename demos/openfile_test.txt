@@ -1,4 +1,0 @@
-line one
-line two
-no newline at the end
-appended
