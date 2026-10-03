@@ -138,6 +138,7 @@ type
     procedure LoadScriptThread;
     procedure RunScriptThread;
     procedure StopScriptThread;
+    procedure ShowWindowAfterScript;
 
     procedure ShowFileList;
     procedure HideFileList;
@@ -166,6 +167,9 @@ type
     FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
     FPresentedFrame: Boolean;
     FScriptFailed: Boolean;
+    //* Set once the engine has shown the window by itself after a headless
+    //script finished without asking for one, so it happens a single time.
+    FWindowAutoShown: Boolean;
     FRunning: LongInt;
     //* Screen shake state (see Shake). FShakeTime counts the seconds left,
     //* FShakeDuration the full length of the current shake so the amplitude can
@@ -450,6 +454,10 @@ begin
       ProcessQueue;
       Update;
       RayUpdates.Update;
+      //A script file passed on the command line runs headless, so it can finish
+      //without ever showing a window. Nothing would be on screen then, so show
+      //the window after all and let the session continue.
+      ShowWindowAfterScript;
 
       if Visible and IsWindowReady then
       begin
@@ -751,6 +759,7 @@ end;
 procedure TTyroMain.Start;
 begin
   FScriptFailed := False;
+  FWindowAutoShown := False;
   RunScriptThread;
 end;
 
@@ -1492,6 +1501,23 @@ procedure TTyroMain.RunScriptThread;
 begin
   if FScriptThread <> nil then
     FScriptThread.Start;
+end;
+
+//Called from the main loop while the window is still hidden. A script file given
+//on the command line runs without moMainWindow, so it is free to finish without
+//showing anything; if it does, nothing is on screen and the process just sits
+//there. Show the window after all so the session stays usable.
+procedure TTyroMain.ShowWindowAfterScript;
+begin
+  if FWindowAutoShown or Visible or IsTerminated then
+    Exit;
+  //Only a real script run can end on its own: Started excludes a thread that was
+  //never launched and Completed is published by the worker just before it exits.
+  if (FScriptThread = nil) or (not FScriptThread.Started) or (not FScriptThread.Completed) then
+    Exit;
+  FWindowAutoShown := True;
+  Log.WriteLn('Script finished without showing a window, showing it now');
+  ShowWindow;
 end;
 
 //Treat an unknown console line as a one line Lua script run on the main
