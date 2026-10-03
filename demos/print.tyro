@@ -1,4 +1,4 @@
--- print.ls - Console output demo
+-- print.tyro - Console output demo
 -- Demonstrates: console.show(), print(), println()
 console.show();
 console.println("Hello World");

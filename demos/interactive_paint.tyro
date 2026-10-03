@@ -1,5 +1,5 @@
 --======================================================================
---  interactive_paint.lua - Mouse drawing with keyboard controls
+--  interactive_paint.tyro - Mouse drawing with keyboard controls
 --======================================================================
 --  Demonstrates: mousex(), mousey(), ismousepressed(), iskeypressed(),
 --  iskeydown() — the new input APIs

@@ -1,5 +1,5 @@
 --======================================================================
--- move_sprite.lua  Moving sprite across the screen
+-- move_sprite.tyro  Moving sprite across the screen
 --======================================================================
 -- A single spirit moves from the left edge to the right edge
 -- over exactly 10 seconds, at 60 FPS.

@@ -1,7 +1,7 @@
 # Tyro
 
 Runing embed programming language in simple graphical environment, for kids and newbies, using [raylib](https://www.raylib.com/) as small game engine to draw.
-Currently supports Lua (`.lua` / `.ls`).
+Currently supports Lua (`.tyro` / `.lua`).
 It also should have editing tool inside that environment, console output and input, work in same graphical window.
 playing sound using mmf code.
 
@@ -13,7 +13,7 @@ It is More simulating old computer, but with modern languages and graphic.
 tyro [<script>] [--workpath=<dir>] [<options>]
 ```
 
-Running a `.lua`/`.ls` file executes it in a graphical environment. Without a
+Running a `.tyro`/`.lua` file executes it in a graphical environment. Without a
 script argument Tyro starts an interactive console session.
 
 | Option | Description |
@@ -85,7 +85,7 @@ These work while the engine is running, whatever has the keyboard focus:
 | Key | Description |
 |-----|-------------|
 | `F2` | Toggle the script editor. Opening it stops the script; closing it (also with `ESC`) saves the edited source back to the script and runs it |
-| `F4` | Toggle the `*.ls` script picker |
+| `F4` | Toggle the script picker (`*.tyro` and `*.lua`) |
 | `F5` | Rerun the loaded script on a new script thread |
 | `F7` | Toggle the output panel |
 | `F8` | Toggle the console |
@@ -163,7 +163,7 @@ openfile("../secrets.txt")          --> nil, "resolves outside the workspace"
 openfile("sub/../data.txt")         --> fine, it stays inside
 ```
 
-See `demos/test_openfile.ls` for a runnable check of all of it.
+See `tests/test_openfile.tyro` for a runnable check of all of it.
 
 # Console
 
@@ -222,7 +222,7 @@ local name = console.read("Your name? ")
 println("Hello, " .. name .. "!")
 ```
 
-See `demos/terminal_demo.lua` and `demos/console_read_demo.lua` for examples.
+See `demos/terminal_demo.tyro` and `demos/console_read_demo.tyro` for examples.
 
 # Sprites
 
@@ -358,7 +358,7 @@ if iskeypressed("z") then shader.area = {0, canvas.height/2, canvas.width, canva
 ```
 
 The `"water"` effect tints and distorts the lower part of the canvas, so draw a
-shore or sea bottom there if you want a sea scene. See `demos/shader_demo.lua`
+shore or sea bottom there if you want a sea scene. See `demos/shader_demo.tyro`
 for a full on-screen demo of every effect, `value` and `area`.
 
 ## Custom shaders
@@ -406,7 +406,7 @@ window.
 | `shake(0)` | Stop a running shake |
 
 A new call restarts the shake, so a longer or harder one simply wins. See
-`demos/shake_demo.ls`.
+`demos/shake_demo.tyro`.
 
 ```lua
 window.show(640, 480)
@@ -462,7 +462,7 @@ controls.align(bottom, "bottom")
 its effective `WindowRect`, so `controls.width`, `controls.height`, and
 `controls.position` keep reporting the preferred geometry. Changing a child's
 size realigns its siblings, and resizing the main window propagates through
-every container level. See `demos/controls_align.ls` for a left-docked panel
+every container level. See `demos/controls_align.tyro` for a left-docked panel
 with top- and bottom-docked buttons.
 
 # Timing
@@ -507,30 +507,30 @@ See [demos/README.md](demos/README.md) for the full demo index.
 Run any demo with:
 
 ```
-tyro demos/<name>.lua
+tyro demos/<name>.tyro
 ```
 
 | File | Feature |
 |------|---------|
-| `demos/pong.lua` | Complete Pong game — drawing, keyboard input, AI, physics, collision, sound, scoring |
-| `demos/basic_drawing.lua` | All drawing primitives: rectangle, circle, line, point, text, colors |
-| `demos/animated_demo.lua` | Animation loop with random colors and sleep timing |
-| `demos/cycle_demo.lua` | Per-frame loop using `while cycle do` — one drawing per frame |
-| `demos/sprites_demo.lua` | Sprites system: load, show, hide, move, rotate, scale, named access |
-| `demos/controls.ls` | Generic buttons, labels, checkboxes, edits, and panels |
-| `demos/controls_align.ls` | Nested controls: a left-docked panel with top- and bottom-docked buttons |
-| `demos/aseprites_demo.ls` | Aseprite animations: load `.aseprite` files (all frames as textures), `play(fps)`, `stop`, `looping`, per-frame stepping — idle/walk/run showcase |
-| `demos/interactive_paint.lua` | Mouse drawing with keyboard color switching (uses input APIs) |
-| `demos/console_demo.lua` | Console output: print, println, log |
-| `demos/terminal_demo.lua` | Built-in terminal commands: dir, list, clear, help, exit |
-| `demos/console_read_demo.lua` | Interactive console.read() — prompt the user for input from Lua |
-| `demos/music_demo.lua` | Sound effects (music.sound) and MML melodies (music.mml) |
-| `demos/test.ls` | Circle animation with random colors |
-| `demos/colors_bar.lua` | Full color palette display |
-| `demos/multiply.lua` | Drawing + MML sound |
-| `demos/text.lua` | Multi-language text rendering |
-| `demos/shader_demo.lua` | Post-processing shaders: water, glow, gray, sepia, invert, vignette, pixelate |
-| `demos/shake_demo.ls` | Screen shake: `shake(ms, power)` / `window.shake(ms, power)` — the world jolts like an accident or an error |
+| `demos/pong.tyro` | Complete Pong game — drawing, keyboard input, AI, physics, collision, sound, scoring |
+| `demos/basic_drawing.tyro` | All drawing primitives: rectangle, circle, line, point, text, colors |
+| `demos/animated_demo.tyro` | Animation loop with random colors and sleep timing |
+| `demos/cycle_demo.tyro` | Per-frame loop using `while cycle do` — one drawing per frame |
+| `demos/sprites_demo.tyro` | Sprites system: load, show, hide, move, rotate, scale, named access |
+| `demos/controls.tyro` | Generic buttons, labels, checkboxes, edits, and panels |
+| `demos/controls_align.tyro` | Nested controls: a left-docked panel with top- and bottom-docked buttons |
+| `demos/aseprites_demo.tyro` | Aseprite animations: load `.aseprite` files (all frames as textures), `play(fps)`, `stop`, `looping`, per-frame stepping — idle/walk/run showcase |
+| `demos/interactive_paint.tyro` | Mouse drawing with keyboard color switching (uses input APIs) |
+| `demos/console_demo.tyro` | Console output: print, println, log |
+| `demos/terminal_demo.tyro` | Built-in terminal commands: dir, list, clear, help, exit |
+| `demos/console_read_demo.tyro` | Interactive console.read() — prompt the user for input from Lua |
+| `demos/music_demo.tyro` | Sound effects (music.sound) and MML melodies (music.mml) |
+| `demos/test.tyro` | Circle animation with random colors |
+| `demos/colors_bar.tyro` | Full color palette display |
+| `demos/multiply.tyro` | Drawing + MML sound |
+| `demos/text.tyro` | Multi-language text rendering |
+| `demos/shader_demo.tyro` | Post-processing shaders: water, glow, gray, sepia, invert, vignette, pixelate |
+| `demos/shake_demo.tyro` | Screen shake: `shake(ms, power)` / `window.shake(ms, power)` — the world jolts like an accident or an error |
 
 # Threading model & lifecycle
 

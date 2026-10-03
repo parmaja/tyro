@@ -1,0 +1,7 @@
+--======================================================================
+--  require_mod.tyro - module loaded by test_require.tyro
+--  Returns a value so the loader caches it, proving the ending was
+--  found and stripped: require("require_mod") must reach this file.
+--======================================================================
+
+return { name = "require_mod.tyro", answer = 42 }

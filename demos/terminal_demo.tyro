@@ -1,5 +1,5 @@
 --======================================================================
---  terminal_demo.lua - Terminal-style console demo
+--  terminal_demo.tyro - Terminal-style console demo
 --======================================================================
 --  Demonstrates the built-in terminal commands available in the console.
 --  When the console is visible, type commands at the prompt:
@@ -8,7 +8,7 @@
 --    help, ?        - Show available commands
 --    exit, quit     - Hide console and stop
 --
---  Run with:  tyro demos/terminal_demo.lua
+--  Run with:  tyro demos/terminal_demo.tyro
 --  Then type "dir" or "list" at the prompt.
 --======================================================================
 

@@ -1,5 +1,5 @@
 --======================================================================
---  spectrum_demo.ls - Radio + live stereo spectrum analyzer
+--  spectrum_demo.tyro - Radio + live stereo spectrum analyzer
 --======================================================================
 --  Play an internet radio station and analyze the live stream with a
 --  Winamp-style stereo spectrum panel.

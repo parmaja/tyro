@@ -73,9 +73,9 @@ type
 
   TFilePickEvent = procedure(Sender: TObject; const AFileName: string) of object;
 
-  //The F4 script picker: a list of loadable files (default *.ls) shown centered
-  //over the main window. Keyboard: Up/Down/PageUp/PageDown/Home/End select (from
-  //TTyroListBox), Enter picks, Escape cancels.
+  //The F4 script picker: a list of loadable files (default *.tyro and *.lua)
+  //shown centered over the main window. Keyboard: Up/Down/PageUp/PageDown/Home/End
+  //select (from TTyroListBox), Enter picks, Escape cancels.
   //Clicking a row selects it; clicking the selected row again picks it.
   TTyroFileList = class(TTyroListBox)
   private
@@ -86,10 +86,11 @@ type
   public
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
-    //Rebuild the item list from ADirectory using AMask; returns the number of
-    //files found. The file names stored here are later resolved against this
-    //directory by SelectedFile.
-    function Refresh(const ADirectory: string; const AMask: string): Integer;
+    //Rebuild the item list from ADirectory using AMasks (one FindFirst each, so
+    //several endings can be listed together); returns the number of files found,
+    //sorted by name and without duplicates. The file names stored here are later
+    //resolved against this directory by SelectedFile.
+    function Refresh(const ADirectory: string; const AMasks: array of string): Integer;
     //Fully qualified name of the selected item, '' when nothing is selected.
     function SelectedFile: string;
     property Directory: string read FDirectory;
@@ -173,7 +174,8 @@ type
     FScriptThread: TTyroScriptThread;
     //Command line script, should run in main thread only
     FScriptREPL: TTyroScript;
-    //F4 script picker: lists the *.ls files of the current directory; picking
+    //F4 script picker: lists the *.tyro and *.lua files of the current directory;
+    //picking
     FFileList: TTyroFileList;
     FReadCallback: TConsoleReadEvent;
     FWaitingQueueObject: TQueueObject; //the queue object a script thread is blocked waiting on
@@ -1150,8 +1152,8 @@ begin
   // F8 toggles the console
   if RayLib.IsKeyPressed(KEY_F8) then
     ToggleConsole;
-  // F4 toggles the *.ls script picker: pick a file, then type "run" to execute
-  // it in the script thread.
+  // F4 toggles the script picker (*.tyro / *.lua): pick a file, then type "run"
+  // to execute it in the script thread.
   if RayLib.IsKeyPressed(KEY_F4) then
     ToggleFileList;
   // Handle ESC to hide console when it's active and focused
@@ -1298,7 +1300,7 @@ begin
   //List the scripts of the current directory first (same source as the console
   //"list" and "load" commands); fall back to the workspace so F4 still finds
   //demos when the engine was launched without a script from an empty folder.
-  FFileList.Refresh(Res.WorkPath, '*.ls');
+  FFileList.Refresh(Res.WorkPath, ['*.tyro', '*.lua']);
 end;
 
 procedure TTyroMain.ShowFileList;
@@ -1684,7 +1686,7 @@ begin
   Output := '';
   if FScriptREPL = nil then
   begin
-    aScriptType := ScriptTypes.FindByExtension('.ls');
+    aScriptType := ScriptTypes.FindByExtension('.tyro');
     if aScriptType = nil then
       aScriptType := ScriptTypes.FindByExtension('.lua');
     if aScriptType = nil then
@@ -1870,33 +1872,36 @@ end;
 
 { TTyroFileList }
 
-function TTyroFileList.Refresh(const ADirectory: string; const AMask: string): Integer;
+function TTyroFileList.Refresh(const ADirectory: string; const AMasks: array of string): Integer;
 var
   sr: TSearchRec;
   DirPath: string;
   Temp: TStringList;
-  i: Integer;
+  m, i: Integer;
 begin
   Clear;
   FDirectory := ExcludeTrailingPathDelimiter(ADirectory);
   Temp := TStringList.Create;
   try
+    Temp.Sorted := True;
+    Temp.Duplicates := dupIgnore;
     DirPath := FDirectory;
     if DirPath <> '' then
     begin
-      if FindFirst(DirPath + PathDelim + AMask, faAnyFile, sr) = 0 then
-      begin
-        try
-          repeat
-            if (sr.Attr and faDirectory) = 0 then
-              Temp.Add(sr.Name);
-          until FindNext(sr) <> 0;
-        finally
-          FindClose(sr);
-        end;
-      end;
+      for m := 0 to High(AMasks) do
+        if AMasks[m] <> '' then
+          if FindFirst(DirPath + PathDelim + AMasks[m], faAnyFile, sr) = 0 then
+          begin
+            try
+              repeat
+                if (sr.Attr and faDirectory) = 0 then
+                  Temp.Add(sr.Name);
+              until FindNext(sr) <> 0;
+            finally
+              FindClose(sr);
+            end;
+          end;
     end;
-    Temp.Sort;
     for i := 0 to Temp.Count - 1 do
       AddItem(Temp[i]);
   finally

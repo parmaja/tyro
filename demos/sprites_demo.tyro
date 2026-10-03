@@ -1,5 +1,5 @@
 --======================================================================
--- spirits_demo.lua  Sprite loading, drawing, moving & transforms
+-- sprites_demo.tyro  Sprite loading, drawing, moving & transforms
 --======================================================================
 -- Demonstrates the Sprites system:
 --   Sprites.new("name")     - create a named spirit

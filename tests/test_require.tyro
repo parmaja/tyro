@@ -1,0 +1,48 @@
+--======================================================================
+--  test_require.tyro - extension resolution smoke test
+--  Run:  tyro tests/test_require.tyro --exit
+--  Writes test_require_out.txt and fails the run (nonzero exit) when any
+--  check does not hold.
+--======================================================================
+
+console.show()
+
+failures = 0
+out = openfile("test_require_out.txt", "w")
+
+function check(label, ok)
+  if ok then
+    out:write("PASS  " .. label .. "\n")
+  else
+    failures = failures + 1
+    out:write("FAIL  " .. label .. "\n")
+  end
+end
+
+-- bare name -> the workspace copy, ending stripped by ModuleStem
+m1 = require("require_mod")
+check('require("require_mod") finds require_mod.tyro', m1 ~= nil and m1.answer == 42)
+
+-- the same module named with its ending: one cached entry, same value
+m2 = require("require_mod.tyro")
+check('require("require_mod.tyro") shares the cached entry', m2 ~= nil and m2.name == "require_mod.tyro")
+
+-- a name that does not exist must still return nil plus a message
+m3, err = require("no_such_module_here")
+check("unknown module is refused", m3 == nil and err ~= nil)
+out:write("      message: " .. tostring(err) .. "\n")
+
+-- .lua is still accepted as a script ending, for modules too
+m4, err4 = require("require_mod_lua")
+check('require("require_mod_lua") finds require_mod_lua.lua', m4 ~= nil and m4.answer == 7)
+out:write("      message: " .. tostring(err4) .. "\n")
+m5, err5 = require("require_mod_lua.lua")
+check('require("require_mod_lua.lua") reaches the same file', m5 ~= nil and m5.name == "require_mod_lua.lua")
+out:write("      message: " .. tostring(err5) .. "\n")
+
+out:write("failures: " .. failures .. "\n")
+out:close()
+
+if failures > 0 then
+  error("test_require: " .. failures .. " check(s) failed")
+end

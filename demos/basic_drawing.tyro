@@ -1,5 +1,5 @@
 --======================================================================
---  basic_drawing.lua - All basic drawing primitives
+--  basic_drawing.tyro - All basic drawing primitives
 --======================================================================
 --  Demonstrates: canvas.clear, canvas.rectangle, canvas.circle,
 --  canvas.line, canvas.point, canvas.text, colors

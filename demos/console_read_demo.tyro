@@ -1,11 +1,11 @@
 --======================================================================
---  console_read_demo.lua - Interactive console.read() demo
+--  console_read_demo.tyro - Interactive console.read() demo
 --======================================================================
 --  Demonstrates the console.read() function, which allows a Lua script
 --  to prompt the user for input on the console. The script blocks until
 --  the user types a line and presses Enter.
 --
---  Run with:  tyro demos/console_read_demo.lua
+--  Run with:  tyro demos/console_read_demo.tyro
 --======================================================================
 
 -- Draw something on the canvas while asking for input

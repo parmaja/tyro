@@ -1,5 +1,5 @@
 --======================================================================
---  cycle_demo.lua - one drawing per frame using the cycle gate
+--  cycle_demo.tyro - one drawing per frame using the cycle gate
 --======================================================================
 --  Demonstrates: while cycle do ... end — the loop body runs at most once
 --  per raylib drawing frame, so drawing commands cannot pile up inside a

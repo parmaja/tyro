@@ -1,5 +1,5 @@
 --======================================================================
--- aseprites_demo.ls  Load & animate Aseprite files (demos/aseprites)
+-- aseprites_demo.tyro  Load & animate Aseprite files (demos/aseprites)
 --======================================================================
 -- Demonstrates loading .aseprite animations with the Sprites system and
 -- playing them at a chosen speed:

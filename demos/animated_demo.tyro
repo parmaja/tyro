@@ -1,5 +1,5 @@
 --======================================================================
---  animated_demo.lua - Animation loop with random colors
+--  animated_demo.tyro - Animation loop with random colors
 --======================================================================
 --  Demonstrates: while-loop animation, random colors, sleep() timing
 --======================================================================

@@ -1,7 +1,7 @@
 --======================================================================
---  marks.ls - a script with no on_collide, to show it's optional
+--  marks.tyro - a script with no on_collide, to show it's optional
 --======================================================================
---  Attach at runtime with:  sprite:loadscript("marks.ls")
+--  Attach at runtime with:  sprite:loadscript("marks.tyro")
 --======================================================================
 
 angle = 0

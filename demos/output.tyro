@@ -1,5 +1,5 @@
 --======================================================================
---  output.ls - Output control
+--  output.tyro - Output control
 --======================================================================
 --  The output control catches everything sent through print(),
 --  println() and log() and shows it on screen. print/println/log

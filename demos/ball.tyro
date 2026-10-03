@@ -1,7 +1,7 @@
 --======================================================================
---  ball.ls - a sprite script attached to a sprite
+--  ball.tyro - a sprite script attached to a sprite
 --======================================================================
---  Attach with:  sprite.load("ball.png", "ball.ls")
+--  Attach with:  sprite.load("ball.png", "ball.tyro")
 --  The file's top-level code runs once when attached. The engine then
 --  calls on_update()/on_draw()/on_collide() on the main thread.
 --======================================================================

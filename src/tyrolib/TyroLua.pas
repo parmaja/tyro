@@ -2654,7 +2654,7 @@ end;
 
 //Turns a module name into the file it stands for, without the ending: "foo.bar"
 //is "foo\bar", the way the stock require reads it. A name that already carries an
-//ending keeps its folder part and loses the ".lua" or ".ls", so both spellings
+//ending keeps its folder part and loses the ".tyro" or ".lua", so both spellings
 //find the same file. Nothing is opened here, the name only becomes a path; the
 //containment check decides whether the path may be used at all.
 function ModuleStem(const AName: string): string;
@@ -2664,10 +2664,10 @@ var
   c: Char;
 begin
   s := AName;
-  if LowerCase(ExtractFileExt(s)) = '.lua' then
-    s := Copy(s, 1, Length(s) - 4)
-  else if LowerCase(ExtractFileExt(s)) = '.ls' then
-    s := Copy(s, 1, Length(s) - 3);
+  if LowerCase(ExtractFileExt(s)) = '.tyro' then
+    s := Copy(s, 1, Length(s) - 5)
+  else if LowerCase(ExtractFileExt(s)) = '.lua' then
+    s := Copy(s, 1, Length(s) - 4);
   //dots that are part of ".." must stay; other dots become the path separator
   Result := '';
   i := 1;
@@ -2699,9 +2699,11 @@ begin
   end;
 end;
 
-//Expands <root>\<name> and returns it only when it lands inside root, so a name
-//built from "..", a drive letter or a UNC root cannot walk out of the folder it
-//is checked against.
+//Expands <root>\<name> and returns it only when the file is really there and
+//lands inside root, so a name built from "..", a drive letter or a UNC root
+//cannot walk out of the folder it is checked against. The existence test is
+//what lets require walk a list of endings: without it the first ending would
+//"win" for every name and the rest of the list would never be reached.
 function ResolveInRoot(const FileName, ARoot: string): string;
 var
   Candidate: string;
@@ -2713,7 +2715,7 @@ begin
     Candidate := ExpandFileName(FileName)
   else
     Candidate := ExpandFileName(IncludePathDelimiter(ARoot) + FileName);
-  if Res.IsPathInside(Candidate, ARoot) then
+  if Res.IsPathInside(Candidate, ARoot) and SysUtils.FileExists(Candidate) then
     Result := Candidate;
 end;
 
@@ -2723,7 +2725,8 @@ end;
 //anywhere on disk: this loader expands the name first and refuses anything that
 //does not land inside the workspace or the app folder. A module that returned a
 //value is remembered in the registry under the file it came from, so the second
-//require hands that value straight back and "m" and "m.lua" share one entry.
+//require hands that value straight back and "m", "m.tyro" and "m.lua" share one
+//entry.
 function TLuaScript.Require_func(L: Plua_State): integer; cdecl;
 var
   aName, Stem, Resolved, aMsg: string;
@@ -2738,21 +2741,23 @@ begin
     Exit(2);
   end;
   aName := L.ToString(1);
+  Stem := ModuleStem(aName);
+  Resolved := '';
 
-  //the workspace comes first, then the app folder; inside each, a .ls file comes
-  //before one of Tyro's own .lua scripts
-  if Resolved = '' then
-    Resolved := ResolveInRoot(Stem + '.ls', Res.WorkPath);
-  if Resolved = '' then
-    Resolved := ResolveInRoot(Stem + '.lua', Res.WorkPath);
-  if Resolved = '' then
-    Resolved := ResolveInRoot(Stem + '.ls', Res.AppPath);
-  if Resolved = '' then
-    Resolved := ResolveInRoot(Stem + '.lua', Res.AppPath);
+  //the workspace comes first, then the app folder; inside each, a .tyro file
+  //comes before one of Tyro's own .lua scripts
+  Extensions[0] := '.tyro';
+  Extensions[1] := '.lua';
+  Roots[0] := Res.WorkPath;
+  Roots[1] := Res.AppPath;
+  for i := 0 to 1 do
+    for j := 0 to 1 do
+      if Resolved = '' then
+        Resolved := ResolveInRoot(Stem + Extensions[j], Roots[i]);
   if Resolved = '' then
   begin
     L.PushNil;
-    L.PushString('require: ''' + aName + ''' is not a .lua or .ls file inside the workspace or the app folder');
+    L.PushString('require: ''' + aName + ''' is not a .tyro or .lua file inside the workspace or the app folder');
     Exit(2);
   end;
 
@@ -4086,7 +4091,7 @@ begin
   Result := 0;
 end;
 
-// sprite:loadscript("file.ls") -> compile & attach a per-sprite script (main thread)
+// sprite:loadscript("file.tyro") -> compile & attach a per-sprite script (main thread)
 function TLuaSprite.LoadScript_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
@@ -4498,7 +4503,7 @@ begin
   FLua.State.BeginTable;
   for i := 0 to Length(FScript.Colors.Colors) - 1 do
     FLua.State.Register(FScript.Colors.Colors[i].Name, ColorToInt(FScript.Colors.Colors[i].Color));
-  FLua.State.EndTable('colors', FScript.Colors);
+  FLua.State.EndTableGlobal('colors', FScript.Colors);
 end;
 
 procedure TLuaSpriteScript.BuildDraw;
@@ -4740,5 +4745,5 @@ begin
 end;
 
 initialization
-  ScriptTypes.RegisterLanguage('Lua', ['.ls', '.lua', '.pluto'], TLuaScript);
+  ScriptTypes.RegisterLanguage('Lua', ['.tyro', '.lua', '.pluto'], TLuaScript);
 end.

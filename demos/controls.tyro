@@ -1,5 +1,5 @@
 --======================================================================
---  controls.ls - Generic control table (buttons, labels, checkboxes, edits)
+--  controls.tyro - Generic control table (buttons, labels, checkboxes, edits)
 --======================================================================
 --  Create controls from Lua by class name; they are owned by the main
 --  window and self-drawn every frame by the main drawing cycle.

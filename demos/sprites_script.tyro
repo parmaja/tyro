@@ -2,8 +2,8 @@
 --  sprite scripts demo - per-sprite Lua "brains"
 --======================================================================
 --  Demonstrates:
---    sprite:load("image.png", "script.ls") - load texture + attach script
---    sprite:loadscript("script.ls")        - attach a script at runtime
+--    sprite:load("image.png", "script.tyro") - load texture + attach script
+--    sprite:loadscript("script.tyro")        - attach a script at runtime
 --    on_update()              - per-frame logic, main thread
 --    on_draw()                - drawn on top of the texture, world coords
 --    on_collide(other, state) - physics contact ("enter" / "leave")
@@ -26,9 +26,9 @@ ground.bouncy = 1.0
 ground.x = 320
 ground.y = 470
 
--- A bouncing ball driven entirely by ball.ls
+-- A bouncing ball driven entirely by ball.tyro
 ball = Sprites.new("ball")
-ball.load("ball.png", "ball.ls")
+ball.load("ball.png", "ball.tyro")
 ball.kind = "dynamic"
 ball.collide = true
 ball.radius = 20
@@ -40,7 +40,7 @@ ball.y = 60
 
 -- Runtime-attached script; no texture, just a rotating marker over the ground
 marks = Sprites.new("marks")
-marks.loadscript("marks.ls")
+marks.loadscript("marks.tyro")
 marks.x = 160
 marks.y = 240
 

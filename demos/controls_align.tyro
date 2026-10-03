@@ -1,5 +1,5 @@
 --======================================================================
---  controls_align.ls - Nested controls and alignment
+--  controls_align.tyro - Nested controls and alignment
 --======================================================================
 --  The panel is docked to the left edge of the main window. Its buttons are
 --  children of that panel: the first three dock to the top and the last one
