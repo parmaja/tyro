@@ -58,7 +58,7 @@ type
     procedure SetStatus(AStatus: TLuaStatus);
   public
     State: Plua_State;
-    procedure Init(SafeMode: Boolean = False; HookCount: Integer = 0);
+    procedure Init(SafeMode: Boolean = True; HookCount: Integer = 0);
     procedure Close;
     procedure SetReady;
     procedure SetTerminated;
