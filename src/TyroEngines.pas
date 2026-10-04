@@ -866,6 +866,7 @@ begin
 
   Console := TTyroTerminal.Create(Self);
   Console.BoundsRect := Rect(Margin, Margin , 100, 200);
+  Console.Important := True;
   Console.Border:= brdSizable;
   Console.BackColor := clNearBlack;
   Console.TextColor := clLightGray;
@@ -878,12 +879,13 @@ begin
   Console.Name := 'Console';
 
   Output := TTyroOutput.Create(Self);
+  Output.Important := True;
   Output.Name := 'Output';
   Output.BoundsRect := Rect(Margin, Margin, 480, 240);
-  Output.Visible := False;
 
   Editor := TyroEditor.Create(Self);
   Editor.Name := 'Editor';
+  Editor.Important := True;
   Editor.BoundsRect := Rect(0, 0, 200, 200);
   Editor.Visible := False;
   Editor.OnClose := EditorClosed;

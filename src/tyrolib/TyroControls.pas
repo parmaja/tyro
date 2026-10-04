@@ -103,6 +103,7 @@ type
   TTyroResizeSide = (rsLeft, rsRight, rsTop, rsBottom);
   TTyroResizeSides = set of TTyroResizeSide;
 
+
   TTyroControls = class;
 
   { TTyroLayout }
@@ -115,6 +116,7 @@ type
     FParent: TTyroLayout;
     FBoundsRect: TRect;
     FVisible: Boolean;
+    FImportant: Boolean;
     FWindowRect: TRect;
     FState: TTyroLayoutStates;
     FControls: TTyroControls;
@@ -179,6 +181,8 @@ type
     property Width: Integer read GetWidth write SetWidth;
     property Height: Integer read GetHeight write SetHeight;
     property Visible: Boolean read FVisible write SetVisible;
+    //Paint it last, over other controls
+    property Important: Boolean read FImportant write FImportant;
   end;
 
 
@@ -2986,9 +2990,16 @@ begin
   begin
     try
       for aControl in Controls do
-      begin
-        aControl.PaintWindow(Canvas);
-      end;
+        if not aControl.Important then
+        begin
+          aControl.PaintWindow(Canvas);
+        end;
+
+      for aControl in Controls do
+        if aControl.Important then
+        begin
+          aControl.PaintWindow(Canvas);
+        end;
     finally
     end;
   end;
