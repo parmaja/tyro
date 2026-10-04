@@ -135,6 +135,9 @@ type
     //* only reads the mouse state and calls these two.
     procedure SelectAtPress(aX, aY: Integer; AExtend: Boolean);
     procedure SelectAtDrag(aX, aY: Integer);
+    //* The half-open range of columns a line has selected, for the painter and
+    //* for a test that cannot open a window.
+    procedure LineSelection(ALine: Integer; out AFrom, ATo: Integer);
     //* The runs of a line, as RebuildRuns measured them: a descendant that
     //* paints the text itself, or a test, needs to know where the colors fall.
     function GetRuns(ALine: Integer): TEditorRuns;
@@ -588,6 +591,47 @@ begin
   if (FCaretLine <> FAnchorLine) or (FCaretCol <> FAnchorCol) then
     FSelecting := True;
   Invalidate;
+end;
+
+{ The half-open range of columns the selection covers on one line, as AFrom
+  up to but not including ATo. AFrom ends up at -1 where the line is not part
+  of the selection at all, and an empty range (ATo at or below AFrom) is a
+  selection that covers nothing there.
+
+  A selection kept on a single line runs from the anchor to the caret and stops
+  there - that is the rule a caret moving with Shift held down follows, one
+  character at a time, so the end of the range has to travel with the caret and
+  not stay pinned to the end of the line. A selection over several lines runs
+  from the anchor to the end of the first line, over every line between them in
+  full, and from the start of the last line to the caret. }
+
+procedure TyroEditor.LineSelection(ALine: Integer; out AFrom, ATo: Integer);
+var
+  l1, c1, l2, c2: Integer;
+begin
+  AFrom := -1;
+  ATo := -1;
+  if not IsSelecting then
+    Exit;
+  GetSelection(l1, c1, l2, c2);
+  if ALine = l1 then
+  begin
+    AFrom := c1;
+    if l1 = l2 then
+      ATo := c2
+    else
+      ATo := GetLineLength(ALine);
+  end
+  else if ALine = l2 then
+  begin
+    AFrom := 0;
+    ATo := c2;
+  end
+  else if (ALine > l1) and (ALine < l2) then
+  begin
+    AFrom := 0;
+    ATo := GetLineLength(ALine);
+  end;
 end;
 
 procedure TyroEditor.ScrollCaretVisible;
@@ -1394,7 +1438,7 @@ var
   textStart, cols: Integer;
   Gov: string;
   glyph: string;
-  SelFrom, SelTo, l1, c1, l2, c2: Integer;
+  SelFrom, SelTo: Integer;
 begin
   if (ALine < 0) or (ALine >= FLines.Count) then
     Exit;
@@ -1430,49 +1474,31 @@ begin
   //selection marker bar + redraw of the selected text
   SelFrom := -1;
   SelTo := -1;
-  if IsSelecting then
+  LineSelection(ALine, SelFrom, SelTo);
+  if (SelFrom >= 0) and (SelTo > SelFrom) then
   begin
-    GetSelection(l1, c1, l2, c2);
-    if ALine = l1 then
+    x1 := textStart + (SelFrom - FLeftCol) * FCharWidth;
+    if x1 < textStart then
+      x1 := textStart;
+    x2 := textStart + (SelTo - FLeftCol) * FCharWidth;
+    if x2 > ClientRect.Width then
+      x2 := ClientRect.Width;
+    if x2 > x1 then
     begin
-      SelFrom := c1;
-      SelTo := UTF8Length(FLines[ALine]);
-    end
-    else if ALine = l2 then
-    begin
-      SelFrom := 0;
-      SelTo := c2;
-    end
-    else if (ALine > l1) and (ALine < l2) then
-    begin
-      SelFrom := 0;
-      SelTo := UTF8Length(FLines[ALine]);
-    end;
-    if (SelFrom >= 0) and (SelTo > SelFrom) then
-    begin
-      x1 := textStart + (SelFrom - FLeftCol) * FCharWidth;
-      if x1 < textStart then
-        x1 := textStart;
-      x2 := textStart + (SelTo - FLeftCol) * FCharWidth;
-      if x2 > ClientRect.Width then
-        x2 := ClientRect.Width;
-      if x2 > x1 then
+      ACanvas.DrawRectangle(x1, aY, x2 - x1, FCharHeight, clDarkGray, True);
+      for I := 0 to High(Runs) do
       begin
-        ACanvas.DrawRectangle(x1, aY, x2 - x1, FCharHeight, clDarkGray, True);
-        for I := 0 to High(Runs) do
-        begin
-          From := Runs[I].Start;
-          if From < SelFrom then
-            From := SelFrom;
-          ToCol := Runs[I].Start + Runs[I].Count;
-          if ToCol > SelTo then
-            ToCol := SelTo;
-          if ToCol <= From then
-            Continue;
-          x := textStart + (From - FLeftCol) * FCharWidth;
-          glyph := UTF8SubStr(FLines[ALine], From, ToCol - From);
-          ACanvas.DrawText(x, aY, glyph, clWhite);
-        end;
+        From := Runs[I].Start;
+        if From < SelFrom then
+          From := SelFrom;
+        ToCol := Runs[I].Start + Runs[I].Count;
+        if ToCol > SelTo then
+          ToCol := SelTo;
+        if ToCol <= From then
+          Continue;
+        x := textStart + (From - FLeftCol) * FCharWidth;
+        glyph := UTF8SubStr(FLines[ALine], From, ToCol - From);
+        ACanvas.DrawText(x, aY, glyph, clWhite);
       end;
     end;
   end;

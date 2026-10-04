@@ -18,8 +18,9 @@ program test_editor_shift_select;
   single character instead, the same check tells "the selection collapsed" apart
   from "the selection is still there".
 
-  Not covered here is the painting of the selection, which needs a real window;
-  the syntax runs and the caret geometry are untouched by the keys under test.
+  Not covered here is the painting itself, which needs a real window; what the
+  painter covers is checked through LineSelection, and the syntax runs and the
+  caret geometry are untouched by the keys under test.
 
   Build and run:
     lazbuild --build-mode=Debug tests\test_editor_shift_select.lpi
@@ -47,12 +48,16 @@ const
 type
   { The mouse half of the selection is protected, and a test cannot hand a
     TyroEditor a mouse: raylib owns that state. A descendant can reach the two
-    handlers and call them with the client coordinates a mouse would have. }
+    handlers and call them with the client coordinates a mouse would have, and
+    can ask which columns a line has selected - that range is what the painter
+    covers and what the eye reads as "selected", and it has to be checked
+    somewhere other than in a window that cannot be opened here. }
 
   TTestEditor = class(TyroEditor)
   public
     procedure Press(aX, aY: Integer; AExtend: Boolean);
     procedure Drag(aX, aY: Integer);
+    function RangeOf(ALine: Integer): string;
   end;
 
 procedure TTestEditor.Press(aX, aY: Integer; AExtend: Boolean);
@@ -63,6 +68,22 @@ end;
 procedure TTestEditor.Drag(aX, aY: Integer);
 begin
   SelectAtDrag(aX, aY);
+end;
+
+{ The columns a line has selected, as 'from-to' over the half-open range the
+  painter fills, or '-' where nothing is selected on that line. The two columns
+  of a caret are both a from and a to, so a selection that has collapsed reads
+  as nothing at all. }
+
+function TTestEditor.RangeOf(ALine: Integer): string;
+var
+  lFrom, lTo: Integer;
+begin
+  LineSelection(ALine, lFrom, lTo);
+  if (lFrom < 0) or (lTo <= lFrom) then
+    Result := '-'
+  else
+    Result := IntToStr(lFrom) + '-' + IntToStr(lTo);
 end;
 
 var
@@ -570,6 +591,90 @@ begin
     Key(KEY_DELETE);
     CheckCut('a click with shift on the anchor of the selection keeps it',
       '|ghi jkl|mno pqr');
+
+    //14. what the painter covers: shift+left and shift+right move the range one
+    //character at a time, and a selection kept on one line ends at the caret
+    //rather than running on to the end of the line
+    Setup;
+    Key(KEY_RIGHT, [ssShift]);
+    Check('one shift+right covers one character', aEditor.RangeOf(0) = '0-1', aEditor.RangeOf(0));
+    Key(KEY_RIGHT, [ssShift]);
+    Key(KEY_RIGHT, [ssShift]);
+    Check('shift+right grows the range one character at a time',
+      aEditor.RangeOf(0) = '0-3', aEditor.RangeOf(0));
+
+    Setup;
+    Key(KEY_END);
+    Key(KEY_LEFT, [ssShift]);
+    Check('one shift+left from the end of a line covers one character',
+      aEditor.RangeOf(0) = '6-7', aEditor.RangeOf(0));
+    Key(KEY_LEFT, [ssShift]);
+    Check('shift+left grows the range back towards the start of the line',
+      aEditor.RangeOf(0) = '5-7', aEditor.RangeOf(0));
+
+    Setup;
+    Key(KEY_RIGHT);
+    Key(KEY_RIGHT);
+    Key(KEY_RIGHT);
+    Key(KEY_LEFT, [ssShift]);
+    Check('the range stops at the caret when it walks back from the middle',
+      aEditor.RangeOf(0) = '2-3', aEditor.RangeOf(0));
+    Key(KEY_LEFT, [ssShift]);
+    Check('and it keeps stopping at the caret as it walks back further',
+      aEditor.RangeOf(0) = '1-3', aEditor.RangeOf(0));
+
+    Setup;
+    Key(KEY_END);
+    Key(KEY_HOME);
+    Key(KEY_RIGHT, [ssShift]);
+    Key(KEY_RIGHT, [ssShift]);
+    Check('a range on one line never reaches past the caret',
+      aEditor.RangeOf(0) = '0-2', aEditor.RangeOf(0));
+    Check('a line outside the selection is left alone', aEditor.RangeOf(1) = '-', aEditor.RangeOf(1));
+
+    //a selection over more than one line runs to the end of the first line and
+    //from the start of the last one, so those two ends stay where they belong
+    Setup;
+    Key(KEY_DOWN, [ssShift]);
+    Key(KEY_RIGHT, [ssShift]);
+    Check('the first line of a selection over lines runs to its end',
+      aEditor.RangeOf(0) = '0-7', aEditor.RangeOf(0));
+    Check('the last line of a selection over lines runs from its start',
+      aEditor.RangeOf(1) = '0-1', aEditor.RangeOf(1));
+    Check('a line the selection does not reach is left alone',
+      aEditor.RangeOf(2) = '-', aEditor.RangeOf(2));
+
+    Setup;
+    Key(KEY_DOWN, [ssShift]);
+    Key(KEY_DOWN, [ssShift]);
+    Key(KEY_RIGHT, [ssShift]);
+    Check('the line in the middle of a selection over lines is covered whole',
+      aEditor.RangeOf(1) = '0-7', aEditor.RangeOf(1));
+    Check('and the last line still stops at the caret',
+      aEditor.RangeOf(2) = '0-1', aEditor.RangeOf(2));
+
+    Setup;
+    Key(KEY_END);
+    Key(KEY_DOWN, [ssShift]);
+    Key(KEY_DOWN, [ssShift]);
+    Check('a range walking down from the end of a line leaves the whole line covered',
+      (aEditor.RangeOf(0) = '-') and (aEditor.RangeOf(1) = '0-7') and (aEditor.RangeOf(2) = '0-7'),
+      aEditor.RangeOf(0) + ' ' + aEditor.RangeOf(1) + ' ' + aEditor.RangeOf(2));
+
+    //and the range is gone again with the selection itself
+    Setup;
+    Key(KEY_RIGHT, [ssShift]);
+    Key(KEY_RIGHT, [ssShift]);
+    Key(KEY_LEFT);              //no shift: the selection goes with it
+    Check('a plain move takes the painted range with it', aEditor.RangeOf(0) = '-', aEditor.RangeOf(0));
+
+    Setup;
+    Key(KEY_RIGHT, [ssShift]);
+    Key(KEY_RIGHT, [ssShift]);
+    Key(KEY_LEFT, [ssShift]);
+    Key(KEY_LEFT, [ssShift]);
+    Check('a range that shrank back to nothing covers nothing',
+      aEditor.RangeOf(0) = '-', aEditor.RangeOf(0));
   finally
     aEditor.Free;
     FreeAndNil(Res);

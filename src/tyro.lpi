@@ -63,6 +63,9 @@
     </RunParams>
     <RequiredPackages>
       <Item>
+        <PackageName Value="miniLua"/>
+      </Item>
+      <Item>
         <PackageName Value="MiniLib"/>
       </Item>
       <Item>
@@ -125,7 +128,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="raylib;lua;tyrolib"/>
+      <OtherUnitFiles Value="..\..\lua;raylib;tyrolib"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

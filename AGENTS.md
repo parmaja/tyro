@@ -6,8 +6,9 @@
 
 ## Libraries
 
+You can full access current folder
 You have full access on minilib source, path is in env %minilib%
-
+You have full access on Lua in path ..\lua\ relative to this current folder
 
 ## Git Commit Guidelines
 

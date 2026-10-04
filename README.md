@@ -586,30 +586,18 @@ https://github.com/raysan5/raylib/issues/454
 
 # Compile
 
-Use FreePascal 3.x or Lazarus with it
+Lazarus or Delphi
 
 # Libraries
 
 You need only MiniLib package minilib.lpk
 [minilib](https://github.com/parmaja/minilib)
+You need only MiniLua package minilib.lpk
+[miniLua](https://github.com/parmaja/miniLua)
 
 # Dependencies
 
 [raylib](https://www.raylib.com/) for raylib.dll/so put it in same of tyro exe folder
-
-[Lua](https://www.lua.org/) for lua dll 5.3 in same of tyro exe folder
-
-# Ported
-
-You do not need to use it, it is already in the source folder
-
-[Lua4Lazarus](https://github.com/malcome/Lua4Lazarus)
-
-
-# TODO
-
-[Sard Objects](https://github.com/parmaja/p-sard)
-
 
 ### Competition
 
