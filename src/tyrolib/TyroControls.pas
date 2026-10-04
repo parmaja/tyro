@@ -63,6 +63,7 @@ type
   TTyroControlStyle = (
     csClip,
     csOpaque,
+    csTexture, //TODO own texture not paint over main texture
     csFocus, //Can focus
     //* A held key auto-repeats: the last accepted key press stays armed while
     //* the physical key is down, then it is replayed every cKeyRepeatInterval
@@ -441,6 +442,26 @@ type
     //* caret is drawn as an underline while it is on.
     property OverwriteMode: Boolean read FOverwrite write SetOverwriteMode;
   end;
+
+  { TTyroImage }
+
+  { TTyroImageControl }
+
+  TTyroImageControl = class(TTyroControl)
+  private
+    FTexture: TTexture2D;
+    FLoaded: Boolean;
+    procedure UnloadTexture;
+  public
+    constructor Create(AParent: TTyroLayout); override;
+    destructor Destroy; override;
+    procedure LoadFromFile(const AFileName: string);
+    procedure LoadFromTexture(ATexture: TTexture2D);
+    procedure DoPaint(ACanvas: TTyroCanvas); override;
+    property Loaded: Boolean read FLoaded;
+  end;
+
+  TTyroImage = TTyroImageControl;
 
   { TTyroListBox }
 
@@ -1899,6 +1920,89 @@ begin
   ACanvas.DrawText(tx, ty, FPlaceHolder, clGray);
 end;
 
+{ TTyroImageControl }
+
+constructor TTyroImageControl.Create(AParent: TTyroLayout);
+begin
+  inherited;
+  Style := Style + [csTexture];
+  Border := brdNone;
+  FLoaded := False;
+  FTexture := Default(TTexture2D);
+  BoundsRect := Rect(0, 0, 64, 64);
+end;
+
+destructor TTyroImageControl.Destroy;
+begin
+  UnloadTexture;
+  inherited;
+end;
+
+procedure TTyroImageControl.UnloadTexture;
+begin
+  if FLoaded then
+  begin
+    RayLib.UnloadTexture(FTexture);
+    FTexture := Default(TTexture2D);
+    FLoaded := False;
+  end;
+end;
+
+procedure TTyroImageControl.LoadFromFile(const AFileName: string);
+var
+  img: TImage;
+  tex: TTexture2D;
+begin
+  UnloadTexture;
+  if AFileName = '' then
+    Exit;
+  img := RayLib.LoadImage(PUTF8Char(UTF8String(Res.GuessFileName(AFileName))));
+  if not RayLib.IsImageValid(img) then
+  begin
+    RayLib.UnloadImage(img);
+    Exit;
+  end;
+  try
+    tex := RayLib.LoadTextureFromImage(img);
+  finally
+    RayLib.UnloadImage(img);
+  end;
+  if not RayLib.IsTextureValid(tex) then
+    Exit;
+  FTexture := tex;
+  FLoaded := True;
+  if BoundsRect.Width < tex.Width then
+    Width := tex.Width;
+  if BoundsRect.Height < tex.Height then
+    Height := tex.Height;
+  Invalidate;
+end;
+
+procedure TTyroImageControl.LoadFromTexture(ATexture: TTexture2D);
+begin
+  UnloadTexture;
+  if not RayLib.IsTextureValid(ATexture) then
+    Exit;
+  FTexture := ATexture;
+  FLoaded := True;
+  Invalidate;
+end;
+
+procedure TTyroImageControl.DoPaint(ACanvas: TTyroCanvas);
+var
+  r: TRect;
+  src: TRectangle;
+begin
+  inherited;
+  if not FLoaded or not RayLib.IsTextureValid(FTexture) then
+    Exit;
+  r := ClientRect;
+  if (r.Width <= 0) or (r.Height <= 0) then
+    Exit;
+  src := TRectangle.Create(0, 0, FTexture.Width, FTexture.Height);
+  RayLib.DrawTexturePro(FTexture, src, RectangleOf(r), Vector2Of(0, 0), 0, clWhite);
+end;
+
 procedure TTyroListBox.DoPaint(ACanvas: TTyroCanvas);
 var
   r: TRect;
@@ -2480,6 +2584,26 @@ begin
     aClientRect := ClientRect;
     if (aClientRect.Width <= 0) or (aClientRect.Height <= 0) then
       exit;
+    //* If this control uses its own texture (csTexture), paint directly to window canvas
+    //* without creating/blitting a separate control buffer over it.
+    if csTexture in Style then
+    begin
+      ACanvas.ResetOrigin;
+      if csClip in Style then
+        RayLib.BeginScissorMode(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top, aClientRect.Width, aClientRect.Height);
+      ACanvas.SetOrigin(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top);
+      try
+        DoPaintBackground(ACanvas);
+        DoPaint(ACanvas);
+        PaintScrollBars(ACanvas);
+      finally
+        ACanvas.ResetOrigin;
+        if csClip in Style then
+          RayLib.EndScissorMode();
+      end;
+      Exit;
+    end;
+
     if PrepareCanvas then
     begin
       //* Paint the control content into its own transparent texture buffer,
