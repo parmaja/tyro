@@ -252,7 +252,9 @@ begin
   ScriptFile := CorrectPath(ExpandToPath(Arguments.ReadString(''), Res.WorkPath)); //File come without switch name
 
   if SysUtils.FileExists(ScriptFile) then
-    Main.ScriptFile := ScriptFile;
+    Main.ScriptFile := ScriptFile
+  else if SysUtils.DirectoryExists(ScriptFile) then
+    Res.WorkPath := ScriptFile;
 
   if (Main.ScriptFile = '') or Arguments.ReadSwitch('-window', true) or Arguments.ReadSwitch('-w', true) then
     MainOptions := MainOptions + [moMainWindow];

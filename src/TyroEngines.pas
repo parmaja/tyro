@@ -1322,6 +1322,7 @@ begin
   FFileList.BoundsRect := Rect((W - LW) div 2, (H - LH) div 2,
                               (W + LW) div 2, (H + LH) div 2);
   FFileList.Show;
+  FFileList.Important := True;
   FFileList.BringToFront;
   FFileList.SetFocus;
 end;
