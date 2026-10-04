@@ -71,3 +71,4 @@ __recovery/
 /src/*.lps
 # test artifacts: tests/rerun_target.log is written by rerun_target.lua
 /tests/*.log
+/ref

@@ -1392,13 +1392,11 @@ begin
   //the source stays safe to change. Stop the run so it is not executing while
   //the source is being edited.
   StopScriptRun;
-  if FScriptMain = nil then
+  if FScriptMain <> nil then
   begin
-    Log.WriteLn('No script loaded. Use "load <script>" first.');
-    Exit;
+    Editor.FileName := FScriptMain.FileName;
+    Editor.LoadSource(FScriptMain.Source);
   end;
-  Editor.FileName := FScriptMain.FileName;
-  Editor.LoadSource(FScriptMain.Source);
   Editor.BoundsRect := Rect(0, 0, Width, Height);
   Editor.Margin := 10;
   Editor.BackColor := clBlack;
@@ -1415,7 +1413,7 @@ begin
     SaveEditorSource;
     Editor.Hide;
     //Run the edited source, exactly like F5 does.
-    RunScriptThread;
+    //RunScriptThread;
   end;
 end;
 

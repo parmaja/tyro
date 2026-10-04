@@ -184,20 +184,6 @@ type
 
   TTyroCanvas = class;
 
-  { TTyroImage }
-
-  TTyroImage = class(TObject)
-  private
-    FImage: TImage;
-  protected
-    property Image: TImage read FImage;
-  public
-    constructor Create(AWidth, AHeight: Integer);
-    destructor Destroy; override;
-    function LoadTexture: TTexture2D;
-    procedure Circle(X, Y, R: Integer; Color: TColor);
-  end;
-
   { TTyroCanvas }
 
   TTyroEffect = (fxNone, fxWater, fxGlow, fxGray, fxSepia, fxInvert, fxVignette, fxPixelate, fxCustom);
@@ -520,30 +506,6 @@ end;
 function UTF8Delete(const S: string; ACol, ACount: Integer): string;
 begin
   Result := UTF8SubStr(S, 0, ACol) + UTF8SubStr(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
-end;
-
-{ TTyroImage }
-
-constructor TTyroImage.Create(AWidth, AHeight: Integer);
-begin
-  //FImage := GetTextureData(FTexture.texture);
-  FImage := GenImageColor(AWidth, AHeight, clRed);
-end;
-
-destructor TTyroImage.Destroy;
-begin
-  UnloadImage(FImage);
-  inherited Destroy;
-end;
-
-function TTyroImage.LoadTexture: TTexture2D;
-begin
-  Result := LoadTextureFromImage(FImage);
-end;
-
-procedure TTyroImage.Circle(X, Y, R: Integer; Color: TColor);
-begin
-  ImageDrawCircle(FImage, X, Y, R, Color);
 end;
 
 { TTyroCanvas }

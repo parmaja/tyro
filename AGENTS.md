@@ -30,7 +30,7 @@ You have full access on Lua in path ..\lua\ relative to this current folder
 - Do not commit without asking you to commit
 - Do not add ignored files
 - Do not add untracked files that you did not generate yourself; leave them untracked
-- Whenever you are asked to make a git commit, you must identify and include your active model name inside the commit message.
+- Whenever you are asked to make a git commit, you must identify and include your active model name on top of the commit message.
 
 ## Testing Framework Architecture
 
