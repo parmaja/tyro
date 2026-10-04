@@ -10,7 +10,7 @@
         <MainUnitHasScaledStatement Value="False"/>
       </Flags>
       <SessionStorage Value="InProjectDir"/>
-      <Title Value="test_rerun_editor"/>
+      <Title Value="test_terminal_tab_complete"/>
       <UseAppBundle Value="False"/>
     </General>
     <BuildModes>
@@ -32,7 +32,7 @@
     </RequiredPackages>
     <Units>
       <Unit>
-        <Filename Value="test_rerun_editor.lpr"/>
+        <Filename Value="test_terminal_tab_complete.lpr"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
@@ -41,11 +41,11 @@
     <Version Value="11"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="..\bin\test_rerun_editor"/>
+      <Filename Value="..\bin\test_terminal_tab_complete"/>
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="..\..\lua;..\src;..\src\raylib;..\src\tyrolib"/>
+      <OtherUnitFiles Value="..\src;..\src\raylib;..\src\lua;..\src\tyrolib"/>
       <UnitOutputDirectory Value="..\src\lib\tests\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

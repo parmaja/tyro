@@ -11,6 +11,9 @@ unit TyroTerminal;
  *    - a single editable command line pinned at the bottom
  *    - the current command word is syntax highlighted when it matches a
  *      registered builtin command
+ *    - TAB completes the word under the caret: the builtin command names while
+ *      the caret is inside the first word, otherwise the files of the workspace
+ *      (WorkPath). TAB again walks to the next candidate, cycling at the end
  *    - up/down arrows browse the command history
  *    - holding a key auto-repeats it (text, backspace, arrows, history)
  *    - console.read() (Lua) works through StartRead/StopRead
@@ -94,6 +97,17 @@ type
 
     FCommandNames: TStringList;       // builtin command names highlighted in the input
 
+    { Tab completion: the candidates of the word under the caret, the one the
+      last TAB inserted, and where that one lives in the input line. The caret
+      sitting right after it is what tells a second TAB ("next candidate") from
+      a fresh completion. }
+    FCompletion: TStringList;
+    FCompletionIndex: Integer;        // -1 = no completion running
+    FCompletionStart: Integer;        // codepoint of the first char of the completed word
+    FCompletionEnd: Integer;          // codepoint right after the inserted candidate
+    FCompletionCurrent: utf8string;   // exactly what the last TAB inserted
+    FFileMasks: TStringList;          // masks of the files offered as arguments
+
     FCaretTimer: Double;
     FCaretDim: Double;
     FCaretVisible: Boolean;
@@ -147,6 +161,15 @@ type
     procedure HistoryDown;
     procedure SubmitInput;
 
+    function HasPrefix(const AText, APrefix: utf8string): Boolean;
+    function WordAtCaret(out AStart: Integer): utf8string;
+    function IsFirstWord: Boolean;
+    procedure BuildCompletion(const APrefix: utf8string; ACommandPos: Boolean);
+    function ApplyCompletion: Boolean;
+    procedure CompleteInput;
+    procedure InsertTabSpaces;
+    procedure ResetCompletion;
+
     procedure DrawOutputLine(ACanvas: TTyroCanvas; ALine, AY: Integer);
     procedure DrawInputLine(ACanvas: TTyroCanvas; AY: Integer);
     procedure DrawCaret(ACanvas: TTyroCanvas; AY: Integer);
@@ -194,6 +217,11 @@ type
 
     property LineCount: Integer read GetLineCount;
     property CommandNames: TStringList read FCommandNames;
+
+    {* Masks of the files TAB offers once the caret left the command word.
+     Defaults to the script extensions; set it to '*.*' to complete any file of
+     the workspace. }
+    property FileMasks: TStringList read FFileMasks;
   end;
 
   { TTyroOutput }
@@ -271,6 +299,17 @@ begin
   for i := 0 to High(Builtin) do
     FCommandNames.Add(Builtin[i]);
 
+  //what TAB offers as arguments: the script files of the workspace
+  FFileMasks := TStringList.Create;
+  FFileMasks.Add('*.tyro');
+  FFileMasks.Add('*.lua');
+
+  FCompletion := nil;
+  FCompletionIndex := -1;
+  FCompletionStart := 0;
+  FCompletionEnd := 0;
+  FCompletionCurrent := '';
+
   FCaretTimer := 0;
   FCaretDim := 1;
   FCaretVisible := True;
@@ -283,6 +322,8 @@ end;
 
 destructor TTyroTerminal.Destroy;
 begin
+  FreeAndNil(FCompletion);
+  FreeAndNil(FFileMasks);
   FreeAndNil(FCommandNames);
   FreeAndNil(FHistory);
   FreeAndNil(FLines);
@@ -559,10 +600,22 @@ begin
   Invalidate;
 end;
 
+{ Drops the running completion, so the next TAB builds a fresh list from
+  whatever the input line holds now. }
+procedure TTyroTerminal.ResetCompletion;
+begin
+  FreeAndNil(FCompletion);
+  FCompletionIndex := -1;
+  FCompletionStart := 0;
+  FCompletionEnd := 0;
+  FCompletionCurrent := '';
+end;
+
 procedure TTyroTerminal.Clear;
 begin
   FLines.Clear;
   FScrollBack := 0;
+  ResetCompletion;
   FInputBuffer := '';
   FInputPos := 0;
   FInputScroll := 0;
@@ -591,6 +644,7 @@ begin
   FInputBuffer := '';
   FInputPos := 0;
   FInputScroll := 0;
+  ResetCompletion;
   ClearInputSelection;
   ClearKeyRepeat;
   FInputOn := True;
@@ -697,6 +751,7 @@ end;
 
 procedure TTyroTerminal.PlaceInputCaretAt(AX: Integer);
 begin
+  ResetCompletion;       //the caret moved: the next TAB completes the new word
   FInputPos := CharAtPixel(AX);
   if FInputPos < 0 then
     FInputPos := 0;
@@ -819,6 +874,7 @@ begin
     Exit;
   if FInputSelStart >= 0 then
     DeleteInputSelection;
+  ResetCompletion;       //the pasted text replaces what a completion covered
   FInputBuffer := UTF8Insert(FInputBuffer, FInputPos, S);
   Inc(FInputPos, UTF8Length(S));
   UpdateInputScroll;
@@ -835,6 +891,7 @@ procedure TTyroTerminal.HistoryUp;
 begin
   if FHistory.Count = 0 then
     Exit;
+  ResetCompletion;
   if FHistoryPos < 0 then
     FHistoryPos := FHistory.Count - 1
   else if FHistoryPos > 0 then
@@ -850,6 +907,7 @@ procedure TTyroTerminal.HistoryDown;
 begin
   if FHistoryPos < 0 then
     Exit;
+  ResetCompletion;
   Inc(FHistoryPos);
   if FHistoryPos >= FHistory.Count then
   begin
@@ -887,11 +945,210 @@ begin
   FInputBuffer := '';
   FInputPos := 0;
   FInputScroll := 0;
+  ResetCompletion;
   ClearInputSelection;
   ClearKeyRepeat;
   FInputOn := False;
   if Assigned(FOnInput) then
     FOnInput(Self, s);
+  Invalidate;
+end;
+
+{ tab completion }
+
+{ Case-insensitive prefix test. Working on the codepoints, not on bytes, so a
+  multi-byte prefix is compared the way the user sees it. }
+function TTyroTerminal.HasPrefix(const AText, APrefix: utf8string): Boolean;
+begin
+  if APrefix = '' then
+    Exit(True);
+  if UTF8Length(AText) < UTF8Length(APrefix) then
+    Exit(False);
+  Result := SameText(AText, APrefix) or
+    SameText(UTF8SubStr(AText, 0, UTF8Length(APrefix)), APrefix);
+end;
+
+{ The word the caret sits in or next to, and where it starts. Scanning stops at
+  a space or a tab, so a caret between two words completes the one it touches
+  (the right one first), and a caret next to a space completes the word before
+  it. An empty result means there is no word to complete. }
+function TTyroTerminal.WordAtCaret(out AStart: Integer): utf8string;
+var
+  L, Start, Stop: Integer;
+  Ch: utf8string;
+begin
+  Result := '';
+  AStart := 0;
+  L := UTF8Length(FInputBuffer);
+  //back up to the first character of the word the caret touches: a caret inside
+  //a word or right after it belongs to that word, a caret in a run of spaces
+  //belongs to the word it faces (the one to its right)
+  Start := FInputPos;
+  while Start > 0 do
+  begin
+    Ch := UTF8SubStr(FInputBuffer, Start - 1, 1);
+    if (Ch = ' ') or (Ch = #9) then
+      Break;
+    Dec(Start);
+  end;
+  if Start > L then
+    Start := L;
+  //and forward to its last character
+  Stop := Start;
+  while Stop < L do
+  begin
+    Ch := UTF8SubStr(FInputBuffer, Stop, 1);
+    if (Ch = ' ') or (Ch = #9) then
+      Break;
+    Inc(Stop);
+  end;
+  AStart := Start;
+  Result := UTF8SubStr(FInputBuffer, Start, Stop - Start);
+end;
+
+{ True when the caret belongs to the command word (the first word of the line)
+  rather than to an argument. An empty first word still counts as the command:
+  that is where the command names are offered. }
+function TTyroTerminal.IsFirstWord: Boolean;
+var
+  Leading, Word, Rest: utf8string;
+  WordEnd: Integer;
+begin
+  SplitFirstWord(FInputBuffer, Leading, Word, Rest);
+  //one past the last char of the command word, so a caret right after it counts
+  WordEnd := UTF8Length(Leading) + UTF8Length(Word);
+  Result := (Word = '') or (FInputPos <= WordEnd);
+end;
+
+{ Fills FCompletion with the candidates that start with APrefix: the command
+  names for the first word, otherwise the files of the workspace that match one
+  of FFileMasks. }
+procedure TTyroTerminal.BuildCompletion(const APrefix: utf8string; ACommandPos: Boolean);
+var
+  i, Mask: Integer;
+  sr: TSearchRec;
+  DirPath: utf8string;
+begin
+  ResetCompletion;
+  FCompletion := TStringList.Create;
+  FCompletion.Sorted := True;   //cycle in a stable, alphabetical order
+  FCompletion.Duplicates := dupIgnore;
+  if ACommandPos then
+  begin
+    for i := 0 to FCommandNames.Count - 1 do
+      if HasPrefix(FCommandNames[i], APrefix) then
+        FCompletion.Add(FCommandNames[i]);
+  end
+  else
+  begin
+    DirPath := IncludePathDelimiter(Res.WorkPath);
+    if DirPath = PathDelim then
+      DirPath := PathDelim
+    else if DirPath = '' then
+      Exit;
+    for Mask := 0 to FFileMasks.Count - 1 do
+      if (FFileMasks[Mask] <> '') and
+        (SysUtils.FindFirst(DirPath + FFileMasks[Mask], faAnyFile, sr) = 0) then
+      begin
+        try
+          repeat
+            if ((sr.Attr and faDirectory) = 0) and HasPrefix(sr.Name, APrefix) then
+              FCompletion.Add(sr.Name);
+          until FindNext(sr) <> 0;
+        finally
+          FindClose(sr);
+        end;
+      end;
+  end;
+end;
+
+{ Replaces the word the completion covers with the current candidate. The span
+  grows and shrinks with the candidate, so cycling back and forth restores the
+  original text exactly. }
+function TTyroTerminal.ApplyCompletion: Boolean;
+var
+  Word: utf8string;
+begin
+  Result := False;
+  if (FCompletion = nil) or (FCompletionIndex < 0) or
+    (FCompletionIndex >= FCompletion.Count) then
+    Exit;
+  Word := UTF8SubStr(FInputBuffer, FCompletionStart,
+    FCompletionEnd - FCompletionStart);
+  //keep the span identical when the candidate already is the typed word
+  if Word = FCompletion[FCompletionIndex] then
+    Exit;
+  FInputBuffer := UTF8SubStr(FInputBuffer, 0, FCompletionStart) +
+    FCompletion[FCompletionIndex] +
+    UTF8SubStr(FInputBuffer, FCompletionEnd, UTF8Length(FInputBuffer) - FCompletionEnd);
+  FCompletionCurrent := FCompletion[FCompletionIndex];
+  FInputPos := FCompletionStart + UTF8Length(FCompletionCurrent);
+  //the covered span follows the candidate, so the next TAB knows it is still
+  //looking at a completion and not at a word the user typed
+  FCompletionEnd := FInputPos;
+  UpdateInputScroll;
+  Result := True;
+end;
+
+{ TAB: completes the word under the caret, or moves to the next candidate when
+  the last one is still in place and untouched. A password prompt completes
+  nothing, and a word with no candidate at all falls back to a plain tab so the
+  key is never dead. }
+procedure TTyroTerminal.CompleteInput;
+var
+  Prefix: utf8string;
+  Start: Integer;
+  CommandPos: Boolean;
+begin
+  if FPasswordMode then
+    Exit;
+  //a completion still standing and unedited cycles to the next candidate
+  if (FCompletion <> nil) and (FCompletionIndex >= 0) and
+    (FInputPos = FCompletionEnd) and
+    (UTF8SubStr(FInputBuffer, FCompletionStart, UTF8Length(FCompletionCurrent)) = FCompletionCurrent) then
+  begin
+    Inc(FCompletionIndex);
+    if FCompletionIndex >= FCompletion.Count then
+      FCompletionIndex := 0; //cycle back to the first
+    if not ApplyCompletion then
+      Exit;
+  end
+  else
+  begin
+    Prefix := WordAtCaret(Start);
+    //the first word is the command itself, everything after it is an argument
+    CommandPos := IsFirstWord;
+    BuildCompletion(Prefix, CommandPos);
+    if FCompletion.Count = 0 then
+    begin
+      InsertTabSpaces;
+      Exit;
+    end;
+    FCompletionIndex := 0;
+    FCompletionStart := Start;
+    FCompletionEnd := Start + UTF8Length(Prefix);
+    if not ApplyCompletion then
+      Exit;
+  end;
+  ClearInputSelection;
+  if Assigned(FOnInputChange) then
+    FOnInputChange(Self, FInputBuffer);
+  if Assigned(FOnAny) then
+    FOnAny(Self, FInputBuffer);
+  Invalidate;
+end;
+
+procedure TTyroTerminal.InsertTabSpaces;
+begin
+  if FInputSelStart >= 0 then
+    DeleteInputSelection;
+  FInputBuffer := UTF8Insert(FInputBuffer, FInputPos, '    ');
+  Inc(FInputPos, 4);
+  UpdateInputScroll;
+  if Assigned(FOnInputChange) then
+    FOnInputChange(Self, FInputBuffer);
+  if Assigned(FOnAny) then
+    FOnAny(Self, FInputBuffer);
   Invalidate;
 end;
 
@@ -931,6 +1188,7 @@ begin
   S := CharOf(Key);      //the bytes as they came, not through the codepage of the machine
   if S = '' then
     Exit;
+  ResetCompletion;       //the typed char invalidates a running completion
   HadSelection := FInputSelStart >= 0;
   if HadSelection then
     DeleteInputSelection;
@@ -1007,21 +1265,13 @@ begin
     begin
       if not (ssCtrl in Shift) then
       begin
-        if FInputSelStart >= 0 then
-          DeleteInputSelection;
-        FInputBuffer := UTF8Insert(FInputBuffer, FInputPos, '    ');
-        Inc(FInputPos, 4);
-        UpdateInputScroll;
-        if Assigned(FOnInputChange) then
-          FOnInputChange(Self, FInputBuffer);
-        if Assigned(FOnAny) then
-          FOnAny(Self, FInputBuffer);
-        Invalidate;
+        CompleteInput;
         Key := KEY_NULL;
       end;
     end;
     KEY_BACKSPACE:
     begin
+      ResetCompletion;
       if FInputSelStart >= 0 then
         DeleteInputSelection
       else if FInputPos > 0 then
@@ -1039,6 +1289,7 @@ begin
     end;
     KEY_DELETE:
     begin
+      ResetCompletion;
       if FInputSelStart >= 0 then
         DeleteInputSelection
       else if FInputPos < UTF8Length(FInputBuffer) then

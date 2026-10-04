@@ -1872,6 +1872,14 @@ begin
   aFile := Params[0];
   aFileName := IncludePathDelimiter(Res.WorkPath) + aFile;
 
+  //"load demo" loads demo.tyro: a name without an extension that does not exist
+  //on its own is taken as a script. An explicit extension is never second-guessed.
+  if (ExtractFileExt(aFile) = '') and not SysUtils.FileExists(aFileName) then
+  begin
+    aFile := aFile + '.tyro';
+    aFileName := IncludePathDelimiter(Res.WorkPath) + aFile;
+  end;
+
   if SysUtils.FileExists(aFileName) then
   begin
     ScriptFile := aFileName;
