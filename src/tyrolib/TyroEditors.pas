@@ -133,6 +133,9 @@ type
     //* only reads the mouse state and calls these two.
     procedure SelectAtPress(aX, aY: Integer; AExtend: Boolean);
     procedure SelectAtDrag(aX, aY: Integer);
+    //* The runs of a line, as RebuildRuns measured them: a descendant that
+    //* paints the text itself, or a test, needs to know where the colors fall.
+    function GetRuns(ALine: Integer): TEditorRuns;
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -1102,6 +1105,13 @@ end;
 
 { Rebuild the syntax run cache for every line }
 
+function TyroEditor.GetRuns(ALine: Integer): TEditorRuns;
+begin
+  Result := nil;
+  if (ALine >= 0) and (ALine < Length(FRuns)) then
+    Result := FRuns[ALine];
+end;
+
 procedure TyroEditor.RebuildRuns;
 var
   I: Integer;
@@ -1115,6 +1125,7 @@ var
   N, K, Q: Integer;
   OpenerLen: Integer;
   Closer: string;
+  Delim: Char;
 
   procedure EmitRun(AColor: TColor);
   var
@@ -1270,6 +1281,11 @@ begin
           end;
         '''', '"':
           begin
+            { The delimiter that opened the string is the one that closes it:
+              anything else in between is text, two characters of a kind
+              included - "button" ends at the quote behind the word, not at
+              the "tt" in the middle of it. }
+            Delim := L[P];
             Advance(N);
             while P <= Ln do
             begin
@@ -1279,7 +1295,7 @@ begin
                 if P <= Ln then
                   Advance(UTF8CodepointSize(@L[P]));
               end
-              else if L[P] = L[P - 1] then
+              else if L[P] = Delim then
               begin
                 Advance(UTF8CodepointSize(@L[P]));
                 Break;
