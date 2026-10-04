@@ -399,6 +399,7 @@ type
     FSelStart: Integer; //selection anchor codepoint, -1 = none
     FSelEnd: Integer;   //selection end codepoint (exclusive), -1 = none
     FScrollPos: Integer;//horizontal scroll offset in pixels
+    FOverwrite: Boolean;//true = typing replaces the character under the caret
     function PointToCaret(ALocalX: Integer): Integer;
     function TextWidth(const S: utf8string): Single;
     procedure SetPlaceHolder(AValue: utf8string);
@@ -412,6 +413,7 @@ type
     procedure CopySelection;
     procedure CutSelection;
     procedure PasteText;
+    procedure SetOverwriteMode(AValue: Boolean);
   protected
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     function GetText: utf8string; override;
@@ -430,6 +432,10 @@ type
     //* Text shown instead of the (empty) content. Empty (the default) paints
     //* nothing while the edit is empty.
     property PlaceHolder: utf8string read FPlaceHolder write SetPlaceHolder;
+    //* Overwrite mode: a typed character replaces the one under the caret
+    //* instead of being inserted before it. The Insert key toggles it, and the
+    //* caret is drawn as an underline while it is on.
+    property OverwriteMode: Boolean read FOverwrite write SetOverwriteMode;
   end;
 
   { TTyroListBox }
@@ -529,6 +535,14 @@ type
     property FocusedControl: TTyroControl read FFocusedControl  write SetFocusedControl;
   end;
 
+  {* The bytes of a typed character, as a UTF-8 string.
+   TUTF8Char is an AnsiString carrying the codepage of the machine, which is not
+   necessarily UTF-8, so reading it as one - by assigning it, or by joining it in
+   a string expression - runs every byte through that codepage and replaces
+   whatever it cannot represent. Only the byte values matter here, so copy them
+   over one by one as they are.}
+  function CharOf(const AChar: TUTF8Char): utf8string;
+
 implementation
 
 { Codepoint helpers for UTF-8 strings (same pattern as TyroTerminal) }
@@ -552,6 +566,15 @@ end;
 function CPDelete(const S: utf8string; ACol, ACount: Integer): utf8string;
 begin
   Result := CPSub(S, 0, ACol) + CPSub(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
+end;
+
+function CharOf(const AChar: TUTF8Char): utf8string;
+var
+  i: Integer;
+begin
+  SetLength(Result, Length(AChar));
+  for i := 1 to Length(AChar) do
+    Move(AChar[i], Result[i], 1);   //the byte itself, not a character
 end;
 
 { TTyroLayout }
@@ -1032,6 +1055,7 @@ begin
   Style := [csClip, csOpaque, csFocus, csRepeatKeys];
   Border := brdNone;
   BackColor := clWhite;
+  FOverwrite := False;
   BoundsRect := Rect(0, 0, 140, 28);
 end;
 
@@ -1063,6 +1087,14 @@ begin
   if FPlaceHolder = AValue then
     Exit;
   FPlaceHolder := AValue;
+  Invalidate;
+end;
+
+procedure TTyroEdit.SetOverwriteMode(AValue: Boolean);
+begin
+  if FOverwrite = AValue then
+    Exit;
+  FOverwrite := AValue;
   Invalidate;
 end;
 
@@ -1231,6 +1263,7 @@ var
   r: TRect;
   th: Single;
   caretX, selX, selW: Integer;
+  caretW: Integer;
   a, b: Integer;
 begin
   inherited;
@@ -1256,11 +1289,24 @@ begin
   if Focused and (Trunc(RayLib.GetTime() * 2) mod 2 = 0) then
   begin
     caretX := 2 + Round(TextWidth(CPSub(FText, 0, FCaretPos))) - FScrollPos;
-    ACanvas.FillRectangle(caretX, 1, 1, r.Height - 2, clBlack);
+    if FOverwrite then
+    begin
+      //an underline under the covered character is the sign every other editor
+      //gives for overwrite; with nothing left to cover, it keeps a thin bar
+      caretW := 2;
+      if FCaretPos < UTF8Length(FText) then
+        caretW := Round(TextWidth(CPSub(FText, FCaretPos, 1)));
+      ACanvas.FillRectangle(caretX, r.Height - 3, caretW, 2, clBlack);
+    end
+    else
+      ACanvas.FillRectangle(caretX, 1, 1, r.Height - 2, clBlack);
   end;
 end;
 
 procedure TTyroEdit.KeyPress(var Key: TUTF8Char);
+var
+  n: Integer;
+  HadSelection: Boolean;
 begin
   inherited;
   if Length(Key) = 0 then
@@ -1272,10 +1318,23 @@ begin
   //arm auto-repeat for this character; the same physical key is also reported
   //as a key press (without a character) right before it
   TrackKeyRepeat(CharToKey(Key), Key);
-  if HasSelection then
+  HadSelection := HasSelection;
+  if HadSelection then
     DeleteSelection;
-  FText := CPInsert(FText, FCaretPos, Key);
-  Inc(FCaretPos);
+  n := UTF8Length(FText);
+  { Overwrite mode (the Insert key) replaces the character under the caret
+    instead of pushing the rest of the text to the right. At the end of the text
+    there is nothing to replace, so the character is appended as usual - and so
+    is one typed over a selection, which has already swallowed the characters it
+    covered. The typed character goes through CharOf, because joining a
+    TUTF8Char onto a utf8string would take it through the codepage of the
+    machine instead of leaving its bytes alone. }
+  if FOverwrite and (not HadSelection) and (FCaretPos < n) then
+    FText := CPSub(FText, 0, FCaretPos) + CharOf(Key) +
+      CPSub(FText, FCaretPos + 1, n - FCaretPos - 1)
+  else
+    FText := CPInsert(FText, FCaretPos, CharOf(Key));
+  Inc(FCaretPos, UTF8Length(Key));
   EnsureCaretVisible;
   Invalidate;
 end;
@@ -1367,6 +1426,13 @@ begin
   end;
 
   case Key of
+    KEY_INSERT:
+    begin
+      //CTRL+INSERT and SHIFT+INSERT above keep their traditional copy/paste
+      //meaning; a plain INSERT switches between insert and overwrite mode
+      FOverwrite := not FOverwrite;
+      Invalidate;
+    end;
     KEY_BACKSPACE:
     begin
       if HasSelection then

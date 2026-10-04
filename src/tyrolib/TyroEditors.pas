@@ -60,6 +60,7 @@ type
     FCaretTimer: Double;
     FCaretDim: Double;
     FCaretVisible: Boolean;
+    FOverwrite: Boolean;   //true = typing replaces the character under the caret
     FAnchorLine: Integer;
     FAnchorCol: Integer;
     FSelecting: Boolean;
@@ -94,7 +95,7 @@ type
     procedure ModifyDone;
 
     procedure BeginEdit;
-    procedure InsertSingleChar(const AChar: string);
+    procedure InsertSingleChar(const AChar: string; AOverwrite: Boolean);
     procedure InsertText(const S: string);
     procedure DeleteCharAt(ALine, ACol: Integer);
     procedure DeleteAtCaret;
@@ -115,6 +116,7 @@ type
     procedure CutSelection;
     procedure PasteText;
 
+    procedure SetOverwriteMode(AValue: Boolean);
     procedure RebuildRuns;
     function IsKeyword(const AWord: string): Boolean;
     function IsApiName(const AWord: string): Boolean;
@@ -152,6 +154,11 @@ type
 
     property FileName: string read FFileName write FFileName;
     property Modified: Boolean read FModified;
+    {* Overwrite mode: a typed character replaces the one under the caret
+     instead of pushing the text to the right of it. The Insert key toggles
+     it, the status bar names the mode and the caret is drawn as an underline
+     while it is on. }
+    property OverwriteMode: Boolean read FOverwrite write SetOverwriteMode;
     property LineCount: Integer read GetLineCount;
     property OnClose: TEditorCloseEvent read FOnClose write FOnClose;
     property OnSave: TEditorSaveEvent read FOnSave write FOnSave;
@@ -212,6 +219,7 @@ begin
   FCaretTimer := 0;
   FCaretDim := 1;
   FCaretVisible := True;
+  FOverwrite := False;
   FAnchorLine := 0;
   FAnchorCol := 0;
   FSelecting := False;
@@ -669,6 +677,14 @@ begin
   Invalidate;
 end;
 
+procedure TyroEditor.SetOverwriteMode(AValue: Boolean);
+begin
+  if FOverwrite = AValue then
+    Exit;
+  FOverwrite := AValue;
+  Invalidate;
+end;
+
 procedure TyroEditor.ModifyDone;
 begin
   FModified := True;
@@ -677,10 +693,21 @@ begin
   Invalidate;
 end;
 
-procedure TyroEditor.InsertSingleChar(const AChar: string);
+procedure TyroEditor.InsertSingleChar(const AChar: string; AOverwrite: Boolean);
+var
+  N, L: Integer;
 begin
-  FLines[FCaretLine] := UTF8Insert(FLines[FCaretLine], FCaretCol, AChar);
-  Inc(FCaretCol, UTF8Length(AChar));
+  L := GetLineLength(FCaretLine);
+  N := UTF8Length(AChar);
+  { Overwrite mode (the Insert key) replaces the character under the caret
+    instead of pushing the rest of the line to the right. At the end of the
+    line there is nothing to replace, so the character is appended as usual. }
+  if AOverwrite and (FCaretCol < L) then
+    FLines[FCaretLine] := UTF8SubStr(FLines[FCaretLine], 0, FCaretCol) + AChar +
+      UTF8SubStr(FLines[FCaretLine], FCaretCol + 1, L - FCaretCol - 1)
+  else
+    FLines[FCaretLine] := UTF8Insert(FLines[FCaretLine], FCaretCol, AChar);
+  Inc(FCaretCol, N);
   FDesiredCol := FCaretCol;
 end;
 
@@ -1456,6 +1483,7 @@ var
   tx, rx: string;
   sbY: Integer;
   rx2, tx2: string;
+  Mode: string;
 begin
   sbY := ClientRect.Height - GetStatusHeight;
   ACanvas.DrawRectangle(0, sbY, ClientRect.Width, GetStatusHeight, clBlack, True);
@@ -1466,11 +1494,16 @@ begin
     tx := ' Untitled';
   ACanvas.DrawText(0, sbY, tx, clLightgray);
 
-  if IsSelecting then
-    rx := Format('Ln %d, Col %d   %d sel   [F2/Esc: close]',
-      [FCaretLine + 1, FCaretCol + 1, SelectionLength])
+  //the active mode is shown, so the Insert key is not a hidden switch
+  if FOverwrite then
+    Mode := 'OVR'
   else
-    rx := Format('Ln %d, Col %d   [F2/Esc: close]', [FCaretLine + 1, FCaretCol + 1]);
+    Mode := 'INS';
+  if IsSelecting then
+    rx := Format('%s   Ln %d, Col %d   %d sel   [F2/Esc: close]',
+      [Mode, FCaretLine + 1, FCaretCol + 1, SelectionLength])
+  else
+    rx := Format('%s   Ln %d, Col %d   [F2/Esc: close]', [Mode, FCaretLine + 1, FCaretCol + 1]);
   if (csHScroll in Style) or (csVScroll in Style) then
     ACanvas.DrawText(ClientRect.Width - UTF8Length(rx) * FCharWidth - cScrollSize, sbY, rx, clLightgray)
   else
@@ -1496,7 +1529,11 @@ begin
   if x >= ClientRect.Width then
     Exit;
   col := clWhite.ReplaceAlpha(Round(255 * FCaretDim));
-  ACanvas.DrawRectangle(x, y, 2, FCharHeight, col, True);
+  if FOverwrite then
+    //overwrite is shown by an underline, the sign every other editor uses
+    ACanvas.DrawRectangle(x, y + FCharHeight - 2, FCharWidth, 2, col, True)
+  else
+    ACanvas.DrawRectangle(x, y, 2, FCharHeight, col, True);
 end;
 
 procedure TyroEditor.DoPaintBackground(ACanvas: TTyroCanvas);
@@ -1603,14 +1640,19 @@ end;
 procedure TyroEditor.KeyPress(var Key: TUTF8Char);
 var
   S: string;
+  HadSelection: Boolean;
 begin
   S := Key;
   if S = '' then
     Exit;
   BeginEdit;
-  if IsSelecting then
+  HadSelection := IsSelecting;
+  if HadSelection then
     DeleteSelected;
-  InsertSingleChar(S);
+  { A selection already swallowed the characters it covered, so it is replaced
+    by an insert here even in overwrite mode - otherwise the character that
+    followed the selection would be overwritten as well. }
+  InsertSingleChar(S, FOverwrite and not HadSelection);
   ModifyDone;
   Key := '';
 end;
@@ -1710,7 +1752,12 @@ begin
     KEY_PAGE_DOWN:
       MovePage(True, Extend);
     KEY_INSERT:
-      Key := KEY_NULL;
+      begin
+        //switches between insert and overwrite, as in every other text editor
+        FOverwrite := not FOverwrite;
+        Key := KEY_NULL;
+        Invalidate;
+      end;
     KEY_C:
       if ssCtrl in Shift then
       begin

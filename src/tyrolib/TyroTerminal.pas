@@ -87,6 +87,7 @@ type
     FInputSelAnchor: Integer;         // the fixed end of the selection, -1 = none
     FPasswordMode: Boolean;
     FPasswordChar: TUTF8Char;
+    FOverwrite: Boolean;              // true = typing replaces the character under the caret
 
     FHistory: TStringList;            // previously submitted command lines
     FHistoryPos: Integer;             // -1 = not browsing history
@@ -120,6 +121,7 @@ type
 
     procedure ProcessChar(var Key: TUTF8Char);
     procedure ProcessKey(var Key: TKeyboardKey; Shift: TShiftState);
+    procedure SetOverwriteMode(AValue: Boolean);
 
     procedure AddLine(const ALine: utf8string);
     procedure AppendText(const S: utf8string);
@@ -181,6 +183,10 @@ type
 
     property CaretVisible: Boolean read FCaretVisible write SetCaretVisible;
     property PasswordChar: TUTF8Char read FPasswordChar write FPasswordChar;
+    {* Overwrite mode: a typed character replaces the one under the caret
+     instead of pushing the line to the right of it. The Insert key toggles
+     it, and the caret is drawn as an underline while it is on. }
+    property OverwriteMode: Boolean read FOverwrite write SetOverwriteMode;
 
     property OnInput: EOnTerminalInput read FOnInput write FOnInput;
     property OnInputChange: EOnTerminalInputChange read FOnInputChange write FOnInputChange;
@@ -254,6 +260,7 @@ begin
   FInputSelAnchor := -1;
   FPasswordMode := False;
   FPasswordChar := '*';
+  FOverwrite := False;
 
   FHistory := TStringList.Create;
   FHistoryPos := -1;
@@ -896,7 +903,7 @@ var
 begin
   if not FInputOn then
     Exit;
-  S := Key;
+  S := CharOf(Key);      //the bytes as they came, not through the codepage of the machine
   if S = '' then
     Exit;
   //arm auto-repeat for this character; the same physical key is also reported
@@ -905,31 +912,42 @@ begin
   ProcessChar(Key);
 end;
 
+procedure TTyroTerminal.SetOverwriteMode(AValue: Boolean);
+begin
+  if FOverwrite = AValue then
+    Exit;
+  FOverwrite := AValue;
+  Invalidate;
+end;
+
 procedure TTyroTerminal.ProcessChar(var Key: TUTF8Char);
 var
   S: utf8string;
+  HadSelection: Boolean;
+  L, N: Integer;
 begin
   if not FInputOn then
     Exit;
-  S := Key;
+  S := CharOf(Key);      //the bytes as they came, not through the codepage of the machine
   if S = '' then
     Exit;
-  if FPasswordMode then
-  begin
-    if FInputSelStart >= 0 then
-      DeleteInputSelection;
-    FInputBuffer := UTF8Insert(FInputBuffer, FInputPos, S);
-    Inc(FInputPos);
-    UpdateInputScroll;
-  end
+  HadSelection := FInputSelStart >= 0;
+  if HadSelection then
+    DeleteInputSelection;
+  L := UTF8Length(FInputBuffer);
+  N := UTF8Length(S);
+  { Overwrite mode (the Insert key) replaces the character under the caret
+    instead of pushing the rest of the line to the right. At the end of the line
+    there is nothing to replace, so the character is appended as usual - and so
+    is one typed over a selection, which has already swallowed the characters it
+    covered. }
+  if FOverwrite and (not HadSelection) and (FInputPos < L) then
+    FInputBuffer := UTF8SubStr(FInputBuffer, 0, FInputPos) + S +
+      UTF8SubStr(FInputBuffer, FInputPos + 1, L - FInputPos - 1)
   else
-  begin
-    if FInputSelStart >= 0 then
-      DeleteInputSelection;
     FInputBuffer := UTF8Insert(FInputBuffer, FInputPos, S);
-    Inc(FInputPos);
-    UpdateInputScroll;
-  end;
+  Inc(FInputPos, N);
+  UpdateInputScroll;
   if Assigned(FOnInputChange) then
     FOnInputChange(Self, FInputBuffer);
   if Assigned(FOnAny) then
@@ -1145,6 +1163,13 @@ begin
       begin
         PasteClipboard;
         Key := KEY_NULL;
+      end
+      else
+      begin
+        //a plain INSERT switches between insert and overwrite mode
+        FOverwrite := not FOverwrite;
+        Key := KEY_NULL;
+        Invalidate;
       end;
     end;
   else
@@ -1309,7 +1334,11 @@ begin
   if x >= ClientRect.Width then
     Exit;
   col := FTextColor.SetAlpha(Round(FTextColor.RGBA.Alpha * FCaretDim));
-  ACanvas.FillRect(x, AY, x + 2, AY + FCharHeight, col);
+  if FOverwrite then
+    //overwrite is shown by an underline, the sign every other editor uses
+    ACanvas.FillRect(x, AY + FCharHeight - 2, x + FCharWidth, AY + FCharHeight, col)
+  else
+    ACanvas.FillRect(x, AY, x + 2, AY + FCharHeight, col);
 end;
 
 procedure TTyroTerminal.DoPaint(ACanvas: TTyroCanvas);
