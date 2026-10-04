@@ -38,8 +38,7 @@ uses
   {$endif}
   SysUtils, Classes, RayLib, mnUtils, mnConfigs,
   Melodies, TyroControls, TyroClasses, mnLogs, TyroEngines,
-  TyroLua,
-  LuaAPI;  //Add all languages units here
+  TyroLua;
 
 type
 

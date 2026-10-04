@@ -445,9 +445,9 @@ type
 
   { TTyroImage }
 
-  { TTyroImageControl }
+  { TTyroImage }
 
-  TTyroImageControl = class(TTyroControl)
+  TTyroImage = class(TTyroControl)
   private
     FTexture: TTexture2D;
     FLoaded: Boolean;
@@ -460,8 +460,6 @@ type
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     property Loaded: Boolean read FLoaded;
   end;
-
-  TTyroImage = TTyroImageControl;
 
   { TTyroListBox }
 
@@ -1920,9 +1918,9 @@ begin
   ACanvas.DrawText(tx, ty, FPlaceHolder, clGray);
 end;
 
-{ TTyroImageControl }
+{ TTyroImage }
 
-constructor TTyroImageControl.Create(AParent: TTyroLayout);
+constructor TTyroImage.Create(AParent: TTyroLayout);
 begin
   inherited;
   Style := Style + [csTexture];
@@ -1932,13 +1930,13 @@ begin
   BoundsRect := Rect(0, 0, 64, 64);
 end;
 
-destructor TTyroImageControl.Destroy;
+destructor TTyroImage.Destroy;
 begin
   UnloadTexture;
   inherited;
 end;
 
-procedure TTyroImageControl.UnloadTexture;
+procedure TTyroImage.UnloadTexture;
 begin
   if FLoaded then
   begin
@@ -1948,7 +1946,7 @@ begin
   end;
 end;
 
-procedure TTyroImageControl.LoadFromFile(const AFileName: string);
+procedure TTyroImage.LoadFromFile(const AFileName: string);
 var
   img: TImage;
   tex: TTexture2D;
@@ -1978,7 +1976,7 @@ begin
   Invalidate;
 end;
 
-procedure TTyroImageControl.LoadFromTexture(ATexture: TTexture2D);
+procedure TTyroImage.LoadFromTexture(ATexture: TTexture2D);
 begin
   UnloadTexture;
   if not RayLib.IsTextureValid(ATexture) then
@@ -1988,7 +1986,7 @@ begin
   Invalidate;
 end;
 
-procedure TTyroImageControl.DoPaint(ACanvas: TTyroCanvas);
+procedure TTyroImage.DoPaint(ACanvas: TTyroCanvas);
 var
   r: TRect;
   src: TRectangle;

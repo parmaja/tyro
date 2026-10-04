@@ -57,11 +57,29 @@ type
 
   { TRayImage }
 
+  { TRayTexture }
+
+  TRayTexture = class(TRayObject)
+  private
+    FLoaded: Boolean;
+    FTexture: RayLib.TTexture2D;
+  protected
+  public
+    procedure Unload;
+    function LoadFromFile(const AFileName: string): Boolean;
+    function IsValid: Boolean;
+  end;
+
+  { TRayImage }
+
   TRayImage = class(TRayObject)
   private
     FImage: RayLib.TImage;
   protected
   public
+    procedure Unload;
+    function LoadFromFile(const AFileName: string): Boolean;
+    function IsValid: Boolean;
   end;
 
   TRayPlayState = (plyStop, plyPlay, plyPause);
@@ -476,6 +494,46 @@ begin
         if Music.State = plyStop then
           RayLibSound.Playing.Delete(I);
       end;
+end;
+
+{ TRayTexture }
+
+procedure TRayTexture.Unload;
+begin
+  RayLib.UnloadTexture(FTexture);
+  FTexture := Default(TTexture2D);
+  FLoaded := False;
+end;
+
+function TRayTexture.LoadFromFile(const AFileName: string): Boolean;
+begin
+  FTexture := RayLib.LoadTexture(PUTF8Char(UTF8String(AFileName)));
+  FLoaded := IsValid;
+  Result := FLoaded;
+end;
+
+function TRayTexture.IsValid: Boolean;
+begin
+  Result := RayLib.IsTextureValid(FTexture);
+end;
+
+{ TRayImage }
+
+procedure TRayImage.Unload;
+begin
+  UnloadImage(FImage);
+  FImage := Default(RayLib.TImage);
+end;
+
+function TRayImage.LoadFromFile(const AFileName: string): Boolean;
+begin
+  FImage := RayLib.LoadImage(PUTF8Char(UTF8String(AFileName)));
+  Result := IsValid;
+end;
+
+function TRayImage.IsValid: Boolean;
+begin
+  Result := IsImageValid(FImage);
 end;
 
 { TRayMusic }
