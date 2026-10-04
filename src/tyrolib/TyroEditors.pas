@@ -79,7 +79,10 @@ type
     function IsSelecting: Boolean;
     procedure GetSelection(out ALine1, ACol1, ALine2, ACol2: Integer);
     function SelectedText: string;
+    function SelectionLength: Integer;
     procedure ClearSelection;
+    procedure AnchorSelection;
+    procedure SelectForMove(Extend: Boolean);
     procedure SelectAll;
     function ColToPixel(ALine, ACol: Integer): Integer;
     procedure PlaceCaretAt(aX, aY: Integer);
@@ -106,6 +109,7 @@ type
     procedure MoveHome(Extend: Boolean);
     procedure MoveEnd(Extend: Boolean);
     procedure MovePage(Forward: Boolean; Extend: Boolean);
+    procedure MoveDoc(ToStart: Boolean; Extend: Boolean);
 
     procedure CopySelection;
     procedure CutSelection;
@@ -125,6 +129,10 @@ type
   protected
     procedure SizeChanged; override;
     procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); override;
+    //* The mouse half of the selection, apart from the mouse itself: Update
+    //* only reads the mouse state and calls these two.
+    procedure SelectAtPress(aX, aY: Integer; AExtend: Boolean);
+    procedure SelectAtDrag(aX, aY: Integer);
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -393,11 +401,57 @@ end;
 procedure TyroEditor.ClearSelection;
 begin
   FSelecting := False;
+  { The caret becomes the anchor as well: a Shift that comes next extends from
+    where the caret is, not from a position left over from an earlier one. }
+  FAnchorLine := FCaretLine;
+  FAnchorCol := FCaretCol;
+end;
+
+procedure TyroEditor.AnchorSelection;
+begin
+  { A selection that is already running keeps its anchor, so every following
+    Shift+move grows or shrinks the same range. Only a fresh one is anchored. }
+  if FSelecting then
+    Exit;
+  FAnchorLine := FCaretLine;
+  FAnchorCol := FCaretCol;
+  FSelecting := True;
+end;
+
+procedure TyroEditor.SelectForMove(Extend: Boolean);
+begin
+  //What every caret move does with the selection: Shift extends it from the
+  //anchor, a plain move collapses it.
+  if Extend then
+    AnchorSelection
+  else
+    ClearSelection;
 end;
 
 function TyroEditor.IsSelecting: Boolean;
 begin
   Result := FSelecting and not ((FAnchorLine = FCaretLine) and (FAnchorCol = FCaretCol));
+end;
+
+function TyroEditor.SelectionLength: Integer;
+var
+  l1, c1, l2, c2, I: Integer;
+begin
+  Result := 0;
+  if not IsSelecting then
+    Exit;
+  GetSelection(l1, c1, l2, c2);
+  for I := l1 to l2 do
+  begin
+    if I = l1 then
+      Inc(Result, GetLineLength(I) - c1)
+    else if I = l2 then
+      Inc(Result, c2)
+    else
+      Inc(Result, GetLineLength(I));
+    if I < l2 then
+      Inc(Result, 1); //the line break the selection spans
+  end;
 end;
 
 procedure TyroEditor.GetSelection(out ALine1, ACol1, ALine2, ACol2: Integer);
@@ -493,6 +547,38 @@ begin
   Invalidate;
 end;
 
+{ A press, with the mouse over (aX, aY) of the client }
+
+procedure TyroEditor.SelectAtPress(aX, aY: Integer; AExtend: Boolean);
+begin
+  { Shift+press extends the selection from the anchor, and that anchor has to
+    be read before the press moves the caret to where the mouse is. A plain
+    press drops whatever was selected, and anchors at the position it landed
+    on rather than at the position the caret came from - that is what keeps a
+    click from dragging a selection along behind it. }
+  if AExtend then
+    AnchorSelection;
+  PlaceCaretAt(aX, aY);
+  if not AExtend then
+    ClearSelection;
+  FMouseDown := True;
+  Invalidate;
+end;
+
+{ The same press, held down: the caret follows the mouse and the selection
+  grows or shrinks from the anchor }
+
+procedure TyroEditor.SelectAtDrag(aX, aY: Integer);
+begin
+  PlaceCaretAt(aX, aY);
+  { A press also arrives as a hold on the frame it happens, so this runs right
+    after SelectAtPress. Only a caret that left the anchor is a drag; a press
+    that landed on the anchor it just set has selected nothing. }
+  if (FCaretLine <> FAnchorLine) or (FCaretCol <> FAnchorCol) then
+    FSelecting := True;
+  Invalidate;
+end;
+
 procedure TyroEditor.ScrollCaretVisible;
 var
   visible: Integer;
@@ -548,6 +634,8 @@ begin
   if FCaretCol > GetLineLength(FCaretLine) then
     FCaretCol := GetLineLength(FCaretLine);
   FDesiredCol := FCaretCol;
+  //The whole buffer came back, so a selection over the old one is meaningless.
+  ClearSelection;
   FModified := True;
   RebuildRuns;
   ScrollCaretVisible;
@@ -571,6 +659,7 @@ begin
   if FCaretCol > GetLineLength(FCaretLine) then
     FCaretCol := GetLineLength(FCaretLine);
   FDesiredCol := FCaretCol;
+  ClearSelection;
   FModified := True;
   RebuildRuns;
   ScrollCaretVisible;
@@ -715,8 +804,7 @@ end;
 
 procedure TyroEditor.MoveLeft(Extend: Boolean);
 begin
-  if not Extend then
-    ClearSelection;
+  SelectForMove(Extend);
   if FCaretCol > 0 then
     Dec(FCaretCol)
   else if FCaretLine > 0 then
@@ -731,8 +819,7 @@ end;
 
 procedure TyroEditor.MoveRight(Extend: Boolean);
 begin
-  if not Extend then
-    ClearSelection;
+  SelectForMove(Extend);
   if FCaretCol < GetLineLength(FCaretLine) then
     Inc(FCaretCol)
   else if FCaretLine < FLines.Count - 1 then
@@ -769,8 +856,7 @@ var
     end;
   end;
 begin
-  if not Extend then
-    ClearSelection;
+  SelectForMove(Extend);
   L := FCaretLine;
   Col := FCaretCol;
   if Forward then
@@ -834,8 +920,7 @@ procedure TyroEditor.MoveUp(Extend: Boolean);
 var
   L, Col: Integer;
 begin
-  if not Extend then
-    ClearSelection;
+  SelectForMove(Extend);
   L := FCaretLine;
   if L > 0 then
     Dec(L);
@@ -852,8 +937,7 @@ procedure TyroEditor.MoveDown(Extend: Boolean);
 var
   L, Col: Integer;
 begin
-  if not Extend then
-    ClearSelection;
+  SelectForMove(Extend);
   L := FCaretLine;
   if L < FLines.Count - 1 then
     Inc(L);
@@ -871,8 +955,7 @@ var
   I: Integer;
   W: Integer;
 begin
-  if not Extend then
-    ClearSelection;
+  SelectForMove(Extend);
   I := 0;
   W := GetLineLength(FCaretLine);
   if (FCaretCol > 0) and (W > 0) then
@@ -892,8 +975,7 @@ end;
 
 procedure TyroEditor.MoveEnd(Extend: Boolean);
 begin
-  if not Extend then
-    ClearSelection;
+  SelectForMove(Extend);
   FCaretCol := GetLineLength(FCaretLine);
   FDesiredCol := FCaretCol;
   ScrollCaretVisible;
@@ -902,10 +984,9 @@ end;
 
 procedure TyroEditor.MovePage(Forward: Boolean; Extend: Boolean);
 var
-  L, Step: Integer;
+  L, Step, Col: Integer;
 begin
-  if not Extend then
-    ClearSelection;
+  SelectForMove(Extend);
   Step := GetVisibleLines - 1;
   if Step < 1 then
     Step := 1;
@@ -919,8 +1000,29 @@ begin
   if L >= FLines.Count then
     L := FLines.Count - 1;
   FCaretLine := L;
-  if FCaretCol > GetLineLength(L) then
-    FCaretCol := GetLineLength(L);
+  { The wanted column survives the jump, the way it does for Up and Down, so
+    that walking back to a line that is long enough lands on the same column. }
+  Col := FDesiredCol;
+  if Col > GetLineLength(L) then
+    Col := GetLineLength(L);
+  FCaretCol := Col;
+  ScrollCaretVisible;
+  Invalidate;
+end;
+
+procedure TyroEditor.MoveDoc(ToStart: Boolean; Extend: Boolean);
+begin
+  SelectForMove(Extend);
+  if ToStart then
+  begin
+    FCaretLine := 0;
+    FCaretCol := 0;
+  end
+  else
+  begin
+    FCaretLine := FLines.Count - 1;
+    FCaretCol := UTF8Length(FLines[FCaretLine]);
+  end;
   FDesiredCol := FCaretCol;
   ScrollCaretVisible;
   Invalidate;
@@ -1348,7 +1450,11 @@ begin
     tx := ' Untitled';
   ACanvas.DrawText(0, sbY, tx, clLightgray);
 
-  rx := Format('Ln %d, Col %d   [F2/Esc: close]', [FCaretLine + 1, FCaretCol + 1]);
+  if IsSelecting then
+    rx := Format('Ln %d, Col %d   %d sel   [F2/Esc: close]',
+      [FCaretLine + 1, FCaretCol + 1, SelectionLength])
+  else
+    rx := Format('Ln %d, Col %d   [F2/Esc: close]', [FCaretLine + 1, FCaretCol + 1]);
   if (csHScroll in Style) or (csVScroll in Style) then
     ACanvas.DrawText(ClientRect.Width - UTF8Length(rx) * FCharWidth - cScrollSize, sbY, rx, clLightgray)
   else
@@ -1440,23 +1546,12 @@ begin
     begin
       if (lx >= 0) and (ly >= 0) and (lx < ClientRect.Width) and (ly < ClientRect.Height)
          and (HitScrollBar(lx, ly) = []) then
-      begin
-        PlaceCaretAt(lx, ly);
-        FAnchorLine := FCaretLine;
-        FAnchorCol := FCaretCol;
-        ClearSelection;
-        FMouseDown := True;
-        Invalidate;
-      end;
+        SelectAtPress(lx, ly, RayLib.IsKeyDown(KEY_LEFT_SHIFT) or RayLib.IsKeyDown(KEY_RIGHT_SHIFT));
     end;
     if FMouseDown and RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT) then
     begin
       if (lx >= 0) and (ly >= 0) and (lx < ClientRect.Width) and (ly < ClientRect.Height) then
-      begin
-        PlaceCaretAt(lx, ly);
-        FSelecting := True;
-        Invalidate;
-      end;
+        SelectAtDrag(lx, ly);
     end;
     if not RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT) then
       FMouseDown := False;
@@ -1585,9 +1680,15 @@ begin
     KEY_DOWN:
       MoveDown(Extend);
     KEY_HOME:
-      MoveHome(Extend);
+      if ssCtrl in Shift then
+        MoveDoc(True, Extend)
+      else
+        MoveHome(Extend);
     KEY_END:
-      MoveEnd(Extend);
+      if ssCtrl in Shift then
+        MoveDoc(False, Extend)
+      else
+        MoveEnd(Extend);
     KEY_PAGE_UP:
       MovePage(False, Extend);
     KEY_PAGE_DOWN:
@@ -1651,7 +1752,7 @@ begin
   FTopLine := 0;
   FLeftCol := 0;
   FModified := False;
-  FSelecting := False;
+  ClearSelection;   //the caret is at the start of the buffer, and so is the anchor
   FUndo.Clear;
   FRedo.Clear;
   RebuildRuns;
