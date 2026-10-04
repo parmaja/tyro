@@ -1430,10 +1430,38 @@ begin
 end;
 
 procedure TTyroMain.EditorSave(Sender: TObject);
+var
+  aPath: string;
 begin
-  //RunScriptThread copies the buffer into the script and runs it (CTRL+S while
-  //the editor is showing).
-  RunScriptThread;
+  { CTRL+S while the editor is showing: the buffer goes back into the script it
+    edits, and from there onto the disk. The file it lands in is the one that
+    script was loaded from - LoadFile split the name it was given into Path and
+    FileName, so the two joined back together are that name again. Nothing is
+    run: F5 is what runs the script, and saving it should not open a window. }
+  if FScriptMain = nil then
+  begin
+    Log.WriteLn('No script loaded, nothing to save');
+    Exit;
+  end;
+  //Straight into the script rather than through SaveEditorSource, which only
+  //copies while the editor is showing: what is being written has to be what the
+  //editor holds, not what the script held before the editor was opened.
+  Editor.SaveSource(FScriptMain.Source);
+  if FScriptMain.FileName = '' then
+  begin
+    //Text typed at the console has no file behind it, so there is nowhere to
+    //write it. The buffer still reached the script, which is what a run uses.
+    Log.WriteLn('The script has no file name, so it was not saved to disk');
+    Exit;
+  end;
+  aPath := FScriptMain.Path + FScriptMain.FileName;
+  try
+    FScriptMain.Source.SaveToFile(aPath);
+    Log.WriteLn('Saved ' + aPath);
+  except
+    on E: Exception do
+      Log.WriteLn('Could not save ' + aPath + ': ' + E.Message);
+  end;
 end;
 
 procedure TTyroMain.Edit_Command(Params: TStrings);
