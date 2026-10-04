@@ -19,8 +19,7 @@ interface
 
 uses
   Classes, SysUtils, Contnrs, Types, Math,
-  mnLogs, mnClasses, mnUtils,
-  mnBDF,
+  mnLogs, mnClasses, mnUtils, mnBDF,
   RayLib;
 
 const
