@@ -16,6 +16,7 @@ unit LuaClasses;
 {$RTTI EXPLICIT METHODS([vcPublic, vcProtected, vcPublished])}
 {$endif}
 {$H+}{$M+}
+{$MINENUMSIZE 4}
 
 interface
 
@@ -58,7 +59,7 @@ type
     procedure SetStatus(AStatus: TLuaStatus);
   public
     State: Plua_State;
-    procedure Init(SafeMode: Boolean = True; HookCount: Integer = 0);
+    procedure Init(SafeMode: Boolean = True; HookCount: Integer = 1000);
     procedure Close;
     procedure SetReady;
     procedure SetTerminated;
@@ -341,20 +342,24 @@ begin
 end;
 
 type
-  PLuaStatus = ^LongInt;
+  TLuaExtraSpace = class(TObject)
+  public
+    Status: TLuaStatus;
+  end;
+  PLuaExtraSpace = ^TLuaExtraSpace;
 
-function LuaStatusPointer(L: Plua_State): PLuaStatus; inline;
+function LuaStatusPointer(L: Plua_State): TLuaExtraSpace; inline;
 begin
-  Result := PLuaStatus(PPointer(lua_getextraspace(L))^);
+  Result := TLuaExtraSpace(PPointer(lua_getextraspace(L))^);
 end;
 
 procedure HookCallback(L: Plua_State; ar: Plua_Debug); cdecl;
 var
-  AStatus: PLuaStatus;
+  AExtraSpace: TLuaExtraSpace;
 begin
-  AStatus := LuaStatusPointer(L);
-  if (AStatus <> nil) and
-     (TInterlocked.Add(AStatus^, 0) = Ord(luaTerminated)) then
+  AExtraSpace := LuaStatusPointer(L);
+  if (AExtraSpace <> nil) and
+     (TInterlocked.Add(Integer(AExtraSpace.Status), 0) = Ord(luaTerminated)) then
     luaL_error(L, PUTF8Char('Terminated by user!'));
 end;
 
@@ -441,25 +446,25 @@ end;
 
 function TLua.GetStatus: TLuaStatus;
 var
-  AStatus: PLuaStatus;
+  AExtraSpace: TLuaExtraSpace;
 begin
   if State = nil then
     Exit(luaNone);
-  AStatus := LuaStatusPointer(State);
-  if AStatus = nil then
+  AExtraSpace := LuaStatusPointer(State);
+  if AExtraSpace = nil then
     Exit(luaNone);
-  Result := TLuaStatus(TInterlocked.Add(AStatus^, 0));
+  Result := TLuaStatus(TInterlocked.Add(Integer(AExtraSpace.Status), 0));
 end;
 
 procedure TLua.SetStatus(AStatus: TLuaStatus);
 var
-  AStatusPtr: PLuaStatus;
+  AExtraSpace: TLuaExtraSpace;
 begin
   if State = nil then
     Exit;
-  AStatusPtr := LuaStatusPointer(State);
-  if AStatusPtr <> nil then
-    TInterlocked.Exchange(AStatusPtr^, Ord(AStatus));
+  AExtraSpace := LuaStatusPointer(State);
+  if AExtraSpace <> nil then
+    TInterlocked.Exchange(Integer(AExtraSpace.Status), Ord(AStatus));
 end;
 
 procedure TLua.SetReady;
@@ -474,7 +479,7 @@ end;
 
 procedure TLua.Init(SafeMode: Boolean; HookCount: Integer);
 var
-  AStatus: PLuaStatus;
+  AExtraSpace: TLuaExtraSpace;
 begin
   //Both in-tree call sites keep the record in a zeroed class field, but a
   //record that already owns a Lua state must release it first: Self :=
@@ -483,15 +488,15 @@ begin
   if State <> nil then
     Close;
   Self := Default(TLua);
-  New(AStatus);
-  AStatus^ := Ord(luaNone);
+  AExtraSpace := TLuaExtraSpace.Create;
+  AExtraSpace.Status := luaNone;
   State := lua_newstate(@LuaAlloc, nil, 0);
   if State = nil then
   begin
-    Dispose(AStatus);
+    AExtraSpace.Free;
     raise Exception.Create('Unable to create Lua state');
   end;
-  PPointer(lua_getextraspace(State))^ := AStatus;
+  PPointer(lua_getextraspace(State))^ := AExtraSpace;
   FVersion := lua_version(State);
   //All libraries
   luaL_openselectedlibs(State, -1, 0);
@@ -526,15 +531,15 @@ end;
 
 procedure TLua.Close;
 var
-  AStatus: PLuaStatus;
+  AExtraSpace: TLuaExtraSpace;
 begin
   if State = nil then
     Exit;
-  AStatus := LuaStatusPointer(State);
+  AExtraSpace := LuaStatusPointer(State);
   lua_close(State);
   State := nil;
-  if AStatus <> nil then
-    Dispose(AStatus);
+  if AExtraSpace <> nil then
+    AExtraSpace.Free;
 end;
 
 { TLuaHelper }
