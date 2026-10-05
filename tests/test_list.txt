@@ -1,0 +1,14 @@
+created=true
+count=3
+item0=a
+item1=z
+outside=nil
+replaced=2
+index=-1
+indexset=1
+viewcount=0
+viewcountset=1
+bynumber=2
+notalist=nil
+badhandle=nil
+cleared=0

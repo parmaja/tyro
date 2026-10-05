@@ -1,0 +1,15 @@
+start
+created=true
+loaded=true
+dotret=true
+colonret=true
+loaded=true
+loaded=true
+ctlret=true
+loaded=true
+size=128x128
+missing=false
+empty=false
+notimage=false
+loaded=false
+badhandle=false

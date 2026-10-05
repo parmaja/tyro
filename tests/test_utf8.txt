@@ -1,0 +1,7 @@
+caption-fn=héllo wörld
+text-fn=héllo wörld
+text-field=héllo wörld
+caption-after-set=über
+edit-text=café
+edit-field=naïve
+edit-byfn=naïve

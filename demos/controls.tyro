@@ -7,6 +7,7 @@
 --  API:
 --    controls.new(class, captionOrText, x?, y?, w?, h?, name?) -> handle
 --      class: 'button' | 'panel' | 'label' | 'checkbox' | 'edit' | 'spectrum'
+--             | 'listbox' | 'image'  ('image' reads the caption as a file name)
 --    controls.text(handle [, s])   get/set text (caption or edited text)
 --    controls.caption(handle [,s]) alias of text (legacy buttons.caption)
 --    controls.checked(handle [,v]) get/set checked state (checkbox)

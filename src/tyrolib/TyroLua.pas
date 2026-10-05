@@ -253,9 +253,10 @@ type
 
   { Generic control creation and inspection. controls.new('button', ...)
     creates a control by class name ('button', 'panel', 'label', 'checkbox',
-    'edit', 'spectrum'); the returned handle addresses a control owned by the
-    main window. The same object backs both the 'controls' table and the
-    legacy 'buttons' alias table, so old scripts keep working. }
+    'edit', 'spectrum', 'listbox', 'image'); the returned handle addresses a
+    control owned by the main window. The same object backs both the
+    'controls' table and the legacy 'buttons' alias table, so old scripts keep
+    working. }
   TLuaControls = class(TTyroLuaObject)
   private
     FItems: TList; //of TTyroControl (owned by the main window, not by us)
@@ -293,6 +294,12 @@ type
     function Clear_func(L: Plua_State): integer; cdecl;
     function ViewCount_func(L: Plua_State): integer; cdecl;
     function ItemIndex_func(L: Plua_State): integer; cdecl;
+    //text: btn.text = "Hi" / controls.text(handle [, "Hi"]); a caption control
+    //keeps it in Caption, an edit in the shared Text
+    function Text_func(L: Plua_State): integer; cdecl;
+    //image control: img.load("logo.png") / controls.load(handle, "logo.png"),
+    //the new state answers the call and reads back through the loaded field
+    function LoadImage_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
     destructor Destroy; override;
   end;
@@ -1230,8 +1237,23 @@ begin
   Lua.State.Register('controls', 'border', Controls, Controls.Border_func);
   Lua.State.Register('controls', 'backcolor', Controls, Controls.BackColor_func);
   Lua.State.Register('controls', 'name', Controls, Controls.Name_func);
+  //caption/text: both spellings work on a caption control, and text also
+  //covers an edit (btn.caption is registered on the control table itself)
+  Lua.State.Register('controls', 'caption', Controls, Controls.Caption_func);
+  Lua.State.Register('controls', 'text', Controls, Controls.Text_func);
+  Lua.State.Register('controls', 'checked', Controls, Controls.Checked_func);
   Lua.State.Register('controls', 'align', Controls, Controls.Align_func);
   Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
+  //listbox: these also exist per control (lst.additem("a")), the table form
+  //takes the handle as first argument (controls.additem(lst, "a"))
+  Lua.State.Register('controls', 'items', Controls, Controls.Items_func);
+  Lua.State.Register('controls', 'item', Controls, Controls.Item_func);
+  Lua.State.Register('controls', 'additem', Controls, Controls.AddItem_func);
+  Lua.State.Register('controls', 'clear', Controls, Controls.Clear_func);
+  Lua.State.Register('controls', 'viewcount', Controls, Controls.ViewCount_func);
+  Lua.State.Register('controls', 'itemindex', Controls, Controls.ItemIndex_func);
+  //image control: load the texture an image shows (img.load(...) is the same)
+  Lua.State.Register('controls', 'load', Controls, Controls.LoadImage_func);
   Lua.State.Register('controls', Controls); //should be last one
 
   //output (catches print/println/log)
@@ -2454,8 +2476,11 @@ begin
   i := first;
   while i <= L.ArgsCount do
   begin
-    //"f:write(#s, s)" writes only the first n bytes of s
-    if (i = first) and L.IsNumber(i) and (L.ToInteger(i) < L.ArgsCount) then
+    //"f:write(#s, s)" writes only the first n bytes of s. Only a real number
+    //is a byte count, like the stock io.write: L.IsNumber also accepts a
+    //string that converts, so f:write(tostring(7) .. "\n") would be read as
+    //"write 7 bytes" and silently write nothing at all
+    if (i = first) and (lua_type(L, i) = LUA_TNUMBER) and (L.ToInteger(i) < L.ArgsCount) then
     begin
       Inc(i); //now on the string that follows the count
       Buf := Buf + Copy(AnsiString(L.ToString(i)), 1, Integer(L.ToInteger(first)));
@@ -2954,14 +2979,38 @@ begin
   Result := 1;
 end;
 
+//__handle must be read raw: the 'controls' and 'sprites' tables carry no
+//__handle of their own, so lua_getfield would re-enter the Getter sitting on
+//their __index and recurse until Lua reports "C stack overflow". That is what
+//answers a lookup of a name the table does not hold, so the read has to stay
+//recursion-free.
+//The key goes on top of an unchanged idx: lua_rawget pops the key and pushes
+//the raw value in its place, leaving the frame exactly as it was found (a
+//leaked value would inflate L.ArgsCount and turn every getter into a setter).
+//0 means "not a sprite/control table".
 function GetSpriteHandle(L: Plua_State; idx: integer): integer;
 begin
-  Result := L.ToInteger(idx, '__handle');
+  L.PushString('__handle');
+  lua_rawget(L, idx);
+  Result := L.PopInteger;
 end;
 
 function GetControlTableHandle(L: Plua_State; idx: integer): integer;
 begin
-  Result := L.ToInteger(idx, '__handle');
+  L.PushString('__handle');
+  lua_rawget(L, idx);
+  Result := L.PopInteger;
+end;
+
+//a caption control (button/label/checkbox) keeps its text in Caption, every
+//other control (an edit) in the shared Text. TSetControlTextObject writes to
+//the same place, so a read here always answers what a write stored.
+function GetControlText(AControl: TTyroControl): utf8string;
+begin
+  if AControl is TTyroCaptionControl then
+    Result := TTyroCaptionControl(AControl).Caption
+  else
+    Result := AControl.Text;
 end;
 
 { TLuaControls }
@@ -3085,6 +3134,19 @@ begin
   else if field = 'parent' then
   begin
     Exit;
+  end
+  else if field = 'text' then
+  begin
+    //btn.text = "Hi" is the property form of controls.text(handle, "Hi")
+    FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(3)));
+    Exit;
+  end
+  else if field = 'file' then
+  begin
+    //img.file = "logo.png" is the property form of img.load(...)
+    if ctrl is TTyroImage then
+      FScript.RunQueueObject(TLoadControlImageObject.Create(ctrl, L.ToString(3)));
+    Exit;
   end;
   // fallback: store raw
   L.PushValue(2); L.PushValue(3); lua_rawset(L, 1);
@@ -3205,6 +3267,23 @@ begin
     end;
     Result := 1;
     Exit;
+  end
+  else if field = 'text' then
+  begin
+    //the caption of a button/label/checkbox, the edited text of an edit
+    L.PushString(GetControlText(ctrl));
+    Result := 1;
+    Exit;
+  end
+  else if field = 'loaded' then
+  begin
+    //true once an image control holds a texture
+    if ctrl is TTyroImage then
+      L.PushBoolean(TTyroImage(ctrl).Loaded)
+    else
+      L.PushBoolean(False);
+    Result := 1;
+    Exit;
   end;
   // fallback
   L.PushValue(2); lua_rawget(L, 1); Result := 1;
@@ -3247,6 +3326,11 @@ begin
     begin
       Lua.State.Register('caption', Caption_func);
       Lua.State.Register('checked', Checked_func);
+    end
+    else if ctrl is TTyroImage then
+    begin
+      //loaded is read as a field (img.loaded), not a call, see Controls.Getter
+      Lua.State.Register('load', LoadImage_func);
     end
     else if ctrl is TTyroButton then
     begin
@@ -3318,7 +3402,8 @@ begin
   aName := '';
   w := 500; h := 200;
   if (clsName = 'button') or (clsName = 'panel') or (clsName = 'label') or
-     (clsName = 'checkbox') or (clsName = 'edit') or (clsName = 'spectrum') or (clsName = 'listbox') then
+     (clsName = 'checkbox') or (clsName = 'edit') or (clsName = 'spectrum') or
+     (clsName = 'listbox') or (clsName = 'image') then
   begin
     //new style: controls.new(class, captionOrText, x?, y?, w?, h?, name?)
     clsName := caption;
@@ -3351,6 +3436,12 @@ begin
     else if clsName = 'listbox' then
     begin
       w := 160; h := 120;
+    end
+    else if clsName = 'image' then
+    begin
+      //same default as TTyroImage itself; a loaded texture that is larger
+      //grows the control, a smaller one keeps these bounds
+      w := 64; h := 64;
     end;
     if c >= 7 then
       aName := L.ToString(7);
@@ -3403,7 +3494,7 @@ begin
   begin
     if L.ArgsCount >= 2 then
     begin
-      FScript.RunQueueObject(TSetControlTextObject.Create(ctrl as TTyroCaptionControl, L.ToString(2)));
+      FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(2)));
       Result := 0;
     end
     else
@@ -3411,6 +3502,35 @@ begin
       L.PushString((ctrl as TTyroCaptionControl).Caption);
       Result := 1;
     end;
+  end;
+end;
+
+//controls.text(handle [, text]) -> get/set the control text: the caption of a
+//button, label or checkbox, the edited text of an edit. Reading it answers the
+//same string as controls.caption does for a caption control.
+function TLuaControls.Text_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+begin
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl = nil then
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  if L.ArgsCount >= 2 then
+  begin
+    FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(2)));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushString(GetControlText(ctrl));
+    Result := 1;
   end;
 end;
 
@@ -3990,6 +4110,39 @@ begin
   if (ctrl <> nil) and (ctrl is TTyroListBox) then
     FScript.RunQueueObject(TClearControlItemsObject.Create(TTyroListBox(ctrl)));
   Result := 0;
+end;
+
+//img.load("logo.png") / img:load("logo.png") / controls.load(handle, "logo.png")
+//Loads the texture an image control shows, replacing the one it holds. An
+//empty (or missing) file name releases it. The upload runs on the main thread
+//(it needs the GL context the control is painted with) and a texture bigger
+//than the control grows it. Answers with the new state, so a file that could
+//not be read reports false just like img.loaded does.
+function TLuaControls.LoadImage_func(L: Plua_State): integer; cdecl;
+var
+  ctrl: TTyroControl;
+  aFile: string;
+begin
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
+  //A per-instance method receives its control table injected as argument 1, so
+  //the file name sits one slot lower for img:load(...) than for img.load(...).
+  //The last argument is the file in every accepted spelling.
+  if L.ArgsCount >= 2 then
+    aFile := L.ToString(L.ArgsCount)
+  else
+    aFile := '';
+  if (ctrl <> nil) and (ctrl is TTyroImage) then
+  begin
+    FScript.RunQueueObject(TLoadControlImageObject.Create(ctrl, aFile));
+    //the upload already happened, so the flag is the answer of the call
+    L.PushBoolean(TTyroImage(ctrl).Loaded);
+  end
+  else
+    L.PushBoolean(False);
+  Result := 1;
 end;
 
 //controls.viewcount(handle [, n]) -> get/set the visible rows (0 = boundsrect size)

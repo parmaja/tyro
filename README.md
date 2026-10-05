@@ -447,16 +447,22 @@ controls.align(bottom, "bottom")
 
 | Function | Description |
 |----------|-------------|
-| `controls.new(class, caption, x, y, w, h, name?)` | Create a `button`, `panel`, `label`, `checkbox`, `edit`, `spectrum`, or `listbox`; returns a handle |
+| `controls.new(class, caption, x, y, w, h, name?)` | Create a `button`, `panel`, `label`, `checkbox`, `edit`, `spectrum`, `listbox`, or `image`; returns a handle |
 | `controls.align(handle [, value])` | Get/set `none`, `left`, `top`, `right`, `bottom`, or `client` |
 | `controls.parent(handle [, parentHandle])` | Get/set the container; the getter returns `0` for the main window, and `nil`/`0` moves the control there |
 | `controls.width/height(handle [, value])` | Get/set the preferred size |
 | `controls.position/move(handle, x, y)` | Get/set the preferred position |
-| `controls.text/caption(handle [, value])` | Get/set a caption, label, or edit value |
+| `controls.text/caption(handle [, value])` | Get/set a caption, label, or edit value; `handle.text = value` is the same |
 | `controls.visible/show/hide(handle)` | Show or hide a control; hidden aligned controls release their space |
 | `controls.hover/down/clicked(handle)` | Read mouse state |
+| `controls.checked(handle [, value])` | Get/set the checked state of a checkbox |
 | `controls.border(handle [, style])` | `0` none, `1` thin, `2` thick, `3` sizable |
 | `controls.backcolor(handle [, color])` | Set a color from the `colors` table |
+| `controls.load(handle, file)` | Load the texture of an `image`; answers `true` when the file produced one |
+| `controls.items(handle [, item...])` | Replace the items of a `listbox`; with no argument it returns the count |
+| `controls.item(handle, index [, text])` | Get/set a single item, `nil` outside the list |
+| `controls.additem(handle, text)` / `controls.clear(handle)` | Append an item / remove them all |
+| `controls.itemindex(handle [, index])` / `controls.viewcount(handle [, rows])` | Get/set the selected row (`-1` is none) / the visible rows (`0` is the control size) |
 
 `BoundsRect` stores a control's preferred position and size. Docking changes only
 its effective `WindowRect`, so `controls.width`, `controls.height`, and
@@ -464,6 +470,33 @@ its effective `WindowRect`, so `controls.width`, `controls.height`, and
 size realigns its siblings, and resizing the main window propagates through
 every container level. See `demos/controls_align.tyro` for a left-docked panel
 with top- and bottom-docked buttons.
+
+## Image controls
+
+`image` is a control that shows a texture. Its caption argument is the file to
+show, so the common case is one line:
+
+```lua
+logo = controls.new("image", "logo.png", 40, 40, 128, 128, "logo")
+```
+
+The texture is loaded on the main thread, and a texture larger than the requested
+size grows the control. The file is looked up like every other script asset
+(work path, then `assets`, then the app folder).
+
+An existing control can load another file at any time, and reports whether it
+holds a texture:
+
+```lua
+controls.load(logo, "other.png")  -- or logo.load("other.png"), or logo.file = "other.png"
+if not logo.loaded then
+    print("logo.png could not be read")
+end
+logo.load("")                     -- release the texture
+```
+
+`controls.load` answers `true`/`false` for the file it just read, and `false`
+for a control that is not an `image`.
 
 # Timing
 

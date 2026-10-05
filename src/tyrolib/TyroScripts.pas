@@ -114,7 +114,8 @@ type
      main drawing cycle every frame) and returns the created control. Dispatch
      happens on the main thread so controls always belong to the control tree.
      Supported classes: 'button', 'panel', 'label', 'checkbox', 'edit',
-     'spectrum', 'listbox'. }
+     'spectrum', 'listbox', 'image'. An 'image' reads the caption argument as
+     the file name of the texture it shows (see TLoadControlImageObject). }
    TCreateControlObject = class(TQueueObject)
    private
      FClassName: string;
@@ -170,10 +171,10 @@ type
 
   TSetControlTextObject = class(TQueueObject)
   private
-    FControl: TTyroCaptionControl;
-    FCaption: string;
+    FControl: TTyroControl;
+    FText: string;
   public
-    constructor Create(AControl: TTyroCaptionControl; const ACaption: string);
+    constructor Create(AControl: TTyroControl; const AText: string);
     procedure DoExecute; override;
   end;
 
@@ -316,6 +317,21 @@ type
     FPlaceHolder: string;
   public
     constructor Create(AControl: TTyroControl; const APlaceHolder: string);
+    procedure DoExecute; override;
+  end;
+
+  { TLoadControlImageObject }
+
+  { Loads a texture into a TTyroImage on the main thread, because the upload
+    needs the same GL context the control is painted with. An empty file name
+    releases the texture the control holds, so a failed load never keeps a
+    texture alive. The file name is resolved by TTyroImage.LoadFromFile. }
+  TLoadControlImageObject = class(TQueueObject)
+  private
+    FControl: TTyroControl;
+    FFileName: string;
+  public
+    constructor Create(AControl: TTyroControl; const AFileName: string);
     procedure DoExecute; override;
   end;
 
@@ -1082,7 +1098,9 @@ begin
   else if LName = 'spectrum' then
     NewControl := TTyroSpectrum.Create(Main)
   else if LName = 'listbox' then
-    NewControl := TTyroListBox.Create(Main);
+    NewControl := TTyroListBox.Create(Main)
+  else if LName = 'image' then
+    NewControl := TTyroImage.Create(Main);
   try
     if NewControl <> nil then
     begin
@@ -1090,6 +1108,11 @@ begin
       if FName <> '' then
         NewControl.Name := FName;
       NewControl.BoundsRect := Rect(FX, FY, FX + FW, FY + FH);
+      //An image has no text: the caption argument names the texture file
+      //instead. It is loaded once the bounds are applied, so a texture larger
+      //than the requested size grows the control (see TTyroImage.LoadFromFile).
+      if (NewControl is TTyroImage) and (FCaption <> '') then
+        TTyroImage(NewControl).LoadFromFile(FCaption);
       FControl := NewControl;
       NewControl := nil;
     end;
@@ -1128,16 +1151,21 @@ end;
 
 { TSetControlTextObject }
 
-constructor TSetControlTextObject.Create(AControl: TTyroCaptionControl; const ACaption: string);
+constructor TSetControlTextObject.Create(AControl: TTyroControl; const AText: string);
 begin
   inherited Create;
   FControl := AControl;
-  FCaption := ACaption;
+  FText := AText;
 end;
 
 procedure TSetControlTextObject.DoExecute;
 begin
-  FControl.Caption := FCaption;
+  //a caption control (button/label/checkbox) keeps its text in Caption, an
+  //edit in the shared Text, so both spellings end up in the right store
+  if FControl is TTyroCaptionControl then
+    TTyroCaptionControl(FControl).Caption := FText
+  else
+    FControl.Text := FText;
 end;
 
 { TSetControlCheckedObject }
@@ -1364,6 +1392,21 @@ begin
     TTyroEdit(FControl).PlaceHolder := FPlaceHolder
   else if FControl is TTyroListBox then
     TTyroListBox(FControl).PlaceHolder := FPlaceHolder;
+end;
+
+{ TLoadControlImageObject }
+
+constructor TLoadControlImageObject.Create(AControl: TTyroControl; const AFileName: string);
+begin
+  inherited Create;
+  FControl := AControl;
+  FFileName := AFileName;
+end;
+
+procedure TLoadControlImageObject.DoExecute;
+begin
+  if FControl is TTyroImage then
+    TTyroImage(FControl).LoadFromFile(FFileName);
 end;
 
 { TDrawSetColorObject }
