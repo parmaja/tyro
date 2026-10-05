@@ -457,7 +457,7 @@ type
     function Require_func(L: Plua_State): integer; cdecl;
 
    public
-    constructor Create; override;
+    procedure Init; override;
     destructor Destroy; override;
     procedure Stop; override;
     function RunLine(const ALine: string; out AOutput: string): Boolean; override;
@@ -1103,7 +1103,7 @@ begin
   Result := 0;
 end;
 
-constructor TLuaScript.Create;
+procedure TLuaScript.Init;
 var
   i: integer;
 begin
@@ -1349,7 +1349,7 @@ begin
   FLastError := '';
   //WriteLn('Run Script');
   //Sleep(1000);
-  if not Lua.State.RunString(ScriptText.Text, Msg) then
+  if not Lua.State.RunString(Source.Text, Msg) then
   begin
     FLastError := Msg;
     DoError(Msg);
@@ -1845,7 +1845,7 @@ var
   s: string;
 begin
   s := L.ToString(1);
-  s := Res.GuessFileName(s, Script.Path);
+  s := Res.GuessFileName(s, Res.WorkPath);
   FScript.AddQueueObject(TPlayMusicFileObject.Create(s));
   Result := 0;
 end;
@@ -2134,7 +2134,7 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.Exit_func(L: PLua_State): integer; cdecl;
+function TLuaScript.Exit_func(L: Plua_State): integer; cdecl;
 begin
   //Stop the script as soon as the current call finishes
   Stop;
@@ -2147,7 +2147,7 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.Time_func(L: PLua_State): integer; cdecl;
+function TLuaScript.Time_func(L: Plua_State): integer; cdecl;
 var
   t: TDateTime;
   secs: Int64;
@@ -2630,7 +2630,7 @@ end;
 //openfile(name [, mode]) -> a file handle, or nil plus an error message.
 //This is the only file access a script has: TLua.Init removes the io and os
 //libraries from the globals, so nothing here can be bypassed from Lua code.
-function TLuaScript.OpenFile_func(L: PLua_State): integer; cdecl;
+function TLuaScript.OpenFile_func(L: Plua_State): integer; cdecl;
 var
   aName, aMode, Resolved: string;
   aFile: TLuaFile;
@@ -2651,7 +2651,7 @@ begin
   //keep it only when it lands inside the workspace. The check runs on the
   //expanded path, so a name that walks out of the workspace is refused before
   //any handle exists.
-  Resolved := ResolveAndValidatePath(aName, Path);
+  Resolved := ResolveAndValidatePath(aName, Res.WorkPath);
   if Resolved = '' then
   begin
     L.PushNil;
@@ -2865,7 +2865,7 @@ var
 begin
   aFile := L.ToString(1);
   // Load font from current directory (ScriptPath or WorkSpace)
-  aFile := Res.GuessFileName(aFile, Script.Path);
+  aFile := Res.GuessFileName(aFile, Res.WorkPath);
   if L.IsNumber(2) then
     aSize := L.ToInteger(2) //LoadFontEx
   else
@@ -4769,14 +4769,9 @@ begin
   if FFileName = '' then
     Exit;
   FFileName := Res.GuessFileName(FFileName);
-  if luaL_dofile(FLua.State, PUTF8Char(UTF8String(FFileName))) <> 0 then
-  begin
-    Msg := FLua.State.ToString(-1);
-    FLua.State.Pop(1);
+  Result := FLua.State.RunFile(FFileName, Msg);
+  if not Result then
     DoError(Msg, 'load');
-  end
-  else
-    Result := True;
 end;
 
 procedure TLuaSpriteScript.BuildSelf;

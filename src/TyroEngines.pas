@@ -15,11 +15,10 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs, StrUtils,
-  mnLogs, mnUtils, mnConfigs,
+  mnLogs, mnUtils, mnClasses, mnConfigs,
   RayLib, RayClasses, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
-  TyroSprites, TyroPhysics, TyroEditors,
-  mnClasses;
+  TyroSprites, TyroPhysics, TyroEditors;
 
 const
   TyroVersion: Double = 0.1;
@@ -128,6 +127,7 @@ type
     procedure Clear_Command(Params: TStrings);
     procedure Exit_Command(Params: TStrings);
     procedure Load_Command(Params: TStrings);
+    procedure Save_Command(Params: TStrings);
     procedure State_Command(Params: TStrings);
     procedure Run_Command(Params: TStrings);
     procedure Stop_Command(Params: TStrings);
@@ -136,7 +136,6 @@ type
     procedure EditorClosed(Sender: TObject);
     procedure EditorSave(Sender: TObject);
 
-    function CloneScript(AScript: TTyroScript): TTyroScript;
     procedure SaveEditorSource;
     procedure LoadScriptThread;
     procedure RunScriptThread;
@@ -287,7 +286,8 @@ type
     property Shaking: Boolean read GetShaking;
 
   public
-    ScriptFile: string;//that to run in ScriptThread
+    ScriptFile: string;//Full file name , that to run in ScriptThread
+    ScriptSource: string; //Shout pass to Thread to run it
     //Board is a canvas for ScriptThread draw on it
     Console: TTyroTerminal;
     Output: TTyroOutput;
@@ -1403,7 +1403,7 @@ begin
   if FScriptMain <> nil then
   begin
     Editor.FileName := FScriptMain.FileName;
-    Editor.LoadSource(FScriptMain.Source);
+    Editor.LoadSource(ScriptSource);
   end;
   Editor.BoundsRect := Rect(0, 0, Width, Height);
   Editor.Margin := 10;
@@ -1439,19 +1439,7 @@ begin
 end;
 
 procedure TTyroMain.EditorSave(Sender: TObject);
-var
-  aPath: string;
 begin
-  { CTRL+S while the editor is showing: the buffer goes back into the script it
-    edits, and from there onto the disk. The file it lands in is the one that
-    script was loaded from - LoadFile split the name it was given into Path and
-    FileName, so the two joined back together are that name again. Nothing is
-    run: F5 is what runs the script, and saving it should not open a window. }
-  if FScriptMain = nil then
-  begin
-    Log.WriteLn('No script loaded, nothing to save');
-    Exit;
-  end;
   //Straight into the script rather than through SaveEditorSource, which only
   //copies while the editor is showing: what is being written has to be what the
   //editor holds, not what the script held before the editor was opened.
@@ -1463,13 +1451,12 @@ begin
     Log.WriteLn('The script has no file name, so it was not saved to disk');
     Exit;
   end;
-  aPath := FScriptMain.Path + FScriptMain.FileName;
   try
-    FScriptMain.Source.SaveToFile(aPath);
-    Log.WriteLn('Saved ' + aPath);
+    FScriptMain.Source.SaveToFile(FScriptMain.FileName);
+    Log.WriteLn('Saved ' + FScriptMain.FileName);
   except
     on E: Exception do
-      Log.WriteLn('Could not save ' + aPath + ': ' + E.Message);
+      Log.WriteLn('Could not save ' + FScriptMain.FileName + ': ' + E.Message);
   end;
 end;
 
@@ -1524,19 +1511,6 @@ begin
   end;
 end;
 
-//Make a runnable copy of a script: same class, path and source. The worker owns
-//its clone, so every run gets a clean script instance (and a clean Lua state).
-function TTyroMain.CloneScript(AScript: TTyroScript): TTyroScript;
-begin
-  Result := nil;
-  if AScript = nil then
-    Exit;
-  Result := TTyroScriptClass(AScript.ClassType).Create;
-  Result.Path := AScript.Path;
-  Result.FileName := AScript.FileName;
-  Result.Source.Assign(AScript.Source);
-end;
-
 //Load ScriptFile into the editable template. The worker is not created here:
 //RunScriptThread clones the template for every run.
 procedure TTyroMain.LoadScriptThread;
@@ -1559,19 +1533,12 @@ begin
     Log.WriteLn('File: ' + ScriptFile);
     if LeftStr(ScriptFile, 1) = '.' then
       ScriptFile := ExpandFileName(Res.WorkPath + ScriptFile);
-    //Read first: a failed load leaves the currently loaded script in place.
-    aScript := aScriptType.ScriptClass.Create;
-    try
-      aScript.LoadFile(ScriptFile);
-    except
-      on E: Exception do
-      begin
-        aScript.Free;
-        raise;
-      end;
-    end;
     Res.WorkPath := ExtractFilePath(ScriptFile);
     Title := ScriptFile;
+
+    ScriptSource := mnUtils.LoadFileString(ScriptFile);
+    //Read first: a failed load leaves the currently loaded script in place.
+    aScript := aScriptType.ScriptClass.Create(ScriptSource);
     //Only now release the previous run: the worker executes a clone of the
     //template, so it is stopped before that template is dropped.
     StopScriptRun;
@@ -1600,7 +1567,7 @@ begin
   ClearScriptControls;
   ClearScriptSprites;
   ClearRunCanvases;
-  FScriptThread := TTyroScriptThread.Create(CloneScript(FScriptMain));
+  FScriptThread := TTyroScriptThread.Create(FScriptMain);
   FScriptThread.Start;
 end;
 
@@ -1682,7 +1649,8 @@ end;
 //so this is the only place where the edited source reaches the template.
 procedure TTyroMain.SaveEditorSource;
 begin
-  if Editor.Visible and (FScriptMain <> nil) then
+  Editor.SaveSource(ScriptSource);
+  if FScriptMain <> nil then
     Editor.SaveSource(FScriptMain.Source);
 end;
 
@@ -1738,7 +1706,7 @@ begin
       Console.Writeln('No Lua environment available. Use "load <script>" first.');
       Exit(True);
     end;
-    FScriptREPL := aScriptType.ScriptClass.Create;
+    FScriptREPL := aScriptType.ScriptClass.Create('');
   end;
 
   if FScriptREPL.RunLine(ALine, Output) then
@@ -1761,6 +1729,7 @@ begin
   Commands.Add('exit', ['quit', 'q'], Exit_Command, 'Hide console and stop');
   Commands.Add('stop', [], Stop_Command, 'Stop current script');
   Commands.Add('load', [], Load_Command, 'Load script name from current directory (F4 to pick)');
+  Commands.Add('save', [], Save_Command, 'Save script name to current directory');
   Commands.Add('state', [], State_Command, 'State of current directory');
   Commands.Add('run', [], Run_Command, 'Run current loaded script');
   Commands.Add('edit', [], Edit_Command, 'Edit the current loaded script (F2)');
@@ -1890,7 +1859,7 @@ begin
   if (ExtractFileExt(aFile) = '') and not SysUtils.FileExists(aFileName) then
   begin
     aFile := aFile + '.tyro';
-    aFileName := IncludePathDelimiter(Res.WorkPath) + aFile;
+    //aFileName := IncludePathDelimiter(Res.WorkPath) + aFile;
   end;
 
   if SysUtils.FileExists(aFileName) then
@@ -1907,6 +1876,43 @@ begin
   begin
     Console.Writeln('Script not found: ' + aFile);
     Exit;
+  end;
+end;
+
+procedure TTyroMain.Save_Command(Params: TStrings);
+var
+  aFile, aFileName: string;
+  aConfirm: Boolean;
+begin
+  if (Params.Count = 0) then
+  begin
+    Console.Writeln('Usage: save <script_name>, [yes]');
+    Exit;
+  end;
+
+  aFile := Params[0];
+
+  if (ExtractFileExt(aFile) = '') then
+    aFile := aFile + '.tyro';
+
+  aFileName := IncludePathDelimiter(Res.WorkPath) + aFile;
+
+  if Params.Count > 1 then
+    aConfirm := IsStrInArray(Params[1], ['1', 'yes', 'true', 'ok'])
+  else
+    aConfirm := False;
+  //"load demo" loads demo.tyro: a name without an extension that does not exist
+  //on its own is taken as a script. An explicit extension is never second-guessed.
+
+  if SysUtils.FileExists(aFileName) and not aConfirm then
+    Console.Writeln('Unable to save, file is exits, add yes after file name ' + aFile)
+  else
+  begin
+    ScriptFile := aFileName;
+    SaveFileUTF8String(aFileName, ScriptSource);
+    Console.Writeln('File saved to ' + aFile);
+
+    LoadScriptThread;
   end;
 end;
 

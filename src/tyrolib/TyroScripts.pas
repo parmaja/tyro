@@ -528,9 +528,8 @@ type
   TTyroScript = class abstract(TObject)
   private
     FActive: LongInt;
-    FStarted: LongInt;
-    FPath: string;
     FFileName: string;
+    FStarted: LongInt;
     function GetActive: Boolean;
  function GetStarted: Boolean;
     procedure ExecuteQueueObject; //this for sync do not call it
@@ -538,7 +537,7 @@ type
   protected
     QueueObject: TQueueObject;
     Thread: TTyroScriptThread;
-    ScriptText: TStringList;
+    FSource: TStringList;
     //* Error message of the most recent main-chunk execution, or '' when it
     //* finished without error. Written on the worker thread, published before
     //* the thread marks itself Completed, read once by the main thread during
@@ -550,25 +549,26 @@ type
     procedure AddQueueObject(AQueueObject: TQueueObject); virtual;
 
     procedure BeforeRun; virtual;
+    procedure Init; virtual;
     procedure Run; virtual; abstract;
     procedure AfterRun; virtual;
   public
-    constructor Create; virtual;
+    constructor Create(ASource: string); virtual;
     destructor Destroy; override;
     procedure Stop; virtual;
     procedure Start; virtual;
     procedure LoadFile(AFileName: string); overload;
+    procedure LoadString(ASource: string); overload;
 
     //Execute a single line of source on the persistent script state so globals
     //(e.g. x = 5) survive across lines; used by the console REPL. AOutput is
     //the error message when Result = False.
     function RunLine(const ALine: string; out AOutput: string): Boolean; virtual;
-    property Path: string read FPath write FPath;
-    property FileName: string read FFileName write FFileName;
+    property FileName: string read FFileName write FFileName; //TODO FFileName
     property Active: Boolean read GetActive;
     property Started: Boolean read GetStarted; //started true even after stopped
     property LastError: string read FLastError; //'' when the last run was clean
-    property Source: TStringList read ScriptText; //the loaded script lines
+    property Source: TStringList read FSource; //the loaded script lines
   end;
 
   { TTyroScriptThread }
@@ -1656,6 +1656,10 @@ procedure TTyroScript.BeforeRun;
 begin
 end;
 
+procedure TTyroScript.Init;
+begin
+end;
+
 procedure TTyroScript.AfterRun;
 begin
 end;
@@ -1681,16 +1685,18 @@ begin
     Thread.Yield;
 end;
 
-constructor TTyroScript.Create;
+constructor TTyroScript.Create(ASource: string);
 begin
   inherited Create;
   TInterlocked.Exchange(FActive, 1);
-  ScriptText := TStringList.Create;
+  FSource := TStringList.Create;
+  FSource.Text := ASource;
+  Init;
 end;
 
 destructor TTyroScript.Destroy;
 begin
-  FreeAndNil(ScriptText);
+  FreeAndNil(FSource);
   inherited Destroy;
 end;
 
@@ -1714,11 +1720,15 @@ end;
 
 procedure TTyroScript.LoadFile(AFileName: string);
 begin
-  ScriptText.LoadFromFile(AFileName);
-  Path := ExtractFilePath(AFileName);
+  Source.LoadFromFile(AFileName);
   //Must not be named FileName: that parameter would shadow the property of
   //the same name and the field would keep its initial empty value.
-  FileName := ExtractFileName(AFileName);
+  FileName := AFileName;
+end;
+
+procedure TTyroScript.LoadString(ASource: string);
+begin
+  Source.Text := ASource;
 end;
 
 function TTyroScript.RunLine(const ALine: string; out AOutput: string): Boolean;

@@ -44,6 +44,8 @@ type
 
   TKState = (stNone, stComment, stString);
 
+  { TyroEditor }
+
   TyroEditor = class(TTyroControl)
   private
     FLines: TStringList;
@@ -141,6 +143,7 @@ type
     //* The runs of a line, as RebuildRuns measured them: a descendant that
     //* paints the text itself, or a test, needs to know where the colors fall.
     function GetRuns(ALine: Integer): TEditorRuns;
+    procedure Reset; virtual;
   public
     constructor Create(AParent: TTyroLayout); override;
     destructor Destroy; override;
@@ -151,8 +154,10 @@ type
     procedure KeyPress(var Key: TUTF8Char); override;
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
 
-    procedure LoadSource(ASource: TStringList);
-    procedure SaveSource(ASource: TStringList);
+    procedure LoadSource(ASource: TStringList); overload;
+    procedure LoadSource(ASource: string); overload;
+    procedure SaveSource(ASource: TStringList); overload;
+    procedure SaveSource(var ASource: string); overload;
     procedure Close;
 
     property FileName: string read FFileName write FFileName;
@@ -1156,11 +1161,11 @@ end;
 
 function TyroEditor.IsApiName(const AWord: string): Boolean;
 const
-  Words: array[0..40] of string = ('version', 'log', 'sleep', 'print', 'println',
+  Words: array[0..41] of string = ('version', 'log', 'sleep', 'print', 'println',
     'iskeypressed', 'iskeydown', 'mousex', 'mousey', 'ismousepressed', 'frametime',
     'time', 'rand', 'window', 'console', 'canvas', 'shader', 'font', 'music',
     'sprites', 'buttons', 'new', 'find', 'caption', 'border', 'clear', 'text',
-    'circle', 'rectangle', 'line', 'point', 'load', 'show', 'read', 'play',
+    'circle', 'rectangle', 'line', 'point', 'load', 'save', 'show', 'read', 'play',
     'beep', 'sound', 'mml', 'hide', 'spectrum', 'shake');
 var
   I: Integer;
@@ -1181,6 +1186,21 @@ begin
   Result := nil;
   if (ALine >= 0) and (ALine < Length(FRuns)) then
     Result := FRuns[ALine];
+end;
+
+procedure TyroEditor.Reset;
+begin
+  FCaretLine := 0;
+  FCaretCol := 0;
+  FDesiredCol := 0;
+  FTopLine := 0;
+  FLeftCol := 0;
+  FModified := False;
+  ClearSelection;   //the caret is at the start of the buffer, and so is the anchor
+  FUndo.Clear;
+  FRedo.Clear;
+  RebuildRuns;
+  Invalidate;
 end;
 
 procedure TyroEditor.RebuildRuns;
@@ -1513,7 +1533,7 @@ var
 begin
   sbY := ClientRect.Height - GetStatusHeight;
   ACanvas.DrawRectangle(0, sbY, ClientRect.Width, GetStatusHeight, clBlack, True);
-  tx := ' ' + FFileName;
+  tx := ' ' + ExtractFileName(FFileName);
   if FModified then
     tx := tx + ' *';
   if tx = ' ' then
@@ -1835,22 +1855,25 @@ begin
   FLines.Assign(ASource);
   if FLines.Count = 0 then
     FLines.Add('');
-  FCaretLine := 0;
-  FCaretCol := 0;
-  FDesiredCol := 0;
-  FTopLine := 0;
-  FLeftCol := 0;
-  FModified := False;
-  ClearSelection;   //the caret is at the start of the buffer, and so is the anchor
-  FUndo.Clear;
-  FRedo.Clear;
-  RebuildRuns;
-  Invalidate;
+  Reset;
+end;
+
+procedure TyroEditor.LoadSource(ASource: string);
+begin
+  FLines.Text := ASource;
+  Reset;
 end;
 
 procedure TyroEditor.SaveSource(ASource: TStringList);
 begin
   ASource.Assign(FLines);
+  FModified := False;
+  Invalidate;
+end;
+
+procedure TyroEditor.SaveSource(var ASource: string);
+begin
+  ASource := FLines.Text;;
   FModified := False;
   Invalidate;
 end;

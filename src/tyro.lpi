@@ -115,6 +115,10 @@
         <Filename Value="TyroApp.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="tyrolib\TyroEditors.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
     <Debugger>
       <ClassConfig Version="1">
