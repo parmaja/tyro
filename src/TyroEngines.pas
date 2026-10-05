@@ -40,6 +40,14 @@ var
 
 type
 
+  { TTyroConsoleLog }
+
+  TTyroConsoleLog = class(TInterfacedPersistent, ILog)
+  private
+    procedure LogWrite(LogLevel: TLogLevel; S: string);
+  public
+  end;
+
   TProcedureObject = procedure(Params: TStrings) of object;
 
   TConsoleCommand = class(TmnNamedObject)
@@ -164,10 +172,6 @@ type
   protected
     FPrepared: Boolean; //InitWindow is used
     FQueue: TQueueObjects;
-    //* The loaded script, kept as the editable template: it owns the source
-    //* (from the file or from the editor) and outlives every run, so a script can
-    //* be edited and rerun after its worker is gone.
-    FScriptMain: TTyroScript;
     //* The current worker. It owns the script clone it executes and frees it
     //* with the thread, hence a run is always a fresh clone + a fresh thread.
     FScriptThread: TTyroScriptThread;
@@ -307,6 +311,8 @@ type
     procedure ShowEditor;
     procedure HideEditor;
     procedure ToggleEditor;
+
+    procedure LogWriteLn(Msg: string);
 
     property CanvasLock: TCriticalSection read FCanvasLock;
     property Options: TTyroMainOptions read FOptions write FOptions;
@@ -921,7 +927,6 @@ end;
 destructor TTyroMain.Destroy;
 begin
   Stop;
-  FreeAndNil(FScriptMain);
   FreeAndNil(FScriptREPL);
 
   //Detach callbacks and release audio objects while their backing device and
@@ -1374,8 +1379,6 @@ begin
       Exit;
     end;
   end;
-  if FScriptMain = nil then
-    Exit;
   HideFileList;
   Console.Writeln('Loaded: ' + ExtractFileName(AFileName) + '. Type "run" to execute it.');
   if not Console.Visible then
@@ -1400,11 +1403,8 @@ begin
   //the source stays safe to change. Stop the run so it is not executing while
   //the source is being edited.
   StopScriptRun;
-  if FScriptMain <> nil then
-  begin
-    Editor.FileName := FScriptMain.FileName;
-    Editor.LoadSource(ScriptSource);
-  end;
+  Editor.FileName := ScriptFile;
+  Editor.LoadSource(ScriptSource);
   Editor.BoundsRect := Rect(0, 0, Width, Height);
   Editor.Margin := 10;
   Editor.BackColor := clBlack;
@@ -1433,6 +1433,12 @@ begin
     ShowEditor;
 end;
 
+procedure TTyroMain.LogWriteLn(Msg: string);
+begin
+  Console.Writeln(Msg);
+  Output.Writeln(Msg);
+end;
+
 procedure TTyroMain.EditorClosed(Sender: TObject);
 begin
   HideEditor;
@@ -1443,8 +1449,8 @@ begin
   //Straight into the script rather than through SaveEditorSource, which only
   //copies while the editor is showing: what is being written has to be what the
   //editor holds, not what the script held before the editor was opened.
-  Editor.SaveSource(FScriptMain.Source);
-  if FScriptMain.FileName = '' then
+  Editor.SaveSource(ScriptSource);
+  if ScriptFile = '' then
   begin
     //Text typed at the console has no file behind it, so there is nowhere to
     //write it. The buffer still reached the script, which is what a run uses.
@@ -1452,11 +1458,11 @@ begin
     Exit;
   end;
   try
-    FScriptMain.Source.SaveToFile(FScriptMain.FileName);
-    Log.WriteLn('Saved ' + FScriptMain.FileName);
+    SaveFileUTF8String(ScriptFile, ScriptSource);
+    Log.WriteLn('Saved ' + ScriptFile);
   except
     on E: Exception do
-      Log.WriteLn('Could not save ' + FScriptMain.FileName + ': ' + E.Message);
+      Log.WriteLn('Could not save ' + ScriptFile + ': ' + E.Message);
   end;
 end;
 
@@ -1516,7 +1522,6 @@ end;
 procedure TTyroMain.LoadScriptThread;
 var
   aScriptType: TScriptType;
-  aScript: TTyroScript;
 begin
   if ScriptFile = '' then
     exit;
@@ -1537,16 +1542,9 @@ begin
     Title := ScriptFile;
 
     ScriptSource := mnUtils.LoadFileString(ScriptFile);
-    //Read first: a failed load leaves the currently loaded script in place.
-    aScript := aScriptType.ScriptClass.Create(ScriptSource);
-    //Only now release the previous run: the worker executes a clone of the
-    //template, so it is stopped before that template is dropped.
-    StopScriptRun;
-    FreeAndNil(FScriptMain);
-    FScriptMain := aScript;
-    exit;
-  end;
-  Log.WriteLn('Type of file not found: ' + ScriptFile);
+  end
+  else
+    Log.WriteLn('Type of file not found: ' + ScriptFile);
 end;
 
 //(Re)start the loaded script: stop whatever is running, then hand a fresh clone
@@ -1554,12 +1552,13 @@ end;
 //the script it runs, so a rerun is always a new thread (F5, "run", and hiding the
 //editor all come through here).
 procedure TTyroMain.RunScriptThread;
+var
+  aScriptType: TScriptType;
+  aScript: TTyroScript;
 begin
-  if FScriptMain = nil then
-    exit;
   //With the editor open its buffer is the current source: take it over first so
   //a rerun never executes a stale template.
-  SaveEditorSource;
+//  SaveEditorSource;
   StopScriptRun;
   //The finished run left the window full of its own controls, a sprite store full
   //of its own sprites and canvases full of its own pixels. Drop all three, or the
@@ -1567,8 +1566,15 @@ begin
   ClearScriptControls;
   ClearScriptSprites;
   ClearRunCanvases;
-  FScriptThread := TTyroScriptThread.Create(FScriptMain);
-  FScriptThread.Start;
+  aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
+  if (aScriptType <> nil) then
+  begin
+    aScript := aScriptType.ScriptClass.Create(ScriptSource);
+    FScriptThread := TTyroScriptThread.Create(aScript);
+    FScriptThread.Start;
+  end
+  else
+    Log.WriteLn('Type of file not found: ' + ScriptFile);
 end;
 
 //True for the controls the engine creates itself and that therefore outlive a run
@@ -1650,8 +1656,6 @@ end;
 procedure TTyroMain.SaveEditorSource;
 begin
   Editor.SaveSource(ScriptSource);
-  if FScriptMain <> nil then
-    Editor.SaveSource(FScriptMain.Source);
 end;
 
 //Stop the running worker and drop the main-thread work it may still have queued,
@@ -1843,7 +1847,7 @@ end;
 
 procedure TTyroMain.Load_Command(Params: TStrings);
 var
-  aFile, aFileName: string;
+  aFile: string;
 begin
   if (Params.Count = 0) then
   begin
@@ -1852,19 +1856,14 @@ begin
   end;
 
   aFile := Params[0];
-  aFileName := IncludePathDelimiter(Res.WorkPath) + aFile;
+  aFile := IncludePathDelimiter(Res.WorkPath) + aFile;
 
-  //"load demo" loads demo.tyro: a name without an extension that does not exist
-  //on its own is taken as a script. An explicit extension is never second-guessed.
-  if (ExtractFileExt(aFile) = '') and not SysUtils.FileExists(aFileName) then
-  begin
+  if (ExtractFileExt(aFile) = '') and not SysUtils.FileExists(aFile) then
     aFile := aFile + '.tyro';
-    //aFileName := IncludePathDelimiter(Res.WorkPath) + aFile;
-  end;
 
-  if SysUtils.FileExists(aFileName) then
+  if SysUtils.FileExists(aFile) then
   begin
-    ScriptFile := aFileName;
+    ScriptFile := aFile;
     try
       LoadScriptThread;
     except
@@ -1920,12 +1919,10 @@ procedure TTyroMain.State_Command(Params: TStrings);
 begin
   if not Active then
     Exit;
-  if FScriptMain = nil then
-    Console.Writeln('No script loaded')
-  else if (FScriptThread <> nil) and FScriptThread.Active then
-    Console.Writeln(FScriptMain.FileName + ' is running')
+  if (FScriptThread <> nil) and FScriptThread.Active then
+    Console.Writeln(ScriptFile + ' is running')
   else
-    Console.Writeln(FScriptMain.FileName + ' is loaded');
+    Console.Writeln(ScriptFile + ' is loaded');
 end;
 
 { TTyroFileList }
@@ -2021,6 +2018,13 @@ begin
     if (i >= 0) and (i = ItemIndex) and Assigned(FOnPick) then
       FOnPick(Self, SelectedFile);
   end;
+end;
+
+{ TTyroConsoleLog }
+
+procedure TTyroConsoleLog.LogWrite(LogLevel: TLogLevel; S: string);
+begin
+  Main.LogWriteLn(S);
 end;
 
 { TConsoleCommand }

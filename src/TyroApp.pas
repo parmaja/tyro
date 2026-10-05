@@ -67,14 +67,6 @@ type
     property Title: string read FTitle write SetTitle;
   end;
 
-  { TTyroConsoleLog }
-
-  TTyroConsoleLog = class(TInterfacedPersistent, ILog)
-  private
-    procedure LogWrite(LogLevel: TLogLevel; S: string);
-  public
-  end;
-
 var
   Application: TTyroApplication = nil;
 
@@ -299,13 +291,6 @@ end;
 procedure TTyroApplication.Terminate;
 begin
   FTerminated := True;
-end;
-
-{ TTyroConsoleLog }
-
-procedure TTyroConsoleLog.LogWrite(LogLevel: TLogLevel; S: string);
-begin
-  //Main.Console.Write(S);
 end;
 
 end.

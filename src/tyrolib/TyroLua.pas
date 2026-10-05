@@ -544,13 +544,8 @@ begin
     if i > 1 then
       s := s + #9;
     s := s + L.ToString(i);
-    if IsConsole then
-      Log.WriteLn(L.ToString(i));
+    Log.WriteLn(L.ToString(i));
   end;
-  //mirror the log line to the Output control too (TTyroOutput is locked, it is
-  //called from the script thread)
-  if (Main <> nil) and (Main.Output <> nil) then
-    Main.Output.Writeln(s);
   Result := 0;
 end;
 

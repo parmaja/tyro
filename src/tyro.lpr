@@ -23,7 +23,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  TyroApp, TyroEditors;
+  TyroApp, TyroEditors, Melodies, TyroLua, TyroScripts;
 
 {$R *.res}
 

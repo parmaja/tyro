@@ -585,9 +585,9 @@ type
     procedure TerminatedSet; override;
     procedure Execute; override;
   public
-    procedure Start; reintroduce;
     constructor Create(AScript: TTyroScript); virtual;
     destructor Destroy; override;
+    procedure Start; reintroduce;
     property Started: Boolean read GetStarted;
     property Completed: Boolean read GetCompleted;
     property Active: Boolean read GetActive;
