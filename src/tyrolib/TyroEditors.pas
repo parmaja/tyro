@@ -748,6 +748,8 @@ var
 begin
   L := GetLineLength(FCaretLine);
   N := UTF8Length(AChar);
+  if FLines.Count = 0 then
+    FLines.Add('');
   { Overwrite mode (the Insert key) replaces the character under the caret
     instead of pushing the rest of the line to the right. At the end of the
     line there is nothing to replace, so the character is appended as usual. }
@@ -768,6 +770,8 @@ var
 begin
   if S = '' then
     Exit;
+  if FLines.Count = 0 then
+    FLines.Add('');
   T := StringReplace(S, #13#10, #10, [rfReplaceAll]);
   T := StringReplace(T, #13, #10, [rfReplaceAll]);
   { Split into one segment per line: "a", LF, "b" gives "a" and "b", and text
