@@ -544,8 +544,8 @@ type
     FTitle: utf8string;
     procedure SetCanvas(AValue: TTyroCanvas);
     procedure SetFocusedControl(AValue: TTyroControl);
-    procedure SetTitle(AValue: utf8string);
   protected
+    procedure SetTitle(AValue: utf8string); virtual;
     procedure PrepareCanvas; virtual;
     function CreateCanvas: TTyroCanvas; virtual; abstract;
   public

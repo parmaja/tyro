@@ -200,6 +200,7 @@ type
     //* Free the controls a finished run left in the window. Every run calls this
     //* before it starts the next one; it is protected so a test can drive the
     //* same step without starting a worker.
+    procedure SetTitle(AValue: utf8string); override;
     procedure ClearScriptControls;
     procedure SizeChanged; override;
     procedure ConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
@@ -687,6 +688,13 @@ begin
   finally
     Lock.Leave;
   end;
+end;
+
+procedure TTyroMain.SetTitle(AValue: utf8string);
+begin
+  inherited;
+  AValue := 'Tyro - ' + AValue;
+  RayLib.SetWindowTitle(PUTF8Char(UTF8String(AValue)));
 end;
 
 function TTyroMain.UpdateShake(ADeltaTime: Double): Boolean;
@@ -1538,6 +1546,12 @@ var
 begin
   if ScriptFile = '' then
     exit;
+  if EndsDelimiter(ScriptFile) and SysUtils.DirectoryExists(ScriptFile) then
+  begin
+    Res.WorkPath := ScriptFile;
+    Title := ScriptFile;
+    exit;
+  end;
 
   aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
   if (aScriptType <> nil) and SysUtils.FileExists(ScriptFile) then
@@ -1557,6 +1571,7 @@ begin
       end;
     end;
     Res.WorkPath := ExtractFilePath(ScriptFile);
+    Title := ScriptFile;
     //Only now release the previous run: the worker executes a clone of the
     //template, so it is stopped before that template is dropped.
     StopScriptRun;

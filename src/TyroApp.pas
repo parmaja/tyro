@@ -250,12 +250,10 @@ begin
 
   ScriptFile := CorrectPath(ExpandToPath(Arguments.ReadString(''), Res.WorkPath)); //File come without switch name
 
-  if SysUtils.FileExists(ScriptFile) then
-    Main.ScriptFile := ScriptFile
-  else if SysUtils.DirectoryExists(ScriptFile) then
-    Res.WorkPath := ScriptFile;
+  if SysUtils.FileExists(ScriptFile) or SysUtils.DirectoryExists(ScriptFile)  then
+    Main.ScriptFile := ScriptFile;
 
-  if (Main.ScriptFile = '') or Arguments.ReadSwitch('-window', true) or Arguments.ReadSwitch('-w', true) then
+  if (Main.ScriptFile = '') or SysUtils.DirectoryExists(ScriptFile) or Arguments.ReadSwitch('-window', true) or Arguments.ReadSwitch('-w', true) then
     MainOptions := MainOptions + [moMainWindow];
   if Arguments.ReadSwitch('-terminal') or Arguments.ReadSwitch('-t') then
     MainOptions := MainOptions + [moShowTerminal];
