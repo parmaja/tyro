@@ -445,6 +445,38 @@ controls.parent(bottom, panel)
 controls.align(bottom, "bottom")
 ```
 
+A handle is also a property bag, so every row above that reads or writes a value
+has a field spelling on the handle itself. The field is the value - never a
+function - so these are interchangeable:
+
+```lua
+local b = controls.new("button", "Hi", 10, 10, 120, 32)
+
+b.caption = "Bye"        -- controls.caption(b, "Bye")
+b.width = 200            -- controls.width(b, 200)
+b.align = "left"         -- controls.align(b, "left")
+b.visible = false        -- controls.visible(b, false)
+b.parent = panel         -- controls.parent(b, panel)
+
+local w, h = b.width, b.height
+```
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `x` / `left`, `y` / `top`, `width`, `height` | integer | Preferred geometry; writing one of them keeps the others |
+| `visible`, `name`, `border`, `backcolor`, `align`, `parent` | | Same values as the functions above |
+| `text` / `caption` | string | The caption of a button, label, or checkbox; the edited text of an edit |
+| `hover`, `down`, `clicked`, `focused` | boolean | Read-only mouse and keyboard state |
+| `checked` | boolean | A checkbox only, `false` on anything else |
+| `items`, `itemindex`, `viewcount` | integer | A `listbox` only; `lst.items = {"a", "b"}` replaces the list, a single string replaces it with one item and `nil` empties it |
+| `loaded` | boolean | An `image` only; `img.file = "logo.png"` loads the texture |
+
+The names that name an action stay methods on the handle and take a colon call,
+because a Lua key cannot be both a value and a function:
+`lst:additem("a")`, `lst:clear()`, `lst:item(0)`, `b:show()`, `b:hide()`,
+`b:move(x, y)`, `b:position(x, y)`, `b:focus()`, `img:load("logo.png")`. Each one
+also takes the handle as its first argument on the table: `controls.additem(lst, "a")`.
+
 | Function | Description |
 |----------|-------------|
 | `controls.new(class, caption, x, y, w, h, name?)` | Create a `button`, `panel`, `label`, `checkbox`, `edit`, `spectrum`, `listbox`, or `image`; returns a handle |
@@ -452,14 +484,14 @@ controls.align(bottom, "bottom")
 | `controls.parent(handle [, parentHandle])` | Get/set the container; the getter returns `0` for the main window, and `nil`/`0` moves the control there |
 | `controls.width/height(handle [, value])` | Get/set the preferred size |
 | `controls.position/move(handle, x, y)` | Get/set the preferred position |
-| `controls.text/caption(handle [, value])` | Get/set a caption, label, or edit value; `handle.text = value` is the same |
+| `controls.text/caption(handle [, value])` | Get/set a caption, label, or edit value |
 | `controls.visible/show/hide(handle)` | Show or hide a control; hidden aligned controls release their space |
 | `controls.hover/down/clicked(handle)` | Read mouse state |
 | `controls.checked(handle [, value])` | Get/set the checked state of a checkbox |
 | `controls.border(handle [, style])` | `0` none, `1` thin, `2` thick, `3` sizable |
 | `controls.backcolor(handle [, color])` | Set a color from the `colors` table |
 | `controls.load(handle, file)` | Load the texture of an `image`; answers `true` when the file produced one |
-| `controls.items(handle [, item...])` | Replace the items of a `listbox`; with no argument it returns the count |
+| `controls.items(handle [, item...])` | Replace the items of a `listbox` (also one table of strings); with no argument it returns the count |
 | `controls.item(handle, index [, text])` | Get/set a single item, `nil` outside the list |
 | `controls.additem(handle, text)` / `controls.clear(handle)` | Append an item / remove them all |
 | `controls.itemindex(handle [, index])` / `controls.viewcount(handle [, rows])` | Get/set the selected row (`-1` is none) / the visible rows (`0` is the control size) |

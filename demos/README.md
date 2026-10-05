@@ -67,7 +67,7 @@ tyro demos/pong.tyro
 
 | File | Feature |
 |------|---------|
-| `controls.tyro` | Generic control table: `controls.new('button'/'label'/'checkbox'/'edit'/'panel'/'image', ...)` with text, checked, position/size, visible, hover/down/clicked, focus, border, backcolor, name |
+| `controls.tyro` | Generic control table: `controls.new('button'/'label'/'checkbox'/'edit'/'panel'/'image', ...)` with text, checked, position/size, visible, hover/down/clicked, focus, border, backcolor, name; every value is also a field of the handle (`btn.caption = "OK"`) |
 | `controls_align.tyro` | Nested aligned controls: a panel docked left, buttons docked to its top, and one button docked to its bottom; resizing reflows the whole tree |
 
 ### Text

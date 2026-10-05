@@ -1,0 +1,39 @@
+x,y=10,20
+w,h=120,32
+set w,h=200,40
+set x,y=5,6
+by table form=200,40
+by handle form=200,40
+is function=false
+text=Hi caption=Hi
+caption set=Bye/Bye
+name=renamed
+visible=false
+border=2 by table=2
+align=left
+backcolor=-13162010 by table=-13162010
+raw field=7
+checked=false
+checked set=true
+checked on button=false
+items=3 item1=b
+itemindex=-1
+itemindex set=1 by table=1
+viewcount=2 by table=2
+added=5 last=e
+replaced=z
+single=1/only
+cleared=0
+items on button=nil
+loaded=true
+loaded after file=true w,h=64,64
+loaded on button=false
+parent=5
+parent by table=5
+back to main=0
+show=true
+hide=false
+move=11,12
+position=13,14
+flags=falsefalsefalsefalse
+focus=false

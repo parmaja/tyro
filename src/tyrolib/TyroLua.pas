@@ -1219,7 +1219,11 @@ begin
   Lua.State.Register('Sprites', '__call', Self, Sprites.Call_func, True);
 
   //controls (generic control table; 'buttons' is a legacy alias to the same
-  //object so old scripts keep working)
+  //object so old scripts keep working). Every function here takes the control as
+  //its first argument and each of them also has a field spelling on the control
+  //table itself (btn.width = 200 for controls.width(btn, 200)), except for the
+  //actions - show, hide, move, position, focus, additem, item, clear, load -
+  //which stay methods on the control table and take a colon call.
   Lua.State.RegisterTable('controls');
   Lua.State.Register('controls', 'new', Controls, Controls.New_func);
   Lua.State.Register('controls', 'position', Controls, Controls.Position_func);
@@ -1238,14 +1242,16 @@ begin
   Lua.State.Register('controls', 'backcolor', Controls, Controls.BackColor_func);
   Lua.State.Register('controls', 'name', Controls, Controls.Name_func);
   //caption/text: both spellings work on a caption control, and text also
-  //covers an edit (btn.caption is registered on the control table itself)
+  //covers an edit; btn.caption and btn.text are the field spellings of both
   Lua.State.Register('controls', 'caption', Controls, Controls.Caption_func);
   Lua.State.Register('controls', 'text', Controls, Controls.Text_func);
   Lua.State.Register('controls', 'checked', Controls, Controls.Checked_func);
   Lua.State.Register('controls', 'align', Controls, Controls.Align_func);
   Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
-  //listbox: these also exist per control (lst.additem("a")), the table form
-  //takes the handle as first argument (controls.additem(lst, "a"))
+  //listbox: items/viewcount/itemindex are fields on the control table
+  //(lst.items), the three actions additem/item/clear are also methods there
+  //(lst:additem("a")); the table form takes the handle first
+  //(controls.additem(lst, "a"))
   Lua.State.Register('controls', 'items', Controls, Controls.Items_func);
   Lua.State.Register('controls', 'item', Controls, Controls.Item_func);
   Lua.State.Register('controls', 'additem', Controls, Controls.AddItem_func);
@@ -3013,6 +3019,107 @@ begin
     Result := AControl.Text;
 end;
 
+//Maps a border style value onto the enum: 0=none, 1=thin, 2=thick, 3=sizable.
+//Anything out of range means "no border", the same answer controls.border
+//gives a setter for a style it does not know.
+function BorderOfValue(AValue: Integer): TBorder;
+begin
+  case AValue of
+    1: Result := brdThin;
+    2: Result := brdThick;
+    3: Result := brdSizable;
+  else
+    Result := brdNone;
+  end;
+end;
+
+//Maps a Lua value onto the docking edge: 'none', 'left', 'top', 'right',
+//'bottom' or 'client', or the enum value 0..5. False when the value names no
+//edge, so the caller can answer nil instead of silently docking nowhere.
+function TryAlignOfValue(const AValue: string; out AAlign: TAlign): Boolean;
+var
+  s: string;
+  n: Integer;
+begin
+  s := LowerCase(Trim(AValue));
+  if TryStrToInt(s, n) and (n >= Ord(alNone)) and (n <= Ord(alClient)) then
+    AAlign := TAlign(n)
+  else if s = 'none' then
+    AAlign := alNone
+  else if s = 'left' then
+    AAlign := alLeft
+  else if s = 'top' then
+    AAlign := alTop
+  else if s = 'right' then
+    AAlign := alRight
+  else if s = 'bottom' then
+    AAlign := alBottom
+  else if s = 'client' then
+    AAlign := alClient
+  else
+    Exit(False);
+  Result := True;
+end;
+
+//The name of a docking edge, as controls.align and the align field read it.
+function AlignName(AAlign: TAlign): string;
+begin
+  case AAlign of
+    alLeft: Result := 'left';
+    alTop: Result := 'top';
+    alRight: Result := 'right';
+    alBottom: Result := 'bottom';
+    alClient: Result := 'client';
+  else
+    Result := 'none';
+  end;
+end;
+
+//The border style as the number the border field and controls.border use.
+function BorderStyleValue(ABorder: TBorder): Integer;
+begin
+  case ABorder of
+    brdThin: Result := 1;
+    brdThick: Result := 2;
+    brdSizable: Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+//Resolves the container of a control: the handle a script can pass straight
+//back into controls.parent, so 0 answers "the main window". Shared by the
+//parent field and controls.parent.
+function ParentHandleOf(AControls: TList; AControl: TTyroControl): Integer;
+var
+  i: Integer;
+begin
+  Result := 0;
+  for i := 0 to AControls.Count - 1 do
+  begin
+    if (TTyroControl(AControls[i]) <> nil) and (TTyroControl(AControls[i]) = AControl.Parent) then
+    begin
+      Result := i + 1;
+      Break;
+    end;
+  end;
+end;
+
+//Where the first value a script passed sits in the arguments of a control
+//function. The control is always argument 1, either as a table or as a handle.
+//A method registered on the control table gets that table pushed in front of the
+//script's arguments, so lst.additem("a") arrives as (table, "a") - but Lua also
+//passes the receiver to a colon call, so lst:additem("a") arrives as
+//(table, table, "a"). Both spellings mean the same call, so a method reads its
+//values from this position and not from a fixed one.
+function FirstArg(L: PLua_State): Integer;
+begin
+  Result := 2;
+  if (L.ArgsCount >= 2) and L.IsTable(1) and L.IsTable(2) and
+    lua_rawequal(L, 1, 2) then
+    Result := 3;
+end;
+
 { TLuaControls }
 
 constructor TLuaControls.Create(AScript: TLuaScript);
@@ -3069,7 +3176,12 @@ end;
 function TLuaControls.Setter(L: PLua_State): integer;
 var
   ctrl: TTyroControl;
+  parentCtrl: TTyroControl;
   field: string;
+  aAlign: TAlign;
+  r: TRect;
+  v: Integer;
+  Items: TStringList;
 begin
   Result := 0;
   if L.IsTable(1) then
@@ -3080,29 +3192,21 @@ begin
     Exit;
   field := LowerCase(L.ToString(2));
 
-  if (field = 'x') or (field = 'left') or (field = 'top') or (field = 'y') or (field = 'width') or (field = 'height') or (field = 'position') then
+  if (field = 'x') or (field = 'left') or (field = 'top') or (field = 'y') or (field = 'width') or (field = 'height') then
   begin
-    // handle position/size
+    //geometry: a write changes one number of the rect and keeps the rest, so
+    //x/y move the control and width/height resize it
+    r := ctrl.BoundsRect;
+    v := round(L.ToNumber(3));
     if (field = 'x') or (field = 'left') then
-    begin
-      with ctrl.BoundsRect do
-        FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, Rect(round(L.ToNumber(3)), Top, Right, Bottom)));
-    end
+      r := Rect(v, r.Top, v + r.Width, r.Bottom)
     else if (field = 'y') or (field = 'top') then
-    begin
-      with ctrl.BoundsRect do
-        FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, Rect(Left, round(L.ToNumber(3)), Right, Bottom)));
-    end
+      r := Rect(r.Left, v, r.Right, v + r.Height)
     else if field = 'width' then
-    begin
-      with ctrl.BoundsRect do
-        FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, Rect(Left, Top, Left + round(L.ToNumber(3)), Bottom)));
-    end
-    else if field = 'height' then
-    begin
-      with ctrl.BoundsRect do
-        FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, Rect(Left, Top, Right, Top + round(L.ToNumber(3)))));
-    end;
+      r := Rect(r.Left, r.Top, r.Left + v, r.Bottom)
+    else
+      r := Rect(r.Left, r.Top, r.Right, r.Top + v);
+    FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, r));
     Exit;
   end
   else if field = 'visible' then
@@ -3112,7 +3216,7 @@ begin
   end
   else if field = 'border' then
   begin
-    // simple numeric/string
+    FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, BorderOfValue(round(L.ToNumber(3)))));
     Exit;
   end
   else if field = 'backcolor' then
@@ -3128,17 +3232,37 @@ begin
   end
   else if field = 'align' then
   begin
-    // handle align
+    if TryAlignOfValue(L.ToString(3), aAlign) then
+      FScript.RunQueueObject(TSetControlAlignObject.Create(ctrl, aAlign));
     Exit;
   end
   else if field = 'parent' then
   begin
+    //a nil or zero handle moves the control back to the main window
+    if lua_isnil(L, 3) or (L.IsNumber(3) and (round(L.ToNumber(3)) <= 0)) then
+      FScript.RunQueueObject(TSetControlParentObject.Create(ctrl, Main))
+    else
+    begin
+      if L.IsTable(3) then
+        parentCtrl := GetControl(GetControlTableHandle(L, 3))
+      else
+        parentCtrl := GetControl(round(L.ToNumber(3)));
+      if parentCtrl <> nil then
+        FScript.RunQueueObject(TSetControlParentObject.Create(ctrl, parentCtrl));
+    end;
     Exit;
   end
-  else if field = 'text' then
+  else if (field = 'text') or (field = 'caption') then
   begin
     //btn.text = "Hi" is the property form of controls.text(handle, "Hi")
     FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(3)));
+    Exit;
+  end
+  else if field = 'checked' then
+  begin
+    //chk.checked = true, the property form of controls.checked(handle, v)
+    if ctrl is TTyroCheckBox then
+      FScript.RunQueueObject(TSetControlCheckedObject.Create(TTyroCheckBox(ctrl), L.ToBoolean(3)));
     Exit;
   end
   else if field = 'file' then
@@ -3147,11 +3271,53 @@ begin
     if ctrl is TTyroImage then
       FScript.RunQueueObject(TLoadControlImageObject.Create(ctrl, L.ToString(3)));
     Exit;
+  end
+  else if ctrl is TTyroListBox then
+  begin
+    //listbox fields; the ones that need a value only act on a listbox
+    if field = 'items' then
+    begin
+      //lst.items = {"a", "b"} replaces the list, a single string replaces it
+      //with one item and nil (or false) empties it
+      Items := TStringList.Create;
+      try
+        if L.IsTable(3) then
+        begin
+          lua_pushnil(L);
+          while lua_next(L, 3) <> 0 do
+          begin
+            //the key stays below the value, so the value is on top
+            Items.Add(L.ToString(-1));
+            lua_pop(L, 1);
+          end;
+        end
+        else if not lua_isnil(L, 3) and not lua_isboolean(L, 3) then
+          Items.Add(L.ToString(3));
+        FScript.RunQueueObject(TSetControlItemsObject.Create(TTyroListBox(ctrl), Items));
+      finally
+        Items.Free;
+      end;
+      Exit;
+    end
+    else if field = 'itemindex' then
+    begin
+      FScript.RunQueueObject(TSetControlItemIndexObject.Create(TTyroListBox(ctrl), round(L.ToNumber(3))));
+      Exit;
+    end
+    else if field = 'viewcount' then
+    begin
+      FScript.RunQueueObject(TSetControlViewCountObject.Create(TTyroListBox(ctrl), round(L.ToNumber(3))));
+      Exit;
+    end;
   end;
   // fallback: store raw
   L.PushValue(2); L.PushValue(3); lua_rawset(L, 1);
 end;
 
+//A control handle is a table of properties: every name below answers the
+//current state of the control, and the Setter accepts the same names to change
+//it. A control table also carries the few action methods (show, hide, move,
+//position, focus, additem, item, clear, load) that have no property meaning.
 function TLuaControls.Getter(L: PLua_State): integer;
 var
   ctrl: TTyroControl;
@@ -3236,15 +3402,16 @@ begin
     Result := 1;
     Exit;
   end
+  else if field = 'parent' then
+  begin
+    //0 is the main window, a value controls.parent takes back unchanged
+    L.PushInteger(ParentHandleOf(FItems, ctrl));
+    Result := 1;
+    Exit;
+  end
   else if field = 'border' then
   begin
-    case ctrl.Border of
-      brdThin: L.PushInteger(1);
-      brdThick: L.PushInteger(2);
-      brdSizable: L.PushInteger(3);
-    else
-      L.PushInteger(0);
-    end;
+    L.PushInteger(BorderStyleValue(ctrl.Border));
     Result := 1;
     Exit;
   end
@@ -3256,32 +3423,46 @@ begin
   end
   else if field = 'align' then
   begin
-    case ctrl.Align of
-      alLeft: L.PushString('left');
-      alTop: L.PushString('top');
-      alRight: L.PushString('right');
-      alBottom: L.PushString('bottom');
-      alClient: L.PushString('client');
-    else
-      L.PushString('none');
-    end;
+    L.PushString(AlignName(ctrl.Align));
     Result := 1;
     Exit;
   end
-  else if field = 'text' then
+  else if (field = 'text') or (field = 'caption') then
   begin
     //the caption of a button/label/checkbox, the edited text of an edit
     L.PushString(GetControlText(ctrl));
     Result := 1;
     Exit;
   end
+  else if field = 'checked' then
+  begin
+    L.PushBoolean((ctrl is TTyroCheckBox) and TTyroCheckBox(ctrl).Checked);
+    Result := 1;
+    Exit;
+  end
   else if field = 'loaded' then
   begin
     //true once an image control holds a texture
-    if ctrl is TTyroImage then
-      L.PushBoolean(TTyroImage(ctrl).Loaded)
+    L.PushBoolean((ctrl is TTyroImage) and TTyroImage(ctrl).Loaded);
+    Result := 1;
+    Exit;
+  end
+  else if ctrl is TTyroListBox then
+  begin
+    //listbox fields; the ones that need a listbox answer nil on anything else
+    if field = 'items' then
+      L.PushInteger(TTyroListBox(ctrl).Items.Count)
+    else if field = 'itemindex' then
+      L.PushInteger(TTyroListBox(ctrl).ItemIndex)
+    else if field = 'viewcount' then
+      L.PushInteger(TTyroListBox(ctrl).ViewCount)
     else
-      L.PushBoolean(False);
+    begin
+      L.PushValue(2);
+      lua_rawget(L, 1);
+      Result := 1;
+      Exit;
+    end;
     Result := 1;
     Exit;
   end;
@@ -3310,59 +3491,37 @@ begin
       Lua.State.SetField(-2, '__name');
     end;
 
-    // Register common methods/properties via control table - but we want object-like
-    // For now, we'll set metatable that routes to control methods
-    // add instance methods based on control type
+    // A control table is a property bag first: the Getter answers every field
+    // (x, width, text, checked, itemindex, ...) and the Setter takes it back, so
+    // a field must NOT be registered here as a method - a raw field wins over
+    // __index and over __newindex, which would make the property both unreadable
+    // and silently dead. Only the actions that have no property spelling are
+    // registered, and they take their control from the self argument, so they
+    // are called with the colon form (btn:show()). controls.<name>(handle, ...)
+    // takes a handle or a table and stays the plain spelling.
     if ctrl is TTyroListBox then
     begin
       Lua.State.Register('clear', Clear_func);
       Lua.State.Register('additem', AddItem_func);
       Lua.State.Register('item', Item_func);
-      Lua.State.Register('items', Items_func);
-      Lua.State.Register('viewcount', ViewCount_func);
-      Lua.State.Register('itemindex', ItemIndex_func);
-    end
-    else if ctrl is TTyroCheckBox then
-    begin
-      Lua.State.Register('caption', Caption_func);
-      Lua.State.Register('checked', Checked_func);
     end
     else if ctrl is TTyroImage then
     begin
       //loaded is read as a field (img.loaded), not a call, see Controls.Getter
       Lua.State.Register('load', LoadImage_func);
-    end
-    else if ctrl is TTyroButton then
-    begin
-      Lua.State.Register('caption', Caption_func);
-      Lua.State.Register('down', Down_func);
-      Lua.State.Register('clicked', Clicked_func);
-      Lua.State.Register('hover', Hover_func);
     end;
 
     if ctrl is TTyroControl then
     begin
       Lua.State.Register('focus', Focus_func);
-      Lua.State.Register('focused', Focused_func);
     end;
 
     if ctrl is TTyroLayout then
     begin
-      Lua.State.Register('name', Name_func);
-      Lua.State.Register('align', Align_func);
       Lua.State.Register('show', Show_func);
       Lua.State.Register('hide', Hide_func);
       Lua.State.Register('move', Move_func);
       Lua.State.Register('position', Position_func);
-      Lua.State.Register('width', Width_func);
-      Lua.State.Register('height', Height_func);
-      Lua.State.Register('visible', Visible_func);
-      Lua.State.Register('border', Border_func);
-      Lua.State.Register('backcolor', BackColor_func);
-      Lua.State.Register('parent', Parent_func);
-      Lua.State.Register('hover', Hover_func);
-      Lua.State.Register('down', Down_func);
-      Lua.State.Register('clicked', Clicked_func);
     end;
 
     Lua.State.NewTable;
@@ -3568,6 +3727,7 @@ function TLuaControls.Position_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
   r: TRect;
+  i: Integer;
 begin
   if L.IsTable(1) then
     ctrl := GetControl(GetControlTableHandle(L, 1))
@@ -3579,11 +3739,12 @@ begin
     Result := 1;
     Exit;
   end;
-  if L.ArgsCount >= 3 then
+  i := FirstArg(L);
+  if (i + 1) <= L.ArgsCount then
   begin
     r := ctrl.BoundsRect;
-    r := Rect(round(L.ToNumber(2)), round(L.ToNumber(3)),
-              round(L.ToNumber(2)) + r.Width, round(L.ToNumber(3)) + r.Height);
+    r := Rect(round(L.ToNumber(i)), round(L.ToNumber(i + 1)),
+              round(L.ToNumber(i)) + r.Width, round(L.ToNumber(i + 1)) + r.Height);
     FScript.RunQueueObject(TSetControlBoundsObject.Create(ctrl, r));
     Result := 0;
   end
@@ -3689,25 +3850,33 @@ begin
   end;
 end;
 
-//controls.show(handle) -> make the control visible
+//controls.show(handle) / btn:show() -> make the control visible
 function TLuaControls.Show_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
- ctrl := GetControl(round(L.ToNumber(1)));
- if ctrl <> nil then
-  FScript.RunQueueObject(TSetControlVisibleObject.Create(ctrl, True));
+  //btn:show() hands over its control table as the self argument,
+  //controls.show(handle) hands over a handle
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl <> nil then
+    FScript.RunQueueObject(TSetControlVisibleObject.Create(ctrl, True));
   Result := 0;
 end;
 
-//controls.hide(handle) -> make the control invisible
+//controls.hide(handle) / btn:hide() -> make the control invisible
 function TLuaControls.Hide_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
 begin
- ctrl := GetControl(round(L.ToNumber(1)));
- if ctrl <> nil then
-  FScript.RunQueueObject(TSetControlVisibleObject.Create(ctrl, False));
+  if L.IsTable(1) then
+    ctrl := GetControl(GetControlTableHandle(L, 1))
+  else
+    ctrl := GetControl(round(L.ToNumber(1)));
+  if ctrl <> nil then
+    FScript.RunQueueObject(TSetControlVisibleObject.Create(ctrl, False));
   Result := 0;
 end;
 
@@ -3795,7 +3964,6 @@ end;
 function TLuaControls.Border_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
-  v: Integer;
 begin
   if L.IsTable(1) then
     ctrl := GetControl(GetControlTableHandle(L, 1))
@@ -3809,25 +3977,12 @@ begin
   end;
   if L.ArgsCount >= 2 then
   begin
-  v := round(L.ToNumber(2));
-  case v of
-   1: FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, brdThin));
-   2: FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, brdThick));
-   3: FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, brdSizable));
-  else
-   FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, brdNone));
-  end;
+    FScript.RunQueueObject(TSetControlBorderObject.Create(ctrl, BorderOfValue(round(L.ToNumber(2)))));
     Result := 0;
   end
   else
   begin
-    case ctrl.Border of
-      brdThin: L.PushInteger(1);
-      brdThick: L.PushInteger(2);
-      brdSizable: L.PushInteger(3);
-    else
-      L.PushInteger(0);
-    end;
+    L.PushInteger(BorderStyleValue(ctrl.Border));
     Result := 1;
   end;
 end;
@@ -3895,8 +4050,6 @@ end;
 function TLuaControls.Align_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
-  s: string;
-  n: Integer;
   aAlign: TAlign;
 begin
   if L.IsTable(1) then
@@ -3912,41 +4065,20 @@ begin
 
   if L.ArgsCount >= 2 then
   begin
-    s := LowerCase(Trim(L.ToString(2)));
-    if TryStrToInt(s, n) and (n >= Ord(alNone)) and (n <= Ord(alClient)) then
-      aAlign := TAlign(n)
-    else if s = 'none' then
-      aAlign := alNone
-    else if s = 'left' then
-      aAlign := alLeft
-    else if s = 'top' then
-      aAlign := alTop
-    else if s = 'right' then
-      aAlign := alRight
-    else if s = 'bottom' then
-      aAlign := alBottom
-    else if s = 'client' then
-      aAlign := alClient
+    if TryAlignOfValue(L.ToString(2), aAlign) then
+    begin
+      FScript.RunQueueObject(TSetControlAlignObject.Create(ctrl, aAlign));
+      Result := 0;
+    end
     else
     begin
       L.PushNil;
       Result := 1;
-      Exit;
     end;
-    FScript.RunQueueObject(TSetControlAlignObject.Create(ctrl, aAlign));
-    Result := 0;
   end
   else
   begin
-    case ctrl.Align of
-      alLeft: L.PushString('left');
-      alTop: L.PushString('top');
-      alRight: L.PushString('right');
-      alBottom: L.PushString('bottom');
-      alClient: L.PushString('client');
-    else
-      L.PushString('none');
-    end;
+    L.PushString(AlignName(ctrl.Align));
     Result := 1;
   end;
 end;
@@ -3959,7 +4091,6 @@ var
   ctrl: TTyroControl;
   parentCtrl: TTyroControl;
   newParent: TTyroLayout;
-  i: Integer;
 begin
   if L.IsTable(1) then
     ctrl := GetControl(GetControlTableHandle(L, 1))
@@ -3997,22 +4128,14 @@ begin
   begin
     //Return 0 for the main window so the result can be passed straight back
     //to the setter.
-    L.PushInteger(0);
+    L.PushInteger(ParentHandleOf(FItems, ctrl));
     Result := 1;
-    for i := 0 to FItems.Count - 1 do
-    begin
-      parentCtrl := TTyroControl(FItems[i]);
-      if (parentCtrl <> nil) and (parentCtrl = ctrl.Parent) then
-      begin
-        L.PushInteger(i + 1);
-        Break;
-      end;
-    end;
   end;
 end;
 
-//controls.items(handle [, item1, item2, ...]) -> replace all items; with no
-//extra arguments returns the number of items
+//controls.items(handle [, item1, item2, ...]) -> replace all items; the items
+//may also come as one table of strings (controls.items(h, {"a", "b"})), the
+//spelling the items field uses. With no extra argument returns the item count.
 function TLuaControls.Items_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -4035,8 +4158,20 @@ begin
   begin
     Items := TStringList.Create;
     try
-      for i := 2 to L.ArgsCount do
-        Items.Add(L.ToString(i));
+      //a table of items as one argument, else one item per argument
+      if L.IsTable(2) then
+      begin
+        lua_pushnil(L);
+        while lua_next(L, 2) <> 0 do
+        begin
+          //the key stays below the value, so the value is on top
+          Items.Add(L.ToString(-1));
+          lua_pop(L, 1);
+        end;
+      end
+      else
+        for i := 2 to L.ArgsCount do
+          Items.Add(L.ToString(i));
       FScript.RunQueueObject(TSetControlItemsObject.Create(lb, Items));
     finally
       Items.Free;
@@ -4055,7 +4190,7 @@ function TLuaControls.Item_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
   lb: TTyroListBox;
-  idx: Integer;
+  idx, i: Integer;
 begin
   if L.IsTable(1) then
     ctrl := GetControl(GetControlTableHandle(L, 1))
@@ -4068,10 +4203,17 @@ begin
     Exit;
   end;
   lb := TTyroListBox(ctrl);
-  idx := round(L.ToNumber(2));
-  if L.ArgsCount >= 3 then
+  i := FirstArg(L);
+  if i > L.ArgsCount then
   begin
-    FScript.RunQueueObject(TSetControlItemObject.Create(lb, idx, L.ToString(3)));
+    L.PushNil;
+    Result := 1;
+    Exit;
+  end;
+  idx := round(L.ToNumber(i));
+  if (i + 1) <= L.ArgsCount then
+  begin
+    FScript.RunQueueObject(TSetControlItemObject.Create(lb, idx, L.ToString(i + 1)));
     Result := 0;
   end
   else
@@ -4088,13 +4230,15 @@ end;
 function TLuaControls.AddItem_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
+  i: Integer;
 begin
   if L.IsTable(1) then
     ctrl := GetControl(GetControlTableHandle(L, 1))
   else
     ctrl := GetControl(round(L.ToNumber(1)));
-  if (ctrl <> nil) and (ctrl is TTyroListBox) then
-    FScript.RunQueueObject(TAddControlItemObject.Create(TTyroListBox(ctrl), L.ToString(2)));
+  i := FirstArg(L);
+  if (ctrl <> nil) and (ctrl is TTyroListBox) and (i <= L.ArgsCount) then
+    FScript.RunQueueObject(TAddControlItemObject.Create(TTyroListBox(ctrl), L.ToString(i)));
   Result := 0;
 end;
 
@@ -4127,9 +4271,10 @@ begin
     ctrl := GetControl(GetControlTableHandle(L, 1))
   else
     ctrl := GetControl(round(L.ToNumber(1)));
-  //A per-instance method receives its control table injected as argument 1, so
-  //the file name sits one slot lower for img:load(...) than for img.load(...).
-  //The last argument is the file in every accepted spelling.
+  //A method registered on the control table is handed that table as argument 1,
+  //and lst:load("a.png") passes it a second time, so the file name sits one slot
+  //lower than for lst.load("a.png"). The last argument is the file in every
+  //accepted spelling.
   if L.ArgsCount >= 2 then
     aFile := L.ToString(L.ArgsCount)
   else

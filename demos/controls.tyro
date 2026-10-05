@@ -24,6 +24,13 @@
 --    controls.parent(handle [,parent])  nest a control in a panel/container
 --    controls.count                  number of created controls
 --
+--  A handle is also a property bag: every value above can be read and written
+--  as a field of the handle itself (btn.caption = "OK", btn.width = 120,
+--  btn.visible = false, chk.checked = true, lst.itemindex = 1, img.loaded).
+--  The names that name an action stay methods and take a colon call:
+--  lst:additem("a"), lst:item(0), lst:clear(), btn:show(), btn:hide(),
+--  btn:move(x, y), btn:position(x, y), btn:focus().
+--
 --  Legacy alias: buttons.new("caption", x, y, w, h, borderSize) still works;
 --  the 'buttons' table is the same object as 'controls'.
 
