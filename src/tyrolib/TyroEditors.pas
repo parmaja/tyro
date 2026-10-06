@@ -562,10 +562,9 @@ begin
   Stop := FCaretCol;
   while IsWordChar(Start - 1) do
     Dec(Start);
-  while IsWordChar(Stop + 1) do
+  while IsWordChar(Stop) do
     Inc(Stop);
-  { The caret ends in front of the word, so a Shift+Right that comes next grows
-    the selection outwards instead of shrinking it back to nothing. }
+  { Stop is now after the last word character; anchor goes at Stop, caret at Start. }
   FAnchorLine := FCaretLine;
   FAnchorCol := Stop;
   FCaretCol := Start;
