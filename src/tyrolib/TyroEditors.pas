@@ -554,7 +554,10 @@ var
 begin
   Len := GetLineLength(FCaretLine);
   if not IsWordChar(FCaretCol) then
-    Exit;
+    if (FCaretCol > 0) and IsWordChar(FCaretCol - 1) then
+      FCaretCol := FCaretCol - 1
+    else
+      Exit;
   Start := FCaretCol;
   Stop := FCaretCol;
   while IsWordChar(Start - 1) do
