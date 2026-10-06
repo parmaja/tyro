@@ -995,23 +995,47 @@ begin
   Col := FCaretCol;
   if Forward then
   begin
-    while True do
+    while (L < FLines.Count) do
     begin
       if Col < GetLineLength(L) then
-        Inc(Col)
-      else if L < FLines.Count - 1 then
       begin
-        Inc(L);
-        Col := 0;
+        if CharIsWord(L, Col) then
+        begin
+          while (Col < GetLineLength(L)) and CharIsWord(L, Col) do
+            Inc(Col);
+          if (Col < GetLineLength(L)) and not CharIsWord(L, Col) then
+          begin
+            while (Col < GetLineLength(L)) and not CharIsWord(L, Col) do
+              Inc(Col);
+            if (Col < GetLineLength(L)) and CharIsWord(L, Col) then
+              Break
+            else if L < FLines.Count - 1 then
+            begin
+              Inc(L);
+              Col := 0;
+              Continue;
+            end;
+          end
+          else if (Col >= GetLineLength(L)) and (L < FLines.Count - 1) then
+          begin
+            Inc(L);
+            Col := 0;
+            Continue;
+          end
+          else
+            Break;
+        end
+        else
+        begin
+          while (Col < GetLineLength(L)) and not CharIsWord(L, Col) do
+            Inc(Col);
+          if (Col < GetLineLength(L)) and CharIsWord(L, Col) then
+            Break;
+        end;
       end
       else
-        Break;
-      IsW := CharIsWord(L, Col - 1);
-      if not IsW then
       begin
-        if (Col < GetLineLength(L)) and CharIsWord(L, Col) then
-          Break
-        else if L < FLines.Count - 1 then
+        if L < FLines.Count - 1 then
         begin
           Inc(L);
           Col := 0;
@@ -1023,22 +1047,31 @@ begin
   end
   else
   begin
-    while True do
+    while (L >= 0) do
     begin
       if Col > 0 then
-        Dec(Col)
-      else if L > 0 then
       begin
-        Dec(L);
-        Col := GetLineLength(L);
+        if CharIsWord(L, Col - 1) then
+        begin
+          while (Col > 0) and CharIsWord(L, Col - 1) do
+            Dec(Col);
+          Break;
+        end
+        else
+        begin
+          while (Col > 0) and not CharIsWord(L, Col - 1) do
+            Dec(Col);
+          Break;
+        end;
       end
       else
-        Break;
-      if Col = 0 then
-        Break;
-      if not CharIsWord(L, Col - 1) then
       begin
-        if (Col > 0) and CharIsWord(L, Col) then
+        if L > 0 then
+        begin
+          Dec(L);
+          Col := GetLineLength(L);
+        end
+        else
           Break;
       end;
     end;
