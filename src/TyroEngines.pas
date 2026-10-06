@@ -27,7 +27,7 @@ const
   sPromptChar: UTF8string = '>';
   sPromptDOT: UTF8string = '*';
 
-  cMainMargin = 16;
+  cMainPadding = 16;
   cDefaultWindowWidth = 640;
   cDefaultWindowHeight = 480;
   //Default screen shake amplitude in pixels (used when Shake gets no power)
@@ -876,7 +876,7 @@ begin
   FBackColor := clCornflowerBlue;
 
   //Configured margin only; absent key must not clobber the default with 0.
-  Margin := Res.Config.Sections['window'].ReadInteger('margin', cMainMargin);
+  Padding := Res.Config.Sections['window'].ReadInteger('padding', cMainPadding);
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -889,12 +889,13 @@ begin
   Console.Important := True;
   Console.Border:= brdSizable;
   Console.BackColor := clNearBlack;
-  Console.TextColor := clLightGray;
+  Console.Color := clLightGray;
   Console.HighlightColor := clBlue;
   Console.SelectionColor := clWhite;
   Console.Visible := False;
   Console.OnInput := ConsoleInput;
   Console.Margin:= 5;
+  Console.Padding:= 5;
   Console.Align:= alBottom;
   Console.Name := 'Console';
 
@@ -911,6 +912,7 @@ begin
   Editor.OnClose := EditorClosed;
   Editor.Border:= brdSizable;
   Editor.Margin:= 5;
+  Editor.Padding:= 5;
   Editor.Align := alClient;
   Editor.OnSave := EditorSave;
 

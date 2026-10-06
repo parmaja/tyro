@@ -1749,8 +1749,8 @@ begin
   end
   else if L.IsString(-1) then
   begin
-    if field = 'textColor' then
-      Main.Output.TextColor := StrToColor(L.ToString(-1))
+    if field = 'color' then
+      Main.Output.Color := StrToColor(L.ToString(-1))
     else if field = 'backColor' then
       Main.Output.BackColor := StrToColor(L.ToString(-1));
   end;

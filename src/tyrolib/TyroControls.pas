@@ -114,6 +114,7 @@ type
     FBorder: TBorder;
     FMargin: Integer;
     FAlign: TAlign;
+    FPadding: Integer;
     FParent: TTyroLayout;
     FBoundsRect: TRect;
     FVisible: Boolean;
@@ -127,6 +128,7 @@ type
     procedure SetBorder(AValue: TBorder);
     procedure SetHeight(AValue: Integer);
     procedure SetMargin(AValue: Integer);
+    procedure SetPadding(AValue: Integer);
     procedure SetWidth(AValue: Integer);
     procedure SetVisible(AValue: Boolean);
     procedure SetParent(AValue: TTyroLayout);
@@ -144,7 +146,10 @@ type
     procedure AddControl(AControl: TTyroLayout);
     procedure PaintWindow(ACanvas: TTyroCanvas); virtual;
 
+    function ScrollVSize: Integer;
+    function ScrollHSize: Integer;
     function BorderSize: Integer;
+
     function BorderRect: TRect;
     function OuterSize: Integer;
     function GetInnerRect: TRect; virtual;
@@ -172,6 +177,7 @@ type
     property Parent: TTyroLayout read FParent write SetParent;
     property Margin: Integer read FMargin write SetMargin;
     property Border: TBorder read FBorder write SetBorder;
+    property Padding: Integer read FPadding write SetPadding;
     //Real bounds control rect
     //DO NOT USE BoundsRect.Width and BoundsRect.Height or any member directly
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
@@ -196,6 +202,7 @@ type
   TTyroControl = class abstract(TTyroLayout)
   private
     FBackColor: TColor;
+    FColor: TColor;
     FWindow: TTyroWindow;
     FCanvas: TTyroCanvas;
     FResizing: Boolean;
@@ -228,6 +235,7 @@ type
     function GetFocused: Boolean;
     procedure SetBackColor(AValue: TColor);
     procedure SetCanvas(AValue: TTyroCanvas);
+    procedure SetColor(AValue: TColor);
     procedure SetFocused(AValue: Boolean);
   protected
     Style: TTyroControlStyles;
@@ -324,7 +332,7 @@ type
     procedure MouseMove(Shift: TShiftState; x, y: integer); virtual;
 
     property Focused: Boolean read GetFocused write SetFocused;
-
+    property Color: TColor read FColor write SetColor;
     property BackColor: TColor read FBackColor write SetBackColor;
 
     //* Shared text: caption for buttons/labels/checkboxes, edited text for edits.
@@ -700,6 +708,16 @@ procedure TTyroLayout.PaintWindow(ACanvas: TTyroCanvas);
 begin
 end;
 
+function TTyroLayout.ScrollVSize: Integer;
+begin
+  Result := 0; //TODO should calc the scroll size if visible
+end;
+
+function TTyroLayout.ScrollHSize: Integer;
+begin
+  Result := 0; //TODO should calc the scroll size if visible
+end;
+
 function TTyroLayout.BorderSize: Integer;
 begin
   case Border of
@@ -720,7 +738,7 @@ end;
 
 function TTyroLayout.OuterSize: Integer;
 begin
-  Result := Margin + BorderSize;
+  Result := Margin + BorderSize + Padding;
 end;
 
 function TTyroLayout.GetClientRect: TRect;
@@ -2303,6 +2321,13 @@ begin
   FMargin := AValue;  
 end;
 
+procedure TTyroLayout.SetPadding(AValue: Integer);
+begin
+  if FPadding=AValue then
+    Exit;
+  FPadding:=AValue;
+end;
+
 procedure TTyroLayout.SetVisible(AValue: Boolean);
 begin
   if FVisible=AValue then Exit;
@@ -2587,22 +2612,21 @@ begin
     if csTexture in Style then
     begin
       ACanvas.ResetOrigin;
-      if csClip in Style then
-        RayLib.BeginScissorMode(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top, aClientRect.Width, aClientRect.Height);
+      DoPaintBorder(Canvas);
+      DoPaintBackground(ACanvas);
       ACanvas.SetOrigin(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top);
+      if csClip in Style then
+        Canvas.BeginClip(aClientRect);
       try
-        DoPaintBackground(ACanvas);
         DoPaint(ACanvas);
         PaintScrollBars(ACanvas);
       finally
-        ACanvas.ResetOrigin;
         if csClip in Style then
-          RayLib.EndScissorMode();
+          Canvas.EndClip;
+        ACanvas.ResetOrigin;
       end;
-      Exit;
-    end;
-
-    if PrepareCanvas then
+    end
+    else if PrepareCanvas then
     begin
       //* Paint the control content into its own transparent texture buffer,
       //* then draw (blit) that buffer on top of the window canvas.
@@ -2610,17 +2634,17 @@ begin
       Canvas.ClearBackground(clBlank);
       try
         DoPaintBorder(Canvas);
+        DoPaintBackground(Canvas);
         Canvas.SetOrigin(OuterSize, OuterSize);
         if csClip in Style then
           Canvas.BeginClip(aClientRect);
         try
-          DoPaintBackground(Canvas);
           DoPaint(Canvas);
           PaintScrollBars(Canvas);
         finally
-          Canvas.ResetOrigin;
           if csClip in Style then
             Canvas.EndClip;
+          Canvas.ResetOrigin;
         end;
       finally
         Canvas.EndDraw;
@@ -2633,17 +2657,18 @@ begin
     begin
       //* No own texture could be created: paint directly as a fallback.
       ACanvas.ResetOrigin;
+      DoPaintBorder(Canvas);
+      DoPaintBackground(Canvas);
       if csClip in Style then
-        RayLib.BeginScissorMode(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top, aClientRect.Width, aClientRect.Height);
-      ACanvas.SetOrigin(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top);
+        ACanvas.BeginClip(aClientRect);
+      Canvas.SetOrigin(OuterSize, OuterSize);
       try
-        DoPaintBackground(ACanvas);
         DoPaint(ACanvas);
         PaintScrollBars(ACanvas);
       finally
         ACanvas.ResetOrigin;
         if csClip in Style then
-          RayLib.EndScissorMode();
+          ACanvas.EndClip;
       end;
     end;
   end;
@@ -2672,6 +2697,12 @@ begin
     Exit;
   FreeAndNil(FCanvas);
   FCanvas := AValue;
+end;
+
+procedure TTyroControl.SetColor(AValue: TColor);
+begin
+  if FColor=AValue then Exit;
+  FColor:=AValue;
 end;
 
 procedure TTyroControl.FocusChanged;
@@ -2726,9 +2757,15 @@ begin
 end;
 
 procedure TTyroControl.DoPaintBackground(ACanvas: TTyroCanvas);
+var
+  aRect: TRect;
 begin
   if csOpaque in Style then
-    ACanvas.DrawRectangle(ClientRect, BackColor, True);
+  begin
+    aRect := InnerRect;
+    aRect.Inflate(Padding, Padding);
+    ACanvas.DrawRectangle(aRect, BackColor, True);
+  end;
 end;
 
 procedure TTyroControl.DoPaint(ACanvas: TTyroCanvas);
@@ -3037,7 +3074,7 @@ begin
   FState := FState + [csCreating];
   FLastMouseX := -1;
   FLastMouseY := -1;
-  FVisible := True;
+  FVisible := False;
   Created;
   //Do not clear csCreating here. The most-derived constructor has not returned
   //yet; TTyroLayout.AfterConstruction clears it only after full construction.

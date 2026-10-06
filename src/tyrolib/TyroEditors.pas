@@ -150,7 +150,6 @@ type
     destructor Destroy; override;
 
     procedure Update; override; //key auto-repeat, caret blink and mouse
-    procedure DoPaintBackground(ACanvas: TTyroCanvas); override;
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     procedure KeyPress(var Key: TUTF8Char); override;
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
@@ -1674,11 +1673,6 @@ begin
     ACanvas.DrawRectangle(x, y + FCharHeight - 2, FCharWidth, 2, col, True)
   else
     ACanvas.DrawRectangle(x, y, 2, FCharHeight, col, True);
-end;
-
-procedure TyroEditor.DoPaintBackground(ACanvas: TTyroCanvas);
-begin
-  inherited;
 end;
 
 procedure TyroEditor.DoPaint(ACanvas: TTyroCanvas);

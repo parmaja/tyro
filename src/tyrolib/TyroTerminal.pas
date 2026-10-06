@@ -74,7 +74,6 @@ type
     FLines: TStringList;              // output/history lines (newest at the end)
     FCharWidth: Integer;
     FCharHeight: Integer;
-    FTextColor: TColor;               // normal text (output lines, input line, caret)
     FHighlightColor: TColor;          // builtin command word + prompt
     FSelectionColor: TColor;          // selection background (selected text is inverted)
     FMaxLines: Integer;
@@ -197,7 +196,6 @@ type
     procedure SaveToFile(AFileName: utf8string);
 
     { All colors are control properties; code only reads these }
-    property TextColor: TColor read FTextColor write FTextColor;
     property HighlightColor: TColor read FHighlightColor write FHighlightColor;
     property SelectionColor: TColor read FSelectionColor write FSelectionColor;
     property CharWidth: Integer read FCharWidth write FCharWidth;
@@ -235,8 +233,6 @@ type
     FLines: TStringList;
     FLock: TCriticalSection; //guards FLines (log() writes from the script thread)
     FMaxLines: Integer;
-    FBackColor: TColor;
-    FTextColor: TColor;
     procedure TrimLines;
     function GetLineCount: Integer;
   protected
@@ -249,8 +245,6 @@ type
     procedure Clear;
     property MaxLines: Integer read FMaxLines write FMaxLines default 500;
     property LineCount: Integer read GetLineCount;
-    property BackColor: TColor read FBackColor write FBackColor;
-    property TextColor: TColor read FTextColor write FTextColor;
   end;
 
 implementation
@@ -267,12 +261,12 @@ begin
   //csRepeatKeys replays a key (text, backspace, arrows, history) while it is
   //held down.
   Style := [csClip, csOpaque, csVScroll, csFocus, csRepeatKeys];
+  Color := clLightGray;
   BackColor := clDarkGray;
 
   FCharWidth := CDefaultCharWidth;
   FCharHeight := CDefaultCharHeight;
   FMaxLines := CDefaultLineCount;
-  FTextColor := clLightGray;
   FHighlightColor := clYellow;
   FSelectionColor := clWhite;
   FScrollBack := 0;
@@ -420,7 +414,7 @@ begin
       SetLength(ARuns, 1);
       ARuns[0].Start := 0;
       ARuns[0].Count := L;
-      ARuns[0].Color := FTextColor;
+      ARuns[0].Color := Color;
     end;
     Exit;
   end;
@@ -432,7 +426,7 @@ begin
     SetLength(ARuns, Length(ARuns) + 1);
     ARuns[High(ARuns)].Start := 0;
     ARuns[High(ARuns)].Count := UTF8Length(Leading);
-    ARuns[High(ARuns)].Color := FTextColor;
+    ARuns[High(ARuns)].Color := Color;
   end;
   if Word <> '' then
   begin
@@ -442,14 +436,14 @@ begin
     if IsCommandName(Word) then
       ARuns[High(ARuns)].Color := FHighlightColor
     else
-      ARuns[High(ARuns)].Color := FTextColor;
+      ARuns[High(ARuns)].Color := Color;
   end;
   if Rest <> '' then
   begin
     SetLength(ARuns, Length(ARuns) + 1);
     ARuns[High(ARuns)].Start := UTF8Length(Leading) + UTF8Length(Word);
     ARuns[High(ARuns)].Count := UTF8Length(Rest);
-    ARuns[High(ARuns)].Color := FTextColor;
+    ARuns[High(ARuns)].Color := Color;
   end;
 end;
 
@@ -1440,7 +1434,7 @@ begin
   if (ALine < 0) or (ALine >= FLines.Count) then
     Exit;
   S := FLines[ALine];
-  c := FTextColor;
+  c := Color;
 
   selStart := -1;
   selEnd := -1;
@@ -1584,7 +1578,7 @@ begin
     x := 0;
   if x >= ClientRect.Width then
     Exit;
-  col := FTextColor.SetAlpha(Round(FTextColor.RGBA.Alpha * FCaretDim));
+  col := Color.SetAlpha(Round(Color.RGBA.Alpha * FCaretDim));
   if FOverwrite then
     //overwrite is shown by an underline, the sign every other editor uses
     ACanvas.FillRect(x, AY + FCharHeight - 2, x + FCharWidth, AY + FCharHeight, col)
@@ -1598,8 +1592,6 @@ var
 begin
   inherited;
   UpdateSizes;
-  ACanvas.DrawRectangle(ClientRect, BackColor, True);
-
   vis := GetVisibleLines;
   outRows := vis - 1;
   if outRows < 0 then
@@ -1760,10 +1752,10 @@ begin
   inherited;
   Style := [csClip];
   FMaxLines := 500;
-  FBackColor := clBlack.ReplaceAlpha(0); //transparent by default
-  FTextColor := clBlack; //contrasts with the light window backcolor
   FLines := TStringList.Create;
   FLock := TCriticalSection.Create;
+  BackColor := clBlack.ReplaceAlpha(0); //transparent by default
+  Color := clBlack; //contrasts with the light window backcolor
   SetBoundsRect(Rect(0, 0, 480, 240));
 end;
 
@@ -1840,10 +1832,6 @@ var
 begin
   inherited;
   r := ClientRect;
-  if (r.Width <= 0) or (r.Height <= 0) then
-    Exit;
-  if FBackColor.RGBA.Alpha > 0 then
-    ACanvas.DrawRectangle(r.Left, r.Top, r.Width, r.Height, FBackColor, True);
   ch := Res.Font.Height;
   if ch <= 0 then
     ch := CDefaultCharHeight;
@@ -1860,7 +1848,7 @@ begin
     y := r.Top;
     for i := start to FLines.Count - 1 do
     begin
-      ACanvas.DrawText(r.Left, y, FLines[i], FTextColor);
+      ACanvas.DrawText(r.Left, y, FLines[i], Color);
       Inc(y, ch);
     end;
   finally

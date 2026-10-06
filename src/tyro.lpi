@@ -131,6 +131,14 @@
         <Filename Value="tyrolib\TyroLua.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="tyrolib\TyroControls.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="tyrolib\TyroTerminal.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
     <Debugger>
       <ClassConfig Version="1">
