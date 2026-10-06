@@ -123,6 +123,13 @@ procedure ShutdownWaveforms;
 function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+{Plain shapes, used by the MIDI synth to give the General MIDI families
+ different tones (organ, guitar, brass, ...) out of the same generator. They
+ are deliberately hard edged: the engine sounds like a chip, and a soft edge
+ would only blur it.}
+function Square_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Saw_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Tri_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
@@ -537,6 +544,57 @@ begin
   b := sin(index * (2 * pi) * frequency / 2 / SampleRate);
   sample := (sample - a - b) / 3;
   Result := sample * fade;
+end;
+
+// Where in the wave Index stands, 0..1, or -1 for a frequency that is too high
+// to have a period at this sample rate (which would divide by zero below).
+function WavePosition(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  WaveSamples: Integer;
+begin
+  Result := -1;
+  if (Frequency <= 0) or (SampleRate <= 0) then
+    Exit;
+  WaveSamples := Round(SampleRate / Frequency);
+  if WaveSamples > 0 then
+    Result := (Index mod WaveSamples) / WaveSamples;
+end;
+
+function Square_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Pos: Single;
+begin
+  Pos := WavePosition(Index, SampleRate, Frequency);
+  if Pos < 0 then
+    Result := 0
+  else if Pos < 0.5 then
+    Result := 1
+  else
+    Result := -1;
+end;
+
+function Saw_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Pos: Single;
+begin
+  Pos := WavePosition(Index, SampleRate, Frequency);
+  if Pos < 0 then
+    Result := 0
+  else
+    Result := (Pos * 2) - 1;
+end;
+
+function Tri_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Pos: Single;
+begin
+  Pos := WavePosition(Index, SampleRate, Frequency);
+  if Pos < 0 then
+    Result := 0
+  else if Pos < 0.5 then
+    Result := (Pos * 4) - 1
+  else
+    Result := 3 - (Pos * 4);
 end;
 
 initialization

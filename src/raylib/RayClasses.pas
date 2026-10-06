@@ -142,6 +142,10 @@ type
     procedure Pause; override;
     procedure Update; override;
     destructor Destroy; override;
+    //The raylib stream behind this audio. A caller that has to hand it to
+    //something else (the spectrum processor reads it) cannot see the field,
+    //which is protected.
+    property Stream: TAudioStream read AudioStream;
   end;
 
   { TRayLibSound }

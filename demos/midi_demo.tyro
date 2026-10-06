@@ -1,0 +1,84 @@
+--======================================================================
+--  midi_demo.tyro - Standard MIDI File playback + live spectrum
+--======================================================================
+--  Plays a .mid file with the built in synth and draws what it is doing:
+--  the position in the song, the tempo in force, and the stereo spectrum
+--  the mixer is producing.
+--
+--  API:
+--    midi.play(file)       load and start a .mid / .midi file
+--    midi.pause()          hold the song where it is
+--    midi.resume()         carry on from there
+--    midi.stop()           silence it and free the stream
+--    midi.name             the track name inside the file ('' if it has none)
+--    midi.state            'idle' | 'playing' | 'paused' | 'stopped' | 'error'
+--    midi.playing          true while it plays
+--    midi.position         seconds rendered so far
+--    midi.length           seconds the file runs for
+--    midi.tracks           number of tracks in the file
+--    midi.tempo            quarter notes a minute at the current position
+--    midi.error            why the last play() failed, '' if it did not
+
+window.show(640, 480)
+spectrum.show(0, 150, 640, 240)
+spectrum.bars = 48
+
+midi.play("swanlake.mid")
+
+local paused = false
+
+while cycle do
+  -- space holds the song and lets it go again
+  if iskeypressed("space") then
+    if paused then
+      midi.resume()
+    else
+      midi.pause()
+    end
+    paused = not paused
+  end
+  -- a fresh play from the top
+  if iskeypressed("r") then
+    midi.play("swanlake.mid")
+    paused = false
+  end
+  if iskeypressed("x") then
+    midi.stop()
+    paused = false
+  end
+
+  -- header, cleared with a black box first so nothing shows through
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 640, 150, true)
+  canvas.color = colors.green
+  canvas.text(8, 8, "Name  : " .. midi.name)
+  canvas.color = colors.white
+  canvas.text(8, 26, "State : " .. midi.state .. "   tracks = " .. midi.tracks ..
+    "   tempo = " .. midi.tempo)
+  canvas.text(8, 44, "Time  : " .. midi.position .. " / " .. midi.length .. " s")
+
+  -- a progress bar under the header
+  local length = midi.length
+  if length > 0 then
+    canvas.color = colors.yellow
+    canvas.rectangle(8, 66, 624, 6, true)
+    canvas.color = colors.green
+    canvas.rectangle(8, 66, math.floor(624 * midi.position / length), 6, true)
+  end
+
+  if midi.error ~= '' then
+    canvas.color = colors.red
+    canvas.text(8, 88, "Error: " .. midi.error)
+  end
+
+  -- footer hint
+  canvas.color = colors.black
+  canvas.rectangle(0, 400, 640, 80, true)
+  canvas.color = colors.white
+  canvas.text(8, 410, "space = pause / resume    r = replay    x = stop")
+
+  if not spectrum.active then
+    canvas.color = colors.white
+    canvas.text(8, 432, "the mixer is not feeding the analyzer")
+  end
+end

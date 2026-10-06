@@ -48,6 +48,7 @@ tyro demos/pong.tyro
 |------|---------|
 | `music_demo.tyro` | music.sound() tones and music.mml() melodies |
 | `multiply.tyro` | Drawing + MML sound effects |
+| `midi_demo.tyro` | Standard MIDI File playback (`midi.play`, `pause`, `resume`, `stop`) with the position, tempo and spectrum of the song |
 | `spectrum_demo.tyro` | Internet radio + live stereo spectrum analyzer (`spectrum.show`, `spectrum.bars`) |
 
 ### Effects

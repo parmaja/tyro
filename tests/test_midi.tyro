@@ -1,0 +1,99 @@
+--======================================================================
+--  test_midi.tyro - what a script can ask the MIDI player for
+--======================================================================
+--  The parser behind this is checked by tests\test_midi.lpr, which needs no
+--  window and no sound device. What is left to check here is the Lua side:
+--  that midi.play/pause/resume/stop reach the player, that the getters move
+--  while a song plays, and that a file that cannot be read says so instead of
+--  failing silently.
+--
+--  Run it:
+--    tyro tests\test_midi.tyro --exit
+--
+--  Every line is written to test_midi_out.txt beside this script as well as to
+--  the console, and the file is flushed as it goes, so the report can be read
+--  while the script is still running.
+--
+--  What each line has to say:
+--    state idle      nothing has been played yet
+--    state error     a file that is not there, with midi.error naming it
+--    state playing   the demo file loaded and the position is moving
+--    state paused    after midi.pause the position stands still
+--    state stopped   after midi.stop, still naming the file that was asked for
+--======================================================================
+
+local out, outErr = openfile("test_midi_out.txt", "w")
+if not out then
+  println("test_midi_out.txt: " .. tostring(outErr))
+  running = false
+  return
+end
+local function say(s)
+  out:write(s .. "\n")
+  out:flush()
+  println(s)
+end
+
+console.show()
+say("midi = " .. type(midi))
+
+-- nothing loaded yet. A stop leaves the name and the file standing, so a script
+-- can still say what it was playing before it stopped it.
+say("state idle    -> " .. midi.state .. "  name='" .. midi.name ..
+  "'  file='" .. midi.file .. "'  playing=" .. tostring(midi.playing) ..
+  "  tracks=" .. midi.tracks .. "  length=" .. midi.length)
+
+-- a file that is not there must be reported, not swallowed
+midi.play("no_such_song.mid")
+sleep(200)
+say("state error   -> " .. midi.state .. "  error=" .. midi.error)
+
+-- the file that ships with the demos
+midi.play("..\\demos\\swanlake.mid")
+sleep(300)
+say("state playing -> " .. midi.state .. "  name=" .. midi.name ..
+  "  tracks=" .. midi.tracks .. "  tempo=" .. midi.tempo ..
+  "  length=" .. string.format("%.1f", midi.length) ..
+  "  error='" .. midi.error .. "'")
+
+local a = midi.position
+sleep(600)
+local b = midi.position
+say("position      -> " .. string.format("%.2f", a) .. " then " ..
+  string.format("%.2f", b) .. "   moving=" .. tostring(b > a))
+
+-- the mixer feeds the analyzer for as long as it is playing, and lets it go when
+-- it is not
+say("analyzer      -> active=" .. tostring(spectrum.active) ..
+  "  bars=" .. spectrum.bars)
+
+-- a pause must hold the song where it is
+midi.pause()
+sleep(150)
+local c = midi.position
+sleep(400)
+say("state paused  -> " .. midi.state .. "  playing=" ..
+  tostring(midi.playing) .. "  held=" .. tostring(midi.position == c))
+
+midi.resume()
+sleep(400)
+local d = midi.position
+say("resumed       -> " .. midi.state .. "  moved on=" .. tostring(d > c))
+
+midi.stop()
+sleep(150)
+say("state stopped -> " .. midi.state .. "  playing=" ..
+  tostring(midi.playing) .. "  name='" .. midi.name .. "'  file='" ..
+  midi.file .. "'  error='" .. midi.error .. "'")
+
+-- and playing again after a stop has to work, the stream is made anew
+midi.play("..\\demos\\swanlake.mid")
+sleep(300)
+say("replayed      -> " .. midi.state .. "  tracks=" .. midi.tracks)
+
+midi.stop()
+sleep(100)
+say("analyzer gone -> active=" .. tostring(spectrum.active))
+say("done")
+out:close()
+running = false
