@@ -87,6 +87,7 @@ type
     procedure AnchorSelection;
     procedure SelectForMove(Extend: Boolean);
     procedure SelectAll;
+    procedure SelectWordAtCaret;
     function ColToPixel(ALine, ACol: Integer): Integer;
     procedure PlaceCaretAt(aX, aY: Integer);
     procedure ScrollCaretVisible;
@@ -460,6 +461,10 @@ begin
   if not IsSelecting then
     Exit;
   GetSelection(l1, c1, l2, c2);
+  { A selection inside one line is exactly the columns between its ends; only a
+    selection that runs over several lines reaches the end of its first line. }
+  if l1 = l2 then
+    Exit(c2 - c1);
   for I := l1 to l2 do
   begin
     if I = l1 then
@@ -498,6 +503,10 @@ begin
   if not IsSelecting then
     Exit;
   GetSelection(l1, c1, l2, c2);
+  { A selection inside one line ends at its end column; only a selection that
+    runs over several lines reaches the end of its first line. }
+  if l1 = l2 then
+    Exit(UTF8SubStr(FLines[l1], c1, c2 - c1));
   for I := l1 to l2 do
   begin
     if I > l1 then
@@ -519,6 +528,46 @@ begin
   FCaretCol := UTF8Length(FLines[FLines.Count - 1]);
   FSelecting := True;
   FDesiredCol := FCaretCol;
+  Invalidate;
+end;
+
+{ Selects the word the caret sits in, for a copy made with no selection. A word
+  is letters, digits and the underscore, the same set the Ctrl+arrow word moves
+  use. The caret sits on a non-word character, or on a line without words, so
+  nothing is selected and the copy does nothing. }
+procedure TyroEditor.SelectWordAtCaret;
+var
+  Len, Start, Stop: Integer;
+  function IsWordChar(ACol: Integer): Boolean;
+  var
+    B: Byte;
+    S: string;
+  begin
+    if (ACol < 0) or (ACol >= Len) then
+      Exit(False);
+    S := UTF8SubStr(FLines[FCaretLine], ACol, 1);
+    if S = '' then
+      Exit(False);
+    B := Byte(S[1]);
+    Result := ((B >= 65) and (B <= 90)) or ((B >= 97) and (B <= 122)) or (B = 95) or ((B >= 48) and (B <= 57));
+  end;
+begin
+  Len := GetLineLength(FCaretLine);
+  if not IsWordChar(FCaretCol) then
+    Exit;
+  Start := FCaretCol;
+  Stop := FCaretCol;
+  while IsWordChar(Start - 1) do
+    Dec(Start);
+  while IsWordChar(Stop + 1) do
+    Inc(Stop);
+  { The caret ends in front of the word, so a Shift+Right that comes next grows
+    the selection outwards instead of shrinking it back to nothing. }
+  FAnchorLine := FCaretLine;
+  FAnchorCol := Stop;
+  FCaretCol := Start;
+  FDesiredCol := FCaretCol;
+  FSelecting := True;
   Invalidate;
 end;
 
@@ -1113,12 +1162,18 @@ end;
 
 procedure TyroEditor.CopySelection;
 begin
+  { A copy with no selection takes the word under the caret, the way most
+    editors do. }
+  if not IsSelecting then
+    SelectWordAtCaret;
   if IsSelecting then
     RayLib.SetClipboardText(PUTF8Char(SelectedText));
 end;
 
 procedure TyroEditor.CutSelection;
 begin
+  { Cut with no selection does nothing; it must not take the word under the
+    caret, only a copy does that. }
   if IsSelecting then
   begin
     CopySelection;
