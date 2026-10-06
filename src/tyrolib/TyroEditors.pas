@@ -1803,10 +1803,18 @@ begin
       MovePage(True, Extend);
     KEY_INSERT:
       begin
-        //switches between insert and overwrite, as in every other text editor
-        FOverwrite := not FOverwrite;
+        //CTRL+INSERT and SHIFT+INSERT keep their traditional copy/paste meaning;
+        //a plain INSERT switches between insert and overwrite mode
+        if ssCtrl in Shift then
+          CopySelection
+        else if ssShift in Shift then
+          PasteText
+        else
+        begin
+          FOverwrite := not FOverwrite;
+          Invalidate;
+        end;
         Key := KEY_NULL;
-        Invalidate;
       end;
     KEY_C:
       if ssCtrl in Shift then
@@ -1835,7 +1843,11 @@ begin
     KEY_Z:
       if ssCtrl in Shift then
       begin
-        UndoMove;
+        //CTRL+SHIFT+Z redoes what CTRL+Z undid, the way every other editor does
+        if ssShift in Shift then
+          RedoMove
+        else
+          UndoMove;
         Key := KEY_NULL;
       end;
     KEY_Y:
