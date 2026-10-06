@@ -1392,7 +1392,7 @@ var
         lua_pop(Lua.State, 1);
       end;
       if S <> '' then
-        Main.Console.Writeln(S);
+        Log.WriteLn(S);
       //Discard the converted return values from the persistent Lua stack.
       lua_pop(Lua.State, n);
     end
@@ -5033,5 +5033,5 @@ begin
 end;
 
 initialization
-  ScriptTypes.RegisterLanguage('Lua', ['.tyro', '.lua', '.pluto'], TLuaScript);
+  ScriptTypes.RegisterLanguage('Lua', ['', '.tyro', '.lua', '.pluto'], TLuaScript);
 end.

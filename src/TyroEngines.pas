@@ -312,7 +312,7 @@ type
     procedure HideEditor;
     procedure ToggleEditor;
 
-    procedure LogWriteLn(Msg: string);
+    procedure LogWrite(Msg: string);
 
     property CanvasLock: TCriticalSection read FCanvasLock;
     property Options: TTyroMainOptions read FOptions write FOptions;
@@ -452,6 +452,11 @@ begin
   Running := True;
   Load;
   Res.Load;
+  if EndsDelimiter(ScriptFile) and SysUtils.DirectoryExists(ScriptFile) then
+  begin
+    Res.WorkPath := ScriptFile;
+    ScriptFile := '';
+  end;
   LoadScriptThread;
   Options := Options + AOptions;
   Start;
@@ -1358,12 +1363,12 @@ procedure TTyroMain.FileListPicked(Sender: TObject; const AFileName: string);
 begin
   if (AFileName = '') or not SysUtils.FileExists(AFileName) then
   begin
-    Console.Writeln('Script not found: ' + AFileName);
+    Log.WriteLn('Script not found: ' + AFileName);
     Exit;
   end;
   if ScriptTypes.FindByExtension(ExtractFileExt(AFileName)) = nil then
   begin
-    Console.Writeln('Unknown script type for: ' + ExtractFileName(AFileName));
+    Log.WriteLn('Unknown script type for: ' + ExtractFileName(AFileName));
     Exit;
   end;
   //Replace the current template with the picked file: LoadScriptThread stops the
@@ -1375,12 +1380,12 @@ begin
   except
     on E: Exception do
     begin
-      Console.Writeln('Unable to load ' + ExtractFileName(AFileName) + ': ' + E.Message);
+      Log.WriteLn('Unable to load ' + ExtractFileName(AFileName) + ': ' + E.Message);
       Exit;
     end;
   end;
   HideFileList;
-  Console.Writeln('Loaded: ' + ExtractFileName(AFileName) + '. Type "run" to execute it.');
+  Log.WriteLn('Loaded: ' + ExtractFileName(AFileName) + '. Type "run" to execute it.');
   if not Console.Visible then
     ShowConsole;
 end;
@@ -1433,10 +1438,10 @@ begin
     ShowEditor;
 end;
 
-procedure TTyroMain.LogWriteLn(Msg: string);
+procedure TTyroMain.LogWrite(Msg: string);
 begin
-  Console.Writeln(Msg);
-  Output.Writeln(Msg);
+  Console.Write(Msg);
+  //Output.Writeln(Trim(Msg));
 end;
 
 procedure TTyroMain.EditorClosed(Sender: TObject);
@@ -1525,13 +1530,7 @@ var
 begin
   if ScriptFile = '' then
     exit;
-  if EndsDelimiter(ScriptFile) and SysUtils.DirectoryExists(ScriptFile) then
-  begin
-    Res.WorkPath := ScriptFile;
-    Title := ScriptFile;
-    exit;
-  end;
-
+  Title := ScriptFile;
   aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
   if (aScriptType <> nil) and SysUtils.FileExists(ScriptFile) then
   begin
@@ -2024,7 +2023,7 @@ end;
 
 procedure TTyroConsoleLog.LogWrite(LogLevel: TLogLevel; S: string);
 begin
-  Main.LogWriteLn(S);
+  Main.LogWrite(S);
 end;
 
 { TConsoleCommand }
@@ -2066,7 +2065,7 @@ begin
     if Name <> '' then
     for i := 0 to Count - 1 do
     begin
-      if SameText(Name, Items[i].Name) or IsStrInArray(Name, Items[i].Alts) then
+      if SameText(Name, Items[i].Name) or IsStrInArray(Name, Items[i].Alts, True) then
         exit(Items[i]);
     end;
   Result := nil;

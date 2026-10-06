@@ -752,7 +752,7 @@ end;
 
 procedure THideOutputObject.DoExecute;
 begin
-  Main.Output.Visible := False;
+  Main.Output.Hide;
 end;
 
 { TReadConsoleObject }
@@ -1537,9 +1537,9 @@ end;
 procedure TPrintObject.DoExecute;
 begin
   if FNewLine then
-    Main.Console.Writeln(FText)
+    Log.WriteLn(FText)
   else
-    Main.Console.Write(FText);
+    Log.Write(FText);
 end;
 
 { TOutputPrintObject }
