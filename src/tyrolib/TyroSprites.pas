@@ -1210,7 +1210,7 @@ end;
 
 procedure TCreateSpriteObject.DoExecute;
 begin
-  FHandleResult := Main.Sprites.AddEmpty(FName);
+  FHandleResult := Engine.Sprites.AddEmpty(FName);
 end;
 
 { TLoadSpriteObject }
@@ -1260,15 +1260,15 @@ begin
     // animated sprite: install every frame (textures become sprite-owned)
     if FExistingHandle > cSpriteInvalid then
     begin
-      if Main.Sprites.InstallFrames(FExistingHandle, aFrames, aFrameMs) then
+      if Engine.Sprites.InstallFrames(FExistingHandle, aFrames, aFrameMs) then
         FHandleResult := FExistingHandle
       else
         FHandleResult := cSpriteInvalid;
     end
     else
     begin
-      aHandle := Main.Sprites.AddEmpty(FName);
-      if (aHandle > cSpriteInvalid) and Main.Sprites.InstallFrames(aHandle, aFrames, aFrameMs) then
+      aHandle := Engine.Sprites.AddEmpty(FName);
+      if (aHandle > cSpriteInvalid) and Engine.Sprites.InstallFrames(aHandle, aFrames, aFrameMs) then
         FHandleResult := aHandle
       else
         FHandleResult := cSpriteInvalid;
@@ -1281,7 +1281,7 @@ begin
     if FExistingHandle > cSpriteInvalid then
     begin
       // materialize a texture created by Sprites.new() in place
-      if Main.Sprites.SetTexture(FExistingHandle, aTexture) then
+      if Engine.Sprites.SetTexture(FExistingHandle, aTexture) then
         FHandleResult := FExistingHandle
       else
       begin
@@ -1290,7 +1290,7 @@ begin
       end;
     end
     else
-      FHandleResult := Main.Sprites.Add(aTexture, FName); //takes ownership
+      FHandleResult := Engine.Sprites.Add(aTexture, FName); //takes ownership
   end
   else
   begin

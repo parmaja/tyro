@@ -50,7 +50,7 @@ type
     FLocation: string;
     FArguments: TConfFile;
     FTerminated: Boolean;
-    MainOptions: TTyroMainOptions;
+    MainOptions: TTyroEngineOptions;
   protected
     procedure SetTitle(const AValue: string);
     procedure DoRun;
@@ -77,8 +77,8 @@ implementation
 procedure TTyroApplication.SetTitle(const AValue: string);
 begin
   FTitle := AValue;;
-  if Main <> nil then
-    Main.Title := AValue;
+  if Engine <> nil then
+    Engine.Title := AValue;
 end;
 
 {$ifdef MSWINDOWS}
@@ -234,18 +234,18 @@ begin
     exit;
   end;
 
-  Main := TTyroMain.Create;
+  Engine := TTyroEngine.Create;
 
-  Main.Title := Title;
+  Engine.Title := Title;
 
   Res.WorkPath := Arguments.ReadPath('-workpath', Location);
 
   ScriptFile := CorrectPath(ExpandToPath(Arguments.ReadString(''), Res.WorkPath)); //File come without switch name
 
   if SysUtils.FileExists(ScriptFile) or SysUtils.DirectoryExists(ScriptFile)  then
-    Main.ScriptFile := ScriptFile;
+    Engine.ScriptFile := ScriptFile;
 
-  if (Main.ScriptFile = '') or SysUtils.DirectoryExists(ScriptFile) or Arguments.ReadSwitch('-window', true) or Arguments.ReadSwitch('-w', true) then
+  if (Engine.ScriptFile = '') or SysUtils.DirectoryExists(ScriptFile) or Arguments.ReadSwitch('-window', true) or Arguments.ReadSwitch('-w', true) then
     MainOptions := MainOptions + [moMainWindow];
   if Arguments.ReadSwitch('-terminal') or Arguments.ReadSwitch('-t') then
     MainOptions := MainOptions + [moShowTerminal];
@@ -270,7 +270,7 @@ begin
     Exit;
   try
     try
-      Main.Run(MainOptions);
+      Engine.Run(MainOptions);
     except
       on E: Exception do
       begin
@@ -282,7 +282,7 @@ begin
   finally
     // A failed script under --exit/--execute becomes a nonzero exit status.
     // Interactive sessions only report through the console and keep running.
-    if (ExitCode = 0) and Main.ScriptFailed then
+    if (ExitCode = 0) and Engine.ScriptFailed then
       ExitCode := 1;
     Terminate;
   end;

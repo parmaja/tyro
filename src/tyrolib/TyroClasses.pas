@@ -306,6 +306,8 @@ type
     function GetEffectValue: Single; override;
     procedure SetEffectArea(const AArea: TRectangle); override;
     function GetEffectArea: TRectangle; override;
+
+    property TextureMode: Boolean read FTextureMode;
     property Texture: TRenderTexture2D read FTexture;
   end;
 
@@ -1173,9 +1175,6 @@ begin
     Font.LoadFromFile(aFontName, aFontSize);
   end;
 end;
-
-{ TTyroResource }
-
 
 { TTyroResource }
 

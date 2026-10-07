@@ -107,17 +107,24 @@ type
     property OnDismiss: TNotifyEvent read FOnDismiss write FOnDismiss;
   end;
 
-  { TTyroMain }
+  { TTyroEngine }
 
-  TTyroMainOption = (moOpaque, moMainWindow, moShowTerminal, moShowFPS);
-  TTyroMainOptions = set of TTyroMainOption;
+  TTyroEngineOption = (moOpaque, moMainWindow, moShowTerminal, moShowFPS);
+  TTyroEngineOptions = set of TTyroEngineOption;
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: UTF8String) of object;
 
-  TTyroMain = class(TTyroWindow)
+  { TTyroMain }
+
+  TTyroEngine = class(TObject)
   private
+    FTitle: string;
+    FMargin: Integer;
+    FWidth: Integer;
+    FHeight: Integer;
+    FSizable: Boolean;
     FFPS: Integer;
-    FOptions: TTyroMainOptions;
+    FOptions: TTyroEngineOptions;
     FBackColor: TColor;
     //* Signaled by the main loop after every drawing cycle (EndDrawing). The
     //* Lua 'cycle' gate waits on it so "while cycle do" runs at most once per
@@ -126,8 +133,6 @@ type
     //* The control which captured the mouse (e.g. dragging a sizable border).
     //* It keeps receiving MouseMove/MouseUp until the left button is released.
     FControlCapture: TTyroControl;
-    function GetCanvasWidth: Integer;
-    function GetCanvasHeight: Integer;
     function GetActive: Boolean;
 
     procedure Help_Command(Params: TStrings);
@@ -162,11 +167,9 @@ type
     procedure FileListPicked(Sender: TObject; const AFileName: string);
     procedure FileListDismissed(Sender: TObject);
   protected
-    FTextureMode: Boolean;
     IsTerminated: Boolean;
     FCanvasLock: TCriticalSection;
     Camera2D: TCamera2D;
-    function CreateCanvas: TTyroCanvas; override;
     procedure Terminate;
 
   protected
@@ -203,9 +206,8 @@ type
     //* Free the controls a finished run left in the window. Every run calls this
     //* before it starts the next one; it is protected so a test can drive the
     //* same step without starting a worker.
-    procedure SetTitle(AValue: utf8string); override;
+    procedure SetTitle(AValue: string);
     procedure ClearScriptControls;
-    procedure SizeChanged; override;
     procedure ConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
     procedure ExecuteCommand(ACommand: string);
     //If the word typed is not a builtin command it is treated as a one line
@@ -214,12 +216,11 @@ type
     function RunLuaLine(const ALine: string): Boolean;
     procedure RegisterCommands;
   public
-    constructor Create(AParent: TTyroLayout); override;
-    constructor Create; reintroduce; overload;
+    constructor Create;
     destructor Destroy; override;
 
     //* TextureMode create texture with canvas
-    procedure PrepareWindow(AWidth, AHeight: Integer; ATextureMode: Boolean = False); overload;
+    procedure PrepareWindow(AWidth, AHeight: Integer); overload;
     procedure ShowWindow(AWidth, AHeight: Integer); overload;
     procedure ShowWindow; overload;
     procedure SetFPS(FPS: Integer); virtual;
@@ -230,12 +231,11 @@ type
 
     //* Before Show window
     procedure Load; virtual;
-    procedure Run(AOptions: TTyroMainOptions = [moMainWindow, moShowFPS]);
+    procedure Run(AOptions: TTyroEngineOptions = [moMainWindow, moShowFPS]);
     procedure Unload; virtual;
     //* After window initialized and other resource, load your resources here
     procedure Start; virtual;
-    procedure Update; override;
-    procedure PrepareDraw; virtual;
+    procedure Update;
     procedure Draw; virtual;
 
     //* Advance the screen shake by ADeltaTime seconds and pick a new random
@@ -296,6 +296,7 @@ type
     Console: TTyroTerminal;
     Output: TTyroOutput;
     Editor: TyroEditor;
+    Main: TTyroWindow;
     Board: TTyroCanvas;
     Sprites: TSprites;
     Physics: TPhysics;
@@ -315,7 +316,7 @@ type
     procedure LogWrite(Msg: string);
 
     property CanvasLock: TCriticalSection read FCanvasLock;
-    property Options: TTyroMainOptions read FOptions write FOptions;
+    property Options: TTyroEngineOptions read FOptions write FOptions;
     property BackColor: TColor read FBackColor write FBackColor;
     property FPS: Integer read FFPS write SetFPS;
     property Queue: TQueueObjects read FQueue;
@@ -323,6 +324,13 @@ type
     //* at the start of every run; only meaningful for the --exit/--execute CLI
     //* lifecycle where the main loop inspects it before releasing the worker.
     property ScriptFailed: Boolean read FScriptFailed;
+
+    property Title: string read FTitle write SetTitle;
+    property Margin: Integer read FMargin write FMargin;
+    property Width: Integer read FWidth  write FWidth;
+    property Height: Integer read FHeight write FHeight;
+
+    property Sizable: Boolean read FSizable write FSizable;
   end;
 {
   function IntToFPColor(I: Integer): TFPColor;
@@ -330,7 +338,7 @@ type
   function RayColorOf(Color: TFPColor): TRGBAColor;
 }
 var
-  Main : TTyroMain = nil;
+  Engine : TTyroEngine = nil;
 
 implementation
 
@@ -375,7 +383,7 @@ begin
 end;
 }
 
-{ TTyroMain }
+{ TTyroEngine }
 
 { Convert a Unicode codepoint to a UTF-8 encoded short string (TUTF8Char) }
 function CodePointToUTF8(Ch: Integer): TUTF8Char;
@@ -390,59 +398,29 @@ begin
     Result := TUTF8Char('');
 end;
 
-constructor TTyroMain.Create;
-begin
-  Create(nil);
-end;
-
-function TTyroMain.CreateCanvas: TTyroCanvas;
-begin
-  Result := TTyroTextureCanvas.Create(GetCanvasWidth, GetCanvasHeight, FTextureMode);
-end;
-
-function TTyroMain.GetCanvasWidth: Integer;
-begin
-  Result := Width - 2 * (BorderSize + Margin);
-  if Result < 1 then
-    Result := 1;
-end;
-
-function TTyroMain.GetCanvasHeight: Integer;
-begin
-  Result := Height - 2 * (BorderSize + Margin);
-  if Result < 1 then
-    Result := 1;
-end;
-
-function TTyroMain.Terminated: Boolean;
+function TTyroEngine.Terminated: Boolean;
 begin
   Result := IsTerminated;
 end;
 
-procedure TTyroMain.SetFPS(FPS: Integer);
+procedure TTyroEngine.SetFPS(FPS: Integer);
 begin
   FFPS := FPS;
   SetTargetFPS(FPS);
 end;
 
-procedure TTyroMain.ShowWindow;
+procedure TTyroEngine.ShowWindow;
 begin
   ShowWindow(cDefaultWindowWidth, cDefaultWindowHeight);
 end;
 
-procedure TTyroMain.HideWindow;
+procedure TTyroEngine.HideWindow;
 begin
-  if Visible then
-  begin
-    Hide;
-    // Keep the graphics context alive until destruction. Canvases, shaders,
-    // textures and fonts must be unloaded before CloseWindow.
-    if RayLib.IsWindowReady then
-      RayLib.SetWindowState([FLAG_WINDOW_HIDDEN]);
-  end;
+  if RayLib.IsWindowReady then
+    RayLib.SetWindowState([FLAG_WINDOW_HIDDEN]);
 end;
 
-procedure TTyroMain.Run(AOptions: TTyroMainOptions);
+procedure TTyroEngine.Run(AOptions: TTyroEngineOptions);
 var
   tw: Integer;
 begin
@@ -491,14 +469,14 @@ begin
       //the window after all and let the session continue.
       ShowWindowAfterScript;
 
-      if Visible and IsWindowReady then
+      if not IsWindowHidden and IsWindowReady then
       begin
         if IsWindowHidden then
           break;
 
         if RayLib.IsWindowResized() then
           ResizeWindow(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
-        PrepareDraw;
+
         RayLib.BeginDrawing();
         if moOpaque in Options then
           RayLib.ClearBackground(BackColor);
@@ -515,14 +493,13 @@ begin
           if UpdateShake(RayLib.GetFrameTime()) then
             Camera2D.Offset := Vector2Of(Margin + FShakeX, Margin + FShakeY);
 
-          Canvas.BeginDraw;
+//          Main.Canvas.BeginDraw;
           BeginMode2D(Camera2D);
           Draw;
-          EndMode2D();
-          Canvas.EndDraw;
-          Canvas.PostDraw;
-
-          Paint;
+          EndMode2D;
+//          Main.Canvas.EndDraw;
+//          Main.Canvas.PostDraw;
+          Main.Paint;
 
           if moShowFPS in Options then
           begin
@@ -560,17 +537,17 @@ begin
   Unload;
 end;
 
-function TTyroMain.GetActive: Boolean;
+function TTyroEngine.GetActive: Boolean;
 begin
   Result := Running;
 end;
 
-function TTyroMain.GetRunning: Boolean;
+function TTyroEngine.GetRunning: Boolean;
 begin
   Result := TInterlocked.Add(FRunning, 0) <> 0;
 end;
 
-procedure TTyroMain.SetRunning(AValue: Boolean);
+procedure TTyroEngine.SetRunning(AValue: Boolean);
 begin
   if AValue then
     TInterlocked.Exchange(FRunning, 1)
@@ -578,12 +555,7 @@ begin
     TInterlocked.Exchange(FRunning, 0);
 end;
 
-procedure TTyroMain.SizeChanged;
-begin
-  inherited;
-end;
-
-procedure TTyroMain.CancelWaiting;
+procedure TTyroEngine.CancelWaiting;
 begin
   Lock.Enter;
   try
@@ -597,7 +569,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.UnregisterWaiting(AQueueObject: TQueueObject);
+procedure TTyroEngine.UnregisterWaiting(AQueueObject: TQueueObject);
 begin
   if AQueueObject = nil then
     Exit;
@@ -610,7 +582,7 @@ begin
   end;
 end;
 
-function TTyroMain.RegisterWaiting(AQueueObject: TQueueObject): Boolean;
+function TTyroEngine.RegisterWaiting(AQueueObject: TQueueObject): Boolean;
 begin
   Lock.Enter;
   try
@@ -625,12 +597,12 @@ begin
   end;
 end;
 
-function TTyroMain.WaitToNextFrame(AScript: TTyroScript): Boolean;
+function TTyroEngine.WaitToNextFrame(AScript: TTyroScript): Boolean;
 begin
   Result := True;
   //No window -> no drawing cycles -> never block the script (behaves like
   //"while true do" so headless scripts do not hang).
-  if (FFrameEvent = nil) or (not Visible) or (not RayLib.IsWindowReady) then
+  if (FFrameEvent = nil) or (IsWindowHidden) or (not RayLib.IsWindowReady) then
     Exit;
   while True do
   begin
@@ -647,7 +619,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.QueueScreenshot(const AFileName: String);
+procedure TTyroEngine.QueueScreenshot(const AFileName: String);
 begin
   Lock.Enter;
   try
@@ -657,7 +629,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.Shake(ATimeMS: Integer; APower: Integer);
+procedure TTyroEngine.Shake(ATimeMS: Integer; APower: Integer);
 begin
   if ATimeMS <= 0 then
   begin
@@ -679,7 +651,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.StopShake;
+procedure TTyroEngine.StopShake;
 begin
   Lock.Enter;
   try
@@ -692,7 +664,7 @@ begin
   end;
 end;
 
-function TTyroMain.GetShaking: Boolean;
+function TTyroEngine.GetShaking: Boolean;
 begin
   Lock.Enter;
   try
@@ -702,14 +674,13 @@ begin
   end;
 end;
 
-procedure TTyroMain.SetTitle(AValue: utf8string);
+procedure TTyroEngine.SetTitle(AValue: string);
 begin
-  inherited;
   AValue := 'Tyro - ' + AValue;
   RayLib.SetWindowTitle(PUTF8Char(UTF8String(AValue)));
 end;
 
-function TTyroMain.UpdateShake(ADeltaTime: Double): Boolean;
+function TTyroEngine.UpdateShake(ADeltaTime: Double): Boolean;
 var
   a: Integer;
 begin
@@ -743,7 +714,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.ProcessQueue;
+procedure TTyroEngine.ProcessQueue;
 var
   p: TQueueObject;
   fpd: Double;
@@ -795,14 +766,14 @@ begin
   end;
 end;
 
-procedure TTyroMain.Start;
+procedure TTyroEngine.Start;
 begin
   FScriptFailed := False;
   FWindowAutoShown := False;
   RunScriptThread;
 end;
 
-{function TTyroMain.CloneScript(AScript: TTyroScript): TTyroScript;
+{function TTyroEngine.CloneScript(AScript: TTyroScript): TTyroScript;
 begin
   Result := nil;
   if AScript = nil then
@@ -813,7 +784,7 @@ begin
   Result.Source.Assign(AScript.Source);
 end;}
 
-procedure TTyroMain.StopScriptThread;
+procedure TTyroEngine.StopScriptThread;
 begin
   if FScriptThread = nil then
     Exit;
@@ -828,7 +799,7 @@ begin
   FreeAndNil(FScriptThread);
 end;
 
-procedure TTyroMain.LoadConfig;
+procedure TTyroEngine.LoadConfig;
 var
   aColor: string;
 begin
@@ -851,60 +822,57 @@ begin
   end;
 end;
 
-procedure TTyroMain.Shutdown;
+procedure TTyroEngine.Shutdown;
 begin
   Stop;
 end;
 
-procedure TTyroMain.PrepareDraw;
-begin
-end;
-
-constructor TTyroMain.Create(AParent: TTyroLayout);
+constructor TTyroEngine.Create;
 begin
   inherited;
   RayLibrary.Load;
   FControlCapture := nil;
   FOptions := [moOpaque];
-  Name := 'Main';
   Res := TTyroResources.Create;
   FCanvasLock := TCriticalSection.Create;
   //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
   //loop signals it after every EndDrawing.
   FFrameEvent := TEvent.Create(nil, False, False, '');
-  BoundsRect := Rect(0, 0, ScreenWidth, ScreenHeight);
+  FWidth := ScreenWidth;
+  FHeight := ScreenHeight;
   FBackColor := clCornflowerBlue;
 
   //Configured margin only; absent key must not clobber the default with 0.
-  Padding := Res.Config.Sections['window'].ReadInteger('padding', cMainPadding);
+  Margin := Res.Config.Sections['window'].ReadInteger('margin', cMainPadding);
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
+  Main := TTyroWindow.Create(nil);
 
-  Console := TTyroTerminal.Create(Self);
-  Console.BoundsRect := Rect(Margin, Margin , 100, 200);
+  Console := TTyroTerminal.Create(Main);
+  Console.BoundsRect := Rect(0, 0 , 200, 200);
   Console.Important := True;
   Console.Border:= brdSizable;
   Console.BackColor := clNearBlack;
   Console.Color := clLightGray;
   Console.HighlightColor := clBlue;
   Console.SelectionColor := clWhite;
-  Console.Visible := False;
+  Console.Visible := True;
   Console.OnInput := ConsoleInput;
   Console.Margin:= 5;
   Console.Padding:= 5;
-  Console.Align:= alBottom;
+  //Console.Align:= alBottom;
   Console.Name := 'Console';
 
-  Output := TTyroOutput.Create(Self);
+  Output := TTyroOutput.Create(Main);
   Output.Important := True;
   Output.Name := 'Output';
-  Output.BoundsRect := Rect(Margin, Margin, 480, 240);
+  Output.BoundsRect := Rect(0, 0, 480, 240);
 
-  Editor := TyroEditor.Create(Self);
+  Editor := TyroEditor.Create(Main);
   Editor.Name := 'Editor';
   Editor.Important := True;
   Editor.BoundsRect := Rect(0, 0, 200, 200);
@@ -918,7 +886,7 @@ begin
 
   //F4 script picker; BoundsRect is recentered every time it is shown so it
   //follows window resizes. Hidden until the user presses F4.
-  FFileList := TTyroFileList.Create(Self);
+  FFileList := TTyroFileList.Create(Main);
   FFileList.Name := 'FileList';
   FFileList.PlaceHolder := 'No Files';
   FFileList.BoundsRect := Rect(0, 0, 360, 280);
@@ -932,7 +900,7 @@ begin
   RegisterCommands;
 end;
 
-destructor TTyroMain.Destroy;
+destructor TTyroEngine.Destroy;
 begin
   Stop;
   FreeAndNil(FScriptREPL);
@@ -958,6 +926,7 @@ begin
   FreeAndNil(Res);
   FreeAndNil(FQueue);
   FreeAndNil(Commands);
+  FreeAndNil(Main);
   inherited;
   if RayLib.IsWindowReady then
     RayLib.CloseWindow;
@@ -965,33 +934,33 @@ begin
   FreeAndNil(FFrameEvent);
 end;
 
-procedure TTyroMain.PrepareWindow(AWidth, AHeight: Integer; ATextureMode: Boolean);
+procedure TTyroEngine.PrepareWindow(AWidth, AHeight: Integer);
 begin
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
   if AHeight = 0 then
     raise exception.Create('Screen height can not be 0');
 
-  FTextureMode := ATextureMode;
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   //SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   RayLib.InitWindow(AWidth, AHeight, PUTF8Char(Title));
-  BoundsRect := Rect(0, 0, AWidth, AHeight);
-  PrepareCanvas;
-  Board := TTyroTextureCanvas.Create(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin), True);
+  FWidth := AWidth;
+  FHeight := AHeight;
+  //MainPrepareCanvas;
+  Board := TTyroTextureCanvas.Create(AWidth - 2 * Margin, AHeight - 2 * Margin, True);
   FPrepared := True;
 end;
 
-procedure TTyroMain.Load;
+procedure TTyroEngine.Load;
 begin
 end;
 
-procedure TTyroMain.Unload;
+procedure TTyroEngine.Unload;
 begin
 end;
 
-procedure TTyroMain.Draw;
+procedure TTyroEngine.Draw;
 begin
   if Board <> nil then
   begin
@@ -1014,7 +983,7 @@ begin
   TThread.Yield
 end;
 
-procedure TTyroMain.Update;
+procedure TTyroEngine.Update;
 var
   Scripted: array[0..1023] of TCollisionEvent;
   Enough: Integer;
@@ -1072,7 +1041,7 @@ begin
 
   // Per-frame work of every control (key auto-repeat, caret blink, mouse)
   try
-    UpdateControls;
+    Main.UpdateControls;
   except
     on E: Exception do
     begin
@@ -1084,7 +1053,7 @@ begin
 end;
 
 
-procedure TTyroMain.ProcessInput;
+procedure TTyroEngine.ProcessInput;
 var
   Shift: TShiftState;
   Key: TKeyboardKey;
@@ -1143,11 +1112,11 @@ begin
   end
   else
   begin
-    for i := Controls.Count - 1 downto 0 do
+    for i := Main.Controls.Count - 1 downto 0 do
     begin
-      if Controls[i] is TTyroControl then
+      if Main.Controls[i] is TTyroControl then
       begin
-        aControl := TTyroControl(Controls[i]).MouseTargetAt(mx, my);
+        aControl := TTyroControl(Main.Controls[i]).MouseTargetAt(mx, my);
         if aControl <> nil then
         begin
           x := mx - aControl.WindowRect.Left;
@@ -1185,7 +1154,7 @@ begin
   if (Console.Visible) and Console.Focused and RayLib.IsKeyPressed(KEY_ESCAPE) then
     HideConsole;
 
-  if FocusedControl = nil then
+  if Main.FocusedControl = nil then
     Exit;
 
   // Process key codes (function keys, arrows, etc.)
@@ -1199,8 +1168,8 @@ begin
           // Shift keys themselves - skip to avoid sending as regular key
         end;
     else
-      if Assigned(FocusedControl) then
-        FocusedControl.KeyDown(Key, Shift);
+      if Assigned(Main.FocusedControl) then
+        Main.FocusedControl.KeyDown(Key, Shift);
     end;
     Key := RayLib.GetKeyPressed;
   end;
@@ -1214,7 +1183,7 @@ begin
       // If Ctrl is held, treat as key shortcut (e.g. Ctrl+V) not text
       if not (ssCtrl in Shift) then
       begin
-        aFocused := FocusedControl;
+        aFocused := Main.FocusedControl;
         if Assigned(aFocused) then
         begin
           aChar := CodePointToUTF8(ch);
@@ -1226,41 +1195,36 @@ begin
   end;
 end;
 
-procedure TTyroMain.ShowWindow(AWidth, AHeight: Integer);
+procedure TTyroEngine.ShowWindow(AWidth, AHeight: Integer);
 begin
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
   if AHeight = 0 then
     raise exception.Create('Screen height can not be 0');
 
-  if Border = brdSizable then
+  if Sizable then
     SetConfigFlags([FLAG_WINDOW_RESIZABLE]);
 
   RayLib.SetWindowSize(AWidth, AHeight);
-  BoundsRect := Rect(0, 0, AWidth, AHeight);
+  FWidth := AWidth;
+  FHeight := AHeight;
 
-  Show;
   ClearWindowState([FLAG_WINDOW_HIDDEN]);
   ShowCursor();
 end;
 
-procedure TTyroMain.ResizeWindow(AWidth, AHeight: Integer);
+procedure TTyroEngine.ResizeWindow(AWidth, AHeight: Integer);
 begin
   if (AWidth <= 0) or (AHeight <= 0) then
     Exit;
-  if (WindowRect.Width = AWidth) and (WindowRect.Height = AHeight)
-     and (Canvas <> nil) and (Canvas.Width = GetCanvasWidth) and (Canvas.Height = GetCanvasHeight) then
-    Exit;
-  //The window is the layout root, so its BoundsRect and WindowRect stay in
-  //sync. Its Resize call then propagates the new dimensions to all children.
-  BoundsRect := Rect(0, 0, AWidth, AHeight);
-  if Canvas <> nil then
-    Canvas.Resize(GetCanvasWidth, GetCanvasHeight);
+
+  if Main <> nil then
+    Main.BoundsRect := Rect(0, 0 ,Width, Height);
   if Board <> nil then
-    Board.Resize(AWidth - 2 * (BorderSize + Margin), AHeight - 2 * (BorderSize + Margin));
+    Board.Resize(AWidth - 2 * Margin, AHeight - 2 * Margin);
 end;
 
-procedure TTyroMain.Stop;
+procedure TTyroEngine.Stop;
 begin
   Running := False;
   //Signal the event of any queue object the script thread is blocked waiting
@@ -1279,20 +1243,20 @@ begin
   end;
 end;
 
-procedure TTyroMain.Terminate;
+procedure TTyroEngine.Terminate;
 begin
   Stop;
   HideWindow;
   IsTerminated := True;
 end;
 
-procedure TTyroMain.ShowConsole(AX, AY, AWidth, AHeight: Integer);
+procedure TTyroEngine.ShowConsole(AX, AY, AWidth, AHeight: Integer);
 begin
   Console.BoundsRect := Rect(AX, AY, AX + AWidth, AY + AHeight);
   ShowConsole;
 end;
 
-procedure TTyroMain.ShowConsole;
+procedure TTyroEngine.ShowConsole;
 begin
   Console.CharWidth := Res.Font.Width;
   Console.CharHeight := Res.Font.Height;
@@ -1304,7 +1268,7 @@ begin
   StartConsoleRead;
 end;
 
-procedure TTyroMain.HideConsole;
+procedure TTyroEngine.HideConsole;
 begin
   Console.StopRead;
   Console.Hide;
@@ -1312,7 +1276,7 @@ begin
   Console.Focused := False;
 end;
 
-procedure TTyroMain.ToggleConsole;
+procedure TTyroEngine.ToggleConsole;
 begin
   if Console.Visible then
     HideConsole
@@ -1320,7 +1284,7 @@ begin
     ShowConsole;
 end;
 
-procedure TTyroMain.RefreshFileList;
+procedure TTyroEngine.RefreshFileList;
 begin
   //List the scripts of the current directory first (same source as the console
   //"list" and "load" commands); fall back to the workspace so F4 still finds
@@ -1328,7 +1292,7 @@ begin
   FFileList.Refresh(Res.WorkPath, ['*.tyro', '*.lua']);
 end;
 
-procedure TTyroMain.ShowFileList;
+procedure TTyroEngine.ShowFileList;
 var
   LW, LH, W, H: Integer;
 begin
@@ -1350,13 +1314,13 @@ begin
   FFileList.SetFocus;
 end;
 
-procedure TTyroMain.HideFileList;
+procedure TTyroEngine.HideFileList;
 begin
   FFileList.Hide;
   //Return keyboard focus (and a read prompt) to the console when it is shown.
 end;
 
-procedure TTyroMain.ToggleFileList;
+procedure TTyroEngine.ToggleFileList;
 begin
   if FFileList.Visible then
     HideFileList
@@ -1364,7 +1328,7 @@ begin
     ShowFileList;
 end;
 
-procedure TTyroMain.FileListPicked(Sender: TObject; const AFileName: string);
+procedure TTyroEngine.FileListPicked(Sender: TObject; const AFileName: string);
 begin
   if (AFileName = '') or not SysUtils.FileExists(AFileName) then
   begin
@@ -1395,19 +1359,19 @@ begin
     ShowConsole;
 end;
 
-procedure TTyroMain.FileListDismissed(Sender: TObject);
+procedure TTyroEngine.FileListDismissed(Sender: TObject);
 begin
   HideFileList;
 end;
 
-procedure TTyroMain.ToggleOutput;
+procedure TTyroEngine.ToggleOutput;
 begin
   Output.Visible := not Output.Visible;
   if Output.Visible then
     Output.BringToFront;
 end;
 
-procedure TTyroMain.ShowEditor;
+procedure TTyroEngine.ShowEditor;
 begin
   //Edit the template, not the running script: the worker executes a clone, so
   //the source stays safe to change. Stop the run so it is not executing while
@@ -1422,7 +1386,7 @@ begin
   Editor.Focused := True;
 end;
 
-procedure TTyroMain.HideEditor;
+procedure TTyroEngine.HideEditor;
 begin
   if Editor.Visible then
   begin
@@ -1435,7 +1399,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.ToggleEditor;
+procedure TTyroEngine.ToggleEditor;
 begin
   if Editor.Visible then
     HideEditor
@@ -1443,18 +1407,18 @@ begin
     ShowEditor;
 end;
 
-procedure TTyroMain.LogWrite(Msg: string);
+procedure TTyroEngine.LogWrite(Msg: string);
 begin
   Console.Write(Msg);
   //Output.Writeln(Trim(Msg));
 end;
 
-procedure TTyroMain.EditorClosed(Sender: TObject);
+procedure TTyroEngine.EditorClosed(Sender: TObject);
 begin
   HideEditor;
 end;
 
-procedure TTyroMain.EditorSave(Sender: TObject);
+procedure TTyroEngine.EditorSave(Sender: TObject);
 begin
   //Straight into the script rather than through SaveEditorSource, which only
   //copies while the editor is showing: what is being written has to be what the
@@ -1476,12 +1440,12 @@ begin
   end;
 end;
 
-procedure TTyroMain.Edit_Command(Params: TStrings);
+procedure TTyroEngine.Edit_Command(Params: TStrings);
 begin
   ShowEditor;
 end;
 
-procedure TTyroMain.ConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
+procedure TTyroEngine.ConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
 begin
   // The terminal echoes the submitted command line itself, so only execute it
   if Assigned(FReadCallback) then
@@ -1496,7 +1460,7 @@ begin
     StartConsoleRead;
 end;
 
-procedure TTyroMain.ExecuteCommand(ACommand: string);
+procedure TTyroEngine.ExecuteCommand(ACommand: string);
 var
   Params: TStringList;
   OriginalLine: string;
@@ -1529,7 +1493,7 @@ end;
 
 //Load ScriptFile into the editable template. The worker is not created here:
 //RunScriptThread clones the template for every run.
-procedure TTyroMain.LoadScriptThread;
+procedure TTyroEngine.LoadScriptThread;
 var
   aScriptType: TScriptType;
 begin
@@ -1555,7 +1519,7 @@ end;
 //of the template to a new worker. A thread can only be started once and it owns
 //the script it runs, so a rerun is always a new thread (F5, "run", and hiding the
 //editor all come through here).
-procedure TTyroMain.RunScriptThread;
+procedure TTyroEngine.RunScriptThread;
 var
   aScriptType: TScriptType;
   aScript: TTyroScript;
@@ -1585,7 +1549,7 @@ begin
 end;
 
 //True for the controls the engine creates itself and that therefore outlive a run
-function TTyroMain.EngineControl(AControl: TTyroLayout): Boolean;
+function TTyroEngine.EngineControl(AControl: TTyroLayout): Boolean;
 begin
   Result := (AControl = Console) or (AControl = Output) or
     (AControl = Editor) or (AControl = FFileList);
@@ -1595,7 +1559,7 @@ end;
 //under the new one. Only the controls the engine owns (console, output, editor,
 //file picker) are kept: they are created once and hold engine state, not script
 //state, while everything else parented to the window came from the script.
-procedure TTyroMain.ClearScriptControls;
+procedure TTyroEngine.ClearScriptControls;
 var
   i: Integer;
 begin
@@ -1603,22 +1567,22 @@ begin
   //disappear. SetFocusedControl calls FocusChanged on the control it replaces, so
   //the focus has to go while the old control is still alive. An engine control is
   //staying, and so keeps both.
-  if (FocusedControl <> nil) and not EngineControl(FocusedControl) then
-    FocusedControl := nil;
+  if (Main.FocusedControl <> nil) and not EngineControl(Main.FocusedControl) then
+    Main.FocusedControl := nil;
   if (FControlCapture <> nil) and not EngineControl(FControlCapture) then
     FControlCapture := nil;
   //A freed control removes itself from Controls (TTyroControl.Destroy clears its
   //parent), so walking backwards keeps the remaining indexes valid.
-  for i := Controls.Count - 1 downto 0 do
-    if not EngineControl(Controls[i]) then
-      Controls[i].Free;
+  for i := Main.Controls.Count - 1 downto 0 do
+    if not EngineControl(Main.Controls[i]) then
+      Main.Controls[i].Free;
 end;
 
 //Free the sprites the previous run created, so a rerun does not keep animating and
 //colliding with them. Physics goes first: its bodies are keyed by the sprite
 //handles that are about to disappear. The store hands out fresh handles, so the
 //new run starts from an empty one.
-procedure TTyroMain.ClearScriptSprites;
+procedure TTyroEngine.ClearScriptSprites;
 begin
   if Physics <> nil then
     Physics.RemoveAll;
@@ -1630,13 +1594,13 @@ end;
 //Board, the texture the script's drawing queue fills, and Canvas, the window
 //canvas it is blitted to. Both keep their content between frames, so without this
 //the new script starts on top of the old one.
-procedure TTyroMain.ClearRunCanvases;
+procedure TTyroEngine.ClearRunCanvases;
 begin
   //Same lock the queue processing takes while it draws into Board.
   CanvasLock.Enter;
   try
     WipeCanvas(Board);
-    WipeCanvas(Canvas);
+    WipeCanvas(Main.Canvas);
   finally
     CanvasLock.Leave;
   end;
@@ -1646,7 +1610,7 @@ end;
 //between BeginDraw and EndDraw, so the clear has to happen inside that pair:
 //outside it ClearBackground would wipe the window backbuffer and leave the canvas
 //content on screen.
-procedure TTyroMain.WipeCanvas(ACanvas: TTyroCanvas);
+procedure TTyroEngine.WipeCanvas(ACanvas: TTyroCanvas);
 begin
   if ACanvas = nil then
     Exit;
@@ -1660,14 +1624,14 @@ end;
 
 //Copy the editor buffer back into the script it edits. The worker runs a clone,
 //so this is the only place where the edited source reaches the template.
-procedure TTyroMain.SaveEditorSource;
+procedure TTyroEngine.SaveEditorSource;
 begin
   Editor.SaveSource(ScriptSource);
 end;
 
 //Stop the running worker and drop the main-thread work it may still have queued,
 //so a following run starts from a clean slate.
-procedure TTyroMain.StopScriptRun;
+procedure TTyroEngine.StopScriptRun;
 begin
   CancelWaiting;
   StopScriptThread;
@@ -1684,9 +1648,9 @@ end;
 //on the command line runs without moMainWindow, so it is free to finish without
 //showing anything; if it does, nothing is on screen and the process just sits
 //there. Show the window after all so the session stays usable.
-procedure TTyroMain.ShowWindowAfterScript;
+procedure TTyroEngine.ShowWindowAfterScript;
 begin
-  if FWindowAutoShown or Visible or IsTerminated then
+  if FWindowAutoShown or (not IsWindowHidden) or IsTerminated then
     Exit;
   //Only a real script run can end on its own: Started excludes a thread that was
   //never launched and Completed is published by the worker just before it exits.
@@ -1700,7 +1664,7 @@ end;
 //Treat an unknown console line as a one line Lua script run on the main
 //script's Lua state (FScriptREPL). A fresh Lua state is created on demand so
 //variables assigned in the console (e.g. x = 42) persist between lines.
-function TTyroMain.RunLuaLine(const ALine: string): Boolean;
+function TTyroEngine.RunLuaLine(const ALine: string): Boolean;
 var
   aScriptType: TScriptType;
   Output: string;
@@ -1730,7 +1694,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.RegisterCommands;
+procedure TTyroEngine.RegisterCommands;
 var
   aCommand: TConsoleCommand;
 begin
@@ -1753,7 +1717,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.StartConsoleRead;
+procedure TTyroEngine.StartConsoleRead;
 begin
   // Clear any script callback so built-in commands are executed
   FReadCallback := nil;
@@ -1761,7 +1725,7 @@ begin
   Console.StartRead(sPromptChar);
 end;
 
-procedure TTyroMain.StartConsoleReadEx(ACallback: TConsoleReadEvent);
+procedure TTyroEngine.StartConsoleReadEx(ACallback: TConsoleReadEvent);
 begin
   //console.read() from a script: make sure the console is visible and focused
   //so the user can actually type a reply. (Do not call StartConsoleRead here;
@@ -1778,7 +1742,7 @@ begin
   Console.StartRead(sPromptChar);
 end;
 
-procedure TTyroMain.CancelConsoleRead(AReader: TReadConsoleObject);
+procedure TTyroEngine.CancelConsoleRead(AReader: TReadConsoleObject);
 begin
   // Only detach this reader when it still owns the terminal callback. This
   // avoids an old reader cancelling a newer read request.
@@ -1789,7 +1753,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.Help_Command(Params: TStrings);
+procedure TTyroEngine.Help_Command(Params: TStrings);
 var
   Command: TConsoleCommand;
 begin
@@ -1802,7 +1766,7 @@ begin
   Console.Writeln('');
 end;
 
-procedure TTyroMain.Dir_Command(Params: TStrings);
+procedure TTyroEngine.Dir_Command(Params: TStrings);
 var
   DirPath: string;
   sr: TSearchRec;
@@ -1831,28 +1795,28 @@ begin
   Console.Writeln('');
 end;
 
-procedure TTyroMain.Clear_Command(Params: TStrings);
+procedure TTyroEngine.Clear_Command(Params: TStrings);
 begin
   Console.Clear;
 end;
 
-procedure TTyroMain.Exit_Command(Params: TStrings);
+procedure TTyroEngine.Exit_Command(Params: TStrings);
 begin
   HideConsole;
   Terminate;
 end;
 
-procedure TTyroMain.Run_Command(Params: TStrings);
+procedure TTyroEngine.Run_Command(Params: TStrings);
 begin
   RunScriptThread;
 end;
 
-procedure TTyroMain.Stop_Command(Params: TStrings);
+procedure TTyroEngine.Stop_Command(Params: TStrings);
 begin
   StopScriptRun;
 end;
 
-procedure TTyroMain.Load_Command(Params: TStrings);
+procedure TTyroEngine.Load_Command(Params: TStrings);
 var
   aFile: string;
 begin
@@ -1885,7 +1849,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.Save_Command(Params: TStrings);
+procedure TTyroEngine.Save_Command(Params: TStrings);
 var
   aFile, aFileName: string;
   aConfirm: Boolean;
@@ -1922,7 +1886,7 @@ begin
   end;
 end;
 
-procedure TTyroMain.State_Command(Params: TStrings);
+procedure TTyroEngine.State_Command(Params: TStrings);
 begin
   if not Active then
     Exit;
@@ -2031,7 +1995,7 @@ end;
 
 procedure TTyroConsoleLog.LogWrite(LogLevel: TLogLevel; S: string);
 begin
-  Main.LogWrite(S);
+  Engine.LogWrite(S);
 end;
 
 { TConsoleCommand }
@@ -2097,5 +2061,5 @@ end;
 
 initialization
 finalization
-  FreeAndNil(Main);
+  FreeAndNil(Engine);
 end.

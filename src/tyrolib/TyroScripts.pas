@@ -715,7 +715,7 @@ end;
 
 procedure TShowConsoleObject.DoExecute;
 begin
-  Main.ShowConsole(fX, fY, fW, fH);
+  Engine.ShowConsole(fX, fY, fW, fH);
 end;
 
 { TShowOutputObject }
@@ -740,19 +740,19 @@ end;
 
 procedure TShowOutputObject.DoExecute;
 begin
-  Main.Output.Visible := True;
-  Main.Output.BringToFront;
+  Engine.Output.Visible := True;
+  Engine.Output.BringToFront;
   if (fW > 0) and (fH > 0) then
-    Main.Output.BoundsRect := Rect(fX, fY, fX + fW, fY + fH)
+    Engine.Output.BoundsRect := Rect(fX, fY, fX + fW, fY + fH)
   else if (fX <> 0) or (fY <> 0) then
-    Main.Output.BoundsRect := Rect(fX, fY, fX + Main.Output.Width, fY + Main.Output.Height);
+    Engine.Output.BoundsRect := Rect(fX, fY, fX + Engine.Output.Width, fY + Engine.Output.Height);
 end;
 
 { THideOutputObject }
 
 procedure THideOutputObject.DoExecute;
 begin
-  Main.Output.Hide;
+  Engine.Output.Hide;
 end;
 
 { TReadConsoleObject }
@@ -780,8 +780,8 @@ begin
   end;
   // Register before exposing the callback. Otherwise shutdown can happen
   // after Synchronize returns but before the script thread enters Wait.
-  if Main.RegisterWaiting(Self) then
-    Main.StartConsoleReadEx(HandleConsoleInput)
+  if Engine.RegisterWaiting(Self) then
+    Engine.StartConsoleReadEx(HandleConsoleInput)
   else
     SetEvent;
 end;
@@ -790,7 +790,7 @@ procedure TReadConsoleObject.HandleConsoleInput(AConsole: TTyroTerminal; AInput:
 begin
   ResultString := AInput;
   // Re-arm for built-in command mode
-  Main.StartConsoleRead;
+  Engine.StartConsoleRead;
   SetEvent;
 end;
 
@@ -800,16 +800,16 @@ begin
   // The terminal stores this object's method pointer. Restore the normal
   // command callback before destruction. The reader normally dies on the
   // script worker, so marshal detachment to the application thread.
-  if Main <> nil then
+  if Engine <> nil then
   begin
     if TThread.Current.ThreadID = MainThreadID then
-      Main.CancelConsoleRead(Self)
+      Engine.CancelConsoleRead(Self)
     else
  TThread.Synchronize(TThread.CurrentThread,
         procedure
         begin
-          if Main <> nil then
-            Main.CancelConsoleRead(Self);
+          if Engine <> nil then
+            Engine.CancelConsoleRead(Self);
         end);
   end;
 end;
@@ -971,10 +971,10 @@ begin
   if FEvent = nil then
     Exit(True);
 
-  if Main = nil then
+  if Engine = nil then
     Exit(False);
   Result := FEvent.WaitFor(Timeout) = wrSignaled;
-  Main.UnregisterWaiting(Self);
+  Engine.UnregisterWaiting(Self);
 end;
 
 procedure TQueueObject.Cancel;
@@ -1034,7 +1034,7 @@ end;
 
 procedure TWindowObject.DoExecute;
 begin
-  Main.ShowWindow(FW, FH);
+  Engine.ShowWindow(FW, FH);
 end;
 
 { TCreateControlObject }
@@ -1086,21 +1086,21 @@ begin
   NewControl := nil;
   LName := LowerCase(FClassName);
   if LName = 'button' then
-    NewControl := TTyroButton.Create(Main)
+    NewControl := TTyroButton.Create(Engine.Main)
   else if LName = 'panel' then
-    NewControl := TTyroPanel.Create(Main)
+    NewControl := TTyroPanel.Create(Engine.Main)
   else if LName = 'label' then
-    NewControl := TTyroLabel.Create(Main)
+    NewControl := TTyroLabel.Create(Engine.Main)
   else if LName = 'checkbox' then
-    NewControl := TTyroCheckBox.Create(Main)
+    NewControl := TTyroCheckBox.Create(Engine.Main)
   else if LName = 'edit' then
-    NewControl := TTyroEdit.Create(Main)
+    NewControl := TTyroEdit.Create(Engine.Main)
   else if LName = 'spectrum' then
-    NewControl := TTyroSpectrum.Create(Main)
+    NewControl := TTyroSpectrum.Create(Engine.Main)
   else if LName = 'listbox' then
-    NewControl := TTyroListBox.Create(Main)
+    NewControl := TTyroListBox.Create(Engine.Main)
   else if LName = 'image' then
-    NewControl := TTyroImage.Create(Main);
+    NewControl := TTyroImage.Create(Engine.Main);
   try
     if NewControl <> nil then
     begin
@@ -1554,9 +1554,9 @@ end;
 procedure TOutputPrintObject.DoExecute;
 begin
   if FNewLine then
-    Main.Output.Writeln(FText)
+    Engine.Output.Writeln(FText)
   else
-    Main.Output.Write(FText);
+    Engine.Output.Write(FText);
 end;
 
 { TDrawTextObject }
@@ -1670,11 +1670,11 @@ begin
     Exit;
   Lock.Enter;
   try
-    // A stopped script must not leave main-thread work behind for a later
+    // A stopped script must not leave Engine-thread work behind for a later
     // interactive run. Ownership remains here when the request is rejected.
-    if GetActive and (Main <> nil) and Main.Running then
+    if GetActive and (Engine <> nil) and Engine.Running then
     begin
-      Main.Queue.Add(AQueueObject);
+      Engine.Queue.Add(AQueueObject);
       AQueueObject := nil;
     end;
   finally

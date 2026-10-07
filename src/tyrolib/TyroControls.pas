@@ -104,7 +104,6 @@ type
   TTyroResizeSide = (rsLeft, rsRight, rsTop, rsBottom);
   TTyroResizeSides = set of TTyroResizeSide;
 
-
   TTyroControls = class;
 
   { TTyroLayout }
@@ -549,21 +548,18 @@ type
   private
     FCanvas: TTyroCanvas;
     FFocusedControl: TTyroControl;
-    FTitle: utf8string;
     procedure SetCanvas(AValue: TTyroCanvas);
     procedure SetFocusedControl(AValue: TTyroControl);
   protected
-    procedure SetTitle(AValue: utf8string); virtual;
     procedure PrepareCanvas; virtual;
-    function CreateCanvas: TTyroCanvas; virtual; abstract;
+    function CreateCanvas: TTyroCanvas; virtual;
   public
     constructor Create(AParent: TTyroLayout); overload; override;
     constructor Create(AParent: TTyroLayout; AWidth, AHeight: Integer); reintroduce; overload;
     destructor Destroy; override;
     procedure Paint;
     property Canvas: TTyroCanvas read FCanvas write SetCanvas;
-    property Title: utf8string read FTitle write SetTitle;
-    property FocusedControl: TTyroControl read FFocusedControl  write SetFocusedControl;
+    property FocusedControl: TTyroControl read FFocusedControl  write SetFocusedControl; //TODO move to engine
   end;
 
   {* The bytes of a typed character, as a UTF-8 string.
@@ -2601,6 +2597,24 @@ end;
 procedure TTyroControl.PaintWindow(ACanvas: TTyroCanvas);
 var
   aClientRect: TRect;
+  procedure PaintNow;
+  begin
+    ACanvas.ResetOrigin;
+    DoPaintBorder(Canvas);
+    DoPaintBackground(ACanvas);
+    ACanvas.SetOrigin(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top);
+    if csClip in Style then
+      Canvas.BeginClip(aClientRect);
+    try
+      DoPaint(ACanvas);
+      PaintScrollBars(ACanvas);
+    finally
+      if csClip in Style then
+        Canvas.EndClip;
+      ACanvas.ResetOrigin;
+    end;
+  end;
+
 begin
   if Visible then
   begin
@@ -2611,20 +2625,7 @@ begin
     //* without creating/blitting a separate control buffer over it.
     if csTexture in Style then
     begin
-      ACanvas.ResetOrigin;
-      DoPaintBorder(Canvas);
-      DoPaintBackground(ACanvas);
-      ACanvas.SetOrigin(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top);
-      if csClip in Style then
-        Canvas.BeginClip(aClientRect);
-      try
-        DoPaint(ACanvas);
-        PaintScrollBars(ACanvas);
-      finally
-        if csClip in Style then
-          Canvas.EndClip;
-        ACanvas.ResetOrigin;
-      end;
+      PaintNow;
     end
     else if PrepareCanvas then
     begin
@@ -2633,19 +2634,7 @@ begin
       Canvas.BeginDraw;
       Canvas.ClearBackground(clBlank);
       try
-        DoPaintBorder(Canvas);
-        DoPaintBackground(Canvas);
-        Canvas.SetOrigin(OuterSize, OuterSize);
-        if csClip in Style then
-          Canvas.BeginClip(aClientRect);
-        try
-          DoPaint(Canvas);
-          PaintScrollBars(Canvas);
-        finally
-          if csClip in Style then
-            Canvas.EndClip;
-          Canvas.ResetOrigin;
-        end;
+        PaintNow;
       finally
         Canvas.EndDraw;
       end;
@@ -2656,20 +2645,7 @@ begin
     else
     begin
       //* No own texture could be created: paint directly as a fallback.
-      ACanvas.ResetOrigin;
-      DoPaintBorder(Canvas);
-      DoPaintBackground(Canvas);
-      if csClip in Style then
-        ACanvas.BeginClip(aClientRect);
-      Canvas.SetOrigin(OuterSize, OuterSize);
-      try
-        DoPaint(ACanvas);
-        PaintScrollBars(ACanvas);
-      finally
-        ACanvas.ResetOrigin;
-        if csClip in Style then
-          ACanvas.EndClip;
-      end;
+      PaintNow;
     end;
   end;
 end;
@@ -3092,16 +3068,15 @@ end;
 
 { TTyroWindow }
 
-procedure TTyroWindow.SetTitle(AValue: utf8string);
-begin
-  if FTitle =AValue then Exit;
-  FTitle :=AValue;
-end;
-
 procedure TTyroWindow.PrepareCanvas;
 begin
   if FCanvas = nil then
     FCanvas := CreateCanvas;
+end;
+
+function TTyroWindow.CreateCanvas: TTyroCanvas;
+begin
+  Result := TTyroTextureCanvas.Create(Width, Height);
 end;
 
 constructor TTyroWindow.Create(AParent: TTyroLayout; AWidth, AHeight: Integer);
@@ -3133,6 +3108,7 @@ end;
 constructor TTyroWindow.Create(AParent: TTyroLayout);
 begin
   inherited;
+  FVisible := True;
 end;
 
 destructor TTyroWindow.Destroy;
@@ -3147,6 +3123,7 @@ var
 begin
   if Visible then
   begin
+    PrepareCanvas;
     try
       for aControl in Controls do
         if not aControl.Important then

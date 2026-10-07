@@ -613,7 +613,7 @@ begin
   //drawing commands into the same cycle. Never cached: every read waits again.
   if aName = 'cycle' then
   begin
-    if (Thread <> nil) and not Main.WaitToNextFrame(Self) then
+    if (Thread <> nil) and not Engine.WaitToNextFrame(Self) then
       L.PushBoolean(False) //script was stopped while waiting -> end the loop
     else
       L.PushBoolean(True);
@@ -621,7 +621,7 @@ begin
   end;
 
   //4) Sprites: reuse/create the sprite proxy bound to the found handle
-  AHandle := Main.Sprites.FindByName(aName);
+  AHandle := Engine.Sprites.FindByName(aName);
   if AHandle > cSpriteInvalid then
   begin
     lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + AHandle); //[globals, key, sprite?]
@@ -681,11 +681,11 @@ begin
   begin
     i := L.ToInteger(-1);
     if field = 'height' then
-      Main.Console.Height := i
+      Engine.Console.Height := i
     else if field = 'width' then
-      Main.Console.Width := i
+      Engine.Console.Width := i
     else if field = 'margin' then
-      Main.Console.Margin := i
+      Engine.Console.Margin := i
   end
   else if L.IsString(-1) then
   begin
@@ -693,17 +693,17 @@ begin
     begin
       //* TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
       if L.ToString(-1) = 'none' then
-        Main.Console.Align := TAlign(0)
+        Engine.Console.Align := TAlign(0)
       else if L.ToString(-1) = 'left' then
-        Main.Console.Align := TAlign(1)
+        Engine.Console.Align := TAlign(1)
       else if L.ToString(-1) = 'top' then
-        Main.Console.Align := TAlign(2)
+        Engine.Console.Align := TAlign(2)
       else if L.ToString(-1) = 'right' then
-        Main.Console.Align := TAlign(3)
+        Engine.Console.Align := TAlign(3)
       else if L.ToString(-1) = 'bottom' then
-        Main.Console.Align := TAlign(4)
+        Engine.Console.Align := TAlign(4)
       else if L.ToString(-1) = 'client' then
-        Main.Console.Align := TAlign(5);
+        Engine.Console.Align := TAlign(5);
     end;
   end;
 end;
@@ -717,13 +717,13 @@ begin
   field := lua_tostring(L, 2);
   if field = 'active' then
   begin
-    lua_pushboolean(L, Main.Console.Visible);
+    lua_pushboolean(L, Engine.Console.Visible);
     Result := 1;
   end
   else if field = 'align' then
   begin
     // TAlign = (alNone=0, alLeft=1, alTop=2, alRight=3, alBottom=4, alClient=5)
-    i := Ord(Main.Console.Align);
+    i := Ord(Engine.Console.Align);
     case i of
       0: lua_pushstring(L, 'none');
       1: lua_pushstring(L, 'left');
@@ -738,17 +738,17 @@ begin
   end
   else if field = 'height' then
   begin
-    lua_pushinteger(L, Main.Console.Height);
+    lua_pushinteger(L, Engine.Console.Height);
     Result := 1;
   end
   else if field = 'width' then
   begin
-    lua_pushinteger(L, Main.Console.Width);
+    lua_pushinteger(L, Engine.Console.Width);
     Result := 1;
   end
   else if field = 'margin' then
   begin
-    lua_pushinteger(L, Main.Console.Margin);
+    lua_pushinteger(L, Engine.Console.Margin);
     Result := 1;
   end;
 end;
@@ -772,15 +772,15 @@ begin
   begin
     i := L.ToInteger(-1);
     if field = 'margin' then
-      Main.Margin := i
+      Engine.Margin := i
     else if field = 'backcolor' then
-      Main.BackColor := IntToColor(i);
+      Engine.BackColor := IntToColor(i);
   end
   else if L.IsString(-1) then
   begin
     color := L.ToString(-1);
     if field = 'backcolor' then
-      Main.BackColor := StrToColor(color);
+      Engine.BackColor := StrToColor(color);
   end;
 end;
 
@@ -793,27 +793,27 @@ begin
 
   if field = 'margin' then
   begin
-    L.PushInteger(Main.Margin);
+    L.PushInteger(Engine.Margin);
     Result := 1;
   end
   else if field = 'backcolor' then
   begin
-    L.PushInteger(ColorToInt(Main.BackColor));
+    L.PushInteger(ColorToInt(Engine.BackColor));
     Result := 1;
   end
   else if field = 'width' then
   begin
-    L.PushInteger(Main.Width);
+    L.PushInteger(Engine.Width);
     Result := 1;
   end
   else if field = 'height' then
   begin
-    L.PushInteger(Main.Height);
+    L.PushInteger(Engine.Height);
     Result := 1;
   end
   else if field = 'shaking' then
   begin
-    L.PushBoolean(Main.Shaking);
+    L.PushBoolean(Engine.Shaking);
     Result := 1;
   end;
 end;
@@ -971,19 +971,19 @@ begin
     if field = 'color' then
     begin
       i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetColorObject.Create(Main.Canvas, IntToColor(i)));
+      FScript.AddQueueObject(TDrawSetColorObject.Create(Engine.Main.Canvas, IntToColor(i)));
       Result := 1;
     end
     else if field = 'alpha' then
     begin
       i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetAlphaObject.Create(Main.Canvas, i));
+      FScript.AddQueueObject(TDrawSetAlphaObject.Create(Engine.Main.Canvas, i));
       Result := 1;
     end
     else if field = 'backcolor' then
     begin
       i := L.ToInteger(-1);
-      //Main.Canvas.BackgroundColor := RayColorOf(IntToColor(i)); //thread unsafe
+      //Engine.Canvas.BackgroundColor := RayColorOf(IntToColor(i)); //thread unsafe
       Result := 1;
     end;
   end;
@@ -999,24 +999,24 @@ begin
 
   if field = 'color' then
   begin
-    i := ColorToInt(Main.Canvas.PenColor);
+    i := ColorToInt(Engine.Main.Canvas.PenColor);
     L.PushInteger(i);
     Result := 1;
   end
   else if field = 'backcolor' then
   begin
-    i := ColorToInt(Main.Canvas.BackColor);
+    i := ColorToInt(Engine.Main.Canvas.BackColor);
     L.PushInteger(i);
     Result := 1;
   end
   else if field = 'width' then
   begin
-    L.PushInteger(Main.Canvas.Width);
+    L.PushInteger(Engine.Main.Canvas.Width);
     Result := 1;
   end
   else if field = 'height' then
   begin
-    L.PushInteger(Main.Canvas.Height);
+    L.PushInteger(Engine.Main.Canvas.Height);
     Result := 1;
   end;
 end;
@@ -1043,12 +1043,12 @@ begin
   if field = 'effect' then
   begin
     if L.IsString(-1) then
-      FScript.AddQueueObject(TSetEffectObject.Create(Main.Board, L.ToString(-1)));
+      FScript.AddQueueObject(TSetEffectObject.Create(Engine.Board, L.ToString(-1)));
   end
   else if field = 'value' then
   begin
     if L.IsNumber(-1) then
-      FScript.AddQueueObject(TSetEffectValueObject.Create(Main.Board, L.ToNumber(-1)));
+      FScript.AddQueueObject(TSetEffectValueObject.Create(Engine.Board, L.ToNumber(-1)));
   end
   else if field = 'area' then
   begin
@@ -1071,7 +1071,7 @@ begin
       if L.IsNumber(-1) then
         area.height := L.ToNumber(-1);
       lua_pop(L, 1);
-      FScript.AddQueueObject(TSetEffectAreaObject.Create(Main.Board, area));
+      FScript.AddQueueObject(TSetEffectAreaObject.Create(Engine.Board, area));
     end;
   end;
 end;
@@ -1085,29 +1085,29 @@ begin
   field := L.ToString(2);
   if field = 'effect' then
   begin
-    if Main.Board <> nil then
-      L.PushString(Main.Board.GetEffectName)
+    if Engine.Board <> nil then
+      L.PushString(Engine.Board.GetEffectName)
     else
       L.PushString('none');
     Result := 1;
   end
   else if field = 'value' then
   begin
-    if Main.Board <> nil then
-      L.PushNumber(Main.Board.GetEffectValue)
+    if Engine.Board <> nil then
+      L.PushNumber(Engine.Board.GetEffectValue)
     else
       L.PushNumber(1.0);
     Result := 1;
   end
   else if field = 'area' then
   begin
-    if Main.Board <> nil then
-      area := Main.Board.GetEffectArea
+    if Engine.Board <> nil then
+      area := Engine.Board.GetEffectArea
     else
     begin
       area := Default(TRectangle);
-      area.width := Main.Canvas.Width;
-      area.height := Main.Canvas.Height;
+      area.width := Engine.Main.Canvas.Width;
+      area.height := Engine.Main.Canvas.Height;
     end;
     lua_createtable(L, 4, 0);
     lua_pushnumber(L, area.x);
@@ -1126,7 +1126,7 @@ function TLuaShader.Load_func(L: PLua_State): integer; cdecl;
 begin
   //Load a custom fragment shader from a file
   if L.IsString(1) then
-    FScript.AddQueueObject(TLoadShaderObject.Create(Main.Board, L.ToString(1)));
+    FScript.AddQueueObject(TLoadShaderObject.Create(Engine.Board, L.ToString(1)));
   Result := 0;
 end;
 
@@ -1383,7 +1383,7 @@ begin
   // A stopped script object may be run again from the interactive console.
   Lua.SetReady;
   //Publish the failure state for the CLI --exit lifecycle: the worker thread
-  //reads this after the run and the main loop surfaces it as the exit code.
+  //reads this after the run and the Engine loop surfaces it as the exit code.
   FLastError := '';
   //WriteLn('Run Script');
   //Sleep(1000);
@@ -1403,7 +1403,7 @@ begin
 end;
 
 // Runs a single console line on the persistent Lua state (same globals as the
-// main script), so assignments like "x = 5" stay alive for later lines. Any
+// Engine script), so assignments like "x = 5" stay alive for later lines. Any
 // return values are echoed to the terminal (REPL style); syntax/runtime errors
 // are reported through AOutput.
 function TLuaScript.RunLine(const ALine: string; out AOutput: string): Boolean;
@@ -1491,7 +1491,7 @@ end;
 
 function TLuaCanvas.Clear_func(L: Plua_State): integer; cdecl;
 begin
-  FScript.AddQueueObject(TClearObject.Create(Main.Canvas));
+  FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas));
   Result := 0;
 end;
 
@@ -1524,10 +1524,10 @@ begin
     ms := Round(L.ToNumber(1));
   if L.ArgsCount > 1 then
     power := Round(L.ToNumber(2));
-  if Main <> nil then
+  if Engine <> nil then
     //Thread safe: the engine takes the request from the script thread and
     //jitters the world camera on the next frames.
-    Main.Shake(ms, power);
+    Engine.Shake(ms, power);
   Result := 0;
 end;
 
@@ -1566,7 +1566,7 @@ begin
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
   s := L.ToString(3);
-  FScript.AddQueueObject(TDrawTextObject.Create(Main.Canvas, x, y, s));
+  FScript.AddQueueObject(TDrawTextObject.Create(Engine.Main.Canvas, x, y, s));
   Result := 0;
 end;
 
@@ -1583,7 +1583,7 @@ begin
   r := round(L.ToNumber(3));
   if c >= 4 then
     f := L.ToBoolean(4);
-  FScript.AddQueueObject(TDrawCircleObject.Create(Main.Canvas, x, y, r, f));
+  FScript.AddQueueObject(TDrawCircleObject.Create(Engine.Main.Canvas, x, y, r, f));
   Result := 0;
 end;
 
@@ -1601,7 +1601,7 @@ begin
   h := round(L.ToNumber(4));
   if c >= 4 then
     f := L.ToBoolean(5);
-  FScript.AddQueueObject(TDrawRectangleObject.Create(Main.Canvas, x, y, w, h, f));
+  FScript.AddQueueObject(TDrawRectangleObject.Create(Engine.Main.Canvas, x, y, w, h, f));
   Result := 0;
 end;
 
@@ -1617,10 +1617,10 @@ begin
   begin
     x2 := round(L.ToNumber(3));
     y2 := round(L.ToNumber(4));
-    FScript.AddQueueObject(TDrawLineObject.Create(Main.Canvas, x1, y1, x2, y2));
+    FScript.AddQueueObject(TDrawLineObject.Create(Engine.Main.Canvas, x1, y1, x2, y2));
   end
   else
-    FScript.AddQueueObject(TDrawLineToObject.Create(Main.Canvas, x1, y1));
+    FScript.AddQueueObject(TDrawLineToObject.Create(Engine.Main.Canvas, x1, y1));
   Result := 0;
 end;
 
@@ -1630,7 +1630,7 @@ var
 begin
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
-  FScript.AddQueueObject(TDrawPointObject.Create(Main.Canvas, x, y));
+  FScript.AddQueueObject(TDrawPointObject.Create(Engine.Main.Canvas, x, y));
   Result := 0;
 end;
 
@@ -1647,7 +1647,7 @@ begin
       s := s + #9;
     s := s + L.ToString(i);
   end;
-  FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, False));
+  FScript.AddQueueObject(TPrintObject.Create(Engine.Main.Canvas, s, False));
   Result := 0;
 end;
 
@@ -1664,7 +1664,7 @@ begin
       s := s + #9;
     s := s + L.ToString(i);
   end;
-  FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
+  FScript.AddQueueObject(TPrintObject.Create(Engine.Main.Canvas, s, True));
   Result := 0;
 end;
 
@@ -1681,8 +1681,8 @@ begin
       s := s + #9;
     s := s + L.ToString(i);
   end;
-  FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, False));
-  FScript.AddQueueObject(TOutputPrintObject.Create(Main.Canvas, s, False));
+  FScript.AddQueueObject(TPrintObject.Create(Engine.Main.Canvas, s, False));
+  FScript.AddQueueObject(TOutputPrintObject.Create(Engine.Main.Canvas, s, False));
   Result := 0;
 end;
 
@@ -1699,8 +1699,8 @@ begin
       s := s + #9;
     s := s + L.ToString(i);
   end;
-  FScript.AddQueueObject(TPrintObject.Create(Main.Canvas, s, True));
-  FScript.AddQueueObject(TOutputPrintObject.Create(Main.Canvas, s, True));
+  FScript.AddQueueObject(TPrintObject.Create(Engine.Main.Canvas, s, True));
+  FScript.AddQueueObject(TOutputPrintObject.Create(Engine.Main.Canvas, s, True));
   Result := 0;
 end;
 
@@ -1715,44 +1715,44 @@ begin
   Result := 0;
   field := L.ToString(2);
   if field = 'visible' then
-    Main.Output.Visible := L.ToBoolean(-1)
+    Engine.Output.Visible := L.ToBoolean(-1)
   else if L.IsInteger(-1) or L.IsNumber(-1) then
   begin
     i := L.ToInteger(-1);
     if field = 'height' then
-      Main.Output.Height := i
+      Engine.Output.Height := i
     else if field = 'width' then
-      Main.Output.Width := i
+      Engine.Output.Width := i
     else if (field = 'left') or (field = 'x') then
     begin
-      r := Main.Output.BoundsRect;
-      Main.Output.BoundsRect := Rect(i, r.Top, i + r.Width, r.Bottom);
+      r := Engine.Output.BoundsRect;
+      Engine.Output.BoundsRect := Rect(i, r.Top, i + r.Width, r.Bottom);
     end
     else if (field = 'top') or (field = 'y') then
     begin
-      r := Main.Output.BoundsRect;
-      Main.Output.BoundsRect := Rect(r.Left, i, r.Right, i + r.Height);
+      r := Engine.Output.BoundsRect;
+      Engine.Output.BoundsRect := Rect(r.Left, i, r.Right, i + r.Height);
     end
     else if field = 'margin' then
-      Main.Output.Margin := i
+      Engine.Output.Margin := i
     else if field = 'maxlines' then
-      Main.Output.MaxLines := i
+      Engine.Output.MaxLines := i
     else if field = 'border' then
       //* 0=none, 1=thin, 2=thick, 3=sizable
       case i of
-        1: Main.Output.Border := brdThin;
-        2: Main.Output.Border := brdThick;
-        3: Main.Output.Border := brdSizable;
+        1: Engine.Output.Border := brdThin;
+        2: Engine.Output.Border := brdThick;
+        3: Engine.Output.Border := brdSizable;
       else
-        Main.Output.Border := brdNone;
+        Engine.Output.Border := brdNone;
       end;
   end
   else if L.IsString(-1) then
   begin
     if field = 'color' then
-      Main.Output.Color := StrToColor(L.ToString(-1))
+      Engine.Output.Color := StrToColor(L.ToString(-1))
     else if field = 'backColor' then
-      Main.Output.BackColor := StrToColor(L.ToString(-1));
+      Engine.Output.BackColor := StrToColor(L.ToString(-1));
   end;
 end;
 
@@ -1764,32 +1764,32 @@ begin
   field := L.ToString(2);
   if field = 'visible' then
   begin
-    lua_pushboolean(L, Main.Output.Visible);
+    lua_pushboolean(L, Engine.Output.Visible);
     Result := 1;
   end
   else if field = 'height' then
   begin
-    lua_pushinteger(L, Main.Output.Height);
+    lua_pushinteger(L, Engine.Output.Height);
     Result := 1;
   end
   else if field = 'width' then
   begin
-    lua_pushinteger(L, Main.Output.Width);
+    lua_pushinteger(L, Engine.Output.Width);
     Result := 1;
   end
   else if (field = 'left') or (field = 'x') then
   begin
-    lua_pushinteger(L, Main.Output.BoundsRect.Left);
+    lua_pushinteger(L, Engine.Output.BoundsRect.Left);
     Result := 1;
   end
   else if (field = 'top') or (field = 'y') then
   begin
-    lua_pushinteger(L, Main.Output.BoundsRect.Top);
+    lua_pushinteger(L, Engine.Output.BoundsRect.Top);
     Result := 1;
   end
   else if field = 'border' then
   begin
-    case Main.Output.Border of
+    case Engine.Output.Border of
       brdThin: lua_pushinteger(L, 1);
       brdThick: lua_pushinteger(L, 2);
       brdSizable: lua_pushinteger(L, 3);
@@ -1800,17 +1800,17 @@ begin
   end
   else if field = 'lines' then
   begin
-    lua_pushinteger(L, Main.Output.LineCount);
+    lua_pushinteger(L, Engine.Output.LineCount);
     Result := 1;
   end
   else if field = 'maxlines' then
   begin
-    lua_pushinteger(L, Main.Output.MaxLines);
+    lua_pushinteger(L, Engine.Output.MaxLines);
     Result := 1;
   end
   else if field = 'margin' then
   begin
-    lua_pushinteger(L, Main.Output.Margin);
+    lua_pushinteger(L, Engine.Output.Margin);
     Result := 1;
   end;
 end;
@@ -1856,7 +1856,7 @@ end;
 
 function TLuaOutput.Clear_func(L: Plua_State): integer; cdecl;
 begin
-  Main.Output.Clear;
+  Engine.Output.Clear;
   Result := 0;
 end;
 
@@ -1902,7 +1902,7 @@ begin
     s := L.ToString(i + 1);
     Song[i] := s;
   end;
-  //Audio objects and raylib audio calls stay on the main thread. Playback is
+  //Audio objects and raylib audio calls stay on the Engine thread. Playback is
   //advanced incrementally by TTyroMain.Update, so this does not block drawing.
   FScript.AddQueueObject(TPlayMMLObject.Create(Song));
   Result := 0;
@@ -2317,9 +2317,9 @@ end;
 function TLuaScript.Screenshot_func(L: Plua_State): integer; cdecl;
 begin
   if L.ArgsCount > 0 then
-    // TakeScreenshot must run on the main thread after the frame is
+    // TakeScreenshot must run on the Engine thread after the frame is
     // presented, so queue the request and let the engine capture it.
-    Main.QueueScreenshot(L.ToString(1));
+    Engine.QueueScreenshot(L.ToString(1));
   Result := 0;
 end;
 
@@ -3000,11 +3000,11 @@ begin
 
   Reader := TReadConsoleObject.Create(s);
   try
-    // Run the DoExecute on the main thread via Synchronize.
+    // Run the DoExecute on the Engine thread via Synchronize.
     // The object is NOT freed by the engine; we free it here.
     Reader.Run(Script.Thread);
     //TThread.Synchronize(ScriptThread, procedure begin sleep(1000) end);
-    // Wait for user to press Enter (signaled from main thread callback)
+    // Wait for user to press Enter (signaled from Engine thread callback)
     if Reader.Wait then
       // Push the result string to Lua
       L.PushString(Reader.ResultString);
@@ -3089,7 +3089,7 @@ begin
     aName := L.ToString(1)
   else
     aName := '';
-  // Create the sprite object immediately on the main thread so script-only
+  // Create the sprite object immediately on the Engine thread so script-only
   // ("texture-less") sprites get a real handle; load() swaps the texture in place.
   CreateObj := TCreateSpriteObject.Create(aName);
   try
@@ -3118,7 +3118,7 @@ var
   handle: integer;
 begin
   aName := L.ToString(1);
-  handle := Main.Sprites.FindByName(aName);
+  handle := Engine.Sprites.FindByName(aName);
   if handle > cSpriteInvalid then
     Script.Sprite.RegisterSprite(handle)
   else
@@ -3133,7 +3133,7 @@ var
   handle: integer;
 begin
   aName := L.ToString(2); // first arg after table self
-  handle := Main.Sprites.FindByName(aName);
+  handle := Engine.Sprites.FindByName(aName);
   if handle > cSpriteInvalid then
     Script.Sprite.RegisterSprite(handle)
   else
@@ -3244,7 +3244,7 @@ begin
 end;
 
 //Resolves the container of a control: the handle a script can pass straight
-//back into controls.parent, so 0 answers "the main window". Shared by the
+//back into controls.parent, so 0 answers "the Engine window". Shared by the
 //parent field and controls.parent.
 function ParentHandleOf(AControls: TList; AControl: TTyroControl): Integer;
 var
@@ -3394,9 +3394,9 @@ begin
   end
   else if field = 'parent' then
   begin
-    //a nil or zero handle moves the control back to the main window
+    //a nil or zero handle moves the control back to the Engine window
     if lua_isnil(L, 3) or (L.IsNumber(3) and (round(L.ToNumber(3)) <= 0)) then
-      FScript.RunQueueObject(TSetControlParentObject.Create(ctrl, Main))
+      FScript.RunQueueObject(TSetControlParentObject.Create(ctrl, Engine.Main))
     else
     begin
       if L.IsTable(3) then
@@ -3560,7 +3560,7 @@ begin
   end
   else if field = 'parent' then
   begin
-    //0 is the main window, a value controls.parent takes back unchanged
+    //0 is the Engine window, a value controls.parent takes back unchanged
     L.PushInteger(ParentHandleOf(FItems, ctrl));
     Result := 1;
     Exit;
@@ -3697,7 +3697,7 @@ begin
 end;
 
 //controls.new(class, captionOrText, x?, y?, w?, h?, name?) -> handle
-//(created on the main thread, self-drawn by the main cycle; the returned
+//(created on the Engine thread, self-drawn by the Engine cycle; the returned
 //handle is 1-based over the controls created by this script)
 //legacy call buttons.new(caption, x?, y?, w?, h?, borderSize?) still works
 function TLuaControls.New_func(L: Plua_State): integer; cdecl;
@@ -4101,7 +4101,7 @@ begin
 end;
 
 //controls.focus(handle) -> move the keyboard focus to the control (on the
-//main thread, like every change of the input state)
+//Engine thread, like every change of the input state)
 function TLuaControls.Focus_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -4240,7 +4240,7 @@ begin
 end;
 
 //controls.parent(handle [, parentHandle]) -> get/set the container. The getter
-//returns 0 when the control belongs to the main window, and the setter moves
+//returns 0 when the control belongs to the Engine window, and the setter moves
 //it back there for a nil or zero handle.
 function TLuaControls.Parent_func(L: Plua_State): integer; cdecl;
 var
@@ -4262,7 +4262,7 @@ begin
   if L.ArgsCount >= 2 then
   begin
     if lua_isnil(L, 2) or (L.IsNumber(2) and (round(L.ToNumber(2)) <= 0)) then
-    newParent := Main
+      newParent := Engine.Main
   else
   begin
     if L.IsTable(2) then
@@ -4282,7 +4282,7 @@ begin
   end
   else
   begin
-    //Return 0 for the main window so the result can be passed straight back
+    //Return 0 for the Engine window so the result can be passed straight back
     //to the setter.
     L.PushInteger(ParentHandleOf(FItems, ctrl));
     Result := 1;
@@ -4414,7 +4414,7 @@ end;
 
 //img.load("logo.png") / img:load("logo.png") / controls.load(handle, "logo.png")
 //Loads the texture an image control shows, replacing the one it holds. An
-//empty (or missing) file name releases it. The upload runs on the main thread
+//empty (or missing) file name releases it. The upload runs on the Engine thread
 //(it needs the GL context the control is painted with) and a texture bigger
 //than the control grows it. Answers with the new state, so a file that could
 //not be read reports false just like img.loaded does.
@@ -4530,7 +4530,7 @@ begin
       // re-index the sprite table under its real handle (it was keyed as unloaded)
       L.PushValue(1);
       lua_rawseti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + handle);
-      // optional per-sprite script; compiled on the main thread by the engine queue
+      // optional per-sprite script; compiled on the Engine thread by the engine queue
       if aScriptFile <> '' then
       begin
         ScriptObj := TLoadSpriteScriptObject.Create(Script, handle, aScriptFile);
@@ -4545,7 +4545,7 @@ begin
   Result := 0;
 end;
 
-// sprite:loadscript("file.tyro") -> compile & attach a per-sprite script (main thread)
+// sprite:loadscript("file.tyro") -> compile & attach a per-sprite script (Engine thread)
 function TLuaSprite.LoadScript_func(L: Plua_State): integer; cdecl;
 var
   handle: integer;
@@ -4568,7 +4568,7 @@ var
 begin
   handle := GetSpriteHandle(L, 1);
   if handle > cSpriteInvalid then
-    Main.Sprites.SetVisible(handle, True);
+    Engine.Sprites.SetVisible(handle, True);
   Result := 0;
 end;
 
@@ -4578,7 +4578,7 @@ var
 begin
   handle := GetSpriteHandle(L, 1);
   if handle > cSpriteInvalid then
-    Main.Sprites.SetVisible(handle, False);
+    Engine.Sprites.SetVisible(handle, False);
   Result := 0;
 end;
 
@@ -4591,7 +4591,7 @@ begin
   y := L.ToNumber(3);
   handle := GetSpriteHandle(L, 1);
   if handle > cSpriteInvalid then
-    Main.Sprites.SetPosition(handle, x, y);
+    Engine.Sprites.SetPosition(handle, x, y);
   Result := 0;
 end;
 
@@ -4600,7 +4600,7 @@ var
   handle: integer;
 begin
   handle := GetSpriteHandle(L, 1);
-  L.PushInteger(Main.Sprites.GetWidth(handle));
+  L.PushInteger(Engine.Sprites.GetWidth(handle));
   Result := 1;
 end;
 
@@ -4609,7 +4609,7 @@ var
   handle: integer;
 begin
   handle := GetSpriteHandle(L, 1);
-  L.PushInteger(Main.Sprites.GetHeight(handle));
+  L.PushInteger(Engine.Sprites.GetHeight(handle));
   Result := 1;
 end;
 
@@ -4623,9 +4623,9 @@ begin
   if handle > cSpriteInvalid then
   begin
     if L.ArgsCount >= 2 then
-      Main.Sprites.SetAnimSpeed(handle, L.ToNumber(2));
-    Main.Sprites.SetAnimFrame(handle, 0);
-    Main.Sprites.SetPlaying(handle, True);
+      Engine.Sprites.SetAnimSpeed(handle, L.ToNumber(2));
+    Engine.Sprites.SetAnimFrame(handle, 0);
+    Engine.Sprites.SetPlaying(handle, True);
   end;
   Result := 0;
 end;
@@ -4637,7 +4637,7 @@ var
 begin
   handle := GetSpriteHandle(L, 1);
   if handle > cSpriteInvalid then
-    Main.Sprites.SetPlaying(handle, False);
+    Engine.Sprites.SetPlaying(handle, False);
   Result := 0;
 end;
 
@@ -4647,7 +4647,7 @@ var
   handle: integer;
 begin
   handle := GetSpriteHandle(L, 1);
-  L.PushInteger(Main.Sprites.GetFrameCount(handle));
+  L.PushInteger(Engine.Sprites.GetFrameCount(handle));
   Result := 1;
 end;
 
@@ -4665,37 +4665,37 @@ begin
   begin
     if field = 'x' then
     begin
-      L.PushNumber(Main.Sprites.GetX(handle));
+      L.PushNumber(Engine.Sprites.GetX(handle));
       Result := 1;
     end
     else if field = 'y' then
     begin
-      L.PushNumber(Main.Sprites.GetY(handle));
+      L.PushNumber(Engine.Sprites.GetY(handle));
       Result := 1;
     end
     else if field = 'angle' then
     begin
-      L.PushNumber(Main.Sprites.GetAngle(handle));
+      L.PushNumber(Engine.Sprites.GetAngle(handle));
       Result := 1;
     end
     else if field = 'scale' then
     begin
-      L.PushNumber(Main.Sprites.GetScale(handle));
+      L.PushNumber(Engine.Sprites.GetScale(handle));
       Result := 1;
     end
     else if field = 'visible' then
     begin
-      L.PushBoolean(Main.Sprites.GetVisible(handle));
+      L.PushBoolean(Engine.Sprites.GetVisible(handle));
       Result := 1;
     end
     else if field = 'collide' then
     begin
-      L.PushBoolean(Main.Sprites.GetCollide(handle));
+      L.PushBoolean(Engine.Sprites.GetCollide(handle));
       Result := 1;
     end
     else if field = 'kind' then
     begin
-      case Main.Sprites.GetKind(handle) of
+      case Engine.Sprites.GetKind(handle) of
         skKinematic: L.PushString('kinematic');
         skStatic: L.PushString('static');
       else
@@ -4705,47 +4705,47 @@ begin
     end
     else if field = 'mass' then
     begin
-      L.PushNumber(Main.Sprites.GetMass(handle));
+      L.PushNumber(Engine.Sprites.GetMass(handle));
       Result := 1;
     end
     else if field = 'friction' then
     begin
-      L.PushNumber(Main.Sprites.GetFriction(handle));
+      L.PushNumber(Engine.Sprites.GetFriction(handle));
       Result := 1;
     end
     else if field = 'bouncy' then
     begin
-      L.PushNumber(Main.Sprites.GetBouncy(handle));
+      L.PushNumber(Engine.Sprites.GetBouncy(handle));
       Result := 1;
     end
     else if field = 'radius' then
     begin
-      L.PushNumber(Main.Sprites.GetRadius(handle));
+      L.PushNumber(Engine.Sprites.GetRadius(handle));
       Result := 1;
     end
     else if field = 'frames' then
     begin
-      L.PushInteger(Main.Sprites.GetFrameCount(handle));
+      L.PushInteger(Engine.Sprites.GetFrameCount(handle));
       Result := 1;
     end
     else if field = 'frame' then
     begin
-      L.PushInteger(Main.Sprites.GetAnimFrame(handle));
+      L.PushInteger(Engine.Sprites.GetAnimFrame(handle));
       Result := 1;
     end
     else if field = 'playing' then
     begin
-      L.PushBoolean(Main.Sprites.GetPlaying(handle));
+      L.PushBoolean(Engine.Sprites.GetPlaying(handle));
       Result := 1;
     end
     else if field = 'speed' then
     begin
-      L.PushNumber(Main.Sprites.GetAnimSpeed(handle));
+      L.PushNumber(Engine.Sprites.GetAnimSpeed(handle));
       Result := 1;
     end
     else if field = 'looping' then
     begin
-      L.PushBoolean(Main.Sprites.GetLooping(handle));
+      L.PushBoolean(Engine.Sprites.GetLooping(handle));
       Result := 1;
     end;
   end;
@@ -4780,29 +4780,29 @@ begin
   end;
   if (field = 'x') or (field = 'y') then
   begin
-    curX := Main.Sprites.GetX(handle);
-    curY := Main.Sprites.GetY(handle);
+    curX := Engine.Sprites.GetX(handle);
+    curY := Engine.Sprites.GetY(handle);
     if field = 'x' then
       curX := L.ToNumber(3)
     else
       curY := L.ToNumber(3);
-    Main.Sprites.SetPosition(handle, curX, curY);
+    Engine.Sprites.SetPosition(handle, curX, curY);
   end
   else if field = 'angle' then
   begin
-    Main.Sprites.SetAngle(handle, L.ToNumber(3));
+    Engine.Sprites.SetAngle(handle, L.ToNumber(3));
   end
   else if field = 'scale' then
   begin
-    Main.Sprites.SetScale(handle, L.ToNumber(3));
+    Engine.Sprites.SetScale(handle, L.ToNumber(3));
   end
   else if field = 'visible' then
   begin
-    Main.Sprites.SetVisible(handle, L.ToBoolean(3));
+    Engine.Sprites.SetVisible(handle, L.ToBoolean(3));
   end
   else if field = 'collide' then
   begin
-    Main.Sprites.SetCollide(handle, L.ToBoolean(3));
+    Engine.Sprites.SetCollide(handle, L.ToBoolean(3));
   end
   else if field = 'kind' then
   begin
@@ -4812,39 +4812,39 @@ begin
       k := skStatic
     else
       k := skDynamic;
-    Main.Sprites.SetKind(handle, k);
+    Engine.Sprites.SetKind(handle, k);
   end
   else if field = 'mass' then
   begin
-    Main.Sprites.SetMass(handle, L.ToNumber(3));
+    Engine.Sprites.SetMass(handle, L.ToNumber(3));
   end
   else if field = 'friction' then
   begin
-    Main.Sprites.SetFriction(handle, L.ToNumber(3));
+    Engine.Sprites.SetFriction(handle, L.ToNumber(3));
   end
   else if field = 'bouncy' then
   begin
-    Main.Sprites.SetBouncy(handle, L.ToNumber(3));
+    Engine.Sprites.SetBouncy(handle, L.ToNumber(3));
   end
   else if field = 'radius' then
   begin
-    Main.Sprites.SetRadius(handle, L.ToNumber(3));
+    Engine.Sprites.SetRadius(handle, L.ToNumber(3));
   end
   else if field = 'frame' then
   begin
-    Main.Sprites.SetAnimFrame(handle, L.ToInteger(3));
+    Engine.Sprites.SetAnimFrame(handle, L.ToInteger(3));
   end
   else if field = 'playing' then
   begin
-    Main.Sprites.SetPlaying(handle, L.ToBoolean(3));
+    Engine.Sprites.SetPlaying(handle, L.ToBoolean(3));
   end
   else if field = 'speed' then
   begin
-    Main.Sprites.SetAnimSpeed(handle, L.ToNumber(3));
+    Engine.Sprites.SetAnimSpeed(handle, L.ToNumber(3));
   end
   else if field = 'looping' then
   begin
-    Main.Sprites.SetLooping(handle, L.ToBoolean(3));
+    Engine.Sprites.SetLooping(handle, L.ToBoolean(3));
   end
   else
   begin
@@ -4865,7 +4865,7 @@ begin
   L.NewTable; //[t]
   L.PushInteger(AHandle);
   L.SetField(-2, '__handle'); //t.__handle = AHandle -> [t]
-  L.PushString(Main.Sprites.GetName(AHandle));
+  L.PushString(Engine.Sprites.GetName(AHandle));
   L.SetField(-2, '__name'); //t.__name = sprite name -> [t]
   L.NewTable; //[t, meta]
 
@@ -4938,7 +4938,7 @@ end;
 
 procedure TLuaSpriteScript.BuildGlobals;
 begin
-  // Reuse the main script's globals so per-sprite states can call the same
+  // Reuse the Engine script's globals so per-sprite states can call the same
   // helpers (the bound FScript outlives this state).
   FLua.State.RegisterGlobal('time', FScript.TotalTime_func);
   FLua.State.RegisterGlobal('rand', FScript.RandomValue_func);
@@ -5078,7 +5078,7 @@ begin
   Scr := TLuaSpriteScript.Create(FScript, FHandle, FFileName);
   try
     if Scr.Load then
-      Main.Sprites.SetScript(FHandle, Scr)
+      Engine.Sprites.SetScript(FHandle, Scr)
     else
       Scr.Free;
   except
@@ -5094,21 +5094,21 @@ end;
 function TLuaCollision.Getter(L: Plua_State): integer;
 begin
   Result := 0;
-  if Main.Physics = nil then
+  if Engine.Physics = nil then
     Exit;
   if L.ToString(2) = 'gravityx' then
   begin
-    L.PushNumber(Main.Physics.GetGravityX);
+    L.PushNumber(Engine.Physics.GetGravityX);
     Result := 1;
   end
   else if L.ToString(2) = 'gravityy' then
   begin
-    L.PushNumber(Main.Physics.GetGravityY);
+    L.PushNumber(Engine.Physics.GetGravityY);
     Result := 1;
   end
   else if L.ToString(2) = 'bodies' then
   begin
-    L.PushInteger(Main.Physics.BodyCount);
+    L.PushInteger(Engine.Physics.BodyCount);
     Result := 1;
   end;
 end;
@@ -5118,15 +5118,15 @@ var
   x, y: single;
 begin
   Result := 0;
-  if Main.Physics = nil then
+  if Engine.Physics = nil then
     Exit;
-  x := Main.Physics.GetGravityX;
-  y := Main.Physics.GetGravityY;
+  x := Engine.Physics.GetGravityX;
+  y := Engine.Physics.GetGravityY;
   if L.ToString(2) = 'gravityx' then
     x := L.ToNumber(3)
   else if L.ToString(2) = 'gravityy' then
     y := L.ToNumber(3);
-  Main.Physics.SetGravity(x, y);
+  Engine.Physics.SetGravity(x, y);
 end;
 
 // Fire the onCollide handler of the sprite AHandle, passing the other sprite and the contact state
@@ -5172,10 +5172,10 @@ var
   ev: TCollisionEvent;
 begin
   Result := 0;
-  if Main.Physics = nil then
+  if Engine.Physics = nil then
     Exit;
   ACount := 0;
-  Main.Physics.Poll(Evs, ACount);
+  Engine.Physics.Poll(Evs, ACount);
   for I := 0 to ACount - 1 do
   begin
     ev := Evs[I];
