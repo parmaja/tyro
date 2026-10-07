@@ -851,9 +851,12 @@ begin
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
   Main := TTyroWindow.Create(nil);
+  //Initial rect only: PrepareWindow re-insets it once the real window size is
+  //known. Children are positioned in absolute window coordinates.
+  Main.BoundsRect := Rect(0, 0, Width, Height);
 
   Console := TTyroTerminal.Create(Main);
-  Console.BoundsRect := Rect(0, 0 , 200, 200);
+  Console.BoundsRect := Rect(0, 0, Width div 2, Height div 2);
   Console.Important := True;
   Console.Border:= brdSizable;
   Console.BackColor := clNearBlack;
@@ -864,7 +867,7 @@ begin
   Console.OnInput := ConsoleInput;
   Console.Margin:= 5;
   Console.Padding:= 5;
-  //Console.Align:= alBottom;
+  Console.Align := alBottom; //TODO
   Console.Name := 'Console';
 
   Output := TTyroOutput.Create(Main);
@@ -948,7 +951,10 @@ begin
   FWidth := AWidth;
   FHeight := AHeight;
   //MainPrepareCanvas;
-  Board := TTyroTextureCanvas.Create(AWidth - 2 * Margin, AHeight - 2 * Margin, True);
+  Board := TTyroTextureCanvas.Create(AWidth - Margin * 2, AHeight - Margin * 2);
+  //Main covers the board area: the window inset by Margin on every side, the
+  //same rect ResizeWindow applies when the window is resized.
+  Main.BoundsRect := Rect(0, 0, AWidth, AHeight);
   FPrepared := True;
 end;
 
@@ -1206,8 +1212,7 @@ begin
     SetConfigFlags([FLAG_WINDOW_RESIZABLE]);
 
   RayLib.SetWindowSize(AWidth, AHeight);
-  FWidth := AWidth;
-  FHeight := AHeight;
+  ResizeWindow(AWidth, AHeight);
 
   ClearWindowState([FLAG_WINDOW_HIDDEN]);
   ShowCursor();
@@ -1218,10 +1223,13 @@ begin
   if (AWidth <= 0) or (AHeight <= 0) then
     Exit;
 
+  FWidth := AWidth;
+  FHeight := AHeight;
+
   if Main <> nil then
-    Main.BoundsRect := Rect(0, 0 ,Width, Height);
+    Main.BoundsRect := Rect(0, 0, AWidth , AHeight);
   if Board <> nil then
-    Board.Resize(AWidth - 2 * Margin, AHeight - 2 * Margin);
+    Board.Resize(AWidth - Margin * 2, AHeight - Margin * 2);
 end;
 
 procedure TTyroEngine.Stop;

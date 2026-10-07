@@ -544,7 +544,7 @@ type
 
   { TTyroWindow }
 
-  TTyroWindow = class abstract(TTyroLayout)
+  TTyroWindow = class(TTyroLayout)
   private
     FCanvas: TTyroCanvas;
     FFocusedControl: TTyroControl;
@@ -552,6 +552,7 @@ type
     procedure SetFocusedControl(AValue: TTyroControl);
   protected
     procedure PrepareCanvas; virtual;
+    procedure PrepareCanvasResize; virtual;
     function CreateCanvas: TTyroCanvas; virtual;
   public
     constructor Create(AParent: TTyroLayout); overload; override;
@@ -2060,8 +2061,6 @@ end;
 
 procedure TTyroLayout.SetBoundsRect(AValue: TRect);
 begin
-  if Name = 'Main' then
-    nothing;
   if FBoundsRect = AValue then
     Exit;
   FBoundsRect := AValue;
@@ -3074,6 +3073,12 @@ begin
     FCanvas := CreateCanvas;
 end;
 
+procedure TTyroWindow.PrepareCanvasResize;
+begin
+  if (FCanvas <> nil) and ((FCanvas.Width <> Width) or (FCanvas.Height <> Height)) then
+    FCanvas.Resize(Width, Height);
+end;
+
 function TTyroWindow.CreateCanvas: TTyroCanvas;
 begin
   Result := TTyroTextureCanvas.Create(Width, Height);
@@ -3124,6 +3129,9 @@ begin
   if Visible then
   begin
     PrepareCanvas;
+    //Follow the window size (Main's BoundsRect changes on window resize); the
+    //canvas paints directly to the backbuffer, a stale size draws clipped.
+    PrepareCanvasResize;
     try
       for aControl in Controls do
         if not aControl.Important then
@@ -3136,6 +3144,9 @@ begin
         begin
           aControl.PaintWindow(Canvas);
         end;
+      //No PostDraw here: the window canvas has no own texture (TextureMode
+      //=False), it paints straight to the raylib backbuffer between
+      //BeginDrawing/EndDrawing, so there is nothing to blit.
     finally
     end;
   end;
