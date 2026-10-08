@@ -257,6 +257,10 @@ type
     //When application exit, unload your resources
     procedure ProcessQueue;
 
+    //* Handle files dropped onto the window (from Explorer). Processes .tyro/.lua
+    //* to open and run them, and .bdf to load a custom font.
+    procedure HandleDroppedFiles;
+
     function Terminated: Boolean; virtual;
     procedure ProcessInput; virtual;
 
@@ -556,6 +560,7 @@ begin
             end;
           end;
         end;
+        HandleDroppedFiles;
         ProcessInput;
       end;
     end;
@@ -1745,6 +1750,81 @@ end;
 //on the command line runs without moMainWindow, so it is free to finish without
 //showing anything; if it does, nothing is on screen and the process just sits
 //there. Show the window after all so the session stays usable.
+procedure TTyroEngine.HandleDroppedFiles;
+var
+  DropList: TFilePathList;
+  i: Integer;
+  FilePath: string;
+  Ext: string;
+begin
+  if not RayLib.IsWindowReady then
+    Exit;
+  if not RayLib.IsFileDropped then
+    Exit;
+  DropList := RayLib.LoadDroppedFiles;
+  if DropList.count <= 0 then
+  begin
+    RayLib.UnloadDroppedFiles(DropList);
+    Exit;
+  end;
+  try
+    for i := 0 to DropList.count - 1 do
+    begin
+      // TFilePathList.paths is PPUTF8Char (array of PUTF8Char)
+      FilePath := UTF8String(DropList.paths[i]);
+      if FilePath = '' then
+        Continue;
+      Ext := LowerCase(ExtractFileExt(FilePath));
+      if (Ext = '.tyro') or (Ext = '.lua') then
+      begin
+        // Stop any running script and prepare to run the dropped script
+        StopScriptRun;
+        ScriptFile := FilePath;
+        Res.WorkPath := ExtractFilePath(FilePath);
+        try
+          LoadScriptThread;
+          RunScriptThread;
+          // Ensure window is shown when running a dropped script
+          if IsWindowHidden then
+            ShowWindow;
+        except
+          on E: Exception do
+          begin
+            if Console <> nil then
+              Console.Writeln('Unable to open dropped script: ' + E.Message);
+            Log.WriteLn('Unable to open dropped script: ' + FilePath + ' - ' + E.Message);
+          end;
+        end;
+        Break; // Only handle one script drop at a time
+      end
+      else if (Ext = '.bdf') then
+      begin
+        // Try to load font from BDF file
+        try
+          Res.Font.LoadFromFile(FilePath, 0);
+          // Update UI components with new font if available
+          if (Console <> nil) then
+          begin
+            Console.CharWidth := Res.Font.Width;
+            Console.CharHeight := Res.Font.Height;
+          end;
+          Log.WriteLn('Loaded font: ' + FilePath);
+        except
+          on E: Exception do
+          begin
+            if Console <> nil then
+              Console.Writeln('Unable to load font: ' + FilePath + ' - ' + E.Message);
+            Log.WriteLn('Unable to load font: ' + FilePath + ' - ' + E.Message);
+          end;
+        end;
+        Break;
+      end;
+    end;
+  finally
+    RayLib.UnloadDroppedFiles(DropList);
+  end;
+end;
+
 procedure TTyroEngine.ShowWindowAfterScript;
 begin
   if FWindowAutoShown or (not IsWindowHidden) or IsTerminated then
