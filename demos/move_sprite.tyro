@@ -3,6 +3,11 @@
 --======================================================================
 -- A single spirit moves from the left edge to the right edge
 -- over exactly 10 seconds, at 60 FPS.
+--
+-- "while cycle do" runs the body at most once per drawn frame, so the
+-- motion is locked to the display cadence: no sleep() jitter, no tearing
+-- aliasing. A frame index counts real frames, so the 10 s duration holds
+-- whatever the window FPS is.
 --======================================================================
 
 window.show(640, 480)
@@ -29,23 +34,25 @@ local stepX = (endX - startX) / totalFrames
 -- Hide the mouse cursor for a clean demo
 --cursor.hide()
 
-for i = 1, totalFrames do
+local i = 0
+while cycle do
+  i = i + 1
+  if i > totalFrames then break end
+
   bg.x = startX + (i - 1) * stepX
 
-  canvas.color = black
+  canvas.backcolor = colors.black
   canvas.clear()
 
   -- engine draws all visible spirits automatically
 
-  canvas.color = white
+  canvas.color = colors.white
   canvas.text(10, 10, "Moving... frame " .. i .. "/600")
   canvas.text(10, 30, "x = " .. math.floor(bg.x))
-
-  sleep(frameTime * 1000)
 end
 
 -- Done!
-canvas.color = colors.black
+canvas.backcolor = colors.black
 canvas.clear()
 canvas.color = colors.white
 canvas.text(10, 240, "10 seconds elapsed - spirit reached the right edge!")

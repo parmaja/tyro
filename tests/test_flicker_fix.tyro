@@ -1,0 +1,70 @@
+--======================================================================
+--  test_flicker_fix.tyro - smoke test for the flicker-fix patch set
+--======================================================================
+--  Covers:
+--    - sprite.x / sprite.y component writes keep the other axis intact
+--      (one-lock SetPositionComponent path)
+--    - canvas.backcolor setter reaches the canvas through the queue
+--    - 'cycle' loop runs a bounded number of frame-locked iterations
+--  Writes PASS/FAIL lines plus a final SMOKE-OK / SMOKE-FAILED into
+--  test_flicker_fix_result.txt next to this script. (No assert(): the
+--  sandboxed assert does not return its argument, so failure reporting
+--  goes through the result file instead.)
+--======================================================================
+
+window.show(640, 480)
+
+local out = openfile("test_flicker_fix_result.txt", "w")
+local fails = 0
+local function check(name, cond)
+  if cond then
+    out:write("PASS ", name, "\n")
+  else
+    fails = fails + 1
+    out:write("FAIL ", name, "\n")
+  end
+end
+
+local s = Sprites.new("p")
+s.load("test_image_tile.png")
+s.show()
+
+-- component writes: x must not clobber y and vice versa
+s.x = 10
+s.y = 20
+check("x readback", s.x == 10)
+check("y readback", s.y == 20)
+s.x = 30
+check("x write keeps y", s.x == 30 and s.y == 20)
+s.y = 40
+check("y write keeps x", s.x == 30 and s.y == 40)
+
+-- move() still sets both axes
+s.move(100, 120)
+check("move", s.x == 100 and s.y == 120)
+
+-- backcolor setter (queued) + clear; give the main loop a moment to drain
+-- the queue, then read the value back
+canvas.backcolor = colors.black
+canvas.clear()
+canvas.color = colors.white
+canvas.text(10, 10, "backcolor ok")
+sleep(200)
+check("backcolor readback", canvas.backcolor == colors.black)
+
+-- a bounded cycle loop: hidden window must not block, visible window must
+-- lock the loop to presented frames (5 iterations, not a hot spin)
+local n = 0
+while cycle do
+  n = n + 1
+  if n >= 5 then break end
+end
+check("cycle iterations = 5", n == 5)
+
+if fails == 0 then
+  out:write("SMOKE-OK\n")
+else
+  out:write("SMOKE-FAILED fails=", fails, "\n")
+end
+out:close()
+exit()

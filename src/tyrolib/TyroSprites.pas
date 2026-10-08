@@ -109,6 +109,9 @@ type
 
     function GetTexture(Handle: integer): TTexture2D;
     procedure SetPosition(Handle: integer; X, Y: single);
+    //Set one position component ("bg.x = v" / "bg.y = v"): the other axis is
+    //read under the same lock, so a write is one lock round-trip, not three.
+    procedure SetPositionComponent(Handle: integer; IsX: Boolean; Value: single);
     procedure SetAngle(Handle: integer; Angle: single);
     procedure SetScale(Handle: integer; Scale: single);
     procedure SetVisible(Handle: integer; AVisible: boolean);
@@ -542,19 +545,16 @@ end;
 procedure TSprites.UpdateAnims(DT: single);
 var
   Sprite: TSprite;
-  Handles: TArray<Integer>;
-  I: Integer;
   TimePer: single;
 begin
   if DT <= 0 then
     Exit;
   FLock.Enter;
   try
-    Handles := FItems.Keys.ToArray;
-    for I := 0 to Length(Handles) - 1 do
+    //Iterate the values directly: Keys.ToArray would allocate a fresh array
+    //every frame for a dictionary that does not change while we hold the lock.
+    for Sprite in FItems.Values do
     begin
-      if not FItems.TryGetValue(Handles[I], Sprite) then
-        Continue;
       if Sprite = nil then
         Continue;
       if not Sprite.Playing then
@@ -683,6 +683,24 @@ begin
     begin
       Sprite.X := X;
       Sprite.Y := Y;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetPositionComponent(Handle: integer; IsX: Boolean; Value: single);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+    begin
+      if IsX then
+        Sprite.X := Value
+      else
+        Sprite.Y := Value;
     end;
   finally
     FLock.Leave;
@@ -1006,25 +1024,22 @@ end;
 procedure TSprites.GetCollideList(var AHandles: TArray<Integer>);
 var
   Sprite: TSprite;
-  Handles: TArray<Integer>;
-  I: Integer;
+  N: Integer;
 begin
   AHandles := nil;
   FLock.Enter;
   try
-    Handles := FItems.Keys.ToArray;
-    for I := 0 to Length(Handles) - 1 do
-    begin
-      if not FItems.TryGetValue(Handles[I], Sprite) then
-        Continue;
-      if Sprite = nil then
-        Continue;
-      if Sprite.Collides then
+    //One preallocated array filled while walking the values directly (the
+    //store cannot change while we hold the lock), then trimmed to N.
+    SetLength(AHandles, FItems.Count);
+    N := 0;
+    for Sprite in FItems.Values do
+      if (Sprite <> nil) and Sprite.Collides then
       begin
-        SetLength(AHandles, Length(AHandles) + 1);
-        AHandles[Length(AHandles) - 1] := Sprite.Handle;
+        AHandles[N] := Sprite.Handle;
+        Inc(N);
       end;
-    end;
+    SetLength(AHandles, N);
   finally
     FLock.Leave;
   end;

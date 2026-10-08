@@ -516,7 +516,9 @@ function sleep_func(L: Plua_State): integer; cdecl;
 var
   n: int64;
 begin
-  n := L.ToInteger(1);
+  //Round, not truncate: sleep(16.7) for a 60 FPS frame must not collapse
+  //to 16 ms and drift against the display cadence.
+  n := Round(L.ToNumber(1));
   sleep(n);
   Result := 0;
 end;
@@ -983,7 +985,9 @@ begin
     else if field = 'backcolor' then
     begin
       i := L.ToInteger(-1);
-      //Engine.Canvas.BackgroundColor := RayColorOf(IntToColor(i)); //thread unsafe
+      //Thread-safe through the queue: the color is applied on the Engine
+      //thread, so canvas.clear() clears with what the script asked for.
+      FScript.AddQueueObject(TDrawSetBackColorObject.Create(Engine.Main.Canvas, IntToColor(i)));
       Result := 1;
     end;
   end;
@@ -4763,7 +4767,6 @@ function TLuaSprite.Setter(L: Plua_State): integer;
 var
   handle: integer;
   field: string;
-  curX, curY: single;
   k: TSpriteKind;
 begin
   // arg 1 is the table, arg 2 is the key, arg 3 is the value
@@ -4780,13 +4783,9 @@ begin
   end;
   if (field = 'x') or (field = 'y') then
   begin
-    curX := Engine.Sprites.GetX(handle);
-    curY := Engine.Sprites.GetY(handle);
-    if field = 'x' then
-      curX := L.ToNumber(3)
-    else
-      curY := L.ToNumber(3);
-    Engine.Sprites.SetPosition(handle, curX, curY);
+    //One lock round-trip: the other axis is read inside the store under the
+    //same lock instead of GetX + GetY + SetPosition (three of them).
+    Engine.Sprites.SetPositionComponent(handle, field = 'x', L.ToNumber(3));
   end
   else if field = 'angle' then
   begin

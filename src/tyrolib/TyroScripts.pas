@@ -344,6 +344,15 @@ type
     procedure DoExecute; override;
   end;
 
+  { TDrawSetBackColorObject }
+
+  TDrawSetBackColorObject = class(TDrawObject)
+  public
+    fColor: TColor;
+    constructor Create(ACanvas: TTyroCanvas; Color: TColor);
+    procedure DoExecute; override;
+  end;
+
   { TDrawCircleObject }
 
   TDrawCircleObject = class(TDrawObject)
@@ -677,7 +686,10 @@ begin
   FScript := AScript;
   Script.Thread := Self;
   FreeOnTerminate := False;
-  Priority := tpLower; //hmmm
+  //tpNormal: tpLower made the worker's wake-ups after sleep() late and
+  //irregular, so script-driven motion juddered. The loop blocks on events
+  //almost all of the time, so a normal priority costs the renderer nothing.
+  Priority := tpNormal;
 end;
 
 destructor TTyroScriptThread.Destroy;
@@ -949,6 +961,19 @@ end;
 procedure TDrawSetAlphaObject.DoExecute;
 begin
   Canvas.PenAlpha := fAlpha;
+end;
+
+{ TDrawSetBackColorObject }
+
+constructor TDrawSetBackColorObject.Create(ACanvas: TTyroCanvas; Color: TColor);
+begin
+  inherited Create(ACanvas);
+  fColor := Color;
+end;
+
+procedure TDrawSetBackColorObject.DoExecute;
+begin
+  Canvas.BackColor := fColor;
 end;
 
 { TQueueObject }

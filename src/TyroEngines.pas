@@ -188,6 +188,8 @@ type
     FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
     FPresentedFrame: Boolean;
     FScriptFailed: Boolean;
+    //Cached width of the '999 FPS' label (moShowFPS), measured once.
+    FFpsLabelWidth: Integer;
     //* Set once the engine has shown the window by itself after a headless
     //script finished without asking for one, so it happens a single time.
     FWindowAutoShown: Boolean;
@@ -425,8 +427,6 @@ begin
 end;
 
 procedure TTyroEngine.Run(AOptions: TTyroEngineOptions);
-var
-  tw: Integer;
 begin
   PrepareWindow(cDefaultWindowWidth, cDefaultWindowHeight);
 
@@ -507,8 +507,11 @@ begin
 
           if moShowFPS in Options then
           begin
-            tw := RayLib.MeasureText('999 FPS', 20) + 5;
-            RayLib.DrawFPS(RayLib.GetScreenWidth - tw, 5);
+            //The label width never changes ('999 FPS', default font), so pay
+            //for MeasureText once instead of every frame.
+            if FFpsLabelWidth = 0 then
+              FFpsLabelWidth := RayLib.MeasureText('999 FPS', 20) + 5;
+            RayLib.DrawFPS(RayLib.GetScreenWidth - FFpsLabelWidth, 5);
           end;
         finally
           RayLib.EndDrawing;
@@ -728,11 +731,9 @@ begin
   begin
     CanvasLock.Enter;
     try
-      ft := GetTime();
-      fpd := (1 / FPS);
-      Board.BeginDraw;
-    while True do
-    begin
+      //Nothing queued: skip the whole texture-mode switch. Binding and
+      //unbinding the render texture (BeginTextureMode/EndTextureMode) twice
+      //per frame just to draw nothing costs GL state churn on every cycle.
       Lock.Enter;
       try
         if Queue.Count > 0 then
@@ -743,27 +744,43 @@ begin
         Lock.Leave;
       end;
       if p = nil then
-        Break;
-      try
-        p.Execute;
-      except
-        on E: Exception do
-        begin
-          if IsConsole then
-            WriteLn('EX-QUEUE: ' + E.ClassName + ': ' + E.Message);
-          //A failing queue object must not leak, abort the rest of the queue,
-          //or leave the canvas half-drawn (EndDraw below still runs); log and
-          //move on to the next queued object.
-        end;
-      end;
-      p.Free;
-      ft2 := GetTime() - ft;
-      if ft2 >= fpd then
+        Exit;
+      ft := GetTime();
+      fpd := (1 / FPS);
+      Board.BeginDraw;
+      while True do
       begin
-        break;
+        try
+          p.Execute;
+        except
+          on E: Exception do
+          begin
+            if IsConsole then
+              WriteLn('EX-QUEUE: ' + E.ClassName + ': ' + E.Message);
+            //A failing queue object must not leak, abort the rest of the queue,
+            //or leave the canvas half-drawn (EndDraw below still runs); log and
+            //move on to the next queued object.
+          end;
+        end;
+        p.Free;
+        ft2 := GetTime() - ft;
+        if ft2 >= fpd then
+        begin
+          break;
+        end;
+        Lock.Enter;
+        try
+          if Queue.Count > 0 then
+            p := Queue.Extract(Queue[0])
+          else
+            p := nil;
+        finally
+          Lock.Leave;
+        end;
+        if p = nil then
+          Break;
       end;
-    end;
-    Board.EndDraw;
+      Board.EndDraw;
     finally
       CanvasLock.Leave;
     end;
@@ -961,7 +978,9 @@ begin
 
   //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   //SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
-  SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
+  //VSync: without it the swap lands mid-scanline and moving sprites tear,
+  //which reads as flicker. SetTargetFPS still caps the pace on top of it.
+  SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE, FLAG_VSYNC_HINT]);
   RayLib.InitWindow(AWidth, AHeight, PUTF8Char(Title));
   FWidth := AWidth;
   FHeight := AHeight;
@@ -1004,7 +1023,6 @@ begin
     // and the legacy Board layer
     Sprites.DrawScripts;
   end;
-  TThread.Yield
 end;
 
 procedure TTyroEngine.Update;
@@ -1073,7 +1091,6 @@ begin
       raise;
     end;
   end;
-  TThread.Yield;
 end;
 
 

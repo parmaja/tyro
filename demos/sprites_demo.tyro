@@ -43,9 +43,11 @@ end
 
 local angle = 0
 
-while true do
+-- "while cycle do" runs once per drawn frame: motion and input sampling are
+-- locked to the display cadence, so movement stays smooth (no sleep jitter).
+while cycle do
   -- Clear the screen each frame
-  canvas.color =colors.black
+  canvas.backcolor = colors.black
   canvas.clear()
 
   -- The engine draws all spirits automatically, so we just update properties
@@ -72,6 +74,4 @@ while true do
     angle = 0
     player.angle = 0
   end
-
-  sleep(16)  -- ~60 FPS
 end
