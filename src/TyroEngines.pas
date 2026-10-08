@@ -27,7 +27,7 @@ const
   sPromptChar: UTF8string = '>';
   sPromptDOT: UTF8string = '*';
 
-  cMainPadding = 16;
+  cMainMargin = 0;
   cDefaultWindowWidth = 640;
   cDefaultWindowHeight = 480;
   //Default screen shake amplitude in pixels (used when Shake gets no power)
@@ -91,6 +91,7 @@ type
     FOnDismiss: TNotifyEvent;
   protected
   public
+    destructor Destroy; override;
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
     //Rebuild the item list from ADirectory using AMasks (one FindFirst each, so
@@ -157,7 +158,6 @@ type
     procedure ClearRunCanvases;
     procedure WipeCanvas(ACanvas: TTyroCanvas);
     procedure ClearScriptSprites;
-    function EngineControl(AControl: TTyroLayout): Boolean;
     procedure ShowWindowAfterScript;
 
     procedure ShowFileList;
@@ -292,12 +292,16 @@ type
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
     ScriptSource: string; //Shout pass to Thread to run it
-    //Board is a canvas for ScriptThread draw on it
+
+    //Main for UI controls
+    Main: TTyroWindow;
+    //Board where Lua drawing on it
+    Board: TTyroCanvas;
+
     Console: TTyroTerminal;
     Output: TTyroOutput;
     Editor: TyroEditor;
-    Main: TTyroWindow;
-    Board: TTyroCanvas;
+
     Sprites: TSprites;
     Physics: TPhysics;
     //property Board: TTyroImage read FBoard;
@@ -507,7 +511,7 @@ begin
             RayLib.DrawFPS(RayLib.GetScreenWidth - tw, 5);
           end;
         finally
-          RayLib.EndDrawing();
+          RayLib.EndDrawing;
           FPresentedFrame := True;
           //One drawing cycle completed: wake any script thread blocked on the
           //Lua 'cycle' gate so "while cycle do" runs at most once per frame.
@@ -843,7 +847,7 @@ begin
   FBackColor := clCornflowerBlue;
 
   //Configured margin only; absent key must not clobber the default with 0.
-  Margin := Res.Config.Sections['window'].ReadInteger('margin', cMainPadding);
+  Margin := Res.Config.Sections['window'].ReadInteger('margin', cMainMargin);
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -851,29 +855,43 @@ begin
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
   Main := TTyroWindow.Create(nil);
-  //Initial rect only: PrepareWindow re-insets it once the real window size is
-  //known. Children are positioned in absolute window coordinates.
+  Main.Name := 'Main';
+  Main.Border := brdNone;
+  Main.Padding := 0;
+  Main.Margin := Margin;
   Main.BoundsRect := Rect(0, 0, Width, Height);
+  Main.Show;
 
-  Console := TTyroTerminal.Create(Main);
-  Console.BoundsRect := Rect(0, 0, Width div 2, Height div 2);
-  Console.Important := True;
-  Console.Border:= brdSizable;
-  Console.BackColor := clNearBlack;
-  Console.Color := clLightGray;
-  Console.HighlightColor := clBlue;
-  Console.SelectionColor := clWhite;
-  Console.Visible := True;
-  Console.OnInput := ConsoleInput;
-  Console.Margin:= 5;
-  Console.Padding:= 5;
-  Console.Align := alBottom; //TODO
-  Console.Name := 'Console';
+  with TTyroLabel.Create(Main) do
+  begin
+    Important := True;
+    Name := 'Label';
+    Caption := 'Label';
+    Border:= brdThick;
+    BackColor := clBlue;
+    BoundsRect := Rect(0, cDefaultWindowHeight-50, 50, cDefaultWindowHeight);
+    Show;
+  end;
 
   Output := TTyroOutput.Create(Main);
   Output.Important := True;
   Output.Name := 'Output';
   Output.BoundsRect := Rect(0, 0, 480, 240);
+
+  Console := TTyroTerminal.Create(Main);
+  Console.BoundsRect := Rect(0, 0, Width, Height div 2);
+  Console.Important := True;
+  Console.Border:= brdThick;
+  Console.BackColor := clNearBlack;
+  Console.Color := clLightGray;
+  Console.HighlightColor := clBlue;
+  Console.SelectionColor := clWhite;
+  Console.Visible := False;
+  Console.OnInput := ConsoleInput;
+  Console.Margin:= 5;
+  Console.Padding:= 5;
+  Console.Align := alBottom;
+  Console.Name := 'Console';
 
   Editor := TyroEditor.Create(Main);
   Editor.Name := 'Editor';
@@ -883,7 +901,7 @@ begin
   Editor.OnClose := EditorClosed;
   Editor.Border:= brdSizable;
   Editor.Margin:= 5;
-  Editor.Padding:= 5;
+  Editor.Padding := 5;
   Editor.Align := alClient;
   Editor.OnSave := EditorSave;
 
@@ -891,6 +909,7 @@ begin
   //follows window resizes. Hidden until the user presses F4.
   FFileList := TTyroFileList.Create(Main);
   FFileList.Name := 'FileList';
+  FFileList.Important := True;
   FFileList.PlaceHolder := 'No Files';
   FFileList.BoundsRect := Rect(0, 0, 360, 280);
   FFileList.Visible := False;
@@ -950,11 +969,14 @@ begin
   RayLib.InitWindow(AWidth, AHeight, PUTF8Char(Title));
   FWidth := AWidth;
   FHeight := AHeight;
-  //MainPrepareCanvas;
-  Board := TTyroTextureCanvas.Create(AWidth - Margin * 2, AHeight - Margin * 2);
-  //Main covers the board area: the window inset by Margin on every side, the
-  //same rect ResizeWindow applies when the window is resized.
+  //Board is a render-texture: script draw commands run inside Board.BeginDraw
+  //during ProcessQueue and are composited by Board.PostDraw inside the camera.
+  Board := TTyroTextureCanvas.Create(AWidth - Margin * 2, AHeight - Margin * 2, True);
+
+  Main.Margin := Margin;
   Main.BoundsRect := Rect(0, 0, AWidth, AHeight);
+  //The script draws through Engine.Main.Canvas during ProcessQueue, which runs
+  //before the first Paint: make sure the canvas exists (and is sized) now.
   FPrepared := True;
 end;
 
@@ -1156,9 +1178,6 @@ begin
   // to execute it in the script thread.
   if RayLib.IsKeyPressed(KEY_F4) then
     ToggleFileList;
-  // Handle ESC to hide console when it's active and focused
-  if (Console.Visible) and Console.Focused and RayLib.IsKeyPressed(KEY_ESCAPE) then
-    HideConsole;
 
   if Main.FocusedControl = nil then
     Exit;
@@ -1226,10 +1245,11 @@ begin
   FWidth := AWidth;
   FHeight := AHeight;
 
-  if Main <> nil then
-    Main.BoundsRect := Rect(0, 0, AWidth , AHeight);
-  if Board <> nil then
-    Board.Resize(AWidth - Margin * 2, AHeight - Margin * 2);
+  Main.Margin := Margin;
+  Main.BoundsRect := Rect(0, 0, AWidth , AHeight);
+    //Keep the script canvas in step with the window so a resize does not leave
+    //script draw commands hitting a canvas sized for the old window.
+  Board.Resize(AWidth - Margin * 2, AHeight - Margin * 2);
 end;
 
 procedure TTyroEngine.Stop;
@@ -1556,13 +1576,6 @@ begin
     Log.WriteLn('Type of file not found: ' + ScriptFile);
 end;
 
-//True for the controls the engine creates itself and that therefore outlive a run
-function TTyroEngine.EngineControl(AControl: TTyroLayout): Boolean;
-begin
-  Result := (AControl = Console) or (AControl = Output) or
-    (AControl = Editor) or (AControl = FFileList);
-end;
-
 //Free the controls the previous run created, so a rerun does not draw the old UI
 //under the new one. Only the controls the engine owns (console, output, editor,
 //file picker) are kept: they are created once and hold engine state, not script
@@ -1575,14 +1588,14 @@ begin
   //disappear. SetFocusedControl calls FocusChanged on the control it replaces, so
   //the focus has to go while the old control is still alive. An engine control is
   //staying, and so keeps both.
-  if (Main.FocusedControl <> nil) and not EngineControl(Main.FocusedControl) then
+  if (Main.FocusedControl <> nil) and not Main.FocusedControl.Important then
     Main.FocusedControl := nil;
-  if (FControlCapture <> nil) and not EngineControl(FControlCapture) then
+  if (FControlCapture <> nil) and not FControlCapture.Important then
     FControlCapture := nil;
   //A freed control removes itself from Controls (TTyroControl.Destroy clears its
   //parent), so walking backwards keeps the remaining indexes valid.
   for i := Main.Controls.Count - 1 downto 0 do
-    if not EngineControl(Main.Controls[i]) then
+    if not Main.Controls[i].Important then
       Main.Controls[i].Free;
 end;
 
@@ -1949,6 +1962,11 @@ begin
   Result := '';
   if (ItemIndex >= 0) and (ItemIndex < Items.Count) and (FDirectory <> '') then
     Result := IncludePathDelimiter(FDirectory) + Items[ItemIndex];
+end;
+
+destructor TTyroFileList.Destroy;
+begin
+  inherited;
 end;
 
 procedure TTyroFileList.KeyDown(var Key: TKeyboardKey; Shift: TShiftState);

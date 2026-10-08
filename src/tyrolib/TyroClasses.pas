@@ -17,7 +17,7 @@ interface
 
 uses
   Classes, SysUtils, Types, SyncObjs,
-  mnClasses, mnUtils, mnLogs, mnConfigs,
+  mnClasses, mnUtils, mnLogs, mnConfigs, mnTypes,
   RayLib, RayClasses,
   Melodies, TyroSounds;
 
@@ -198,7 +198,7 @@ type
   }
   TTyroCanvas = class abstract(TObject)
   private
-    FOriginPoint: TPoint;
+    FOrigin: TPoint;
     FCurrentPoint: TPoint;
     FPenColor: TColor;
     FBackColor: TColor;
@@ -219,7 +219,8 @@ type
     destructor Destroy; override;
 
     procedure SetCurrent(X, Y: Integer);
-    procedure SetOrigin(X, Y: Integer);
+    procedure SetOrigin(X, Y: Integer); overload;
+    procedure SetOrigin(D: Integer); overload;
     procedure ResetOrigin;
     procedure BeginDraw; virtual;
     procedure EndDraw; virtual;
@@ -236,19 +237,20 @@ type
     procedure DrawLineF(X1, Y1, X2, Y2: Single); overload;
 
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
-    procedure FillRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor); overload;
-    procedure FillRectangle(Rect: TRect; Color: TColor); overload;
+    procedure FillRect(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor); overload;
+    procedure FillRect(Rect: TRect; Color: TColor); overload;
     procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(ARectangle: TRectangle; Color: TColor; Fill: Boolean); overload;
 
-    procedure FillRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor); overload;
-    procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean); overload;
-    procedure DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
-    //Only outline
-    procedure DrawRect(ARectangle: TRect; Size: Integer; Color: TColor); overload;
-    procedure BeginClip(ARectangle: TRect);
+    procedure DrawRect(const ARect: TRect; const Color: TColor; Fill: Boolean); overload;
+    procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; const Color: TColor; Fill: Boolean); overload;
+    //Only inner outline
+    procedure DrawRect(const ARect: TRect; Size: Integer; const Color: TColor); overload;
+
+    //Screen coordinate
+    procedure BeginClip(const ARect: TRect);
     procedure EndClip;
 
     procedure Clear;
@@ -271,6 +273,7 @@ type
     property BackColor: TColor read FBackColor write SetBackColor;
     property Width: Integer read FWidth write SetWidth;
     property Height: Integer read FHeight write SetHeight;
+    property Origin:TPoint read FOrigin;
   end;
 
   TTyroTextureCanvas = class(TTyroCanvas)
@@ -318,12 +321,33 @@ type
     constructor Create(const AResName, AResType: string; const AResData: rawbytestring);
   end;
 
+  TColorSet = record
+    TextColor: TColor;
+    BackColor: TColor;
+  end;
+
+  TColorControl = record
+    TextColor: TColor;
+    BackColor: TColor;
+    BorderColor: TColor;
+  end;
+
+  { TTyroTheme }
+
+  TTyroTheme = class(TObject)
+  public
+    Control: TColorControl;
+    Window: TColorControl;
+    constructor Create;
+  end;
+
   { TTyroResources }
 
   TTyroResources = class(TmnNamedObjectList<TTyroResource>)
   protected
     procedure LoadConfig;
   public
+    Theme: TTyroTheme;
     Font: TRayFont;
     Config: TConfFile;
     WorkPath: utf8string;
@@ -339,9 +363,9 @@ type
     destructor Destroy; override;
   end;
 
-  function StrToColor(Value: String): TColor;
-  function IntToColor(I: Integer): TColor;
-  function ColorToInt(C: TColor): Integer;
+function StrToColor(Value: String): TColor;
+function IntToColor(I: Integer): TColor;
+function ColorToInt(C: TColor): Integer;
 
 { Codepoint helpers for UTF-8 strings }
 
@@ -560,10 +584,7 @@ begin
   FHeight := AHeight;
   FPenSize := 1;
   FPenColor := clBlack;
-  //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
-  //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
-//  FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
-  FBackColor := clFrenchSkyBlue;
+  FBackColor := Res.Theme.Window.BackColor;
 
   {BeginTextureMode(FTexture);
   ClearBackground(BackColor);
@@ -578,22 +599,27 @@ end;
 
 procedure TTyroCanvas.SetOrigin(X, Y: Integer);
 begin
-  FOriginPoint := Point(X, Y);
+  FOrigin := Point(X, Y);
+end;
+
+procedure TTyroCanvas.SetOrigin(D: Integer);
+begin
+  SetOrigin(D, D);
 end;
 
 procedure TTyroCanvas.ResetOrigin;
 begin
-  FOriginPoint := Point(0, 0);
+  FOrigin := Point(0, 0);
 end;
 
 function TTyroCanvas.OffsetRect(const ARect: TRect): TRectangle;
 begin
-  Result := RectangleOf(ARect.Left + FOriginPoint.X, ARect.Top + FOriginPoint.Y, ARect.Width, ARect.Height);
+  Result := RectangleOf(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height);
 end;
 
 function TTyroCanvas.OffsetRect(const ARect: TRectangle): TRectangle;
 begin
-  Result := RectangleOf(ARect.X + FOriginPoint.X, ARect.Y + FOriginPoint.Y, ARect.Width, ARect.Height);
+  Result := RectangleOf(ARect.X + FOrigin.X, ARect.Y + FOrigin.Y, ARect.Width, ARect.Height);
 end;
 
 procedure TTyroCanvas.SetCurrent(X, Y: Integer);
@@ -612,18 +638,18 @@ end;
 procedure TTyroCanvas.DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
 begin
   if Fill then
-    RayLib.DrawCircle(X + FOriginPoint.X, Y + FOriginPoint.Y, R, Color)
+    RayLib.DrawCircle(X + FOrigin.X, Y + FOrigin.Y, R, Color)
   else
-    RayLib.DrawCircleLines(X + FOriginPoint.X, Y + FOriginPoint.Y, R, Color);
+    RayLib.DrawCircleLines(X + FOrigin.X, Y + FOrigin.Y, R, Color);
   SetCurrent(X, Y);
 end;
 
 procedure TTyroCanvas.DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
 begin
   if Fill then
-    RayLib.DrawRectangle(X + FOriginPoint.X, Y + FOriginPoint.Y, AWidth, AHeight, Color)
+    RayLib.DrawRectangle(X + FOrigin.X, Y + FOrigin.Y, AWidth, AHeight, Color)
   else
-    RayLib.DrawRectangleLinesEx(RectangleOf(X + FOriginPoint.X, Y + FOriginPoint.Y, AWidth, AHeight), PenSize, Color);
+    RayLib.DrawRectangleLinesEx(RectangleOf(X + FOrigin.X, Y + FOrigin.Y, AWidth, AHeight), PenSize, Color);
   SetCurrent(X + AWidth, Y + AHeight);
 end;
 
@@ -632,25 +658,25 @@ begin
   DrawRectangle(ARectangle.Left, ARectangle.Top, ARectangle.Width, ARectangle.Height, Color, Fill);
 end;
 
-procedure TTyroCanvas.DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor; Fill: Boolean);
+procedure TTyroCanvas.DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; const Color: TColor; Fill: Boolean);
 begin
   DrawRectangle(ALeft, ATop, ARight - ALeft, ABottom - ATop, Color, Fill);
 end;
 
-procedure TTyroCanvas.DrawRect(ARectangle: TRect; Color: TColor; Fill: Boolean);
+procedure TTyroCanvas.DrawRect(const ARect: TRect; const Color: TColor; Fill: Boolean);
 begin
-  DrawRect(ARectangle.Left, ARectangle.Top, ARectangle.Right, ARectangle.Bottom, Color, Fill);
+  DrawRect(ARect.Left, ARect.Top, ARect.Right, ARect.Bottom, Color, Fill);
 end;
 
-procedure TTyroCanvas.DrawRect(ARectangle: TRect; Size: Integer; Color: TColor);
+procedure TTyroCanvas.DrawRect(const ARect: TRect; Size: Integer; const Color: TColor);
 begin
-  RayLib.DrawRectangleLinesEx(RectangleOf(ARectangle.Left + FOriginPoint.X, ARectangle.Top + FOriginPoint.Y, ARectangle.Width-Size, ARectangle.Height-Size), Size, Color);
-  SetCurrent(ARectangle.Right, ARectangle.Bottom);
+  RayLib.DrawRectangleLinesEx(RectangleOf(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height), Size, Color);
+  SetCurrent(ARect.Right, ARect.Bottom);
 end;
 
-procedure TTyroCanvas.BeginClip(ARectangle: TRect);
+procedure TTyroCanvas.BeginClip(const ARect: TRect);
 begin
-  BeginScissorMode(ARectangle.Left + FOriginPoint.X, ARectangle.Top + FOriginPoint.Y, ARectangle.Width, ARectangle.Height);
+  BeginScissorMode(ARect.Left, ARect.Top, ARect.Width, ARect.Height);
 end;
 
 procedure TTyroCanvas.EndClip;
@@ -670,11 +696,6 @@ begin
   SetCurrent(Round(ARectangle.X + ARectangle.Width), Round(ARectangle.Y + ARectangle.Height));
 end;
 
-procedure TTyroCanvas.FillRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; Color: TColor);
-begin
-  FillRectangle(ALeft, ATop, ARight - ALeft, ABottom - ATop, Color);
-end;
-
 procedure TTyroCanvas.DrawRectangle(X: Single; Y: Single; AWidth: Single;
   AHeight: Single; Color: TColor; Fill: Boolean);
 begin
@@ -683,23 +704,23 @@ end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: utf8string; Color: TColor);
 begin
-  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginPoint.X, y + FOriginPoint.Y), Res.Font.Height, 0, Color);
+  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(S), Vector2Of(x + FOrigin.X, y + FOrigin.Y), Res.Font.Height, 0, Color);
 end;
 
 procedure TTyroCanvas.DrawText(X, Y: Single; S: utf8string; Color: TColor);
 begin
-  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(S), Vector2Of(x + FOriginPoint.X, y + FOriginPoint.Y), Res.Font.Height, 0, Color);
+  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(S), Vector2Of(x + FOrigin.X, y + FOrigin.Y), Res.Font.Height, 0, Color);
 end;
 
 procedure TTyroCanvas.DrawPixel(X, Y: Integer; Color: TColor);
 begin
-  RayLib.DrawPixel(X + FOriginPoint.X, Y + FOriginPoint.Y, Color);
+  RayLib.DrawPixel(X + FOrigin.X, Y + FOrigin.Y, Color);
   SetCurrent(X, Y);
 end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
 begin
-  RayLib.DrawLineEx(Vector2Of(X1 + FOriginPoint.X, Y1 + FOriginPoint.Y), Vector2Of(X2 + FOriginPoint.X, Y2 + FOriginPoint.Y), PenSize, Color);
+  RayLib.DrawLineEx(Vector2Of(X1 + FOrigin.X, Y1 + FOrigin.Y), Vector2Of(X2 + FOrigin.X, Y2 + FOrigin.Y), PenSize, Color);
   SetCurrent(X2, Y2);
 end;
 
@@ -715,7 +736,7 @@ end;
 
 procedure TTyroCanvas.DrawLineF(X1, Y1, X2, Y2: Single; Color: TColor);
 begin
-  DrawLineEx(TVector2.Create(X1 + FOriginPoint.X, Y1 + FOriginPoint.Y), TVector2.Create(X2 + FOriginPoint.X, Y2 + FOriginPoint.Y), PenSize, Color);
+  DrawLineEx(TVector2.Create(X1 + FOrigin.X, Y1 + FOrigin.Y), TVector2.Create(X2 + FOrigin.X, Y2 + FOrigin.Y), PenSize, Color);
   SetCurrent(Round(X2), Round(Y2));
 end;
 
@@ -726,15 +747,15 @@ begin
   DrawLine(FCurrentPoint.X, FCurrentPoint.Y, X2, Y2, Color);
 end;
 
-procedure TTyroCanvas.FillRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor);
+procedure TTyroCanvas.FillRect(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor);
 begin
-  RayLib.DrawRectangle(X + FOriginPoint.X, Y + FOriginPoint.Y, AWidth, AHeight, Color);
+  RayLib.DrawRectangle(X + FOrigin.X, Y + FOrigin.Y, AWidth, AHeight, Color);
   SetCurrent(X + AWidth, Y + AHeight);
 end;
 
-procedure TTyroCanvas.FillRectangle(Rect: TRect; Color: TColor);
+procedure TTyroCanvas.FillRect(Rect: TRect; Color: TColor);
 begin
-  RayLib.DrawRectangle(Rect.Left + FOriginPoint.X, Rect.Top + FOriginPoint.Y, Rect.Width, Rect.Height, Color);
+  RayLib.DrawRectangle(Rect.Left + FOrigin.X, Rect.Top + FOrigin.Y, Rect.Width, Rect.Height, Color);
   SetCurrent(Rect.Right, Rect.Bottom);
 end;
 
@@ -902,7 +923,7 @@ begin
         SetAreaUniform;
     end;
     with FTexture do
-      RayLib.DrawTextureRec(Texture, TRectangle.Create(0, 0, Texture.Width, -Texture.height), Vector2Of(AX, AY), clWhite);
+      RayLib.DrawTextureRec(Texture, TRectangle.Create(0, 0, Texture.Width, -Texture.Height), Vector2Of(AX, AY), clWhite);
     if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
       RayLib.EndShaderMode;
   end;
@@ -1042,6 +1063,7 @@ begin
   AppName := ChangeFileExt(ExtractFileName(ParamStr(0)), '');
   WorkPath:= GetCurrentDir;
   Config := TConfFile.Create;
+  Theme := TTyroTheme.Create;
   Font := TRayFont.Create;
   {$include 'font.inc'}
   LoadConfig;
@@ -1050,6 +1072,7 @@ end;
 destructor TTyroResources.Destroy;
 begin
   FreeAndNil(Font);
+  FreeAndNil(Theme);
   FreeAndNil(Config);
   if Res = Self then
     Res := nil;
@@ -1180,9 +1203,26 @@ end;
 
 constructor TTyroResource.Create(const AResName, AResType: string; const AResData: rawbytestring);
 begin
+  inherited Create;
   Name := AResName;
   ResType := AResType;
   ResData := AResData;
+end;
+
+{ TTyroTheme }
+
+constructor TTyroTheme.Create;
+begin
+  //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
+  //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
+  //FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
+  Window.BackColor := clFrenchSkyBlue;
+  Window.TextColor := clBlack;
+  Window.BorderColor := clBlack;
+
+  Control.BackColor := clNearBlack;
+  Control.TextColor := clWhite;
+  Control.BorderColor := clRed; //clNearBlack;
 end;
 
 initialization

@@ -18,8 +18,7 @@ unit TyroTerminal;
  *    - holding a key auto-repeats it (text, backspace, arrows, history)
  *    - console.read() (Lua) works through StartRead/StopRead
  *
- *  TTyroOutput - the small script output panel (moved here from the old
- *  console unit).
+ *  TTyroOutput - the small script output panel.
  *
  *}
 
@@ -127,6 +126,8 @@ type
     function GetVisibleLines: Integer;
     function GetPromptX: Integer;
     function IsCommandName(const AWord: utf8string): Boolean;
+    procedure SetCharHeight(AValue: Integer);
+    procedure SetCharWidth(AValue: Integer);
     procedure SplitFirstWord(const S: utf8string; out ALeading, AWord, ARest: utf8string);
     procedure BuildInputRuns(out ARuns: TTermRuns);
     function CharAtPixel(AX: Integer): Integer;
@@ -198,8 +199,8 @@ type
     { All colors are control properties; code only reads these }
     property HighlightColor: TColor read FHighlightColor write FHighlightColor;
     property SelectionColor: TColor read FSelectionColor write FSelectionColor;
-    property CharWidth: Integer read FCharWidth write FCharWidth;
-    property CharHeight: Integer read FCharHeight write FCharHeight;
+    property CharWidth: Integer read FCharWidth write SetCharWidth;
+    property CharHeight: Integer read FCharHeight write SetCharHeight;
     property MaxLines: Integer read FMaxLines write FMaxLines;
 
     property CaretVisible: Boolean read FCaretVisible write SetCaretVisible;
@@ -368,6 +369,18 @@ begin
     if SameText(FCommandNames[i], AWord) then
       Exit(True);
   Result := False;
+end;
+
+procedure TTyroTerminal.SetCharHeight(AValue: Integer);
+begin
+  if FCharHeight=AValue then Exit;
+  FCharHeight:=AValue;
+end;
+
+procedure TTyroTerminal.SetCharWidth(AValue: Integer);
+begin
+  if FCharWidth=AValue then Exit;
+  FCharWidth:=AValue;
 end;
 
 procedure TTyroTerminal.SplitFirstWord(const S: utf8string; out ALeading, AWord, ARest: utf8string);

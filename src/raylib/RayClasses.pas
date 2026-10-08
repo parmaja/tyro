@@ -34,6 +34,13 @@ type
 
   TRectHelper = record helper for TRect
     function ToString: string;
+    procedure Inflate(D: Integer); overload;
+  end;
+
+  { TPointHelper }
+
+  TPointHelper = record helper for TPoint
+    function ToString: string;
   end;
 
   TRayObject = class(TObject)
@@ -467,6 +474,18 @@ end;
 function TRectHelper.ToString: string;
 begin
   Result := Format('(%d, %d, %d, %d)', [Self.Left, Self.Top, Self.Right, Self.Bottom]);
+end;
+
+procedure TRectHelper.Inflate(D: Integer);
+begin
+  InflateRect(Self, D, D);
+end;
+
+{ TPointHelper }
+
+function TPointHelper.ToString: string;
+begin
+  Result := Format('(%d, %d)', [Self.X, Self.Y]);
 end;
 
 { TRayUpdateList }

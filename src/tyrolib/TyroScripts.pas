@@ -1101,6 +1101,7 @@ begin
     NewControl := TTyroListBox.Create(Engine.Main)
   else if LName = 'image' then
     NewControl := TTyroImage.Create(Engine.Main);
+
   try
     if NewControl <> nil then
     begin

@@ -62,8 +62,8 @@ type
 
   TTyroControlStyle = (
     csClip,
+    csTexture, //Own Texture
     csOpaque,
-    csTexture, //TODO own texture not paint over main texture
     csFocus, //Can focus
     //* A held key auto-repeats: the last accepted key press stays armed while
     //* the physical key is down, then it is replayed every cKeyRepeatInterval
@@ -174,16 +174,19 @@ type
     property State: TTyroLayoutStates read FState;
     property Align: TAlign read FAlign write SetAlign;
     property Parent: TTyroLayout read FParent write SetParent;
+
     property Margin: Integer read FMargin write SetMargin;
     property Border: TBorder read FBorder write SetBorder;
     property Padding: Integer read FPadding write SetPadding;
-    //Real bounds control rect
+
     //DO NOT USE BoundsRect.Width and BoundsRect.Height or any member directly
+    //BoundsRect is Control read bounds in screen coordinate
     property BoundsRect: TRect read FBoundsRect write SetBoundsRect;
-    //Inflate the rect with margin and border
+    //Inner rect is same client rect but with screen coordinate
     property InnerRect: TRect read GetInnerRect;
-    //ClientRect always start from (0, 0)
+    //ClientRect always start from (0, 0) so it is InnerRect but shifted to (0, 0)
     property ClientRect: TRect read GetClientRect;
+
     property Width: Integer read GetWidth write SetWidth;
     property Height: Integer read GetHeight write SetHeight;
     property Visible: Boolean read FVisible write SetVisible;
@@ -264,6 +267,13 @@ type
     function CharToKey(const AChar: utf8string): TKeyboardKey;
     //* Shift state as it is right now, used for a replayed key.
     function CurrentShiftState: TShiftState;
+
+    //PaintBorder in screen coordinate
+    procedure DoPaintBorder(ACanvas: TTyroCanvas); virtual;
+    //PaintBackground in screen coordinate
+    procedure DoPaintBackground(ACanvas: TTyroCanvas); virtual;
+    //Paint in Client coordinate, shifted to 0, 0
+    procedure DoPaint(ACanvas: TTyroCanvas); virtual;
   public
     //* Text/caption of the control (buttons, labels, checkboxes, edits). The
     //* Lua controls table reads/writes it through these virtuals.
@@ -293,9 +303,7 @@ type
     procedure SetScrollPosition(Which: TScrollbarType; AValue: Integer; Visible: Boolean);
     procedure Scroll(Which: TScrollbarType; ScrollCode: TScrollCode; Pos: Integer); virtual;
 
-    procedure DoPaintBorder(ACanvas: TTyroCanvas); virtual;
-    procedure DoPaintBackground(ACanvas: TTyroCanvas); virtual;
-    procedure DoPaint(ACanvas: TTyroCanvas); virtual;
+    procedure InternalWindow(ACanvas: TTyroCanvas);
 
     procedure Created; override;
     property Window: TTyroWindow read FWindow;
@@ -385,6 +393,7 @@ type
     procedure SetText(const AValue: utf8string); override;
   public
     constructor Create(AParent: TTyroLayout); override;
+    destructor Destroy; override;
   end;
 
   { TTyroCheckBox }
@@ -552,7 +561,6 @@ type
     procedure SetFocusedControl(AValue: TTyroControl);
   protected
     procedure PrepareCanvas; virtual;
-    procedure PrepareCanvasResize; virtual;
     function CreateCanvas: TTyroCanvas; virtual;
   public
     constructor Create(AParent: TTyroLayout); overload; override;
@@ -741,14 +749,15 @@ end;
 function TTyroLayout.GetClientRect: TRect;
 begin
   Result := InnerRect;
-  //* ClientRect is relative to this control's WindowRect origin.
-  Result.Offset(-Result.Left, -Result.Top); //Because drawing will use Origin
+  Result.Offset(-Result.Left, -Result.Top);
 end;
 
 function TTyroLayout.GetInnerRect: TRect;
 begin
   Result := WindowRect;
   Result.Inflate(-OuterSize, -OuterSize);
+  if Name = 'Console' then
+    WriteLn(Name, ' ', OuterSize, ', ' , Result.ToString);
 end;
 
 constructor TTyroLayout.Create(AParent: TTyroLayout);
@@ -995,7 +1004,13 @@ begin
   inherited;
   Style := [];
   Border := brdNone;
+  BackColor := clBlank;
   BoundsRect := Rect(0, 0, 120, 24);
+end;
+
+destructor TTyroLabel.Destroy;
+begin
+  inherited Destroy;
 end;
 
 function TTyroLabel.GetText: utf8string;
@@ -1013,6 +1028,8 @@ var
   th: Single;
 begin
   inherited;
+  ACanvas.FillRect(ClientRect, BackColor);
+  Writeln(Name, ' ClientRect ', ClientRect.ToString);
   th := Res.Font.Height;
   ACanvas.DrawText(2, (ClientRect.Height - th) / 2, FCaption, ACanvas.PenColor);
 end;
@@ -1066,9 +1083,9 @@ begin
   box := Rect(r.Left, r.Top + (r.Height - boxSize) div 2, r.Left + boxSize, r.Top + (r.Height - boxSize) div 2 + boxSize);
 
   if FChecked then
-    ACanvas.FillRectangle(box, clSkyBlue)
+    ACanvas.FillRect(box, clSkyBlue)
   else
-    ACanvas.FillRectangle(box, clWhite);
+    ACanvas.FillRect(box, clWhite);
   //ACanvas.DrawRect(box, 1, clDarkGray);
   {if FHover then
     ACanvas.DrawRect(Rect(box.Left - 1, box.Top - 1, box.Right + 1, box.Bottom + 1), 1, clSkyBlue);   }
@@ -1314,7 +1331,7 @@ begin
   begin
     selX := 2 + Round(TextWidth(CPSub(FText, 0, a))) - FScrollPos;
     selW := Round(TextWidth(CPSub(FText, a, b - a)));
-    ACanvas.FillRectangle(selX + 1, 1, selW, r.Height - 2, clBlue.ReplaceAlpha(90));
+    ACanvas.FillRect(selX + 1, 1, selW, r.Height - 2, clBlue.ReplaceAlpha(90));
   end;
 
   if FText = '' then
@@ -1334,10 +1351,10 @@ begin
       caretW := 2;
       if FCaretPos < UTF8Length(FText) then
         caretW := Round(TextWidth(CPSub(FText, FCaretPos, 1)));
-      ACanvas.FillRectangle(caretX, r.Height - 3, caretW, 2, clBlack);
+      ACanvas.FillRect(caretX, r.Height - 3, caretW, 2, clBlack);
     end
     else
-      ACanvas.FillRectangle(caretX, 1, 1, r.Height - 2, clBlack);
+      ACanvas.FillRect(caretX, 1, 1, r.Height - 2, clBlack);
   end;
 end;
 
@@ -1899,7 +1916,7 @@ var
   th, ty: Single;
 begin
   if AIndex = FItemIndex then
-    ACanvas.FillRectangle(AItemRect, clSkyBlue);
+    ACanvas.FillRect(AItemRect, clSkyBlue);
   th := Res.Font.Height;
   ty := AItemRect.Top + (AItemRect.Height - th) / 2;
   if AIndex = FItemIndex then
@@ -1938,7 +1955,6 @@ end;
 constructor TTyroImage.Create(AParent: TTyroLayout);
 begin
   inherited;
-  Style := Style + [csTexture];
   Border := brdNone;
   FLoaded := False;
   FTexture := Default(TTexture2D);
@@ -2051,7 +2067,7 @@ begin
     else
     begin
       if hoverIdx = top + i then
-        ACanvas.FillRectangle(itemRect, clLightGray.ReplaceAlpha(90));
+        ACanvas.FillRect(itemRect, clLightGray.ReplaceAlpha(90));
       DoDrawItem(ACanvas, top + i, itemRect);
     end;
   end;
@@ -2122,7 +2138,7 @@ end;
 procedure TTyroControl.SetBackColor(AValue: TColor);
 begin
   if FBackColor=AValue then Exit;
-  FBackColor:=AValue;
+  FBackColor := AValue;
 end;
 
 procedure TTyroControl.SetFocused(AValue: Boolean);
@@ -2325,8 +2341,9 @@ end;
 
 procedure TTyroLayout.SetVisible(AValue: Boolean);
 begin
-  if FVisible=AValue then Exit;
-  FVisible:=AValue;
+  if FVisible=AValue then
+    Exit;
+  FVisible := AValue;
   VisibleChanged;
 end;
 
@@ -2593,58 +2610,50 @@ procedure TTyroControl.Invalidate;
 begin
 end;
 
+procedure TTyroControl.InternalWindow(ACanvas: TTyroCanvas);
+begin
+  ACanvas.ResetOrigin;
+  DoPaintBorder(ACanvas);
+  DoPaintBackground(ACanvas);
+  if csClip in Style then
+    ACanvas.BeginClip(WindowRect);
+  ACanvas.SetOrigin(WindowRect.Left + OuterSize, WindowRect.Top + OuterSize);
+  try
+    DoPaint(ACanvas);
+    PaintScrollBars(ACanvas);
+  finally
+    ACanvas.ResetOrigin;
+    if csClip in Style then
+      ACanvas.EndClip;
+  end;
+end;
+
 procedure TTyroControl.PaintWindow(ACanvas: TTyroCanvas);
 var
   aClientRect: TRect;
-  procedure PaintNow;
-  begin
-    ACanvas.ResetOrigin;
-    DoPaintBorder(Canvas);
-    DoPaintBackground(ACanvas);
-    ACanvas.SetOrigin(WindowRect.Left + aClientRect.Left, WindowRect.Top + aClientRect.Top);
-    if csClip in Style then
-      Canvas.BeginClip(aClientRect);
-    try
-      DoPaint(ACanvas);
-      PaintScrollBars(ACanvas);
-    finally
-      if csClip in Style then
-        Canvas.EndClip;
-      ACanvas.ResetOrigin;
-    end;
-  end;
-
 begin
   if Visible then
   begin
     aClientRect := ClientRect;
     if (aClientRect.Width <= 0) or (aClientRect.Height <= 0) then
       exit;
-    //* If this control uses its own texture (csTexture), paint directly to window canvas
-    //* without creating/blitting a separate control buffer over it.
-    if csTexture in Style then
-    begin
-      PaintNow;
-    end
-    else if PrepareCanvas then
+    if (csTexture in Style) and PrepareCanvas then
     begin
       //* Paint the control content into its own transparent texture buffer,
       //* then draw (blit) that buffer on top of the window canvas.
       Canvas.BeginDraw;
       Canvas.ClearBackground(clBlank);
       try
-        PaintNow;
+        InternalWindow(Canvas);
       finally
         Canvas.EndDraw;
       end;
-      {while aControl in Controls do
-        aControl.PaintWindow(ACanvas);}
       Canvas.PostDraw(WindowRect.Left, WindowRect.Top);
     end
     else
     begin
       //* No own texture could be created: paint directly as a fallback.
-      PaintNow;
+      InternalWindow(ACanvas);
     end;
   end;
 end;
@@ -2655,7 +2664,7 @@ var
 begin
   w := WindowRect.Width;
   h := WindowRect.Height;
-  Result := (w >= 1) and (h >= 1);
+  Result := (w >= 0) and (h >= 0);
   if not Result then
     Exit;
 
@@ -2737,9 +2746,15 @@ var
 begin
   if csOpaque in Style then
   begin
-    aRect := InnerRect;
-    aRect.Inflate(Padding, Padding);
-    ACanvas.DrawRectangle(aRect, BackColor, True);
+    aRect := WindowRect;
+    aRect.Inflate(-Margin - BorderSize);
+    if Name = 'Console' then
+    begin
+      Writeln(Name, ' Window ', WindowRect.ToString);
+      Writeln(Name, ' Background ', aRect.ToString);
+    end;
+
+    ACanvas.FillRect(aRect, BackColor);
   end;
 end;
 
@@ -2991,52 +3006,13 @@ end;
 
 procedure TTyroControl.DoPaintBorder(ACanvas: TTyroCanvas);
 var
-  baseColor, highlightColor: TColor;
-  activeSides: TTyroResizeSides;
-  w, h, bs: Integer;
+  aRect: TRect;
 begin
   if Border = brdNone then
     Exit;
-
-  //The border is painted in the control's own texture buffer, whose origin is
-  //its top-left corner (the client area starts at OuterSize, applied
-  //by the caller after DoPaintBorder runs).
-  w := ACanvas.Width;
-  h := ACanvas.Height;
-  bs := BorderSize;
-  if (w <= 0) or (h <= 0) or (bs <= 0) then
-    Exit;
-
-  baseColor := clDarkGray;
-
-  //Solid frame around the whole control.
-  ACanvas.FillRectangle(Rect(0, 0, w, bs), baseColor);
-  ACanvas.FillRectangle(Rect(0, h - bs, w, h), baseColor);
-  ACanvas.FillRectangle(Rect(0, bs, bs, h - bs), baseColor);
-  ACanvas.FillRectangle(Rect(w - bs, bs, w, h - bs), baseColor);
-
-  //Brighten the side under the cursor (or the one being dragged) so a sizable
-  //border advertises its resize handles.
-  if Border = brdSizable then
-  begin
-    highlightColor := clLightGray;
-    if FResizing then
-      activeSides := FResizeSides
-    else if (FLastMouseX >= 0) and (FLastMouseX < w) and
-            (FLastMouseY >= 0) and (FLastMouseY < h) then
-      activeSides := GetResizeSides(FLastMouseX, FLastMouseY)
-    else
-      activeSides := [];
-
-    if rsLeft in activeSides then
-      ACanvas.FillRectangle(Rect(0, 0, bs, h), highlightColor);
-    if rsTop in activeSides then
-      ACanvas.FillRectangle(Rect(0, 0, w, bs), highlightColor);
-    if rsRight in activeSides then
-      ACanvas.FillRectangle(Rect(w - bs, 0, w, h), highlightColor);
-    if rsBottom in activeSides then
-      ACanvas.FillRectangle(Rect(0, h - bs, w, h), highlightColor);
-  end;
+  aRect := WindowRect;
+  aRect.Inflate(-Margin, -Margin);
+  ACanvas.DrawRect(aRect, BorderSize, Res.Theme.Control.BorderColor);
 end;
 
 procedure TTyroControl.Created;
@@ -3053,7 +3029,6 @@ begin
   Created;
   //Do not clear csCreating here. The most-derived constructor has not returned
   //yet; TTyroLayout.AfterConstruction clears it only after full construction.
-  SetParent(AParent);
 end;
 
 destructor TTyroControl.Destroy;
@@ -3070,12 +3045,8 @@ end;
 procedure TTyroWindow.PrepareCanvas;
 begin
   if FCanvas = nil then
-    FCanvas := CreateCanvas;
-end;
-
-procedure TTyroWindow.PrepareCanvasResize;
-begin
-  if (FCanvas <> nil) and ((FCanvas.Width <> Width) or (FCanvas.Height <> Height)) then
+    FCanvas := CreateCanvas
+  else if (FCanvas.Width <> Width) or (FCanvas.Height <> Height) then
     FCanvas.Resize(Width, Height);
 end;
 
@@ -3097,17 +3068,18 @@ begin
   if FFocusedControl <> nil then
     FFocusedControl.FocusChanged;
   FFocusedControl :=AValue;
-  if FFocusedControl <> nil then
+  if FFocusedControl <> nil then //Yes again for new controls
     FFocusedControl.FocusChanged;
 end;
 
 procedure TTyroWindow.SetCanvas(AValue: TTyroCanvas);
 begin
-  if FCanvas =AValue then Exit;
+  if FCanvas =AValue then
+    Exit;
   //Replacing the canvas must not leak the previous one (the control-level
   //SetCanvas already follows this rule).
   FreeAndNil(FCanvas);
-  FCanvas :=AValue;
+  FCanvas := AValue;
 end;
 
 constructor TTyroWindow.Create(AParent: TTyroLayout);
@@ -3129,9 +3101,6 @@ begin
   if Visible then
   begin
     PrepareCanvas;
-    //Follow the window size (Main's BoundsRect changes on window resize); the
-    //canvas paints directly to the backbuffer, a stale size draws clipped.
-    PrepareCanvasResize;
     try
       for aControl in Controls do
         if not aControl.Important then
@@ -3144,9 +3113,6 @@ begin
         begin
           aControl.PaintWindow(Canvas);
         end;
-      //No PostDraw here: the window canvas has no own texture (TextureMode
-      //=False), it paints straight to the raylib backbuffer between
-      //BeginDrawing/EndDrawing, so there is nothing to blit.
     finally
     end;
   end;
