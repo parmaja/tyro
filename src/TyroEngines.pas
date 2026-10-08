@@ -862,7 +862,7 @@ begin
   Main.BoundsRect := Rect(0, 0, Width, Height);
   Main.Show;
 
-  with TTyroLabel.Create(Main) do
+  {with TTyroLabel.Create(Main) do
   begin
     Important := True;
     Name := 'Label';
@@ -871,7 +871,7 @@ begin
     BackColor := clBlue;
     BoundsRect := Rect(0, cDefaultWindowHeight-50, 50, cDefaultWindowHeight);
     Show;
-  end;
+  end;}
 
   Output := TTyroOutput.Create(Main);
   Output.Important := True;
@@ -882,10 +882,6 @@ begin
   Console.BoundsRect := Rect(0, 0, Width, Height div 2);
   Console.Important := True;
   Console.Border:= brdThick;
-  Console.BackColor := clNearBlack;
-  Console.Color := clLightGray;
-  Console.HighlightColor := clBlue;
-  Console.SelectionColor := clWhite;
   Console.Visible := False;
   Console.OnInput := ConsoleInput;
   Console.Margin:= 5;
@@ -899,7 +895,7 @@ begin
   Editor.BoundsRect := Rect(0, 0, 200, 200);
   Editor.Visible := False;
   Editor.OnClose := EditorClosed;
-  Editor.Border:= brdSizable;
+  Editor.Border:= brdThick;
   Editor.Margin:= 5;
   Editor.Padding := 5;
   Editor.Align := alClient;

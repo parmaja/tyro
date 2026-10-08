@@ -47,7 +47,7 @@ type
 
   { TSprite }
 
-  TSprite = class(TObject)
+  TSprite = class(TTyroObject)
   public
     Handle: Integer;
     Texture: TTexture2D;

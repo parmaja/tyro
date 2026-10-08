@@ -14,6 +14,6 @@ while i > 0 do
     canvas.circle(x, y, r, true)
     canvas.color = colors.black
     canvas.circle(x, y, r, false)
-    sleep(100)
+    sleep(50)
     i = i - 1
 end

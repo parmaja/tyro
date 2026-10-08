@@ -262,14 +262,14 @@ begin
   //csRepeatKeys replays a key (text, backspace, arrows, history) while it is
   //held down.
   Style := [csClip, csOpaque, csVScroll, csFocus, csRepeatKeys];
-  Color := clLightGray;
-  BackColor := clDarkGray;
+  Color := Res.Theme.Editor.TextColor;
+  BackColor := Res.Theme.Editor.BackColor;
+  FHighlightColor := Res.Theme.HighlightColor;
+  FSelectionColor := Res.Theme.SelectionColor;
 
   FCharWidth := CDefaultCharWidth;
   FCharHeight := CDefaultCharHeight;
   FMaxLines := CDefaultLineCount;
-  FHighlightColor := clYellow;
-  FSelectionColor := clWhite;
   FScrollBack := 0;
 
   FLines := TStringList.Create;

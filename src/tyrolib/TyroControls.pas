@@ -143,6 +143,7 @@ type
     FPadding: Integer;
     FParent: TTyroLayout;
     FBoundsRect: TRect;
+    FScripted: Boolean;
     FVisible: Boolean;
     FImportant: Boolean;
     FWindowRect: TRect;
@@ -219,6 +220,7 @@ type
     property Visible: Boolean read FVisible write SetVisible;
     //Paint it last, over other controls
     property Important: Boolean read FImportant write FImportant;
+    property Scripted: Boolean read FScripted write FScripted;
   end;
 
 
@@ -753,9 +755,9 @@ end;
 function TTyroLayout.BorderSize: Integer;
 begin
   case Border of
-    brdThin: Result := 1;
-    brdThick: Result := 2;
-    brdSizable: Result := 1;
+    brdThin: Result := Res.Theme.Border.Thin;
+    brdThick: Result := Res.Theme.Border.Thick;
+    brdSizable: Result := Res.Theme.Border.Thick;
     else
       Result := 0;
   end
@@ -988,7 +990,7 @@ end;
 procedure TTyroButton.DoPaint(ACanvas: TTyroCanvas);
 var
   r: TRectangle;
-  body, border, foreground: TColor;
+  body: TColor;
   tx, ty, tw, th: Single;
 begin
   inherited;
@@ -997,21 +999,19 @@ begin
     Exit;
 
   if FDown then
-    body := clGray
+    body := Res.Theme.Button.BackColor //TODO make it darker
   else if FHover then
-    body := clSkyBlue
+    body := Res.Theme.HighlightColor
   else
-    body := clLightgray;
+    body := Res.Theme.Button.BackColor;
 
-  border := clDarkGray;
-  foreground := clBlack;
   r.X := r.X + 2;
   r.Y := r.Y + 2;
   r.Width := r.Width - 4;
   r.Height := r.Height - 4;
 
   RayLib.DrawRectangleRounded(r, 0.5, 15, body);
-  RayLib.DrawRectangleRoundedLinesEx(r, 0.5, 15, 0.4, border);
+  RayLib.DrawRectangleRoundedLinesEx(r, 0.5, 15, 0.4, Res.Theme.Button.BorderColor);
 
   th := Res.Font.Height;
   tw := RayLib.MeasureTextEx(Res.Font.Data, PUTF8Char(FCaption), Res.Font.Height, 0).x;
@@ -1019,7 +1019,7 @@ begin
   ty := r.Y + (r.Height - th) / 2;
   if FDown then
     ty := ty + 0.1;
-  ACanvas.DrawText(tx, ty, FCaption, foreground);
+  ACanvas.DrawText(tx, ty, FCaption, Res.Theme.Button.TextColor);
 end;
 
 { TTyroLabel }

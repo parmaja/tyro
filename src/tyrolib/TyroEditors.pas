@@ -233,7 +233,7 @@ begin
   FSelecting := False;
   FMouseDown := False;
   FFileName := '';
-  BackColor := clDarkGray;
+  BackColor := Res.Theme.Editor.BackColor;
   SetBoundsRect(Rect(0, 0, 400, 300));
   RebuildRuns;
 end;
@@ -1621,7 +1621,6 @@ procedure TyroEditor.DrawStatus(ACanvas: TTyroCanvas);
 var
   tx, rx: string;
   sbY: Integer;
-  rx2, tx2: string;
   Mode: string;
 begin
   sbY := ClientRect.Height - GetStatusHeight;

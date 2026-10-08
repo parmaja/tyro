@@ -182,6 +182,16 @@ const
 
 type
 
+  { TTyroObject }
+
+  TTyroObject = class(TObject)
+  private
+    FScripted: Boolean;
+  public
+    procedure SetAsScripted;
+    property Scripted: Boolean read FScripted;
+  end;
+
   TTyroCanvas = class;
 
   { TTyroCanvas }
@@ -324,18 +334,37 @@ type
     BackColor: TColor;
   end;
 
-  TColorControl = record
+  TThemeControl = record
     TextColor: TColor;
     BackColor: TColor;
     BorderColor: TColor;
   end;
 
+  TThemeEditor = record
+    TextColor: TColor;
+    BackColor: TColor;
+    BorderColor: TColor;
+    GutterColor: TColor;
+    SelectionColor: TColor;
+  end;
+
+  TThemeBorder = record
+    Thin: Integer;
+    Thick: Integer;
+  end;
+
+
   { TTyroTheme }
 
   TTyroTheme = class(TObject)
   public
-    Control: TColorControl;
-    Window: TColorControl;
+    Control: TThemeControl;
+    Window: TThemeControl;
+    Button: TThemeControl;
+    Editor: TThemeEditor;
+    Border: TThemeBorder;
+    HighlightColor: TColor; //Or Active
+    SelectionColor: TColor;
     constructor Create;
   end;
 
@@ -530,6 +559,13 @@ end;
 function UTF8Delete(const S: string; ACol, ACount: Integer): string;
 begin
   Result := UTF8SubStr(S, 0, ACol) + UTF8SubStr(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
+end;
+
+{ TTyroObject }
+
+procedure TTyroObject.SetAsScripted;
+begin
+  FScripted := True;
 end;
 
 { TTyroCanvas }
@@ -1202,9 +1238,24 @@ begin
   Window.TextColor := clBlack;
   Window.BorderColor := clBlack;
 
-  Control.BackColor := clNearBlack;
-  Control.TextColor := clWhite;
-  Control.BorderColor := clRed; //clNearBlack;
+  Control.BackColor := clWhite;
+  Control.TextColor := clBlack;
+  Control.BorderColor := clBlue;
+
+  Button.BackColor := clLightGray;
+  Button.TextColor := clBlack;
+  Button.BorderColor := clDarkGray;
+
+  Editor.TextColor := clWhite;
+  Editor.BackColor := clNearBlack;
+  Editor.BorderColor := Control.BorderColor;
+  Editor.GutterColor := clBlack;
+
+  Border.Thin := 1;
+  Border.Thick := 2;
+
+  HighlightColor := clBlue;
+  SelectionColor := clSkyBlue;
 end;
 
 initialization
