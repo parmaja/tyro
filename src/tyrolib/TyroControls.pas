@@ -4,9 +4,36 @@ unit TyroControls;
  *
  * @license   MIT
  *
- * @author    Zaher Dirkey 
+ * @author    Zaher Dirkey zaher@github.com
  *
  *}
+
+{---------------------------------------------------------------
+
+  Margin: always transparent, not painted
+  Border: Have own color, default from Theme
+  Padding: Color as BackColor as like Content
+  Content/ClientRect: Using BackColor for background
+
+      ┌─────────────────────────────────────────────┐
+      │                   Margin                    │
+      │   ███████████████████████████████████████   │
+      │   ███████████████ Border ████████████████   │
+      │   ████                              ░████   │
+      │   ████            Padding           ░████   │
+      │   ████    ┌─────────────────────┐   ░████   │
+      │   ████    │                     │   ░████   │
+      │   ████    │       Content       │   ░████   │
+      │   ████    │                     │   ░████   │
+      │   ████    └─────────────────────┘   ░████   │
+      │   ████                              ░████   │
+      │   ████░░ Scroll Bars ░░░░░░░░░░░░░░░░████   │
+      │   ███████████████████████████████████████   │
+      │   ███████████████████████████████████████   │
+      │                                             │
+      └─────────────────────────────────────────────┘
+
+----------------------------------------------------------------}
 
 {$ifdef FPC}
 {$mode delphi}
@@ -756,8 +783,6 @@ function TTyroLayout.GetInnerRect: TRect;
 begin
   Result := WindowRect;
   Result.Inflate(-OuterSize, -OuterSize);
-  if Name = 'Console' then
-    WriteLn(Name, ' ', OuterSize, ', ' , Result.ToString);
 end;
 
 constructor TTyroLayout.Create(AParent: TTyroLayout);
@@ -938,7 +963,7 @@ begin
   inherited;
   r := ClientRect;
   //r.Inflate(-2,-2);
-  ACanvas.DrawRectangle(r, BackColor, True);
+  ACanvas.DrawRect(r, BackColor, True);
 end;
 
 { TTyroButton }
@@ -1029,7 +1054,6 @@ var
 begin
   inherited;
   ACanvas.FillRect(ClientRect, BackColor);
-  Writeln(Name, ' ClientRect ', ClientRect.ToString);
   th := Res.Font.Height;
   ACanvas.DrawText(2, (ClientRect.Height - th) / 2, FCaption, ACanvas.PenColor);
 end;
@@ -2582,7 +2606,7 @@ begin
   if (Track.Right <= Track.Left) or (Track.Bottom <= Track.Top) then
     Exit;
   TrackColor := clDarkGray.ReplaceAlpha(140);
-  ACanvas.DrawRectangle(Track, TrackColor, True);
+  ACanvas.DrawRect(Track, TrackColor, True);
   Thumb := ScrollThumbRect(Which);
   if (Thumb.Right <= Thumb.Left) or (Thumb.Bottom <= Thumb.Top) then
     Exit;
@@ -2594,7 +2618,7 @@ begin
     ThumbColor := clLightgray
   else
     ThumbColor := clLightgray.ReplaceAlpha(170);
-  ACanvas.DrawRectangle(Thumb, ThumbColor, True);
+  ACanvas.DrawRect(Thumb, ThumbColor, True);
   ACanvas.DrawRect(Thumb, 1, clDarkGray);
 end;
 
@@ -2748,12 +2772,6 @@ begin
   begin
     aRect := WindowRect;
     aRect.Inflate(-Margin - BorderSize);
-    if Name = 'Console' then
-    begin
-      Writeln(Name, ' Window ', WindowRect.ToString);
-      Writeln(Name, ' Background ', aRect.ToString);
-    end;
-
     ACanvas.FillRect(aRect, BackColor);
   end;
 end;

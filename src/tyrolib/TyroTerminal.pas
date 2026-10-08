@@ -1580,7 +1580,7 @@ end;
 procedure TTyroTerminal.DrawCaret(ACanvas: TTyroCanvas; AY: Integer);
 var
   x: Integer;
-  col: TColor;
+  aColor: TColor;
 begin
   if not (FInputOn and Focused and FCaretVisible) then
     Exit;
@@ -1591,12 +1591,12 @@ begin
     x := 0;
   if x >= ClientRect.Width then
     Exit;
-  col := Color.SetAlpha(Round(Color.RGBA.Alpha * FCaretDim));
+  aColor := Color.SetAlpha(Round(Color.RGBA.Alpha * FCaretDim));
   if FOverwrite then
     //overwrite is shown by an underline, the sign every other editor uses
-    ACanvas.FillRect(x, AY + FCharHeight - 2, x + FCharWidth, AY + FCharHeight, col)
+    ACanvas.FillRect(x, AY + FCharHeight - 2, FCharWidth, 2, aColor)
   else
-    ACanvas.FillRect(x, AY, x + 2, AY + FCharHeight, col);
+    ACanvas.FillRect(x, AY, 2, FCharHeight, aColor);
 end;
 
 procedure TTyroTerminal.DoPaint(ACanvas: TTyroCanvas);

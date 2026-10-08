@@ -235,17 +235,15 @@ type
     procedure DrawLine(X1, Y1, X2, Y2: Integer); overload;
     procedure DrawLineF(X1, Y1, X2, Y2: Single; Color: TColor); overload;
     procedure DrawLineF(X1, Y1, X2, Y2: Single); overload;
-
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
+
     procedure FillRect(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor); overload;
     procedure FillRect(Rect: TRect; Color: TColor); overload;
-    procedure DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean); overload;
-    procedure DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean); overload;
+
     procedure DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor; Fill: Boolean); overload;
     procedure DrawRectangle(ARectangle: TRectangle; Color: TColor; Fill: Boolean); overload;
 
     procedure DrawRect(const ARect: TRect; const Color: TColor; Fill: Boolean); overload;
-    procedure DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; const Color: TColor; Fill: Boolean); overload;
     //Only inner outline
     procedure DrawRect(const ARect: TRect; Size: Integer; const Color: TColor); overload;
 
@@ -644,28 +642,13 @@ begin
   SetCurrent(X, Y);
 end;
 
-procedure TTyroCanvas.DrawRectangle(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor; Fill: Boolean);
-begin
-  if Fill then
-    RayLib.DrawRectangle(X + FOrigin.X, Y + FOrigin.Y, AWidth, AHeight, Color)
-  else
-    RayLib.DrawRectangleLinesEx(RectangleOf(X + FOrigin.X, Y + FOrigin.Y, AWidth, AHeight), PenSize, Color);
-  SetCurrent(X + AWidth, Y + AHeight);
-end;
-
-procedure TTyroCanvas.DrawRectangle(ARectangle: TRect; Color: TColor; Fill: Boolean);
-begin
-  DrawRectangle(ARectangle.Left, ARectangle.Top, ARectangle.Width, ARectangle.Height, Color, Fill);
-end;
-
-procedure TTyroCanvas.DrawRect(ALeft: Integer; ATop: Integer; ARight: Integer; ABottom: Integer; const Color: TColor; Fill: Boolean);
-begin
-  DrawRectangle(ALeft, ATop, ARight - ALeft, ABottom - ATop, Color, Fill);
-end;
-
 procedure TTyroCanvas.DrawRect(const ARect: TRect; const Color: TColor; Fill: Boolean);
 begin
-  DrawRect(ARect.Left, ARect.Top, ARect.Right, ARect.Bottom, Color, Fill);
+  if Fill then
+    RayLib.DrawRectangle(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height, Color)
+  else
+    RayLib.DrawRectangleLinesEx(RectangleOf(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height), PenSize, Color);
+  SetCurrent(ARect.Right, ARect.Bottom);
 end;
 
 procedure TTyroCanvas.DrawRect(const ARect: TRect; Size: Integer; const Color: TColor);
@@ -696,8 +679,7 @@ begin
   SetCurrent(Round(ARectangle.X + ARectangle.Width), Round(ARectangle.Y + ARectangle.Height));
 end;
 
-procedure TTyroCanvas.DrawRectangle(X: Single; Y: Single; AWidth: Single;
-  AHeight: Single; Color: TColor; Fill: Boolean);
+procedure TTyroCanvas.DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor; Fill: Boolean);
 begin
   DrawRectangle(RectangleOf(X, Y, AWidth, AHeight), Color, Fill)
 end;
