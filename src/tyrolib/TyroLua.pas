@@ -523,6 +523,27 @@ begin
   Result := 0;
 end;
 
+// enter(): hold the processing queue. The drawing commands the script queues
+// after this call are NOT executed by the main loop until leave() balances it,
+// so the whole group between enter() and leave() is drawn at one drawing
+// cycle. Nested enter() calls count up and need the same number of leave()s.
+function enter_func(L: Plua_State): integer; cdecl;
+begin
+  if Engine <> nil then
+    Engine.HoldQueue;
+  Result := 0;
+end;
+
+// leave(): release the hold taken by enter(). When the last hold is released
+// the main loop drains the whole held group in the next drawing cycle without
+// stopping at the per-frame time budget.
+function leave_func(L: Plua_State): integer; cdecl;
+begin
+  if Engine <> nil then
+    Engine.ReleaseQueue;
+  Result := 0;
+end;
+
 // True when FileName already carries a drive ("C:\x", "C:x") or a UNC root
 // ("\\host\x"), and so has to be used as it stands. Pasting such a name onto a
 // base folder only builds a name that cannot exist, and saying "outside the
@@ -1238,6 +1259,11 @@ begin
   Lua.State.RegisterGlobal('exit', Exit_func);
   Lua.State.RegisterGlobal('clock', Clock_func);
   Lua.State.RegisterGlobal('time', Time_func);
+
+  //enter/leave: hold the drawing queue so the commands queued in between are
+  //all drawn at one drawing cycle instead of being spread over frames
+  Lua.State.RegisterGlobal('enter', enter_func);
+  Lua.State.RegisterGlobal('leave', leave_func);
 
   //file access: openfile(name [, mode]) -> file handle, or nil + error
   //This is the only way a script reaches the file system; the io/os libraries

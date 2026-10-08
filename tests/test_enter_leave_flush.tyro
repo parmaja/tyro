@@ -1,0 +1,38 @@
+--======================================================================
+--  test_enter_leave_flush.tyro - prove the held batch is drawn after leave()
+--======================================================================
+--  Control: a magenta marker drawn OUTSIDE the hold on frame 1 proves the
+--  screenshot pipeline works. The 10 white bars queued while the hold is open
+--  must appear only after leave(). The result file records the run; the
+--  screenshot is checked for white pixels afterwards.
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_enter_leave_flush_result.txt", "w")
+out:write("start\n")
+
+-- control marker: drawn through the normal queue path
+canvas.color = colors.purple
+canvas.rectangle(5, 5, 30, 30, true)
+local okc = cycle
+
+-- hold the queue open for 10 frames, one white bar per frame
+enter()
+for i = 1, 10 do
+  canvas.color = colors.white
+  canvas.rectangle(20 + i * 15, 100, 10, 60, true)
+  out:write("queued bar ", i, "\n")
+  local ok = cycle
+end
+out:write("releasing\n")
+leave()
+
+-- wait one frame (the flush draws at the next ProcessQueue), then shoot
+local ok = cycle
+screenshot("enter_group_proof.png")
+local ok2 = cycle
+local ok3 = cycle
+out:write("SMOKE-OK\n")
+out:close()
+exit()

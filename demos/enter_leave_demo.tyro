@@ -1,0 +1,35 @@
+--======================================================================
+--  enter_leave_demo.tyro - group drawing with enter() / leave()
+--======================================================================
+--  Demonstrates: enter() holds the processing queue, leave() releases it.
+--  Every drawing command queued between enter() and leave() is executed at
+--  one drawing cycle, so the group appears on screen together (no partial
+--  groups spread over frames).
+--======================================================================
+
+window.show(640, 480)
+
+frame = 0
+
+while cycle do
+  -- commands outside the group are drawn as usual, one frame at a time
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+
+  -- the whole batch below lands in a single drawing cycle
+  enter()
+
+  for i = 0, 11 do
+    -- palette colors rotate with the frame, the batch moves as one block
+    canvas.color = colors[(i + frame) % colors.count]
+    canvas.rectangle(20 + i * 50, 100, 40, 40, true)
+  end
+
+  canvas.color = colors.white
+  canvas.text(10, 10, "enter/leave demo - the 12 squares are drawn as one group")
+  canvas.text(10, 30, "frame: " .. frame)
+
+  leave()
+
+  frame = frame + 1
+end

@@ -193,6 +193,15 @@ type
     //* Set once the engine has shown the window by itself after a headless
     //script finished without asking for one, so it happens a single time.
     FWindowAutoShown: Boolean;
+    //* Lua enter()/leave() queue grouping. FQueueHold counts the open enter()
+    //* calls: while it is above zero ProcessQueue stops executing commands, so
+    //* a whole group of draw calls is drawn at one drawing cycle instead of
+    //* being spread over frames. FQueueFlush is the one-shot flag leave() sets
+    //* to let the next ProcessQueue pass drain the held group without the
+    //* per-frame time budget. Both are touched from the script thread, so all
+    //* access goes through TInterlocked.
+    FQueueHold: LongInt;
+    FQueueFlush: LongInt;
     FRunning: LongInt;
     //* Screen shake state (see Shake). FShakeTime counts the seconds left,
     //* FShakeDuration the full length of the current shake so the amplitude can
@@ -290,6 +299,17 @@ type
     procedure StopShake;
     //* True while a shake is still running.
     property Shaking: Boolean read GetShaking;
+
+    //* Lua enter(): hold the processing queue. Commands keep being queued by
+    //* the script, but ProcessQueue stops executing them until ReleaseQueue
+    //* balances the hold, so the group is drawn at one drawing cycle. Nested
+    //* enter() calls count up; safe to call from any thread.
+    procedure HoldQueue;
+    //* Lua leave(): release the hold taken by HoldQueue. When the last hold is
+    //* released the next ProcessQueue pass drains the whole held group in one
+    //* go (no per-frame time budget). Safe to call from any thread; an
+    //* unbalanced leave() (more leaves than enters) is ignored.
+    procedure ReleaseQueue;
 
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
@@ -681,6 +701,24 @@ begin
   end;
 end;
 
+procedure TTyroEngine.HoldQueue;
+begin
+  TInterlocked.Increment(FQueueHold);
+end;
+
+procedure TTyroEngine.ReleaseQueue;
+begin
+  if TInterlocked.Decrement(FQueueHold) <= 0 then
+  begin
+    //Clamp an unbalanced leave() back to zero ...
+    TInterlocked.Exchange(FQueueHold, 0);
+    //... and arm the one-shot flush: the next ProcessQueue pass drains the
+    //whole held group in a single drawing cycle, without stopping at the
+    //per-frame time budget the streaming drain uses.
+    TInterlocked.Exchange(FQueueFlush, 1);
+  end;
+end;
+
 procedure TTyroEngine.SetTitle(AValue: string);
 begin
   AValue := 'Tyro - ' + AValue;
@@ -726,9 +764,24 @@ var
   p: TQueueObject;
   fpd: Double;
   ft, ft2: Double;
+  flush: Boolean;
 begin
   if Board <> nil then
   begin
+    //A script that called enter() holds the queue: commands keep piling up,
+    //but nothing is drawn until leave() releases the hold. A holder that has
+    //already gone (a script that errored or was stopped between enter and
+    //leave) is released here so it cannot lock drawing forever; the console
+    //REPL has no worker thread, so it is not covered by that self-healing.
+    if TInterlocked.Add(FQueueHold, 0) > 0 then
+    begin
+      if (FScriptThread = nil) or (not FScriptThread.Active) then
+        TInterlocked.Exchange(FQueueHold, 0);
+      Exit;
+    end;
+    //leave() asked for it: this pass ignores the frame time budget, so the
+    //whole group queued between enter() and leave() lands in one cycle.
+    flush := TInterlocked.Exchange(FQueueFlush, 0) <> 0;
     CanvasLock.Enter;
     try
       //Nothing queued: skip the whole texture-mode switch. Binding and
@@ -764,7 +817,10 @@ begin
         end;
         p.Free;
         ft2 := GetTime() - ft;
-        if ft2 >= fpd then
+        //Stop the pass at the frame time budget unless a flush was armed, and
+        //also as soon as a fresh enter() is seen, so a command queued after
+        //the hold began is never executed by this already-running pass.
+        if ((not flush) and (ft2 >= fpd)) or (TInterlocked.Add(FQueueHold, 0) > 0) then
         begin
           break;
         end;
@@ -1282,6 +1338,10 @@ begin
   finally
     Lock.Leave;
   end;
+  //A run stopped between enter() and leave() must not leave the hold behind:
+  //the next run would find its drawing frozen.
+  TInterlocked.Exchange(FQueueHold, 0);
+  TInterlocked.Exchange(FQueueFlush, 0);
 end;
 
 procedure TTyroEngine.Terminate;
@@ -1676,6 +1736,9 @@ begin
   finally
     Lock.Leave;
   end;
+  //A rerun must not inherit a hold the stopped run never balanced with leave().
+  TInterlocked.Exchange(FQueueHold, 0);
+  TInterlocked.Exchange(FQueueFlush, 0);
 end;
 
 //Called from the main loop while the window is still hidden. A script file given

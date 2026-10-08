@@ -36,6 +36,7 @@ local stepX = (endX - startX) / totalFrames
 
 local i = 0
 while cycle do
+  enter()
   i = i + 1
   if i > totalFrames then break end
 
@@ -49,6 +50,7 @@ while cycle do
   canvas.color = colors.white
   canvas.text(10, 10, "Moving... frame " .. i .. "/600")
   canvas.text(10, 30, "x = " .. math.floor(bg.x))
+  leave()
 end
 
 -- Done!

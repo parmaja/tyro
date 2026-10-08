@@ -536,6 +536,8 @@ for a control that is not an `image`.
 |----------|---------|-------------|
 | `sleep(ms)` | — | Pause the script thread for *ms* milliseconds |
 | `cycle` | `true` | **Block** until the next drawing frame completes. Use `while cycle do` (instead of `while true do`) to run the loop body at most once per drawn frame, so drawing commands cannot pile up inside a single raylib drawing cycle |
+| `enter()` | — | **Hold** the processing queue: the drawing commands queued after this call are not executed until `leave()` balances it |
+| `leave()` | — | Release the hold taken by `enter()`: the whole group queued in between is then drawn at one drawing cycle |
 | `frametime()` | `number` (seconds) | Time elapsed since the last frame |
 | `time()` | `number` (seconds) | Elapsed time since the window was created |
 | `rand(min, max)` | `integer` | Random integer in [min, max] |
@@ -566,6 +568,33 @@ end
 print("uptime: " .. (time() - start))
 ```
 
+## Grouping drawing with enter() / leave()
+
+`enter()` locks the processing queue: the drawing commands the script queues
+after the call keep piling up but are not executed by the main loop. `leave()`
+releases the lock, and the whole group is then drawn at one drawing cycle —
+instead of a large batch being split over several frames. Commands queued
+outside the group behave as usual.
+
+```lua
+window.show()
+while cycle do
+    canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+
+    enter()                             -- hold the queue
+    for i = 0, 99 do                    -- this batch is drawn as one
+        canvas.circle(rand(0, canvas.width), rand(0, canvas.height), 4, true)
+    end
+    leave()                             -- draw the whole group now
+
+    canvas.text(10, 10, "frame: " .. time())
+end
+```
+
+`enter()`/`leave()` nest (they count up and down), and a script that stops or
+errors between them is released automatically so the next run never inherits a
+frozen queue.
+
 # Examples
 
 See [demos/README.md](demos/README.md) for the full demo index.
@@ -581,6 +610,7 @@ tyro demos/<name>.tyro
 | `demos/basic_drawing.tyro` | All drawing primitives: rectangle, circle, line, point, text, colors |
 | `demos/animated_demo.tyro` | Animation loop with random colors and sleep timing |
 | `demos/cycle_demo.tyro` | Per-frame loop using `while cycle do` — one drawing per frame |
+| `demos/enter_leave_demo.tyro` | Grouped drawing with `enter()` / `leave()` — a batch of draw calls lands in one drawing cycle |
 | `demos/sprites_demo.tyro` | Sprites system: load, show, hide, move, rotate, scale, named access |
 | `demos/controls.tyro` | Generic buttons, labels, checkboxes, edits, and panels |
 | `demos/controls_align.tyro` | Nested controls: a left-docked panel with top- and bottom-docked buttons |
