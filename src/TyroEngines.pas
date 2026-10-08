@@ -256,8 +256,8 @@ type
     //* Block the calling script (thread) until the next drawing cycle
     //* (EndDrawing) has completed. Backs the Lua global 'cycle' so scripts can
     //* write "while cycle do" instead of "while true do". Returns False when
-    //* AScript was stopped while waiting (termination is polled here because
-    //* the Lua debug hook cannot fire while a C function blocks the thread).
+    //* AScript was stopped while waiting, termination is polled here because
+    //* the Lua debug hook cannot fire while a C function blocks the thread.
     function WaitToNextFrame(AScript: TTyroScript): Boolean;
 
     //* Register the queue object a script thread is about to block on, so Stop

@@ -116,11 +116,11 @@ type
      Supported classes: 'button', 'panel', 'label', 'checkbox', 'edit',
      'spectrum', 'listbox', 'image'. An 'image' reads the caption argument as
      the file name of the texture it shows (see TLoadControlImageObject). }
-   TCreateControlObject = class(TQueueObject)
-   private
-     FClassName: string;
-     FCaption: utf8string;
-     FX, FY, FW, FH: Integer;
+  TCreateControlObject = class(TQueueObject)
+  private
+    FClassName: string;
+    FCaption: utf8string;
+    FX, FY, FW, FH: Integer;
     FName: string;
     FControl: TTyroControl;
     FTransferred: Boolean;
@@ -1109,6 +1109,7 @@ begin
       if FName <> '' then
         NewControl.Name := FName;
       NewControl.BoundsRect := Rect(FX, FY, FX + FW, FY + FH);
+      NewControl.Show;
       //An image has no text: the caption argument names the texture file
       //instead. It is loaded once the bounds are applied, so a texture larger
       //than the requested size grows the control (see TTyroImage.LoadFromFile).
