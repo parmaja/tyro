@@ -686,7 +686,7 @@ Lazarus or Delphi
 
 # Libraries
 
-You need only MiniLib package minilib.lpk
+You need MiniLib package minilib.lpk
 [minilib](https://github.com/parmaja/minilib)
 You need only MiniLua package minilib.lpk
 [miniLua](https://github.com/parmaja/miniLua)

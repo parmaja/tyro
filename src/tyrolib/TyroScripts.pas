@@ -521,7 +521,10 @@ type
 
   TClearObject = class(TDrawObject)
   public
-    constructor Create(ACanvas: TTyroCanvas);
+    fColor: TColor;
+    fHasColor: Boolean;
+    constructor Create(ACanvas: TTyroCanvas); overload;
+    constructor Create(ACanvas: TTyroCanvas; AColor: TColor); overload;
     procedure DoExecute; override;
   end;
 
@@ -1528,11 +1531,22 @@ end;
 constructor TClearObject.Create(ACanvas: TTyroCanvas);
 begin
   inherited Create(ACanvas);
+  fHasColor := False;
+end;
+
+constructor TClearObject.Create(ACanvas: TTyroCanvas; AColor: TColor);
+begin
+  inherited Create(ACanvas);
+  fColor := AColor;
+  fHasColor := True;
 end;
 
 procedure TClearObject.DoExecute;
 begin
-  ClearBackground(Canvas.BackColor);
+  if fHasColor then
+    Canvas.ClearBackground(fColor)
+  else
+    Canvas.ClearBackground(Canvas.BackColor);
 end;
 
 { TDrawRectangleObject }

@@ -1,4 +1,4 @@
-unit TyroLua;
+﻿unit TyroLua;
 {**
  *  This file is part of the "Tyro"
  *
@@ -293,7 +293,6 @@ type
     FItems: TList; //of TTyroControl (owned by the main window, not by us)
     function GetControl(AHandle: Integer): TTyroControl;
     function FindByName(const AName: string): Integer;
-    function GetControlHandle(AControl: TTyroControl): Integer;
   protected
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
@@ -406,7 +405,7 @@ type
     FLinesPos: Integer;
     function ModeFlag(const AFlag: Char): Boolean;
     //Reads one token ('n') or one line ('l'/'L') and pushes exactly one value
-    function ReadTextFormat(L: PLua_State; const AFormat: Char): Boolean;
+    function ReadTextFormat(L: PLua_State; const AFormat: UTF8Char): Boolean;
     //Index of the first value the script passed; see the implementation
     function FirstArgIndex(L: PLua_State): Integer;
   public
@@ -415,7 +414,6 @@ type
     function Read_func(L: Plua_State): integer; cdecl;
     function Write_func(L: Plua_State): integer; cdecl;
     function Close_func(L: Plua_State): integer; cdecl;
-    function Flush_func(L: Plua_State): integer; cdecl;
     function Lines_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
     destructor Destroy; override;
@@ -1520,8 +1518,21 @@ begin
 end;
 
 function TLuaCanvas.Clear_func(L: Plua_State): integer; cdecl;
+var
+  c: integer;
 begin
-  FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas));
+  c := L.ArgsCount;
+  if c >= 1 then
+  begin
+    if L.IsNumber(1) then
+      FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas, IntToColor(round(L.ToNumber(1)))))
+    else if L.IsString(1) then
+      FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas, StrToColor(L.ToString(1))))
+    else
+      FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas));
+  end
+  else
+    FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas));
   Result := 0;
 end;
 
@@ -2329,7 +2340,7 @@ end;
 
 function TLuaScript.Clock_func(L: Plua_State): integer; cdecl;
 begin
-  L.PushNumber(GetTickCount / 1000.0);
+  L.PushNumber(TThread.GetTickCount / 1000.0);
   Result := 1;
 end;
 
@@ -2497,7 +2508,7 @@ end;
 //pushes exactly one value, following the io library's text-mode conventions: at
 //the end of the stream it pushes nil, and a number it cannot parse pushes nil
 //plus a message (and returns False so the caller returns two values).
-function TLuaFile.ReadTextFormat(L: PLua_State; const AFormat: Char): Boolean;
+function TLuaFile.ReadTextFormat(L: PLua_State; const AFormat: UTF8Char): Boolean;
 var
   Buf: AnsiString;
   Num: Double;
@@ -2585,8 +2596,8 @@ end;
 //only apply to text streams; on a binary stream they read raw bytes.
 function TLuaFile.Read_func(L: PLua_State): integer; cdecl;
 var
-  Format: AnsiString;
-  Fmt: Char;
+  aFormat: AnsiString;
+  Fmt: AnsiChar;
   Count: Int64;
   Buf: AnsiString;
   idx: Integer;
@@ -2599,16 +2610,16 @@ begin
   end;
   idx := FirstArgIndex(L);
   if L.ArgsCount < idx then
-    Format := 'l'
+    aFormat := 'l'
   else
-    Format := AnsiString(L.ToString(idx));
-  if (Format <> '') and (Format[1] = '*') then
-    Delete(Format, 1, 1);
-  if Format = '' then
-    Format := 'l';
+    aFormat := AnsiString(L.ToString(idx));
+  if (aFormat <> '') and (aFormat[1] = '*') then
+    Delete(aFormat, 1, 1);
+  if aFormat = '' then
+    aFormat := 'l';
   //The letter keeps the case the script wrote, because that is what tells "l"
   //from "L"; the other letters are accepted in either case.
-  Fmt := Format[1];
+  Fmt := aFormat[1];
 
   if FIsText and (Fmt in ['l', 'L', 'n']) then
   begin
@@ -2630,7 +2641,7 @@ begin
     Exit(1);
   end;
 
-  if not TryStrToInt64(Format, Count) then
+  if not TryStrToInt64(aFormat, Count) then
     Count := 0;
   if Count <= 0 then
   begin
@@ -2704,14 +2715,6 @@ begin
     //TStream.Size would also move the file pointer, which is not what a write
     //in the middle of the stream should do
     FStream.WriteBuffer(Buf[1], Length(Buf));
-  L.PushValue(1); //the handle table, for chaining
-  Result := 1;
-end;
-
-function TLuaFile.Flush_func(L: PLua_State): integer; cdecl;
-begin
-  if FIsOpen then
-    FStream.Flush;
   L.PushValue(1); //the handle table, for chaining
   Result := 1;
 end;
@@ -2862,7 +2865,6 @@ begin
   //arguments from index 2, the way the rest of the Tyro bindings do.
   Lua.State.Register('read', aFile.Read_func);
   Lua.State.Register('write', aFile.Write_func);
-  Lua.State.Register('flush', aFile.Flush_func);
   Lua.State.Register('close', aFile.Close_func);
   Lua.State.Register('lines', aFile.Lines_func);
   PopArgs(L, base); //leave the handle table as the only value
@@ -3337,21 +3339,6 @@ begin
   begin
     c := TTyroControl(FItems[i]);
     if (c <> nil) and (SameText(c.Name, AName)) then
-    begin
-      Result := i + 1;
-      Exit;
-    end;
-  end;
-end;
-
-function TLuaControls.GetControlHandle(AControl: TTyroControl): Integer;
-var
-  i: Integer;
-begin
-  Result := 0;
-  for i := 0 to FItems.Count - 1 do
-  begin
-    if TTyroControl(FItems[i]) = AControl then
     begin
       Result := i + 1;
       Exit;

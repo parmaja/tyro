@@ -153,8 +153,6 @@ type
 
   PColor = ^TColor;
 
-  { TColorHelper }
-
   { TRGBAColorHelper }
 
   TRGBAColorHelper = record helper for TRGBAColor
@@ -170,6 +168,7 @@ type
     constructor Create(RGBAColor: TRGBAColor); overload;
     //constructor Create(AValue: Cardinal); overload;
     constructor CreateRGBA(RGBA: Cardinal); overload; //stupid idea, but ok :P
+    procedure Clear;
   end;
 
 const
@@ -2607,6 +2606,11 @@ begin
   {$else}
   Self := RGBA; //TODO Swap it SwapEndian()
   {$endif}
+end;
+
+procedure TColorHelper.Clear;
+begin
+  Self := clBlank;
 end;
 
 { TVector2 }

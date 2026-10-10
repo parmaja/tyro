@@ -125,7 +125,7 @@ type
     FName: string;
     FFileName: string;
     FSamples: Int64;      //frames rendered since Play: the song clock
-    FLastClock: QWord;    //milliseconds at the last Update
+    FLastClock: UInt64;    //milliseconds at the last Update
     FSampleRate: Integer;
     FChannels: TMidiChannelList;
     FVoices: TMidiVoiceList;
@@ -200,9 +200,9 @@ const
 // once a window has been opened, so a script that never shows one would leave a
 // song standing still at its first sample. This clock runs from the moment the
 // process does, which is also the clock the engine hands a script as `clock()`.
-function Milliseconds: QWord;
+function Milliseconds: UInt64;
 begin
-  Result := QWord(GetTickCount64);
+  Result := UInt64(TThread.GetTickCount64);
 end;
 
 { The tone of a note }
@@ -1069,7 +1069,7 @@ end;
 procedure TMidiPlayer.Update;
 var
   aWanted: Integer;
-  aNow: QWord;
+  aNow: UInt64;
 begin
   if FState <> mpPlaying then
     Exit;
