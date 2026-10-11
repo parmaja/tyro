@@ -42,6 +42,7 @@ type
   TRadioPlayerState = (
     rpIdle,       //nothing loaded, no client
     rpBuffering,  //connected, filling the buffer
+    rpReconnecting, //connection lost, retrying before giving up
     rpPlaying,
     rpPaused,
     rpStopped,    //stopped by user or stream ended
@@ -67,6 +68,9 @@ type
     FPrerollBytes: Int64; //buffer bytes needed before first playback
     FPreloadBytes: Int64; //reload the snapshot when less than this remains
     FOverlapBytes: Int64; //bytes of already-decoded audio kept on reload
+    FMaxAttempts: Integer; //reconnect attempts before giving up
+    FReconnectDelay: Integer; //milliseconds between reconnect attempts
+    FWaitingData: Boolean; //after a reconnect, wait for fresh data before ending
     procedure LoadFromSnapshot(AFirst: Boolean);
     function GuessFileType: string;
     procedure DoError(const AMessage: string);
@@ -101,6 +105,10 @@ type
     property Playing: Boolean read GetPlaying;
     property Buffered: Int64 read GetBuffered;
     property Volume: Single read FVolume write SetVolume;
+    //how many times to (re)connect before reporting an error, default 5
+    property MaxAttempts: Integer read FMaxAttempts write FMaxAttempts;
+    //milliseconds to wait between connect attempts, default 1000
+    property ReconnectDelay: Integer read FReconnectDelay write FReconnectDelay;
   end;
 
 var
@@ -124,6 +132,9 @@ begin
   FPrerollBytes := cDefaultPreroll;
   FPreloadBytes := cDefaultPreload;
   FOverlapBytes := cDefaultOverlap;
+  FMaxAttempts := 5;
+  FReconnectDelay := 1000;
+  FWaitingData := False;
   RayUpdates.Add(Self);
 end;
 
@@ -156,6 +167,7 @@ begin
   Stop;
   FState := rpBuffering;
   FUserPlaying := True;
+  FWaitingData := False;
   //A script thread could be inside a getter reading FClient/FURL/FError;
   //install the new client under the lock so it never sees a half-created
   //instance or torn strings.
@@ -164,6 +176,8 @@ begin
     FURL := AURL;
     FError := '';
     FClient := TmnIceCastClient.Create;
+    FClient.MaxAttempts := FMaxAttempts;
+    FClient.ReconnectDelay := FReconnectDelay;
     FClient.Open(AURL);
   finally
     FLock.Leave;
@@ -324,6 +338,7 @@ begin
   case FState of
     rpIdle: Result := 'idle';
     rpBuffering: Result := 'buffering';
+    rpReconnecting: Result := 'reconnecting';
     rpPlaying: Result := 'playing';
     rpPaused: Result := 'paused';
     rpStopped: Result := 'stopped';
@@ -473,6 +488,7 @@ begin
     FMusic := aNewMusic;
     FBytesPerSec := aBP;
     FMusicLoaded := True;
+    FWaitingData := False; //fresh data arrived, stream-end decision is valid again
     Spectrum.Attach(FMusic.Stream); //feed the analyzer from the live stream
     FSnapshot.Free;
     FSnapshot := aSnap;
@@ -514,6 +530,17 @@ begin
       Exit;
     end;
   end;
+  //While the client is reconnecting, keep whatever is already buffered playing
+  //and do not end the stream; only a failed reconnect (icError) stops playback.
+  if aState = icReconnecting then
+  begin
+    if FUserPlaying then
+      FState := rpReconnecting;
+    FWaitingData := True; //do not end the stream just because the buffer drained
+    if FMusicLoaded then
+      UpdateMusicStream(FMusic);
+    Exit;
+  end;
   if not FMusicLoaded then
   begin
     if (aState = icReady) and (FClient.BufferSize >= FPrerollBytes) then
@@ -536,9 +563,11 @@ begin
       end;
       if aNewData then
         LoadFromSnapshot(False)
-      else if aPlayed >= GetMusicTimeLength(FMusic) - 0.1 then
+      else if (not FWaitingData) and (aPlayed >= GetMusicTimeLength(FMusic) - 0.1) then
         StreamEnded; //no new data and the decoder finished the snapshot
     end;
+    if (aState = icReady) and FUserPlaying then
+      FState := rpPlaying; //reconnected: back to normal playback
   end;
 end;
 
