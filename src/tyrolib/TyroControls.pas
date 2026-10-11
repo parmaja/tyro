@@ -2666,7 +2666,7 @@ begin
       //* Paint the control content into its own transparent texture buffer,
       //* then draw (blit) that buffer on top of the window canvas.
       Canvas.BeginDraw;
-      Canvas.ClearBackground(clBlank);
+      //Canvas.ClearBackground(clBlank);
       try
         InternalWindow(Canvas);
       finally

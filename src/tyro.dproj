@@ -70,6 +70,7 @@
         <DCC_UnitSearchPath>raylib;lua;tyrolib;..\..\lua;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_Locale>10241</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <Debugger_RunParams>&quot;D:\lab\pascal\tyro\demos\radio.tyro&quot;</Debugger_RunParams>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Linux64)'!=''">
         <DCC_UsePackage>DataSnapServer;fmx;dxDockingRS27;DbxCommonDriver;bindengine;FireDACCommonODBC;emsclient;IndyProtocols;dbxcds;prmLib;FireDACSqliteDriver;DbxClientDriver;soapmidas;dbexpress;inet;CustomIPTransport;FireDACMSSQLDriver;IndySystem;FireDACCommon;DataSnapServerMidas;FireDACODBCDriver;emsserverresource;rtl;FireDACMySQLDriver;DataSnapFireDAC;FireDAC;xmlrtl;dsnap;FireDACDb2Driver;DataSnapNativeClient;DatasnapConnectorsFreePascal;emshosting;FireDACCommonDriver;emsedge;bindcompfmx;dxRibbonRS27;inetdb;FireDACASADriver;fmxFireDAC;FireDACInfxDriver;DataSnapCommon;dbrtl;FireDACOracleDriver;DataSnapIndy10ServerTransport;DataSnapConnectors;FireDACMongoDBDriver;FireDACTDataDriver;bindcomp;cxLibraryRS27;inetstn;IndyCore;RESTBackendComponents;FireDACADSDriver;RESTComponents;dsnapxml;DataSnapClient;emsclientfiredac;FireDACPgDriver;CloudService;soaprtl;soapserver;FireDACIBDriver;$(DCC_UsePackage)</DCC_UsePackage>
@@ -94,7 +95,6 @@
         <VerInfo_Locale>1033</VerInfo_Locale>
         <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
-        <Debugger_RunParams>-w -c</Debugger_RunParams>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">
         <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
@@ -116,8 +116,9 @@
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_ExeOutput>..\bin</DCC_ExeOutput>
-        <Debugger_RunParams>&quot;D:\lab\pascal\tyro\demos\t.tyro&quot;</Debugger_RunParams>
+        <Debugger_DebugSourcePath>D:\lab\pascal\tyro\src\tyrolib\;$(Debugger_DebugSourcePath)</Debugger_DebugSourcePath>
         <DCC_DUPLICATE_CTOR_DTOR>false</DCC_DUPLICATE_CTOR_DTOR>
+        <Debugger_RunParams>&quot;D:\lab\pascal\tyro\demos\shader_demo.tyro&quot;</Debugger_RunParams>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>

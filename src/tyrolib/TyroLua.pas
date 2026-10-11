@@ -992,13 +992,13 @@ begin
     if field = 'color' then
     begin
       i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetColorObject.Create(Engine.Main.Canvas, IntToColor(i)));
+      FScript.AddQueueObject(TDrawSetColorObject.Create(Engine.Board, IntToColor(i)));
       Result := 1;
     end
     else if field = 'alpha' then
     begin
       i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetAlphaObject.Create(Engine.Main.Canvas, i));
+      FScript.AddQueueObject(TDrawSetAlphaObject.Create(Engine.Board, i));
       Result := 1;
     end
     else if field = 'backcolor' then
@@ -1006,7 +1006,7 @@ begin
       i := L.ToInteger(-1);
       //Thread-safe through the queue: the color is applied on the Engine
       //thread, so canvas.clear() clears with what the script asked for.
-      FScript.AddQueueObject(TDrawSetBackColorObject.Create(Engine.Main.Canvas, IntToColor(i)));
+      FScript.AddQueueObject(TDrawSetBackColorObject.Create(Engine.Board, IntToColor(i)));
       Result := 1;
     end;
   end;
@@ -1022,24 +1022,24 @@ begin
 
   if field = 'color' then
   begin
-    i := ColorToInt(Engine.Main.Canvas.PenColor);
+    i := ColorToInt(Engine.Board.PenColor);
     L.PushInteger(i);
     Result := 1;
   end
   else if field = 'backcolor' then
   begin
-    i := ColorToInt(Engine.Main.Canvas.BackColor);
+    i := ColorToInt(Engine.Board.BackColor);
     L.PushInteger(i);
     Result := 1;
   end
   else if field = 'width' then
   begin
-    L.PushInteger(Engine.Main.Canvas.Width);
+    L.PushInteger(Engine.Board.Width);
     Result := 1;
   end
   else if field = 'height' then
   begin
-    L.PushInteger(Engine.Main.Canvas.Height);
+    L.PushInteger(Engine.Board.Height);
     Result := 1;
   end;
 end;
@@ -1129,8 +1129,8 @@ begin
     else
     begin
       area := Default(TRectangle);
-      area.width := Engine.Main.Canvas.Width;
-      area.height := Engine.Main.Canvas.Height;
+      area.width := Engine.Board.Width;
+      area.height := Engine.Board.Height;
     end;
     lua_createtable(L, 4, 0);
     lua_pushnumber(L, area.x);
@@ -1525,14 +1525,14 @@ begin
   if c >= 1 then
   begin
     if L.IsNumber(1) then
-      FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas, IntToColor(round(L.ToNumber(1)))))
+      FScript.AddQueueObject(TClearObject.Create(Engine.Board, IntToColor(round(L.ToNumber(1)))))
     else if L.IsString(1) then
-      FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas, StrToColor(L.ToString(1))))
+      FScript.AddQueueObject(TClearObject.Create(Engine.Board, StrToColor(L.ToString(1))))
     else
-      FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas));
+      FScript.AddQueueObject(TClearObject.Create(Engine.Board));
   end
   else
-    FScript.AddQueueObject(TClearObject.Create(Engine.Main.Canvas));
+    FScript.AddQueueObject(TClearObject.Create(Engine.Board));
   Result := 0;
 end;
 
@@ -1607,7 +1607,7 @@ begin
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
   s := L.ToString(3);
-  FScript.AddQueueObject(TDrawTextObject.Create(Engine.Main.Canvas, x, y, s));
+  FScript.AddQueueObject(TDrawTextObject.Create(Engine.Board, x, y, s));
   Result := 0;
 end;
 
@@ -1624,7 +1624,7 @@ begin
   r := round(L.ToNumber(3));
   if c >= 4 then
     f := L.ToBoolean(4);
-  FScript.AddQueueObject(TDrawCircleObject.Create(Engine.Main.Canvas, x, y, r, f));
+  FScript.AddQueueObject(TDrawCircleObject.Create(Engine.Board, x, y, r, f));
   Result := 0;
 end;
 
@@ -1642,7 +1642,7 @@ begin
   h := round(L.ToNumber(4));
   if c >= 4 then
     f := L.ToBoolean(5);
-  FScript.AddQueueObject(TDrawRectangleObject.Create(Engine.Main.Canvas, x, y, w, h, f));
+  FScript.AddQueueObject(TDrawRectangleObject.Create(Engine.Board, x, y, w, h, f));
   Result := 0;
 end;
 
@@ -1658,10 +1658,10 @@ begin
   begin
     x2 := round(L.ToNumber(3));
     y2 := round(L.ToNumber(4));
-    FScript.AddQueueObject(TDrawLineObject.Create(Engine.Main.Canvas, x1, y1, x2, y2));
+    FScript.AddQueueObject(TDrawLineObject.Create(Engine.Board, x1, y1, x2, y2));
   end
   else
-    FScript.AddQueueObject(TDrawLineToObject.Create(Engine.Main.Canvas, x1, y1));
+    FScript.AddQueueObject(TDrawLineToObject.Create(Engine.Board, x1, y1));
   Result := 0;
 end;
 
@@ -1671,7 +1671,7 @@ var
 begin
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
-  FScript.AddQueueObject(TDrawPointObject.Create(Engine.Main.Canvas, x, y));
+  FScript.AddQueueObject(TDrawPointObject.Create(Engine.Board, x, y));
   Result := 0;
 end;
 
@@ -1688,7 +1688,7 @@ begin
       s := s + #9;
     s := s + L.ToString(i);
   end;
-  FScript.AddQueueObject(TPrintObject.Create(Engine.Main.Canvas, s, False));
+  FScript.AddQueueObject(TPrintObject.Create(s, False)); //TODO
   Result := 0;
 end;
 
@@ -1705,7 +1705,7 @@ begin
       s := s + #9;
     s := s + L.ToString(i);
   end;
-  FScript.AddQueueObject(TPrintObject.Create(Engine.Main.Canvas, s, True));
+  FScript.AddQueueObject(TPrintObject.Create(s, True));//TODO
   Result := 0;
 end;
 
@@ -1722,8 +1722,8 @@ begin
       s := s + #9;
     s := s + L.ToString(i);
   end;
-  FScript.AddQueueObject(TPrintObject.Create(Engine.Main.Canvas, s, False));
-  FScript.AddQueueObject(TOutputPrintObject.Create(Engine.Main.Canvas, s, False));
+  FScript.AddQueueObject(TPrintObject.Create(s, False));
+  FScript.AddQueueObject(TOutputPrintObject.Create(s, False));
   Result := 0;
 end;
 
@@ -1740,8 +1740,8 @@ begin
       s := s + #9;
     s := s + L.ToString(i);
   end;
-  FScript.AddQueueObject(TPrintObject.Create(Engine.Main.Canvas, s, True));
-  FScript.AddQueueObject(TOutputPrintObject.Create(Engine.Main.Canvas, s, True));
+  FScript.AddQueueObject(TPrintObject.Create(s, True));
+  FScript.AddQueueObject(TOutputPrintObject.Create(s, True));
   Result := 0;
 end;
 
@@ -3496,7 +3496,6 @@ var
   ctrl: TTyroControl;
   field: string;
 begin
-  Result := 0;
   if L.IsTable(1) then
     ctrl := GetControl(GetControlTableHandle(L, 1))
   else
@@ -3822,6 +3821,7 @@ begin
     Result := 1;
     Exit;
   end;
+
   if ctrl is TTyroCaptionControl then
   begin
     if L.ArgsCount >= 2 then

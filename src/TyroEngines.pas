@@ -11,6 +11,21 @@ unit TyroEngines;
  *
  *}
 
+{
+  +---------------------------+-------------------------------------------------+----------------------------------------------------------+
+  | Mechanism                 | What It Does to the CPU                         | Effect on Background Threads                             |
+  +---------------------------+-------------------------------------------------+----------------------------------------------------------+
+  | VSync Block               | Spins or polls the GPU driver until             | Starves threads.                                         |
+  |                           | the monitor refreshes.                          | The CPU core stays at 100% utilization.                  |
+  +---------------------------+-------------------------------------------------+----------------------------------------------------------+
+  | std::this_thread::yield() | Gives up the current CPU time slice             | Good balance. Immediate relief                           |
+  |                           | to any thread waiting in line.                  | for other threads with minimal lag.                      |
+  +---------------------------+-------------------------------------------------+----------------------------------------------------------+
+  | sleep(1) / SetTargetFPS() | Puts the thread into a low-power "Wait" state   | Great for threads. Frees up the CPU completely, but can  |
+  |                           | for a set time.                                 | cause minor frame stutter if the sleep overshoots.       |
+  +---------------------------+-------------------------------------------------+----------------------------------------------------------+
+}
+
 interface
 
 uses
@@ -155,8 +170,8 @@ type
     procedure RunScriptThread;
     procedure StopScriptRun;
     procedure StopScriptThread;
-    procedure ClearRunCanvases;
-    procedure WipeCanvas(ACanvas: TTyroCanvas);
+    procedure Clear;
+    procedure ClearCanvas(ACanvas: TTyroCanvas);
     procedure ClearScriptSprites;
     procedure ShowWindowAfterScript;
 
@@ -478,7 +493,6 @@ begin
   if Res.Config.Sections.ReadBool('show', 'log', False) then
     Output.Show;}
   repeat
-    CheckSynchronize;
     if WindowShouldClose() then
     begin
       Shutdown;
@@ -490,6 +504,7 @@ begin
       // mode still owns a live graphics/audio context and must service accepted
       // script commands before --exit can shut it down.
       ProcessQueue;
+
       Update;
       RayUpdates.Update;
       //A script file passed on the command line runs headless, so it can finish
@@ -505,9 +520,9 @@ begin
         if RayLib.IsWindowResized() then
           ResizeWindow(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
 
-        RayLib.BeginDrawing();
-        if moOpaque in Options then
-          RayLib.ClearBackground(BackColor);
+        RayLib.BeginDrawing;
+      {  if moOpaque in Options then
+          RayLib.ClearBackground(BackColor);}
 
         try
           Camera2D.Target := Vector2Of(0, 0);
@@ -521,11 +536,11 @@ begin
           if UpdateShake(RayLib.GetFrameTime()) then
             Camera2D.Offset := Vector2Of(Margin + FShakeX, Margin + FShakeY);
 
-//          Main.Canvas.BeginDraw;
+          //Board.BeginDraw;
           BeginMode2D(Camera2D);
           Draw;
           EndMode2D;
-//          Main.Canvas.EndDraw;
+          //Board.EndDraw;
 //          Main.Canvas.PostDraw;
           Main.Paint;
 
@@ -564,6 +579,14 @@ begin
         ProcessInput;
       end;
     end;
+    CheckSynchronize;
+    {$ifdef FPC}
+    {$else}
+    //YieldProcessor;
+    {$endif}
+    //Yield;
+    //ThreadSwitch;
+    //Sleep(1); //Why do i need it here, for Radio thread starting?!!!
   until Terminated;
 
   Unload;
@@ -801,8 +824,10 @@ begin
       finally
         Lock.Leave;
       end;
+
       if p = nil then
         Exit;
+
       ft := GetTime();
       fpd := (1 / FPS);
       Board.BeginDraw;
@@ -820,7 +845,7 @@ begin
             //move on to the next queued object.
           end;
         end;
-        p.Free;
+        FreeAndNil(p);
         ft2 := GetTime() - ft;
         //Stop the pass at the frame time budget unless a flush was armed, and
         //also as soon as a fresh enter() is seen, so a command queued after
@@ -829,6 +854,7 @@ begin
         begin
           break;
         end;
+
         Lock.Enter;
         try
           if Queue.Count > 0 then
@@ -840,6 +866,7 @@ begin
         end;
         if p = nil then
           Break;
+
       end;
       Board.EndDraw;
     finally
@@ -1037,12 +1064,9 @@ begin
   if AHeight = 0 then
     raise exception.Create('Screen height can not be 0');
 
-  //SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  //SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
-  //VSync: without it the swap lands mid-scanline and moving sprites tear,
-  //which reads as flicker. SetTargetFPS still caps the pace on top of it.
-  SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE, FLAG_VSYNC_HINT]);
-  RayLib.InitWindow(AWidth, AHeight, PUTF8Char(Title));
+  //Do not use FLAG_VSYNC_HINT it block the other threads, or use YieldProcess, TODO
+  RayLib.SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE, FLAG_VSYNC_HINT]);
+  RayLib.InitWindow(AWidth, AHeight, PUTF8Char(UTF8String(Title)));
   FWidth := AWidth;
   FHeight := AHeight;
   //Board is a render-texture: script draw commands run inside Board.BeginDraw
@@ -1639,7 +1663,7 @@ begin
   //new script inherits them.
   ClearScriptControls;
   ClearScriptSprites;
-  ClearRunCanvases;
+  Clear;
   //A song the finished run left playing belongs to that run, not to the next one.
   if MidiPlayer <> nil then
     MidiPlayer.Stop;
@@ -1693,13 +1717,13 @@ end;
 //Board, the texture the script's drawing queue fills, and Canvas, the window
 //canvas it is blitted to. Both keep their content between frames, so without this
 //the new script starts on top of the old one.
-procedure TTyroEngine.ClearRunCanvases;
+procedure TTyroEngine.Clear;
 begin
   //Same lock the queue processing takes while it draws into Board.
   CanvasLock.Enter;
   try
-    WipeCanvas(Board);
-    WipeCanvas(Main.Canvas);
+    ClearCanvas(Board);
+    ClearCanvas(Main.Canvas);
   finally
     CanvasLock.Leave;
   end;
@@ -1709,7 +1733,7 @@ end;
 //between BeginDraw and EndDraw, so the clear has to happen inside that pair:
 //outside it ClearBackground would wipe the window backbuffer and leave the canvas
 //content on screen.
-procedure TTyroEngine.WipeCanvas(ACanvas: TTyroCanvas);
+procedure TTyroEngine.ClearCanvas(ACanvas: TTyroCanvas);
 begin
   if ACanvas = nil then
     Exit;

@@ -412,22 +412,22 @@ type
 
   { TPrintObject }
 
-  TPrintObject = class(TDrawObject)
+  TPrintObject = class(TQueueObject)
   public
     FText: String;
     FNewLine: Boolean;
-    constructor Create(ACanvas: TTyroCanvas; Text: String; NewLine: Boolean);
+    constructor Create(Text: String; NewLine: Boolean);
     procedure DoExecute; override;
   end;
 
   { TOutputPrintObject - writes a copy of the script output (print/println)
     to the engine's Output control. }
 
-  TOutputPrintObject = class(TDrawObject)
+  TOutputPrintObject = class(TQueueObject)
   public
     FText: String;
     FNewLine: Boolean;
-    constructor Create(ACanvas: TTyroCanvas; Text: String; NewLine: Boolean);
+    constructor Create(const Text: String; NewLine: Boolean);
     procedure DoExecute; override;
   end;
 
@@ -1568,9 +1568,9 @@ end;
 
 { TPrintObject }
 
-constructor TPrintObject.Create(ACanvas: TTyroCanvas; Text: String; NewLine: Boolean);
+constructor TPrintObject.Create(Text: String; NewLine: Boolean);
 begin
-  inherited Create(ACanvas);
+  inherited Create;
   fText := Text;
   fNewLine := NewLine;
 end;
@@ -1585,9 +1585,9 @@ end;
 
 { TOutputPrintObject }
 
-constructor TOutputPrintObject.Create(ACanvas: TTyroCanvas; Text: String; NewLine: Boolean);
+constructor TOutputPrintObject.Create(const Text: String; NewLine: Boolean);
 begin
-  inherited Create(ACanvas);
+  inherited Create;
   FText := Text;
   FNewLine := NewLine;
 end;

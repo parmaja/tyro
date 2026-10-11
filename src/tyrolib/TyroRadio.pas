@@ -221,6 +221,7 @@ begin
   end;
   FState := rpStopped;
 end;
+
 procedure TRadioPlayer.SetVolume(AVolume: Single);
 begin
   FVolume := AVolume;
@@ -543,8 +544,6 @@ end;
 
 initialization
   RadioPlayer := TRadioPlayer.Create;
-
 finalization
   FreeAndNil(RadioPlayer);
-
 end.
