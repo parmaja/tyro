@@ -181,6 +181,10 @@ const
     '}';
 
 type
+  ITyroUpdate = interface
+    procedure Update;
+    procedure Draw;
+  end;
 
   { TTyroObject }
 

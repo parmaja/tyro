@@ -1,4 +1,5 @@
 window.show(640, 480)
+fontHeight = font.height
 while cycle do
 
   canvas.color = colors.black
@@ -11,5 +12,8 @@ while cycle do
   canvas.color = colors.black
   canvas.rectangle(0, 360, 640, 120, true)
   canvas.color = colors.white
-  canvas.text(8, 368, "waiting for the radio stream...")
+  canvas.text(8, 368, "waiting for the radio stream... 1")
+  canvas.text(8, 368+fontHeight*2, "waiting for the radio stream... 2")
+  canvas.text(8, 368+fontHeight*3, "waiting for the radio stream... 3")
+  canvas.text(8, 368+fontHeight*4, "waiting for the radio stream... 4")
 end

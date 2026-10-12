@@ -39,9 +39,7 @@ type
   end;
 
   { Per-sprite script hook (implemented by TyroLua; run on the main thread) }
-  ISpriteScript = interface
-    procedure Update;
-    procedure Draw;
+  ISpriteScript = interface(ITyroUpdate)
     procedure OnCollide(AOtherHandle: Integer; const AState: string);
   end;
 

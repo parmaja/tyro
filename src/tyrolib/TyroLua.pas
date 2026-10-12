@@ -801,7 +801,7 @@ begin
   begin
     color := L.ToString(-1);
     if field = 'backcolor' then
-      EngineBackColor := StrToColor(color);
+      Engine.Board.BackColor := StrToColor(color);
   end
   else if lua_isboolean(L, -1) then
   begin
@@ -4782,6 +4782,28 @@ begin
     begin
       L.PushBoolean(Engine.Sprites.GetLooping(handle));
       Result := 1;
+    end
+    else if field = 'width' then
+    begin
+      L.PushValue(2); // key
+      lua_rawget(L, 1); // raw table value
+      if lua_isnil(L, -1) then
+      begin
+        L.Pop(1);
+        L.PushInteger(Engine.Sprites.GetWidth(handle));
+      end;
+      Result := 1;
+    end
+    else if field = 'height' then
+    begin
+      L.PushValue(2); // key
+      lua_rawget(L, 1); // raw table value
+      if lua_isnil(L, -1) then
+      begin
+        L.Pop(1);
+        L.PushInteger(Engine.Sprites.GetHeight(handle));
+      end;
+      Result := 1;
     end;
   end;
   if Result = 0 then
@@ -4876,6 +4898,14 @@ begin
   begin
     Engine.Sprites.SetLooping(handle, L.ToBoolean(3));
   end
+  {else if (field = 'width') or (field = 'height') then
+  begin
+    // Store raw: GPU textures cannot be resized in place; the stored value
+    // acts as an override that scripts can read back via sprite.width/height.
+    L.PushValue(2);
+    L.PushValue(3);
+    lua_rawset(L, 1);
+  end}
   else
   begin
     // unknown key (e.g. onCollide = function): store it raw in the sprite table

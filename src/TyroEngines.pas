@@ -125,7 +125,7 @@ type
 
   { TTyroEngine }
 
-  TTyroEngineOption = (moOpaque, moMainWindow, moShowTerminal, moShowFPS);
+  TTyroEngineOption = (moMainWindow, moShowTerminal, moShowFPS);
   TTyroEngineOptions = set of TTyroEngineOption;
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: UTF8String) of object;
@@ -134,6 +134,7 @@ type
 
   TTyroEngine = class(TObject)
   private
+    FOpaque: Boolean;
     FTitle: string;
     FMargin: Integer;
     FWidth: Integer;
@@ -329,7 +330,7 @@ type
     //* go (no per-frame time budget). Safe to call from any thread; an
     //* unbalanced leave() (more leaves than enters) is ignored.
     procedure ReleaseQueue;
-
+    property Opaque: Boolean read FOpaque write FOpaque;
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
     ScriptSource: string; //Shout pass to Thread to run it
@@ -521,8 +522,8 @@ begin
           ResizeWindow(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
 
         RayLib.BeginDrawing;
-      {  if moOpaque in Options then
-          RayLib.ClearBackground(BackColor);}
+        if Opaque then
+          RayLib.ClearBackground(BackColor);
 
         try
           Camera2D.Target := Vector2Of(0, 0);
@@ -941,7 +942,8 @@ begin
   inherited;
   RayLibrary.Load;
   FControlCapture := nil;
-  FOptions := [moOpaque];
+  FOptions := [];
+  FOpaque := True;
   Res := TTyroResources.Create;
   FCanvasLock := TCriticalSection.Create;
   //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
@@ -1065,7 +1067,7 @@ begin
     raise exception.Create('Screen height can not be 0');
 
   //Do not use FLAG_VSYNC_HINT it block the other threads, or use YieldProcess, TODO
-  RayLib.SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE, FLAG_VSYNC_HINT]);
+  RayLib.SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   RayLib.InitWindow(AWidth, AHeight, PUTF8Char(UTF8String(Title)));
   FWidth := AWidth;
   FHeight := AHeight;
