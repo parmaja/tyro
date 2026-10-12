@@ -801,7 +801,12 @@ begin
   begin
     color := L.ToString(-1);
     if field = 'backcolor' then
-      Engine.BackColor := StrToColor(color);
+      EngineBackColor := StrToColor(color);
+  end
+  else if lua_isboolean(L, -1) then
+  begin
+    if field = 'opaque' then
+      Engine.Opaque := L.ToBoolean(-1);
   end;
 end;
 
@@ -836,6 +841,11 @@ begin
   begin
     L.PushBoolean(Engine.Shaking);
     Result := 1;
+  end
+  else if field = 'opaque' then
+  begin
+    L.PushBoolean(Engine.Opaque);
+    Result := 1;
   end;
 end;
 
@@ -852,8 +862,16 @@ begin
 end;
 
 function TLuaFont.Getter(L: PLua_State): integer;
+var
+  field: string;
 begin
   Result := 0;
+  field := L.ToString(2);
+  if field = 'height' then
+  begin
+    L.PushInteger(Res.Font.Height);
+    Result := 1;
+  end;
 end;
 
 constructor TLuaFont.Create(AScript: TLuaScript);
