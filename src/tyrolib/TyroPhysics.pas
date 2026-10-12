@@ -8,6 +8,7 @@ interface
 
 uses
   Classes, SysUtils, Math, SyncObjs, Generics.Collections,
+  mnClasses,
   chipmunk,
   TyroSprites;
 
@@ -39,7 +40,7 @@ type
     queue by SplitScriptedEvents (main thread) and fire on_collide directly. }
   TPhysics = class(TObject)
   private
-    FLock: TCriticalSection;        // guards FEvents, FScriptedEvents and gravity request
+    FLock: TmnCriticalSection;        // guards FEvents, FScriptedEvents and gravity request
     FSpace: cpSpace;
     FSprites: TSprites;
     FEvents: TList<TCollisionEvent>;
@@ -126,7 +127,7 @@ var
 begin
   inherited Create;
   FSprites := ASprites;
-  FLock := TCriticalSection.Create;
+  FLock := TmnCriticalSection.Create;
   FEvents := TList<TCollisionEvent>.Create;
   FScriptedEvents := TList<TCollisionEvent>.Create;
   FHandleToBody := TDictionary<Integer, cpBody>.Create;

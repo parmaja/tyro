@@ -45,6 +45,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs, Math,
+  mnClasses,
   RayLib, RayClasses,
   TyroSounds, TyroMidiFile, TyroSpectrum;
 
@@ -117,7 +118,7 @@ type
 
   TMidiPlayer = class(TRayUpdate)
   private
-    FLock: TCriticalSection;
+    FLock: TmnCriticalSection;
     FSong: TMidiSong;
     FStream: TRayAudio;
     FState: TMidiPlayerState;
@@ -552,7 +553,7 @@ end;
 constructor TMidiPlayer.Create;
 begin
   inherited Create;
-  FLock := TCriticalSection.Create;
+  FLock := TmnCriticalSection.Create;
   FState := mpIdle;
   FSampleRate := cMidiSampleRate;
   SetLength(FVoices, cMidiVoices);

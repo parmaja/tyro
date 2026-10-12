@@ -31,7 +31,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs, Types,
-  mnUtils,
+  mnUtils, mnClasses,
   RayLib, RayClasses,
   TyroClasses, TyroControls;
 
@@ -232,7 +232,7 @@ type
   TTyroOutput = class(TTyroControl)
   private
     FLines: TStringList;
-    FLock: TCriticalSection; //guards FLines (log() writes from the script thread)
+    FLock: TmnCriticalSection; //guards FLines (log() writes from the script thread)
     FMaxLines: Integer;
     procedure TrimLines;
     function GetLineCount: Integer;
@@ -1766,7 +1766,7 @@ begin
   Style := [csClip];
   FMaxLines := 500;
   FLines := TStringList.Create;
-  FLock := TCriticalSection.Create;
+  FLock := TmnCriticalSection.Create;
   BackColor := clBlack.ReplaceAlpha(0); //transparent by default
   Color := clBlack; //contrasts with the light window backcolor
   SetBoundsRect(Rect(0, 0, 480, 240));

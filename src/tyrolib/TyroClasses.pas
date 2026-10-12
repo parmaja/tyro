@@ -414,7 +414,7 @@ const
 
 var
   Res: TTyroResources = nil;
-  Lock: TCriticalSection = nil;
+  Lock: TmnCriticalSection = nil;
 
 const
   cFramePerSeconds: Integer = 60;
@@ -1263,7 +1263,7 @@ begin
 end;
 
 initialization
-  Lock := TCriticalSection.Create;
+  Lock := TmnCriticalSection.Create;
 finalization
   FreeAndNil(Lock);
 end.

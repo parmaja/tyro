@@ -34,6 +34,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs,
+  mnClasses,
   RayLib, RayClasses,
   mnIceCasts,
   TyroSpectrum;
@@ -53,7 +54,7 @@ type
 
   TRadioPlayer = class(TRayUpdate)
   private
-    FLock: TCriticalSection; //serializes FClient (lifecycle vs script-thread getters)
+    FLock: TmnCriticalSection; //serializes FClient (lifecycle vs script-thread getters)
     FClient: TmnIceCastClient;
     FSnapshot: TMemoryStream; //last snapshot handed to raylib (kept for bookkeeping)
     FMusic: TMusic;
@@ -133,7 +134,7 @@ const
 constructor TRadioPlayer.Create;
 begin
   inherited Create;
-  FLock := TCriticalSection.Create;
+  FLock := TmnCriticalSection.Create;
   FVolume := 1;
   FState := rpIdle;
   FPrerollBytes := cDefaultPreroll;

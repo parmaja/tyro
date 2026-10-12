@@ -26,6 +26,7 @@ interface
 
 uses
   Classes, SysUtils, Types, SyncObjs, Math,
+  mnClasses,
   RayLib, RayClasses,
   TyroClasses, TyroControls;
 
@@ -59,7 +60,7 @@ type
 
   TTyroSpectrumUpdate = class(TRayUpdate)
   private
-    FLock: TCriticalSection;
+    FLock: TmnCriticalSection;
     FAttachedStream: TAudioStream;
     FAttached: Boolean;
     FSampleRate: Single;
@@ -228,7 +229,7 @@ var
   i: Integer;
 begin
   inherited Create;
-  FLock := TCriticalSection.Create;
+  FLock := TmnCriticalSection.Create;
   FSampleRate := 48000;
   FBars := cSpectrumDefaultBars;
   FRequestedBars := cSpectrumDefaultBars;

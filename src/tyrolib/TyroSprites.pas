@@ -8,6 +8,7 @@ interface
 
 uses
   Classes, SysUtils, SyncObjs, Generics.Collections,
+  mnClasses,
   RayLib, RayClasses,
   TyroScripts, TyroClasses;
 
@@ -81,7 +82,7 @@ type
 
   TSprites = class(TObject)
   private
-    FLock: TCriticalSection;
+    FLock: TmnCriticalSection;
     FItems: TDictionary<Integer, TSprite>;
     FNextHandle: Integer;
     function GetCount: integer;
@@ -269,7 +270,7 @@ end;
 constructor TSprites.Create;
 begin
   inherited Create;
-  FLock := TCriticalSection.Create;
+  FLock := TmnCriticalSection.Create;
   FItems := TDictionary<Integer, TSprite>.Create;
   FNextHandle := 1;
 end;
