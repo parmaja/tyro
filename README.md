@@ -538,6 +538,8 @@ for a control that is not an `image`.
 | `cycle` | `true` | **Block** until the next drawing frame completes. Use `while cycle do` (instead of `while true do`) to run the loop body at most once per drawn frame, so drawing commands cannot pile up inside a single raylib drawing cycle |
 | `enter()` | — | **Hold** the processing queue: the drawing commands queued after this call are not executed until `leave()` balances it |
 | `leave()` | — | Release the hold taken by `enter()`: the whole group queued in between is then drawn at one drawing cycle |
+| `atomic(f)` | — | Run `f` as one group (`enter()` … `leave()` for you), so everything it queues lands in a single drawing cycle |
+| `autogroup(on)` | — | Turn automatic per-`cycle` grouping on (`true`, default) or off (`false`) |
 | `frametime()` | `number` (seconds) | Time elapsed since the last frame |
 | `time()` | `number` (seconds) | Elapsed time since the window was created |
 | `millis()` | `number` (ms) | High-resolution monotonic clock in milliseconds (the same timer the frame budget uses); fine enough to time a `while cycle do` body |
@@ -555,6 +557,29 @@ while cycle do                      -- one iteration per drawing frame
     canvas.circle(320, 240, 20, true)
 end                                 -- no sleep() needed for ~60 FPS pacing
 ```
+
+## Automatic grouping (default)
+
+Each `while cycle do` iteration is drawn as one group automatically. From the
+moment a body starts until the next yield point (the next `cycle`, `sleep()`, or
+`console.read()`), the queue is held, so a body that takes several frames to
+build still lands in a single drawing cycle. This prevents the "black box, then
+the text" flicker with no extra code:
+
+```lua
+window.show()
+while cycle do
+    canvas.color = colors.black
+    canvas.rectangle(0, 0, 640, 70, true)   -- the box ...
+    canvas.color = colors.green
+    canvas.text(8, 8, "Station : " .. station) -- ... and its text arrive together
+end
+```
+
+The hold is released before `sleep()`/`console.read()` so a prompt or progress
+drawn earlier still shows while the script waits. Call `autogroup(false)` for
+progressive drawing that must stream across frames, and see `atomic(f)` below
+for grouping a single function explicitly.
 
 For sleep-based pacing you can still use the classic loop:
 
@@ -575,7 +600,9 @@ print("uptime: " .. (time() - start))
 after the call keep piling up but are not executed by the main loop. `leave()`
 releases the lock, and the whole group is then drawn at one drawing cycle —
 instead of a large batch being split over several frames. Commands queued
-outside the group behave as usual.
+outside the group behave as usual. This is automatic for `while cycle` bodies
+(see *Automatic grouping* above); use it explicitly to group part of an
+iteration, or a body outside a cycle loop.
 
 ```lua
 window.show()
@@ -596,6 +623,20 @@ end
 errors between them is released automatically so the next run never inherits a
 frozen queue.
 
+`atomic(f)` wraps the same pair around a function, which reads better when the
+grouping is the point of a helper:
+
+```lua
+local function header(text)
+    atomic(function()
+        canvas.color = colors.black
+        canvas.rectangle(0, 0, 640, 70, true)
+        canvas.color = colors.green
+        canvas.text(8, 8, text)
+    end)
+end
+```
+
 ## Measuring the queue (queue.*)
 
 The engine exposes read-only counters to help diagnose the "black box, then the
@@ -610,6 +651,7 @@ text" flicker, where a frame is presented with only part of a drawing body.
 | `queue.max` | Largest backlog seen at the start of a pass (a high-water mark) |
 | `queue.holds` | Open `enter()` calls (the hold depth) |
 | `queue.frames` | Drawing cycles presented since the engine started |
+| `queue.group` | `true` while automatic per-`cycle` grouping is enabled |
 | `queue.drainms` | Duration of the most recent drain pass, in milliseconds |
 
 Because the script thread builds a body while the main loop drains the queue on

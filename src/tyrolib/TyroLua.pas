@@ -529,12 +529,55 @@ implementation
 function sleep_func(L: Plua_State): integer; cdecl;
 var
   n: int64;
+  Held: Boolean;
 begin
   //Round, not truncate: sleep(16.7) for a 60 FPS frame must not collapse
   //to 16 ms and drift against the display cadence.
   n := Round(L.ToNumber(1));
-  sleep(n);
+  //sleep() is a yield point: commit the cycle body queued so far and let the
+  //main loop draw it (so a prompt/progress stays visible) before blocking.
+  Held := (Engine <> nil) and Engine.ReleaseAutoQueue;
+  try
+    sleep(n);
+  finally
+    if Held then
+      Engine.HoldAutoQueue;
+  end;
   Result := 0;
+end;
+
+// atomic(f): draw f() as one group. Everything f queues goes through a single
+// drawing cycle, exactly like wrapping the body in enter()/leave() by hand.
+// Useful for a body that is not inside a 'while cycle' loop (where grouping is
+// already automatic) or to group part of one iteration explicitly.
+function atomic_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if (Engine = nil) or (lua_type(L, 1) <> LUA_TFUNCTION) then
+    Exit;
+  Engine.HoldQueue;
+  lua_pushvalue(L, 1);
+  if lua_pcall(L, 0, 0, 0) <> 0 then
+  begin
+    //Release before reporting, so a failing body cannot freeze the queue.
+    Engine.ReleaseQueue;
+    if Engine <> nil then
+      Log.WriteLn('atomic: ' + L.ToString(-1));
+    L.Pop(1);
+    Exit;
+  end;
+  Engine.ReleaseQueue;
+end;
+
+// autogroup(flag): turn the automatic per-'cycle' grouping on (default) or off.
+// Off restores raw streaming, where the main loop may drain part of a body.
+function autogroup_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if Engine = nil then
+    Exit;
+  if L.ArgsCount > 0 then
+    Engine.AutoGroup := L.ToBoolean(1);
 end;
 
 // enter(): hold the processing queue. The drawing commands the script queues
@@ -921,6 +964,11 @@ begin
   begin
     L.PushNumber(Stats.DrainMs);
     Result := 1;
+  end
+  else if field = 'group' then
+  begin
+    L.PushBoolean(Stats.Group);
+    Result := 1;
   end;
 end;
 
@@ -1255,6 +1303,10 @@ begin
   Lua.State.RegisterGlobal('version', TyroVersion);
   Lua.State.RegisterGlobal('log', @log_func);
   Lua.State.RegisterGlobal('sleep', @sleep_func);
+  //atomic(f): draw f() as one group (explicit enter()/leave())
+  Lua.State.RegisterGlobal('atomic', @atomic_func);
+  //autogroup(flag): toggle automatic per-cycle grouping (on by default)
+  Lua.State.RegisterGlobal('autogroup', @autogroup_func);
 
   Canvas := TLuaCanvas.Create(Self);
   Window := TLuaWindow.Create(Self);
@@ -3132,6 +3184,7 @@ function TLuaConsole.Read_func(L: Plua_State): integer; cdecl;
 var
   s: string;
   c: integer;
+  Held: Boolean;
   Reader: TReadConsoleObject;
 begin
   s := '> ';
@@ -3141,15 +3194,23 @@ begin
 
   Reader := TReadConsoleObject.Create(s);
   try
-    // Run the DoExecute on the Engine thread via Synchronize.
-    // The object is NOT freed by the engine; we free it here.
-    Reader.Run(Script.Thread);
-    //TThread.Synchronize(ScriptThread, procedure begin sleep(1000) end);
-    // Wait for user to press Enter (signaled from Engine thread callback)
-    if Reader.Wait then
-      // Push the result string to Lua
-      L.PushString(Reader.ResultString);
-    Result := 1;
+    // read() blocks the script thread: commit the cycle body queued so far so
+    // any prompt drawn before it is on screen while the user types.
+    Held := (Engine <> nil) and Engine.ReleaseAutoQueue;
+    try
+      // Run the DoExecute on the Engine thread via Synchronize.
+      // The object is NOT freed by the engine; we free it here.
+      Reader.Run(Script.Thread);
+      //TThread.Synchronize(ScriptThread, procedure begin sleep(1000) end);
+      // Wait for user to press Enter (signaled from Engine thread callback)
+      if Reader.Wait then
+        // Push the result string to Lua
+        L.PushString(Reader.ResultString);
+      Result := 1;
+    finally
+      if Held then
+        Engine.HoldAutoQueue;
+    end;
   finally
     Reader.Free;
   end;

@@ -155,6 +155,8 @@ type
     Frames: Integer;
     //* Duration of the most recent drain pass, in milliseconds.
     DrainMs: Double;
+    //* True while automatic per-cycle grouping is enabled (the default).
+    Group: Boolean;
   end;
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: UTF8String) of object;
@@ -247,6 +249,13 @@ type
     //* access goes through TInterlocked.
     FQueueHold: LongInt;
     FQueueFlush: LongInt;
+    //* Automatic per-'cycle' grouping (see AutoGroup). FQueueAuto is the
+    //* implicit hold taken when a cycle body starts and released at the next
+    //* yield point, so the whole body is committed in one drawing cycle just
+    //* like an explicit enter()/leave(). FAutoGroup enables the behaviour.
+    //* Touched from the script thread, so access goes through TInterlocked.
+    FQueueAuto: LongInt;
+    FAutoGroup: Boolean;
     FRunning: LongInt;
     //* Queue/frame diagnostics backing QueueStats (see TQueueStats). Written on
     //* the main thread during ProcessQueue and the drawing cycle, read on the
@@ -373,6 +382,19 @@ type
     //* go (no per-frame time budget). Safe to call from any thread; an
     //* unbalanced leave() (more leaves than enters) is ignored.
     procedure ReleaseQueue;
+    //* Release the implicit hold (if any) taken for the current 'cycle' body
+    //* and arm the one-shot flush, so the main loop commits what the script has
+    //* queued so far. Called at every yield point (cycle, sleep, console read).
+    //* Returns True when a hold was actually released, so the caller can take it
+    //* again after the yield. Safe to call from any thread.
+    function ReleaseAutoQueue: Boolean;
+    //* Take the implicit hold that groups the commands of one 'cycle' body.
+    //* The next ReleaseAutoQueue commits them in a single drawing cycle. Safe
+    //* to call from any thread.
+    procedure HoldAutoQueue;
+    //* Enable/disable automatic grouping of each 'while cycle' body. On by
+    //* default; turn it off for progressive drawing that streams across frames.
+    property AutoGroup: Boolean read FAutoGroup write FAutoGroup;
     property Opaque: Boolean read FOpaque write FOpaque;
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
@@ -700,6 +722,10 @@ end;
 function TTyroEngine.WaitToNextFrame(AScript: TTyroScript): Boolean;
 begin
   Result := True;
+  //Reading 'cycle' is the commit point of the previous body: release the
+  //implicit hold so the main loop draws everything queued since the last read
+  //(also when no window is up, so the hold can never stay stuck).
+  ReleaseAutoQueue;
   //No window -> no drawing cycles -> never block the script (behaves like
   //"while true do" so headless scripts do not hang).
   if (FFrameEvent = nil) or (IsWindowHidden) or (not RayLib.IsWindowReady) then
@@ -715,8 +741,27 @@ begin
       Exit;
     end;
     if FFrameEvent.WaitFor(50) = wrSignaled then
-      Exit; //the next drawing frame was presented: run one more iteration
+      Break; //the next drawing frame was presented: run one more iteration
   end;
+  //Start holding the body that is about to run, so it lands in one cycle.
+  HoldAutoQueue;
+end;
+
+function TTyroEngine.ReleaseAutoQueue: Boolean;
+begin
+  //Release unconditionally: if autogroup was just turned off with a body still
+  //held, the hold must not stay stuck.
+  Result := TInterlocked.Exchange(FQueueAuto, 0) <> 0;
+  //Only a released hold needs the flush: it lets the next ProcessQueue pass
+  //drain the whole body in one go instead of stopping at the time budget.
+  if Result then
+    TInterlocked.Exchange(FQueueFlush, 1);
+end;
+
+procedure TTyroEngine.HoldAutoQueue;
+begin
+  if FAutoGroup then
+    TInterlocked.Exchange(FQueueAuto, 1);
 end;
 
 procedure TTyroEngine.QueueScreenshot(const AFileName: String);
@@ -845,14 +890,19 @@ begin
   if Board <> nil then
   begin
     //A script that called enter() holds the queue: commands keep piling up,
-    //but nothing is drawn until leave() releases the hold. A holder that has
-    //already gone (a script that errored or was stopped between enter and
-    //leave) is released here so it cannot lock drawing forever; the console
-    //REPL has no worker thread, so it is not covered by that self-healing.
-    if TInterlocked.Add(FQueueHold, 0) > 0 then
+    //but nothing is drawn until leave() releases the hold. Automatic per-cycle
+    //grouping uses the same gate through FQueueAuto. A holder that has already
+    //gone (a script that errored or was stopped between enter and leave) is
+    //released here so it cannot lock drawing forever; the console REPL has no
+    //worker thread, so it is not covered by that self-healing.
+    if (TInterlocked.Add(FQueueHold, 0) > 0) or
+       (TInterlocked.Add(FQueueAuto, 0) > 0) then
     begin
       if (FScriptThread = nil) or (not FScriptThread.Active) then
+      begin
         TInterlocked.Exchange(FQueueHold, 0);
+        TInterlocked.Exchange(FQueueAuto, 0);
+      end;
       Exit;
     end;
     //leave() asked for it: this pass ignores the frame time budget, so the
@@ -961,6 +1011,7 @@ begin
   Result.Holds := TInterlocked.Add(FQueueHold, 0);
   Result.Frames := TInterlocked.Add(FFrameCount, 0);
   Result.DrainMs := FQueueDrainMs;
+  Result.Group := FAutoGroup;
   Lock.Enter;
   try
     Result.Depth := Queue.Count;
@@ -1037,6 +1088,8 @@ begin
   FControlCapture := nil;
   FOptions := [];
   FOpaque := True;
+  //Each 'while cycle' body is drawn atomically by default (see AutoGroup).
+  FAutoGroup := True;
   Res := TTyroResources.Create;
   FCanvasLock := TCriticalSection.Create;
   //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
@@ -1465,6 +1518,7 @@ begin
   //A run stopped between enter() and leave() must not leave the hold behind:
   //the next run would find its drawing frozen.
   TInterlocked.Exchange(FQueueHold, 0);
+  TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
 end;
 
@@ -1766,6 +1820,10 @@ begin
   if (aScriptType <> nil) then
   begin
     aScript := aScriptType.ScriptClass.Create(ScriptSource);
+    //Group the script's initial drawing too, so even a body it builds before
+    //its first cycle/sleep/read is committed atomically; the hold is released
+    //at the first yield or when the run stops.
+    HoldAutoQueue;
     FScriptThread := TTyroScriptThread.Create(aScript);
     FScriptThread.Start;
   end
@@ -1862,6 +1920,7 @@ begin
   end;
   //A rerun must not inherit a hold the stopped run never balanced with leave().
   TInterlocked.Exchange(FQueueHold, 0);
+  TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
 end;
 

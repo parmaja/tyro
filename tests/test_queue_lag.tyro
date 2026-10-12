@@ -1,55 +1,58 @@
 --======================================================================
---  test_queue_lag.tyro - measure the "black box, then the text" flicker
+--  test_queue_lag.tyro - the "black box, then the text" flicker
 --======================================================================
 --  A "while cycle do" body queues an opaque black header and then some text.
---  The main loop drains the queue on its own thread while the script thread is
---  still queueing the body. When a frame boundary falls in the middle of the
---  body, the engine draws the black box alone and presents it; the text shows
---  up a frame later. That is the flicker.
+--  The main loop drains the drawing queue on its own thread while the script
+--  thread is still building the body. If a frame boundary falls in the middle
+--  of a body, the engine draws only what it can see (the black box) and
+--  presents it; the text appears a frame later.
+--
+--  Tyro prevents this by default: automatic per-cycle grouping holds the queue
+--  from the moment a 'cycle' body starts until the next yield point (the next
+--  'cycle', sleep(), console read()), so the whole body is committed in one
+--  drawing cycle. autogroup(false) restores raw streaming for scripts that
+--  want progressive drawing.
 --
 --  Engine counters, read through the 'queue' table:
 --    queue.consumed  commands executed since start (grows on every drain)
 --    queue.passes    ProcessQueue passes that executed >=1 command
---    queue.deferred  passes stopped at the frame time budget with more waiting
+--    queue.deferred  passes stopped at the time budget with more waiting
 --    queue.depth     commands waiting right now
 --    queue.max       largest backlog seen at the start of a pass
 --    queue.holds     open enter() calls
+--    queue.group     true while automatic per-cycle grouping is on
 --  millis() is the same high-resolution clock the frame budget uses.
 --
---  How to catch the split from Lua. A frame boundary can only fall inside the
---  body while the script is busy queueing it, and at that moment the script is
---  not blocked on 'cycle', so it cannot sample then. But it does not need to:
---  right after the body returns, BEFORE the next 'cycle', read queue.consumed
---  again. Any commands the engine managed to execute in between were drained
---  while the body was still being built:
---      before = queue.consumed          (queue is empty here)
+--  How to catch a split from Lua. A frame boundary can only fall inside the
+--  body while the script is busy building it, and at that moment the script is
+--  not blocked on 'cycle', so it cannot sample then. It does not need to: right
+--  after the body returns, BEFORE the next 'cycle', read queue.consumed again.
+--  Any commands the engine executed in between were drained mid-body:
+--      before = queue.consumed           (queue is empty here)
 --      <queue the body of n commands>
---      mid = queue.consumed - before    (drained mid-body: 0 < mid < n = SPLIT)
---      <cycle: the frame that draws the rest>
---      after = queue.consumed - before
---  A split means one frame was presented with only part of the body.
+--      mid = queue.consumed - before     (0 < mid < n  ->  a split frame)
 --
---  Phase 1 runs bodies with no pause. The body queues in well under a
---  millisecond against a ~33 ms frame, so the split is real but rare.
---  Phase 2 parks the script after the black box (sleep), which guarantees the
---  boundary lands mid-body: the box is drawn alone. Phase 3 wraps the same
---  parked body in enter()/leave(); the hold keeps the main loop out, so the
---  boundary cannot fall inside and no split appears.
+--  Phase 1 (default): a body that spins 70 ms without yielding spans several
+--  frames; automatic grouping keeps it whole, so no split appears.
+--  Phase 2: the same body with autogroup(false) - the frame race is back and
+--  the black box is drained and drawn alone (mid = 2, the box's two commands).
+--  Phase 3: back on by default, wrapped in enter()/leave() for good measure.
 --======================================================================
 
 window.show(320, 240)
 
 local out = openfile("test_queue_lag_result.txt", "w")
 
--- One "radio header" style body: an opaque black box, then green text lines.
--- AOpenMS > 0 parks the script after the box, widening the race window.
--- Returns the number of queued commands (the colour writes are queued too).
-local function draw_body(aOpenMS)
+-- One "radio header" body: an opaque black box, then green text lines. ABusyMS
+-- spins without yielding so the body spans a frame boundary (widening the race
+-- window deterministically). Returns the number of queued commands.
+local function draw_body(aBusyMS)
   local n = 0
   canvas.color = colors.black;  n = n + 1
   canvas.rectangle(0, 0, 320, 120, true); n = n + 1
-  if aOpenMS > 0 then
-    sleep(aOpenMS)
+  if aBusyMS > 0 then
+    local t0 = millis()
+    while millis() - t0 < aBusyMS do end
   end
   canvas.color = colors.green;  n = n + 1
   for i = 1, 12 do
@@ -68,57 +71,55 @@ local function wait_empty()
 end
 
 -- Run ABodies bodies. Returns the number of mid-body splits seen.
-local function run_phase(aName, aHold, aOpenMS, aBodies)
-  out:write("phase ", aName, " hold=", aHold, " park=", aOpenMS, "ms\n")
-  local splits, delayed, whole = 0, 0, 0
-  local n, maxmid, queue_ms = 0, 0, 0
+local function run_phase(aName, aHold, aBusyMS, aBodies)
+  out:write("phase ", aName, " hold=", aHold, " busy=", aBusyMS,
+            "ms group=", tostring(queue.group), "\n")
+  local splits, nodrain, whole = 0, 0, 0
+  local n, maxmid = 0, 0
   for b = 1, aBodies do
     if not wait_empty() then break end
     local before = queue.consumed
     if aHold then enter() end
-    local t0 = millis()
-    n = draw_body(aOpenMS)
+    n = draw_body(aBusyMS)
     if aHold then leave() end
-    local dt = millis() - t0
-    if dt > queue_ms then queue_ms = dt end
     -- Sample without waiting: a non-zero delta here was drained mid-body.
     local mid = queue.consumed - before
     if mid > maxmid then maxmid = mid end
     if mid > 0 and mid < n then
       splits = splits + 1
     elseif mid == 0 then
-      delayed = delayed + 1
+      nodrain = nodrain + 1
     else
       whole = whole + 1
     end
     if not wait_empty() then break end
-    local after = queue.consumed - before
-    out:write("  body ", b, " mid=", mid, "/", after, " of ", n,
-              "  queue_ms=", dt, "  depth=", queue.depth, "\n")
+    out:write("  body ", b, " mid=", mid, " of ", n,
+              " depth=", queue.depth, "\n")
   end
-  out:write("  summary n=", n, " splits=", splits, " delayed=", delayed,
-            " whole=", whole, " maxmid=", maxmid, " queue_ms=", queue_ms, "\n")
+  out:write("  summary n=", n, " splits=", splits, " no-drain=", nodrain,
+            " whole=", whole, " maxmid=", maxmid, "\n")
   return splits
 end
 
--- 1: bare, no park. Fast enough that the split is rare but possible.
-local fast = run_phase("bare-fast", false, 0, 20)
+-- 1: automatic grouping on (default). The body is held as one group.
+local auto = run_phase("auto-group", false, 70, 10)
 
--- 2: bare, parked after the black box. The boundary lands mid-body, so the
---    box is drawn alone and the split is guaranteed.
-local split = run_phase("bare-parked", false, 60, 10)
+-- 2: raw streaming. The frame race splits the body: the box is drawn alone.
+autogroup(false)
+local raw = run_phase("group-off", false, 70, 10)
+autogroup(true)
 
--- 3: enter()/leave() around the same parked body. The hold stops the main loop
---    from draining mid-body, so no split can appear.
-local held = run_phase("held-parked", true, 60, 10)
+-- 3: explicit enter()/leave() around the same body (grouping is on again).
+local held = run_phase("enter-leave", true, 70, 10)
 
 out:write("engine frames=", queue.frames,
           " deferred=", queue.deferred,
           " maxdepth=", queue.max,
           " holds=", queue.holds,
+          " group=", tostring(queue.group),
           " drainms=", queue.drainms, "\n")
-out:write("VERDICT split(bare-fast)=", fast,
-          " split(bare-parked)=", split,
-          " split(held-parked)=", held, "\n")
+out:write("VERDICT splits auto=", auto,
+          " group-off=", raw,
+          " enter-leave=", held, "\n")
 out:close()
 exit()
