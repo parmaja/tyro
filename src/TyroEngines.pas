@@ -128,6 +128,35 @@ type
   TTyroEngineOption = (moMainWindow, moShowTerminal, moShowFPS);
   TTyroEngineOptions = set of TTyroEngineOption;
 
+  {
+    Queue/frame diagnostics for the "black box, then the text" partial-frame
+    flicker. A script on the worker thread keeps queueing draw commands while
+    the main loop drains them once per frame; when a ProcessQueue pass stops at
+    the per-frame time budget with commands still waiting, the frame is drawn
+    with only part of the batch the script built, which shows as a black
+    rectangle that gets its text a frame later. Read from Lua through the
+    'queue' table (queue.consumed, queue.deferred, ...).
+  }
+  TQueueStats = record
+    //* Commands executed on the main thread since the engine started.
+    Consumed: Integer;
+    //* ProcessQueue passes that executed at least one command.
+    Passes: Integer;
+    //* Passes that stopped at the time budget while commands were still
+    //* queued: each one drew a partial batch, i.e. a flicker frame.
+    Deferred: Integer;
+    //* Largest Queue.Count seen at the start of a pass (backlog high-water).
+    MaxDepth: Integer;
+    //* Commands waiting in the queue right now.
+    Depth: Integer;
+    //* Open enter() calls (the queue hold depth).
+    Holds: Integer;
+    //* Drawing cycles presented since the engine started.
+    Frames: Integer;
+    //* Duration of the most recent drain pass, in milliseconds.
+    DrainMs: Double;
+  end;
+
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: UTF8String) of object;
 
   { TTyroMain }
@@ -219,6 +248,16 @@ type
     FQueueHold: LongInt;
     FQueueFlush: LongInt;
     FRunning: LongInt;
+    //* Queue/frame diagnostics backing QueueStats (see TQueueStats). Written on
+    //* the main thread during ProcessQueue and the drawing cycle, read on the
+    //* script thread through the Lua 'queue' table, so reads go through
+    //* TInterlocked.
+    FQueueConsumed: LongInt;
+    FQueuePasses: LongInt;
+    FQueueDeferred: LongInt;
+    FQueueMaxDepth: LongInt;
+    FQueueDrainMs: Double;
+    FFrameCount: LongInt;
     //* Screen shake state (see Shake). FShakeTime counts the seconds left,
     //* FShakeDuration the full length of the current shake so the amplitude can
     //* fade out, and FShakeX/FShakeY hold this frame's random offset in pixels.
@@ -272,6 +311,10 @@ type
 
     //When application exit, unload your resources
     procedure ProcessQueue;
+
+    //* Snapshot of the queue/frame diagnostics (see TQueueStats). Safe to call
+    //* from any thread; backs the Lua 'queue' table.
+    function QueueStats: TQueueStats;
 
     //* Handle files dropped onto the window (from Explorer). Processes .tyro/.lua
     //* to open and run them, and .bdf to load a custom font.
@@ -556,6 +599,7 @@ begin
         finally
           RayLib.EndDrawing;
           FPresentedFrame := True;
+          TInterlocked.Increment(FFrameCount);
           //One drawing cycle completed: wake any script thread blocked on the
           //Lua 'cycle' gate so "while cycle do" runs at most once per frame.
           if FFrameEvent <> nil then
@@ -794,6 +838,9 @@ var
   fpd: Double;
   ft, ft2: Double;
   flush: Boolean;
+  Consumed: Integer;
+  Depth: Integer;
+  BudgetHit: Boolean;
 begin
   if Board <> nil then
   begin
@@ -818,7 +865,8 @@ begin
       //per frame just to draw nothing costs GL state churn on every cycle.
       Lock.Enter;
       try
-        if Queue.Count > 0 then
+        Depth := Queue.Count;
+        if Depth > 0 then
           p := Queue.Extract(Queue[0])
         else
           p := nil;
@@ -829,8 +877,16 @@ begin
       if p = nil then
         Exit;
 
+      //Remember the backlog this pass starts with. A high-water mark that keeps
+      //growing means the script thread queues commands faster than the main
+      //loop drains them (see TQueueStats).
+      if Depth > FQueueMaxDepth then
+        FQueueMaxDepth := Depth;
+
       ft := GetTime();
       fpd := (1 / FPS);
+      Consumed := 0;
+      BudgetHit := False;
       Board.BeginDraw;
       while True do
       begin
@@ -847,14 +903,20 @@ begin
           end;
         end;
         FreeAndNil(p);
+        Inc(Consumed);
         ft2 := GetTime() - ft;
         //Stop the pass at the frame time budget unless a flush was armed, and
         //also as soon as a fresh enter() is seen, so a command queued after
         //the hold began is never executed by this already-running pass.
-        if ((not flush) and (ft2 >= fpd)) or (TInterlocked.Add(FQueueHold, 0) > 0) then
+        if (not flush) and (ft2 >= fpd) then
         begin
+          //Budget exhausted while more commands may be waiting: the frame is
+          //about to be drawn with a partial batch.
+          BudgetHit := True;
           break;
         end;
+        if TInterlocked.Add(FQueueHold, 0) > 0 then
+          break;
 
         Lock.Enter;
         try
@@ -870,9 +932,40 @@ begin
 
       end;
       Board.EndDraw;
+      //Publish the pass counters. Only the main thread writes them; the Lua
+      //side reads through TInterlocked (QueueStats).
+      TInterlocked.Add(FQueueConsumed, Consumed);
+      if Consumed > 0 then
+        TInterlocked.Increment(FQueuePasses);
+      FQueueDrainMs := (GetTime() - ft) * 1000;
+      Lock.Enter;
+      try
+        Depth := Queue.Count;
+      finally
+        Lock.Leave;
+      end;
+      if BudgetHit and (Depth > 0) then
+        TInterlocked.Increment(FQueueDeferred);
     finally
       CanvasLock.Leave;
     end;
+  end;
+end;
+
+function TTyroEngine.QueueStats: TQueueStats;
+begin
+  Result.Consumed := TInterlocked.Add(FQueueConsumed, 0);
+  Result.Passes := TInterlocked.Add(FQueuePasses, 0);
+  Result.Deferred := TInterlocked.Add(FQueueDeferred, 0);
+  Result.MaxDepth := TInterlocked.Add(FQueueMaxDepth, 0);
+  Result.Holds := TInterlocked.Add(FQueueHold, 0);
+  Result.Frames := TInterlocked.Add(FFrameCount, 0);
+  Result.DrainMs := FQueueDrainMs;
+  Lock.Enter;
+  try
+    Result.Depth := Queue.Count;
+  finally
+    Lock.Leave;
   end;
 end;
 

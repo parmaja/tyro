@@ -540,6 +540,7 @@ for a control that is not an `image`.
 | `leave()` | — | Release the hold taken by `enter()`: the whole group queued in between is then drawn at one drawing cycle |
 | `frametime()` | `number` (seconds) | Time elapsed since the last frame |
 | `time()` | `number` (seconds) | Elapsed time since the window was created |
+| `millis()` | `number` (ms) | High-resolution monotonic clock in milliseconds (the same timer the frame budget uses); fine enough to time a `while cycle do` body |
 | `rand(min, max)` | `integer` | Random integer in [min, max] |
 
 `cycle` is a frame gate: reading it pauses the script thread until the main
@@ -594,6 +595,49 @@ end
 `enter()`/`leave()` nest (they count up and down), and a script that stops or
 errors between them is released automatically so the next run never inherits a
 frozen queue.
+
+## Measuring the queue (queue.*)
+
+The engine exposes read-only counters to help diagnose the "black box, then the
+text" flicker, where a frame is presented with only part of a drawing body.
+
+| Field | Description |
+|-------|-------------|
+| `queue.consumed` | Drawing commands executed since the engine started (grows on every drain) |
+| `queue.passes` | `ProcessQueue` passes that executed at least one command |
+| `queue.deferred` | Passes stopped at the frame time budget while more commands were still queued (each one drew a partial batch) |
+| `queue.depth` | Commands waiting in the queue right now |
+| `queue.max` | Largest backlog seen at the start of a pass (a high-water mark) |
+| `queue.holds` | Open `enter()` calls (the hold depth) |
+| `queue.frames` | Drawing cycles presented since the engine started |
+| `queue.drainms` | Duration of the most recent drain pass, in milliseconds |
+
+Because the script thread builds a body while the main loop drains the queue on
+its own thread, a frame boundary can fall in the middle of a body. The script
+cannot sample at that instant (it is not blocked on `cycle` then), but it can
+catch it right after the body returns, before the next `cycle`:
+
+```lua
+while cycle do
+    local before = queue.consumed      -- queue is empty here
+    enter()                            -- or queue the body bare
+    n = draw_body()
+    leave()
+    local mid = queue.consumed - before -- drained while the body was built
+    -- 0 < mid < n  ->  a frame showed only part of the body (the flicker)
+end
+```
+
+The same trick with `millis()` times how long the body takes to queue:
+
+```lua
+local t0 = millis()
+n = draw_body()
+print("body queued in " .. (millis() - t0) .. " ms")
+```
+
+Wrapping the body in `enter()`/`leave()` holds the queue, so the main loop
+cannot drain mid-body and no partial frame can appear.
 
 # Examples
 

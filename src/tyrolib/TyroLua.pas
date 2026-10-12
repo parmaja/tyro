@@ -115,6 +115,20 @@ type
     function Shake_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaQueue }
+
+  // Read-only view of the engine's queue/frame diagnostics (TQueueStats).
+  // A script in "while cycle do" can compare queue.consumed before and after a
+  // body with the number of commands it queued: when the delta is smaller the
+  // main loop drew only part of the body that frame, which is the black-box-
+  // then-text flicker. queue.deferred counts those partial frames directly.
+  TLuaQueue = class(TTyroLuaObject)
+  protected
+    function Getter(L: PLua_State): integer; override;
+  public
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
   { TLuaFont }
 
   TLuaFont = class(TTyroLuaObject)
@@ -447,6 +461,7 @@ type
     Canvas: TLuaCanvas;
     Console: TLuaConsole;
     Window: TLuaWindow;
+    QueueLua: TLuaQueue;
     Colors: TLuaColors;
     Font: TLuaFont;
     Music: TLuaMusic;
@@ -475,6 +490,7 @@ type
     function IsMouseButtonPressed_func(L: Plua_State): integer; cdecl;
     function FrameTime_func(L: Plua_State): integer; cdecl;
     function TotalTime_func(L: Plua_State): integer; cdecl;
+    function Millis_func(L: Plua_State): integer; cdecl;
     function RandomValue_func(L: Plua_State): integer; cdecl;
     function Screenshot_func(L: Plua_State): integer; cdecl;
     function Exit_func(L: Plua_State): integer; cdecl;
@@ -854,6 +870,65 @@ begin
   inherited Create(AScript);
 end;
 
+{ TLuaQueue }
+
+function TLuaQueue.Getter(L: PLua_State): integer;
+var
+  Stats: TQueueStats;
+  field: string;
+begin
+  Result := 0;
+  if Engine = nil then
+    Exit;
+  Stats := Engine.QueueStats;
+  field := L.ToString(2);
+  if field = 'consumed' then
+  begin
+    L.PushInteger(Stats.Consumed);
+    Result := 1;
+  end
+  else if field = 'passes' then
+  begin
+    L.PushInteger(Stats.Passes);
+    Result := 1;
+  end
+  else if field = 'deferred' then
+  begin
+    L.PushInteger(Stats.Deferred);
+    Result := 1;
+  end
+  else if field = 'max' then
+  begin
+    L.PushInteger(Stats.MaxDepth);
+    Result := 1;
+  end
+  else if field = 'depth' then
+  begin
+    L.PushInteger(Stats.Depth);
+    Result := 1;
+  end
+  else if field = 'holds' then
+  begin
+    L.PushInteger(Stats.Holds);
+    Result := 1;
+  end
+  else if field = 'frames' then
+  begin
+    L.PushInteger(Stats.Frames);
+    Result := 1;
+  end
+  else if field = 'drainms' then
+  begin
+    L.PushNumber(Stats.DrainMs);
+    Result := 1;
+  end;
+end;
+
+constructor TLuaQueue.Create(AScript: TLuaScript);
+begin
+  inherited Create(AScript);
+end;
+
 { TLuaFont }
 
 function TLuaFont.Setter(L: PLua_State): integer;
@@ -1183,6 +1258,7 @@ begin
 
   Canvas := TLuaCanvas.Create(Self);
   Window := TLuaWindow.Create(Self);
+  QueueLua := TLuaQueue.Create(Self);
   Console := TLuaConsole.Create(Self);
   Colors := TLuaColors.Create(Self);
   Font := TLuaFont.Create(Self);
@@ -1204,6 +1280,9 @@ begin
   Lua.State.Register('window', 'shake', Window, Window.Shake_func);
   Lua.State.RegisterGlobal('shake', Window.Shake_func);
   Lua.State.Register('window', Window); //Should be last one for window
+
+  //queue: read-only queue/frame diagnostics (see TLuaQueue / TQueueStats)
+  Lua.State.Register('queue', QueueLua); //Should be last one
 
   //global functions
   Lua.State.RegisterGlobal('print', Console.PrintOut_func);
@@ -1270,6 +1349,7 @@ begin
   Lua.State.RegisterGlobal('ismousepressed', IsMouseButtonPressed_func);
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
+  Lua.State.RegisterGlobal('millis', Millis_func);
   Lua.State.RegisterGlobal('rand', RandomValue_func);
   Lua.State.RegisterGlobal('screenshot', Screenshot_func);
   Lua.State.RegisterGlobal('exit', Exit_func);
@@ -1412,6 +1492,7 @@ begin
   FreeAndNil(Colors);
   FreeAndNil(Console);
   FreeAndNil(Window);
+  FreeAndNil(QueueLua);
   FreeAndNil(Canvas);
   inherited;
 end;
@@ -2336,6 +2417,16 @@ end;
 function TLuaScript.TotalTime_func(L: Plua_State): integer; cdecl;
 begin
   L.PushNumber(TyroInput.TotalTime);
+  Result := 1;
+end;
+
+// millis() - high-resolution monotonic clock in milliseconds (RayLib.GetTime,
+// the same timer the engine's frame budget uses). Unlike clock(), which is
+// quantised to the OS tick, this is fine enough to time a "while cycle do"
+// body, e.g. "local t0 = millis() ... print(millis() - t0)".
+function TLuaScript.Millis_func(L: Plua_State): integer; cdecl;
+begin
+  L.PushNumber(RayLib.GetTime * 1000);
   Result := 1;
 end;
 
