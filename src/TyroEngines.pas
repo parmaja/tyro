@@ -157,6 +157,14 @@ type
     DrainMs: Double;
     //* True while automatic per-cycle grouping is enabled (the default).
     Group: Boolean;
+    //* Milliseconds the script spent between the last two queued commands, and
+    //* the largest such gap seen. A big value is the script stalling between
+    //* two queue calls (a blocking getter, file I/O, ...) without yielding, so
+    //* e.g. a rectangle and the text queued right after it land in the same
+    //* group but seconds apart. Reset at every yield (cycle/sleep/read), so
+    //* frame waits are not counted.
+    LastGap: Integer;
+    MaxGap: Integer;
   end;
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: UTF8String) of object;
@@ -267,6 +275,14 @@ type
     FQueueMaxDepth: LongInt;
     FQueueDrainMs: Double;
     FFrameCount: LongInt;
+    //* Time (ms) of the last queued command on the script thread, plus the
+    //* resulting gaps. A gap is how long the script spent between two
+    //* consecutive queue calls without yielding; a 0 stamp means there is no
+    //* baseline yet (run start or just after a yield). Written on the script
+    //* thread, read on the main thread, so access goes through TInterlocked.
+    FQueueGapStamp: Int64;
+    FQueueGapLast: LongInt;
+    FQueueGapMax: LongInt;
     //* Screen shake state (see Shake). FShakeTime counts the seconds left,
     //* FShakeDuration the full length of the current shake so the amplitude can
     //* fade out, and FShakeX/FShakeY hold this frame's random offset in pixels.
@@ -392,6 +408,17 @@ type
     //* The next ReleaseAutoQueue commits them in a single drawing cycle. Safe
     //* to call from any thread.
     procedure HoldAutoQueue;
+    //* Record the moment a command was queued (called by TTyroScript.
+    //* AddQueueObject on the script thread). Consecutive calls with no yield in
+    //* between measure how long the script itself took to produce the next
+    //* command, which is what TQueueStats.LastGap/MaxGap report: a blocking
+    //* getter between a rectangle() and the text() that follows it shows up
+    //* here. Safe to call from any thread.
+    procedure NoteEnqueue;
+    //* Drop the enqueue baseline so the next NoteEnqueue starts a fresh
+    //* measurement. Called at every yield point (see ReleaseAutoQueue). Safe to
+    //* call from any thread.
+    procedure ResetEnqueueGap;
     //* Enable/disable automatic grouping of each 'while cycle' body. On by
     //* default; turn it off for progressive drawing that streams across frames.
     property AutoGroup: Boolean read FAutoGroup write FAutoGroup;
@@ -756,12 +783,43 @@ begin
   //drain the whole body in one go instead of stopping at the time budget.
   if Result then
     TInterlocked.Exchange(FQueueFlush, 1);
+  //The script is about to block/yield: stop measuring enqueue gaps, so the
+  //wait itself is not reported as a stall and the next body starts clean.
+  ResetEnqueueGap;
 end;
 
 procedure TTyroEngine.HoldAutoQueue;
 begin
   if FAutoGroup then
     TInterlocked.Exchange(FQueueAuto, 1);
+end;
+
+procedure TTyroEngine.NoteEnqueue;
+var
+  NowMs, Prev, Diff: Int64;
+  Gap: LongInt;
+begin
+  NowMs := Round(GetTime() * 1000);
+  //Exchange gives the previous stamp and installs the new one in one step; a
+  //0/negative previous stamp means there is no baseline yet.
+  Prev := TInterlocked.Exchange(FQueueGapStamp, NowMs);
+  if Prev <= 0 then
+    Exit;
+  Diff := NowMs - Prev;
+  if Diff < 0 then
+    Diff := 0; //clock wrap: ignore
+  if Diff > High(LongInt) then
+    Gap := High(LongInt)
+  else
+    Gap := LongInt(Diff);
+  TInterlocked.Exchange(FQueueGapLast, Gap);
+  if Gap > TInterlocked.Add(FQueueGapMax, 0) then
+    TInterlocked.Exchange(FQueueGapMax, Gap);
+end;
+
+procedure TTyroEngine.ResetEnqueueGap;
+begin
+  TInterlocked.Exchange(FQueueGapStamp, 0);
 end;
 
 procedure TTyroEngine.QueueScreenshot(const AFileName: String);
@@ -1012,6 +1070,8 @@ begin
   Result.Frames := TInterlocked.Add(FFrameCount, 0);
   Result.DrainMs := FQueueDrainMs;
   Result.Group := FAutoGroup;
+  Result.LastGap := TInterlocked.Add(FQueueGapLast, 0);
+  Result.MaxGap := TInterlocked.Add(FQueueGapMax, 0);
   Lock.Enter;
   try
     Result.Depth := Queue.Count;
@@ -1520,6 +1580,7 @@ begin
   TInterlocked.Exchange(FQueueHold, 0);
   TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
+  ResetEnqueueGap;
 end;
 
 procedure TTyroEngine.Terminate;
@@ -1820,6 +1881,10 @@ begin
   if (aScriptType <> nil) then
   begin
     aScript := aScriptType.ScriptClass.Create(ScriptSource);
+    //Fresh enqueue-gap measurement for this run (queue.maxgap/lastgap).
+    TInterlocked.Exchange(FQueueGapStamp, 0);
+    TInterlocked.Exchange(FQueueGapLast, 0);
+    TInterlocked.Exchange(FQueueGapMax, 0);
     //Group the script's initial drawing too, so even a body it builds before
     //its first cycle/sleep/read is committed atomically; the hold is released
     //at the first yield or when the run stops.
@@ -1922,6 +1987,7 @@ begin
   TInterlocked.Exchange(FQueueHold, 0);
   TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
+  ResetEnqueueGap;
 end;
 
 //Called from the main loop while the window is still hidden. A script file given

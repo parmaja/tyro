@@ -22,6 +22,22 @@ radio.play("http://solid24.streamupsolutions.com:8026/stream")
 --radio.play("https://stream04.pcradio.app/vangelis-med")
 --radio.play("https://server.emancity.com:9992/stream")
 
+-- Watch for the script stalling between two queued commands (e.g. a radio.*
+-- getter blocking on a lock while the stream reconnects). The first gap that
+-- clears the limit is reported to the console; a new report needs a gap a full
+-- limit above the last one reported, so small jitter never spams the console.
+-- See docs/atomic.md "Catching a stall".
+local gap_warned = 0
+local function gapwatch(aLimitMS)
+  local g = queue.maxgap
+  if g > aLimitMS and g >= gap_warned + aLimitMS then
+    gap_warned = g
+    println("GAP: " .. g .. " ms between two queued commands"
+      .. " (limit " .. aLimitMS .. " ms, lastgap " .. queue.lastgap .. " ms)")
+  end
+  return g
+end
+
 while cycle do
   -- left/right arrow keys change the number of bars
   if iskeypressed("left") and spectrum.bars > 8 then
@@ -40,6 +56,8 @@ while cycle do
   canvas.text(8, 26, "Title   : " .. radio.title)
   canvas.text(8, 44, "State   : " .. radio.state .. "   " .. radio.bitrate)
   leave()
+  -- report a too-long gap (blocking radio getter / reconnect) to the console
+  gapwatch(250)
 
   enter()
   -- bottom hint

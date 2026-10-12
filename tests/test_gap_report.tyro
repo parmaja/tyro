@@ -1,0 +1,93 @@
+--======================================================================
+--  test_gap_report.tyro - gapwatch(): report a too-long queue gap
+--======================================================================
+--  gapwatch(aLimitMS) is a tiny script-side monitor (used by demos/radio.tyro):
+--  after a drawing body it looks at queue.maxgap and reports to the console the
+--  first gap that clears the limit, and again only when a gap is a full limit
+--  above the last one reported - so a blocking getter (radio.station during a
+--  reconnect) is flagged once per stall level and small jitter never spams.
+--
+--  This test drives the same logic with the alert going to the result file
+--  instead of the console, and checks the expected claims:
+--    normal bodies            -> no alert (maxgap stays ~0)
+--    sleep() between commands -> no alert (a yield resets the baseline)
+--    a 150 ms non-yield stall -> exactly one alert for 150
+--    a 400 ms non-yield stall -> exactly one more alert for 400
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_gap_report_result.txt", "w")
+
+local gap_warned = 0
+local function gapwatch(aLimitMS)
+  local g = queue.maxgap
+  if g > aLimitMS and g >= gap_warned + aLimitMS then
+    gap_warned = g
+    out:write("  ALERT gap=", g, " limit=", aLimitMS,
+              " lastgap=", queue.lastgap, "\n")
+  end
+  return g
+end
+
+local function draw_body(aBusyMS, aSleepMS)
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 320, 120, true)
+  if aBusyMS > 0 then
+    local t0 = millis()
+    while millis() - t0 < aBusyMS do end
+  end
+  if aSleepMS > 0 then
+    sleep(aSleepMS)
+  end
+  canvas.color = colors.green
+  canvas.text(8, 8, "line 1")
+  canvas.text(8, 22, "line 2")
+end
+
+local function wait_empty()
+  while queue.depth > 0 do
+    if not cycle then return false end
+  end
+  return true
+end
+
+-- Run a phase with the same stall/sleep in every body and count the alerts.
+local function run_phase(aName, aBusyMS, aSleepMS, aBodies, aLimit)
+  local hits = 0
+  local maxg = 0
+  out:write("phase ", aName, " busy=", aBusyMS, " sleep=", aSleepMS,
+            " limit=", aLimit, "\n")
+  for b = 1, aBodies do
+    if not wait_empty() then break end
+    draw_body(aBusyMS, aSleepMS)
+    local prevwarn = gap_warned
+    local g = gapwatch(aLimit)
+    if gap_warned > prevwarn then hits = hits + 1 end
+    if g > maxg then maxg = g end
+    out:write("  body ", b, " maxgap=", g, " warned=", gap_warned, "\n")
+    if not wait_empty() then break end
+  end
+  out:write("  phase-hits=", hits, " maxgap=", maxg, "\n")
+  return hits
+end
+
+-- 1: plain bodies, nothing to report.
+local h_normal = run_phase("normal", 0, 0, 5, 100)
+
+-- 2: a 150 ms yield: it is a commit point, not a stall, so still nothing.
+local h_sleep = run_phase("sleep-yield", 0, 150, 5, 100)
+
+-- 3: a 150 ms busy-wait (no yield): exactly one alert for the 150 ms record.
+local h_stall150 = run_phase("stall-150", 150, 0, 5, 100)
+
+-- 4: a 400 ms busy-wait: one more alert for the new 400 ms record.
+local h_stall400 = run_phase("stall-400", 400, 0, 5, 100)
+
+local ok = (h_normal == 0) and (h_sleep == 0) and (h_stall150 == 1)
+      and (h_stall400 == 1)
+out:write("VERDICT hits normal=", h_normal, " sleep=", h_sleep,
+          " stall150=", h_stall150, " stall400=", h_stall400,
+          " maxgap=", queue.maxgap, " => ", ok and "PASS" or "FAIL", "\n")
+out:close()
+exit()

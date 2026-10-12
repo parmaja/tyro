@@ -1715,6 +1715,10 @@ begin
     // interactive run. Ownership remains here when the request is rejected.
     if GetActive and (Engine <> nil) and Engine.Running then
     begin
+      //Stamp the enqueue time (before the queue lock is contended) so the
+      //engine can report how long the script stalled between two commands
+      //(queue.lastgap/maxgap); see TTyroEngine.NoteEnqueue.
+      Engine.NoteEnqueue;
       Engine.Queue.Add(AQueueObject);
       AQueueObject := nil;
     end;

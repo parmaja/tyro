@@ -969,6 +969,19 @@ begin
   begin
     L.PushBoolean(Stats.Group);
     Result := 1;
+  end
+  else if field = 'lastgap' then
+  begin
+    //ms between the last two queued commands (no yield in between).
+    L.PushInteger(Stats.LastGap);
+    Result := 1;
+  end
+  else if field = 'maxgap' then
+  begin
+    //largest ms spent between two queued commands of the run, e.g. a blocking
+    //getter between a rectangle() and the text() drawn over it.
+    L.PushInteger(Stats.MaxGap);
+    Result := 1;
   end;
 end;
 

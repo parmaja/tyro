@@ -653,6 +653,8 @@ text" flicker, where a frame is presented with only part of a drawing body.
 | `queue.frames` | Drawing cycles presented since the engine started |
 | `queue.group` | `true` while automatic per-`cycle` grouping is enabled |
 | `queue.drainms` | Duration of the most recent drain pass, in milliseconds |
+| `queue.lastgap` | Milliseconds between the last two queued commands (no yield in between) |
+| `queue.maxgap` | Largest such gap of the run: the script stalled between two queue calls |
 
 Because the script thread builds a body while the main loop drains the queue on
 its own thread, a frame boundary can fall in the middle of a body. The script
@@ -676,6 +678,50 @@ The same trick with `millis()` times how long the body takes to queue:
 local t0 = millis()
 n = draw_body()
 print("body queued in " .. (millis() - t0) .. " ms")
+```
+
+Grouping makes the body land in one drawing cycle, but it cannot fix the script
+itself taking a long time between two commands (a `radio.station` getter that
+blocks on a lock the network thread holds, file I/O, ...). The engine stamps
+every queued command with its enqueue time, so `queue.maxgap` reports the
+largest time the script spent between two consecutive queue calls with no yield
+in between — exactly the gap between a `rectangle()` and the `text()` that is
+meant to cover it:
+
+```lua
+canvas.rectangle(0, 0, 640, 70, true)   -- opaque black box
+-- radio.station blocks here for a second; the box alone cannot be shown yet,
+-- but it will be the whole group is held, so the frame freezes instead
+canvas.text(8, 8, "Station : " .. radio.station)
+print("stall between box and text: " .. queue.maxgap .. " ms")
+```
+
+Wait times that *are* yields (`cycle`, `sleep()`, `console.read()`) reset the
+baseline, so `maxgap` does not count frame waits: a small `maxgap` with a
+black-only header means the metadata itself is empty (buffering/reconnect), not
+a rendering race.
+
+To be told when a stall happens, watch the gap from the script (used by
+`demos/radio.tyro`). The first gap that clears the limit is printed to the
+console; a new report needs a gap a full limit above the last one reported, so
+drift never spams:
+
+```lua
+local gap_warned = 0
+local function gapwatch(aLimitMS)
+  local g = queue.maxgap
+  if g > aLimitMS and g >= gap_warned + aLimitMS then
+    gap_warned = g
+    println("GAP: " .. g .. " ms between two queued commands"
+      .. " (limit " .. aLimitMS .. " ms, lastgap " .. queue.lastgap .. " ms)")
+  end
+  return g
+end
+
+while cycle do
+    -- ...draw the body...
+    gapwatch(250)   -- >250 ms stall? the console says so
+end
 ```
 
 Wrapping the body in `enter()`/`leave()` holds the queue, so the main loop

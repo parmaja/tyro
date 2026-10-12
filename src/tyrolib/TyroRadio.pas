@@ -75,6 +75,13 @@ type
     function GuessFileType: string;
     procedure DoError(const AMessage: string);
     procedure StreamEnded;
+    //* Detach the client under the lock (so script-thread getters instantly see
+    //* nil and return '') and close/free it WITHOUT holding the lock: Close()
+    //* joins the connection worker thread, which can be blocked inside a socket
+    //* read for up to ReadTimeout seconds. Holding FLock across that join would
+    //* freeze every radio.* getter (they take FLock too) and stall a drawing
+    //* body in the middle of its queue calls.
+    procedure CloseClient;
     procedure SetVolume(AVolume: Single);
     function GetTitle: string;
     function GetStation: string;
@@ -221,19 +228,36 @@ begin
     FMusicLoaded := False;
   end;
   FreeAndNil(FSnapshot);
-  //Close + free under the lock so an in-flight getter on a script thread can
-  //never dereference a freed client (TOCTOU use-after-free).
+  //Close the client without holding the lock (see CloseClient).
+  CloseClient;
+  FState := rpStopped;
+end;
+
+procedure TRadioPlayer.CloseClient;
+var
+  aClient: TmnIceCastClient;
+begin
+  //Detach under the lock: a concurrent getter can only see nil or the old
+  //client, never a half-freed one, and any getter that already holds a
+  //reference has already copied the value it needed under its own FLock wait.
   FLock.Enter;
   try
-    if FClient <> nil then
-    begin
-      FClient.Close;
-      FreeAndNil(FClient);
-    end;
+    aClient := FClient;
+    FClient := nil;
   finally
     FLock.Leave;
   end;
-  FState := rpStopped;
+  //Close joins the connection worker thread, which can be stuck inside a
+  //socket read for up to ReadTimeout seconds. Doing it without the lock keeps
+  //script-thread radio.* getters (and the drawing body calling them) live.
+  if aClient <> nil then
+  begin
+    try
+      aClient.Close;
+    finally
+      aClient.Free;
+    end;
+  end;
 end;
 
 procedure TRadioPlayer.SetVolume(AVolume: Single);
@@ -365,13 +389,8 @@ begin
   end;
   FSnapshot.Free;
   FSnapshot := nil;
-  FLock.Enter;
-  try
-    FClient.Close;
-    FreeAndNil(FClient);
-  finally
-    FLock.Leave;
-  end;
+  //Close the client without holding the lock (see CloseClient).
+  CloseClient;
 end;
 
 procedure TRadioPlayer.StreamEnded;
@@ -386,13 +405,8 @@ begin
   end;
   FSnapshot.Free;
   FSnapshot := nil;
-  FLock.Enter;
-  try
-    FClient.Close;
-    FreeAndNil(FClient);
-  finally
-    FLock.Leave;
-  end;
+  //Close the client without holding the lock (see CloseClient).
+  CloseClient;
   FState := rpStopped;
 end;
 

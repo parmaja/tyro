@@ -1,0 +1,88 @@
+--======================================================================
+--  test_gap.tyro - catching the gap between 'rectangle' and 'text'
+--======================================================================
+--  The radio header asks why the black box appears alone for a second: "text
+--  not drawn quickly after rectangle". A frame boundary is no longer a suspect
+--  (automatic per-cycle grouping holds the whole body), but the script thread
+--  itself can still stall between two queue calls - e.g. inside radio.station /
+--  radio.title, which take locks the network thread may hold. When that happens
+--  the commands are enqueued far apart in TIME, and this test shows how to see
+--  that gap.
+--
+--  Engine support: every queued command is stamped with its enqueue time
+--  (GetTime). The time the script spent between two consecutive queue calls,
+--  with no yield in between, is reported as:
+--    queue.lastgap  ms between the last two queued commands
+--    queue.maxgap   the largest such gap of the run
+--  At every yield point (cycle, sleep(), console read()) the baseline is reset,
+--  so frame waits never pollute the counters.
+--
+--  Phase 1 (normal):    header + text right after each other - tiny gaps.
+--  Phase 2 (sleep):     the same body, but sleep(150) between the box and the
+--                       text. sleep() is a yield: the 150 ms wait is NOT a gap.
+--  Phase 3 (stall):     the same body, but a 150 ms busy-wait (no yield) in
+--                       place of the box. queue.maxgap must jump to ~150 ms,
+--                       proving the counter sees a blocking getter-sized stall.
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_gap_result.txt", "w")
+
+-- One "radio header" body: an opaque black box, then green text lines.
+-- aBusyMS spins WITHOUT yielding between the box and the text (what a blocking
+-- getter would do); aSleepMS is a real yield used by phase 2.
+local function draw_body(aBusyMS, aSleepMS)
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 320, 120, true)
+  if aBusyMS > 0 then
+    local t0 = millis()
+    while millis() - t0 < aBusyMS do end
+  end
+  if aSleepMS > 0 then
+    sleep(aSleepMS)
+  end
+  canvas.color = colors.green
+  canvas.text(8, 8, "Station : test")
+  canvas.text(8, 22, "Title   : xyz")
+  canvas.text(8, 36, "State   : playing   128")
+end
+
+-- Wait for the queue to drain completely, so the next body starts from empty.
+local function wait_empty()
+  while queue.depth > 0 do
+    if not cycle then return false end
+  end
+  return true
+end
+
+local function run_phase(aName, aBusyMS, aSleepMS, aBodies)
+  out:write("phase ", aName, " busy=", aBusyMS, " sleep=", aSleepMS, "\n")
+  for b = 1, aBodies do
+    if not wait_empty() then break end
+    draw_body(aBusyMS, aSleepMS)
+    -- Sampling without a pending 'cycle': maxgap is current on the script side.
+    out:write("  body ", b, " lastgap=", queue.lastgap,
+              " maxgap=", queue.maxgap,
+              " depth=", queue.depth, "\n")
+    if not wait_empty() then break end
+  end
+  out:write("  phase-maxgap=", queue.maxgap, "\n")
+  return queue.maxgap
+end
+
+-- 1: straight header+text bodies. Every gap is Lua overhead only.
+local normal = run_phase("normal", 0, 0, 5)
+
+-- 2: a 150 ms yield sits between box and text. It must NOT inflate the gap:
+--    sleep() is a yield point, so the baseline is reset around it.
+local via_sleep = run_phase("sleep-yield", 0, 150, 5)
+
+-- 3: a 150 ms stall with no yield (a blocking getter in disguise). queued just
+--    before and just after it are a full 150 ms apart in enqueue time.
+local via_stall = run_phase("stall", 150, 0, 5)
+
+out:write("VERDICT normal=", normal, " ms, sleep=", via_sleep,
+          " ms, stall=", via_stall, " ms\n")
+out:close()
+exit()
