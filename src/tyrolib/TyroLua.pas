@@ -26,8 +26,7 @@ uses
   mnUtils, mnLogs, mnClasses,
   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroPhysics,
   TyroControls, TyroEngines, TyroInput,
-  TyroRadio, TyroSpectrum,
-  TyroMidi;
+  TyroRadio, TyroSpectrum;
 
 type
   TLuaScript = class;
@@ -187,19 +186,6 @@ type
     function Stop_func(L: Plua_State): integer; cdecl;
   end;
 
-  { TLuaMidi }
-
-  TLuaMidi = class(TTyroLuaObject)
-  protected
-    function Setter(L: PLua_State): integer; override;
-    function Getter(L: PLua_State): integer; override;
-  public
-    function Play_func(L: PLua_State): integer; cdecl;
-    function Pause_func(L: PLua_State): integer; cdecl;
-    function Resume_func(L: PLua_State): integer; cdecl;
-    function Stop_func(L: PLua_State): integer; cdecl;
-  end;
-
   { TLuaSpectrum }
 
   TLuaSpectrum = class(TTyroLuaObject)
@@ -210,23 +196,6 @@ type
     function Show_func(L: Plua_State): integer; cdecl;
     function Hide_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
-  end;
-
-  { TMidiAction }
-
-  TMidiAction = (maPlay, maPause, maResume, maStop);
-
-  { Routes midi.play/pause/resume/stop into the main window thread (the same
-    one that drives RayUpdates.Update and the raylib audio device). }
-
-  TMidiPlayObject = class(TQueueObject)
-  private
-    FAction: TMidiAction;
-    FFileName: string;
-  public
-    constructor Create(AAction: TMidiAction); overload;
-    constructor Create(AAction: TMidiAction; const AFileName: string); overload;
-    procedure DoExecute; override;
   end;
 
   { TRadioAction }
@@ -466,7 +435,6 @@ type
     Font: TLuaFont;
     Music: TLuaMusic;
     Radio: TLuaRadio;
-    Midi: TLuaMidi;
     Sprite: TLuaSprite;
     Sprites: TLuaSprites;
     Controls: TLuaControls;
@@ -1339,7 +1307,6 @@ begin
   Font := TLuaFont.Create(Self);
   Music := TLuaMusic.Create(Self);
   Radio := TLuaRadio.Create(Self);
-  Midi := TLuaMidi.Create(Self);
   SpectrumLua := TLuaSpectrum.Create(Self);
   Sprite := TLuaSprite.Create(Self);
   Sprites := TLuaSprites.Create(Self);
@@ -1400,15 +1367,6 @@ begin
   Lua.State.Register('radio', 'resume', Radio, Radio.Resume_func);
   Lua.State.Register('radio', 'stop', Radio, Radio.Stop_func);
   Lua.State.Register('radio', Radio); //Should be last one
-
-  //midi (midi.play(file), midi.pause(), midi.resume(), midi.stop()
-  // + getters: midi.name, midi.state, midi.playing, midi.position,
-  // midi.length, midi.tracks, midi.tempo, midi.error)
-  Lua.State.Register('midi', 'play', Midi, Midi.Play_func);
-  Lua.State.Register('midi', 'pause', Midi, Midi.Pause_func);
-  Lua.State.Register('midi', 'resume', Midi, Midi.Resume_func);
-  Lua.State.Register('midi', 'stop', Midi, Midi.Stop_func);
-  Lua.State.Register('midi', Midi); //Should be last one
 
   //spectrum (spectrum.show(x, y, w, h), spectrum.hide()
   // + getters/setters: spectrum.bars, spectrum.active, spectrum.visible)
@@ -1560,7 +1518,6 @@ begin
   FreeAndNil(Sprites);
   FreeAndNil(Sprite);
   FreeAndNil(SpectrumLua);
-  FreeAndNil(Midi);
   FreeAndNil(Radio);
   FreeAndNil(Music);
   FreeAndNil(Font);
@@ -2230,124 +2187,6 @@ begin
     raPause: RadioPlayer.Pause;
     raResume: RadioPlayer.Resume;
     raStop: RadioPlayer.Stop;
-  end;
-end;
-
-{ TLuaMidi }
-
-function TLuaMidi.Getter(L: Plua_State): Integer;
-var
-  field: string;
-begin
-  Result := 0;
-  field := L.ToString(2);
-  if MidiPlayer = nil then
-    Exit;
-  if field = 'name' then
-  begin
-    lua_pushstring(L, PAnsiChar(AnsiString(MidiPlayer.Name)));
-    Result := 1;
-  end
-  else if field = 'file' then
-  begin
-    lua_pushstring(L, PAnsiChar(AnsiString(MidiPlayer.FileName)));
-    Result := 1;
-  end
-  else if field = 'state' then
-  begin
-    lua_pushstring(L, PAnsiChar(AnsiString(MidiPlayer.StateString)));
-    Result := 1;
-  end
-  else if field = 'error' then
-  begin
-    lua_pushstring(L, PAnsiChar(AnsiString(MidiPlayer.Error)));
-    Result := 1;
-  end
-  else if field = 'playing' then
-  begin
-    lua_pushboolean(L, MidiPlayer.Playing);
-    Result := 1;
-  end
-  else if field = 'position' then
-  begin
-    lua_pushnumber(L, MidiPlayer.Position);
-    Result := 1;
-  end
-  else if field = 'length' then
-  begin
-    lua_pushnumber(L, MidiPlayer.Length);
-    Result := 1;
-  end
-  else if field = 'tracks' then
-  begin
-    lua_pushinteger(L, MidiPlayer.Tracks);
-    Result := 1;
-  end
-  else if field = 'tempo' then
-  begin
-    lua_pushinteger(L, MidiPlayer.Tempo);
-    Result := 1;
-  end;
-end;
-
-//Playback is the only thing a script can ask for: a MIDI player renders a file
-//it was given, it does not take live note commands the way music.beep does.
-function TLuaMidi.Setter(L: PLua_State): integer;
-begin
-  Result := 0;
-end;
-
-function TLuaMidi.Play_func(L: Plua_State): integer; cdecl;
-var
-  s: string;
-begin
-  s := L.ToString(1);
-  s := Res.GuessFileName(s, Res.WorkPath);
-  FScript.AddQueueObject(TMidiPlayObject.Create(maPlay, s));
-  Result := 0;
-end;
-
-function TLuaMidi.Pause_func(L: Plua_State): integer; cdecl;
-begin
-  FScript.AddQueueObject(TMidiPlayObject.Create(maPause));
-  Result := 0;
-end;
-
-function TLuaMidi.Resume_func(L: Plua_State): integer; cdecl;
-begin
-  FScript.AddQueueObject(TMidiPlayObject.Create(maResume));
-  Result := 0;
-end;
-
-function TLuaMidi.Stop_func(L: Plua_State): integer; cdecl;
-begin
-  FScript.AddQueueObject(TMidiPlayObject.Create(maStop));
-  Result := 0;
-end;
-
-{ TMidiPlayObject }
-
-constructor TMidiPlayObject.Create(AAction: TMidiAction);
-begin
-  inherited Create;
-  FAction := AAction;
-end;
-
-constructor TMidiPlayObject.Create(AAction: TMidiAction; const AFileName: string);
-begin
-  Create(AAction);
-  FFileName := AFileName;
-end;
-
-procedure TMidiPlayObject.DoExecute;
-begin
-  if MidiPlayer = nil then
-    Exit;
-  case FAction of
-    maPlay: MidiPlayer.Play(FFileName);
-    maPause: MidiPlayer.Pause;
-    maResume: MidiPlayer.Resume;
-    maStop: MidiPlayer.Stop;
   end;
 end;
 

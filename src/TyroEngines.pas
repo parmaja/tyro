@@ -588,8 +588,7 @@ var
 implementation
 
 uses
-  TyroRadio, TyroSpectrum,
-  TyroMidi;
+  TyroRadio, TyroSpectrum;
 
 {
 function IntToFPColor(I: Integer): TFPColor;
@@ -1559,8 +1558,6 @@ begin
   //the raylib update list are still alive.
   if RadioPlayer <> nil then
     RadioPlayer.Stop;
-  if MidiPlayer <> nil then
-    MidiPlayer.Stop;
   if Spectrum <> nil then
     Spectrum.Shutdown;
   ShutdownMelodies;
@@ -2253,8 +2250,6 @@ begin
   ClearScriptSprites;
   Clear;
   //A song the finished run left playing belongs to that run, not to the next one.
-  if MidiPlayer <> nil then
-    MidiPlayer.Stop;
   aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
   if (aScriptType <> nil) then
   begin
