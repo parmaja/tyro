@@ -165,6 +165,12 @@ type
     //* frame waits are not counted.
     LastGap: Integer;
     MaxGap: Integer;
+    //* Admission limit on the queue (0 = unlimited). See ThrottleQueue.
+    Limit: Integer;
+    //* Times a producer had to wait for room at the limit.
+    Waits: Integer;
+    //* Producers waiting for room right now.
+    Blocked: Integer;
   end;
 
   TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: UTF8String) of object;
@@ -283,6 +289,19 @@ type
     FQueueGapStamp: Int64;
     FQueueGapLast: LongInt;
     FQueueGapMax: LongInt;
+    //* Admission limit on the processing queue: while FQueueLimit > 0 a
+    //* producer (AddQueueObject) blocks in ThrottleQueue until the backlog
+    //* falls below it, so a script that queues faster than the main loop
+    //* drains cannot grow the queue without bound. 0 = unlimited (default).
+    //* Set from the script thread (Lua queuelimit), so access goes through
+    //* TInterlocked.
+    FQueueLimit: Integer;
+    //* Auto-reset event set by ProcessQueue after a drain pass (and by
+    //* Stop/Clear/SetQueueLimit) so a throttled producer can wake and re-check
+    //* the depth instead of sleeping a whole frame.
+    FQueueSpaceEvent: TEvent;
+    FQueueWaits: LongInt;
+    FQueueBlocked: LongInt;
     //* Screen shake state (see Shake). FShakeTime counts the seconds left,
     //* FShakeDuration the full length of the current shake so the amplitude can
     //* fade out, and FShakeX/FShakeY hold this frame's random offset in pixels.
@@ -340,6 +359,19 @@ type
     //* Snapshot of the queue/frame diagnostics (see TQueueStats). Safe to call
     //* from any thread; backs the Lua 'queue' table.
     function QueueStats: TQueueStats;
+
+    //* Block the calling (script) thread while the queue is at/over its
+    //* admission limit, so a fast producer cannot grow it without bound.
+    //* Returns at once when the limit is 0, a group is held (enter()/cycle),
+    //* the window is hidden/headless, or the engine is stopping. Called by
+    //* TTyroScript.AddQueueObject after a command is accepted; the caller must
+    //* NOT hold the global Lock here (ProcessQueue needs it to drain).
+    procedure ThrottleQueue;
+    //* Current admission limit (0 = unlimited).
+    function GetQueueLimit: Integer;
+    //* Set the admission limit; 0 disables throttling. Raising or clearing it
+    //* releases producers already waiting. Safe to call from any thread.
+    procedure SetQueueLimit(ALimit: Integer);
 
     //* Handle files dropped onto the window (from Explorer). Processes .tyro/.lua
     //* to open and run them, and .bdf to load a custom font.
@@ -458,6 +490,8 @@ type
     property BackColor: TColor read FBackColor write FBackColor;
     property FPS: Integer read FFPS write SetFPS;
     property Queue: TQueueObjects read FQueue;
+    //* Admission limit of the queue (0 = unlimited). See ThrottleQueue.
+    property QueueLimit: Integer read GetQueueLimit write SetQueueLimit;
     //* True when the last run-and-exit script finished with a Lua error. Reset
     //* at the start of every run; only meaningful for the --exit/--execute CLI
     //* lifecycle where the main loop inspects it before releasing the worker.
@@ -1056,6 +1090,10 @@ begin
         TInterlocked.Increment(FQueueDeferred);
     finally
       CanvasLock.Leave;
+      //A drain pass may have made room: wake any producer throttled by
+      //FQueueLimit so it can queue the next command without waiting a frame.
+      if FQueueSpaceEvent <> nil then
+        FQueueSpaceEvent.SetEvent;
     end;
   end;
 end;
@@ -1072,11 +1110,74 @@ begin
   Result.Group := FAutoGroup;
   Result.LastGap := TInterlocked.Add(FQueueGapLast, 0);
   Result.MaxGap := TInterlocked.Add(FQueueGapMax, 0);
+  Result.Limit := TInterlocked.Add(FQueueLimit, 0);
+  Result.Waits := TInterlocked.Add(FQueueWaits, 0);
+  Result.Blocked := TInterlocked.Add(FQueueBlocked, 0);
   Lock.Enter;
   try
     Result.Depth := Queue.Count;
   finally
     Lock.Leave;
+  end;
+end;
+
+function TTyroEngine.GetQueueLimit: Integer;
+begin
+  Result := TInterlocked.Add(FQueueLimit, 0);
+end;
+
+procedure TTyroEngine.SetQueueLimit(ALimit: Integer);
+begin
+  if ALimit < 0 then
+    ALimit := 0;
+  TInterlocked.Exchange(FQueueLimit, ALimit);
+  //Raising or clearing the limit must release any producer already waiting.
+  if FQueueSpaceEvent <> nil then
+    FQueueSpaceEvent.SetEvent;
+end;
+
+procedure TTyroEngine.ThrottleQueue;
+var
+  Limit: Integer;
+begin
+  Limit := TInterlocked.Add(FQueueLimit, 0);
+  if Limit <= 0 then
+    Exit;
+  //A held group (enter()/leave()/atomic() or the automatic 'cycle' hold) is
+  //built before it is drawn: ProcessQueue executes nothing while a hold is
+  //open, so waiting here would deadlock the script before it could leave().
+  if (TInterlocked.Add(FQueueHold, 0) > 0) or
+     (TInterlocked.Add(FQueueAuto, 0) > 0) then
+    Exit;
+  //No consumer: a hidden/headless window has no drawing cycle, so behave as
+  //unlimited instead of hanging the script forever.
+  if (FFrameEvent = nil) or IsWindowHidden or (not RayLib.IsWindowReady) then
+    Exit;
+
+  TInterlocked.Increment(FQueueBlocked);
+  try
+    while Running do
+    begin
+      Lock.Enter;
+      try
+        if Queue.Count < Limit then
+          Break;
+      finally
+        Lock.Leave;
+      end;
+      TInterlocked.Increment(FQueueWaits);
+      if FQueueSpaceEvent = nil then
+        Break;
+      //Poll with a short timeout, like WaitToNextFrame: a missed signal costs
+      //latency, never a hang, and Stop() ends the loop.
+      FQueueSpaceEvent.WaitFor(50);
+      //queuelimit() may have raised or cleared the cap while we waited.
+      Limit := TInterlocked.Add(FQueueLimit, 0);
+      if Limit <= 0 then
+        Break;
+    end;
+  finally
+    TInterlocked.Decrement(FQueueBlocked);
   end;
 end;
 
@@ -1155,6 +1256,10 @@ begin
   //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
   //loop signals it after every EndDrawing.
   FFrameEvent := TEvent.Create(nil, False, False, '');
+  //Auto-reset, set after every ProcessQueue pass: a producer throttled by
+  //FQueueLimit waits on it. Unlimited by default (Lua queuelimit turns it on).
+  FQueueSpaceEvent := TEvent.Create(nil, False, False, '');
+  FQueueLimit := 0;
   FWidth := ScreenWidth;
   FHeight := ScreenHeight;
   FBackColor := clCornflowerBlue;
@@ -1262,6 +1367,7 @@ begin
   if RayLib.IsWindowReady then
     RayLib.CloseWindow;
   FreeAndNil(FCanvasLock);
+  FreeAndNil(FQueueSpaceEvent);
   FreeAndNil(FFrameEvent);
 end;
 
@@ -1581,6 +1687,9 @@ begin
   TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
   ResetEnqueueGap;
+  //Wake a producer throttled by FQueueLimit so Stop does not wait a poll tick.
+  if FQueueSpaceEvent <> nil then
+    FQueueSpaceEvent.SetEvent;
 end;
 
 procedure TTyroEngine.Terminate;
@@ -1988,6 +2097,9 @@ begin
   TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
   ResetEnqueueGap;
+  //Wake a producer throttled by FQueueLimit so a rerun starts without a stall.
+  if FQueueSpaceEvent <> nil then
+    FQueueSpaceEvent.SetEvent;
 end;
 
 //Called from the main loop while the window is still hidden. A script file given

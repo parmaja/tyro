@@ -1706,9 +1706,12 @@ begin
 end;
 
 procedure TTyroScript.AddQueueObject(AQueueObject: TQueueObject);
+var
+  Admitted: Boolean;
 begin
   if AQueueObject = nil then
     Exit;
+  Admitted := False;
   Lock.Enter;
   try
     // A stopped script must not leave Engine-thread work behind for a later
@@ -1721,11 +1724,18 @@ begin
       Engine.NoteEnqueue;
       Engine.Queue.Add(AQueueObject);
       AQueueObject := nil;
+      Admitted := True;
     end;
   finally
     Lock.Leave;
     AQueueObject.Free;
   end;
+  if Admitted then
+    //Back-pressure: if the engine has an admission limit (Lua queuelimit) and
+    //the backlog is at it, wait here for the main loop to drain some. Called
+    //AFTER the global Lock is released: ProcessQueue needs that same lock to
+    //extract, so waiting under it would stall the very consumer we await.
+    Engine.ThrottleQueue;
   if Thread <> nil then
     Thread.Yield;
 end;

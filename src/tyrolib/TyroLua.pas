@@ -580,6 +580,21 @@ begin
     Engine.AutoGroup := L.ToBoolean(1);
 end;
 
+// queuelimit(n): cap the processing queue. While it holds n commands a script
+// that keeps queueing without yielding (autogroup off, or a body bigger than a
+// frame) waits in AddQueueObject until the main loop drains some, so memory and
+// lag stay bounded instead of growing without limit. 0 restores the default
+// unlimited behaviour. Read the current cap back with queue.limit; queue.waits
+// counts how often a producer had to wait and queue.blocked how many wait now.
+function queuelimit_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if Engine = nil then
+    Exit;
+  if L.ArgsCount > 0 then
+    Engine.QueueLimit := L.ToInteger(1);
+end;
+
 // enter(): hold the processing queue. The drawing commands the script queues
 // after this call are NOT executed by the main loop until leave() balances it,
 // so the whole group between enter() and leave() is drawn at one drawing
@@ -982,6 +997,24 @@ begin
     //getter between a rectangle() and the text() drawn over it.
     L.PushInteger(Stats.MaxGap);
     Result := 1;
+  end
+  else if field = 'limit' then
+  begin
+    //admission cap on the queue (0 = unlimited); set with queuelimit(n).
+    L.PushInteger(Stats.Limit);
+    Result := 1;
+  end
+  else if field = 'waits' then
+  begin
+    //times a producer had to wait because the queue was at the limit.
+    L.PushInteger(Stats.Waits);
+    Result := 1;
+  end
+  else if field = 'blocked' then
+  begin
+    //producers waiting for room right now.
+    L.PushInteger(Stats.Blocked);
+    Result := 1;
   end;
 end;
 
@@ -1320,6 +1353,8 @@ begin
   Lua.State.RegisterGlobal('atomic', @atomic_func);
   //autogroup(flag): toggle automatic per-cycle grouping (on by default)
   Lua.State.RegisterGlobal('autogroup', @autogroup_func);
+  //queuelimit(n): cap the queue depth (0 = unlimited); see queue.limit
+  Lua.State.RegisterGlobal('queuelimit', @queuelimit_func);
 
   Canvas := TLuaCanvas.Create(Self);
   Window := TLuaWindow.Create(Self);

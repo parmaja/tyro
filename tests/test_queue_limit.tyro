@@ -1,0 +1,67 @@
+--======================================================================
+--  test_queue_limit.tyro - queue admission limit (back-pressure)
+--======================================================================
+--  queuelimit(n) caps the processing queue: a script that keeps queueing
+--  without yielding waits in AddQueueObject until the main loop drains some,
+--  so the backlog (queue.depth) cannot grow past n. queue.waits counts how
+--  often a producer had to wait; queue.blocked how many wait right now.
+--
+--  Phase 1 keeps the default (unlimited) and checks no producer ever waits.
+--  Phase 2 sets a small cap and streams a large body with no yield between
+--  commands: the depth seen by the script stays at/under the cap and
+--  queue.waits grows.
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_queue_limit_result.txt", "w")
+
+local function drain()
+  while queue.depth > 0 do
+    if not cycle then return end
+  end
+end
+
+-- Stream N one-command bodies with no yield between them. Samples the backlog
+-- from the script after each command and returns the largest depth it saw.
+local function stream(aN)
+  local maxd = 0
+  for i = 1, aN do
+    canvas.point(i % 320, i % 240)
+    local d = queue.depth
+    if d > maxd then maxd = d end
+  end
+  return maxd
+end
+
+autogroup(false)  -- raw streaming, no hold: the cap can act
+
+-- Phase 1: unlimited (default)
+queuelimit(0)
+local w0 = queue.waits
+local maxd1 = stream(4000)
+local w1 = queue.waits
+out:write("phase unlimited limit=", queue.limit,
+          " maxdepth_seen=", maxd1,
+          " waits=", (w1 - w0), "\n")
+drain()
+
+-- Phase 2: a small cap
+local cap = 128
+queuelimit(cap)
+local w2 = queue.waits
+local maxd2 = stream(4000)
+local w3 = queue.waits
+out:write("phase limited limit=", queue.limit,
+          " maxdepth_seen=", maxd2,
+          " waits=", (w3 - w2), "\n")
+drain()
+
+local capOk = (queue.limit == cap)
+local bounded = (maxd2 <= cap + 8)
+local waited = ((w3 - w2) > 0)
+out:write("VERDICT limit_readback=", tostring(capOk),
+          " bounded=", tostring(bounded),
+          " waited=", tostring(waited), "\n")
+out:close()
+exit()
