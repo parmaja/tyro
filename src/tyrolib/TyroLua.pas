@@ -546,29 +546,6 @@ begin
   Result := 0;
 end;
 
-// atomic(f): draw f() as one group. Everything f queues goes through a single
-// drawing cycle, exactly like wrapping the body in enter()/leave() by hand.
-// Useful for a body that is not inside a 'while cycle' loop (where grouping is
-// already automatic) or to group part of one iteration explicitly.
-function atomic_func(L: Plua_State): integer; cdecl;
-begin
-  Result := 0;
-  if (Engine = nil) or (lua_type(L, 1) <> LUA_TFUNCTION) then
-    Exit;
-  Engine.HoldQueue;
-  lua_pushvalue(L, 1);
-  if lua_pcall(L, 0, 0, 0) <> 0 then
-  begin
-    //Release before reporting, so a failing body cannot freeze the queue.
-    Engine.ReleaseQueue;
-    if Engine <> nil then
-      Log.WriteLn('atomic: ' + L.ToString(-1));
-    L.Pop(1);
-    Exit;
-  end;
-  Engine.ReleaseQueue;
-end;
-
 // autogroup(flag): turn the automatic per-'cycle' grouping on (default) or off.
 // Off restores raw streaming, where the main loop may drain part of a body.
 function autogroup_func(L: Plua_State): integer; cdecl;
@@ -1349,8 +1326,6 @@ begin
   Lua.State.RegisterGlobal('version', TyroVersion);
   Lua.State.RegisterGlobal('log', @log_func);
   Lua.State.RegisterGlobal('sleep', @sleep_func);
-  //atomic(f): draw f() as one group (explicit enter()/leave())
-  Lua.State.RegisterGlobal('atomic', @atomic_func);
   //autogroup(flag): toggle automatic per-cycle grouping (on by default)
   Lua.State.RegisterGlobal('autogroup', @autogroup_func);
   //queuelimit(n): cap the queue depth (0 = unlimited); see queue.limit

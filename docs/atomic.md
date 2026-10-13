@@ -73,24 +73,6 @@ end
 an iteration, or a body outside a cycle loop. A script that stops or errors
 between them is released automatically.
 
-## `atomic(f)`
-
-The same pair wrapped around a function, which reads better when grouping is the
-point of a helper:
-
-```lua
-local function header(text)
-    atomic(function()
-        canvas.color = colors.black
-        canvas.rectangle(0, 0, 640, 70, true)
-        canvas.color = colors.green
-        canvas.text(8, 8, text)
-    end)
-end
-```
-
-If `f` raises, the hold is still released before the error is reported.
-
 ## `autogroup(on)`
 
 Turns the automatic per-`cycle` grouping on (`true`, the default) or off:

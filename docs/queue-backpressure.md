@@ -154,7 +154,7 @@ as `queue.limit`, `queue.waits`, `queue.blocked`; `queuelimit_func` and the
 
 | Situation | Behavior | Why |
 |-----------|----------|-----|
-| `enter()` / `leave()` / `atomic()` / `cycle` body | **No throttle** | `ProcessQueue` executes nothing while held; blocking would deadlock before `leave()` |
+| `enter()` / `leave()` / `cycle` body | **No throttle** | `ProcessQueue` executes nothing while held; blocking would deadlock before `leave()` |
 | `while cycle do` body | Rarely throttles | `cycle` is already one body per frame (natural back-pressure) |
 | Headless / hidden window | **No throttle** | No drawing cycle consumes the queue |
 | REPL / main-thread script | **No throttle** | `Thread = nil`; blocking the main thread on its own consumer deadlocks |

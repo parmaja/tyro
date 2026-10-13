@@ -1246,7 +1246,7 @@ begin
   Limit := TInterlocked.Add(FQueueLimit, 0);
   if Limit <= 0 then
     Exit;
-  //A held group (enter()/leave()/atomic() or the automatic 'cycle' hold) is
+  //A held group (enter()/leave() or the automatic 'cycle' hold) is
   //built before it is drawn: ProcessQueue executes nothing while a hold is
   //open, so waiting here would deadlock the script before it could leave().
   if (TInterlocked.Add(FQueueHold, 0) > 0) or

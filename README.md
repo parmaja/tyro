@@ -538,7 +538,6 @@ for a control that is not an `image`.
 | `cycle` | `true` | **Block** until the next drawing frame completes. Use `while cycle do` (instead of `while true do`) to run the loop body at most once per drawn frame, so drawing commands cannot pile up inside a single raylib drawing cycle |
 | `enter()` | — | **Hold** the processing queue: the drawing commands queued after this call are not executed until `leave()` balances it |
 | `leave()` | — | Release the hold taken by `enter()`: the whole group queued in between is then drawn at one drawing cycle |
-| `atomic(f)` | — | Run `f` as one group (`enter()` … `leave()` for you), so everything it queues lands in a single drawing cycle |
 | `autogroup(on)` | — | Turn automatic per-`cycle` grouping on (`true`, default) or off (`false`) |
 | `frametime()` | `number` (seconds) | Time elapsed since the last frame |
 | `time()` | `number` (seconds) | Elapsed time since the window was created |
@@ -578,8 +577,7 @@ end
 
 The hold is released before `sleep()`/`console.read()` so a prompt or progress
 drawn earlier still shows while the script waits. Call `autogroup(false)` for
-progressive drawing that must stream across frames, and see `atomic(f)` below
-for grouping a single function explicitly.
+progressive drawing that must stream across frames.
 
 For sleep-based pacing you can still use the classic loop:
 
@@ -622,20 +620,6 @@ end
 `enter()`/`leave()` nest (they count up and down), and a script that stops or
 errors between them is released automatically so the next run never inherits a
 frozen queue.
-
-`atomic(f)` wraps the same pair around a function, which reads better when the
-grouping is the point of a helper:
-
-```lua
-local function header(text)
-    atomic(function()
-        canvas.color = colors.black
-        canvas.rectangle(0, 0, 640, 70, true)
-        canvas.color = colors.green
-        canvas.text(8, 8, text)
-    end)
-end
-```
 
 ## Measuring the queue (queue.*)
 
