@@ -35,6 +35,15 @@ uses
   TyroClasses, TyroControls, TyroTerminal,
   TyroSprites, TyroPhysics, TyroEditors;
 
+//Diagnostics (queue/frame counters and the like) are compiled only when
+//'diagnose' is defined, which tracks the debug switch. Debug builds keep them;
+//release builds skip the counters and their per-command/per-frame overhead.
+//They never affect drawing, and the Lua 'queue' table reports zero for those
+//compiled out. See TQueueStats and the FQueue* declarations below.
+{$ifopt d+}
+{$define diagnose}
+{$endif}
+
 const
   TyroVersion: Double = 0.1;
   TyroVersionString = '0.1';
@@ -136,6 +145,10 @@ type
     with only part of the batch the script built, which shows as a black
     rectangle that gets its text a frame later. Read from Lua through the
     'queue' table (queue.consumed, queue.deferred, ...).
+
+    Most of the counters below are filled only when the 'diagnose' conditional
+    is defined (debug builds, see the top of the unit): a release build reports
+    0 for them. Consumed, Depth, Holds, Group and Limit are always live.
   }
   TQueueStats = record
     //* Commands executed on the main thread since the engine started.
@@ -270,6 +283,11 @@ type
     //* Set once the engine has shown the window by itself after a headless
     //script finished without asking for one, so it happens a single time.
     FWindowAutoShown: Boolean;
+    //* True while the queue/frame statistics panel is drawn in the top-left
+    //* corner. Toggled with Ctrl+F10 or through the ShowQueueStats property.
+    //* Diagnostics-facing: the counters it reports are only populated in debug
+    //* builds, so a release build shows 0 for most of them.
+    FShowQueueStats: Boolean;
     //* Lua enter()/leave() queue grouping. FQueueHold counts the open enter()
     //* calls: while it is above zero ProcessQueue stops executing commands, so
     //* a whole group of draw calls is drawn at one drawing cycle instead of
@@ -282,13 +300,14 @@ type
     //* Commit watermark. FQueueEnqueued counts every command ever added to the
     //* queue (monotonic); FQueueCommitUpTo snapshots it when a hold is armed,
     //* so "commands committed before this hold" = FQueueCommitUpTo commands.
-    //* ProcessQueue may draw while the hold is open as long as fewer than that
-    //* many commands have been drawn in total (compared against FQueueConsumed),
-    //* which lets a released group land in one cycle even though the script
-    //* re-arms the hold before the next pass. Counters make this safe against a
-    //* pass that is still draining when the next hold is armed.
+    //* ProcessQueue drains while fewer than that many commands have been drawn
+    //* in total (FQueueConsumed), which lets a released group land in one cycle
+    //* even though the script re-arms the hold before the next pass. Counters
+    //* make this safe against a pass still draining when the next hold is armed.
+    //* These three are load-bearing, not diagnostics: they run in release too.
     FQueueEnqueued: LongInt;
     FQueueCommitUpTo: LongInt;
+    FQueueConsumed: LongInt;
     //* Automatic per-'cycle' grouping (see AutoGroup). FQueueAuto is the
     //* implicit hold taken when a cycle body starts and released at the next
     //* yield point, so the whole body is committed in one drawing cycle just
@@ -297,11 +316,25 @@ type
     FQueueAuto: LongInt;
     FAutoGroup: Boolean;
     FRunning: LongInt;
-    //* Queue/frame diagnostics backing QueueStats (see TQueueStats). Written on
-    //* the main thread during ProcessQueue and the drawing cycle, read on the
-    //* script thread through the Lua 'queue' table, so reads go through
+    //* Admission limit on the processing queue: while FQueueLimit > 0 a
+    //* producer (AddQueueObject) blocks in ThrottleQueue until the backlog
+    //* falls below it, so a script that queues faster than the main loop
+    //* drains cannot grow the queue without bound. 0 = unlimited (default).
+    //* Set from the script thread (Lua queuelimit), so access goes through
     //* TInterlocked.
-    FQueueConsumed: LongInt;
+    FQueueLimit: Integer;
+    //* Auto-reset event set by ProcessQueue after a drain pass (and by
+    //* Stop/Clear/SetQueueLimit) so a throttled producer can wake and re-check
+    //* the depth instead of sleeping a whole frame.
+    FQueueSpaceEvent: TEvent;
+    {$ifdef diagnose}
+    //* Queue/frame diagnostics backing QueueStats (see TQueueStats). Compiled
+    //* only when 'diagnose' is defined (debug builds, see the top of the unit):
+    //* they are pure counters with no effect on drawing, so release builds skip
+    //* the per-command and per-frame interlocked work that maintains them. The
+    //* Lua 'queue' table reports zero for whichever ones are compiled out.
+    //* Written on the main thread during ProcessQueue and the drawing cycle,
+    //* read on the script thread, so reads go through TInterlocked.
     FQueuePasses: LongInt;
     FQueueDeferred: LongInt;
     FQueueMaxDepth: LongInt;
@@ -315,19 +348,11 @@ type
     FQueueGapStamp: Int64;
     FQueueGapLast: LongInt;
     FQueueGapMax: LongInt;
-    //* Admission limit on the processing queue: while FQueueLimit > 0 a
-    //* producer (AddQueueObject) blocks in ThrottleQueue until the backlog
-    //* falls below it, so a script that queues faster than the main loop
-    //* drains cannot grow the queue without bound. 0 = unlimited (default).
-    //* Set from the script thread (Lua queuelimit), so access goes through
-    //* TInterlocked.
-    FQueueLimit: Integer;
-    //* Auto-reset event set by ProcessQueue after a drain pass (and by
-    //* Stop/Clear/SetQueueLimit) so a throttled producer can wake and re-check
-    //* the depth instead of sleeping a whole frame.
-    FQueueSpaceEvent: TEvent;
+    //* Times a producer had to wait for room at the limit, and how many are
+    //* waiting right now (reported through QueueStats only).
     FQueueWaits: LongInt;
     FQueueBlocked: LongInt;
+    {$endif}
     //* Screen shake state (see Shake). FShakeTime counts the seconds left,
     //* FShakeDuration the full length of the current shake so the amplitude can
     //* fade out, and FShakeX/FShakeY hold this frame's random offset in pixels.
@@ -405,6 +430,10 @@ type
 
     function Terminated: Boolean; virtual;
     procedure ProcessInput; virtual;
+    //* Draw the queue/frame statistics panel (see FShowQueueStats) in the
+    //* window's top-left corner. A no-op when the panel is hidden. Called from
+    //* the drawing cycle, after the world and the controls, so it stays on top.
+    procedure DrawQueueStats;
 
     procedure LoadConfig;
     procedure Stop; //and wait
@@ -504,6 +533,9 @@ type
     //property Board: TTyroImage read FBoard;
     property Running: Boolean read GetRunning write SetRunning;
     property Active: Boolean read GetActive;
+    //* Show/hide the queue/frame statistics panel (also Ctrl+F10). See
+    //* FShowQueueStats: the diagnostic counters read 0 outside debug builds.
+    property ShowQueueStats: Boolean read FShowQueueStats write FShowQueueStats;
 
     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
     procedure ShowConsole; overload;
@@ -724,10 +756,16 @@ begin
               FFpsLabelWidth := RayLib.MeasureText('999 FPS', 20) + 5;
             RayLib.DrawFPS(RayLib.GetScreenWidth - FFpsLabelWidth, 5);
           end;
+
+          //Queue/frame statistics panel (Ctrl+F10), on top of the controls.
+          if FShowQueueStats then
+            DrawQueueStats;
         finally
           RayLib.EndDrawing;
           FPresentedFrame := True;
+          {$ifdef diagnose}
           TInterlocked.Increment(FFrameCount);
+          {$endif}
           //One drawing cycle completed: wake any script thread blocked on the
           //Lua 'cycle' gate so "while cycle do" runs at most once per frame.
           if FFrameEvent <> nil then
@@ -883,13 +921,18 @@ begin
 end;
 
 procedure TTyroEngine.NoteEnqueue;
+{$ifdef diagnose}
 var
   NowMs, Prev, Diff: Int64;
   Gap: LongInt;
+{$endif}
 begin
   //Monotonic count of accepted commands, the basis of the commit watermark
-  //(FQueueCommitUpTo). Bumped on every enqueue, before the gap baseline check.
+  //(FQueueCommitUpTo). Load-bearing, so it always runs.
   TInterlocked.Increment(FQueueEnqueued);
+  {$ifdef diagnose}
+  //Diagnose-only: time the gap between commands so a blocking getter shows up
+  //as queue.lastgap/maxgap. Skipped entirely in release builds.
   NowMs := Round(GetTime() * 1000);
   //Exchange gives the previous stamp and installs the new one in one step; a
   //0/negative previous stamp means there is no baseline yet.
@@ -906,11 +949,14 @@ begin
   TInterlocked.Exchange(FQueueGapLast, Gap);
   if Gap > TInterlocked.Add(FQueueGapMax, 0) then
     TInterlocked.Exchange(FQueueGapMax, Gap);
+  {$endif}
 end;
 
 procedure TTyroEngine.ResetEnqueueGap;
 begin
+  {$ifdef diagnose}
   TInterlocked.Exchange(FQueueGapStamp, 0);
+  {$endif}
 end;
 
 procedure TTyroEngine.QueueScreenshot(const AFileName: String);
@@ -1047,9 +1093,11 @@ var
   flush: Boolean;
   Consumed: Integer;
   Depth: Integer;
-  BudgetHit: Boolean;
   ToDrain: Integer; //>=0: drain exactly this many (committed) commands
   Hold0, Auto0: LongInt;
+  {$ifdef diagnose}
+  BudgetHit: Boolean;
+  {$endif}
 begin
   if Board <> nil then
   begin
@@ -1112,16 +1160,20 @@ begin
       if p = nil then
         Exit;
 
+      {$ifdef diagnose}
       //Remember the backlog this pass starts with. A high-water mark that keeps
       //growing means the script thread queues commands faster than the main
       //loop drains them (see TQueueStats).
       if Depth > FQueueMaxDepth then
         FQueueMaxDepth := Depth;
+      {$endif}
 
       ft := GetTime();
       fpd := (1 / FPS);
       Consumed := 0;
+      {$ifdef diagnose}
       BudgetHit := False;
+      {$endif}
       Board.BeginDraw;
       while True do
       begin
@@ -1156,7 +1208,9 @@ begin
           begin
             //Budget exhausted while more commands may be waiting: the frame is
             //about to be drawn with a partial batch.
+            {$ifdef diagnose}
             BudgetHit := True;
+            {$endif}
             break;
           end;
           if TInterlocked.Add(FQueueHold, 0) > 0 then
@@ -1177,9 +1231,11 @@ begin
 
       end;
       Board.EndDraw;
-      //Publish the pass counters. Only the main thread writes them; the Lua
+      //FQueueConsumed is load-bearing (the commit watermark compares against
+      //it), so it is always published. Only the main thread writes it; the Lua
       //side reads through TInterlocked (QueueStats).
       TInterlocked.Add(FQueueConsumed, Consumed);
+      {$ifdef diagnose}
       if Consumed > 0 then
         TInterlocked.Increment(FQueuePasses);
       FQueueDrainMs := (GetTime() - ft) * 1000;
@@ -1191,6 +1247,7 @@ begin
       end;
       if BudgetHit and (Depth > 0) then
         TInterlocked.Increment(FQueueDeferred);
+      {$endif}
     finally
       CanvasLock.Leave;
       //A drain pass may have made room: wake any producer throttled by
@@ -1203,25 +1260,73 @@ end;
 
 function TTyroEngine.QueueStats: TQueueStats;
 begin
+  //Zero first: the diagnose-only counters below stay 0 when compiled out, so
+  //the Lua 'queue' table keeps its shape and reports 0 for them.
+  Result := Default(TQueueStats);
   Result.Consumed := TInterlocked.Add(FQueueConsumed, 0);
+  Result.Holds := TInterlocked.Add(FQueueHold, 0);
+  Result.Group := FAutoGroup;
+  Result.Limit := TInterlocked.Add(FQueueLimit, 0);
+  {$ifdef diagnose}
   Result.Passes := TInterlocked.Add(FQueuePasses, 0);
   Result.Deferred := TInterlocked.Add(FQueueDeferred, 0);
   Result.MaxDepth := TInterlocked.Add(FQueueMaxDepth, 0);
-  Result.Holds := TInterlocked.Add(FQueueHold, 0);
   Result.Frames := TInterlocked.Add(FFrameCount, 0);
   Result.DrainMs := FQueueDrainMs;
-  Result.Group := FAutoGroup;
   Result.LastGap := TInterlocked.Add(FQueueGapLast, 0);
   Result.MaxGap := TInterlocked.Add(FQueueGapMax, 0);
-  Result.Limit := TInterlocked.Add(FQueueLimit, 0);
   Result.Waits := TInterlocked.Add(FQueueWaits, 0);
   Result.Blocked := TInterlocked.Add(FQueueBlocked, 0);
+  {$endif}
   Lock.Enter;
   try
     Result.Depth := Queue.Count;
   finally
     Lock.Leave;
   end;
+end;
+
+procedure TTyroEngine.DrawQueueStats;
+const
+  cPad = 6;
+  cFont = 14;
+  cLine = 17;
+var
+  Stats: TQueueStats;
+  Lines: TArray<string>;
+  i, w, maxW, x, y, h: Integer;
+begin
+  Stats := QueueStats;
+  //Two label/value columns per row to keep the panel short enough for a small
+  //window; the header row names the panel and its shortcut.
+  Lines := [
+    'QUEUE STATS  (Ctrl+F10)',
+    Format('%-8s %-6d   %-8s %-6d', ['consumed', Stats.Consumed, 'passes', Stats.Passes]),
+    Format('%-8s %-6d   %-8s %-6d', ['deferred', Stats.Deferred, 'depth', Stats.Depth]),
+    Format('%-8s %-6d   %-8s %-6d', ['max', Stats.MaxDepth, 'holds', Stats.Holds]),
+    Format('%-8s %-6d   %-8s %-6s', ['frames', Stats.Frames, 'group', BoolToStr(Stats.Group, True)]),
+    Format('%-8s %-6d   %-8s %-6d', ['limit', Stats.Limit, 'waits', Stats.Waits]),
+    Format('%-8s %-6d   %-8s %-6.2f', ['blocked', Stats.Blocked, 'drainms', Stats.DrainMs]),
+    Format('%-8s %-6d   %-8s %-6d', ['lastgap', Stats.LastGap, 'maxgap', Stats.MaxGap]),
+    Format('%-8s %-6d', ['fps', RayLib.GetFPS])
+  ];
+  //Size the panel to its widest line, measured with the default font.
+  maxW := 0;
+  for i := 0 to High(Lines) do
+  begin
+    w := RayLib.MeasureText(PUTF8Char(UTF8String(Lines[i])), cFont);
+    if w > maxW then
+      maxW := w;
+  end;
+  x := cPad;
+  y := cPad;
+  h := cPad * 2 + Length(Lines) * cLine;
+  //Translucent backdrop so the text stays readable over any drawing.
+  RayLib.DrawRectangle(x - cPad, y - cPad, maxW + cPad * 2, h,
+    clBlack.ReplaceAlpha(200));
+  RayLib.DrawRectangleLines(x - cPad, y - cPad, maxW + cPad * 2, h, clGray);
+  for i := 0 to High(Lines) do
+    RayLib.DrawText(PUTF8Char(UTF8String(Lines[i])), x, y + i * cLine, cFont, clWhite);
 end;
 
 function TTyroEngine.GetQueueLimit: Integer;
@@ -1257,7 +1362,9 @@ begin
   if (FFrameEvent = nil) or IsWindowHidden or (not RayLib.IsWindowReady) then
     Exit;
 
+  {$ifdef diagnose}
   TInterlocked.Increment(FQueueBlocked);
+  {$endif}
   try
     while Running do
     begin
@@ -1268,7 +1375,9 @@ begin
       finally
         Lock.Leave;
       end;
+      {$ifdef diagnose}
       TInterlocked.Increment(FQueueWaits);
+      {$endif}
       if FQueueSpaceEvent = nil then
         Break;
       //Poll with a short timeout, like WaitToNextFrame: a missed signal costs
@@ -1280,7 +1389,9 @@ begin
         Break;
     end;
   finally
+    {$ifdef diagnose}
     TInterlocked.Decrement(FQueueBlocked);
+    {$endif}
   end;
 end;
 
@@ -1693,6 +1804,9 @@ begin
   // to execute it in the script thread.
   if RayLib.IsKeyPressed(KEY_F4) then
     ToggleFileList;
+  // Ctrl+F10 toggles the queue/frame statistics panel in the top-left corner.
+  if (ssCtrl in Shift) and RayLib.IsKeyPressed(KEY_F10) then
+    FShowQueueStats := not FShowQueueStats;
 
   if Main.FocusedControl = nil then
     Exit;
@@ -2145,10 +2259,12 @@ begin
   if (aScriptType <> nil) then
   begin
     aScript := aScriptType.ScriptClass.Create(ScriptSource);
+    {$ifdef diagnose}
     //Fresh enqueue-gap measurement for this run (queue.maxgap/lastgap).
     TInterlocked.Exchange(FQueueGapStamp, 0);
     TInterlocked.Exchange(FQueueGapLast, 0);
     TInterlocked.Exchange(FQueueGapMax, 0);
+    {$endif}
     //Group the script's initial drawing too, so even a body it builds before
     //its first cycle/sleep/read is committed atomically; the hold is released
     //at the first yield or when the run stops.

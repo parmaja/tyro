@@ -96,7 +96,9 @@ These release the hold so what is already queued is shown, then re-arm it:
 
 ## Diagnostics
 
-Read-only counters, plus a high-resolution clock:
+Read-only counters, plus a high-resolution clock. They are diagnostics only:
+debug builds (the `diagnose` conditional) keep them, a release build compiles
+them out and reports 0.
 
 | Field | Description |
 |-------|-------------|

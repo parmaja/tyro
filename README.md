@@ -89,6 +89,7 @@ These work while the engine is running, whatever has the keyboard focus:
 | `F5` | Rerun the loaded script on a new script thread |
 | `F7` | Toggle the output panel |
 | `F8` | Toggle the console |
+| `CTRL`+`F10` | Toggle the queue/frame statistics panel in the top-left corner |
 | `CTRL`+`S` | In the editor: save the source back and rerun the script |
 
 The script that is edited and rerun is the one loaded with `load` or picked with
@@ -625,6 +626,17 @@ frozen queue.
 
 The engine exposes read-only counters to help diagnose the "black box, then the
 text" flicker, where a frame is presented with only part of a drawing body.
+
+These counters are diagnostics only, and are compiled only in debug builds (the
+`diagnose` conditional tracks the debug switch). A release build reports 0 for
+the diagnostic-only ones; `queue.consumed`, `queue.depth`, `queue.holds`,
+`queue.group` and `queue.limit` always stay live.
+
+The same fields can be watched live, without a script, by pressing `CTRL`+`F10`:
+the engine draws a compact panel in the window's top-left corner, showing every
+counter below (plus the current `fps`) and refreshed each frame. Press it again
+to hide the panel. Only the counters above the `diagnose` line are populated in
+a release build.
 
 | Field | Description |
 |-------|-------------|
