@@ -23,7 +23,7 @@ uses
   Classes, SysUtils, Types,
   LuaAPI, LuaClasses,
   RayLib, RayClasses, //remove it
-  mnUtils, mnLogs,
+  mnUtils, mnLogs, mnClasses,
   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroPhysics,
   TyroControls, TyroEngines, TyroInput,
   TyroRadio, TyroSpectrum,

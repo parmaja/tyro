@@ -223,7 +223,7 @@ type
     procedure FileListDismissed(Sender: TObject);
   protected
     IsTerminated: Boolean;
-    FCanvasLock: TCriticalSection;
+    FCanvasLock: TmnCriticalSection;
     Camera2D: TCamera2D;
     procedure Terminate;
 
@@ -453,7 +453,7 @@ type
 
     procedure LogWrite(Msg: string);
 
-    property CanvasLock: TCriticalSection read FCanvasLock;
+    property CanvasLock: TmnCriticalSection read FCanvasLock;
     property Options: TTyroEngineOptions read FOptions write FOptions;
     property BackColor: TColor read FBackColor write FBackColor;
     property FPS: Integer read FFPS write SetFPS;
@@ -1151,7 +1151,7 @@ begin
   //Each 'while cycle' body is drawn atomically by default (see AutoGroup).
   FAutoGroup := True;
   Res := TTyroResources.Create;
-  FCanvasLock := TCriticalSection.Create;
+  FCanvasLock := TmnCriticalSection.Create;
   //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
   //loop signals it after every EndDrawing.
   FFrameEvent := TEvent.Create(nil, False, False, '');
@@ -2487,5 +2487,6 @@ end;
 
 initialization
 finalization
+  //cReportLag := 20;
   FreeAndNil(Engine);
 end.

@@ -54,7 +54,6 @@ type
 
   TRadioPlayer = class(TRayUpdate)
   private
-    FLock: TmnCriticalSection; //serializes FClient (lifecycle vs script-thread getters)
     FClient: TmnIceCastClient;
     FSnapshot: TMemoryStream; //last snapshot handed to raylib (kept for bookkeeping)
     FMusic: TMusic;
@@ -134,7 +133,6 @@ const
 constructor TRadioPlayer.Create;
 begin
   inherited Create;
-  FLock := TmnCriticalSection.Create;
   FVolume := 1;
   FState := rpIdle;
   FPrerollBytes := cDefaultPreroll;
@@ -143,14 +141,15 @@ begin
   FMaxAttempts := 5;
   FReconnectDelay := 1000;
   FWaitingData := False;
+  FClient := TmnIceCastClient.Create;
   RayUpdates.Add(Self);
 end;
 
 destructor TRadioPlayer.Destroy;
 begin
   Stop;
-  FLock.Free;
   RayUpdates.Remove(Self);
+  FreeAndNil(FClient);
   inherited Destroy;
 end;
 
@@ -179,17 +178,11 @@ begin
   //A script thread could be inside a getter reading FClient/FURL/FError;
   //install the new client under the lock so it never sees a half-created
   //instance or torn strings.
-  FLock.Enter;
-  try
-    FURL := AURL;
-    FError := '';
-    FClient := TmnIceCastClient.Create;
-    FClient.MaxAttempts := FMaxAttempts;
-    FClient.ReconnectDelay := FReconnectDelay;
-    FClient.Open(AURL);
-  finally
-    FLock.Leave;
-  end;
+  FURL := AURL;
+  FError := '';
+  FClient.MaxAttempts := FMaxAttempts;
+  FClient.ReconnectDelay := FReconnectDelay;
+  FClient.Open(AURL);
 end;
 
 procedure TRadioPlayer.Pause;
@@ -235,30 +228,8 @@ begin
 end;
 
 procedure TRadioPlayer.CloseClient;
-var
-  aClient: TmnIceCastClient;
 begin
-  //Detach under the lock: a concurrent getter can only see nil or the old
-  //client, never a half-freed one, and any getter that already holds a
-  //reference has already copied the value it needed under its own FLock wait.
-  FLock.Enter;
-  try
-    aClient := FClient;
-    FClient := nil;
-  finally
-    FLock.Leave;
-  end;
-  //Close joins the connection worker thread, which can be stuck inside a
-  //socket read for up to ReadTimeout seconds. Doing it without the lock keeps
-  //script-thread radio.* getters (and the drawing body calling them) live.
-  if aClient <> nil then
-  begin
-    try
-      aClient.Close;
-    finally
-      aClient.Free;
-    end;
-  end;
+  FClient.Close;
 end;
 
 procedure TRadioPlayer.SetVolume(AVolume: Single);
@@ -270,54 +241,22 @@ end;
 
 function TRadioPlayer.GetTitle: string;
 begin
-  FLock.Enter;
-  try
-    if FClient <> nil then
-      Result := FClient.Title
-    else
-      Result := '';
-  finally
-    FLock.Leave;
-  end;
+  Result := FClient.Title
 end;
 
 function TRadioPlayer.GetStation: string;
 begin
-  FLock.Enter;
-  try
-    if FClient <> nil then
-      Result := FClient.StationName
-    else
-      Result := '';
-  finally
-    FLock.Leave;
-  end;
+  Result := FClient.StationName
 end;
 
 function TRadioPlayer.GetGenre: string;
 begin
-  FLock.Enter;
-  try
-    if FClient <> nil then
-      Result := FClient.Genre
-    else
-      Result := '';
-  finally
-    FLock.Leave;
-  end;
+  Result := FClient.Genre
 end;
 
 function TRadioPlayer.GetBitrate: string;
 begin
-  FLock.Enter;
-  try
-    if FClient <> nil then
-      Result := FClient.Bitrate
-    else
-      Result := '';
-  finally
-    FLock.Leave;
-  end;
+  Result := FClient.Bitrate
 end;
 
 function TRadioPlayer.GetPlaying: Boolean;
@@ -327,35 +266,17 @@ end;
 
 function TRadioPlayer.GetBuffered: Int64;
 begin
-  FLock.Enter;
-  try
-    if FClient <> nil then
-      Result := FClient.BufferSize
-    else
-      Result := 0;
-  finally
-    FLock.Leave;
-  end;
+  Result := FClient.BufferSize
 end;
 
 function TRadioPlayer.GetError: string;
 begin
-  FLock.Enter;
-  try
-    Result := FError;
-  finally
-    FLock.Leave;
-  end;
+  Result := FError;
 end;
 
 function TRadioPlayer.GetURL: string;
 begin
-  FLock.Enter;
-  try
-    Result := FURL;
-  finally
-    FLock.Leave;
-  end;
+  Result := FURL;
 end;
 
 function TRadioPlayer.GetStateString: string;
@@ -373,12 +294,7 @@ end;
 
 procedure TRadioPlayer.DoError(const AMessage: string);
 begin
-  FLock.Enter;
-  try
-    FError := AMessage;
-  finally
-    FLock.Leave;
-  end;
+  FError := AMessage;
   FState := rpError;
   FUserPlaying := False;
   if FMusicLoaded then
@@ -424,7 +340,7 @@ var
   aNewMusic: TMusic;
   aExt: string;
 begin
-  if (FClient = nil) or (FClient.BufferSize = 0) then
+  if (FClient.BufferSize = 0) then
     Exit;
   aBuf := FClient.Buffer;
   FSeekBytes := 0;
@@ -527,8 +443,6 @@ var
   aPlayed, aRemaining: Single;
   aNewData: Boolean;
 begin
-  if FClient = nil then
-    Exit;
   aState := FClient.State;
   case aState of
     icError:
