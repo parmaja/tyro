@@ -1,0 +1,335 @@
+--======================================================================
+--  Slingshot - an Angry-Birds-style physics game for Tyro
+--======================================================================
+--  A bird flies off a slingshot and knocks down wooden towers to pop
+--  the pigs. Uses Chipmunk2D bodies (dynamic/static), the new sprite
+--  velocity API (sprite.vx / sprite.vy), per-sprite onCollide handlers,
+--  textured sprites for the rotating blocks, and the screen shaker.
+--
+--  Controls:
+--    Move the mouse  - pull the sling back (pull further = shoot harder)
+--    Left click      - launch the bird
+--    SPACE           - launch too (same aim)
+--    R               - restart the level
+--
+--  Run:  tyro games/birds/slingshot.tyro
+--  Assets: games/birds/ab_*.png (regenerate: python games/birds/make_ab_assets.py)
+--======================================================================
+
+window.show(800, 480)
+
+-- ---- tuning ----------------------------------------------------------
+local GRAVITY       = 900     -- px/s^2, Y down
+local GROUND_TOP    = 440
+local ANCHOR_X      = 150     -- sling fork
+local ANCHOR_Y      = 300
+local MAX_PULL      = 95
+local LAUNCH_K      = 9.0     -- pull px -> launch px/s
+local BIRD_R        = 15
+local PIG_R         = 18
+local BIRDS         = 5
+local PIG_POP_SPEED = 200     -- relative speed that pops a pig
+
+collision.gravityy = GRAVITY
+
+-- ---- state -----------------------------------------------------------
+local state      = "aiming"   -- aiming | flying | watching | resetting | won | lost
+local score      = 0
+local birds_left = BIRDS
+local pigs_alive = 0
+local flyFrames, restFrames, watchFrames = 0, 0, 0
+local launchVX, launchVY = 0, 0
+local resetStage = 0
+local pops = {}               -- pop effects: {x, y, t}
+
+local boxes = {}              -- {s = sprite, x, y}
+local pigs  = {}              -- {s = sprite, x, y, popped}
+local bird, ground
+
+-- ---- helpers ---------------------------------------------------------
+local function speed2(ax, ay) return math.sqrt(ax * ax + ay * ay) end
+
+local function onPigHit(rec, other, st)
+  if rec.popped or st ~= "enter" then return end
+  local ps = speed2(rec.s.vx, rec.s.vy)
+  local os = 0
+  if other ~= nil and other.kind ~= "static" then
+    os = speed2(other.vx, other.vy)
+  end
+  if ps + os > PIG_POP_SPEED then
+    rec.popped          = true
+    rec.s.collide       = false          -- body is removed next step
+    rec.s.visible       = false
+    pigs_alive          = pigs_alive - 1
+    score               = score + 100
+    pops[#pops + 1]     = {x = rec.s.x, y = rec.s.y, t = 0}
+    music.sound(1050, 70)
+    window.shake(140, 5)
+  end
+end
+
+local function addBox(tex, x, y, mass)
+  local s = Sprites.new()
+  s.load(tex)
+  s.kind     = "dynamic"
+  s.collide  = true
+  s.mass     = mass
+  s.friction = 0.9
+  s.bouncy   = 0.05
+  s.x = x
+  s.y = y
+  boxes[#boxes + 1] = {s = s, x = x, y = y}
+end
+
+local function addPig(x, y)
+  local s = Sprites.new("pig" .. (#pigs + 1))
+  s.load("ab_pig.png")
+  s.kind     = "dynamic"
+  s.collide  = true
+  s.radius   = PIG_R
+  s.mass     = 0.7
+  s.friction = 0.7
+  s.bouncy   = 0.15
+  s.x = x
+  s.y = y
+  local rec = {s = s, x = x, y = y, popped = false}
+  s.onCollide = function(other, st) onPigHit(rec, other, st) end
+  pigs[#pigs + 1] = rec
+end
+
+local function buildLevel()
+  ground = Sprites.new("ground")
+  ground.load("ab_ground.png")
+  ground.kind    = "static"
+  ground.collide = true
+  -- Texture is 3200x240. Center it so the grass top sits at y=440 and the
+  -- slab spans x=-800..2400 (well past the window) to catch fly-away debris.
+  ground.x = 800
+  ground.y = 440 + 120
+
+  -- left tower: two posts, a beam, a crate
+  addBox("ab_plank.png", 470, 380, 1.0)
+  addBox("ab_plank.png", 560, 380, 1.0)
+  addBox("ab_beam.png",  515, 308, 0.8)
+  addBox("ab_block.png", 515, 276, 1.4)
+  -- right tower: two posts and a long beam
+  addBox("ab_plank.png", 650, 380, 1.0)
+  addBox("ab_plank.png", 750, 380, 1.0)
+  addBox("ab_beam_long.png", 700, 308, 0.8)
+
+  addPig(515, 238)   -- on the crate
+  addPig(515, 422)   -- sheltered on the ground
+  addPig(700, 278)   -- on the long beam
+
+  bird = Sprites.new("bird")
+  bird.load("ab_bird.png")
+  bird.kind     = "dynamic"
+  bird.radius   = BIRD_R
+  bird.mass     = 2.0
+  bird.friction = 0.6
+  bird.bouncy   = 0.4
+  bird.collide  = false
+  bird.x = ANCHOR_X
+  bird.y = ANCHOR_Y
+  bird.onCollide = function(other, st)
+    if st == "enter" and speed2(bird.vx, bird.vy) > 260 then
+      music.sound(170, 40)
+      window.shake(110, 4)
+    end
+  end
+end
+
+local function loadBird()
+  bird.collide = false
+  bird.vx = 0
+  bird.vy = 0
+  bird.x  = ANCHOR_X
+  bird.y  = ANCHOR_Y
+  state   = "aiming"
+end
+
+local function startReset()
+  state = "resetting"
+  resetStage = 0
+end
+
+buildLevel()
+pigs_alive = #pigs
+
+-- ---- main loop -------------------------------------------------------
+while cycle do
+  collision.pump()
+
+  -- fade pop effects
+  for i = #pops, 1, -1 do
+    pops[i].t = pops[i].t + 1
+    if pops[i].t > 18 then table.remove(pops, i) end
+  end
+
+  if iskeypressed("r") and state ~= "resetting" then
+    startReset()
+
+  elseif state == "resetting" then
+    if resetStage == 0 then
+      for _, b in ipairs(boxes) do b.s.collide = false end
+      for _, p in ipairs(pigs)  do p.s.collide = false p.s.visible = false end
+      bird.collide = false
+      resetStage = 1
+    else
+      for _, b in ipairs(boxes) do
+        b.s.x = b.x  b.s.y = b.y  b.s.angle = 0
+        b.s.vx = 0   b.s.vy = 0   b.s.collide = true
+      end
+      for _, p in ipairs(pigs) do
+        p.s.x = p.x  p.s.y = p.y  p.s.angle = 0
+        p.s.vx = 0   p.s.vy = 0
+        p.popped = false  p.s.visible = true  p.s.collide = true
+      end
+      score = 0
+      birds_left = BIRDS
+      pigs_alive = #pigs
+      pops = {}
+      loadBird()
+    end
+
+  elseif state == "aiming" then
+    local px = mousex() - ANCHOR_X
+    local py = mousey() - ANCHOR_Y
+    if px > 0 then px = 0 end
+    if py < 0 then py = 0 end
+    local len = speed2(px, py)
+    if len > MAX_PULL then
+      px = px / len * MAX_PULL
+      py = py / len * MAX_PULL
+      len = MAX_PULL
+    end
+    bird.x = ANCHOR_X + px
+    bird.y = ANCHOR_Y + py
+    launchVX = -px * LAUNCH_K
+    launchVY = -py * LAUNCH_K
+
+    if (ismousepressed("left") or iskeypressed("space")) and len > 12 then
+      bird.collide = true
+      bird.vx = launchVX
+      bird.vy = launchVY
+      birds_left = birds_left - 1
+      flyFrames  = 0
+      restFrames = 0
+      state      = "flying"
+      music.sound(320, 60)
+    end
+
+  elseif state == "flying" then
+    flyFrames = flyFrames + 1
+    if flyFrames > 20 and speed2(bird.vx, bird.vy) < 22 then
+      restFrames = restFrames + 1
+    else
+      restFrames = 0
+    end
+    if restFrames > 25 or flyFrames > 360 or bird.x > 830 or bird.y > 560 then
+      state = "watching"
+      watchFrames = 0
+    end
+
+  elseif state == "watching" then
+    watchFrames = watchFrames + 1
+    if watchFrames > 80 then
+      if pigs_alive <= 0 then
+        score = score + birds_left * 250
+        state = "won"
+      elseif birds_left <= 0 then
+        state = "lost"
+      else
+        loadBird()
+      end
+    end
+
+  elseif state == "won" or state == "lost" then
+    -- waiting for R
+  end
+
+  -- ---- draw ----------------------------------------------------------
+  canvas.color = colors.skyblue
+  canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+
+  -- clouds
+  canvas.color = colors.white
+  canvas.circle(110, 80, 26, true)
+  canvas.circle(148, 94, 20, true)
+  canvas.circle(620, 66, 30, true)
+  canvas.circle(660, 82, 22, true)
+
+  -- slingshot
+  canvas.color = colors.darkbrown
+  canvas.rectangle(ANCHOR_X - 5, ANCHOR_Y, 10, GROUND_TOP - ANCHOR_Y, true)
+  canvas.line(ANCHOR_X, ANCHOR_Y + 24, ANCHOR_X - 14, ANCHOR_Y - 8)
+  canvas.line(ANCHOR_X, ANCHOR_Y + 24, ANCHOR_X + 14, ANCHOR_Y - 8)
+
+  -- trajectory preview
+  if state == "aiming" then
+    local tx, ty = bird.x, bird.y
+    local vx, vy = launchVX, launchVY
+    local dt = 1 / 30
+    for i = 1, 70 do
+      -- semi-implicit Euler, matching the engine's integrator
+      vy = vy + GRAVITY * dt
+      tx = tx + vx * dt
+      ty = ty + vy * dt
+      if ty > GROUND_TOP or tx > canvas.width then break end
+      if i % 2 == 0 then
+        canvas.color = colors.white
+        canvas.circle(tx, ty, 2, true)
+      end
+    end
+  end
+
+  -- sling band
+  if state == "aiming" then
+    canvas.color = colors.darkbrown
+    canvas.line(ANCHOR_X - 14, ANCHOR_Y - 8, bird.x, bird.y)
+    canvas.line(ANCHOR_X + 14, ANCHOR_Y - 8, bird.x, bird.y)
+  end
+
+  -- pop rings
+  for _, pp in ipairs(pops) do
+    canvas.color = colors.white
+    canvas.circle(pp.x, pp.y, 8 + pp.t, false)
+  end
+
+  -- HUD
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 320, 26, true)
+  canvas.color = colors.yellow
+  canvas.text(8, 6, "Score " .. score .. "    Birds " .. birds_left .. "    Pigs " .. pigs_alive)
+
+  -- power meter
+  if state == "aiming" then
+    local pull = speed2(bird.x - ANCHOR_X, bird.y - ANCHOR_Y)
+    canvas.color = colors.black
+    canvas.rectangle(8, 34, 104, 10, true)
+    canvas.color = colors.red
+    canvas.rectangle(10, 36, math.floor(100 * pull / MAX_PULL), 6, true)
+    canvas.color = colors.darkblue
+    canvas.text(8, 50, "Move mouse back-left to pull, click / SPACE to fire")
+  end
+
+  -- waiting birds lined up by the sling (drawn under the sprites)
+  for i = 1, birds_left do
+    canvas.color = colors.red
+    canvas.circle(ANCHOR_X - 78 + (i - 1) * 15, GROUND_TOP - 8, 6, true)
+  end
+
+  -- end messages
+  if state == "won" or state == "lost" then
+    canvas.color = colors.black
+    canvas.rectangle(210, 180, 380, 96, true)
+    canvas.color = colors.yellow
+    if state == "won" then
+      canvas.text(300, 196, "LEVEL CLEARED!")
+    else
+      canvas.text(310, 196, "OUT OF BIRDS")
+    end
+    canvas.color = colors.white
+    canvas.text(285, 232, "Score " .. score .. "   -   press R to play again")
+  end
+end

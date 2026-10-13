@@ -4772,6 +4772,16 @@ begin
       L.PushNumber(Engine.Sprites.GetRadius(handle));
       Result := 1;
     end
+    else if field = 'vx' then
+    begin
+      L.PushNumber(Engine.Sprites.GetVelocityX(handle));
+      Result := 1;
+    end
+    else if field = 'vy' then
+    begin
+      L.PushNumber(Engine.Sprites.GetVelocityY(handle));
+      Result := 1;
+    end
     else if field = 'frames' then
     begin
       L.PushInteger(Engine.Sprites.GetFrameCount(handle));
@@ -4895,6 +4905,14 @@ begin
   else if field = 'radius' then
   begin
     Engine.Sprites.SetRadius(handle, L.ToNumber(3));
+  end
+  else if field = 'vx' then
+  begin
+    Engine.Sprites.SetVelocity(handle, L.ToNumber(3), Engine.Sprites.GetVelocityY(handle));
+  end
+  else if field = 'vy' then
+  begin
+    Engine.Sprites.SetVelocity(handle, Engine.Sprites.GetVelocityX(handle), L.ToNumber(3));
   end
   else if field = 'frame' then
   begin

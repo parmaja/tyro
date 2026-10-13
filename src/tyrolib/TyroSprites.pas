@@ -37,6 +37,8 @@ type
     Friction: single;
     Bouncy: single;
     Radius: single;
+    VX: single;      // velocity, px/s (dynamic bodies; set by script or written back)
+    VY: single;
   end;
 
   { Per-sprite script hook (implemented by TyroLua; run on the main thread) }
@@ -62,6 +64,8 @@ type
     Friction: single;
     Bouncy: single;
     Radius: single;
+    VX: single;      // linear velocity in px/s (applied to a dynamic body each step)
+    VY: single;
     Script: ISpriteScript;
     // Animation state: when the sprite was loaded from an Aseprite file that
     // has more than one frame, AnimFrames holds one texture per frame and
@@ -148,6 +152,12 @@ type
     procedure SetFriction(Handle: integer; AFriction: single);
     procedure SetBouncy(Handle: integer; ABouncy: single);
     procedure SetRadius(Handle: integer; ARadius: single);
+    // Velocity of a dynamic body in px/s. A script write sets the body velocity
+    // for the next physics step; after each step TPhysics writes the simulated
+    // velocity back here, so a plain read reports the current motion.
+    procedure SetVelocity(Handle: integer; AVelocityX, AVelocityY: single);
+    function GetVelocityX(Handle: integer): single;
+    function GetVelocityY(Handle: integer): single;
     function GetCollide(Handle: integer): boolean;
     function GetKind(Handle: integer): TSpriteKind;
     function GetMass(Handle: integer): single;
@@ -248,6 +258,8 @@ begin
   Friction := 0.5;
   Bouncy := 0.0;
   Radius := 0.0;
+  VX := 0.0;
+  VY := 0.0;
   Script := nil;
   AnimFrames := nil;
   AnimFrameMs := nil;
@@ -930,6 +942,52 @@ begin
   end;
 end;
 
+procedure TSprites.SetVelocity(Handle: integer; AVelocityX, AVelocityY: single);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+    begin
+      Sprite.VX := AVelocityX;
+      Sprite.VY := AVelocityY;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetVelocityX(Handle: integer): single;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.VX
+    else
+      Result := 0;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetVelocityY(Handle: integer): single;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.VY
+    else
+      Result := 0;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 function TSprites.GetCollide(Handle: integer): boolean;
 var
   Sprite: TSprite;
@@ -1065,6 +1123,8 @@ begin
       AState.Friction := Sprite.Friction;
       AState.Bouncy := Sprite.Bouncy;
       AState.Radius := Sprite.Radius;
+      AState.VX := Sprite.VX;
+      AState.VY := Sprite.VY;
       Result := True;
     end;
   finally
@@ -1148,15 +1208,23 @@ end;
 procedure TSprites.DrawAll;
 var
   Sprite: TSprite;
-  Pos: TVector2;
+  W, H: Single;
+  Src, Dst: TRectangle;
 begin
   FLock.Enter;
   try
     for Sprite in FItems.Values do
       if Sprite.Visible and (Sprite.Texture.id > 0) then
       begin
-        Pos := TVector2.Create(Sprite.X, Sprite.Y);
-        RayLib.DrawTextureEx(Sprite.Texture, Pos, Sprite.Angle, Sprite.Scale, clWhite);
+        // Draw the texture centred on (X, Y) with its rotation pivot at the
+        // centre, matching the physics body (whose origin is the centre) and
+        // the documented "sprite.x/y = position" model.
+        W := Sprite.Texture.width * Sprite.Scale;
+        H := Sprite.Texture.height * Sprite.Scale;
+        Src := RectangleOf(0, 0, Sprite.Texture.width, Sprite.Texture.height);
+        Dst := RectangleOf(Sprite.X, Sprite.Y, W, H);
+        RayLib.DrawTexturePro(Sprite.Texture, Src, Dst,
+          Vector2Of(W / 2, H / 2), Sprite.Angle, clWhite);
       end;
   finally
     FLock.Leave;
@@ -1190,7 +1258,10 @@ end;
 procedure TSprites.DrawSprite(Handle: integer; ACanvas: TTyroCanvas; AX, AY: single; AAngle: single; AScale: single; ATint: TColor);
 var
   Sprite: TSprite;
-  Pos: TVector2;
+  W, H: Single;
+  Texture: TTexture2D;
+  Angle: Single;
+  Src, Dst: TRectangle;
 begin
   FLock.Enter;
   try
@@ -1205,11 +1276,18 @@ begin
       Sprite.Angle := AAngle;
     if AScale >= 0 then
       Sprite.Scale := AScale;
-    Pos := TVector2.Create(Sprite.X, Sprite.Y);
+    Texture := Sprite.Texture;
+    // Snapshot under the lock; the DrawTexturePro call happens outside it.
+    W := Texture.width * Sprite.Scale;
+    H := Texture.height * Sprite.Scale;
+    Src := RectangleOf(0, 0, Texture.width, Texture.height);
+    Dst := RectangleOf(Sprite.X, Sprite.Y, W, H);
+    Angle := Sprite.Angle;
   finally
     FLock.Leave;
   end;
-  RayLib.DrawTextureEx(Sprite.Texture, Pos, Sprite.Angle, Sprite.Scale, ATint);
+  RayLib.DrawTexturePro(Texture, Src, Dst,
+    Vector2Of(W / 2, H / 2), Angle, ATint);
 end;
 
 { TCreateSpriteObject }

@@ -419,6 +419,7 @@ var
   State: TSpritePhysicsState;
   Config: TBodyConfig;
   Pos: cpVect;
+  Vel: cpVect;
   IsColliding: boolean;
 begin
   if FSpace = nil then
@@ -503,7 +504,14 @@ begin
       if not FSprites.GetPhysicsState(AHandle, State) then
         Continue;
       if State.Kind = skDynamic then
-        Dyn.Add(AHandle)
+      begin
+        Dyn.Add(AHandle);
+        //Apply the script-visible velocity to the body. Between steps the
+        //store holds the last simulated velocity, so re-applying it is a
+        //no-op for a coasting body and only takes effect when a script wrote
+        //a new value since the previous write-back (phase 6).
+        cpBodySetVelocity(Body, cpv(State.VX, State.VY));
+      end
       else
       begin
         cpBodySetPosition(Body, cpv(State.X, State.Y));
@@ -528,6 +536,8 @@ begin
       Pos := cpBodyGetPosition(Body);
       FSprites.SetPosition(Dyn[I], Pos.x, Pos.y);
       FSprites.SetAngle(Dyn[I], RadToDeg(cpBodyGetAngle(Body)));
+      Vel := cpBodyGetVelocity(Body);
+      FSprites.SetVelocity(Dyn[I], Vel.x, Vel.y);
     end;
   finally
     Dyn.Free;
