@@ -1288,45 +1288,45 @@ end;
 
 procedure TTyroEngine.DrawQueueStats;
 const
-  cPad = 6;
-  cFont = 14;
+  cPad = 8;
+  cFont = 16;
   cLine = 17;
 var
   Stats: TQueueStats;
   Lines: TArray<string>;
-  i, w, maxW, x, y, h: Integer;
+  i: Integer;
+  w, maxW, x, y, h: Integer;
 begin
   Stats := QueueStats;
   //Two label/value columns per row to keep the panel short enough for a small
   //window; the header row names the panel and its shortcut.
   Lines := [
-    'QUEUE STATS  (Ctrl+F10)',
-    Format('%-8s %-6d   %-8s %-6d', ['consumed', Stats.Consumed, 'passes', Stats.Passes]),
-    Format('%-8s %-6d   %-8s %-6d', ['deferred', Stats.Deferred, 'depth', Stats.Depth]),
-    Format('%-8s %-6d   %-8s %-6d', ['max', Stats.MaxDepth, 'holds', Stats.Holds]),
-    Format('%-8s %-6d   %-8s %-6s', ['frames', Stats.Frames, 'group', BoolToStr(Stats.Group, True)]),
-    Format('%-8s %-6d   %-8s %-6d', ['limit', Stats.Limit, 'waits', Stats.Waits]),
-    Format('%-8s %-6d   %-8s %-6.2f', ['blocked', Stats.Blocked, 'drainms', Stats.DrainMs]),
-    Format('%-8s %-6d   %-8s %-6d', ['lastgap', Stats.LastGap, 'maxgap', Stats.MaxGap]),
-    Format('%-8s %-6d', ['fps', RayLib.GetFPS])
+    Format('%-8s %-6d   %-8s %-6d', ['Consumed', Stats.Consumed, 'Passes', Stats.Passes]),
+    Format('%-8s %-6d   %-8s %-6d', ['Deferred', Stats.Deferred, 'Depth', Stats.Depth]),
+    Format('%-8s %-6d   %-8s %-6d', ['Max', Stats.MaxDepth, 'Holds', Stats.Holds]),
+    Format('%-8s %-6d   %-8s %-6s', ['Frames', Stats.Frames, 'Group', BoolToStr(Stats.Group, True)]),
+    Format('%-8s %-6d   %-8s %-6d', ['Limit', Stats.Limit, 'Waits', Stats.Waits]),
+    Format('%-8s %-6d   %-8s %-6.2f', ['Blocked', Stats.Blocked, 'Drain ms', Stats.DrainMs]),
+    Format('%-8s %-6d   %-8s %-6d', ['LastGap', Stats.LastGap, 'Maxgap', Stats.MaxGap]),
+    Format('%-8s %-6d', ['FPS', RayLib.GetFPS])
   ];
   //Size the panel to its widest line, measured with the default font.
-  maxW := 0;
-  for i := 0 to High(Lines) do
-  begin
-    w := RayLib.MeasureText(PUTF8Char(UTF8String(Lines[i])), cFont);
-    if w > maxW then
-      maxW := w;
-  end;
   x := cPad;
   y := cPad;
   h := cPad * 2 + Length(Lines) * cLine;
-  //Translucent backdrop so the text stays readable over any drawing.
-  RayLib.DrawRectangle(x - cPad, y - cPad, maxW + cPad * 2, h,
-    clBlack.ReplaceAlpha(200));
-  RayLib.DrawRectangleLines(x - cPad, y - cPad, maxW + cPad * 2, h, clGray);
+  maxW := 0;
   for i := 0 to High(Lines) do
-    RayLib.DrawText(PUTF8Char(UTF8String(Lines[i])), x, y + i * cLine, cFont, clWhite);
+  begin
+    w := Length(Lines[i]) * Res.Font.Width;
+    if w > maxW then
+      maxW := w;
+  end;
+  //Translucent backdrop so the text stays readable over any drawing.
+  RayLib.DrawRectangle(x - cPad, y - cPad, maxW + cPad * 2, h, clBlack.ReplaceAlpha(200));
+  RayLib.DrawRectangleLines(x - cPad, y - cPad, maxW + cPad * 2, h, clGray);
+
+  for i := 0 to High(Lines) do
+    RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(UTF8String(Lines[i])), Vector2Of(x, y + i * cLine), Res.Font.Height, 0, clWhite);
 end;
 
 function TTyroEngine.GetQueueLimit: Integer;
