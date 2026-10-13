@@ -1,0 +1,9 @@
+--======================================================================
+--  test_cli_exit_script.tyro - does a bare --exit end the session as
+--  soon as the main script finishes?
+--======================================================================
+--  The script returns immediately, so with --exit the process must quit
+--  instead of waiting for the auto-shown window to be closed.
+--  Run:  tyro.exe tests\test_cli_exit_script.tyro --exit
+
+print("cli-exit-script done")

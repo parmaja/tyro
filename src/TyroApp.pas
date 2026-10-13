@@ -36,7 +36,7 @@ uses
   {$ifdef MSWINDOWS}
   Windows,
   {$endif}
-  SysUtils, Classes, RayLib, mnUtils, mnConfigs,
+  SysUtils, Classes, RayLib, mnUtils, mnConfigs, StrUtils,
   Melodies, TyroControls, TyroClasses, mnLogs, TyroEngines,
   TyroLua;
 
@@ -193,7 +193,39 @@ begin
   WriteLn('--console -c           Show command prompt');
   WriteLn('--terminal -t          Show terminal');
   WriteLn('--debug -d             Run in debug mode');
+  WriteLn('--exit[:N]             Exit after N seconds, or when the script ends');
+  WriteLn('--screenshot:N         Save a screenshot after N seconds');
   //WriteLn('--window -w            Show window');
+end;
+
+//* Look up a command line switch that may carry a numeric value, accepting
+//* both the "-name:value" and "-name=value" forms (and the --name and /name
+//* spellings). Returns True when the switch is present; AValue is '' for a
+//* bare switch. The mini library argument parser only splits on '=', so the
+//* ':' form used by --exit:N/--screenshot:N is handled here.
+function ReadValueSwitch(const AName: string; out AValue: string): Boolean;
+var
+  i: Integer;
+  S, N: string;
+begin
+  Result := False;
+  AValue := '';
+  for i := 1 to ParamCount do
+  begin
+    S := ParamStr(i);
+    N := S;
+    if StartsText('/', N) then
+      N := '-' + Copy(N, 2, MaxInt)
+    else if StartsText('--', N) then
+      N := Copy(N, 2, MaxInt);
+    if SameText(N, AName) then
+      Exit(True);
+    if StartsText(AName + ':', N) or StartsText(AName + '=', N) then
+    begin
+      AValue := Copy(N, Length(AName) + 2, MaxInt);
+      Exit(True);
+    end;
+  end;
 end;
 
 constructor TTyroApplication.Create;
@@ -201,6 +233,7 @@ var
   LogLevel: TLogLevel;
   s: string;
   ScriptFile: string;
+  i: Integer;
 begin
   inherited;
   FLocation := ExtractFilePath(ParamStr(0));
@@ -249,6 +282,30 @@ begin
     MainOptions := MainOptions + [moMainWindow];
   if Arguments.ReadSwitch('-terminal') or Arguments.ReadSwitch('-t') then
     MainOptions := MainOptions + [moShowTerminal];
+
+  //--exit:N ends the session N seconds into the run; a bare --exit ends it as
+  //soon as the main script finishes. Either way the process quits by itself
+  //instead of waiting for the window to be closed.
+  if ReadValueSwitch('-exit', s) then
+  begin
+    i := StrToIntDef(s, 0);
+    if i > 0 then
+      Engine.ExitAfterSeconds := i
+    else
+      Engine.ExitAfterScript := True;
+  end;
+
+  //--screenshot:N captures the screen N seconds in. Drawing, and therefore the
+  //capture, needs a visible window, so ask for one.
+  if ReadValueSwitch('-screenshot', s) then
+  begin
+    i := StrToIntDef(s, 0);
+    if i > 0 then
+    begin
+      Engine.ScreenshotAfterSeconds := i;
+      MainOptions := MainOptions + [moMainWindow];
+    end;
+  end;
 end;
 
 destructor TTyroApplication.Destroy;

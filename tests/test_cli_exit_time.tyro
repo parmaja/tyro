@@ -1,0 +1,14 @@
+--======================================================================
+--  test_cli_exit_time.tyro - does --exit:N stop the session after N
+--  seconds?
+--======================================================================
+--  The script never finishes on its own, so only the timer can end it.
+--  Run:  tyro.exe tests\test_cli_exit_time.tyro --exit:3
+--  The process should come back on its own after ~3 seconds.
+
+window.show(200, 120)
+
+while cycle do
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 200, 120, true)
+end

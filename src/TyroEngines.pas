@@ -220,6 +220,10 @@ type
     procedure ClearCanvas(ACanvas: TTyroCanvas);
     procedure ClearScriptSprites;
     procedure ShowWindowAfterScript;
+    //* Service the command line lifecycle (--exit / --screenshot) once per
+    //* frame. Returns True when this call terminated the session, so the main
+    //* loop can stop after the current frame.
+    function AutoLifecycle: Boolean;
 
     procedure ShowFileList;
     procedure HideFileList;
@@ -249,6 +253,18 @@ type
     FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
     FPresentedFrame: Boolean;
     FScriptFailed: Boolean;
+    //* Command line lifecycle (see AutoLifecycle): --exit ends the session
+    //* after FExitAfterSeconds, a bare --exit once the main script thread
+    //* finished, and --screenshot captures the screen after
+    //* FScreenshotAfterSeconds. Zero/False keeps the interactive behaviour.
+    FExitAfterSeconds: Integer;
+    FExitAfterScript: Boolean;
+    FScreenshotAfterSeconds: Integer;
+    FScreenshotFile: string;
+    FScreenshotDone: Boolean;
+    //* GetTime() (seconds) when the current run started, so the deadlines above
+    //* are measured from the run and not from process start.
+    FRunStart: Double;
     //Cached width of the '999 FPS' label (moShowFPS), measured once.
     FFpsLabelWidth: Integer;
     //* Set once the engine has shown the window by itself after a headless
@@ -512,6 +528,16 @@ type
     //* lifecycle where the main loop inspects it before releasing the worker.
     property ScriptFailed: Boolean read FScriptFailed;
 
+    //* --exit:N: end the session after N seconds of running (0 = never).
+    property ExitAfterSeconds: Integer read FExitAfterSeconds write FExitAfterSeconds;
+    //* Bare --exit: end the session once the main script thread has finished.
+    property ExitAfterScript: Boolean read FExitAfterScript write FExitAfterScript;
+    //* --screenshot:N: capture the screen N seconds into the run (0 = never).
+    property ScreenshotAfterSeconds: Integer read FScreenshotAfterSeconds write FScreenshotAfterSeconds;
+    //* File the timed screenshot is written to; empty picks screenshot.png in
+    //* the working path.
+    property ScreenshotFile: String read FScreenshotFile write FScreenshotFile;
+
     property Title: string read FTitle write SetTitle;
     property Margin: Integer read FMargin write FMargin;
     property Width: Integer read FWidth  write FWidth;
@@ -624,6 +650,10 @@ begin
   LoadScriptThread;
   Options := Options + AOptions;
   Start;
+  //The --exit/--screenshot deadlines are measured from now, when the script
+  //starts, not from process start.
+  FRunStart := GetTime();
+  FScreenshotDone := False;
   if moMainWindow in AOptions then
     ShowWindow;
   {if Res.Config.Sections.ReadBool('show', 'console', False) then
@@ -721,6 +751,10 @@ begin
         HandleDroppedFiles;
         ProcessInput;
       end;
+      //Command line lifecycle runs after the frame has been processed, so a
+      //finishing script's last commands still land before --exit ends the
+      //session; a screenshot armed here is captured at the next present.
+      AutoLifecycle;
     end;
     CheckSynchronize;
     {$ifdef FPC}
@@ -1774,6 +1808,52 @@ begin
   IsTerminated := True;
 end;
 
+//Service the command line lifecycle (--exit / --screenshot) once per frame.
+//Returns True when this call terminated the session, so the main loop can stop.
+//A screenshot armed on the same frame defers the exit by one frame, so the
+//capture still gets presented before the window goes away.
+function TTyroEngine.AutoLifecycle: Boolean;
+var
+  Elapsed: Double;
+  Queued: Boolean;
+begin
+  Result := False;
+  Queued := False;
+  Elapsed := GetTime() - FRunStart;
+
+  if (FScreenshotAfterSeconds > 0) and (not FScreenshotDone) and (Elapsed >= FScreenshotAfterSeconds) then
+  begin
+    FScreenshotDone := True;
+    if FScreenshotFile = '' then
+    begin
+      FScreenshotFile := 'screenshot.png';
+      if Res.WorkPath <> '' then
+        //raylib's TakeScreenshot cannot open an absolute path on Windows, so
+        //keep the file relative to the current directory (the working path).
+        FScreenshotFile := ExtractRelativePath(IncludeTrailingPathDelimiter(GetCurrentDir), IncludeTrailingPathDelimiter(CorrectPath(Res.WorkPath))) + FScreenshotFile;
+    end;
+    QueueScreenshot(FScreenshotFile);
+    Queued := True;
+  end;
+  if Queued then
+    Exit;
+
+  if (FExitAfterSeconds > 0) and (Elapsed >= FExitAfterSeconds) then
+  begin
+    Terminate;
+    Exit(True);
+  end;
+
+  //Bare --exit: Started excludes a thread that was never launched and Completed
+  //is published by the worker just before it exits, so this only fires for a
+  //script that really ran and finished.
+  if FExitAfterScript and (FScriptThread <> nil) and (FScriptThread.Started) and (FScriptThread.Completed) then
+  begin
+    Terminate;
+    Exit(True);
+  end;
+end;
+
 procedure TTyroEngine.ShowConsole(AX, AY, AWidth, AHeight: Integer);
 begin
   Console.BoundsRect := Rect(AX, AY, AX + AWidth, AY + AHeight);
@@ -2264,7 +2344,9 @@ end;
 
 procedure TTyroEngine.ShowWindowAfterScript;
 begin
-  if FWindowAutoShown or (not IsWindowHidden) or IsTerminated then
+  //Bare --exit ends the session as soon as the script is done, so showing the
+  //window here would only flash it for the one remaining frame.
+  if FWindowAutoShown or (not IsWindowHidden) or IsTerminated or FExitAfterScript then
     Exit;
   //Only a real script run can end on its own: Started excludes a thread that was
   //never launched and Completed is published by the worker just before it exits.

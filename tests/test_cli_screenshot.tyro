@@ -1,0 +1,19 @@
+--======================================================================
+--  test_cli_screenshot.tyro - does --screenshot:N capture the screen N
+--  seconds in?
+--======================================================================
+--  Draws a recognisable frame for a few seconds so the timed capture has
+--  something to save.
+--  Run:  tyro.exe tests\test_cli_screenshot.tyro --screenshot:2 --exit:4
+--  Expect a screenshot.png in the working path.
+
+window.show(320, 200)
+
+while cycle do
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 320, 200, true)
+  canvas.color = colors.red
+  canvas.rectangle(40, 40, 240, 120, true)
+  canvas.color = colors.white
+  canvas.text(8, 8, "screenshot test")
+end
