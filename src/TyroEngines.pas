@@ -263,6 +263,16 @@ type
     //* access goes through TInterlocked.
     FQueueHold: LongInt;
     FQueueFlush: LongInt;
+    //* Commit watermark. FQueueEnqueued counts every command ever added to the
+    //* queue (monotonic); FQueueCommitUpTo snapshots it when a hold is armed,
+    //* so "commands committed before this hold" = FQueueCommitUpTo commands.
+    //* ProcessQueue may draw while the hold is open as long as fewer than that
+    //* many commands have been drawn in total (compared against FQueueConsumed),
+    //* which lets a released group land in one cycle even though the script
+    //* re-arms the hold before the next pass. Counters make this safe against a
+    //* pass that is still draining when the next hold is armed.
+    FQueueEnqueued: LongInt;
+    FQueueCommitUpTo: LongInt;
     //* Automatic per-'cycle' grouping (see AutoGroup). FQueueAuto is the
     //* implicit hold taken when a cycle body starts and released at the next
     //* yield point, so the whole body is committed in one drawing cycle just
@@ -425,6 +435,11 @@ type
     //* balances the hold, so the group is drawn at one drawing cycle. Nested
     //* enter() calls count up; safe to call from any thread.
     procedure HoldQueue;
+    //* Snapshot the enqueue watermark for the hold that is opening now.
+    //* ProcessQueue draws commands queued before the hold even while it stays
+    //* open, so a released group is never stranded behind a hold the script
+    //* re-armed before the next pass. Called from the script thread.
+    procedure MarkQueueCommit;
     //* Lua leave(): release the hold taken by HoldQueue. When the last hold is
     //* released the next ProcessQueue pass drains the whole held group in one
     //* go (no per-frame time budget). Safe to call from any thread; an
@@ -825,7 +840,12 @@ end;
 procedure TTyroEngine.HoldAutoQueue;
 begin
   if FAutoGroup then
-    TInterlocked.Exchange(FQueueAuto, 1);
+    //0 -> 1 closes the gate for the body about to run: snapshot the commands
+    //already queued (the previous, released body) so ProcessQueue can still
+    //draw them even though this hold stays open for the new body.
+    if TInterlocked.Exchange(FQueueAuto, 1) = 0 then
+      if TInterlocked.Add(FQueueHold, 0) = 0 then
+        MarkQueueCommit;
 end;
 
 procedure TTyroEngine.NoteEnqueue;
@@ -833,6 +853,9 @@ var
   NowMs, Prev, Diff: Int64;
   Gap: LongInt;
 begin
+  //Monotonic count of accepted commands, the basis of the commit watermark
+  //(FQueueCommitUpTo). Bumped on every enqueue, before the gap baseline check.
+  TInterlocked.Increment(FQueueEnqueued);
   NowMs := Round(GetTime() * 1000);
   //Exchange gives the previous stamp and installs the new one in one step; a
   //0/negative previous stamp means there is no baseline yet.
@@ -911,9 +934,22 @@ begin
   end;
 end;
 
+procedure TTyroEngine.MarkQueueCommit;
+begin
+  //Watermark = total commands enqueued so far. ProcessQueue drains while
+  //FQueueConsumed stays below it, so it draws exactly the commands that were
+  //committed before this hold and never touches the body being built.
+  TInterlocked.Exchange(FQueueCommitUpTo, TInterlocked.Add(FQueueEnqueued, 0));
+end;
+
 procedure TTyroEngine.HoldQueue;
 begin
-  TInterlocked.Increment(FQueueHold);
+  //Only the transition from an open gate to a closed one marks a commit
+  //boundary: nested enter() calls (e.g. one inside a 'cycle' body) must not
+  //move the watermark past the outer hold's commands.
+  if TInterlocked.Increment(FQueueHold) = 1 then
+    if TInterlocked.Add(FQueueAuto, 0) = 0 then
+      MarkQueueCommit;
 end;
 
 procedure TTyroEngine.ReleaseQueue;
@@ -978,6 +1014,8 @@ var
   Consumed: Integer;
   Depth: Integer;
   BudgetHit: Boolean;
+  ToDrain: Integer; //>=0: drain exactly this many (committed) commands
+  Hold0, Auto0: LongInt;
 begin
   if Board <> nil then
   begin
@@ -987,16 +1025,37 @@ begin
     //gone (a script that errored or was stopped between enter and leave) is
     //released here so it cannot lock drawing forever; the console REPL has no
     //worker thread, so it is not covered by that self-healing.
-    if (TInterlocked.Add(FQueueHold, 0) > 0) or
-       (TInterlocked.Add(FQueueAuto, 0) > 0) then
+    Hold0 := TInterlocked.Add(FQueueHold, 0);
+    Auto0 := TInterlocked.Add(FQueueAuto, 0);
+    if (Hold0 > 0) or (Auto0 > 0) then
     begin
       if (FScriptThread = nil) or (not FScriptThread.Active) then
       begin
         TInterlocked.Exchange(FQueueHold, 0);
         TInterlocked.Exchange(FQueueAuto, 0);
+        Hold0 := 0;
+        Auto0 := 0;
       end;
-      Exit;
     end;
+
+    if (Hold0 > 0) or (Auto0 > 0) then
+    begin
+      //A body is being built: draw only the group that was committed before
+      //the hold was armed. The script re-arms the hold as soon as the frame
+      //event wakes it, which happens before this pass runs, so without the
+      //commit watermark the gate is almost always seen closed and nothing is
+      //drawn; the backlog then grows without bound and text appears seconds
+      //late. Bound the pass by (commit watermark - already drawn).
+      ToDrain := TInterlocked.Add(FQueueCommitUpTo, 0) - TInterlocked.Add(FQueueConsumed, 0);
+      if ToDrain <= 0 then
+        Exit;
+    end
+    else
+    begin
+      //Gate open: everything queued is committed, drain it normally.
+      ToDrain := -1;
+    end;
+
     //leave() asked for it: this pass ignores the frame time budget, so the
     //whole group queued between enter() and leave() lands in one cycle.
     flush := TInterlocked.Exchange(FQueueFlush, 0) <> 0;
@@ -1046,19 +1105,29 @@ begin
         end;
         FreeAndNil(p);
         Inc(Consumed);
-        ft2 := GetTime() - ft;
-        //Stop the pass at the frame time budget unless a flush was armed, and
-        //also as soon as a fresh enter() is seen, so a command queued after
-        //the hold began is never executed by this already-running pass.
-        if (not flush) and (ft2 >= fpd) then
+        if ToDrain >= 0 then
         begin
-          //Budget exhausted while more commands may be waiting: the frame is
-          //about to be drawn with a partial batch.
-          BudgetHit := True;
-          break;
+          //Committed group: drain exactly that many commands, in one drawing
+          //cycle, regardless of the frame time budget.
+          if Consumed >= ToDrain then
+            Break;
+        end
+        else
+        begin
+          ft2 := GetTime() - ft;
+          //Stop the pass at the frame time budget unless a flush was armed, and
+          //also as soon as a fresh enter() is seen, so a command queued after
+          //the hold began is never executed by this already-running pass.
+          if (not flush) and (ft2 >= fpd) then
+          begin
+            //Budget exhausted while more commands may be waiting: the frame is
+            //about to be drawn with a partial batch.
+            BudgetHit := True;
+            break;
+          end;
+          if TInterlocked.Add(FQueueHold, 0) > 0 then
+            break;
         end;
-        if TInterlocked.Add(FQueueHold, 0) > 0 then
-          break;
 
         Lock.Enter;
         try
@@ -1686,6 +1755,12 @@ begin
   TInterlocked.Exchange(FQueueHold, 0);
   TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
+  //Keep the commit watermark consistent: with the queue dropped, all commands
+  //ever enqueued are also considered drawn, or the leftover difference would
+  //make a later hold drain its whole body before it is committed.
+  TInterlocked.Exchange(FQueueCommitUpTo, 0);
+  TInterlocked.Exchange(FQueueEnqueued, 0);
+  TInterlocked.Exchange(FQueueConsumed, 0);
   ResetEnqueueGap;
   //Wake a producer throttled by FQueueLimit so Stop does not wait a poll tick.
   if FQueueSpaceEvent <> nil then
@@ -2096,6 +2171,12 @@ begin
   TInterlocked.Exchange(FQueueHold, 0);
   TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
+  //Keep the commit watermark consistent: with the queue dropped, all commands
+  //ever enqueued are also considered drawn, or the leftover difference would
+  //make a later hold drain its whole body before it is committed.
+  TInterlocked.Exchange(FQueueCommitUpTo, 0);
+  TInterlocked.Exchange(FQueueEnqueued, 0);
+  TInterlocked.Exchange(FQueueConsumed, 0);
   ResetEnqueueGap;
   //Wake a producer throttled by FQueueLimit so a rerun starts without a stall.
   if FQueueSpaceEvent <> nil then

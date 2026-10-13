@@ -1,0 +1,41 @@
+--======================================================================
+--  test_cycle_drain.tyro - does the per-cycle auto-hold let the engine
+--  drain the drawing queue?
+--======================================================================
+--  A "while cycle" body is held by the automatic grouping gate until the
+--  next cycle read. ProcessQueue stops while that hold is open, so if the
+--  main loop always samples the gate while it is held, nothing is drained
+--  and the backlog grows without bound (text appears seconds late).
+--
+--  Prints once a second: commands drained in that second, the number of
+--  drawing frames, the current backlog and its worst value.
+--
+--  Healthy: depth stays near the body size (~5), drained ~= frames * body.
+--  Stalled: depth climbs every report with drained far below that.
+
+window.show(320, 200)
+
+local lastc = queue.consumed
+local lastf = queue.frames
+local frames = 0
+local worst = 0
+
+while cycle do
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 320, 200, true)
+  canvas.color = colors.green
+  canvas.text(8, 8, "cycle drain diagnostic")
+
+  frames = frames + 1
+  if frames % 60 == 0 then
+    local dc = queue.consumed - lastc
+    local df = queue.frames - lastf
+    lastc = queue.consumed
+    lastf = queue.frames
+    local d = queue.depth
+    if d > worst then worst = d end
+    println(string.format(
+      "t=%ds drained=%d frames=%d depth=%d max=%d worst=%d",
+      frames // 60, dc, df, d, queue.max, worst))
+  end
+end
