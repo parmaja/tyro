@@ -128,6 +128,7 @@ function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): S
 function LFSRNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function OldPiano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Square_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Saw_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Tri_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -605,8 +606,54 @@ begin
   //WriteLn('Sample = ' + FloatTOStr(Sample) + ' WaveSamples = '+ FloatToStr(wavesamples) + ' Result: ' + FloatToStr(Result));
 end;
 
-//ref: http://web.mit.edu/6.02/www/s2007/lab2.pdf
+//Additive piano: inharmonic partials, per-partial decay, hammer transient.
+//The old version was (sin f - sin 2f - sin f/2) with one shared envelope:
+//  - exp(-log10(50)*t/3) only fell to 18% after 3s (log10, not ln), so notes
+//    sounded sustained like an organ instead of dying.
+//  - the f/2 term is a subharmonic, pianos do not have one, and it was as loud
+//    as the fundamental so the pitch read an octave low and muddy.
+//  - one envelope for every partial kept the timbre static; a real piano loses
+//    its brightness first because the upper partials decay faster.
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  Inharmonicity = 0.0004; //string stiffness, partials sit slightly sharp of k*f
+  PartialCount = 8;
+var
+  t, Rate, Sum, Norm, Amp, Decay, Fk, Attack: Double;
+  k: Integer;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Rate := 0.7 + Frequency / 880; //higher notes die quicker
+  Attack := 1 - Exp(-t * 400);   //~2.5ms hammer attack
+  Sum := 0;
+  Norm := 0;
+  for k := 1 to PartialCount do
+  begin
+    Fk := Frequency * k * Sqrt(1 + Inharmonicity * k * k);
+    if Fk >= SampleRate / 2 then
+      Break;
+    Amp := 1 / (k * Sqrt(k));                      //rolls off faster than 1/k
+    Decay := Exp(-Rate * (0.6 + 0.5 * k) * t);     //brightness dies first
+    Sum := Sum + Amp * Sin(2 * Pi * Fk * Index / SampleRate) * Decay;
+    Norm := Norm + Amp;
+  end;
+  if Norm > 0 then
+    Sum := Sum / Norm;
+  //Hammer noise at the start of the note
+  Result := (Sum + HashNoise(Index) * Exp(-t * 150) * 0.12) * Attack;
+end;
+
+//The original piano generator, kept under a separate name so it can be A/B
+//compared with the additive one above. It is a fixed (sin f - sin 2f - sin f/2)
+//wave times a single envelope: exp(-log10(50)*t/3) is log10, not ln, so it only
+//falls to ~18% after 3s, and the f/2 term is a subharmonic pianos do not have.
+//ref: http://web.mit.edu/6.02/www/s2007/lab2.pdf
+function OldPiano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 var
   a, b,
   Sample, Fade: Single;
@@ -879,6 +926,7 @@ initialization
   //Default one is the first one
   Waveforms.Add('Sin', @Sin_Waveform);
   Waveforms.Add('Piano', @Piano_Waveform);
+  Waveforms.Add('OldPiano', @OldPiano_Waveform);
   Waveforms.Add('Square', @Square_Waveform);
   Waveforms.Add('Pulse25', @Pulse25_Waveform);
   Waveforms.Add('Pulse125', @Pulse125_Waveform);
