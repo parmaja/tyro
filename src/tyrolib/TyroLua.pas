@@ -172,6 +172,11 @@ type
     function Noise_func(L: Plua_State): integer; cdecl;
     function Play_func(L: Plua_State): integer; cdecl;
     function MML_func(L: Plua_State): integer; cdecl;
+    //sound.loopPlay()/pitch()/volume()/stop()
+    function LoopPlay_func(L: Plua_State): integer; cdecl;
+    function LoopPitch_func(L: Plua_State): integer; cdecl;
+    function LoopVolume_func(L: Plua_State): integer; cdecl;
+    function LoopStop_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
@@ -1417,6 +1422,17 @@ begin
   Lua.State.Register('music', 'play', Music, Music.Play_func);
   Lua.State.Register('music', 'mml', Music, Music.MML_func);
 
+  //sound (gapless looping playback, e.g. an engine drone)
+  //  sound.loopPlay(freq [, volume])
+  //  sound.loopPlay(wave, freq [, volume])
+  //  sound.pitch(freq)         retune the running loop
+  //  sound.volume(0..1)
+  //  sound.stop()
+  Lua.State.Register('sound', 'loopPlay', Music, Music.LoopPlay_func);
+  Lua.State.Register('sound', 'pitch', Music, Music.LoopPitch_func);
+  Lua.State.Register('sound', 'volume', Music, Music.LoopVolume_func);
+  Lua.State.Register('sound', 'stop', Music, Music.LoopStop_func);
+
   //radio (radio.play(url), radio.pause(), radio.resume(), radio.stop()
   // + getters: radio.title, radio.station, radio.state, radio.playing ...)
   Lua.State.Register('radio', 'play', Radio, Radio.Play_func);
@@ -2180,6 +2196,52 @@ begin
     Period := round(L.ToNumber(2));
     FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
   end;
+  Result := 0;
+end;
+
+function TLuaMusic.LoopPlay_func(L: Plua_State): integer; cdecl;
+var
+  WaveName: string;
+  Freq, Volume: Single;
+  c: Integer;
+begin
+  // sound.loopPlay(freq [, volume])
+  // sound.loopPlay(wave, freq [, volume])
+  c := L.ArgsCount;
+  Volume := 1;
+  if L.IsString(1) then
+  begin
+    WaveName := L.ToString(1);
+    Freq := L.ToNumber(2);
+    if c >= 3 then
+      Volume := L.ToNumber(3);
+  end
+  else
+  begin
+    WaveName := '';
+    Freq := L.ToNumber(1);
+    if c >= 2 then
+      Volume := L.ToNumber(2);
+  end;
+  FScript.AddQueueObject(TStartLoopSoundObject.Create(WaveName, Freq, Volume));
+  Result := 0;
+end;
+
+function TLuaMusic.LoopPitch_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.AddQueueObject(TSetLoopPitchObject.Create(L.ToNumber(1)));
+  Result := 0;
+end;
+
+function TLuaMusic.LoopVolume_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.AddQueueObject(TSetLoopVolumeObject.Create(L.ToNumber(1)));
+  Result := 0;
+end;
+
+function TLuaMusic.LoopStop_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.AddQueueObject(TStopLoopSoundObject.Create);
   Result := 0;
 end;
 

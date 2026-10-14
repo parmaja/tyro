@@ -71,6 +71,15 @@ thickness of lines and of rectangle/triangle outlines; `canvas.line` also takes
 a per-call thickness. `textwidth(s)` and `textheight()` measure the built-in
 font, and `canvas.width` / `canvas.height` report the canvas size.
 
+For sound, `music.beep()`, `music.sound(freq, ms)` or `music.sound(wave, freq,
+ms)`, `music.noise(ms)` (white) / `music.noise(freq, ms)` (pitched) and
+`music.mml(...)` play one-shot effects and tunes. For a sound that has to run
+without gaps—an engine drone, a siren, a wind loop—use `sound.loopPlay(freq
+[, volume])` or `sound.loopPlay(wave, freq [, volume])`. It keeps looping until
+`sound.stop()`, and `sound.pitch(freq)` / `sound.volume(0..1)` retune it while
+it plays. Available `wave` names include `Sin`, `Square`, `Saw`, `Tri`, `Organ`,
+`FM`, `Noise`, `Pink` and `Pitched`.
+
 # Input
 
 Keyboard and mouse input can be queried from script. Key and button names are

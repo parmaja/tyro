@@ -500,6 +500,42 @@ type
      procedure DoExecute; override;
    end;
 
+   { TStartLoopSoundObject }
+
+   TStartLoopSoundObject = class(TQueueObject)
+   public
+     WaveName: string;
+     Frequency: Single;
+     Volume: Single;
+     constructor Create(const AWaveName: string; AFrequency, AVolume: Single);
+     procedure DoExecute; override;
+   end;
+
+   { TStopLoopSoundObject }
+
+   TStopLoopSoundObject = class(TQueueObject)
+   public
+     procedure DoExecute; override;
+   end;
+
+   { TSetLoopPitchObject }
+
+   TSetLoopPitchObject = class(TQueueObject)
+   public
+     Frequency: Single;
+     constructor Create(AFrequency: Single);
+     procedure DoExecute; override;
+   end;
+
+   { TSetLoopVolumeObject }
+
+   TSetLoopVolumeObject = class(TQueueObject)
+   public
+     Volume: Single;
+     constructor Create(AVolume: Single);
+     procedure DoExecute; override;
+   end;
+
    { TLoadFontObject }
 
    TLoadFontObject = class(TQueueObject)
@@ -1002,6 +1038,54 @@ end;
 procedure TPlayMusicFileObject.DoExecute;
 begin
   RayLibSound.PlayMusicFile(FileName);
+end;
+
+{ TStartLoopSoundObject }
+
+constructor TStartLoopSoundObject.Create(const AWaveName: string; AFrequency, AVolume: Single);
+begin
+  inherited Create;
+  WaveName := AWaveName;
+  Frequency := AFrequency;
+  Volume := AVolume;
+end;
+
+procedure TStartLoopSoundObject.DoExecute;
+begin
+  StartLoop(WaveName, Frequency, Volume);
+end;
+
+{ TStopLoopSoundObject }
+
+procedure TStopLoopSoundObject.DoExecute;
+begin
+  StopLoop;
+end;
+
+{ TSetLoopPitchObject }
+
+constructor TSetLoopPitchObject.Create(AFrequency: Single);
+begin
+  inherited Create;
+  Frequency := AFrequency;
+end;
+
+procedure TSetLoopPitchObject.DoExecute;
+begin
+  SetLoopPitch(Frequency);
+end;
+
+{ TSetLoopVolumeObject }
+
+constructor TSetLoopVolumeObject.Create(AVolume: Single);
+begin
+  inherited Create;
+  Volume := AVolume;
+end;
+
+procedure TSetLoopVolumeObject.DoExecute;
+begin
+  SetLoopVolume(Volume);
 end;
 
 { TDrawSetAlphaObject }

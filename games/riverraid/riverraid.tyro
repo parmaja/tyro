@@ -96,7 +96,7 @@ local BRIDGE_BAND   = 9          -- world-y half thickness of a bridge
 local state, travel, score, lives, fuel
 local player, speed, invuln
 local pbullets, ebullets, enemies, islands, bridges, depots, blasts
-local genY, nextEnemyY, dyingTimer, msg, msgTimer
+local genY, nextEnemyY, dyingTimer, msg, msgTimer, engineOn, enginePitch
 
 local function screenY(wy) return H + travel - wy end
 local function playerWorldY() return travel + (H - PLAYER_PY) end
@@ -122,6 +122,7 @@ local function crash()
   lives = lives - 1
   blasts[#blasts + 1] = { x = player.x, wy = playerWorldY(), t = 0, big = true }
   beep(90, 300)
+  music.noise(450)              -- white-noise burst on top of the low boom
   window.shake(600, 12)
 end
 
@@ -393,6 +394,24 @@ local function update(ft)
     dyingTimer = dyingTimer - ft
     if dyingTimer <= 0 then respawn() end
   end
+
+  -- plane engine: a gapless looping drone (sound.loopPlay) that is retuned
+  -- with the throttle, so it hums continuously instead of retriggering.
+  if state == "play" then
+    local f = 72 + 48 * ((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN))
+    if not engineOn then
+      engineOn = true
+      enginePitch = f
+      sound.loopPlay("Pitched", f, 0.30)
+    elseif math.abs(f - enginePitch) >= 1 then
+      enginePitch = f
+      sound.pitch(f)
+    end
+  elseif engineOn then
+    engineOn = false
+    enginePitch = -1
+    sound.stop()
+  end
 end
 
 -- ---- rendering -------------------------------------------------------
@@ -631,6 +650,9 @@ local function reset()
   genY = 900
   nextEnemyY = 1200
   dyingTimer = 0
+  engineOn = false
+  enginePitch = -1
+  sound.stop()
   msg = ""
   msgTimer = 0
   local l, r = riverBounds(travel + (H - PLAYER_PY))

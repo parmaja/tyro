@@ -116,6 +116,33 @@ type
     function CreateChannel: TMelodyChannel; override;
   end;
 
+  { TTyroLoopSound }
+
+  { A continuously looping generated tone. RayLib has no loop for a decoded
+    Sound/Music, and looping a buffer leaves a small silent gap at the wrap
+    point. Instead this voice drives an AudioStream through a callback that
+    generates samples on demand, so the tone is genuinely gapless. The waveform
+    is generated at the frequency it was started with and the read position is
+    advanced at `Rate` samples per output sample, so the pitch can change while
+    it plays without a phase jump. }
+  TTyroLoopSound = class(TObject)
+  private
+    FStream: TAudioStream;
+    FBaseFrequency: Single;
+    FStopping: Boolean;
+    FFinished: Boolean;
+    FValid: Boolean;
+  public
+    constructor Create(Proc: TWaveformProc; Frequency, Volume: Single);
+    destructor Destroy; override;
+    procedure Update;
+    procedure SetPitch(Frequency: Single);
+    procedure SetVolume(Volume: Single);
+    procedure Stop;
+    property Valid: Boolean read FValid;
+    property Finished: Boolean read FFinished;
+  end;
+
 var
   WaveForms: TWaveForms = nil;
 
@@ -127,6 +154,14 @@ procedure UpdateMelodies;
 procedure UpdateWaveforms;
 procedure ShutdownMelodies;
 procedure ShutdownWaveforms;
+
+//A single looping voice, started/stopped by sound.loopPlay()/sound.stop().
+procedure StartLoop(Proc: TWaveformProc; Frequency, Volume: Single); overload;
+procedure StartLoop(WaveformName: string; Frequency, Volume: Single); overload;
+procedure StopLoop;
+procedure SetLoopPitch(Frequency: Single);
+procedure SetLoopVolume(Volume: Single);
+procedure UpdateLoopSounds;
 
 function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -156,6 +191,7 @@ implementation
 var
   PlayingMelodies: TList = nil;
   PlayingWaveforms: TList = nil;
+  LoopSound: TTyroLoopSound = nil;
 
 { TTyroRayAudio }
 
@@ -539,23 +575,28 @@ var
   I: Integer;
   Wave: TTyroRayWave;
 begin
-  if PlayingWaveforms = nil then
-    Exit;
-  for I := PlayingWaveforms.Count - 1 downto 0 do
+  if PlayingWaveforms <> nil then
   begin
-    Wave := TTyroRayWave(PlayingWaveforms[I]);
-    if not Wave.IsPlaying then
+    for I := PlayingWaveforms.Count - 1 downto 0 do
     begin
-      PlayingWaveforms.Delete(I);
-      Wave.Free;
+      Wave := TTyroRayWave(PlayingWaveforms[I]);
+      if not Wave.IsPlaying then
+      begin
+        PlayingWaveforms.Delete(I);
+        Wave.Free;
+      end;
     end;
   end;
+  //The looping voice is independent of the one-shot waveforms; it is kept
+  //streaming here so sound.loopPlay() plays without gaps.
+  UpdateLoopSounds;
 end;
 
 procedure ShutdownWaveforms;
 var
   I: Integer;
 begin
+  FreeAndNil(LoopSound);
   if PlayingWaveforms = nil then
     Exit;
   for I := PlayingWaveforms.Count - 1 downto 0 do
@@ -572,6 +613,205 @@ begin
   for I := PlayingMelodies.Count - 1 downto 0 do
     TObject(PlayingMelodies[I]).Free;
   PlayingMelodies.Clear;
+end;
+
+{ TTyroLoopSound }
+
+//The audio thread and the main thread share these plain values instead of an
+//object reference: the callback keeps reading them safely even in the instant
+//after the voice that owns the stream is freed.
+type
+  TLoopSignal = record
+    Active: Boolean;
+    Wave: TWaveformProc;
+    SampleRate: Integer;
+    BaseFrequency: Single;   //frequency the waveform is generated at
+    Rate: Single;            //read index advance per output sample
+    IndexPos: Double;        //fractional read position into the base waveform
+    Gain: Single;            //envelope, ramps to avoid clicks
+    TargetGain: Single;
+    GainStep: Single;
+  end;
+
+var
+  LoopSignal: TLoopSignal;
+
+//Runs on the audio thread. Fills `Frames` mono float samples. The waveform is
+//evaluated at BaseFrequency and the read position is advanced at Rate, so the
+//output stays continuous (no gap) and pitch changes glide without a phase jump.
+procedure LoopAudioCallback(var Buffer; Frames: Cardinal); cdecl;
+var
+  Out32: PSingle;
+  I, N: Integer;
+  v: Single;
+begin
+  Out32 := PSingle(@Buffer);
+  N := Integer(Frames);
+  if not LoopSignal.Active then
+  begin
+    for I := 0 to N - 1 do
+      Out32[I] := 0;
+    Exit;
+  end;
+  for I := 0 to N - 1 do
+  begin
+    if LoopSignal.Gain < LoopSignal.TargetGain then
+    begin
+      LoopSignal.Gain := LoopSignal.Gain + LoopSignal.GainStep;
+      if LoopSignal.Gain > LoopSignal.TargetGain then
+        LoopSignal.Gain := LoopSignal.TargetGain;
+    end
+    else if LoopSignal.Gain > LoopSignal.TargetGain then
+    begin
+      LoopSignal.Gain := LoopSignal.Gain - LoopSignal.GainStep;
+      if LoopSignal.Gain < LoopSignal.TargetGain then
+        LoopSignal.Gain := LoopSignal.TargetGain;
+    end;
+    v := LoopSignal.Wave(Integer(Round(LoopSignal.IndexPos)), LoopSignal.SampleRate, LoopSignal.BaseFrequency);
+    LoopSignal.IndexPos := LoopSignal.IndexPos + LoopSignal.Rate;
+    Out32[I] := v * LoopSignal.Gain;
+  end;
+end;
+
+constructor TTyroLoopSound.Create(Proc: TWaveformProc; Frequency, Volume: Single);
+begin
+  inherited Create;
+  FValid := False;
+  FStopping := False;
+  FFinished := False;
+  if not Assigned(Proc) then
+    Exit;
+  if Frequency < 1 then
+    Frequency := 1;
+  FBaseFrequency := Frequency;
+  RayLibSound.Open;
+  //32 bit float mono: our callback feeds it, so playback never underruns at a
+  //loop point the way a decoded Music stream does.
+  FStream := LoadAudioStream(cDefaultSampleRate, 32, 1);
+  if FStream.Buffer = nil then
+    Exit;
+  //Publish the signal before the stream starts so the first callback sees it.
+  LoopSignal.Active := True;
+  LoopSignal.Wave := Proc;
+  LoopSignal.SampleRate := cDefaultSampleRate;
+  LoopSignal.BaseFrequency := FBaseFrequency;
+  LoopSignal.Rate := 1;
+  LoopSignal.IndexPos := 0;
+  LoopSignal.Gain := 0;
+  LoopSignal.TargetGain := 1;
+  LoopSignal.GainStep := 1 / (0.008 * cDefaultSampleRate); //8 ms attack
+  SetAudioStreamVolume(FStream, Volume);
+  SetAudioStreamCallback(FStream, LoopAudioCallback);
+  PlayAudioStream(FStream);
+  FValid := True;
+end;
+
+destructor TTyroLoopSound.Destroy;
+begin
+  if FStream.Buffer <> nil then
+  begin
+    LoopSignal.Active := False;
+    StopAudioStream(FStream);
+    SetAudioStreamCallback(FStream, nil);
+    UnloadAudioStream(FStream);
+    FStream := Default(TAudioStream);
+  end;
+  inherited;
+end;
+
+procedure TTyroLoopSound.Update;
+begin
+  if not FValid then
+    Exit;
+  //The fade-out has completed; the caller can now free this voice.
+  if FStopping and (LoopSignal.Gain <= 0.0001) then
+    FFinished := True;
+end;
+
+procedure TTyroLoopSound.SetPitch(Frequency: Single);
+begin
+  if not FValid then
+    Exit;
+  if Frequency < 1 then
+    Frequency := 1;
+  LoopSignal.Rate := Frequency / FBaseFrequency;
+end;
+
+procedure TTyroLoopSound.SetVolume(Volume: Single);
+begin
+  if not FValid then
+    Exit;
+  if Volume < 0 then
+    Volume := 0
+  else if Volume > 1 then
+    Volume := 1;
+  SetAudioStreamVolume(FStream, Volume);
+end;
+
+procedure TTyroLoopSound.Stop;
+begin
+  if not FValid then
+    Exit;
+  //Ramp down instead of cutting the stream, then let Update free us.
+  FStopping := True;
+  LoopSignal.TargetGain := 0;
+end;
+
+procedure StartLoop(Proc: TWaveformProc; Frequency, Volume: Single);
+var
+  Loop: TTyroLoopSound;
+begin
+  //Replace any current voice outright (a retrigger is allowed to click).
+  FreeAndNil(LoopSound);
+  Loop := TTyroLoopSound.Create(Proc, Frequency, Volume);
+  if Loop.Valid then
+    LoopSound := Loop
+  else
+    Loop.Free;
+end;
+
+procedure StartLoop(WaveformName: string; Frequency, Volume: Single);
+var
+  wf: TWaveForm;
+begin
+  if WaveformName = '' then
+    StartLoop(@Sin_Waveform, Frequency, Volume)
+  else
+  begin
+    wf := WaveForms.Find(WaveformName);
+    if wf = nil then
+      StartLoop(@Sin_Waveform, Frequency, Volume)
+    else
+      StartLoop(wf.Proc, Frequency, Volume);
+  end;
+end;
+
+procedure StopLoop;
+begin
+  //Fade out; UpdateLoopSounds frees the voice once the envelope reaches zero.
+  if LoopSound <> nil then
+    LoopSound.Stop;
+end;
+
+procedure SetLoopPitch(Frequency: Single);
+begin
+  if LoopSound <> nil then
+    LoopSound.SetPitch(Frequency);
+end;
+
+procedure SetLoopVolume(Volume: Single);
+begin
+  if LoopSound <> nil then
+    LoopSound.SetVolume(Volume);
+end;
+
+procedure UpdateLoopSounds;
+begin
+  if LoopSound = nil then
+    Exit;
+  LoopSound.Update;
+  if LoopSound.Finished then
+    FreeAndNil(LoopSound);
 end;
 
 function LFSRNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
