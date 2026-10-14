@@ -20,8 +20,14 @@ sleep(250)
 music.sound(659, 200)  -- E note
 sleep(300)
 
--- Noise effects (frequency Hz, duration ms) - good for crashes/hits
-music.noise(400, 250)  -- crash / explosion
+-- Noise effects:
+-- music.noise(ms)              - white noise (unpitched)
+-- music.noise(freq, ms)        - pitched noise (LFSR), freq controls pitch
+music.noise(250)           -- white noise burst
+sleep(200)
+music.noise(400, 250)      -- pitched noise - lower pitch
+sleep(200)
+music.noise(800, 250)      -- pitched noise - higher pitch
 sleep(400)
 
 canvas.color = colors.green
