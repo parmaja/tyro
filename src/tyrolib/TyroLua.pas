@@ -2157,7 +2157,9 @@ var
   Freq, Period: integer;
   WaveName: string;
 begin
-  if L.IsString(1) then
+  //Use lua_type, not L.IsString: lua_isstring is also true for numbers, so
+  //music.sound(freq, ms) would be misread as music.sound(name, freq [, ms]).
+  if lua_type(L, 1) = LUA_TSTRING then
   begin
     WaveName := L.ToString(1);
     Freq := round(L.ToNumber(2));
@@ -2209,7 +2211,8 @@ begin
   // sound.loopPlay(wave, freq [, volume])
   c := L.ArgsCount;
   Volume := 1;
-  if L.IsString(1) then
+  //lua_type, not L.IsString: lua_isstring is true for numbers too.
+  if lua_type(L, 1) = LUA_TSTRING then
   begin
     WaveName := L.ToString(1);
     Freq := L.ToNumber(2);
