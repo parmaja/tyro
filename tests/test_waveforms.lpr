@@ -17,12 +17,14 @@ program test_waveforms;
             white 'Noise' is skipped because it calls Rayleigh's RNG, the rest
             are pure math.
 
-    piano   the piano must die away, must lose its brightness while it dies,
-            and must not put energy an octave below the written note. This is
-            the regression for the old (sin f - sin 2f - sin f/2) generator
-            with exp(-log10(50)*t/3), which stayed at ~48% after 1.5s, kept
-            the same brightness all the way, and had the f/2 subharmonic as
-            loud as the fundamental.
+    piano   the piano like generators (Piano, GrandPiano) must die away, must
+            lose their brightness while they die, and must not put energy an
+            octave below the written note. This is the regression for the old
+            (sin f - sin 2f - sin f/2) generator with exp(-log10(50)*t/3),
+            which stayed at ~48% after 1.5s, kept the same brightness all the
+            way, and had the f/2 subharmonic as loud as the fundamental.
+            OldPiano is that legacy generator; it is measured but not checked,
+            it is there for the comparison numbers.
 
   Build and run:
     lazbuild --build-mode=Debug tests\test_waveforms.lpi
@@ -254,37 +256,66 @@ begin
   Result := best;
 end;
 
-procedure CheckPiano;
+procedure CheckPianoLike(const Name: string; Proc: TWaveformProc; Check: Boolean);
 var
-  Early, Late: Double;
+  RmsEarly, RmsLate, AmpEarly, AmpLate, CorrF, CorrHalf, Peak, v: Double;
+  fi, i: Integer;
 begin
+  //headroom: the amplitude scaling in Generate must not wrap a SmallInt.
+  //Whole notes, not just the first 8192 samples, because the highest peak of
+  //a beating partial pair can come later than that.
+  Peak := 0;
+  for fi := 0 to High(cFreqs) do
+    for i := 0 to cNoteLen - 1 do
+    begin
+      v := Abs(Proc(i, cSampleRate, cFreqs[fi]));
+      if v > Peak then
+        Peak := v;
+    end;
+  if Check and (Peak > 1.0001) then
+    Fail(Format('%s: peak %g exceeds 1', [Name, Peak]));
+
   //decay: the note must be well below its start after 1.5s
-  Early := WindowRms(@Piano_Waveform, cPianoFreq, 1000);
-  Late := WindowRms(@Piano_Waveform, cPianoFreq, cNoteLen - cWindow);
-  if Early < 0.1 then
-    Fail(Format('Piano: nearly silent at the start (rms %g)', [Early]));
-  if Late > Early * 0.35 then
-    Fail(Format('Piano: does not decay, rms %g late vs %g early (ratio %g)',
-      [Late, Early, Late / Early]));
+  RmsEarly := WindowRms(Proc, cPianoFreq, 1000);
+  RmsLate := WindowRms(Proc, cPianoFreq, cNoteLen - cWindow);
+  if Check then
+  begin
+    if RmsEarly < 0.1 then
+      Fail(Format('%s: nearly silent at the start (rms %g)', [Name, RmsEarly]));
+    if RmsLate > RmsEarly * 0.35 then
+      Fail(Format('%s: does not decay, rms %g late vs %g early (ratio %g)',
+        [Name, RmsLate, RmsEarly, RmsLate / RmsEarly]));
+  end;
 
   //brightness: the upper partials must die faster than the fundamental.
   //Amplitude of the 6th partial early and late: with the old shared envelope
   //the two were the same.
-  Early := PartialAmp(@Piano_Waveform, cPianoFreq, 6, 1000);
-  Late := PartialAmp(@Piano_Waveform, cPianoFreq, 6, cNoteLen - cWindow);
-  if Early < 0.015 then
-    Fail(Format('Piano: no upper partials at the start (6th amp %g)', [Early]));
-  if Late > Early * 0.5 then
-    Fail(Format('Piano: keeps its brightness, 6th amp %g late vs %g early',
-      [Late, Early]));
+  AmpEarly := PartialAmp(Proc, cPianoFreq, 6, 1000);
+  AmpLate := PartialAmp(Proc, cPianoFreq, 6, cNoteLen - cWindow);
+  if Check then
+  begin
+    if AmpEarly < 0.015 then
+      Fail(Format('%s: no upper partials at the start (6th amp %g)', [Name, AmpEarly]));
+    if AmpLate > AmpEarly * 0.5 then
+      Fail(Format('%s: keeps its brightness, 6th amp %g late vs %g early',
+        [Name, AmpLate, AmpEarly]));
+  end;
 
   //pitch: an f/2 subharmonic would read as a note one octave too low
-  Early := WindowCorr(@Piano_Waveform, cPianoFreq, cPianoFreq, 1000);
-  Late := WindowCorr(@Piano_Waveform, cPianoFreq, cPianoFreq / 2, 1000);
-  if Early < 0.6 then
-    Fail(Format('Piano: weak fundamental, correlation %g', [Early]));
-  if Abs(Late) > 0.3 then
-    Fail(Format('Piano: subharmonic at half the frequency, correlation %g', [Late]));
+  CorrF := WindowCorr(Proc, cPianoFreq, cPianoFreq, 1000);
+  CorrHalf := WindowCorr(Proc, cPianoFreq, cPianoFreq / 2, 1000);
+  if Check then
+  begin
+    if CorrF < 0.6 then
+      Fail(Format('%s: weak fundamental, correlation %g', [Name, CorrF]));
+    if Abs(CorrHalf) > 0.3 then
+      Fail(Format('%s: subharmonic at half the frequency, correlation %g',
+        [Name, CorrHalf]));
+  end;
+
+  //for comparing the piano like generators, peak, rms and 6th partial over 1.5s
+  WriteLn(Format('  %-11s peak %6.4f  rms %6.4f -> %6.4f  6th %6.4f -> %6.4f  f %5.3f  f/2 %5.3f',
+    [Name, Peak, RmsEarly, RmsLate, AmpEarly, AmpLate, CorrF, CorrHalf]));
 end;
 
 var
@@ -319,8 +350,11 @@ begin
     CheckRange(w.Name, w.Proc);
   end;
 
-  WriteLn('piano: decays, loses brightness, no subharmonic');
-  CheckPiano;
+  WriteLn('piano like: decays, loses brightness, no subharmonic');
+  CheckPianoLike('Piano', @Piano_Waveform, True);
+  CheckPianoLike('GrandPiano', @GrandPiano_Waveform, True);
+  //the legacy generator, measured only so it can be compared
+  CheckPianoLike('OldPiano', @OldPiano_Waveform, False);
 
   if Failures = 0 then
     WriteLn('OK: all waveform checks passed')

@@ -128,6 +128,7 @@ function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): S
 function LFSRNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function GrandPiano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function OldPiano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Square_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Saw_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -668,6 +669,53 @@ begin
   Result := sample * fade;
 end;
 
+//Grand piano, a fuller Piano: 16 partials rolling off at 1/k instead of
+//1/k^1.5 so it is brighter, each partial with its own decay (the bass rings
+//longer than the treble), every partial shared between two strings detuned by
+//~1.4 cents so the note beats like a real unison, and a hammer noise burst.
+//Sum/Norm is normalized by the sum of the amplitudes, so it stays inside +-1
+//by construction, and the Gain*Sum + Noise*hammer result is measured against
+//+-1 by test_waveforms at 110/440/3000 Hz over a whole 1.5s note. Gain brings
+//the level next to Piano so an A/B does not just compare loudness.
+function GrandPiano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  Inharmonicity = 0.00025; //stiff strings, partials sit slightly sharp of k*f
+  PartialCount = 16;
+  Unison = 0.0008;         //detune of the second string, ~1.4 cents
+  Gain = 1.3;              //makeup to match the Piano level
+  Noise = 0.1;             //hammer noise on top of the gain
+var
+  t, Rate, Sum, Norm, Amp, Decay, Fk, Attack, Hammer, Beat: Double;
+  k: Integer;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Rate := 0.55 + Frequency / 700; //bass rings longer than treble
+  Attack := 1 - Exp(-t * 500);    //~2ms hammer attack
+  Hammer := Exp(-t * 250);        //hammer noise over the first ~4ms
+  Sum := 0;
+  Norm := 0;
+  for k := 1 to PartialCount do
+  begin
+    Fk := Frequency * k * Sqrt(1 + Inharmonicity * k * k);
+    if Fk >= SampleRate / 2 then
+      Break;
+    Amp := 1 / k;
+    Decay := Exp(-Rate * (0.5 + 0.55 * k) * t);
+    //(sin a + sin b) / 2 for two unison strings = sin * cos of their beating
+    Beat := Cos(2 * Pi * Fk * Unison * t);
+    Sum := Sum + Amp * Sin(2 * Pi * Fk * Index / SampleRate) * Decay * Beat;
+    Norm := Norm + Amp;
+  end;
+  if Norm > 0 then
+    Sum := Sum / Norm;
+  Result := (Gain * Sum + Noise * Hammer * HashNoise(Index)) * Attack;
+end;
+
 // Where in the wave Index stands, 0..1. Returns -1 only for a frequency or
 // sample rate that has no meaningful period.
 function WavePosition(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -926,6 +974,7 @@ initialization
   //Default one is the first one
   Waveforms.Add('Sin', @Sin_Waveform);
   Waveforms.Add('Piano', @Piano_Waveform);
+  Waveforms.Add('GrandPiano', @GrandPiano_Waveform);
   Waveforms.Add('OldPiano', @OldPiano_Waveform);
   Waveforms.Add('Square', @Square_Waveform);
   Waveforms.Add('Pulse25', @Pulse25_Waveform);
