@@ -121,10 +121,8 @@ procedure UpdateWaveforms;
 procedure ShutdownMelodies;
 procedure ShutdownWaveforms;
 
-function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-function PitchedNoise_Wave(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 {Plain shapes, used by the MIDI synth to give the General MIDI families
@@ -393,7 +391,7 @@ begin
   FWaveForms := TWaveForms.Create;
   //Default one is the first one
   Waveforms.Add('Sin', Sin_Waveform);
-  Waveforms.Add('Noise', @Noise_Waveform);
+  Waveforms.Add('Noise', @WhiteNoise_Waveform);
 end;
 
 destructor TRayMelody.Destroy;
@@ -512,11 +510,6 @@ begin
   PlayingMelodies.Clear;
 end;
 
-function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-begin
-  Result := GetRandomValue(-100,+100) / 100;
-end;
-
 function LFSRNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 var
   Period, T: Integer;
@@ -551,11 +544,6 @@ end;
 function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 begin
   // LFSR-based pitched noise (periodic like NES noise)
-  Result := LFSRNoise_Waveform(Index, SampleRate, Frequency);
-end;
-
-function PitchedNoise_Wave(Index, SampleRate: Integer; Frequency: Single): Single;
-begin
   Result := LFSRNoise_Waveform(Index, SampleRate, Frequency);
 end;
 

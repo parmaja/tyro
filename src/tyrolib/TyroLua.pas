@@ -170,8 +170,6 @@ type
     function Beep_func(L: Plua_State): integer; cdecl;
     function Sound_func(L: Plua_State): integer; cdecl;
     function Noise_func(L: Plua_State): integer; cdecl;
-    function PNoise_func(L: Plua_State): integer; cdecl;
-    function PitchedNoise_func(L: Plua_State): integer; cdecl;
     function Play_func(L: Plua_State): integer; cdecl;
     function MML_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
@@ -1387,9 +1385,6 @@ begin
   Lua.State.Register('music', 'beep', Music, Music.Beep_func);
   Lua.State.Register('music', 'sound', Music, Music.Sound_func);
   Lua.State.Register('music', 'noise', Music, Music.Noise_func);
-  Lua.State.Register('music', 'pnoise', Music, Music.PNoise_func);
-  Lua.State.Register('music', 'pitchednoise', Music, Music.PitchedNoise_func);
-  Lua.State.Register('music', 'p_noise', Music, Music.PNoise_func);
   Lua.State.Register('music', 'play', Music, Music.Play_func);
   Lua.State.Register('music', 'mml', Music, Music.MML_func);
 
@@ -2124,31 +2119,20 @@ end;
 
 function TLuaMusic.Noise_func(L: Plua_State): integer; cdecl;
 var
-  Freq, Period: integer;
+  c, Freq, Period: integer;
 begin
-  Freq := round(L.ToNumber(1));
-  Period := round(L.ToNumber(2));
+  c := L.ArgsCount;
+  if c = 1 then
+  begin
+    Freq := 0;
+    Period := round(L.ToNumber(1));
+  end
+  else
+  begin
+    Freq := round(L.ToNumber(1));
+    Period := round(L.ToNumber(2));
+  end;
   FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
-  Result := 0;
-end;
-
-function TLuaMusic.PNoise_func(L: Plua_State): integer; cdecl;
-var
-  Freq, Period: integer;
-begin
-  Freq := round(L.ToNumber(1));
-  Period := round(L.ToNumber(2));
-  FScript.AddQueueObject(TPlayPitchedNoiseObject.Create(Freq, Period));
-  Result := 0;
-end;
-
-function TLuaMusic.PitchedNoise_func(L: Plua_State): integer; cdecl;
-var
-  Freq, Period: integer;
-begin
-  Freq := round(L.ToNumber(1));
-  Period := round(L.ToNumber(2));
-  FScript.AddQueueObject(TPlayPitchedNoiseObject.Create(Freq, Period));
   Result := 0;
 end;
 
