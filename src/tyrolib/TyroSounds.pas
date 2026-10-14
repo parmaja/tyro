@@ -875,8 +875,6 @@ initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
   Waveforms.Add('Sin', @Sin_Waveform);
-  Waveforms.Add('Noise', @WhiteNoise_Waveform);
-  Waveforms.Add('Pitched', @PitchedNoise_Waveform);
   Waveforms.Add('Piano', @Piano_Waveform);
   Waveforms.Add('Square', @Square_Waveform);
   Waveforms.Add('Pulse25', @Pulse25_Waveform);
@@ -890,8 +888,12 @@ initialization
   Waveforms.Add('Pluck', @Pluck_Waveform);
   Waveforms.Add('Flute', @Flute_Waveform);
   Waveforms.Add('FM', @FM_Waveform);
+
+  //Noises
+  Waveforms.Add('Noise', @WhiteNoise_Waveform);
   Waveforms.Add('Pink', @PinkNoise_Waveform);
   Waveforms.Add('Dark', @DarkNoise_Waveform);
+  Waveforms.Add('Pitched', @PitchedNoise_Waveform);
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;
