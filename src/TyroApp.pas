@@ -271,8 +271,6 @@ begin
 
   Engine.Title := Title;
 
-  Res.WorkPath := Arguments.ReadPath('-workpath', Location);
-
   ScriptFile := CorrectPath(ExpandToPath(Arguments.ReadString(''), Res.WorkPath)); //File come without switch name
 
   if SysUtils.FileExists(ScriptFile) or SysUtils.DirectoryExists(ScriptFile)  then

@@ -702,12 +702,8 @@ begin
   Running := True;
   Load;
   Res.Load;
-  if EndsDelimiter(ScriptFile) and SysUtils.DirectoryExists(ScriptFile) then
-  begin
-    Res.WorkPath := ScriptFile;
-    ScriptFile := '';
-  end;
   LoadScriptThread;
+  Log.WriteLn('WorkPath: ' + Res.WorkPath);
   Options := Options + AOptions;
   Start;
   //The --exit/--screenshot deadlines are measured from now, when the script
@@ -2306,20 +2302,29 @@ var
 begin
   if ScriptFile = '' then
     exit;
-  Title := ScriptFile;
-  aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
-  if (aScriptType <> nil) and SysUtils.FileExists(ScriptFile) then
-  begin
-    Log.WriteLn('File: ' + ScriptFile);
-    if LeftStr(ScriptFile, 1) = '.' then
-      ScriptFile := ExpandFileName(Res.WorkPath + ScriptFile);
-    Res.WorkPath := ExtractFilePath(ScriptFile);
-    Title := ScriptFile;
 
-    ScriptSource := mnUtils.LoadFileString(ScriptFile);
+  if EndsDelimiter(ScriptFile) and SysUtils.DirectoryExists(ScriptFile) then
+  begin
+    Res.WorkPath := ScriptFile;
+    ScriptFile := '';
   end
   else
-    Log.WriteLn('Type of file not found: ' + ScriptFile);
+  begin
+    Title := ScriptFile;
+    aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
+    if (aScriptType <> nil) and SysUtils.FileExists(ScriptFile) then
+    begin
+      Log.WriteLn('File: ' + ScriptFile);
+      if LeftStr(ScriptFile, 1) = '.' then
+        ScriptFile := ExpandFileName(Res.WorkPath + ScriptFile);
+      Res.WorkPath := ExtractFilePath(ScriptFile);
+      Title := ScriptFile;
+
+      ScriptSource := mnUtils.LoadFileString(ScriptFile);
+    end
+    else
+      Log.WriteLn('Type of file not found: ' + ScriptFile);
+  end;
 end;
 
 //(Re)start the loaded script: stop whatever is running, then hand a fresh clone
@@ -2500,7 +2505,6 @@ begin
         // Stop any running script and prepare to run the dropped script
         StopScriptRun;
         ScriptFile := FilePath;
-        Res.WorkPath := ExtractFilePath(FilePath);
         try
           LoadScriptThread;
           RunScriptThread;

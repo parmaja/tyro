@@ -1103,7 +1103,7 @@ begin
   inherited;
   AppPath:= IncludePathDelimiter(ExtractFilePath(ParamStr(0)));
   AppName := ChangeFileExt(ExtractFileName(ParamStr(0)), '');
-  WorkPath:= GetCurrentDir;
+  WorkPath := GetCurrentDir;
   Config := TConfFile.Create;
   Theme := TTyroTheme.Create;
   Font := TRayFont.Create;
@@ -1124,16 +1124,17 @@ end;
 procedure TTyroResources.LoadConfig;
 var
   aConfigFile: string;
-  aFileName: string;
+  aFileName, aFileNameEx: string;
 begin
   aConfigFile := AppName + '.conf';
   aFileName := IncludePathDelimiter(AppPath) + aConfigFile;
   if SysUtils.FileExists(aFileName) then
     Config.MergeFromFile(aFileName);
-  aFileName := IncludePathDelimiter(WorkPath) + aConfigFile;
-  if SysUtils.FileExists(aFileName) then
-    Config.MergeFromFile(aFileName);
+  aFileNameEx:= IncludePathDelimiter(WorkPath) + aConfigFile;
+  if not SameFileName(aFileNameEx, aFileName) and SysUtils.FileExists(aFileNameEx) then
+    Config.MergeFromFile(aFileNameEx);
   Config.MergeArguments;
+  WorkPath := ExpandToPath(Config.ReadString('workpath', WorkPath), WorkPath);
 end;
 
 function TTyroResources.GuessFileName(const FileName: string; InDirectory: string): string;

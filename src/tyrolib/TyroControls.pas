@@ -490,8 +490,6 @@ type
 
   { TTyroImage }
 
-  { TTyroImage }
-
   TTyroImage = class(TTyroControl)
   private
     FTexture: TTexture2D;
