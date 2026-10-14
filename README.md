@@ -166,6 +166,31 @@ openfile("sub/../data.txt")         --> fine, it stays inside
 
 See `tests/test_openfile.tyro` for a runnable check of all of it.
 
+# Network
+
+Scripts can talk to web APIs with `http_get` and read the answer with
+`json_decode`. The request runs on the script thread, so the render loop keeps
+drawing while the call is in flight; the script itself blocks until the answer
+(or the failure) arrives.
+
+| Function | Description |
+|----------|-------------|
+| `http_get(url)` | Fetch a URL over HTTP/HTTPS; returns the body, or `nil` plus a message |
+| `json_decode(text)` | Parse a JSON document into the matching Lua value: object→table (keyed by member name), array→table (1..n), number, boolean, `null`→`nil`; returns `nil` plus the parser message on invalid input |
+
+```lua
+local body, err = http_get("https://ipapi.co/json/")   -- IP-based geolocation
+if body then
+  local geo = json_decode(body)
+  println("you are in " .. geo.city .. ", " .. geo.country_code)
+end
+```
+
+`json_decode` answers `nil` plus a message for a bare top-level number or
+boolean (`"42"`, `"false"`) — the underlying parser reads objects, arrays and
+strings. See `games/weather/weather.tyro` for a full app built on both
+functions, and `tests/test_http_json.tyro` for a runnable check.
+
 # Console
 
 ## Built-in Terminal Commands
@@ -748,7 +773,6 @@ tyro demos/<name>.tyro
 | `demos/terminal_demo.tyro` | Built-in terminal commands: dir, list, clear, help, exit |
 | `demos/console_read_demo.tyro` | Interactive console.read() — prompt the user for input from Lua |
 | `demos/music_demo.tyro` | Sound effects (music.sound) and MML melodies (music.mml) |
-| `demos/midi_demo.tyro` | Standard MIDI File playback — `midi.play(file)`, `pause`, `resume`, `stop`, plus `midi.name`/`state`/`position`/`length`/`tracks`/`tempo` |
 | `demos/test.tyro` | Circle animation with random colors |
 | `demos/colors_bar.tyro` | Full color palette display |
 | `demos/multiply.tyro` | Drawing + MML sound |
@@ -764,7 +788,7 @@ packaged as a queue object (`TQueueObject`) and dispatched back to the main
 thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
 
 - **Main-thread confinement.** Window, canvas, sprites, shaders, fonts, music/
-  sound (the audio device), midi, radio, spectrum and the control tree are all
+  sound (the audio device), radio, spectrum and the control tree are all
   owned by the main thread and must only be touched there. The Lua facades hide this:
   they enqueue `TCreateControlObject`/`TSetControl*Object`/draw/music objects
   that execute on the main thread.
@@ -792,7 +816,7 @@ thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
   at is still alive. Canvas clearing happens inside `BeginDraw`/`EndDraw`, which is
   the only window in which a texture canvas is bound to its render texture.
 - **Resource release order.** GPU/audio owners (sprites, canvases, shaders,
-  fonts, musicians, generated waveforms, midi, radio, spectrum) are destroyed while
+  fonts, musicians, generated waveforms, radio, spectrum) are destroyed while
   the window/OpenGL context and audio device are still alive; the context and
   device are closed last, after every owner has been released.
 

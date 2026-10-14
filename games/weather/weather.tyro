@@ -1,0 +1,414 @@
+--======================================================================
+--  Weather - an IP-based weather dashboard for Tyro
+--======================================================================
+--  http_get() + json_decode() locate this machine by IP (ipapi.co, with
+--  ip-api.com as fallback) and pull the forecast from open-meteo.com.
+--  The whole report is drawn with canvas primitives:
+--
+--    +-----------------------------------------------------------+
+--    | Latakia, SY 35.5/35.8 ip .. at 03:30      [R]efresh [Q]uit|
+--    +------------------+----------------------------------------+
+--    | NOW              |  24h temperature line chart            |
+--    |  icon, temp,     |                                        |
+--    |  feels/hum/wind  |                                        |
+--    +------------------+----------------------------------------+
+--    | rain chance 24h bars   |  today card  |  tomorrow card    |
+--    +------------------------+--------------+--------------------+
+--
+--  Controls:  R refetch    Q quit
+--  Run:  tyro games/weather/weather.tyro
+--======================================================================
+
+window.show(800, 480)
+
+-- ---- small helpers ---------------------------------------------------
+local function i0(x) return string.format("%.0f", tonumber(x) or 0) end
+local function f1(x) return string.format("%.1f", tonumber(x) or 0) end
+
+local MONTHS = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+
+local function fmt_date(iso)
+  if type(iso) ~= "string" or #iso < 10 then return tostring(iso) end
+  return string.sub(iso, 9, 10) .. " " .. (MONTHS[tonumber(string.sub(iso, 6, 7)) or 1] or "?")
+end
+
+local CODES = {
+  [0]  = "Clear sky",   [1]  = "Mainly clear",  [2]  = "Partly cloudy",
+  [3]  = "Overcast",    [45] = "Fog",           [48] = "Rime fog",
+  [51] = "Light drizzle", [53] = "Drizzle",     [55] = "Dense drizzle",
+  [56] = "Freezing drizzle", [57] = "Freezing drizzle",
+  [61] = "Light rain",  [63] = "Rain",          [65] = "Heavy rain",
+  [66] = "Freezing rain", [67] = "Freezing rain",
+  [71] = "Light snow",  [73] = "Snow",          [75] = "Heavy snow",
+  [77] = "Snow grains", [80] = "Light showers", [81] = "Showers",
+  [82] = "Violent showers", [85] = "Snow showers", [86] = "Snow showers",
+  [95] = "Thunderstorm", [96] = "Thunderstorm, hail", [99] = "Thunderstorm, hail",
+}
+local function describe(code) return CODES[tonumber(code) or -1] or "?" end
+
+-- ---- data ------------------------------------------------------------
+local function fetch_json(url)
+  local body, err = http_get(url)
+  if not body then return nil, err end
+  return json_decode(body)
+end
+
+local function locate()
+  -- ipapi.co over https first; ip-api.com (http) as fallback
+  local geo = fetch_json("https://ipapi.co/json/")
+  if geo and geo.latitude and geo.longitude then
+    return { ip = tostring(geo.ip or "?"),
+             city = tostring(geo.city or "?"),
+             country = tostring(geo.country_code or geo.country_name or "?"),
+             lat = tonumber(geo.latitude), lon = tonumber(geo.longitude) }
+  end
+  geo = fetch_json("http://ip-api.com/json/?fields=status,city,regionName,country,countryCode,lat,lon,query")
+  if geo and geo.status == "success" then
+    return { ip = tostring(geo.query or "?"),
+             city = tostring(geo.city or "?"),
+             country = tostring(geo.countryCode or "?"),
+             lat = tonumber(geo.lat), lon = tonumber(geo.lon) }
+  end
+  return nil, "geolocation failed (ipapi.co and ip-api.com)"
+end
+
+local function fetch_forecast(loc)
+  local url = "https://api.open-meteo.com/v1/forecast"
+    .. "?latitude=" .. tostring(loc.lat) .. "&longitude=" .. tostring(loc.lon)
+    .. "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m"
+    .. "&hourly=temperature_2m,weather_code,precipitation_probability"
+    .. "&daily=weather_code,temperature_2m_max,temperature_2m_min"
+    .. "&forecast_days=2&timezone=auto"
+  return fetch_json(url)
+end
+
+-- the next 24 hours from now: hour labels, temperatures, rain chances
+local function next_hours(wx)
+  local times = wx.hourly and wx.hourly.time or {}
+  local temps = wx.hourly and wx.hourly.temperature_2m or {}
+  local probs = wx.hourly and wx.hourly.precipitation_probability or {}
+  local start = 1
+  local prefix = string.sub(tostring((wx.current or {}).time or ""), 1, 13)
+  if #prefix >= 13 then
+    for i = 1, #times do
+      if string.sub(tostring(times[i]), 1, 13) == prefix then
+        start = i
+        break
+      end
+    end
+  end
+  local hours, t24, p24 = {}, {}, {}
+  for i = start, math.min(start + 23, #times) do
+    hours[#hours + 1] = string.sub(tostring(times[i]), 12, 13)
+    t24[#t24 + 1] = tonumber(temps[i]) or 0
+    if #probs >= i then p24[#p24 + 1] = tonumber(probs[i]) or 0 end
+  end
+  return hours, t24, p24
+end
+
+-- ---- weather icons, drawn from primitives ----------------------------
+local function draw_sun(cx, cy, r)
+  canvas.color = colors.gold
+  for i = 0, 7 do
+    local a = i * math.pi / 4
+    canvas.line(cx + math.floor(r * 1.25 * math.cos(a)), cy + math.floor(r * 1.25 * math.sin(a)),
+                cx + math.floor(r * 1.65 * math.cos(a)), cy + math.floor(r * 1.65 * math.sin(a)))
+  end
+  canvas.color = colors.yellow
+  canvas.circle(cx, cy, r, true)
+end
+
+local function draw_moon(cx, cy, r)
+  canvas.color = colors.silver
+  canvas.circle(cx, cy, r, true)
+  canvas.color = colors.white
+  canvas.point(cx - r * 2, cy - r)
+  canvas.point(cx + r * 2, cy + r)
+  canvas.point(cx + r, cy - r * 2)
+end
+
+local function draw_cloud(cx, cy, s)
+  canvas.circle(cx - s, cy, s, true)
+  canvas.circle(cx, cy - s, s, true)
+  canvas.circle(cx + s, cy, s, true)
+  canvas.rectangle(cx - s, cy, s * 2, s, true)
+end
+
+local function draw_drops(cx, cy, s, n, freezing)
+  canvas.color = colors.aqua
+  local by = cy + math.floor(s * 0.6)
+  for i = 0, n - 1 do
+    local x = cx - s + math.floor(i * (2 * s) / math.max(n - 1, 1))
+    if freezing and (i % 2 == 1) then
+      canvas.point(x, by + 4)
+    else
+      canvas.line(x, by + 1, x - 2, by + 7)
+    end
+  end
+end
+
+local function draw_dots(cx, cy, s, n)
+  canvas.color = colors.white
+  for i = 0, n - 1 do
+    local x = cx - s + math.floor(i * (2 * s) / math.max(n - 1, 1))
+    canvas.point(x, cy + math.floor(s * 0.6) + 3 + (i % 2) * 3)
+  end
+end
+
+local function draw_bolt(cx, cy, s)
+  canvas.color = colors.yellow
+  canvas.line(cx, cy, cx - math.floor(s * 0.3), cy + math.floor(s * 0.5))
+  canvas.line(cx - math.floor(s * 0.3), cy + math.floor(s * 0.5), cx + math.floor(s * 0.15), cy + math.floor(s * 0.5))
+  canvas.line(cx + math.floor(s * 0.15), cy + math.floor(s * 0.5), cx - math.floor(s * 0.1), cy + s)
+end
+
+local function draw_fog(cx, cy, s)
+  canvas.color = colors.silver
+  for i = 0, 3 do
+    canvas.line(cx - s, cy - s + i * math.floor(s * 0.6), cx + s, cy - s + i * math.floor(s * 0.6))
+  end
+end
+
+-- one icon for a WMO weather code, sized by radius s
+local function draw_weather_icon(cx, cy, s, code, is_day)
+  code = tonumber(code) or -1
+  is_day = tonumber(is_day) or 1
+  local group
+  if code == 0 then group = "clear"
+  elseif code <= 2 then group = "fewclouds"
+  elseif code == 3 then group = "cloud"
+  elseif code <= 48 then group = "fog"
+  elseif code <= 57 then group = "drizzle"
+  elseif code <= 67 then group = "rain"
+  elseif code <= 77 then group = "snow"
+  elseif code <= 82 then group = "rain"   -- rain showers
+  elseif code <= 86 then group = "snow"   -- snow showers
+  else group = "thunder" end
+
+  if group == "clear" then
+    if is_day == 0 then draw_moon(cx, cy, s) else draw_sun(cx, cy, s) end
+  elseif group == "fog" then
+    draw_fog(cx, cy, s)
+  else
+    local freezing = (code == 56) or (code == 57) or (code == 66) or (code == 67)
+    -- sun or moon peeking top-left, the cloud body center, extras below
+    if is_day == 0 then draw_moon(cx - s, cy - s, math.floor(s * 0.6))
+    else draw_sun(cx - s, cy - s, math.floor(s * 0.6)) end
+    if group == "fewclouds" then
+      draw_cloud(cx + math.floor(s * 0.3), cy + math.floor(s * 0.3), math.floor(s * 0.8))
+    elseif group == "cloud" then
+      draw_cloud(cx, cy, s)
+    elseif group == "thunder" then
+      draw_cloud(cx, cy - math.floor(s * 0.3), s)
+      draw_bolt(cx + math.floor(s * 0.2), cy + math.floor(s * 0.5), s)
+    elseif group == "drizzle" then
+      draw_cloud(cx, cy - math.floor(s * 0.4), s)
+      draw_drops(cx, cy - math.floor(s * 0.4), s, 3, freezing)
+    elseif group == "rain" then
+      draw_cloud(cx, cy - math.floor(s * 0.4), s)
+      draw_drops(cx, cy - math.floor(s * 0.4), s, 4, freezing)
+    else -- snow
+      draw_cloud(cx, cy - math.floor(s * 0.4), s)
+      draw_dots(cx, cy - math.floor(s * 0.4), s, 4)
+    end
+  end
+end
+
+-- ---- panels and charts -------------------------------------------------
+local function panel(x, y, w, h, bg)
+  canvas.color = bg
+  canvas.rectangle(x, y, w, h, true)
+  canvas.color = colors.gray
+  canvas.rectangle(x, y, w, h, false)
+end
+
+local function draw_now_panel(x, y, w, h, wx)
+  local cur = wx.current or {}
+  local is_day = tonumber(cur.is_day) or 1
+  local bg = colors.skyblue
+  local fg = colors.black
+  if is_day == 0 then
+    bg = colors.darkblue
+    fg = colors.white
+  end
+  panel(x, y, w, h, bg)
+  canvas.color = fg
+  canvas.text(x + 4, y + 3, "NOW")
+  draw_weather_icon(x + math.floor(w * 0.26), y + math.floor(h * 0.42), math.floor(h * 0.15), cur.weather_code, is_day)
+  local tx = x + math.floor(w * 0.50)
+  canvas.text(tx, y + math.floor(h * 0.26), f1(cur.temperature_2m) .. "C")
+  canvas.text(tx, y + math.floor(h * 0.26) + 16, describe(cur.weather_code))
+  canvas.text(tx, y + math.floor(h * 0.26) + 32, "feels " .. f1(cur.apparent_temperature) .. "C")
+  canvas.text(tx, y + math.floor(h * 0.26) + 48, "humid " .. i0(cur.relative_humidity_2m) .. "%")
+  canvas.text(tx, y + math.floor(h * 0.26) + 64, "wind " .. f1(cur.wind_speed_10m) .. " km/h")
+  canvas.text(tx, y + math.floor(h * 0.26) + 80, "rain " .. f1(cur.precipitation) .. " mm")
+end
+
+local function draw_temp_chart(x, y, w, h, hours, temps)
+  panel(x, y, w, h, colors.darkblue)
+  canvas.color = colors.white
+  canvas.text(x + 4, y + 3, "TEMPERATURE - NEXT " .. #temps .. " HOURS")
+  local padL, padR, padT, padB = 26, 6, 14, 12
+  local pw, ph = w - padL - padR, h - padT - padB
+  local lo, hi = temps[1], temps[1]
+  for i = 2, #temps do
+    if temps[i] < lo then lo = temps[i] end
+    if temps[i] > hi then hi = temps[i] end
+  end
+  lo = math.floor(lo - 1)
+  hi = math.ceil(hi + 1)
+  local span = math.max(hi - lo, 1)
+  -- gridlines and labels at hi / mid / lo
+  for g = 0, 2 do
+    local gy = y + padT + math.floor(ph * g / 2)
+    canvas.color = colors.gray
+    canvas.line(x + padL, gy, x + w - padR, gy)
+    canvas.color = colors.silver
+    canvas.text(x + 2, gy - 6, i0(hi - (hi - lo) * g / 2))
+  end
+  -- the temperature curve
+  local px, py
+  canvas.color = colors.yellow
+  for i = 1, #temps do
+    local fx = x + padL + math.floor((i - 1) * pw / math.max(#temps - 1, 1))
+    local fy = y + padT + math.floor((hi - temps[i]) * ph / span)
+    if px then canvas.line(px, py, fx, fy) end
+    px, py = fx, fy
+  end
+  -- dots on every point, a bigger red one marks the current hour
+  for i = 1, #temps do
+    local fx = x + padL + math.floor((i - 1) * pw / math.max(#temps - 1, 1))
+    local fy = y + padT + math.floor((hi - temps[i]) * ph / span)
+    if i == 1 then
+      canvas.color = colors.red
+      canvas.circle(fx, fy, 3, true)
+      canvas.color = colors.yellow
+    else
+      canvas.point(fx, fy)
+    end
+  end
+  -- hour labels every 3 hours
+  canvas.color = colors.silver
+  for i = 1, #temps, 3 do
+    local fx = x + padL + math.floor((i - 1) * pw / math.max(#temps - 1, 1))
+    canvas.text(fx - 6, y + padT + ph + 2, hours[i])
+  end
+end
+
+local function draw_rain_chart(x, y, w, h, hours, probs)
+  panel(x, y, w, h, colors.darkblue)
+  canvas.color = colors.white
+  canvas.text(x + 4, y + 3, "RAIN CHANCE - NEXT " .. #probs .. " HOURS")
+  local padT, padB = 14, 12
+  local ph = h - padT - padB
+  local n = #probs
+  local bw = (w - 8) / n
+  for i = 1, n do
+    local p = math.max(0, math.min(100, tonumber(probs[i]) or 0))
+    local bh = math.max(math.floor(p * ph / 100), 1)
+    canvas.color = colors.aqua
+    canvas.rectangle(x + 4 + math.floor((i - 1) * bw), y + padT + ph - bh,
+                     math.max(math.floor(bw) - 1, 1), bh, true)
+  end
+  canvas.color = colors.gray
+  canvas.line(x + 4, y + padT + ph, x + w - 4, y + padT + ph)
+  canvas.color = colors.silver
+  for i = 1, n, 6 do
+    canvas.text(x + 4 + math.floor((i - 1) * bw), y + padT + ph + 2, hours[i])
+  end
+end
+
+local function draw_day_card(x, y, w, h, datestr, code, tmax, tmin)
+  panel(x, y, w, h, colors.darkblue)
+  canvas.color = colors.white
+  canvas.text(x + 4, y + 3, datestr)
+  draw_weather_icon(x + math.floor(w / 2), y + math.floor(h * 0.45), math.floor(h * 0.13), code, 1)
+  canvas.text(x + 4, y + h - 16, "H " .. i0(tmax) .. "  L " .. i0(tmin))
+end
+
+-- ---- state -------------------------------------------------------------
+local loc, wx, status, errmsg = nil, nil, "loading", ""
+local hours, t24, p24 = {}, {}, {}
+
+local function draw_screen()
+  local W, H = canvas.width, canvas.height
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, W, H, true)
+
+  if status == "loading" then
+    canvas.color = colors.white
+    canvas.text(8, 8, "Fetching weather by IP ...")
+    return
+  end
+  if status == "error" then
+    canvas.color = colors.red
+    canvas.text(8, 8, "Could not fetch the weather:")
+    canvas.text(8, 24, errmsg)
+    canvas.color = colors.silver
+    canvas.text(8, 44, "[R] retry   [Q] quit")
+    return
+  end
+
+  -- header: where we are and what the app can do
+  canvas.color = colors.white
+  canvas.text(4, 4, loc.city .. ", " .. loc.country
+    .. "  " .. f1(loc.lat) .. "/" .. f1(loc.lon)
+    .. "  ip " .. loc.ip .. "  at " .. string.sub(tostring(wx.current.time), 12, 16))
+  canvas.color = colors.silver
+  canvas.text(W - 16 * 8, 4, "[R]efresh [Q]uit")
+
+  -- layout: two rows under the header, all relative to the canvas size
+  local G = 6
+  local r1h = math.floor((H - 20 - G * 3) * 0.47)
+  local r2h = H - 20 - G * 3 - r1h
+  local nowW = math.floor(W * 0.32)
+  local row2W = W - 4 * G
+  local rainW = math.floor(row2W * 0.51)
+  local cardW = math.floor((row2W - rainW) / 2)
+  local r1y, r2y = 20 + G, 20 + G * 2 + r1h
+
+  draw_now_panel(G, r1y, nowW, r1h, wx)
+  if #t24 > 0 then
+    draw_temp_chart(G + nowW + G, r1y, W - (G + nowW + G) - G, r1h, hours, t24)
+  end
+  if #p24 > 0 then
+    draw_rain_chart(G, r2y, rainW, r2h, hours, p24)
+  end
+  local d = wx.daily or {}
+  local dts, dcode = d.time or {}, d.weather_code or {}
+  local dmax, dmin = d.temperature_2m_max or {}, d.temperature_2m_min or {}
+  if dts[1] then
+    draw_day_card(G + rainW + G, r2y, cardW, r2h, fmt_date(dts[1]), dcode[1], dmax[1], dmin[1])
+  end
+  if dts[2] then
+    draw_day_card(G + rainW + G * 2 + cardW, r2y, cardW, r2h, fmt_date(dts[2]), dcode[2], dmax[2], dmin[2])
+  end
+end
+
+local function refresh()
+  status = "loading"
+  draw_screen()
+  sleep(50) -- commit the loading frame before the blocking fetch
+  local l, err = locate()
+  if not l then
+    status, errmsg = "error", err
+    return
+  end
+  local w, err2 = fetch_forecast(l)
+  if not w then
+    status, errmsg = "error", err2
+    return
+  end
+  loc, wx, status = l, w, "ready"
+  hours, t24, p24 = next_hours(w)
+end
+
+-- ---- main --------------------------------------------------------------
+refresh()
+
+while cycle do
+  draw_screen()
+  if iskeypressed("r") then refresh() end
+  if iskeypressed("q") then exit() end
+end

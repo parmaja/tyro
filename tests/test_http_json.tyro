@@ -1,0 +1,98 @@
+--======================================================================
+--  test_http_json.tyro - do http_get() and json_decode() work end to end?
+--======================================================================
+--  Checks the contract of both new globals (success and failure paths),
+--  then fetches the real APIs the weather app uses: ipapi.co for IP-based
+--  geolocation and open-meteo for the forecast. Everything is written to
+--  http_json_out.txt next to this script (the way test_openfile does it),
+--  and a small sparkline of the hourly temperatures is drawn so the run
+--  can also be checked with --screenshot.
+--  Note: the underlying parser (mnDON) decodes objects, arrays and strings;
+--  a bare top-level number/boolean ("42", "false") comes back nil+error,
+--  which the scalar lines below record as-is.
+--  Run:  tyro.exe tests\test_http_json.tyro --exit
+--======================================================================
+
+local out, outErr = openfile("http_json_out.txt", "w")
+if not out then
+  log("http_json_out.txt: " .. tostring(outErr))
+  return
+end
+local function say(s) out:write(tostring(s) .. "\n") end
+
+window.show(320, 200)
+
+-- ---- json_decode contract (no network needed) ------------------------
+local ok = json_decode('{"a": 1, "b": [true, null, "x"], "c": -2.5}')
+say("json object a      = " .. tostring(ok.a) .. " (" .. type(ok.a) .. ")")
+say("json array b[1]    = " .. tostring(ok.b[1]))
+say("json array b[2]    = " .. tostring(ok.b[2]) .. " (" .. type(ok.b[2]) .. ")")
+say("json array b[3]    = " .. tostring(ok.b[3]))
+say("json number c      = " .. tostring(ok.c))
+say("json scalar number = " .. tostring(json_decode("42")))
+say("json scalar string = " .. tostring(json_decode('"hi"')))
+say("json scalar bool   = " .. tostring(json_decode("false")))
+say("json scalar null   = " .. tostring(json_decode("null")))
+local bad, baderr = json_decode("{oops")
+say("json bad  value    = " .. tostring(bad))
+say("json bad  err      = " .. tostring(baderr))
+
+-- ---- http_get contract ------------------------------------------------
+local noargs, noargserr = http_get()
+say("http_get() value   = " .. tostring(noargs))
+say("http_get() err     = " .. tostring(noargserr))
+
+-- ---- live: IP geolocation ---------------------------------------------
+local body, err = http_get("https://ipapi.co/json/")
+if not body then
+  say("ipapi  http       = FAILED: " .. tostring(err))
+  out:close()
+  return
+end
+local geo = json_decode(body)
+say("ipapi  ip          = " .. tostring(geo.ip))
+say("ipapi  city        = " .. tostring(geo.city))
+say("ipapi  country     = " .. tostring(geo.country_code))
+say("ipapi  lat/lon     = " .. tostring(geo.latitude) .. " / " .. tostring(geo.longitude))
+
+-- ---- live: open-meteo forecast ----------------------------------------
+local url = "https://api.open-meteo.com/v1/forecast?latitude=" .. tostring(geo.latitude)
+  .. "&longitude=" .. tostring(geo.longitude)
+  .. "&current=temperature_2m,relative_humidity_2m,weather_code"
+  .. "&hourly=temperature_2m&forecast_days=1&timezone=auto"
+local wbody, werr = http_get(url)
+if not wbody then
+  say("meteo  http       = FAILED: " .. tostring(werr))
+  out:close()
+  return
+end
+local wx = json_decode(wbody)
+say("meteo  current t   = " .. tostring(wx.current.temperature_2m) .. " C")
+say("meteo  humidity    = " .. tostring(wx.current.relative_humidity_2m) .. " %")
+say("meteo  hourly n    = " .. tostring(#wx.hourly.temperature_2m))
+
+-- draw the hourly temperatures as a sparkline so a screenshot shows the
+-- decoded numbers as graphics, not just text
+local temps = wx.hourly.temperature_2m
+local lo, hi = temps[1], temps[1]
+for i = 2, #temps do
+  if temps[i] < lo then lo = temps[i] end
+  if temps[i] > hi then hi = temps[i] end
+end
+canvas.color = colors.black
+canvas.rectangle(0, 0, 320, 200, true)
+canvas.color = colors.gray
+canvas.rectangle(10, 10, 300, 180, false)
+canvas.color = colors.yellow
+local prevx, prevy
+for i = 1, #temps do
+  local x = 10 + math.floor((i - 1) * 300 / (#temps - 1))
+  local y = 180 - math.floor((temps[i] - lo) * 160 / math.max(hi - lo, 1))
+  if prevx then canvas.line(prevx, prevy, x, y) end
+  canvas.point(x, y)
+  prevx, prevy = x, y
+end
+canvas.color = colors.white
+canvas.text(14, 12, tostring(geo.city) .. " " .. string.format("%.1f C", wx.current.temperature_2m))
+sleep(200)
+out:close()

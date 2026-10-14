@@ -23,7 +23,7 @@ uses
   Classes, SysUtils, Types,
   LuaAPI, LuaClasses,
   RayLib, RayClasses, //remove it
-  mnUtils, mnLogs, mnClasses,
+  mnUtils, mnLogs, mnClasses, mnDON,
   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroPhysics,
   TyroControls, TyroEngines, TyroInput,
   TyroRadio, TyroSpectrum;
@@ -469,6 +469,11 @@ type
 
     function OpenFile_func(L: Plua_State): integer; cdecl;
     function Require_func(L: Plua_State): integer; cdecl;
+
+    //network & json
+
+    function HttpGet_func(L: Plua_State): integer; cdecl;
+    function JsonDecode_func(L: Plua_State): integer; cdecl;
 
    public
     procedure Init; override;
@@ -1398,6 +1403,15 @@ begin
   //This is the only way a script reaches the file system; the io/os libraries
   //are removed in TLua.Init, so nothing here can be bypassed from Lua.
   Lua.State.RegisterGlobal('openfile', OpenFile_func);
+
+  //network: http_get(url) -> body | nil, err. The request runs on the script
+  //thread (TTyroEngine.HttpGet), so the render loop keeps drawing while it is
+  //in flight. json_decode(text) -> value | nil, err turns a JSON document into
+  //the matching Lua value (object->table, array->table, number, boolean,
+  //null->nil); together they let a script talk to web APIs, e.g.
+  //local t = json_decode(http_get("https://api.open-meteo.com/v1/forecast?..."))
+  Lua.State.RegisterGlobal('http_get', HttpGet_func);
+  Lua.State.RegisterGlobal('json_decode', JsonDecode_func);
 
   //require(name) is the stock loader's replacement: the Lua one is removed in
   //TLua.Init along with dofile/loadfile/package, and this one reads only from
@@ -3040,6 +3054,109 @@ begin
     L.Pop(1); //[value]
   end;
   Result := 1;
+end;
+
+//http_get(url) -> body | nil, err
+//Fetches a URL over HTTP/HTTPS through TTyroEngine.HttpGet. The request runs
+//on the script thread, so the render loop keeps drawing while it is in flight;
+//the script itself blocks until the answer (or the failure) arrives.
+function TLuaScript.HttpGet_func(L: Plua_State): integer; cdecl;
+var
+  aBody, aError: string;
+begin
+  if not L.IsString(1) then
+  begin
+    L.PushNil;
+    L.PushString('http_get: missing url');
+    Exit(2);
+  end;
+  aError := 'http_get: engine is not running';
+  if (Engine = nil) or not Engine.HttpGet(L.ToString(1), aBody, aError) then
+  begin
+    L.PushNil;
+    L.PushString(aError);
+    Exit(2);
+  end;
+  L.PushString(aBody);
+  Result := 1;
+end;
+
+//Push one parsed JSON value as the matching Lua value. Objects become tables
+//keyed by their member names, arrays become tables with 1..n integer keys,
+//numbers/booleans/strings map to their Lua counterparts and null becomes nil.
+procedure PushDonValue(L: Plua_State; AValue: TDON_Value);
+var
+  i: Integer;
+  Obj: TDON_Object;
+  Arr: TDON_Array;
+begin
+  if AValue = nil then
+    L.PushNil
+  else if AValue is TDON_Object then
+  begin
+    Obj := TDON_Object(AValue);
+    lua_createtable(L, 0, Obj.Count);
+    for i := 0 to Obj.Count - 1 do
+    begin
+      lua_pushstring(L, PUTF8Char(UTF8String(Obj.Pairs[i].Name)));
+      PushDonValue(L, Obj.Pairs[i].Value);
+      lua_rawset(L, -3);
+    end;
+  end
+  else if AValue is TDON_Array then
+  begin
+    Arr := TDON_Array(AValue);
+    lua_createtable(L, Arr.Count, 0);
+    for i := 0 to Arr.Count - 1 do
+    begin
+      lua_pushinteger(L, i + 1);
+      PushDonValue(L, Arr.Item[i]);
+      lua_rawset(L, -3);
+    end;
+  end
+  else if AValue is TDON_Number then
+    L.PushNumber(TDON_Number(AValue).Value)
+  else if AValue is TDON_Boolean then
+    L.PushBoolean(TDON_Boolean(AValue).Value)
+  else if AValue.IsNull then
+    L.PushNil //JSON null (parsed as the identifier 'null')
+  else
+    L.PushString(AValue.AsString);
+end;
+
+//json_decode(text) -> value | nil, err
+//Parses a JSON document (the answer of a web API, a file, ...) into the
+//matching Lua value; see PushDonValue for the mapping. On invalid input it
+//returns nil plus the parser message, like openfile does for a bad path.
+function TLuaScript.JsonDecode_func(L: Plua_State): integer; cdecl;
+var
+  aText: string;
+  Root: TDON_Value;
+begin
+  if not L.IsString(1) then
+  begin
+    L.PushNil;
+    L.PushString('json_decode: missing json text');
+    Exit(2);
+  end;
+  aText := L.ToString(1);
+  Root := nil;
+  try
+    try
+      Root := JsonParseValueString(aText);
+    except
+      on E: Exception do
+      begin
+        L.PushNil;
+        L.PushString('json_decode: ' + E.Message);
+        Exit(2);
+      end;
+    end;
+    PushDonValue(L, Root);
+    Result := 1;
+  finally
+    Root.Free;
+  end;
 end;
 
 function TLuaConsole.Read_func(L: Plua_State): integer; cdecl;

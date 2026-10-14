@@ -548,6 +548,13 @@ type
 
     procedure LogWrite(Msg: string);
 
+    //* Fetch a URL over HTTP/HTTPS and return the response body as text.
+    //* The request runs on the calling thread (the script worker), so a script
+    //* that calls it blocks its own thread while the render loop keeps drawing.
+    //* Returns False and fills AError when the request fails. Backs the Lua
+    //* global http_get(url).
+    function HttpGet(const AUrl: string; out ABody: string; out AError: string): Boolean;
+
     property CanvasLock: TmnCriticalSection read FCanvasLock;
     property Options: TTyroEngineOptions read FOptions write FOptions;
     property BackColor: TColor read FBackColor write FBackColor;
@@ -588,7 +595,7 @@ var
 implementation
 
 uses
-  TyroRadio, TyroSpectrum;
+  TyroRadio, TyroSpectrum, mnHttpClient, mnModules;
 
 {
 function IntToFPColor(I: Integer): TFPColor;
@@ -2126,6 +2133,40 @@ procedure TTyroEngine.LogWrite(Msg: string);
 begin
   Console.Write(Msg);
   //Output.Writeln(Trim(Msg));
+end;
+
+function TTyroEngine.HttpGet(const AUrl: string; out ABody: string; out AError: string): Boolean;
+var
+  Client: TmnHttpClient;
+begin
+  //One client per call: TmnHttpClient owns a socket, so sharing one instance
+  //between the script thread and the main thread would need locking. A fresh
+  //instance keeps this call thread-safe and lets the caller block freely.
+  Result := False;
+  ABody := '';
+  AError := '';
+  Client := TmnHttpClient.Create;
+  try
+    try
+      //Ask for an uncompressed answer: the client advertises "gzip, deflate"
+      //by default but only inflates gzip responses, so a server that picks
+      //deflate (open-meteo does) would hand back bytes the JSON parser
+      //rejects. ovNo drops the Accept-Encoding header entirely.
+      Client.Request.Use.AcceptCompressing := ovNo;
+      Client.ConnectTimeout := 10000;
+      Client.ReadTimeout := 15000;
+      Client.GetString(UTF8String(AUrl), ABody);
+      Result := True;
+    except
+      on E: Exception do
+      begin
+        ABody := '';
+        AError := E.Message;
+      end;
+    end;
+  finally
+    Client.Free;
+  end;
 end;
 
 procedure TTyroEngine.EditorClosed(Sender: TObject);
