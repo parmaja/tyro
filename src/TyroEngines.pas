@@ -2883,14 +2883,18 @@ end;
 
 procedure TTyroFileList.MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer);
 var
-  i: Integer;
+  i, prevIndex: Integer;
 begin
+  //A click selects the row; clicking the selected row again picks it. Take the
+  //selection before the inherited handler runs, because that handler moves
+  //ItemIndex to the row under the mouse: comparing after it would make every
+  //click, including the first one on a fresh row, look like a second click.
+  prevIndex := ItemIndex;
   inherited;
-  //A click selects the row; clicking the selected row again picks it.
   if (Button = mbLeft) and (HitScrollBar(x, y) = []) then
   begin
-    i := ItemIndexAt(y - (Margin + BorderSize));
-    if (i >= 0) and (i = ItemIndex) and Assigned(FOnPick) then
+    i := ItemIndexAt(y - OuterSize);
+    if (i >= 0) and (i = prevIndex) and Assigned(FOnPick) then
       FOnPick(Self, SelectedFile);
   end;
 end;
