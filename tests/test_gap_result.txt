@@ -1,0 +1,22 @@
+phase normal busy=0 sleep=0
+  body 1 lastgap=0 maxgap=0 depth=6
+  body 2 lastgap=0 maxgap=0 depth=6
+  body 3 lastgap=0 maxgap=0 depth=6
+  body 4 lastgap=0 maxgap=0 depth=6
+  body 5 lastgap=0 maxgap=0 depth=6
+  phase-maxgap=0
+phase sleep-yield busy=0 sleep=150
+  body 1 lastgap=0 maxgap=0 depth=4
+  body 2 lastgap=0 maxgap=0 depth=4
+  body 3 lastgap=0 maxgap=0 depth=4
+  body 4 lastgap=0 maxgap=1 depth=4
+  body 5 lastgap=0 maxgap=1 depth=4
+  phase-maxgap=1
+phase stall busy=150 sleep=0
+  body 1 lastgap=0 maxgap=150 depth=6
+  body 2 lastgap=0 maxgap=150 depth=6
+  body 3 lastgap=0 maxgap=150 depth=6
+  body 4 lastgap=0 maxgap=150 depth=6
+  body 5 lastgap=0 maxgap=150 depth=6
+  phase-maxgap=150
+VERDICT normal=0 ms, sleep=1 ms, stall=150 ms

@@ -1,0 +1,28 @@
+-- Probe 6: determine sprite draw anchor by placing known sprites at known spots
+window.show(800, 480)
+
+local block = Sprites.new("b1")
+block.load("../games/birds/ab_block.png")     -- 40x40
+block.kind = "static"
+block.collide = false
+block.x = 400
+block.y = 240
+
+local ground = Sprites.new("g1")
+ground.load("../games/birds/ab_ground.png")   -- 3200x240
+ground.kind = "static"
+ground.collide = false
+ground.x = 800
+ground.y = 560
+
+local frame = 0
+while cycle do
+  canvas.color = colors.skyblue
+  canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+  canvas.color = colors.yellow
+  canvas.line(400, 0, 400, 480)
+  canvas.line(0, 240, 800, 240)
+  frame = frame + 1
+  if frame == 30 then screenshot("tests/ab_probe6.png") end
+  if frame > 60 then exit() end
+end

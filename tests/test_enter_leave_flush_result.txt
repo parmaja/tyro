@@ -1,0 +1,13 @@
+start
+queued bar 1
+queued bar 2
+queued bar 3
+queued bar 4
+queued bar 5
+queued bar 6
+queued bar 7
+queued bar 8
+queued bar 9
+queued bar 10
+releasing
+SMOKE-OK

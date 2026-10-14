@@ -1,0 +1,42 @@
+-- Probe: can a script-driven kinematic body push a dynamic body?
+window.show(640, 480)
+local out = openfile("ab_probe_out.txt", "w")
+if not out then
+  println("no out file")
+  exit()
+end
+
+collision.gravityy = 0  -- isolate horizontal transfer
+
+driver = Sprites.new("driver")
+driver.kind = "kinematic"
+driver.collide = true
+driver.radius = 15
+driver.x = 100
+driver.y = 240
+driver.visible = false
+
+target = Sprites.new("target")
+target.kind = "dynamic"
+target.collide = true
+target.radius = 20
+target.mass = 1
+target.bouncy = 0.1
+target.friction = 0.5
+target.x = 300
+target.y = 240
+target.visible = false
+
+local frame = 0
+while cycle do
+  collision.pump()
+  if frame < 60 then
+    driver.x = driver.x + 8
+  end
+  out:write(frame .. " " .. driver.x .. " " .. target.x .. " " .. target.y .. "\n")
+  frame = frame + 1
+  if frame > 90 then
+    out:close()
+    exit()
+  end
+end

@@ -1,0 +1,31 @@
+phase normal busy=0 sleep=0 limit=100
+  body 1 maxgap=0 warned=0
+  body 2 maxgap=0 warned=0
+  body 3 maxgap=0 warned=0
+  body 4 maxgap=0 warned=0
+  body 5 maxgap=0 warned=0
+  phase-hits=0 maxgap=0
+phase sleep-yield busy=0 sleep=150 limit=100
+  body 1 maxgap=0 warned=0
+  body 2 maxgap=0 warned=0
+  body 3 maxgap=0 warned=0
+  body 4 maxgap=0 warned=0
+  body 5 maxgap=0 warned=0
+  phase-hits=0 maxgap=0
+phase stall-150 busy=150 sleep=0 limit=100
+  ALERT gap=150 limit=100 lastgap=0
+  body 1 maxgap=150 warned=150
+  body 2 maxgap=150 warned=150
+  body 3 maxgap=150 warned=150
+  body 4 maxgap=150 warned=150
+  body 5 maxgap=150 warned=150
+  phase-hits=1 maxgap=150
+phase stall-400 busy=400 sleep=0 limit=100
+  ALERT gap=400 limit=100 lastgap=0
+  body 1 maxgap=400 warned=400
+  body 2 maxgap=400 warned=400
+  body 3 maxgap=400 warned=400
+  body 4 maxgap=400 warned=400
+  body 5 maxgap=400 warned=400
+  phase-hits=1 maxgap=400
+VERDICT hits normal=0 sleep=0 stall150=1 stall400=1 maxgap=400 => PASS

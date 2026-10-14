@@ -114,13 +114,17 @@ type
   end;
 
 procedure PlayMML(const Song: TmmlSong);
-procedure PlayWaveform(Freq, Duration: Single);
+procedure PlayWaveform(Freq, Duration: Single); overload;
+procedure PlayWaveform(Proc: TWaveformProc; Freq, Duration: Single); overload;
 procedure UpdateMelodies;
 procedure UpdateWaveforms;
 procedure ShutdownMelodies;
 procedure ShutdownWaveforms;
 
 function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function PitchedNoise_Wave(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 {Plain shapes, used by the MIDI synth to give the General MIDI families
@@ -424,11 +428,11 @@ begin
   end;
 end;
 
-procedure PlayWaveform(Freq, Duration: Single);
+procedure PlayWaveform(Proc: TWaveformProc; Freq, Duration: Single);
 var
   Wave: TTyroRayWave;
 begin
-  if (Duration <= 0) or (Freq < 0) then
+  if (Duration <= 0) or (Freq < 0) or not Assigned(Proc) then
     Exit;
   if PlayingWaveforms = nil then
     Exit;
@@ -436,13 +440,18 @@ begin
   Wave := TTyroRayWave.Create;
   try
     // Lua's music.sound duration is expressed in milliseconds.
-    Wave.Generate(@Sin_Waveform, Freq, Duration / 1000, 100);
+    Wave.Generate(Proc, Freq, Duration / 1000, 100);
     Wave.Play;
     PlayingWaveforms.Add(Wave);
     Wave := nil;
   finally
     Wave.Free;
   end;
+end;
+
+procedure PlayWaveform(Freq, Duration: Single);
+begin
+  PlayWaveform(@Sin_Waveform, Freq, Duration);
 end;
 
 procedure UpdateMelodies;
@@ -504,6 +513,53 @@ begin
 end;
 
 function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+begin
+  Result := GetRandomValue(-100,+100) / 100;
+end;
+
+function LFSRNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Period, T: Integer;
+  LFSR: Word;
+  Bit: Word;
+  i: Integer;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := GetRandomValue(-100,+100) / 100;
+    Exit;
+  end;
+  Period := Round(SampleRate / Frequency);
+  if Period < 1 then Period := 1;
+  T := Index div Period;
+  // seed LFSR based on period
+  LFSR := Word(T * 131542391 + 1009);
+  if LFSR = 0 then LFSR := $ACE1;
+  // advance LFSR a few steps to get variation
+  for i := 0 to (T mod 8) do
+  begin
+    Bit := ((LFSR shr 0) xor (LFSR shr 2) xor (LFSR shr 3) xor (LFSR shr 5)) and 1;
+    LFSR := (LFSR shr 1) or (Bit shl 15);
+  end;
+  // output bit as -1 or 1 for harsher tone
+  if (LFSR and 1) = 1 then
+    Result := 1.0
+  else
+    Result := -1.0;
+end;
+
+function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+begin
+  // LFSR-based pitched noise (periodic like NES noise)
+  Result := LFSRNoise_Waveform(Index, SampleRate, Frequency);
+end;
+
+function PitchedNoise_Wave(Index, SampleRate: Integer; Frequency: Single): Single;
+begin
+  Result := LFSRNoise_Waveform(Index, SampleRate, Frequency);
+end;
+
+function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 begin
   Result := GetRandomValue(-100,+100) / 100;
 end;

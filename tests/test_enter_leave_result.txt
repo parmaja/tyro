@@ -1,0 +1,5 @@
+PASS cycle loop ran 20 frames
+PASS 40 groups entered (2 per frame)
+PASS hold survived 20 cycle waits
+PASS unbalanced leave ignored
+SMOKE-OK

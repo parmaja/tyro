@@ -6,7 +6,7 @@
 --  The whole report is drawn with canvas primitives:
 --
 --    +-----------------------------------------------------------+
---    | Latakia, SY 35.5/35.8 ip .. at 03:30      [R]efresh [Q]uit|
+--    | Damascus,SY 35.5/35.8 ip .. at 03:30      [R]efresh [Q]uit|
 --    +------------------+----------------------------------------+
 --    | NOW              |  24h temperature line chart            |
 --    |  icon, temp,     |                                        |

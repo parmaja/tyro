@@ -1,8 +1,8 @@
 --======================================================================
 --  music_demo.tyro - Sound and music effects
 --======================================================================
---  Demonstrates: music.sound() for tone effects, music.mml() for
---  Music Macro Language melodies
+--  Demonstrates: music.sound() for tone effects, music.noise() for
+--  noise effects, music.mml() for Music Macro Language melodies
 --======================================================================
 
 window.show(640, 480)
@@ -19,6 +19,10 @@ music.sound(587, 200)  -- D note
 sleep(250)
 music.sound(659, 200)  -- E note
 sleep(300)
+
+-- Noise effects (frequency Hz, duration ms) - good for crashes/hits
+music.noise(400, 250)  -- crash / explosion
+sleep(400)
 
 canvas.color = colors.green
 canvas.text(10, 100, "Tone sequence done!")

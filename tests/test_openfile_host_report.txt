@@ -1,0 +1,27 @@
+--- who am I running under ---
+_VERSION     Lua 5.5
+arg[-1]      nil
+arg[0]       nil
+arg[1]       nil
+version      0.1
+host         tyro
+
+--- the file API on this host ---
+openfile     function
+io           nil
+os           nil
+dofile       nil
+loadfile     nil
+require      function
+controls     table
+
+openfile is here, so this IS the Tyro host.
+controls is a table and version is set, both injected by Tyro.
+openfile wrote test_openfile_host.txt next to the script
+read back: written through openfile() inside the Tyro sandbox
+
+--- workspace guard ---
+  ../outside.txt         -> nil / openfile: '../outside.txt' resolves outside the workspace
+  C:\Windows\win.ini     -> nil / openfile: 'C:\Windows\win.ini' resolves outside the workspace
+
+done

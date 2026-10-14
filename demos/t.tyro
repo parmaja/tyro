@@ -1,5 +1,9 @@
 window.show(640, 480)
 fontHeight = font.height
+--music.noise(400, 2500)      -- white noise (unchanged)
+music.pnoise(100, 2500)     -- higher pitched periodic noise
+sleep(2500)
+music.pitchednoise(800, 2500)     -- lower pitched periodic noise
 while cycle do
 
   canvas.color = colors.black

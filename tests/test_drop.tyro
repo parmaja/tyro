@@ -1,0 +1,4 @@
+-- Simple test for drag-drop
+print("Hello from dropped file!")
+window:show()
+exit()

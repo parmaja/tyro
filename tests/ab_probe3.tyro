@@ -1,0 +1,33 @@
+-- Probe 3: velocity API -> ballistic flight
+window.show(800, 480)
+local out = openfile("ab_probe3_out.txt", "w")
+if not out then println("no out") exit() end
+
+collision.gravityy = 900
+
+bird = Sprites.new("bird")
+bird.visible = false
+bird.kind = "dynamic"
+bird.collide = true
+bird.radius = 12
+bird.mass = 1
+bird.bouncy = 0.3
+bird.friction = 0.5
+bird.x = 100
+bird.y = 380
+bird.vx = 320
+bird.vy = -430
+
+local frame = 0
+while cycle do
+  collision.pump()
+  if frame % 4 == 0 then
+    out:write(frame .. " x=" .. math.floor(bird.x) .. " y=" .. math.floor(bird.y)
+      .. " vx=" .. math.floor(bird.vx) .. " vy=" .. math.floor(bird.vy) .. "\n")
+  end
+  frame = frame + 1
+  if frame > 120 then
+    out:close()
+    exit()
+  end
+end

@@ -1,0 +1,8 @@
+PASS x readback
+PASS y readback
+PASS x write keeps y
+PASS y write keeps x
+PASS move
+PASS backcolor readback
+PASS cycle iterations = 5
+SMOKE-OK

@@ -472,6 +472,24 @@ type
     procedure DoExecute; override;
   end;
 
+  { TPlayNoiseObject }
+
+  TPlayNoiseObject = class(TQueueObject)
+  public
+    Freq, Period: Integer;
+    constructor Create(AFreq, APeriod: Integer);
+    procedure DoExecute; override;
+  end;
+
+  { TPlayPitchedNoiseObject }
+
+  TPlayPitchedNoiseObject = class(TQueueObject)
+  public
+    Freq, Period: Integer;
+    constructor Create(AFreq, APeriod: Integer);
+    procedure DoExecute; override;
+  end;
+
   { TPlayMusicFileObject }
 
   TPlayMusicFileObject = class(TQueueObject)
@@ -961,6 +979,34 @@ end;
 procedure TPlaySoundObject.DoExecute;
 begin
   PlayWaveform(Freq, Period);
+end;
+
+{ TPlayNoiseObject }
+
+constructor TPlayNoiseObject.Create(AFreq, APeriod: Integer);
+begin
+  inherited Create;
+  Freq := AFreq;
+  Period := APeriod;
+end;
+
+procedure TPlayNoiseObject.DoExecute;
+begin
+  PlayWaveform(@Noise_Waveform, Freq, Period);
+end;
+
+{ TPlayPitchedNoiseObject }
+
+constructor TPlayPitchedNoiseObject.Create(AFreq, APeriod: Integer);
+begin
+  inherited Create;
+  Freq := AFreq;
+  Period := APeriod;
+end;
+
+procedure TPlayPitchedNoiseObject.DoExecute;
+begin
+  PlayWaveform(@PitchedNoise_Waveform, Freq, Period);
 end;
 
 { TPlayMusicFileObject }

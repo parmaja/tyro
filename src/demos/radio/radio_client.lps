@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectSession>
+    <PathDelim Value="\"/>
+    <Version Value="12"/>
+    <BuildModes Active="Debug"/>
+    <Units>
+      <Unit>
+        <Filename Value="radio_client.lpr"/>
+        <IsPartOfProject Value="True"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="47"/>
+        <CursorPos X="18" Y="52"/>
+        <UsageCount Value="22"/>
+        <Loaded Value="True"/>
+      </Unit>
+    </Units>
+    <JumpHistory HistoryIndex="10">
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+        <Caret Line="16" Column="41" TopLine="7"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+        <Caret Line="812" Column="13" TopLine="803"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+        <Caret Line="635" Column="19" TopLine="608"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+        <Caret Line="665" Column="36" TopLine="640"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+        <Caret Line="720" Column="28" TopLine="704"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+        <Caret Line="26" Column="12"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+        <Caret Line="681" Column="34" TopLine="656"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+        <Caret Line="692" Column="30" TopLine="667"/>
+      </Position>
+      <Position>
+        <Filename Value="radio_client.lpr"/>
+        <Caret Line="750" Column="3" TopLine="734"/>
+      </Position>
+    </JumpHistory>
+    <RunParams>
+      <FormatVersion Value="2"/>
+      <Modes ActiveMode=""/>
+    </RunParams>
+  </ProjectSession>
+</CONFIG>

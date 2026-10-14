@@ -1,0 +1,75 @@
+== frame0 pigs_alive=3
+  box1 470,380 a=0
+  box2 560,380 a=0
+  box3 515,308 a=0
+  box4 515,276 a=0
+  box5 650,380 a=0
+  box6 750,380 a=0
+  box7 700,308 a=0
+  pig1 515,239 popped=false
+  pig2 515,422 popped=false
+  pig3 700,279 popped=false
+== frame30 pigs_alive=3
+  box1 470,380 a=0
+  box2 560,380 a=0
+  box3 515,308 a=0
+  box4 515,276 a=0
+  box5 650,380 a=0
+  box6 750,380 a=0
+  box7 700,308 a=0
+  pig1 515,238 popped=false
+  pig2 515,422 popped=false
+  pig3 700,278 popped=false
+== frame60 pigs_alive=3
+  box1 470,380 a=0
+  box2 560,380 a=0
+  box3 515,308 a=0
+  box4 515,276 a=0
+  box5 650,380 a=0
+  box6 750,380 a=0
+  box7 700,308 a=0
+  pig1 515,238 popped=false
+  pig2 515,422 popped=false
+  pig3 700,278 popped=false
+  LAUNCH vx=650 vy=-431
+  t65 bird 157,309 v=721
+  t70 bird 265,267 v=670
+  t75 bird 373,250 v=650
+  t80 bird 482,258 v=362
+  POP pig at 516,236 ps=194 os=276
+  t85 bird 523,270 v=221
+  t90 bird 549,289 v=103
+  t95 bird 566,297 v=169
+  POP pig at 724,289 ps=157 os=256
+  t100 bird 586,327 v=293
+  t105 bird 605,381 v=311
+  t110 bird 595,386 v=105
+  t115 bird 576,394 v=39
+  t120 bird 575,392 v=20
+  t125 bird 581,396 v=73
+  t130 bird 586,399 v=3
+  t135 bird 585,399 v=0
+  t140 bird 585,399 v=0
+  t145 bird 585,399 v=0
+  t150 bird 585,399 v=0
+  t155 bird 585,399 v=0
+  t160 bird 585,399 v=0
+  t165 bird 585,399 v=0
+  t170 bird 585,399 v=0
+  t175 bird 585,399 v=0
+  t180 bird 585,399 v=0
+  t185 bird 585,399 v=0
+  t190 bird 585,399 v=0
+  t195 bird 585,399 v=0
+  t200 bird 585,399 v=0
+== frame200 pigs_alive=1
+  box1 534,398 a=122
+  box2 651,410 a=72
+  box3 659,382 a=-18
+  box4 809,349 a=284
+  box5 730,414 a=76
+  box6 833,428 a=90
+  box7 865,397 a=14
+  pig1 521,231 popped=true
+  pig2 516,422 popped=false
+  pig3 727,294 popped=true

@@ -782,7 +782,7 @@ tyro demos/<name>.tyro
 | `demos/console_demo.tyro` | Console output: print, println, log |
 | `demos/terminal_demo.tyro` | Built-in terminal commands: dir, list, clear, help, exit |
 | `demos/console_read_demo.tyro` | Interactive console.read() — prompt the user for input from Lua |
-| `demos/music_demo.tyro` | Sound effects (music.sound) and MML melodies (music.mml) |
+| `demos/music_demo.tyro` | Sound effects (music.sound, music.noise) and MML melodies (music.mml) |
 | `demos/test.tyro` | Circle animation with random colors |
 | `demos/colors_bar.tyro` | Full color palette display |
 | `demos/multiply.tyro` | Drawing + MML sound |

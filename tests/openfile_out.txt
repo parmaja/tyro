@@ -1,0 +1,24 @@
+io = nil
+os = nil
+openfile = function
+read l  = "line one"
+read L  = "line two\
+"
+read a  = "no newline at the end"
+at eof  = nil
+closed  = 1 value(s)
+line: "line one"
+line: "line two"
+line: "no newline at the end"
+num1 = 10
+num2 = 20.5
+num3 = -3
+num4 = nil
+after append = "line one\13\
+line two\13\
+no newline at the end\13\
+appended\13\
+"
+  FAILED to open richard-say.png (rb): openfile: cannot open 'richard-say.png' (Unable to open file "D:\lab\pascal\tyro\tests\richard-say.png": The system cannot find the file specified.)
+chain = chained
+  FAILED to open openfile_new.txt (x): openfile: cannot open 'openfile_new.txt' (file already exists)

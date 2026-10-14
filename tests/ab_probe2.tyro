@@ -1,0 +1,97 @@
+-- Probe 2: can a fast kinematic "bird" topple a box tower?
+window.show(800, 480)
+local out = openfile("ab_probe2_out.txt", "w")
+if not out then println("no out") exit() end
+
+collision.gravityy = 900
+
+ground = Sprites.new("ground")
+ground.load("../games/birds/ab_ground.png")
+ground.visible = false
+ground.kind = "static"
+ground.collide = true
+ground.x = 400
+ground.y = 460
+
+plankL = Sprites.new("plankL")
+plankL.load("../games/birds/ab_plank.png")
+plankL.visible = false
+plankL.kind = "dynamic"
+plankL.collide = true
+plankL.mass = 1
+plankL.friction = 0.8
+plankL.bouncy = 0.05
+plankL.x = 470
+plankL.y = 380
+
+plankR = Sprites.new("plankR")
+plankR.load("../games/birds/ab_plank.png")
+plankR.visible = false
+plankR.kind = "dynamic"
+plankR.collide = true
+plankR.mass = 1
+plankR.friction = 0.8
+plankR.bouncy = 0.05
+plankR.x = 530
+plankR.y = 380
+
+beam = Sprites.new("beam")
+beam.load("../games/birds/ab_beam.png")
+beam.visible = false
+beam.kind = "dynamic"
+beam.collide = true
+beam.mass = 1
+beam.friction = 0.8
+beam.bouncy = 0.05
+beam.x = 500
+beam.y = 308
+
+block = Sprites.new("block")
+block.load("../games/birds/ab_block.png")
+block.visible = false
+block.kind = "dynamic"
+block.collide = true
+block.mass = 1
+block.friction = 0.8
+block.bouncy = 0.05
+block.x = 500
+block.y = 276
+
+pig = Sprites.new("pig")
+pig.visible = false
+pig.kind = "dynamic"
+pig.collide = true
+pig.radius = 14
+pig.mass = 0.6
+pig.friction = 0.6
+pig.bouncy = 0.2
+pig.x = 500
+pig.y = 245
+
+bird = Sprites.new("bird")
+bird.visible = false
+bird.kind = "kinematic"
+bird.collide = true
+bird.radius = 12
+bird.x = 60
+bird.y = 380
+
+local frame = 0
+while cycle do
+  collision.pump()
+  if frame < 200 then
+    bird.x = bird.x + 14
+  end
+  if frame % 5 == 0 then
+    out:write(frame .. " bird=" .. math.floor(bird.x) .. " pig=" .. math.floor(pig.x) .. "," .. math.floor(pig.y)
+      .. " pL=" .. math.floor(plankL.x) .. "," .. math.floor(plankL.y)
+      .. " pR=" .. math.floor(plankR.x) .. "," .. math.floor(plankR.y)
+      .. " beam=" .. math.floor(beam.x) .. "," .. math.floor(beam.y)
+      .. " blk=" .. math.floor(block.x) .. "," .. math.floor(block.y) .. "\n")
+  end
+  frame = frame + 1
+  if frame > 150 then
+    out:close()
+    exit()
+  end
+end

@@ -1,0 +1,3 @@
+phase unlimited limit=0 maxdepth_seen=4000 waits=0
+phase limited limit=128 maxdepth_seen=127 waits=32
+VERDICT limit_readback=true bounded=true waited=true

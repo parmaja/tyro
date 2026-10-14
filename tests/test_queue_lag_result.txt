@@ -1,0 +1,38 @@
+phase auto-group hold= busy=70ms group=true
+  body 1 mid=0 of 15 depth=0
+  body 2 mid=0 of 15 depth=0
+  body 3 mid=0 of 15 depth=0
+  body 4 mid=0 of 15 depth=0
+  body 5 mid=0 of 15 depth=0
+  body 6 mid=0 of 15 depth=0
+  body 7 mid=0 of 15 depth=0
+  body 8 mid=0 of 15 depth=0
+  body 9 mid=0 of 15 depth=0
+  body 10 mid=0 of 15 depth=0
+  summary n=15 splits=0 no-drain=10 whole=0 maxmid=0
+phase group-off hold= busy=70ms group=false
+  body 1 mid=0 of 15 depth=0
+  body 2 mid=2 of 15 depth=0
+  body 3 mid=2 of 15 depth=0
+  body 4 mid=2 of 15 depth=0
+  body 5 mid=2 of 15 depth=0
+  body 6 mid=2 of 15 depth=0
+  body 7 mid=2 of 15 depth=0
+  body 8 mid=2 of 15 depth=0
+  body 9 mid=2 of 15 depth=0
+  body 10 mid=2 of 15 depth=0
+  summary n=15 splits=9 no-drain=1 whole=0 maxmid=2
+phase enter-leave hold= busy=70ms group=true
+  body 1 mid=0 of 15 depth=0
+  body 2 mid=0 of 15 depth=0
+  body 3 mid=0 of 15 depth=0
+  body 4 mid=0 of 15 depth=0
+  body 5 mid=0 of 15 depth=0
+  body 6 mid=0 of 15 depth=0
+  body 7 mid=0 of 15 depth=0
+  body 8 mid=0 of 15 depth=0
+  body 9 mid=0 of 15 depth=0
+  body 10 mid=0 of 15 depth=0
+  summary n=15 splits=0 no-drain=10 whole=0 maxmid=0
+engine frames=114 deferred=0 maxdepth=15 holds=0 group=true drainms=0.36009999999997433
+VERDICT splits auto=0 group-off=9 enter-leave=0

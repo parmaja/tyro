@@ -1,0 +1,59 @@
+f0 reload=0 collide=false pigs_alive=3 bird 150,300 v=0,0
+SHOT 1 vx=650 vy=-431
+f40 reload=0 collide=true pigs_alive=3 bird 287,261 v=650,-131
+  POP pig at 516,236 ps=194 os=276
+  POP pig at 723,289 ps=157 os=256
+f80 reload=0 collide=true pigs_alive=1 bird 591,385 v=-105,25
+f120 reload=3 collide=false pigs_alive=1 bird 150,300 v=0,0
+f160 reload=3 collide=false pigs_alive=1 bird 150,300 v=0,0
+f200 reload=3 collide=false pigs_alive=1 bird 150,300 v=0,0
+f240 reload=3 collide=false pigs_alive=1 bird 150,300 v=0,0
+f255 reload=2 collide=false pigs_alive=1 bird 150,300 v=0,0
+f256 reload=3 collide=false pigs_alive=1 bird 150,300 v=0,0
+f257 reload=0 collide=false pigs_alive=1 bird 150,300 v=0,0
+f258 reload=1 collide=false pigs_alive=1 bird 150,300 v=0,0
+f259 reload=2 collide=false pigs_alive=1 bird 150,300 v=0,0
+SHOT 2 vx=820 vy=-120
+f260 reload=3 collide=true pigs_alive=1 bird 150,326 v=820,-90
+f261 reload=0 collide=true pigs_alive=1 bird 87,326 v=820,-90
+f262 reload=0 collide=true pigs_alive=1 bird 115,323 v=820,-60
+f263 reload=0 collide=true pigs_alive=1 bird 142,321 v=820,-30
+f264 reload=0 collide=true pigs_alive=1 bird 169,320 v=820,0
+f265 reload=0 collide=true pigs_alive=1 bird 197,320 v=820,30
+f266 reload=0 collide=true pigs_alive=1 bird 224,321 v=820,60
+f267 reload=0 collide=true pigs_alive=1 bird 251,323 v=820,90
+f268 reload=0 collide=true pigs_alive=1 bird 279,326 v=820,120
+f269 reload=0 collide=true pigs_alive=1 bird 306,330 v=820,150
+f270 reload=0 collide=true pigs_alive=1 bird 333,335 v=820,180
+f271 reload=0 collide=true pigs_alive=1 bird 361,341 v=820,210
+f272 reload=0 collide=true pigs_alive=1 bird 388,348 v=820,240
+f273 reload=0 collide=true pigs_alive=1 bird 415,356 v=820,270
+f274 reload=0 collide=true pigs_alive=1 bird 443,365 v=820,300
+f275 reload=0 collide=true pigs_alive=1 bird 470,375 v=317,138
+f276 reload=0 collide=true pigs_alive=1 bird 480,379 v=317,168
+f277 reload=0 collide=true pigs_alive=1 bird 490,385 v=317,198
+f278 reload=0 collide=true pigs_alive=1 bird 501,392 v=317,228
+  POP pig at 515,422 ps=177 os=243
+f279 reload=0 collide=true pigs_alive=0 bird 519,397 v=241,-21
+f280 reload=0 collide=true pigs_alive=0 bird 519,397 v=241,-21
+f281 reload=0 collide=true pigs_alive=0 bird 527,395 v=241,9
+f282 reload=0 collide=true pigs_alive=0 bird 535,395 v=241,39
+f283 reload=0 collide=true pigs_alive=0 bird 543,397 v=220,79
+f284 reload=0 collide=true pigs_alive=0 bird 550,399 v=214,111
+f285 reload=0 collide=true pigs_alive=0 bird 557,403 v=210,143
+f320 reload=0 collide=true pigs_alive=0 bird 584,425 v=0,-0
+f360 reload=0 collide=true pigs_alive=0 bird 584,425 v=-0,0
+f400 reload=0 collide=true pigs_alive=0 bird 584,425 v=-0,0
+f440 reload=0 collide=true pigs_alive=0 bird 584,425 v=0,0
+f480 reload=0 collide=true pigs_alive=0 bird 584,425 v=-0,0
+FINAL pigs_alive=0
+  pig1 521,231 popped=true
+  pig2 523,423 popped=true
+  pig3 726,294 popped=true
+  box1 584,389
+  box2 694,397
+  box3 676,378
+  box4 811,350
+  box5 731,414
+  box6 834,428
+  box7 870,398

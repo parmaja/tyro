@@ -1,0 +1,4 @@
+textwidth I=8 RIVERRAID=80 textheight=16
+pensize=4
+linewidth=6
+VERDICT => PASS

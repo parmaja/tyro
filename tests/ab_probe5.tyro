@@ -1,0 +1,118 @@
+-- Probe 5: simulate two shots with the game's respawn logic to check winnability
+window.show(800, 480)
+local out = openfile("ab_probe5_out.txt", "w")
+if not out then println("no out") exit() end
+
+local GRAVITY = 900
+local PIG_R = 18
+collision.gravityy = GRAVITY
+local pigs_alive = 0
+local boxes = {}
+local pigs = {}
+local function speed2(ax, ay) return math.sqrt(ax * ax + ay * ay) end
+
+local function onPigHit(rec, other, st)
+  if rec.popped or st ~= "enter" then return end
+  local ps = speed2(rec.s.vx, rec.s.vy)
+  local os = 0
+  if other ~= nil and other.kind ~= "static" then os = speed2(other.vx, other.vy) end
+  if ps + os > 200 then
+    rec.popped = true
+    rec.s.collide = false
+    rec.s.visible = false
+    pigs_alive = pigs_alive - 1
+    out:write("  POP pig at " .. math.floor(rec.s.x) .. "," .. math.floor(rec.s.y)
+      .. " ps=" .. math.floor(ps) .. " os=" .. math.floor(os) .. "\n")
+  end
+end
+
+local function addBox(tex, x, y, mass)
+  local s = Sprites.new()
+  s.load(tex)
+  s.kind = "dynamic" s.collide = true s.mass = mass
+  s.friction = 0.9 s.bouncy = 0.05 s.x = x s.y = y
+  boxes[#boxes + 1] = {s = s, x = x, y = y}
+end
+local function addPig(x, y)
+  local s = Sprites.new("pig" .. (#pigs + 1))
+  s.load("../games/birds/ab_pig.png")
+  s.kind = "dynamic" s.collide = true s.radius = PIG_R s.mass = 0.7
+  s.friction = 0.7 s.bouncy = 0.15 s.x = x s.y = y
+  local rec = {s = s, x = x, y = y, popped = false}
+  s.onCollide = function(other, st) onPigHit(rec, other, st) end
+  pigs[#pigs + 1] = rec
+end
+
+local ground = Sprites.new("ground")
+ground.load("../games/birds/ab_ground.png")
+ground.kind = "static" ground.collide = true
+ground.x = 800 ground.y = 440 + 120
+
+addBox("../games/birds/ab_plank.png", 470, 380, 1.0)
+addBox("../games/birds/ab_plank.png", 560, 380, 1.0)
+addBox("../games/birds/ab_beam.png",  515, 308, 0.8)
+addBox("../games/birds/ab_block.png", 515, 276, 1.4)
+addBox("../games/birds/ab_plank.png", 650, 380, 1.0)
+addBox("../games/birds/ab_plank.png", 750, 380, 1.0)
+addBox("../games/birds/ab_beam_long.png", 700, 308, 0.8)
+addPig(515, 238)
+addPig(515, 422)
+addPig(700, 278)
+pigs_alive = #pigs
+
+local bird = Sprites.new("bird")
+bird.load("../games/birds/ab_bird.png")
+bird.kind = "dynamic" bird.radius = 15 bird.mass = 2.0
+bird.friction = 0.6 bird.bouncy = 0.4 bird.collide = false
+bird.x = 150 bird.y = 300
+
+local frame = 0
+local shots = {
+  {at = 30,  x = 70,  y = 360, vx = 650, vy = -431},   -- first: knock the towers
+  {at = 260, x = 60,  y = 330, vx = 820, vy = -120},   -- second: sweep the ground pig
+}
+local si = 1
+local reload = 0
+
+while cycle do
+  collision.pump()
+
+  if si <= #shots and frame == shots[si].at then
+    bird.collide = true
+    bird.x = shots[si].x bird.y = shots[si].y
+    bird.vx = shots[si].vx bird.vy = shots[si].vy
+    out:write("SHOT " .. si .. " vx=" .. shots[si].vx .. " vy=" .. shots[si].vy .. "\n")
+    si = si + 1
+  end
+  -- when the shot settles, do the 2-frame respawn dance
+  if si > 1 and si <= #shots and reload == 0 and frame > shots[si-1].at + 5
+     and speed2(bird.vx, bird.vy) < 20 then
+    reload = 1
+  elseif reload == 1 then
+    bird.collide = false
+    reload = 2
+  elseif reload == 2 then
+    bird.vx = 0 bird.vy = 0
+    bird.x = 150 bird.y = 300
+    reload = 3
+  elseif reload == 3 then
+    reload = 0
+  end
+
+  if frame % 40 == 0 or (frame >= 255 and frame <= 285) then
+    out:write(string.format("f%d reload=%d collide=%s pigs_alive=%d bird %.0f,%.0f v=%.0f,%.0f\n",
+      frame, reload, tostring(bird.collide), pigs_alive, bird.x, bird.y, bird.vx, bird.vy))
+  end
+  frame = frame + 1
+  if frame > 500 then
+    out:write("FINAL pigs_alive=" .. pigs_alive .. "\n")
+    for i, p in ipairs(pigs) do
+      out:write(string.format("  pig%d %.0f,%.0f popped=%s\n", i, p.s.x, p.s.y, tostring(p.popped)))
+    end
+    for i, b in ipairs(boxes) do
+      out:write(string.format("  box%d %.0f,%.0f\n", i, b.s.x, b.s.y))
+    end
+    out:close()
+    exit()
+  end
+end
