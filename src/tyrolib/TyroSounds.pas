@@ -565,8 +565,9 @@ begin
   Period := Round(SampleRate / Frequency);
   if Period < 1 then Period := 1;
   T := Index div Period;
-  // seed LFSR based on period
-  LFSR := Word(T * 131542391 + 1009);
+  // seed LFSR based on period; the multiply wraps on purpose, so keep it in
+  // UInt64 and take the low word instead of overflowing a 32 bit integer.
+  LFSR := Word((UInt64(T) * 131542391 + 1009) and $FFFF);
   if LFSR = 0 then LFSR := $ACE1;
   // advance LFSR a few steps to get variation
   for i := 0 to (T mod 8) do
@@ -679,12 +680,14 @@ end;
 
 function HashNoise(Index: Integer): Single;
 var
-  h: Cardinal;
+  h: UInt64;
 begin
-  //Integer overflow here is intentional and expected (wraps around).
-  h := (Cardinal(Index) * 1664525) + 1013904223;
+  //A 32 bit wrap is intended here. Kept in UInt64 and masked so it wraps the
+  //same way but does not trip the overflow/range checks the application is
+  //built with ({$Q+}, {$R+}), which used to raise ERangeError on this line.
+  h := (UInt64(Cardinal(Index)) * 1664525 + 1013904223) and $FFFFFFFF;
   h := h xor (h shr 13);
-  h := h * 1274126177;
+  h := (h * 1274126177) and $FFFFFFFF;
   Result := (h and $7FFFFFFF) / 1073741824 - 1;
 end;
 
