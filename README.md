@@ -61,6 +61,16 @@ script argument Tyro starts an interactive console session.
     end
 ```
 
+The canvas primitives are `canvas.clear()`, `canvas.text(x, y, s)`,
+`canvas.rectangle(x, y, w, h [, fill])`, `canvas.circle(x, y, r [, fill])`,
+`canvas.triangle(x1, y1, x2, y2, x3, y3 [, fill])`,
+`canvas.line(x1, y1, x2, y2 [, thickness])` and `canvas.point(x, y)`. Set the
+color with `canvas.color = colors.red` (and `canvas.backcolor` / `canvas.clear()`
+for the background). `canvas.pensize` (alias `canvas.linewidth`) sets the
+thickness of lines and of rectangle/triangle outlines; `canvas.line` also takes
+a per-call thickness. `textwidth(s)` and `textheight()` measure the built-in
+font, and `canvas.width` / `canvas.height` report the canvas size.
+
 # Input
 
 Keyboard and mouse input can be queried from script. Key and button names are

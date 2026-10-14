@@ -363,6 +363,25 @@ type
     procedure DoExecute; override;
   end;
 
+  { TDrawTriangleObject }
+
+  TDrawTriangleObject = class(TDrawObject)
+  public
+    fX1, fY1, fX2, fY2, fX3, fY3: Integer;
+    fFill: Boolean;
+    constructor Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2, X3, Y3: Integer; Fill: Boolean);
+    procedure DoExecute; override;
+  end;
+
+  { TDrawSetPenSizeObject }
+
+  TDrawSetPenSizeObject = class(TDrawObject)
+  public
+    fPenSize: Integer;
+    constructor Create(ACanvas: TTyroCanvas; APenSize: Integer);
+    procedure DoExecute; override;
+  end;
+
   { TDrawRectangleObject }
 
   TDrawRectangleObject = class(TDrawObject)
@@ -378,7 +397,11 @@ type
   TDrawLineObject = class(TDrawObject)
   public
     fX1, fY1, fX2, fY2: Integer;
-    constructor Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer);
+    //0 keeps the canvas pen size; a positive value is a per-call thickness that
+    //DoExecute applies and restores, so canvas.line(x1,y1,x2,y2,w) works.
+    fPenSize: Integer;
+    constructor Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer); overload;
+    constructor Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2: Integer; APenSize: Integer); overload;
     procedure DoExecute; override;
   end;
 
@@ -1519,11 +1542,62 @@ begin
   fY1 := Y1;
   fX2 := X2;
   fY2 := Y2;
+  fPenSize := 0;
+end;
+
+constructor TDrawLineObject.Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2, APenSize: Integer);
+begin
+  Create(ACanvas, X1, Y1, X2, Y2);
+  fPenSize := APenSize;
 end;
 
 procedure TDrawLineObject.DoExecute;
+var
+  OldPenSize: Integer;
 begin
-  Canvas.DrawLine(fX1, fY1, fX2, fY2, Canvas.PenColor);
+  if fPenSize > 0 then
+  begin
+    OldPenSize := Canvas.PenSize;
+    Canvas.PenSize := fPenSize;
+    Canvas.DrawLine(fX1, fY1, fX2, fY2, Canvas.PenColor);
+    Canvas.PenSize := OldPenSize;
+  end
+  else
+    Canvas.DrawLine(fX1, fY1, fX2, fY2, Canvas.PenColor);
+end;
+
+{ TDrawTriangleObject }
+
+constructor TDrawTriangleObject.Create(ACanvas: TTyroCanvas; X1, Y1, X2, Y2, X3, Y3: Integer; Fill: Boolean);
+begin
+  inherited Create(ACanvas);
+  fX1 := X1;
+  fY1 := Y1;
+  fX2 := X2;
+  fY2 := Y2;
+  fX3 := X3;
+  fY3 := Y3;
+  fFill := Fill;
+end;
+
+procedure TDrawTriangleObject.DoExecute;
+begin
+  Canvas.DrawTriangle(fX1, fY1, fX2, fY2, fX3, fY3, Canvas.PenColor, fFill);
+end;
+
+{ TDrawSetPenSizeObject }
+
+constructor TDrawSetPenSizeObject.Create(ACanvas: TTyroCanvas; APenSize: Integer);
+begin
+  inherited Create(ACanvas);
+  fPenSize := APenSize;
+end;
+
+procedure TDrawSetPenSizeObject.DoExecute;
+begin
+  if fPenSize < 1 then
+    fPenSize := 1;
+  Canvas.PenSize := fPenSize;
 end;
 
 { TClearObject }

@@ -242,6 +242,9 @@ type
     procedure Resize(AWidth, AHeight: Integer); virtual;
 
     procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
+    //Triangle: filled uses raylib's 2D triangle, an outline follows the pen size
+    //so canvas.pensize / the thickness argument control how heavy it looks.
+    procedure DrawTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor; Fill: Boolean = false);
     procedure DrawText(X, Y: Integer; S: utf8string; Color: TColor); overload;
     procedure DrawText(X, Y: Single; S: utf8string; Color: TColor); overload;
     procedure DrawPixel(X, Y: Integer; Color: TColor);
@@ -680,6 +683,23 @@ begin
   else
     RayLib.DrawCircleLines(X + FOrigin.X, Y + FOrigin.Y, R, Color);
   SetCurrent(X, Y);
+end;
+
+procedure TTyroCanvas.DrawTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor; Fill: Boolean = false);
+begin
+  if Fill then
+    RayLib.DrawTriangle(Vector2Of(X1 + FOrigin.X, Y1 + FOrigin.Y),
+      Vector2Of(X2 + FOrigin.X, Y2 + FOrigin.Y),
+      Vector2Of(X3 + FOrigin.X, Y3 + FOrigin.Y), Color)
+  else
+  begin
+    //An outline is drawn as three pen-size lines rather than DrawTriangleLines,
+    //so it honours PenSize and stays consistent with canvas.line.
+    DrawLine(X1, Y1, X2, Y2, Color);
+    DrawLine(X2, Y2, X3, Y3, Color);
+    DrawLine(X3, Y3, X1, Y1, Color);
+  end;
+  SetCurrent(X3, Y3);
 end;
 
 procedure TTyroCanvas.DrawRect(const ARect: TRect; const Color: TColor; Fill: Boolean);

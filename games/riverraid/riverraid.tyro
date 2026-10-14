@@ -1,0 +1,660 @@
+--======================================================================
+--  River Raid - a top-down river shooter for Tyro
+--======================================================================
+--  Fly a jet up an endless, wandering river. The river narrows and widens
+--  and islands split it; touch a bank or an island and you crash. Bridges
+--  span the river - shoot a hole in one to fly through and score 500.
+--  Helicopters and ships patrol the water; helicopters shoot back. The
+--  fuel gauge drains the harder you push, and fuel depots along the banks
+--  refill it (+80) when you fly over them.
+--
+--  Everything is drawn with canvas primitives - no image files.
+--
+--  Controls:  LEFT / RIGHT  (A / D)   steer
+--             UP   / DOWN   (W / S)   speed up / slow down
+--             SPACE                  fire          (start / restart)
+--             ESC                    quit
+--  Run:  tyro games/riverraid/riverraid.tyro
+--======================================================================
+
+window.show(480, 640)
+
+local W = canvas.width
+local H = canvas.height
+
+-- ---- helpers ---------------------------------------------------------
+local function clamp(v, lo, hi)
+  if v < lo then return lo elseif v > hi then return hi else return v end
+end
+
+local function beep(freq, ms)
+  music.sound(freq, ms)
+end
+
+local function center_text(s, y, col)
+  canvas.color = col
+  canvas.text((W - textwidth(s)) / 2, y, s)
+end
+
+-- ---- river geometry --------------------------------------------------
+-- The river is a smooth function of the world y, so it is the same for
+-- drawing, collision and spawning: two sine mixtures give the centre a
+-- lazy wander and the half-width its breathing in and out.
+local RIVER_BASE = W * 0.30
+local RIVER_MIN  = W * 0.13
+local RIVER_MAX  = W * 0.41
+
+local function riverCenter(wy)
+  return W * 0.5
+    + 0.16 * W * math.sin(wy * 0.0021)
+    + 0.09 * W * math.sin(wy * 0.0009 + 1.7)
+    + 0.045 * W * math.sin(wy * 0.0043 + 0.6)
+end
+
+local function riverHalf(wy)
+  local hw = RIVER_BASE
+    + 0.13 * W * math.sin(wy * 0.0016 + 0.4)
+    + 0.07 * W * math.sin(wy * 0.0007 + 2.3)
+  return clamp(hw, RIVER_MIN, RIVER_MAX)
+end
+
+-- Visible left/right bank at a world y. The width comes from riverHalf and
+-- the whole channel is shifted (not clipped) so it always stays on screen.
+local function riverBounds(wy)
+  local c = riverCenter(wy)
+  local h = riverHalf(wy)
+  local l = c - h
+  local r = c + h
+  local m = 8
+  if l < m then
+    local d = m - l
+    l = l + d
+    r = r + d
+  end
+  if r > W - m then
+    local d = r - (W - m)
+    r = r - d
+    l = l - d
+  end
+  return l, r
+end
+
+-- ---- tuning ----------------------------------------------------------
+local SPEED_MIN   = 70
+local SPEED_MAX   = 220
+local SPEED_START = 130
+local ACCEL       = 200          -- px/s per second
+local STEER       = 200          -- px/s of lateral movement
+local PLAYER_PY   = H - 110      -- fixed screen y of the plane
+local PLAYER_HW   = 9            -- collision half width
+local PBULLET_SPEED = 640
+local PBULLET_MAX   = 2
+local EBULLET_SPEED = 300
+local BRIDGE_BAND   = 9          -- world-y half thickness of a bridge
+
+-- ---- state -----------------------------------------------------------
+local state, travel, score, lives, fuel
+local player, speed, invuln
+local pbullets, ebullets, enemies, islands, bridges, depots, blasts
+local genY, nextEnemyY, dyingTimer, msg, msgTimer
+
+local function screenY(wy) return H + travel - wy end
+local function playerWorldY() return travel + (H - PLAYER_PY) end
+local function difficulty() return clamp(score / 5000, 0, 1) end
+
+-- ---- bridge helpers --------------------------------------------------
+local function segIndex(b, x)
+  local idx = math.floor((x - b.l) / b.sw) + 1
+  if idx < 1 then idx = 1 elseif idx > b.n then idx = b.n end
+  return idx
+end
+
+local function inSolid(b, x)
+  if x < b.l or x > b.r then return false end
+  return b.segs[segIndex(b, x)]
+end
+
+-- ---- crash / respawn -------------------------------------------------
+local function crash()
+  if state ~= "play" or invuln > 0 then return end
+  state = "dying"
+  dyingTimer = 1.1
+  lives = lives - 1
+  blasts[#blasts + 1] = { x = player.x, wy = playerWorldY(), t = 0, big = true }
+  beep(90, 300)
+  window.shake(600, 12)
+end
+
+local function respawn()
+  local pwy = playerWorldY()
+  local l, r = riverBounds(pwy)
+  player.x = (l + r) / 2
+  fuel = 100
+  speed = SPEED_START
+  invuln = 2.5
+  enemies = {}
+  ebullets = {}
+  pbullets = {}
+  nextEnemyY = travel + H + 400
+  -- clear the stretch just ahead so a fresh life never starts inside a wall
+  local clearTo = pwy + 300
+  local i
+  for i = #islands, 1, -1 do
+    if islands[i].wy > pwy - 40 and islands[i].wy < clearTo then table.remove(islands, i) end
+  end
+  for i = #bridges, 1, -1 do
+    if bridges[i].wy > pwy - 40 and bridges[i].wy < clearTo then table.remove(bridges, i) end
+  end
+  if lives <= 0 then
+    state = "over"
+  else
+    state = "play"
+  end
+  -- drop anything generated while dead that is now behind the plane
+  genY = math.max(genY, travel + H * 0.5)
+end
+
+-- ---- world generation ------------------------------------------------
+-- Islands, bridges and depots are laid down ahead of the plane as it
+-- travels. Stretches of plain water are left between them on purpose so
+-- the player gets a moment to breathe.
+local function generate()
+  local limit = travel + H + 1200
+  while genY < limit do
+    local pick = rand(1, 100)
+    if pick <= 42 then
+      local wy = genY
+      local l, r = riverBounds(wy)
+      local h = (r - l) / 2
+      local c = (l + r) / 2
+      local rad = math.min(rand(20, 44), math.floor(h - 26))
+      if rad >= 14 then
+        local room = math.floor(h - rad - 26)
+        if room < 0 then room = 0 end
+        local off = rand(-room, room)
+        islands[#islands + 1] = { wy = wy, x = c + off, r = rad }
+      end
+      genY = genY + rand(400, 680)
+    elseif pick <= 66 then
+      local wy = genY
+      local l, r = riverBounds(wy)
+      local span = r - l
+      local n = clamp(math.floor(span / 30), 4, 12)
+      local segs = {}
+      for i = 1, n do segs[i] = true end
+      bridges[#bridges + 1] = { wy = wy, l = l, r = r, n = n, sw = span / n, segs = segs }
+      genY = genY + rand(950, 1350)
+    elseif pick <= 86 then
+      depots[#depots + 1] = { wy = genY, used = false }
+      genY = genY + rand(850, 1250)
+    else
+      genY = genY + rand(280, 520)
+    end
+  end
+end
+
+local function cleanup()
+  local back = travel - 140
+  local i
+  for i = #islands, 1, -1 do if islands[i].wy < back then table.remove(islands, i) end end
+  for i = #bridges, 1, -1 do if bridges[i].wy < back then table.remove(bridges, i) end end
+  for i = #depots, 1, -1 do if depots[i].wy < back then table.remove(depots, i) end end
+end
+
+local function spawnEnemy()
+  local wy = travel + H + 30
+  local l, r = riverBounds(wy)
+  local cx = (l + r) / 2
+  local heli = rand(1, 100) <= (28 + 55 * difficulty())
+  local e
+  if heli then
+    e = { kind = "heli", wy = wy, x = cx, hw = 15, hh = 10,
+          vx = (rand(0, 1) == 0 and -1 or 1) * rand(70, 115),
+          fire = 0.6 + rand(20, 80) / 100 }
+  else
+    e = { kind = "ship", wy = wy, x = cx, hw = 18, hh = 8,
+          vx = (rand(0, 1) == 0 and -1 or 1) * rand(30, 55) }
+  end
+  enemies[#enemies + 1] = e
+end
+
+-- ---- simulation ------------------------------------------------------
+local function stepBullets(ft)
+  local pwy = playerWorldY()
+
+  -- player missiles: destroy bridges and enemies
+  for i = #pbullets, 1, -1 do
+    local b = pbullets[i]
+    b.wy = b.wy + PBULLET_SPEED * ft
+    local hit = false
+
+    for j = 1, #bridges do
+      local br = bridges[j]
+      if b.wy >= br.wy - 16 and b.wy <= br.wy + 16 and b.x >= br.l and b.x <= br.r then
+        local idx = segIndex(br, b.x)
+        if br.segs[idx] then
+          br.segs[idx] = false
+          score = score + 500
+          blasts[#blasts + 1] = { x = b.x, wy = br.wy, t = 0 }
+          beep(320, 70)
+          hit = true
+        end
+        break
+      end
+    end
+
+    if not hit then
+      for j = #enemies, 1, -1 do
+        local e = enemies[j]
+        if math.abs(e.wy - b.wy) < e.hh + 8 and math.abs(e.x - b.x) < e.hw + 4 then
+          score = score + (e.kind == "heli" and 60 or 30)
+          blasts[#blasts + 1] = { x = e.x, wy = e.wy, t = 0 }
+          beep(e.kind == "heli" and 220 or 300, 90)
+          table.remove(enemies, j)
+          hit = true
+          break
+        end
+      end
+    end
+
+    if hit or b.wy > travel + H + 60 then
+      table.remove(pbullets, i)
+    end
+  end
+
+  -- enemy missiles: travel down the screen toward the plane
+  for i = #ebullets, 1, -1 do
+    local b = ebullets[i]
+    b.wy = b.wy - EBULLET_SPEED * ft
+    if b.wy < travel - 40 then
+      table.remove(ebullets, i)
+    elseif invuln <= 0 and math.abs(b.x - player.x) < PLAYER_HW + 2
+        and math.abs(b.wy - pwy) < 12 then
+      table.remove(ebullets, i)
+      crash()
+    end
+  end
+end
+
+local function stepEnemies(ft)
+  for i = #enemies, 1, -1 do
+    local e = enemies[i]
+    e.x = e.x + e.vx * ft
+    local l, r = riverBounds(e.wy)
+    if e.x - e.hw < l then e.x = l + e.hw; e.vx = -e.vx end
+    if e.x + e.hw > r then e.x = r - e.hw; e.vx = -e.vx end
+    if e.kind == "heli" then
+      e.fire = e.fire - ft
+      if e.fire <= 0 then
+        e.fire = 1.1 + rand(30, 90) / 100
+        ebullets[#ebullets + 1] = { x = e.x, wy = e.wy - 8 }
+      end
+    end
+    if e.wy < travel - 80 then table.remove(enemies, i) end
+  end
+end
+
+local function stepPlayerCollisions()
+  if invuln > 0 then return end
+  local pwy = playerWorldY()
+  local l, r = riverBounds(pwy)
+  if player.x - PLAYER_HW < l or player.x + PLAYER_HW > r then crash() return end
+
+  for i = 1, #islands do
+    local s = islands[i]
+    if math.abs(s.wy - pwy) < s.r + 14 then
+      local dx = player.x - s.x
+      local dy = pwy - s.wy
+      if dx * dx + dy * dy < (s.r + PLAYER_HW) * (s.r + PLAYER_HW) then crash() return end
+    end
+  end
+
+  for i = 1, #bridges do
+    local b = bridges[i]
+    if math.abs(pwy - b.wy) < BRIDGE_BAND then
+      if inSolid(b, player.x - PLAYER_HW) or inSolid(b, player.x + PLAYER_HW) then
+        crash() return
+      end
+    end
+  end
+
+  for i = 1, #enemies do
+    local e = enemies[i]
+    if math.abs(e.wy - pwy) < e.hh + 10 and math.abs(e.x - player.x) < e.hw + PLAYER_HW then
+      crash() return
+    end
+  end
+end
+
+local function stepDepots()
+  local pwy = playerWorldY()
+  for i = 1, #depots do
+    local d = depots[i]
+    if not d.used and math.abs(pwy - d.wy) < 46 then
+      d.used = true
+      fuel = 100
+      score = score + 80
+      msg = "FUEL +80"
+      msgTimer = 1.2
+      beep(700, 90)
+    end
+  end
+end
+
+local function update(ft)
+  -- explosions and the on-screen message animate in every state
+  for i = #blasts, 1, -1 do
+    local bl = blasts[i]
+    bl.t = bl.t + ft
+    if bl.t > 0.6 then table.remove(blasts, i) end
+  end
+  if msgTimer > 0 then msgTimer = msgTimer - ft end
+
+  if state == "play" then
+    invuln = math.max(0, invuln - ft)
+
+    local dir = 0
+    if iskeydown("left") or iskeydown("a") then dir = dir - 1 end
+    if iskeydown("right") or iskeydown("d") then dir = dir + 1 end
+    player.x = clamp(player.x + dir * STEER * ft, 0, W)
+
+    if iskeydown("up") or iskeydown("w") then
+      speed = clamp(speed + ACCEL * ft, SPEED_MIN, SPEED_MAX)
+    elseif iskeydown("down") or iskeydown("s") then
+      speed = clamp(speed - ACCEL * ft, SPEED_MIN, SPEED_MAX)
+    end
+
+    travel = travel + speed * ft
+    generate()
+
+    if iskeypressed("space") and #pbullets < PBULLET_MAX then
+      pbullets[#pbullets + 1] = { x = player.x, wy = playerWorldY() + 14 }
+      beep(900, 35)
+    end
+
+    fuel = fuel - (1.4 + 1.8 * (speed / SPEED_MAX)) * ft
+    if fuel <= 0 then
+      fuel = 0
+      crash()
+    end
+
+    if state == "play" then
+      if travel + H > nextEnemyY then
+        spawnEnemy()
+        nextEnemyY = travel + H + (780 - 420 * difficulty()) + rand(-80, 140)
+      end
+      stepBullets(ft)
+      stepEnemies(ft)
+      stepDepots()
+      stepPlayerCollisions()
+      cleanup()
+    end
+  elseif state == "dying" then
+    dyingTimer = dyingTimer - ft
+    if dyingTimer <= 0 then respawn() end
+  end
+end
+
+-- ---- rendering -------------------------------------------------------
+local function draw_world()
+  -- land
+  canvas.color = colors.darkgreen
+  canvas.rectangle(0, 0, W, H, true)
+
+  -- river: a sandy edge under a blue channel, row by row
+  local step = 5
+  local y = 0
+  while y <= H do
+    local wy = H + travel - y
+    local l, r = riverBounds(wy)
+    local ix = math.floor(l)
+    local iw = math.floor(r - l)
+    canvas.color = colors.beige
+    canvas.rectangle(ix - 4, y, iw + 8, step + 1, true)
+    canvas.color = colors.blue
+    canvas.rectangle(ix, y, iw, step + 1, true)
+    y = y + step
+  end
+
+  -- drifting wave marks, spaced in world coordinates so they scroll
+  local wave = 70
+  local k0 = math.floor((travel - 40) / wave) - 1
+  for k = k0, k0 + math.ceil(H / wave) + 2 do
+    local wy = k * wave + 20
+    local sy = screenY(wy)
+    if sy >= -4 and sy <= H + 4 then
+      local l, r = riverBounds(wy)
+      local span = math.max(1, math.floor(r - l - 40))
+      local x = l + 20 + ((k * 97) % span)
+      canvas.color = colors.skyblue
+      canvas.line(x, sy, x + 14, sy)
+    end
+  end
+end
+
+local function draw_islands()
+  for i = 1, #islands do
+    local s = islands[i]
+    local sy = screenY(s.wy)
+    if sy > -s.r - 4 and sy < H + s.r + 4 then
+      canvas.color = colors.green
+      canvas.circle(s.x, sy, s.r, true)
+      canvas.color = colors.darkgreen
+      canvas.circle(s.x - s.r * 0.3, sy - s.r * 0.3, s.r * 0.5, true)
+    end
+  end
+end
+
+local function draw_depots()
+  for i = 1, #depots do
+    local d = depots[i]
+    for wy = d.wy - 60, d.wy + 60, 20 do
+      local sy = screenY(wy)
+      if sy >= -20 and sy <= H + 20 then
+        local l, r = riverBounds(wy)
+        canvas.color = colors.silver
+        canvas.rectangle(l + 5, sy - 6, 14, 14, true)
+        canvas.rectangle(r - 19, sy - 6, 14, 14, true)
+        canvas.color = colors.red
+        canvas.rectangle(l + 5, sy - 8, 14, 4, true)
+        canvas.rectangle(r - 19, sy - 8, 14, 4, true)
+      end
+    end
+  end
+end
+
+local function draw_bridges()
+  for i = 1, #bridges do
+    local b = bridges[i]
+    local sy = screenY(b.wy)
+    if sy > -40 and sy < H + 40 then
+      for k = 1, b.n do
+        if b.segs[k] then
+          local x = b.l + (k - 1) * b.sw
+          canvas.color = colors.darkbrown
+          canvas.rectangle(math.floor(x), math.floor(sy) - 8, math.ceil(b.sw) + 1, 16, true)
+          canvas.color = colors.gray
+          canvas.rectangle(math.floor(x), math.floor(sy) - 8, math.ceil(b.sw) + 1, 3, true)
+        end
+      end
+    end
+  end
+end
+
+local function draw_enemies()
+  for i = 1, #enemies do
+    local e = enemies[i]
+    local sy = screenY(e.wy)
+    if e.kind == "ship" then
+      canvas.color = colors.gray
+      canvas.rectangle(e.x - e.hw, sy - e.hh, e.hw * 2, e.hh * 2, true)
+      canvas.color = colors.darkgray
+      canvas.triangle(e.x - e.hw, sy - e.hh, e.x + e.hw, sy - e.hh, e.x, sy - e.hh - 9, true)
+      canvas.color = colors.white
+      canvas.rectangle(e.x - 4, sy - 3, 8, 6, true)
+    else
+      canvas.color = colors.darkgray
+      canvas.circle(e.x, sy, e.hh + 2, true)
+      canvas.color = colors.black
+      canvas.circle(e.x, sy, 3, true)
+      canvas.color = colors.silver
+      canvas.line(e.x - e.hw, sy - e.hh - 5, e.x + e.hw, sy - e.hh - 5, 2)
+      canvas.line(e.x, sy - e.hh - 5, e.x, sy + 2)
+      canvas.line(e.x + e.hw, sy, e.x + e.hw + 8, sy, 2)
+    end
+  end
+end
+
+local function draw_bullets()
+  canvas.color = colors.yellow
+  for i = 1, #pbullets do
+    local b = pbullets[i]
+    local sy = screenY(b.wy)
+    canvas.line(b.x, sy - 6, b.x, sy + 6, 3)
+  end
+  for i = 1, #ebullets do
+    local b = ebullets[i]
+    canvas.color = colors.orange
+    canvas.circle(b.x, screenY(b.wy), 3, true)
+  end
+end
+
+local function draw_player()
+  -- blink while invulnerable after a respawn
+  if invuln > 0 and math.floor(millis() / 100) % 2 == 0 then return end
+  local py = PLAYER_PY
+  canvas.color = colors.lightgray
+  canvas.triangle(player.x, py - 13, player.x - PLAYER_HW - 3, py + 9,
+                  player.x + PLAYER_HW + 3, py + 9, true)
+  canvas.color = colors.white
+  canvas.triangle(player.x, py - 10, player.x - 5, py + 4, player.x + 5, py + 4, true)
+  canvas.color = colors.red
+  canvas.line(player.x - PLAYER_HW - 3, py + 9, player.x + PLAYER_HW + 3, py + 9, 2)
+  canvas.color = colors.orange
+  canvas.circle(player.x, py + 13, 3, true)
+end
+
+local function draw_blasts()
+  for i = 1, #blasts do
+    local bl = blasts[i]
+    local sy = screenY(bl.wy)
+    local p = bl.t / 0.6
+    local rad = 6 + (bl.big and 34 or 24) * p
+    canvas.color = colors.red
+    canvas.circle(bl.x, sy, math.floor(rad), false)
+    canvas.color = colors.orange
+    canvas.circle(bl.x, sy, math.floor(rad * 0.65), false)
+    canvas.color = colors.yellow
+    canvas.circle(bl.x, sy, math.floor(rad * 0.3), true)
+  end
+end
+
+local function draw_hud()
+  canvas.color = colors.white
+  canvas.text(8, 8, "SCORE " .. score)
+
+  local shown = math.min(lives, 6)
+  for i = 1, shown do
+    local lx = W - 18 - (i - 1) * 22
+    canvas.color = colors.lightgray
+    canvas.triangle(lx, 6, lx - 7, 22, lx + 7, 22, true)
+  end
+
+  -- vertical fuel gauge down the left edge
+  local gx, gy, gh = 8, 56, 200
+  canvas.color = colors.black
+  canvas.rectangle(gx - 3, gy - 3, 24, gh + 6, true)
+  canvas.color = colors.white
+  canvas.rectangle(gx, gy, 18, gh, false)
+  local fh = math.floor(gh * clamp(fuel, 0, 100) / 100)
+  if fuel > 50 then canvas.color = colors.green
+  elseif fuel > 25 then canvas.color = colors.yellow
+  else canvas.color = colors.red end
+  canvas.rectangle(gx + 1, gy + gh - fh, 16, fh, true)
+  canvas.color = colors.white
+  canvas.text(gx, gy + gh + 6, "FUEL")
+  canvas.text(gx, gy + gh + 24, "SPD " .. math.floor(speed))
+
+  if msgTimer > 0 then
+    center_text(msg, H / 2 - 60, colors.yellow)
+  end
+end
+
+local function draw_overlay()
+  if state == "ready" then
+    canvas.color = colors.black
+    canvas.rectangle(0, 120, W, 180, true)
+    center_text("RIVER RAID", 136, colors.red)
+    center_text("RIVER RAID", 134, colors.yellow)
+    center_text("PRESS SPACE TO START", 196, colors.white)
+    center_text("LEFT / RIGHT  steer", 236, colors.silver)
+    center_text("UP / DOWN  speed", 254, colors.silver)
+    center_text("SPACE  fire      ESC  quit", 272, colors.silver)
+  elseif state == "over" then
+    canvas.color = colors.black
+    canvas.rectangle(0, 180, W, 150, true)
+    center_text("GAME OVER", 196, colors.red)
+    center_text("SCORE " .. score, 228, colors.white)
+    center_text("PRESS SPACE TO PLAY AGAIN", 272, colors.silver)
+  end
+end
+
+local function render()
+  draw_world()
+  draw_depots()
+  draw_islands()
+  draw_bridges()
+  draw_enemies()
+  draw_bullets()
+  if state ~= "over" then draw_player() end
+  draw_blasts()
+  draw_hud()
+  draw_overlay()
+end
+
+-- ---- boot ------------------------------------------------------------
+local function reset()
+  state = "ready"
+  travel = 0
+  score = 0
+  lives = 3
+  fuel = 100
+  speed = SPEED_START
+  invuln = 0
+  pbullets = {}
+  ebullets = {}
+  enemies = {}
+  islands = {}
+  bridges = {}
+  depots = {}
+  blasts = {}
+  genY = 900
+  nextEnemyY = 1200
+  dyingTimer = 0
+  msg = ""
+  msgTimer = 0
+  local l, r = riverBounds(travel + (H - PLAYER_PY))
+  player = { x = (l + r) / 2 }
+  generate()
+end
+
+reset()
+
+while cycle do
+  local ft = frametime()
+  if ft <= 0 then ft = 1 / 60 end
+  if ft > 0.06 then ft = 0.06 end
+
+  if iskeypressed("escape") then exit() end
+
+  if state == "ready" or state == "over" then
+    if iskeypressed("space") or iskeypressed("enter") then
+      reset()
+      state = "play"
+      invuln = 1.5
+    end
+  end
+
+  update(ft)
+  render()
+end

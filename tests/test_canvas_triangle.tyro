@@ -1,0 +1,73 @@
+--======================================================================
+--  test_canvas_triangle.tyro - new canvas.text primitives and metrics
+--======================================================================
+--  Covers the bindings added for procedural games (riverraid):
+--    canvas.triangle(x1,y1,x2,y2,x3,y3 [,fill])
+--    canvas.pensize / canvas.linewidth (thick lines and outlines)
+--    canvas.line(x1,y1,x2,y2 [,thickness])
+--    textwidth(s) / textheight()
+--  Run:  tyro.exe tests\test_canvas_triangle.tyro --screenshot:1 --exit:3
+--  Screenshot saved to tests\screenshot.png; result file next to it.
+
+window.show(320, 240)
+
+local out = openfile("test_canvas_triangle_result.txt", "w")
+
+-- Let queued draw commands run so the getters reflect the setters.
+local function drain()
+  while queue.depth > 0 do
+    if not cycle then break end
+  end
+end
+
+local ok = true
+
+-- Text metrics: non-zero, and a longer string measures wider than a short one.
+local w_short = textwidth("I")
+local w_long = textwidth("RIVER RAID")
+local h = textheight()
+out:write("textwidth I=", w_short, " RIVERRAID=", w_long,
+          " textheight=", h, "\n")
+if w_short <= 0 or w_long <= w_short or h <= 0 then ok = false end
+
+-- Pen size round-trips through the queue and the getter.
+canvas.pensize = 4
+drain()
+out:write("pensize=", canvas.pensize, "\n")
+if canvas.pensize ~= 4 then ok = false end
+
+-- linewidth is the same setting under an alias.
+canvas.linewidth = 6
+drain()
+out:write("linewidth=", canvas.linewidth, "\n")
+if canvas.linewidth ~= 6 then ok = false end
+
+-- Drawing calls must not error, in both outline and filled forms.
+canvas.color = colors.green
+canvas.triangle(10, 10, 60, 10, 35, 50, false)
+canvas.triangle(80, 10, 130, 10, 105, 50, true)
+canvas.color = colors.red
+canvas.line(10, 70, 200, 70, 3)
+canvas.rectangle(10, 90, 100, 40, false)
+canvas.pensize = 1
+drain()
+
+out:write("VERDICT => ", ok and "PASS" or "FAIL", "\n")
+out:close()
+
+-- Leave a recognisable frame for the timed screenshot.
+while cycle do
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 320, 240, true)
+  canvas.color = colors.white
+  canvas.text(8, 8, "triangle / pensize / textwidth")
+  canvas.color = colors.green
+  canvas.triangle(20, 40, 90, 40, 55, 100, true)
+  canvas.color = colors.red
+  canvas.triangle(120, 40, 190, 40, 155, 100, false)
+  canvas.color = colors.white
+  canvas.line(20, 120, 300, 120, 5)
+  -- Centre a label using textwidth: exercises the metric in a real frame.
+  local cx = (320 - textwidth("centred")) / 2
+  canvas.text(cx, 140, "centred")
+end

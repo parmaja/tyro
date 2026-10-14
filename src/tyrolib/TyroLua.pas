@@ -55,6 +55,7 @@ type
     function Clear_func(L: Plua_State): integer; cdecl;
     function Text_func(L: Plua_State): integer; cdecl;
     function Circle_func(L: Plua_State): integer; cdecl;
+    function Triangle_func(L: Plua_State): integer; cdecl;
     function Rectangle_func(L: Plua_State): integer; cdecl;
     function Line_func(L: Plua_State): integer; cdecl;
     function Point_func(L: Plua_State): integer; cdecl;
@@ -464,6 +465,10 @@ type
     function Exit_func(L: Plua_State): integer; cdecl;
     function Clock_func(L: Plua_State): integer; cdecl;
     function Time_func(L: Plua_State): integer; cdecl;
+    //Text metrics for the built-in font, e.g. to centre a label:
+    //local w = textwidth('GAME OVER')
+    function TextWidth_func(L: Plua_State): integer; cdecl;
+    function TextHeight_func(L: Plua_State): integer; cdecl;
 
     //file access
 
@@ -1145,6 +1150,16 @@ begin
       //thread, so canvas.clear() clears with what the script asked for.
       FScript.AddQueueObject(TDrawSetBackColorObject.Create(Engine.Board, IntToColor(i)));
       Result := 1;
+    end
+    else if (field = 'pensize') or (field = 'linewidth') then
+    begin
+      //Pen size drives the weight of lines and of rectangle/triangle
+      //outlines: canvas.pensize = 3 makes later strokes thick.
+      i := L.ToInteger(-1);
+      if i < 1 then
+        i := 1;
+      FScript.AddQueueObject(TDrawSetPenSizeObject.Create(Engine.Board, i));
+      Result := 1;
     end;
   end;
 end;
@@ -1177,6 +1192,11 @@ begin
   else if field = 'height' then
   begin
     L.PushInteger(Engine.Board.Height);
+    Result := 1;
+  end
+  else if (field = 'pensize') or (field = 'linewidth') then
+  begin
+    L.PushInteger(Engine.Board.PenSize);
     Result := 1;
   end;
 end;
@@ -1346,6 +1366,7 @@ begin
   Lua.State.Register('canvas', 'clear', Canvas, Canvas.Clear_func);
   Lua.State.Register('canvas', 'text', Canvas, Canvas.Text_func);
   Lua.State.Register('canvas', 'circle', Canvas, Canvas.Circle_func);
+  Lua.State.Register('canvas', 'triangle', Canvas, Canvas.Triangle_func);
   Lua.State.Register('canvas', 'rectangle', Canvas, Canvas.Rectangle_func);
   Lua.State.Register('canvas', 'line', Canvas, Canvas.Line_func);
   Lua.State.Register('canvas', 'point', Canvas, Canvas.Point_func);
@@ -1393,6 +1414,8 @@ begin
   Lua.State.RegisterGlobal('exit', Exit_func);
   Lua.State.RegisterGlobal('clock', Clock_func);
   Lua.State.RegisterGlobal('time', Time_func);
+  Lua.State.RegisterGlobal('textwidth', TextWidth_func);
+  Lua.State.RegisterGlobal('textheight', TextHeight_func);
 
   //enter/leave: hold the drawing queue so the commands queued in between are
   //all drawn at one drawing cycle instead of being spread over frames
@@ -1773,6 +1796,26 @@ begin
   Result := 0;
 end;
 
+function TLuaCanvas.Triangle_func(L: Plua_State): integer; cdecl;
+var
+  c: integer;
+  x1, y1, x2, y2, x3, y3: integer;
+  f: boolean;
+begin
+  f := False;
+  c := L.ArgsCount;
+  x1 := round(L.ToNumber(1));
+  y1 := round(L.ToNumber(2));
+  x2 := round(L.ToNumber(3));
+  y2 := round(L.ToNumber(4));
+  x3 := round(L.ToNumber(5));
+  y3 := round(L.ToNumber(6));
+  if c >= 7 then
+    f := L.ToBoolean(7);
+  FScript.AddQueueObject(TDrawTriangleObject.Create(Engine.Board, x1, y1, x2, y2, x3, y3, f));
+  Result := 0;
+end;
+
 function TLuaCanvas.Rectangle_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
@@ -1794,16 +1837,24 @@ end;
 function TLuaCanvas.Line_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
-  x1, y1, x2, y2: integer;
+  x1, y1, x2, y2, w: integer;
 begin
   c := L.ArgsCount;
   x1 := round(L.ToNumber(1));
   y1 := round(L.ToNumber(2));
-  if c = 4 then
+  if c >= 4 then
   begin
     x2 := round(L.ToNumber(3));
     y2 := round(L.ToNumber(4));
-    FScript.AddQueueObject(TDrawLineObject.Create(Engine.Board, x1, y1, x2, y2));
+    //Optional 5th argument is a per-call thickness; with none the canvas pen
+    //size set through canvas.pensize applies.
+    w := 0;
+    if c >= 5 then
+      w := round(L.ToNumber(5));
+    if w > 0 then
+      FScript.AddQueueObject(TDrawLineObject.Create(Engine.Board, x1, y1, x2, y2, w))
+    else
+      FScript.AddQueueObject(TDrawLineObject.Create(Engine.Board, x1, y1, x2, y2));
   end
   else
     FScript.AddQueueObject(TDrawLineToObject.Create(Engine.Board, x1, y1));
@@ -2389,6 +2440,21 @@ begin
   t := Now;
   secs := Trunc(t * 86400);
   L.PushInteger(secs);
+  Result := 1;
+end;
+
+function TLuaScript.TextWidth_func(L: Plua_State): integer; cdecl;
+begin
+  //Measure with the very font canvas.text draws with, so this can be used to
+  //centre or right-align text without hard-coding character widths.
+  L.PushInteger(Round(RayLib.MeasureTextEx(Res.Font.Data,
+    PUTF8Char(UTF8String(L.ToString(1))), Res.Font.Height, 0).x));
+  Result := 1;
+end;
+
+function TLuaScript.TextHeight_func(L: Plua_State): integer; cdecl;
+begin
+  L.PushInteger(Res.Font.Height);
   Result := 1;
 end;
 
