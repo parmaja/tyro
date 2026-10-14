@@ -1,23 +1,7 @@
 window.show(640, 480)
-fontHeight = font.height
---music.noise(400, 2500)      -- white noise (unchanged)
-music.pnoise(100, 2500)     -- higher pitched periodic noise
-sleep(2500)
-music.pitchednoise(800, 2500)     -- lower pitched periodic noise
-while cycle do
 
-  canvas.color = colors.black
-  canvas.rectangle(0, 0, 640, 70, true)
-  canvas.color = colors.green
-  canvas.text(8, 8, "Station : ")
-  canvas.text(8, 26, "Title   : ")
-  canvas.text(8, 44, "State   : ")
-
-  canvas.color = colors.black
-  canvas.rectangle(0, 360, 640, 120, true)
-  canvas.color = colors.white
-  canvas.text(8, 368, "waiting for the radio stream... 1")
-  canvas.text(8, 368+fontHeight*2, "waiting for the radio stream... 2")
-  canvas.text(8, 368+fontHeight*3, "waiting for the radio stream... 3")
-  canvas.text(8, 368+fontHeight*4, "waiting for the radio stream... 4")
-end
+music.noise(500)      -- white noise (unchanged)
+pause(2500)
+music.noise(100, 500)
+pause(2500)
+music.noise(800, 500)

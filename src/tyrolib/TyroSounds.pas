@@ -101,7 +101,6 @@ type
 
   TRayMelody = class(TMelody)
   private
-    FWaveForms: TWaveForms;
   protected
     procedure BeforePlay; override;
     procedure AfterPlay; override;
@@ -110,12 +109,15 @@ type
     constructor Create; override;
     destructor Destroy; override;
     function CreateChannel: TMelodyChannel; override;
-    property WaveForms: TWaveForms read FWaveForms;
   end;
 
+var
+  WaveForms: TWaveForms = nil;
+
 procedure PlayMML(const Song: TmmlSong);
-procedure PlayWaveform(Freq, Duration: Single); overload;
+
 procedure PlayWaveform(Proc: TWaveformProc; Freq, Duration: Single); overload;
+procedure PlayWaveform(WaveformName: string; Freq, Duration: Single); overload;
 procedure UpdateMelodies;
 procedure UpdateWaveforms;
 procedure ShutdownMelodies;
@@ -125,10 +127,6 @@ function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Sin
 function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-{Plain shapes, used by the MIDI synth to give the General MIDI families
- different tones (organ, guitar, brass, ...) out of the same generator. They
- are deliberately hard edged: the engine sounds like a chip, and a soft edge
- would only blur it.}
 function Square_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Saw_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Tri_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -295,10 +293,10 @@ procedure TRayMelodyChannel.SetInstrument(Instrument: String);
 begin
   inherited;
   if Instrument = '' then
-    Waveform := (Melody as TRayMelody).WaveForms[0]
+    Waveform := WaveForms[0]
   else
   begin
-    Waveform := (Melody as TRayMelody).WaveForms.Find(Instrument);
+    Waveform := WaveForms.Find(Instrument);
     if Waveform = nil then
       raise EMelodyException.Create('Waveform not exists ' + Instrument);
   end;
@@ -388,15 +386,10 @@ end;
 constructor TRayMelody.Create;
 begin
   inherited Create;
-  FWaveForms := TWaveForms.Create;
-  //Default one is the first one
-  Waveforms.Add('Sin', Sin_Waveform);
-  Waveforms.Add('Noise', @WhiteNoise_Waveform);
 end;
 
 destructor TRayMelody.Destroy;
 begin
-  FreeAndNil(FWaveForms);
   inherited Destroy;
 end;
 
@@ -447,9 +440,17 @@ begin
   end;
 end;
 
-procedure PlayWaveform(Freq, Duration: Single);
+procedure PlayWaveform(WaveformName: string; Freq, Duration: Single); overload;
+var
+  wf: TWaveForm;
+  wp: TWaveformProc;
 begin
-  PlayWaveform(@Sin_Waveform, Freq, Duration);
+  wf :=WaveForms.Find(WaveformName);
+  if wf = nil then
+    wp := @Sin_Waveform
+  else
+    wp := wf.Proc;
+  PlayWaveform(wp, Freq, Duration);
 end;
 
 procedure UpdateMelodies;
@@ -642,12 +643,24 @@ begin
 end;
 
 initialization
+  WaveForms := TWaveForms.Create;
+  //Default one is the first one
+  Waveforms.Add('Sin', @Sin_Waveform);
+  Waveforms.Add('Noise', @WhiteNoise_Waveform);
+  Waveforms.Add('Piano', @Piano_Waveform);
+  Waveforms.Add('Square', @Square_Waveform);
+  Waveforms.Add('Saw', @Saw_Waveform);
+  Waveforms.Add('Tri', @Tri_Waveform);
+
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;
 finalization
   ShutdownMelodies;
   ShutdownWaveforms;
+
   FreeAndNil(PlayingMelodies);
   FreeAndNil(PlayingWaveforms);
+
+  FreeAndNil(WaveForms);
 end.
 

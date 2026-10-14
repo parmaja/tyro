@@ -1254,7 +1254,7 @@ end;
 
 function TyroEditor.IsApiName(const AWord: string): Boolean;
 const
-  Words: array[0..43] of string = ('version', 'log', 'sleep', 'print', 'println',
+  Words: array[0..44] of string = ('version', 'log', 'sleep', 'pause', 'print', 'println',
     'iskeypressed', 'iskeydown', 'mousex', 'mousey', 'ismousepressed', 'frametime',
     'time', 'rand', 'window', 'console', 'canvas', 'shader', 'font', 'music',
     'sprites', 'buttons', 'new', 'find', 'caption', 'border', 'clear', 'text',

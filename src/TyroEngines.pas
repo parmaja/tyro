@@ -315,6 +315,12 @@ type
     //* Touched from the script thread, so access goes through TInterlocked.
     FQueueAuto: LongInt;
     FAutoGroup: Boolean;
+    //* Count of active Lua pause() calls. While > 0 the main loop skips the
+    //* scene simulation (physics, sprite animation/scripts, controls) so a
+    //* paused script keeps showing a still frame; audio and input keep running.
+    //* Raised/lowered on the script thread, read on the main thread, so access
+    //* goes through TInterlocked.
+    FScriptPause: LongInt;
     FRunning: LongInt;
     //* Admission limit on the processing queue: while FQueueLimit > 0 a
     //* producer (AddQueueObject) blocks in ThrottleQueue until the backlog
@@ -500,6 +506,15 @@ type
     //* The next ReleaseAutoQueue commits them in a single drawing cycle. Safe
     //* to call from any thread.
     procedure HoldAutoQueue;
+    //* Lua pause(): mark the engine as paused so the main loop freezes the
+    //* scene (physics, sprite animation/on_update, controls) while it waits.
+    //* The caller makes the matching EndScriptPause call in a finally. Audio
+    //* and input are untouched, so music keeps playing and the window stays
+    //* responsive. Safe to call from any thread; nested pauses count up.
+    procedure BeginScriptPause;
+    procedure EndScriptPause;
+    //* True while at least one script pause() is active.
+    function GetScriptPaused: Boolean;
     //* Record the moment a command was queued (called by TTyroScript.
     //* AddQueueObject on the script thread). Consecutive calls with no yield in
     //* between measure how long the script itself took to produce the next
@@ -514,6 +529,8 @@ type
     //* Enable/disable automatic grouping of each 'while cycle' body. On by
     //* default; turn it off for progressive drawing that streams across frames.
     property AutoGroup: Boolean read FAutoGroup write FAutoGroup;
+    //* True while a Lua pause() has frozen the scene (see BeginScriptPause).
+    property ScriptPaused: Boolean read GetScriptPaused;
     property Opaque: Boolean read FOpaque write FOpaque;
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
@@ -924,6 +941,21 @@ begin
     if TInterlocked.Exchange(FQueueAuto, 1) = 0 then
       if TInterlocked.Add(FQueueHold, 0) = 0 then
         MarkQueueCommit;
+end;
+
+procedure TTyroEngine.BeginScriptPause;
+begin
+  TInterlocked.Increment(FScriptPause);
+end;
+
+procedure TTyroEngine.EndScriptPause;
+begin
+  TInterlocked.Decrement(FScriptPause);
+end;
+
+function TTyroEngine.GetScriptPaused: Boolean;
+begin
+  Result := TInterlocked.Add(FScriptPause, 0) > 0;
 end;
 
 procedure TTyroEngine.NoteEnqueue;
@@ -1651,10 +1683,18 @@ var
   AState: string;
 begin
   try
-    if Physics <> nil then
-      Physics.Step(RayLib.GetFrameTime());
+    //Audio is never frozen: a pause() must not stall music/radio/waveform
+    //playback, which is advanced here and by RayUpdates.Update.
     UpdateMelodies;
     UpdateWaveforms;
+    //Lua pause(): freeze the scene. Physics, sprite animation, per-sprite
+    //on_update/on_collide and control work are all skipped while a pause is
+    //active, so the last drawn frame stays as it is. Only the scene stops
+    //changing; the window keeps presenting frames and audio keeps streaming.
+    if ScriptPaused then
+      Exit;
+    if Physics <> nil then
+      Physics.Step(RayLib.GetFrameTime());
     // Advance every playing sprite animation (frame textures swap here)
     if Sprites <> nil then
       Sprites.UpdateAnims(RayLib.GetFrameTime());

@@ -92,7 +92,18 @@ These release the hold so what is already queued is shown, then re-arm it:
 |------|--------------------------|
 | `cycle` | waiting for the next frame (the commit point) |
 | `sleep(ms)` | sleeping |
+| `pause(ms)` | freezing the scene (like `sleep`, but the engine stops simulating) |
 | `console.read()` | waiting for the user to press Enter |
+
+`pause(ms)` behaves like `sleep(ms)` for the script thread, but it also marks the
+engine as paused for the duration: the main loop skips `Update`, so physics,
+sprite animation, per-sprite `on_update`/`on_collide` and controls stop advancing
+and the last drawn frame stays on screen. `Update`'s audio work
+(`UpdateMelodies`/`UpdateWaveforms`) and `RayUpdates.Update` (music/radio
+streaming) keep running, as does window input, so the window stays responsive and
+sound does not stutter. `tests/test_pause_probe.tyro` checks the difference: a
+sprite script that moves 1px per `on_update` does not move across `pause()`, but
+does across `sleep()`.
 
 ## Diagnostics
 

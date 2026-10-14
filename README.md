@@ -571,6 +571,7 @@ for a control that is not an `image`.
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `sleep(ms)` | — | Pause the script thread for *ms* milliseconds |
+| `pause(ms)` | — | Like `sleep(ms)`, but also **freeze the scene** while the script waits: physics, sprite animation/`on_update` and controls stop advancing, so the frame the script queued stays on screen. Audio (music/radio) and input keep running. Use it for a still hold; use `sleep()` when the scene should keep moving |
 | `cycle` | `true` | **Block** until the next drawing frame completes. Use `while cycle do` (instead of `while true do`) to run the loop body at most once per drawn frame, so drawing commands cannot pile up inside a single raylib drawing cycle |
 | `enter()` | — | **Hold** the processing queue: the drawing commands queued after this call are not executed until `leave()` balances it |
 | `leave()` | — | Release the hold taken by `enter()`: the whole group queued in between is then drawn at one drawing cycle |
@@ -596,10 +597,10 @@ end                                 -- no sleep() needed for ~60 FPS pacing
 ## Automatic grouping (default)
 
 Each `while cycle do` iteration is drawn as one group automatically. From the
-moment a body starts until the next yield point (the next `cycle`, `sleep()`, or
-`console.read()`), the queue is held, so a body that takes several frames to
-build still lands in a single drawing cycle. This prevents the "black box, then
-the text" flicker with no extra code:
+moment a body starts until the next yield point (the next `cycle`, `sleep()`,
+`pause()`, or `console.read()`), the queue is held, so a body that takes several
+frames to build still lands in a single drawing cycle. This prevents the "black
+box, then the text" flicker with no extra code:
 
 ```lua
 window.show()
@@ -611,9 +612,9 @@ while cycle do
 end
 ```
 
-The hold is released before `sleep()`/`console.read()` so a prompt or progress
-drawn earlier still shows while the script waits. Call `autogroup(false)` for
-progressive drawing that must stream across frames.
+The hold is released before `sleep()`/`pause()`/`console.read()` so a prompt or
+progress drawn earlier still shows while the script waits. Call
+`autogroup(false)` for progressive drawing that must stream across frames.
 
 For sleep-based pacing you can still use the classic loop:
 
@@ -626,6 +627,16 @@ while true do
     sleep(16)   -- ~60 FPS pacing
 end
 print("uptime: " .. (time() - start))
+```
+
+Use `pause(ms)` instead of `sleep(ms)` for a still hold: it also freezes the
+scene (physics, sprites, controls) for the duration while music/radio keep
+playing.
+
+```lua
+canvas.text(10, 10, "Paused...")
+pause(1000)                       -- the text stays on screen, the scene is still
+canvas.text(10, 30, "Back!")
 ```
 
 ## Grouping drawing with enter() / leave()

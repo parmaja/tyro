@@ -525,6 +525,33 @@ begin
   Result := 0;
 end;
 
+// pause(ms): like sleep(), but also freezes the scene for the duration. The
+// main loop stops simulating physics, sprite animation/scripts and controls,
+// so the frame the script queued before the call stays on screen while the
+// script waits; audio and input keep running. Use it for holds/cutscenes that
+// want a still picture, and sleep() when the scene should keep moving.
+function pause_func(L: Plua_State): integer; cdecl;
+var
+  n: int64;
+  Held: Boolean;
+begin
+  n := Round(L.ToNumber(1));
+  //Commit whatever the body queued so far, exactly like sleep(), so the frozen
+  //frame is the one the script asked to show.
+  Held := (Engine <> nil) and Engine.ReleaseAutoQueue;
+  if Engine <> nil then
+    Engine.BeginScriptPause;
+  try
+    sleep(n);
+  finally
+    if Engine <> nil then
+      Engine.EndScriptPause;
+    if Held then
+      Engine.HoldAutoQueue;
+  end;
+  Result := 0;
+end;
+
 // autogroup(flag): turn the automatic per-'cycle' grouping on (default) or off.
 // Off restores raw streaming, where the main loop may drain part of a body.
 function autogroup_func(L: Plua_State): integer; cdecl;
@@ -1320,6 +1347,8 @@ begin
   Lua.State.RegisterGlobal('version', TyroVersion);
   Lua.State.RegisterGlobal('log', @log_func);
   Lua.State.RegisterGlobal('sleep', @sleep_func);
+  //pause(ms): like sleep(), but also freezes the scene (physics/sprites/controls)
+  Lua.State.RegisterGlobal('pause', @pause_func);
   //autogroup(flag): toggle automatic per-cycle grouping (on by default)
   Lua.State.RegisterGlobal('autogroup', @autogroup_func);
   //queuelimit(n): cap the queue depth (0 = unlimited); see queue.limit
@@ -2110,10 +2139,27 @@ end;
 function TLuaMusic.Sound_func(L: Plua_State): integer; cdecl;
 var
   Freq, Period: integer;
+  WaveName: string;
 begin
-  Freq := round(L.ToNumber(1));
-  Period := round(L.ToNumber(2));
-  FScript.AddQueueObject(TPlaySoundObject.Create(Freq, Period));
+  if L.IsString(1) then
+  begin
+    WaveName := L.ToString(1);
+    Freq := round(L.ToNumber(2));
+    if l.ArgsCount = 3 then
+      Period := round(L.ToNumber(3))
+    else
+      Period := 500;
+  end
+  else
+  begin
+    WaveName := '';
+    Freq := round(L.ToNumber(1));
+    if l.ArgsCount = 2 then
+      Period := round(L.ToNumber(2))
+    else
+      Period := 500;
+  end;
+  Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
   Result := 0;
 end;
 
@@ -2126,13 +2172,14 @@ begin
   begin
     Freq := 0;
     Period := round(L.ToNumber(1));
+    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
   end
   else
   begin
     Freq := round(L.ToNumber(1));
     Period := round(L.ToNumber(2));
+    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
   end;
-  FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
   Result := 0;
 end;
 

@@ -468,7 +468,8 @@ type
   TPlaySoundObject = class(TQueueObject)
   public
     Freq, Period: Integer;
-    constructor Create(AFreq, APeriod: Integer);
+    WaveName: string;
+    constructor Create(AFreq, APeriod: Integer; AWaveName: string = '');
     procedure DoExecute; override;
   end;
 
@@ -869,7 +870,7 @@ end;
 
 procedure TBeepObject.DoExecute;
 begin
-  PlayWaveform(440, 1000);
+  PlayWaveform(@Sin_Waveform, 440, 1000);
 end;
 
 { TPlayMMLObject }
@@ -960,16 +961,17 @@ end;
 
 { TPlaySoundObject }
 
-constructor TPlaySoundObject.Create(AFreq, APeriod: Integer);
+constructor TPlaySoundObject.Create(AFreq, APeriod: Integer; AWaveName: string);
 begin
   inherited Create;
   Freq := AFreq;
   Period := APeriod;
+  WaveName := AWaveName ;
 end;
 
 procedure TPlaySoundObject.DoExecute;
 begin
-  PlayWaveform(Freq, Period);
+  PlayWaveform(WaveName, Freq, Period);
 end;
 
 { TPlayNoiseObject }
@@ -983,8 +985,8 @@ end;
 
 procedure TPlayNoiseObject.DoExecute;
 begin
-  if Freq = 0 then
-    PlayWaveform(@WhiteNoise_Waveform, Freq, Period)
+  if Freq <= 0 then
+    PlayWaveform(@WhiteNoise_Waveform, 400, Period)
   else
     PlayWaveform(@PitchedNoise_Waveform, Freq, Period);
 end;
