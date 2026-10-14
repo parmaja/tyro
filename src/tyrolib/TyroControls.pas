@@ -513,6 +513,7 @@ type
     FItems: TStrings;
     FViewCount: Integer;
     FExtraHeight: Integer;
+    FItemPadding: Integer;
     FCustomDraw: Boolean;
     FPlaceHolder: utf8string;
     FTopIndex: Integer;   //first visible item (vertical scroll offset)
@@ -523,6 +524,7 @@ type
     procedure SetItems(AValue: TStrings);
     procedure SetViewCount(AValue: Integer);
     procedure SetExtraHeight(AValue: Integer);
+    procedure SetItemPadding(AValue: Integer);
     procedure SetCustomDraw(AValue: Boolean);
     procedure SetItemIndex(AValue: Integer);
     procedure SetPlaceHolder(AValue: utf8string);
@@ -569,6 +571,9 @@ type
     property ViewCount: Integer read FViewCount write SetViewCount;
     //* Row height in pixels (0 = derived from the loaded font).
     property ExtraHeight: Integer read FExtraHeight write SetExtraHeight;
+    //* Extra space in pixels above and below each item's text; the row grows
+    //* by twice this value. Default 1.
+    property ItemPadding: Integer read FItemPadding write SetItemPadding;
     property RowHeight: Integer read GetRowHeight;
     //* When True each visible item is painted by DoCustomDraw instead of the
     //* default printed text.
@@ -1636,6 +1641,7 @@ begin
   BackColor := clWhite;
   FViewCount := 0;
   FExtraHeight := 0;
+  FItemPadding := 1;
   FCustomDraw := False;
   FPlaceHolder := '';
   FTopIndex := 0;
@@ -1651,7 +1657,7 @@ end;
 
 function TTyroListBox.GetRowHeight: Integer;
 begin
-  Result := Res.Font.Height + FExtraHeight
+  Result := Res.Font.Height + FExtraHeight + 2 * FItemPadding
 end;
 
 function TTyroListBox.GetVisibleItems: Integer;
@@ -1703,6 +1709,18 @@ begin
   if FExtraHeight = AValue then
     Exit;
   FExtraHeight := AValue;
+  AutoSizeHeight;
+  UpdateScrollBars;
+  Invalidate;
+end;
+
+procedure TTyroListBox.SetItemPadding(AValue: Integer);
+begin
+  if AValue < 0 then
+    AValue := 0;
+  if FItemPadding = AValue then
+    Exit;
+  FItemPadding := AValue;
   AutoSizeHeight;
   UpdateScrollBars;
   Invalidate;
