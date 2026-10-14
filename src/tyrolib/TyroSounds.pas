@@ -125,11 +125,24 @@ procedure ShutdownWaveforms;
 
 function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function LFSRNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Square_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Saw_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Tri_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Pulse25_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Pulse125_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Rect_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Dsin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Organ_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Bell_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Pluck_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Flute_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function FM_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function PinkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function DarkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function HashNoise(Index: Integer): Single;
 
 implementation
 
@@ -144,6 +157,7 @@ var
   aData: array of SmallInt;
   SampleCount, SampleSize: Integer;
   i: Integer;
+  s: Int64;
   v: Smallint;
   {$ifdef FADE}
   WaveSamples: Integer;
@@ -159,7 +173,7 @@ begin
   SetLength(aData, SampleCount);
   if Frequency <> 0 then
   begin
-    Amplitude := (Amplitude * ((Power(2, SampleSize) / 2) - 1) / 100) - 1;
+    Amplitude := Amplitude * ((Power(2, SampleSize) / 2) - 1) / 100;
     {$ifdef FADE}
     //Guard degenerate frequencies: round(Frequency)=0 would be a div-by-zero
     //and WaveSamples<=0 would make Delta = 100/0 = Inf (crash on Round(Inf)).
@@ -170,12 +184,24 @@ begin
     if WaveSamples <= 0 then
       WaveSamples := 1;
     Starting := WaveSamples * 3;
-    Ending := SampleCount - WaveSamples * 3;
-    Delta := 100 / (WaveSamples * 3);
+    //Keep the fade window inside the sound, a note shorter than 3 periods
+    //would otherwise fade in over its whole length and be nearly silent.
+    if Starting > SampleCount div 2 then
+      Starting := SampleCount div 2;
+    if Starting <= 0 then
+      Starting := 1;
+    Ending := SampleCount - Starting;
+    Delta := 100 / Starting;
     {$endif}
     for i := 0 to SampleCount -1 do
     begin
-      v := Round(Proc(i, SampleRate, Frequency) * Amplitude);
+      s := Round(Proc(i, SampleRate, Frequency) * Amplitude);
+      //A waveform may overshoot +-1 a little, a wrapped SmallInt would click.
+      if s > High(SmallInt) then
+        s := High(SmallInt)
+      else if s < Low(SmallInt) then
+        s := Low(SmallInt);
+      v := s;
       {$ifdef FADE}
       if i < Starting then
         v := Round(v * i * Delta / 100);
@@ -199,11 +225,12 @@ end;
 procedure TTyroRayWave.Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single; SampleRate: Integer; BitRate: Integer);
 var
   Wave: TWave;
-  i: Cardinal;
+  i: Integer;
+  s: Int64;
   v: Smallint;
   {$ifdef FADE}
-  WaveSamples: Cardinal;
-  Starting, Ending: Cardinal;
+  WaveSamples: Integer;
+  Starting, Ending: Integer;
   Delta: Single;
   {$endif}
   //aData: array of SmallInt;
@@ -225,7 +252,7 @@ begin
     raise Exception.Create('Unable to allocate generated waveform');
   if Frequency <> 0 then
   begin
-    Amplitude := (Amplitude * ((Power(2, Wave.SampleSize) / 2) - 1) / 100) - 1;
+    Amplitude := Amplitude * ((Power(2, Wave.SampleSize) / 2) - 1) / 100;
 
     {$ifdef FADE}
     //Guard degenerate frequencies: round(Frequency)=0 would be a div-by-zero
@@ -237,24 +264,36 @@ begin
     if WaveSamples <= 0 then
       WaveSamples := 1;
     Starting := WaveSamples * 3;
-    Ending := Wave.FrameCount - WaveSamples * 3;
-    Delta := 100 / (WaveSamples * 3);
+    //Keep the fade window inside the sound, a note shorter than 3 periods
+    //would otherwise fade in over its whole length and be nearly silent.
+    if Starting > Integer(Wave.FrameCount) div 2 then
+      Starting := Integer(Wave.FrameCount) div 2;
+    if Starting <= 0 then
+      Starting := 1;
+    Ending := Integer(Wave.FrameCount) - Starting;
+    Delta := 100 / Starting;
     {$endif}
 
-    for i := 0 to Wave.FrameCount -1 do
+    for i := 0 to Integer(Wave.FrameCount) -1 do
     begin
-      v := Round(Proc(i, SampleRate, Frequency) * Amplitude);
+      s := Round(Proc(i, SampleRate, Frequency) * Amplitude);
+      //A waveform may overshoot +-1 a little, a wrapped SmallInt would click.
+      if s > High(SmallInt) then
+        s := High(SmallInt)
+      else if s < Low(SmallInt) then
+        s := Low(SmallInt);
+      v := s;
       {$ifdef FADE}
       if i < Starting then
         v := Round(v * i * Delta / 100);
       if i > Ending then
-        v := Round(v * (Wave.FrameCount - i) * Delta / 100);
+        v := Round(v * (Integer(Wave.FrameCount) - i) * Delta / 100);
       {$endif}
       aData[i] := v;
     end;
   end
   else
-    for i := 0 to Wave.FrameCount - 1 do
+    for i := 0 to Integer(Wave.FrameCount) - 1 do
       aData[i] := 0;
   Wave.Data := aData;
   //ExportWave(Wave, PChar('c:\temp\'+IntTOStr(round(Frequency))+'.wav'));
@@ -554,24 +593,14 @@ begin
 end;
 
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-var
-  Sample, WaveSamples: Single;
 begin
-  if Frequency > 0 then
-  begin
-    WaveSamples := SampleRate / Frequency;
-    //Round(WaveSamples) can be 0 for Frequency > 2*SampleRate; Index mod 0
-    //would raise an integer division error.
-    if Round(WaveSamples) > 0 then
-    begin
-      Sample := Index mod Round(WaveSamples);
-      Result := Sin(2*Pi * (Sample / WaveSamples));
-    end
-    else
-      Result := 0;
-  end
+  //The old version mixed 'Index mod Round(period)' with '/ period' (unrounded),
+  //which made the phase jump every cycle and caused an audible glitch.
+  //A sine is naturally periodic, no wrapping is needed at all.
+  if (Frequency <= 0) or (SampleRate <= 0) then
+    Result := 0
   else
-    Result := 0;
+    Result := Sin(2 * Pi * Frequency * Index / SampleRate);
   //WriteLn('Sample = ' + FloatTOStr(Sample) + ' WaveSamples = '+ FloatToStr(wavesamples) + ' Result: ' + FloatToStr(Result));
 end;
 
@@ -591,18 +620,19 @@ begin
   Result := sample * fade;
 end;
 
-// Where in the wave Index stands, 0..1, or -1 for a frequency that is too high
-// to have a period at this sample rate (which would divide by zero below).
+// Where in the wave Index stands, 0..1. Returns -1 only for a frequency or
+// sample rate that has no meaningful period.
 function WavePosition(Index, SampleRate: Integer; Frequency: Single): Single;
 var
-  WaveSamples: Integer;
+  Phase: Double;
 begin
+  //Was '(Index mod Round(SampleRate/Frequency)) / Round(...)' which quantized
+  //the pitch (440 Hz became 441 Hz). Frac() keeps the exact frequency.
   Result := -1;
   if (Frequency <= 0) or (SampleRate <= 0) then
     Exit;
-  WaveSamples := Round(SampleRate / Frequency);
-  if WaveSamples > 0 then
-    Result := (Index mod WaveSamples) / WaveSamples;
+  Phase := Frequency; //widen to Double before multiplying by Index
+  Result := Frac(Phase * Index / SampleRate);
 end;
 
 function Square_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -642,15 +672,226 @@ begin
     Result := 3 - (Pos * 4);
 end;
 
+{ --- deterministic noise helpers -------------------------------------------
+  A waveform proc has no memory between calls, so the noise layers derive their
+  randomness from the index. Same index always gives the same value, which also
+  makes an MML note render the same again on every play. }
+
+function HashNoise(Index: Integer): Single;
+var
+  h: Cardinal;
+begin
+  //Integer overflow here is intentional and expected (wraps around).
+  h := (Cardinal(Index) * 1664525) + 1013904223;
+  h := h xor (h shr 13);
+  h := h * 1274126177;
+  Result := (h and $7FFFFFFF) / 1073741824 - 1;
+end;
+
+{ --- new waveforms --------------------------------------------------------- }
+
+// NES/Game Boy style pulse, 25% duty (thinner than Square)
+function Pulse25_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Pos: Single;
+begin
+  Pos := WavePosition(Index, SampleRate, Frequency);
+  if Pos < 0 then
+    Result := 0
+  else if Pos < 0.25 then
+    Result := 1
+  else
+    Result := -1;
+end;
+
+// Even thinner 12.5% duty pulse, very nasal/chip-like
+function Pulse125_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Pos: Single;
+begin
+  Pos := WavePosition(Index, SampleRate, Frequency);
+  if Pos < 0 then
+    Result := 0
+  else if Pos < 0.125 then
+    Result := 1
+  else
+    Result := -1;
+end;
+
+// Rectified sine, Abs(Sin), hollow organ-ish tone
+function Rect_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Pos: Single;
+begin
+  Pos := WavePosition(Index, SampleRate, Frequency);
+  if Pos < 0 then
+    Result := 0
+  else
+    Result := Abs(Sin(2 * Pi * Pos));
+end;
+
+// Sine shaped by its own absolute value, smoother than square with a little grit
+function Dsin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Pos: Single;
+  s: Single;
+begin
+  Pos := WavePosition(Index, SampleRate, Frequency);
+  if Pos < 0 then
+    Result := 0
+  else
+  begin
+    s := Sin(2 * Pi * Pos);
+    Result := s * Abs(s);
+  end;
+end;
+
+// Additive harmonics, Hammond-style organ. Normalized by the sum of weights.
+function Organ_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Phase: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  Phase := 2 * Pi * Frequency * Index / SampleRate;
+  Result := (Sin(Phase) + 0.6 * Sin(2 * Phase) + 0.4 * Sin(3 * Phase) + 0.3 * Sin(4 * Phase)) / 2.3;
+end;
+
+// Inharmonic partials each with its own decay, struck-bell character.
+function Bell_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Phase, t: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  Phase := 2 * Pi * Frequency * Index / SampleRate;
+  t := Index / SampleRate;
+  Result := (Sin(Phase) * Exp(-1.5 * t)
+           + 0.6 * Sin(2.76 * Phase) * Exp(-2.8 * t)
+           + 0.4 * Sin(5.40 * Phase) * Exp(-4.2 * t)
+           + 0.25 * Sin(8.93 * Phase) * Exp(-6.0 * t)) / 2.25;
+end;
+
+// Karplus-Strong flavored pluck: harmonics decay faster the higher they are,
+// which is what makes a plucked string lose its brightness over time.
+function Pluck_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  f, MaxH, k: Integer;
+  Sum, Norm, PhaseStep, t, Decay: Double;
+begin
+  Result := 0;
+  if (Frequency <= 0) or (SampleRate <= 0) then
+    Exit;
+  f := Round(Frequency);
+  if f < 1 then
+    f := 1;
+  //Only harmonics below Nyquist can be heard, cap the count for speed.
+  MaxH := (SampleRate div 2) div f;
+  if MaxH > 24 then
+    MaxH := 24;
+  if MaxH < 1 then
+  begin
+    Result := Sin(2 * Pi * Frequency * Index / SampleRate);
+    Exit;
+  end;
+  PhaseStep := 2 * Pi * Frequency / SampleRate;
+  t := Index / SampleRate;
+  Sum := 0;
+  Norm := 0;
+  for k := 1 to MaxH do
+  begin
+    Decay := Exp(-t * k * 3.0);
+    Sum := Sum + Sin(PhaseStep * k * Index) * Decay / k;
+    Norm := Norm + 1 / k;
+  end;
+  Result := Sum / Norm;
+end;
+
+// Mostly sine with soft upper harmonics plus a breath of noise.
+function Flute_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Phase: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  Phase := 2 * Pi * Frequency * Index / SampleRate;
+  Result := (Sin(Phase) + 0.15 * Sin(2 * Phase) + 0.05 * Sin(3 * Phase)) / 1.3
+          + HashNoise(Index) * 0.02;
+end;
+
+// Two operator FM, one function covers metal/brass/electric-piano flavors.
+function FM_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Phase: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  Phase := 2 * Pi * Frequency * Index / SampleRate;
+  Result := Sin(Phase + 2.0 * Sin(2 * Phase));
+end;
+
+// Voss style pink noise: one random layer per octave, held for 2^k samples.
+function PinkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  k: Integer;
+  Sum: Single;
+begin
+  Sum := 0;
+  for k := 0 to 6 do
+    Sum := Sum + HashNoise(Index shr k) / (k + 1);
+  Result := Sum / 2.593; //sum of 1/(k+1) for k = 0..6
+end;
+
+// Brown-ish noise: octave layers with more weight on the slow (low frequency)
+// ones. Summing the weights stays just under 2, so the output cannot exceed 1.
+function DarkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  k: Integer;
+  Sum, Weight: Double;
+begin
+  Sum := 0;
+  Weight := 1;
+  for k := 0 to 7 do
+  begin
+    Sum := Sum + HashNoise(Index shr k) * Weight;
+    Weight := Weight / 2;
+  end;
+  Result := Sum / 2;
+end;
+
 initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
   Waveforms.Add('Sin', @Sin_Waveform);
   Waveforms.Add('Noise', @WhiteNoise_Waveform);
+  Waveforms.Add('Pitched', @PitchedNoise_Waveform);
   Waveforms.Add('Piano', @Piano_Waveform);
   Waveforms.Add('Square', @Square_Waveform);
+  Waveforms.Add('Pulse25', @Pulse25_Waveform);
+  Waveforms.Add('Pulse125', @Pulse125_Waveform);
   Waveforms.Add('Saw', @Saw_Waveform);
   Waveforms.Add('Tri', @Tri_Waveform);
+  Waveforms.Add('Rect', @Rect_Waveform);
+  Waveforms.Add('Dsin', @Dsin_Waveform);
+  Waveforms.Add('Organ', @Organ_Waveform);
+  Waveforms.Add('Bell', @Bell_Waveform);
+  Waveforms.Add('Pluck', @Pluck_Waveform);
+  Waveforms.Add('Flute', @Flute_Waveform);
+  Waveforms.Add('FM', @FM_Waveform);
+  Waveforms.Add('Pink', @PinkNoise_Waveform);
+  Waveforms.Add('Dark', @DarkNoise_Waveform);
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;
