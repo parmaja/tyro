@@ -614,6 +614,11 @@ implementation
 uses
   TyroRadio, TyroSpectrum, mnHttpClient, mnModules;
 
+{$IFDEF MMLDEBUG}
+var
+  FDebugFrameCount: Integer = 0;
+{$ENDIF}
+
 {
 function IntToFPColor(I: Integer): TFPColor;
 begin
@@ -1682,6 +1687,12 @@ var
   ev: TCollisionEvent;
   AState: string;
 begin
+  {$IFDEF MMLDEBUG}
+  Inc(FDebugFrameCount);
+  if FDebugFrameCount mod 120 = 0 then
+    WriteLn(Format('FPSLOG tick=%d frames=%d fps=%d ft=%.3fms',
+      [TThread.GetTickCount64, FDebugFrameCount, RayLib.GetFPS, RayLib.GetFrameTime * 1000]));
+  {$ENDIF}
   try
     //Audio is never frozen: a pause() must not stall music/radio/waveform
     //playback, which is advanced here and by RayUpdates.Update.

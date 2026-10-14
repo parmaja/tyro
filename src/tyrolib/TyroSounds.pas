@@ -28,6 +28,9 @@ unit TyroSounds;
 *	 usefull refereces
 *
 *  http://web.mit.edu/18.06/www/Essays/linear-algebra-and-music.pdf
+*
+* Editor
+* 3ML https://wiki.mabinogiworld.com/view/User:LexisMikaya/MML_101_Guide
 //////////////////////////////////////////////////////////////////////////////-}
 
 interface
@@ -82,7 +85,9 @@ type
     Amplitude: Single;
     SampleRate: Integer;
     BitRate: Integer;
-    Sound: TTyroMelodySound;
+    Sound: TTyroMelodySound; //currently playing
+    PendingSound: TTyroMelodySound; //generated and waiting for its turn
+    SpareSound: TTyroMelodySound; //retired, still draining; reused for the next generation
     Waveform: TWaveForm;
     procedure SetInstrument(Instrument: String); override;
     procedure SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single); override;
@@ -348,13 +353,27 @@ begin
   inherited;
   if Waveform = nil then
     raise EMelodyException.Create('Waveform not defined');
-  //if (Frequency > 0) and (Duration > 0) then
-    Sound.Generate(Waveform.Proc, Frequency, Duration, Amplitude, SampleRate, BitRate);
+  //Generate into the free buffer, not the one currently playing, so preparing a
+  //note ahead of time never cuts the sound that is already on the air.
+  //With very short notes the recycled buffer could still be draining, stop it
+  //first so its wave is never freed while the audio thread is reading it.
+  if PendingSound.IsPlaying then
+    PendingSound.Stop;
+  PendingSound.Generate(Waveform.Proc, Frequency, Duration, Amplitude, SampleRate, BitRate);
 end;
 
 function TRayMelodyChannel.PlaySound: Boolean;
+var
+  tmp: TTyroMelodySound;
 begin
   inherited;
+  //Rotate the three buffers: the freshly generated note becomes current, the
+  //finished one is retired (it may still be draining in the audio device), and
+  //the oldest, long drained buffer is handed back for the next generation.
+  tmp := SpareSound;
+  SpareSound := Sound;
+  Sound := PendingSound;
+  PendingSound := tmp;
   Sound.Play;
   Result := True;
 end;
@@ -394,13 +413,16 @@ begin
   SampleRate := cDefaultSampleRate;
   BitRate := 16;
   Sound := TTyroMelodySound.Create(False);
-  //Sound := TTyroMelodySound.Create;
+  PendingSound := TTyroMelodySound.Create(False);
+  SpareSound := TTyroMelodySound.Create(False);
   SetInstrument('');
 end;
 
 destructor TRayMelodyChannel.Destroy;
 begin
   FreeAndNil(Sound);
+  FreeAndNil(PendingSound);
+  FreeAndNil(SpareSound);
   inherited;
 end;
 

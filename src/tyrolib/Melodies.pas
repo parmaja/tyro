@@ -86,6 +86,16 @@ type
     Instrument: String; //for waveform
     SoundExpired: UInt64; //When the note should be end, by milliseconds
     SoundDuration: Single; //Duration and Rest by second
+
+    //Scheduler state. The notes are driven by wall clock time, not by the
+    //render frame: a note is parsed and its wave generated ahead of time
+    //(pre-generated while the previous note is still playing), then started
+    //when its deadline arrives. This keeps every note its exact length
+    //instead of stretching each one to the next rendered frame.
+    Started: Boolean; //the opening note was prepared
+    HasPrepared: Boolean; //a note was parsed and generated, ready to play
+    PreparedDuration: Single; //SoundDuration of the prepared note, in seconds
+    NextTick: UInt64; //when the prepared note must start (0 = play now)
     constructor Create(AMelody: TMelody); virtual;
     procedure Update; virtual;
     procedure Prepare; virtual;
@@ -282,6 +292,11 @@ begin
 
   Line := 1; //Line for error messages
   Current := 1;
+
+  Started := False;
+  HasPrepared := False;
+  PreparedDuration := 0;
+  NextTick := 0;
 
   if (Current <= Length(Notes)) then
     Chr := Notes[Current];
@@ -887,7 +902,11 @@ function TMelody.UpdatePlay: Boolean;
 var
   Channel: TMelodyChannel;
   Busy: Boolean;
-  SoundDurationMS: UInt64;
+  Now: UInt64;
+  DurMS: UInt64;
+  {$IFDEF MMLDEBUG}
+  StartTick, GenMS: UInt64;
+  {$ENDIF}
 begin
   Result := False;
   if not FPlaying then
@@ -902,30 +921,77 @@ begin
   try
     for Channel in FChannels do
     begin
-      if not Channel.Finished then
+      if Channel.Finished then
+        Continue;
+      Channel.Update;
+
+      //Parse and generate the opening note once, before the loop starts.
+      if not Channel.Started then
       begin
-        Channel.Update;
-        if Channel.IsPlaying or
-           (Channel.SoundExpired > TThread.GetTickCount64) then
-          Busy := True
-        else
+        Channel.Started := True;
+        if Channel.Next then
         begin
-          Channel.StopSound;
-          if Channel.Next then
-          begin
-            Channel.PlaySound;
-            SoundDurationMS := Round(Channel.SoundDuration * 1000);
-            Channel.SoundExpired := SoundDurationMS + TThread.GetTickCount64 + 1;
-            Busy := True;
-          end
-          else
-          begin
-            Channel.StopSound;
-            Channel.Finished := True;
-            Channel.Unprepare;
-          end;
+          Channel.PreparedDuration := Channel.SoundDuration;
+          Channel.HasPrepared := True;
+        end;
+        if not Channel.HasPrepared then
+        begin
+          Channel.Finished := True;
+          Channel.Unprepare;
+          Continue;
         end;
       end;
+
+      //No more notes: keep the channel alive until the last one's deadline.
+      if not Channel.HasPrepared then
+      begin
+        Now := TThread.GetTickCount64;
+        if Now >= Channel.NextTick then
+        begin
+          Channel.StopSound;
+          Channel.Finished := True;
+          Channel.Unprepare;
+        end
+        else
+          Busy := True;
+        Continue;
+      end;
+
+      Now := TThread.GetTickCount64;
+      if Now >= Channel.NextTick then
+      begin
+        //First note: anchor the schedule at the current time.
+        if Channel.NextTick = 0 then
+          Channel.NextTick := Now;
+        Channel.PlaySound;
+        DurMS := Round(Channel.PreparedDuration * 1000);
+        //Advance the deadline by the exact note length, not from "now", so a
+        //late frame does not accumulate into a longer and longer song.
+        Channel.NextTick := Channel.NextTick + DurMS;
+        //Never build a backlog, a single frame is the finest the loop can start.
+        if Channel.NextTick < Now then
+          Channel.NextTick := Now;
+
+        //Pre-generate the following note while this one is still playing, so
+        //the wave maths never delays the next note's start.
+        {$IFDEF MMLDEBUG}
+        StartTick := TThread.GetTickCount64;
+        {$ENDIF}
+        if Channel.Next then
+        begin
+          Channel.PreparedDuration := Channel.SoundDuration;
+          Channel.HasPrepared := True;
+        end
+        else
+          Channel.HasPrepared := False;
+        {$IFDEF MMLDEBUG}
+        GenMS := TThread.GetTickCount64 - StartTick;
+        WriteLn('MML ', Channel.Name, ' tick=', Now, ' dur=', DurMS, 'ms gen=', GenMS, 'ms');
+        {$ENDIF}
+        Busy := True;
+      end
+      else
+        Busy := True;
     end;
   except
     FinishPlay;
