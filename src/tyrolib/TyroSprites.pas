@@ -237,7 +237,7 @@ type
 implementation
 
 uses
-  TyroEngines, Aseprites;
+  TyroEngines, Aseprites, SpriteAtlas;
 
 { TSprite }
 
@@ -1340,6 +1340,18 @@ begin
     begin
       //A single-frame .aseprite is a static sprite: hand its frame to the
       //single-texture path below (nil the slot so a rollback free skips it).
+      aTexture := aFrames[0];
+      aFrames[0] := Default(TTexture2D);
+    end;
+  end
+  else if IsSpriteFile(FFileName) then
+  begin
+    //A .sprite archive (ZIP with a PNG atlas + JSON descriptor, as written by
+    //TexturePacker / Phaser / PixiJS) yields one frame per atlas entry, so it
+    //loads through the same animation path as Aseprite.
+    aCount := SpriteLoadFrameTextures(FFileName, aFrames, aFrameMs);
+    if aCount = 1 then
+    begin
       aTexture := aFrames[0];
       aFrames[0] := Default(TTexture2D);
     end;

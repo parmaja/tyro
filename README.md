@@ -287,7 +287,7 @@ positioned with `move` or by setting `x`/`y` properties.
 
 | Method | Description |
 |--------|-------------|
-| `sprite:load("image.png")` | Load a texture from file into this sprite. `.aseprite`/`.ase` files load every frame as an animation. |
+| `sprite:load("image.png")` | Load a texture from file into this sprite. `.aseprite`/`.ase` files load every frame as an animation. `.sprite` files (a ZIP holding a PNG texture + a TexturePacker/Phaser/PixiJS JSON atlas) load every atlas frame as an animation frame. |
 | `sprite:show()` | Make the sprite visible (shown by default). |
 | `sprite:hide()` | Hide the sprite from rendering. |
 | `sprite:move(x, y)` | Set the sprite's position. |
@@ -295,7 +295,7 @@ positioned with `move` or by setting `x`/`y` properties.
 | `sprite:height()` | Return the texture height in pixels. |
 | `sprite:play([fps])` | Restart and play the animation. `fps` overrides the per-frame timings stored in the file (0 or omitted keeps them — needed because Aseprite files often have ~1 ms delays). |
 | `sprite:stop()` | Freeze the animation on the current frame (aliased by `sprite:pause()`). |
-| `sprite:framecount()` | Number of frames in the loaded `.aseprite` animation. |
+| `sprite:framecount()` | Number of frames in the loaded `.aseprite`/`.sprite` animation. |
 
 ## Sprite Properties
 
@@ -798,6 +798,7 @@ tyro demos/<name>.tyro
 | `demos/controls.tyro` | Generic buttons, labels, checkboxes, edits, and panels |
 | `demos/controls_align.tyro` | Nested controls: a left-docked panel with top- and bottom-docked buttons |
 | `demos/aseprites_demo.tyro` | Aseprite animations: load `.aseprite` files (all frames as textures), `play(fps)`, `stop`, `looping`, per-frame stepping — idle/walk/run showcase |
+| `demos/sprite_atlas_demo.tyro` | Texture atlas `.sprite` files: load a ZIP'd PNG + JSON atlas (TexturePacker/Phaser/PixiJS), every atlas frame becomes an animation frame, `play`/`stop`, speed control |
 | `demos/interactive_paint.tyro` | Mouse drawing with keyboard color switching (uses input APIs) |
 | `demos/console_demo.tyro` | Console output: print, println, log |
 | `demos/terminal_demo.tyro` | Built-in terminal commands: dir, list, clear, help, exit |

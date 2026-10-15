@@ -1,0 +1,92 @@
+--======================================================================
+-- sprite_atlas_demo.tyro  Load & animate a .sprite texture atlas
+--======================================================================
+-- A .sprite file is a ZIP archive holding a PNG texture plus the JSON
+-- descriptor written by TexturePacker / Phaser / PixiJS.  It loads through
+-- the Sprites system exactly like an .aseprite file: every frame in the atlas
+-- becomes an animation frame.
+--
+--   sprite.load("sprite_sheet.sprite")   -- loads EVERY atlas frame
+--   sprite:play([fps])                   -- restart & play (fps override)
+--   sprite:stop() / sprite:pause()       -- freeze on current frame
+--   sprite.frames                        -- number of frames
+--   sprite.frame                         -- current frame (read/write)
+--   sprite.playing                       -- animation running? (bool)
+--   sprite.speed                         -- frames-per-second (0 = file)
+--   sprite.looping                       -- loop when the last frame ends
+--
+-- demos/sprite_sheet.sprite holds 4 "16x32_Walk" frames (32x32 each) packed
+-- into a 100x67 sheet by the "Image2Pixel Spritesheet Generator".
+--
+-- Controls:
+--   SPACE        play / pause
+--   Up / Down    faster / slower
+--   ESC          exit
+--======================================================================
+
+window.show(760, 400)
+canvas.color = colors.black
+canvas.clear()
+
+-- the loaded atlas, played in the middle of the screen
+walk = Sprites.new("walk")
+walk.load("sprite_sheet.sprite")
+walk.x = 380
+walk.y = 200
+walk:play(8)
+
+-- a row of still copies, one per atlas frame, so every frame is visible
+local strip = {}
+for i = 0, walk.frames - 1 do
+  local s = Sprites.new()
+  s.load("sprite_sheet.sprite")
+  s.scale = 0.75
+  s.x = 110 + i * 90
+  s.y = 320
+  s.frame = i          -- hold this frame (no play => it stays put)
+  strip[i] = s
+end
+
+local speed = 8
+println("sprite_atlas_demo: " .. walk.frames .. " frames from sprite_sheet.sprite")
+
+while cycle do
+  -- input ---------------------------------------------------------------
+  if iskeypressed("space") then
+    if walk.playing then
+      walk:stop()
+    else
+      walk:play(speed)
+    end
+  end
+  if iskeypressed("up") then
+    speed = math.min(speed + 1, 30)
+    if walk.playing then walk:play(speed) end
+  end
+  if iskeypressed("down") then
+    speed = math.max(speed - 1, 1)
+    if walk.playing then walk:play(speed) end
+  end
+
+  -- draw the scene -------------------------------------------------------
+  canvas.color = colors.black
+  canvas.clear()
+
+  canvas.color = colors.darkgray
+  canvas.rectangle(0, 0, canvas.width, 130, true)
+  canvas.color = colors.darkblue
+  canvas.rectangle(0, 300, canvas.width, 100, true)
+
+  canvas.color = colors.white
+  canvas.text(180, 10, "Texture atlas (.sprite) demo - sprite_sheet.sprite")
+
+  canvas.color = colors.yellow
+  canvas.text(300, 240, "animated  " .. walk.frames .. "f @ " .. speed .. " fps")
+
+  canvas.color = colors.lightgray
+  canvas.text(150, 382, "SPACE: play/pause   Up/Down: speed   ESC: exit")
+
+  if iskeypressed("escape") then
+    break
+  end
+end

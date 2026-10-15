@@ -104,6 +104,10 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
+        <Filename Value="tyrolib\SpriteAtlas.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
         <Filename Value="tyrolib\TyroPhysics.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>

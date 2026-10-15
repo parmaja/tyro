@@ -158,6 +158,11 @@ type
   // Encodes a single-frame RGBA8 sprite as a valid .ase file.
   function AsepriteSaveRGBA(const FileName: string; AWidth, AHeight: Integer; APixels: PByte; ADuration: Integer = 100; const ALayerName: string = 'Layer 1'): Boolean;
 
+  // Raw DEFLATE (RFC 1951) decompression of a stream without a zlib wrapper.
+  // Used by the ZIP-based .sprite reader; ADst must hold at least ADstSize
+  // bytes. Returns the number of bytes written, or -1 on a malformed stream.
+  function InflateRawBuffer(ASrc: PByte; ASrcLen: Integer; ADst: PByte; ADstSize: Integer): Integer;
+
 implementation
 
 const
@@ -631,6 +636,11 @@ begin
     DistTree.Free;
     ClTree.Free;
   end;
+end;
+
+function InflateRawBuffer(ASrc: PByte; ASrcLen: Integer; ADst: PByte; ADstSize: Integer): Integer;
+begin
+  Result := InflateRaw(ASrc, ASrcLen, ADst, ADstSize);
 end;
 
 { Decompress a zlib stream (RFC 1950) into a buffer of exactly AExpected bytes. }

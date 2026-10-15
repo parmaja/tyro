@@ -33,6 +33,7 @@ tyro demos/pong.tyro
 | File | Feature |
 |------|---------|
 | `aseprites_demo.tyro` | Load and play Aseprite animations from `demos/aseprites/` — `sprite:play(fps)`, `stop`, `looping`, `frames`/`frame` — with a controllable idle/walk/run hero |
+| `sprite_atlas_demo.tyro` | Load and play a `.sprite` texture atlas (`demos/sprite_sheet.sprite`, PNG + TexturePacker/Phaser JSON in a ZIP) — `sprite:play(fps)`, `stop`, `frames`/`frame` — with a frame strip and speed controls |
 
 ### Console
 
