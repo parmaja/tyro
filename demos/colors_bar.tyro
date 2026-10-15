@@ -5,7 +5,7 @@ i = 0
 while i < colors.count do
     canvas.color = colors[i]
     h = 20
-    y = i * h + 50
+    y = i * h + 5
     canvas.rectangle(x, y, w, h, true)
     canvas.color = colors.black
     canvas.rectangle(x, y, w, h, false)
