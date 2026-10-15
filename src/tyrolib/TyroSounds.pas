@@ -959,8 +959,10 @@ begin
 
   // Roar cutoff scales with RPM so higher revs sound brighter/harsher
   RoarCutoff := 250.0 + Frequency * 1.6;
-  if RoarCutoff > 2800.0 then RoarCutoff := 2800.0;
-  if RoarCutoff < 150.0 then RoarCutoff := 150.0;
+  if RoarCutoff > 2800.0 then
+    RoarCutoff := 2800.0;
+  if RoarCutoff < 150.0 then
+    RoarCutoff := 150.0;
 
   // Wobble/throb rate scales with RPM
   WobbleRate := Frequency * 0.06;
