@@ -331,7 +331,7 @@ end;
 
 procedure TMelodyChannel.SetInstrument(Instrument: String);
 begin
-  Log.WriteLn('SetInstrument(' + Instrument + ')');
+  //Log.WriteLn('SetInstrument(' + Instrument + ')');
 end;
 
 function TMelodyChannel.Next: Boolean;

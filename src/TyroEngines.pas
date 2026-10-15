@@ -1547,7 +1547,9 @@ begin
   Output := TTyroOutput.Create(Main);
   Output.Important := True;
   Output.Name := 'Output';
-  Output.BoundsRect := Rect(0, 0, 480, 240);
+  Output.BoundsRect := Rect(0, 0, Width, Height);
+  Output.Align := alClient;
+  Output.Show;
 
   Console := TTyroTerminal.Create(Main);
   Console.BoundsRect := Rect(0, 0, Width, Height div 2);
@@ -2033,7 +2035,7 @@ begin
   Console.BringToFront;
   //Route typed input to the console now that it is visible.
   Console.Focused := True;
-
+  Writeln(Console.WindowRect.Height);
   StartConsoleRead;
 end;
 

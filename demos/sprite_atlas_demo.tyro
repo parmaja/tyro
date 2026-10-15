@@ -40,7 +40,7 @@ local strip = {}
 for i = 0, walk.frames - 1 do
   local s = Sprites.new()
   s.load("sprite_sheet.sprite")
-  s.scale = 0.75
+  s.scale = 1
   s.x = 110 + i * 90
   s.y = 320
   s.frame = i          -- hold this frame (no play => it stays put)

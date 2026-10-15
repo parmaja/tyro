@@ -41,7 +41,7 @@ type
   protected
   public
     constructor Create(AScript: TLuaScript); virtual;
-    procedure Register; override;
+    procedure Register(L: PLua_State); override;
     property Script: TLuaScript read FScript;
   end;
 
@@ -838,7 +838,7 @@ end;
 
 constructor TLuaConsole.Create(AScript: TLuaScript);
 begin
-  inherited Create(AScript);
+  inherited;
 end;
 
 { TLuaWindow }
@@ -1066,7 +1066,7 @@ begin
   Created;
 end;
 
-procedure TTyroLuaObject.Register;
+procedure TTyroLuaObject.Register(L: PLua_State);
 begin
 end;
 
@@ -1179,19 +1179,15 @@ begin
     else if field = 'backcolor' then
     begin
       i := L.ToInteger(-1);
-      //Thread-safe through the queue: the color is applied on the Engine
-      //thread, so canvas.clear() clears with what the script asked for.
       FScript.AddQueueObject(TDrawSetBackColorObject.Create(Engine.Board, IntToColor(i)));
       Result := 1;
     end
-    else if (field = 'pensize') or (field = 'linewidth') then
+    else if (field = 'pen') then
     begin
-      //Pen size drives the weight of lines and of rectangle/triangle
-      //outlines: canvas.pensize = 3 makes later strokes thick.
       i := L.ToInteger(-1);
       if i < 1 then
         i := 1;
-      FScript.AddQueueObject(TDrawSetPenSizeObject.Create(Engine.Board, i));
+      FScript.AddQueueObject(TDrawSetPenObject.Create(Engine.Board, i));
       Result := 1;
     end;
   end;
@@ -1207,7 +1203,7 @@ begin
 
   if field = 'color' then
   begin
-    i := ColorToInt(Engine.Board.PenColor);
+    i := ColorToInt(Engine.Board.Color);
     L.PushInteger(i);
     Result := 1;
   end
@@ -1227,9 +1223,9 @@ begin
     L.PushInteger(Engine.Board.Height);
     Result := 1;
   end
-  else if (field = 'pensize') or (field = 'linewidth') then
+  else if (field = 'pen') then
   begin
-    L.PushInteger(Engine.Board.PenSize);
+    L.PushInteger(Engine.Board.Pen);
     Result := 1;
   end;
 end;
@@ -1794,9 +1790,9 @@ var
 begin
   c := L.ArgsCount;
   x := 0;
-  y := 0;
-  w := 0;
-  h := 0;
+  y := Engine.Height div 2;
+  w := Engine.Width;
+  h := y;
   if c >= 2 then
   begin
     x := round(L.ToNumber(1));

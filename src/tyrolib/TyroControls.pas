@@ -1058,7 +1058,7 @@ begin
   inherited;
   ACanvas.FillRect(ClientRect, BackColor);
   th := Res.Font.Height;
-  ACanvas.DrawText(2, (ClientRect.Height - th) / 2, FCaption, ACanvas.PenColor);
+  ACanvas.DrawText(2, (ClientRect.Height - th) / 2, FCaption, ACanvas.Color);
 end;
 
 { TTyroCaptionControl }
@@ -1120,12 +1120,12 @@ begin
   if FChecked then
   begin
     //check mark: two strokes inside the box
-    ACanvas.DrawLine(box.Left + 3, box.Top + boxSize div 2, box.Left + boxSize div 2, box.Bottom - 3, ACanvas.PenColor);
-    ACanvas.DrawLine(box.Left + boxSize div 2, box.Bottom - 3, box.Right - 2, box.Top + 3, ACanvas.PenColor);
+    ACanvas.DrawLine(box.Left + 3, box.Top + boxSize div 2, box.Left + boxSize div 2, box.Bottom - 3, ACanvas.Color);
+    ACanvas.DrawLine(box.Left + boxSize div 2, box.Bottom - 3, box.Right - 2, box.Top + 3, ACanvas.Color);
   end;
 
   th := Res.Font.Height;
-  ACanvas.DrawText(box.Right + 6, r.Top + (r.Height - th) / 2, FCaption, ACanvas.PenColor);
+  ACanvas.DrawText(box.Right + 6, r.Top + (r.Height - th) / 2, FCaption, ACanvas.Color);
 end;
 
 { TTyroEdit }
@@ -1366,7 +1366,7 @@ begin
     //* in front of it.
     DoDrawPlaceHolder(ACanvas)
   else
-    ACanvas.DrawText(2 - FScrollPos, (r.Height - th) / 2, FText, ACanvas.PenColor);
+    ACanvas.DrawText(2 - FScrollPos, (r.Height - th) / 2, FText, ACanvas.Color);
 
   if Focused and (Trunc(RayLib.GetTime() * 2) mod 2 = 0) then
   begin
@@ -1962,7 +1962,7 @@ begin
   if AIndex = FItemIndex then
     ACanvas.DrawText(AItemRect.Left + 4, ty, FItems[AIndex], clBlack)
   else
-    ACanvas.DrawText(AItemRect.Left + 4, ty, FItems[AIndex], ACanvas.PenColor);
+    ACanvas.DrawText(AItemRect.Left + 4, ty, FItems[AIndex], ACanvas.Color);
 end;
 
 procedure TTyroListBox.DoCustomDraw(ACanvas: TTyroCanvas; AIndex: Integer; AItemRect: TRect);

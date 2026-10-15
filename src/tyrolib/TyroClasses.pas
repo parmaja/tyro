@@ -214,15 +214,15 @@ type
   private
     FOrigin: TPoint;
     FCurrentPoint: TPoint;
-    FPenColor: TColor;
+    FColor: TColor;
     FBackColor: TColor;
-    FPenSize: Integer;
+    FPen: Integer;
     FWidth, FHeight: Integer;
     function GetPenAlpha: Byte;
     procedure SetPenAlpha(AValue: Byte);
     procedure SetHeight(AValue: Integer);
-    procedure SetPenColor(AValue: TColor);
-    procedure SetPenSize(AValue: Integer);
+    procedure SetColor(AValue: TColor);
+    procedure SetPen(AValue: Integer);
     procedure SetWidth(AValue: Integer);
     procedure SetBackColor(const Value: TColor);
   protected
@@ -243,7 +243,7 @@ type
 
     procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
     //Triangle: filled uses raylib's 2D triangle, an outline follows the pen size
-    //so canvas.pensize / the thickness argument control how heavy it looks.
+    //so canvas.Pen / the thickness argument control how heavy it looks.
     procedure DrawTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor; Fill: Boolean = false);
     procedure DrawText(X, Y: Integer; S: utf8string; Color: TColor); overload;
     procedure DrawText(X, Y: Single; S: utf8string; Color: TColor); overload;
@@ -282,8 +282,8 @@ type
     function GetEffectArea: TRectangle; virtual;
 
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
-    property PenSize: Integer read FPenSize write SetPenSize;
-    property PenColor: TColor read FPenColor write SetPenColor;
+    property Pen: Integer read FPen write SetPen;
+    property Color: TColor read FColor write SetColor;
     //Maybe TextColor
     property BackColor: TColor read FBackColor write SetBackColor;
     property Width: Integer read FWidth write SetWidth;
@@ -588,26 +588,26 @@ begin
   FHeight :=AValue;
 end;
 
-procedure TTyroCanvas.SetPenColor(AValue: TColor);
+procedure TTyroCanvas.SetColor(AValue: TColor);
 begin
-  FPenColor := AValue;
+  FColor := AValue;
 end;
 
-procedure TTyroCanvas.SetPenSize(AValue: Integer);
+procedure TTyroCanvas.SetPen(AValue: Integer);
 begin
-  if FPenSize =AValue then
+  if FPen =AValue then
     Exit;
-  FPenSize :=AValue;
+  FPen :=AValue;
 end;
 
 function TTyroCanvas.GetPenAlpha: Byte;
 begin
-  Result := FPenColor.RGBA.Alpha;
+  Result := FColor.RGBA.Alpha;
 end;
 
 procedure TTyroCanvas.SetPenAlpha(AValue: Byte);
 begin
-  FPenColor.RGBA.Alpha := AValue;
+  FColor.RGBA.Alpha := AValue;
 end;
 
 procedure TTyroCanvas.SetWidth(AValue: Integer);
@@ -623,8 +623,8 @@ begin
   SetCurrent(0 ,0);
   FWidth := AWidth;
   FHeight := AHeight;
-  FPenSize := 1;
-  FPenColor := clBlack;
+  FPen := 1;
+  FColor := clBlack;
   FBackColor := Res.Theme.Window.BackColor;
 
   {BeginTextureMode(FTexture);
@@ -694,7 +694,7 @@ begin
   else
   begin
     //An outline is drawn as three pen-size lines rather than DrawTriangleLines,
-    //so it honours PenSize and stays consistent with canvas.line.
+    //so it honours Pen and stays consistent with canvas.line.
     DrawLine(X1, Y1, X2, Y2, Color);
     DrawLine(X2, Y2, X3, Y3, Color);
     DrawLine(X3, Y3, X1, Y1, Color);
@@ -707,7 +707,7 @@ begin
   if Fill then
     RayLib.DrawRectangle(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height, Color)
   else
-    RayLib.DrawRectangleLinesEx(RectangleOf(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height), PenSize, Color);
+    RayLib.DrawRectangleLinesEx(RectangleOf(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height), Pen, Color);
   SetCurrent(ARect.Right, ARect.Bottom);
 end;
 
@@ -735,7 +735,7 @@ begin
   if Fill then
     RayLib.DrawRectangleRec(R, Color)
   else
-    RayLib.DrawRectangleLinesEx(R, PenSize, Color);
+    RayLib.DrawRectangleLinesEx(R, Pen, Color);
   SetCurrent(Round(ARectangle.X + ARectangle.Width), Round(ARectangle.Y + ARectangle.Height));
 end;
 
@@ -762,23 +762,23 @@ end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer; Color: TColor);
 begin
-  RayLib.DrawLineEx(Vector2Of(X1 + FOrigin.X, Y1 + FOrigin.Y), Vector2Of(X2 + FOrigin.X, Y2 + FOrigin.Y), PenSize, Color);
+  RayLib.DrawLineEx(Vector2Of(X1 + FOrigin.X, Y1 + FOrigin.Y), Vector2Of(X2 + FOrigin.X, Y2 + FOrigin.Y), Pen, Color);
   SetCurrent(X2, Y2);
 end;
 
 procedure TTyroCanvas.DrawLine(X1, Y1, X2, Y2: Integer);
 begin
-  DrawLine(X1, Y1, X2, Y2, PenColor);
+  DrawLine(X1, Y1, X2, Y2, Color);
 end;
 
 procedure TTyroCanvas.DrawLineF(X1, Y1, X2, Y2: Single);
 begin
-  DrawLineF(X1, Y1, X2, Y2, PenColor);
+  DrawLineF(X1, Y1, X2, Y2, Color);
 end;
 
 procedure TTyroCanvas.DrawLineF(X1, Y1, X2, Y2: Single; Color: TColor);
 begin
-  DrawLineEx(TVector2.Create(X1 + FOrigin.X, Y1 + FOrigin.Y), TVector2.Create(X2 + FOrigin.X, Y2 + FOrigin.Y), PenSize, Color);
+  DrawLineEx(TVector2.Create(X1 + FOrigin.X, Y1 + FOrigin.Y), TVector2.Create(X2 + FOrigin.X, Y2 + FOrigin.Y), Pen, Color);
   SetCurrent(Round(X2), Round(Y2));
 end;
 
