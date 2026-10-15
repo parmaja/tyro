@@ -132,7 +132,9 @@ type
     pitch change only changes the slope of the cursor, so it never jumps phase.
 
     Reset/NextSample are the render core; keeping them on the record lets a
-    headless test drive the exact code the callback runs. }
+    headless test drive the exact code the callback runs. SrcIndex/SrcPos are
+    wrapped back at WrapAt, a whole number of base cycles, so a loop can keep
+    playing without the source cursor ever overflowing. }
   TLoopSignal = record
     Active: Boolean;
     Wave: TWaveformProc;
@@ -142,6 +144,7 @@ type
     SrcIndex: Integer;       //integer part of the source cursor
     SrcPos: Double;          //fractional source cursor
     S0, S1: Single;          //source samples at SrcIndex and SrcIndex + 1
+    WrapAt: Integer;         //source index the cursor wraps back from
     Gain: Single;            //envelope, ramps to avoid clicks
     TargetGain: Single;
     GainStep: Single;
@@ -659,10 +662,31 @@ end;
 //completely, and resampled the rest with nearest neighbour, which aliases when
 //Rate is not 1. The two sample history below resamples properly instead.
 
+const
+  //A loop can play for days, so the cursor is wrapped back before it can reach
+  //the top of an Integer. At 44.1 kHz this is about 6.7 hours of looping; the
+  //application is built with {$R+}{$Q+}, so without it the voice would raise
+  //ERangeError on the audio thread instead of wrapping.
+  cLoopWrapLimit = 1 shl 30;
+
 procedure TLoopSignal.Reset;
+var
+  Period: Integer;
 begin
   SrcIndex := 0;
   SrcPos := 0;
+  //Wrap as a whole number of cycles of the base waveform, so neither the
+  //resampler (SrcPos moves with SrcIndex, the interpolation fraction is
+  //untouched) nor the phase of a periodic waveform moves at the wrap.
+  //Period is clamped to the wrap limit: below ~0.04 Hz a cycle no longer fits,
+  //and then the wrap is just a plain sample count.
+  if (SampleRate > 0) and (BaseFrequency >= SampleRate / cLoopWrapLimit) then
+    Period := Round(SampleRate / BaseFrequency)
+  else
+    Period := cLoopWrapLimit;
+  if Period < 1 then
+    Period := 1;
+  WrapAt := (cLoopWrapLimit div Period) * Period;
   if Assigned(Wave) and (SampleRate > 0) then
   begin
     S0 := Wave(0, SampleRate, BaseFrequency);
@@ -705,6 +729,14 @@ begin
     S0 := S1;
     SrcIndex := SrcIndex + 1;
     S1 := Wave(SrcIndex + 1, SampleRate, BaseFrequency);
+  end;
+  //Wrap the cursor back before it can reach the top of an Integer. SrcIndex
+  //and SrcPos move together, so the interpolation fraction, and therefore the
+  //output, is unchanged by it.
+  if SrcIndex >= WrapAt then
+  begin
+    SrcIndex := SrcIndex - WrapAt;
+    SrcPos := SrcPos - WrapAt;
   end;
   fr := SrcPos - SrcIndex;
   v := S0 + (S1 - S0) * fr;
