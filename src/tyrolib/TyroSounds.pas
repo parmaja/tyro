@@ -163,9 +163,14 @@ procedure SetLoopPitch(Frequency: Single);
 procedure SetLoopVolume(Volume: Single);
 procedure UpdateLoopSounds;
 
-function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function LFSRNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function TrueLFSRNoise(Index, SampleRate: Integer; Frequency: Single): Single;
+function HashNoise(Index: Integer): Single;
+
+function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function PlaneNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Engine_Waveform(Index: Integer; SampleRate: Integer; Frequency: Single): Single;
+function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function GrandPiano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -184,7 +189,6 @@ function Flute_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function FM_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function PinkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function DarkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-function HashNoise(Index: Integer): Single;
 
 implementation
 
@@ -846,10 +850,140 @@ begin
     Result := -1.0;
 end;
 
+var
+  // Global/Class state variables
+  LFSR_State: Word = $ACE1; // Non-zero seed
+  LFSR_Phase: Single = 0.0;
+  LFSR_HoldValue: Single = 0.0;
+
+function TrueLFSRNoise(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Bit: Word;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := GetRandomValue(-100,+100) / 100;
+    Exit;
+  end;
+
+  // Advance the phase based on frequency
+  LFSR_Phase := LFSR_Phase + (Frequency / SampleRate);
+
+  // Every time phase wraps 1.0, advance the LFSR state and grab a new sample
+  while LFSR_Phase >= 1.0 do
+  begin
+    LFSR_Phase := LFSR_Phase - 1.0;
+
+    // 16-bit maximal length LFSR (taps at 15, 13, 12, 10)
+    Bit := ((LFSR_State shr 0) xor (LFSR_State shr 2) xor
+            (LFSR_State shr 3) xor (LFSR_State shr 5)) and 1;
+
+    LFSR_State := (LFSR_State shr 1) or (Bit shl 15);
+
+    // Output as 8-bit style noise (smoother than 1-bit, grittier than 16-bit)
+    LFSR_HoldValue := ((LFSR_State and $FF) - 128) / 128.0;
+  end;
+
+  // Output the held value (this creates the "pitched" effect)
+  Result := LFSR_HoldValue;
+end;
+
 function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 begin
   // LFSR-based pitched noise (periodic like NES noise)
-  Result := LFSRNoise_Waveform(Index, SampleRate, Frequency);
+  Result := TrueLFSRNoise(Index, SampleRate, Frequency);
+end;
+
+function PlaneNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  Period, T: Integer;
+  Hash: UInt32;
+  NoiseVal: Single;
+  PropPhase: Single;
+  PropVal: Single;
+begin
+  // 1. Generate the Engine Noise (Pitched)
+  Period := Round(SampleRate / Frequency);
+  if Period < 1 then Period := 1;
+
+  T := Index div Period;
+
+  // High-quality integer hash to scramble T
+  Hash := UInt32(T);
+  Hash := (Hash xor 61) xor (Hash shr 16);
+  Hash := Hash + (Hash shl 3);
+  Hash := Hash xor (Hash shr 4);
+  Hash := Hash * $27d4eb2d;
+  Hash := Hash xor (Hash shr 15);
+
+  // Output harsh 1-bit noise for that raspy 8-bit engine texture
+  if (Hash and 1) = 1 then
+    NoiseVal := 1.0
+  else
+    NoiseVal := -1.0;
+
+  // 2. Generate the Propeller "Chug" (Amplitude Modulation)
+  // The propeller spins at 1/4th the speed of the noise frequency.
+  // (e.g., if Frequency is 120Hz, the propeller chops at 30Hz)
+  PropPhase := Frac((Index / SampleRate) * (Frequency * 0.25));
+
+  // Create a pulse wave. It's "ON" 40% of the time, and "Muffled" 60%.
+  if PropPhase < 0.4 then
+    PropVal := 1.0        // Loud
+  else
+    PropVal := 0.2;       // Muffled (but not totally silent)
+
+  // 3. Combine them
+  Result := NoiseVal * PropVal;
+end;
+
+var
+  LP1: Single = 0.0;
+  LP2: Single = 0.0;
+  LP3: Single = 0.0;  // cascaded lowpass states for the roar
+  WobLP: Single = 0.0;          // lowpass for the slow wobble
+
+function Engine_Waveform(Index: Integer; SampleRate: Integer; Frequency: Single): Single;
+const
+  RoarLevel   = 0.9;    // noise rumble volume
+  WobbleDepth = 0.25;   // how much roar throbs
+var
+  dt, k: Single;
+  RoarCutoff, WobbleRate: Single;
+  Roar, Wobble, n: Single;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+    Exit(0);
+
+  dt := 1.0 / SampleRate;
+
+  // Roar cutoff scales with RPM so higher revs sound brighter/harsher
+  RoarCutoff := 250.0 + Frequency * 1.6;
+  if RoarCutoff > 2800.0 then RoarCutoff := 2800.0;
+  if RoarCutoff < 150.0 then RoarCutoff := 150.0;
+
+  // Wobble/throb rate scales with RPM
+  WobbleRate := Frequency * 0.06;
+  if WobbleRate > 60.0 then WobbleRate := 60.0;
+  if WobbleRate < 6.0 then WobbleRate := 6.0;
+
+  // Roar: white noise through 3 cascaded one-pole lowpasses
+  n := GetRandomValue(-100, +100) / 200;   // +/-0.5
+  k := 1 - Exp(-2 * Pi * RoarCutoff * dt);
+  LP1 := LP1 + k * (n - LP1);
+  LP2 := LP2 + k * (LP1 - LP2);
+  LP3 := LP3 + k * (LP2 - LP3);
+  Roar := LP3 * 4.0;
+
+  // Slow wobble driven by filtered noise, rate follows RPM
+  n := GetRandomValue(-100, +100) / 200;
+  k := 1 - Exp(-2 * Pi * WobbleRate * dt);
+  WobLP := WobLP + k * (n - WobLP);
+  Wobble := 1.0 - WobbleDepth * (WobLP * 2.0);
+
+  Result := RoarLevel * Roar * Wobble;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
 end;
 
 function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -1256,6 +1390,9 @@ initialization
   Waveforms.Add('White', @WhiteNoise_Waveform);
   Waveforms.Add('Pink', @PinkNoise_Waveform);
   Waveforms.Add('Dark', @DarkNoise_Waveform);
+
+  Waveforms.Add('Plane', @PlaneNoise_Waveform);
+  Waveforms.Add('Engine', @Engine_Waveform);
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;

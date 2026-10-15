@@ -398,19 +398,19 @@ local function update(ft)
   -- plane engine: a gapless looping drone (sound.loopPlay) that is retuned
   -- with the throttle, so it hums continuously instead of retriggering.
   if state == "play" then
-    local f = 300 + 90 * ((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN))
+    local f = 300 + 50 * ((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN))
     if not engineOn then
       engineOn = true
       enginePitch = f
-      sound.loopPlay("Pitched", f, 0.30)
+      sound.loopPlay("Engine", f, 0.30)
     elseif math.abs(f - enginePitch) >= 1 then
       enginePitch = f
-      sound.pitch(f)
+      sound.loopPitch(f)
     end
   elseif engineOn then
     engineOn = false
     enginePitch = -1
-    sound.stop()
+    sound.loopStop()
   end
 end
 
@@ -652,7 +652,7 @@ local function reset()
   dyingTimer = 0
   engineOn = false
   enginePitch = -1
-  sound.stop()
+  sound.loopStop()
   msg = ""
   msgTimer = 0
   local l, r = riverBounds(travel + (H - PLAYER_PY))

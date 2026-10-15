@@ -24,7 +24,7 @@ uses
   cthreads,
   {$ENDIF}
   TyroApp, TyroEditors, Melodies, TyroLua, TyroScripts, TyroControls,
-  TyroTerminal;
+  TyroTerminal, TyroSounds;
 
 {$R *.res}
 

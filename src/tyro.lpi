@@ -143,6 +143,10 @@
         <Filename Value="tyrolib\TyroTerminal.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="tyrolib\TyroSounds.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
     <Debugger>
       <ClassConfig Version="1">
