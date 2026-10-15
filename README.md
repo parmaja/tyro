@@ -76,9 +76,9 @@ ms)`, `music.noise(ms)` (white) / `music.noise(freq, ms)` (pitched) and
 `music.mml(...)` play one-shot effects and tunes. For a sound that has to run
 without gaps—an engine drone, a siren, a wind loop—use `sound.loopPlay(freq
 [, volume])` or `sound.loopPlay(wave, freq [, volume])`. It keeps looping until
-`sound.stop()`, and `sound.pitch(freq)` / `sound.volume(0..1)` retune it while
-it plays. Available `wave` names include `Sin`, `Square`, `Saw`, `Tri`, `Organ`,
-`FM`, `Noise`, `Pink` and `Pitched`.
+`sound.loopStop()`, and `sound.loopPitch(freq)` / `sound.loopVolume(0..1)` retune
+it while it plays. Available `wave` names include `Sin`, `Square`, `Saw`, `Tri`,
+`Organ`, `FM`, `Noise`, `Pink` and `Engine`.
 
 # Input
 

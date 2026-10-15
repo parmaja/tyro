@@ -116,15 +116,48 @@ type
     function CreateChannel: TMelodyChannel; override;
   end;
 
+  { TLoopSignal }
+
+  { The state of the looping voice, shared between the audio thread (reads it
+    in TTyroLoopSound's callback) and the main thread (writes the pitch/volume
+    targets). Plain values only, no object reference, so the callback keeps
+    reading safely even in the instant after the voice that owns the stream is
+    freed.
+
+    The waveform is rendered at BaseFrequency into a two sample history
+    (S0/S1) and the source cursor SrcPos walks that history at `Rate` samples
+    per output sample, interpolating between the two neighbours. That is a
+    resample, not a re-evaluate: every waveform retunes with Rate, including
+    the stateful ones (Engine, Noise) that ignore the Index argument, and a
+    pitch change only changes the slope of the cursor, so it never jumps phase.
+
+    Reset/NextSample are the render core; keeping them on the record lets a
+    headless test drive the exact code the callback runs. }
+  TLoopSignal = record
+    Active: Boolean;
+    Wave: TWaveformProc;
+    SampleRate: Integer;
+    BaseFrequency: Single;   //frequency the waveform is generated at
+    Rate: Single;            //source cursor advance per output sample
+    SrcIndex: Integer;       //integer part of the source cursor
+    SrcPos: Double;          //fractional source cursor
+    S0, S1: Single;          //source samples at SrcIndex and SrcIndex + 1
+    Gain: Single;            //envelope, ramps to avoid clicks
+    TargetGain: Single;
+    GainStep: Single;
+    //(Re)seed the source history at sample 0. Does not touch Rate or Gain.
+    procedure Reset;
+    //One mono output sample; ramps Gain toward TargetGain first.
+    function NextSample: Single;
+  end;
+
   { TTyroLoopSound }
 
   { A continuously looping generated tone. RayLib has no loop for a decoded
     Sound/Music, and looping a buffer leaves a small silent gap at the wrap
     point. Instead this voice drives an AudioStream through a callback that
-    generates samples on demand, so the tone is genuinely gapless. The waveform
-    is generated at the frequency it was started with and the read position is
-    advanced at `Rate` samples per output sample, so the pitch can change while
-    it plays without a phase jump. }
+    generates samples on demand, so the tone is genuinely gapless. See
+    TLoopSignal for how the pitch (sound.loopPitch) is applied. }
   TTyroLoopSound = class(TObject)
   private
     FStream: TAudioStream;
@@ -619,63 +652,84 @@ begin
   PlayingMelodies.Clear;
 end;
 
-{ TTyroLoopSound }
+{ TLoopSignal }
 
-//The audio thread and the main thread share these plain values instead of an
-//object reference: the callback keeps reading them safely even in the instant
-//after the voice that owns the stream is freed.
-type
-  TLoopSignal = record
-    Active: Boolean;
-    Wave: TWaveformProc;
-    SampleRate: Integer;
-    BaseFrequency: Single;   //frequency the waveform is generated at
-    Rate: Single;            //read index advance per output sample
-    IndexPos: Double;        //fractional read position into the base waveform
-    Gain: Single;            //envelope, ramps to avoid clicks
-    TargetGain: Single;
-    GainStep: Single;
+//Was: evaluate the waveform straight at the rounded cursor. That dropped every
+//waveform that ignores Index (Engine, Noise, White) out of pitch control
+//completely, and resampled the rest with nearest neighbour, which aliases when
+//Rate is not 1. The two sample history below resamples properly instead.
+
+procedure TLoopSignal.Reset;
+begin
+  SrcIndex := 0;
+  SrcPos := 0;
+  if Assigned(Wave) and (SampleRate > 0) then
+  begin
+    S0 := Wave(0, SampleRate, BaseFrequency);
+    S1 := Wave(1, SampleRate, BaseFrequency);
+  end
+  else
+  begin
+    S0 := 0;
+    S1 := 0;
   end;
+end;
+
+function TLoopSignal.NextSample: Single;
+var
+  v, fr: Single;
+begin
+  if not Active or not Assigned(Wave) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  if Gain < TargetGain then
+  begin
+    Gain := Gain + GainStep;
+    if Gain > TargetGain then
+      Gain := TargetGain;
+  end
+  else if Gain > TargetGain then
+  begin
+    Gain := Gain - GainStep;
+    if Gain < TargetGain then
+      Gain := TargetGain;
+  end;
+  //Consume every source sample the cursor walked past, so SrcPos always ends
+  //up inside [SrcIndex, SrcIndex + 1). Generating ahead by one sample is what
+  //makes the interpolation below possible; at Rate = 1 it costs exactly the one
+  //call per output sample the old code made, and emits the same values.
+  while SrcPos >= SrcIndex + 1 do
+  begin
+    S0 := S1;
+    SrcIndex := SrcIndex + 1;
+    S1 := Wave(SrcIndex + 1, SampleRate, BaseFrequency);
+  end;
+  fr := SrcPos - SrcIndex;
+  v := S0 + (S1 - S0) * fr;
+  SrcPos := SrcPos + Rate;
+  Result := v * Gain;
+end;
 
 var
   LoopSignal: TLoopSignal;
 
-//Runs on the audio thread. Fills `Frames` mono float samples. The waveform is
-//evaluated at BaseFrequency and the read position is advanced at Rate, so the
-//output stays continuous (no gap) and pitch changes glide without a phase jump.
+//Runs on the audio thread. Fills `Frames` mono float samples from the shared
+//render core, so a pitch change is a continuous resample of what is already
+//playing: no gap at the loop point, no phase jump when the pitch moves.
 procedure LoopAudioCallback(var Buffer; Frames: Cardinal); cdecl;
 var
   Out32: PSingle;
   I, N: Integer;
-  v: Single;
 begin
   Out32 := PSingle(@Buffer);
   N := Integer(Frames);
-  if not LoopSignal.Active then
-  begin
-    for I := 0 to N - 1 do
-      Out32[I] := 0;
-    Exit;
-  end;
   for I := 0 to N - 1 do
-  begin
-    if LoopSignal.Gain < LoopSignal.TargetGain then
-    begin
-      LoopSignal.Gain := LoopSignal.Gain + LoopSignal.GainStep;
-      if LoopSignal.Gain > LoopSignal.TargetGain then
-        LoopSignal.Gain := LoopSignal.TargetGain;
-    end
-    else if LoopSignal.Gain > LoopSignal.TargetGain then
-    begin
-      LoopSignal.Gain := LoopSignal.Gain - LoopSignal.GainStep;
-      if LoopSignal.Gain < LoopSignal.TargetGain then
-        LoopSignal.Gain := LoopSignal.TargetGain;
-    end;
-    v := LoopSignal.Wave(Integer(Round(LoopSignal.IndexPos)), LoopSignal.SampleRate, LoopSignal.BaseFrequency);
-    LoopSignal.IndexPos := LoopSignal.IndexPos + LoopSignal.Rate;
-    Out32[I] := v * LoopSignal.Gain;
-  end;
+    Out32[I] := LoopSignal.NextSample;
 end;
+
+{ TTyroLoopSound }
 
 constructor TTyroLoopSound.Create(Proc: TWaveformProc; Frequency, Volume: Single);
 begin
@@ -700,10 +754,10 @@ begin
   LoopSignal.SampleRate := cDefaultSampleRate;
   LoopSignal.BaseFrequency := FBaseFrequency;
   LoopSignal.Rate := 1;
-  LoopSignal.IndexPos := 0;
   LoopSignal.Gain := 0;
   LoopSignal.TargetGain := 1;
   LoopSignal.GainStep := 1 / (0.008 * cDefaultSampleRate); //8 ms attack
+  LoopSignal.Reset;
   SetAudioStreamVolume(FStream, Volume);
   SetAudioStreamCallback(FStream, LoopAudioCallback);
   PlayAudioStream(FStream);
@@ -897,7 +951,7 @@ end;
 function PlaneNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 var
   Period, T: Integer;
-  Hash: UInt32;
+  Hash: UInt64;
   NoiseVal: Single;
   PropPhase: Single;
   PropVal: Single;
@@ -908,12 +962,17 @@ begin
 
   T := Index div Period;
 
-  // High-quality integer hash to scramble T
-  Hash := UInt32(T);
+  // High-quality integer hash to scramble T. Kept in UInt64 and masked back to
+  // 32 bits at every step that can wrap, for the same reason HashNoise is: the
+  // shift below and the multiply after it overflow on purpose, and with the
+  // {$Q+} this application is built with a UInt32 operation raises ERangeError
+  // instead of wrapping. The masked result is bit for bit what a 32 bit
+  // wraparound would give.
+  Hash := Cardinal(T);
   Hash := (Hash xor 61) xor (Hash shr 16);
-  Hash := Hash + (Hash shl 3);
+  Hash := (Hash + ((Hash shl 3) and $FFFFFFFF)) and $FFFFFFFF;
   Hash := Hash xor (Hash shr 4);
-  Hash := Hash * $27d4eb2d;
+  Hash := (Hash * $27d4eb2d) and $FFFFFFFF;
   Hash := Hash xor (Hash shr 15);
 
   // Output harsh 1-bit noise for that raspy 8-bit engine texture

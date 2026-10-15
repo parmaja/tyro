@@ -6,8 +6,8 @@
 --    music.noise(ms)          white noise       (crash)
 --    music.noise(freq, ms)    pitched noise
 --    sound.loopPlay(wave, freq [, volume])      start a gapless loop
---    sound.pitch(freq) / sound.volume(v)        retune while it plays
---    sound.stop()
+--    sound.loopPitch(freq) / sound.loopVolume(v) retune while it plays
+--    sound.loopStop()
 --  A bad call aborts the script before the result file is written.
 --  Run:  tyro.exe tests\test_riverraid_sound.tyro --exit:3
 --  Result: tests\test_riverraid_sound_result.txt
@@ -22,9 +22,9 @@ music.noise(150)
 music.sound("Saw", 90, 150)
 music.sound(440, 120)
 -- looping engine drone, retuned and stopped
-sound.loopPlay("Pitched", 90, 0.30)
-sound.pitch(120)
-sound.volume(0.15)
+sound.loopPlay("Engine", 90, 0.30)
+sound.loopPitch(120)
+sound.loopVolume(0.15)
 
 out:write("noise, sound and loop calls accepted\n")
 out:write("VERDICT => PASS\n")
@@ -35,9 +35,9 @@ out:close()
 local t0 = millis()
 while millis() - t0 < 600 do
   if not cycle then break end
-  sound.pitch(90 + (millis() % 200) / 5)
+  sound.loopPitch(90 + (millis() % 200) / 5)
 end
-sound.stop()
+sound.loopStop()
 
 while cycle do
   canvas.color = colors.black
