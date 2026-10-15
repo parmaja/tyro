@@ -225,6 +225,8 @@ function Flute_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function FM_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function PinkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function DarkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Pew_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Explode_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
@@ -1458,6 +1460,86 @@ begin
   Result := Sum / 2;
 end;
 
+// Missile launch "pew": a fast descending chirp (the rocket motor kicking in)
+// layered with a noise whoosh that dies away, so a short note reads as a launch
+// rather than a plain laser blip. The sweep is expressed as an integrated
+// phase (t + 3*tau*(1 - exp(-t/tau))) so it stays sample-accurate and
+// deterministic; Frequency is the pitch the sweep settles on.
+function Pew_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  SweepDepth = 3.0;   //starts SweepDepth+1 times higher, drops to the base pitch
+  SweepTau = 0.08;    //how fast the pitch falls, seconds
+  DecayTau = 0.18;    //overall amplitude decay, seconds
+  Whoosh = 0.45;      //noise level mixed under the chirp
+var
+  t, Phase, Sweep, Noise, Envelope: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  //Instantaneous frequency f(t) = Frequency * (1 + SweepDepth*exp(-t/SweepTau)),
+  //integrated to get the phase; the exp integral is analytic, no per-sample
+  //state needed.
+  Phase := 2 * Pi * Frequency * (t + SweepDepth * SweepTau * (1 - Exp(-t / SweepTau)));
+  //Soft 2ms onset keeps the transient from clicking, then a rocket-motor decay.
+  Envelope := (1 - Exp(-t * 500)) * Exp(-t / DecayTau);
+  Sweep := Sin(Phase);
+  //Deterministic noise, brighter right after launch and gone with the whoosh.
+  Noise := (HashNoise(Index) * 0.7 + HashNoise(Index div 3) * 0.3) * Exp(-t / (SweepTau * 1.5));
+  Result := (Sweep + Noise * Whoosh) * Envelope;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
+// Enemy explosion "Trrrr": a broadband bang that dies in tens of milliseconds,
+// followed by a dark rumble tail chopped by a fast stutter gate, so the decay
+// rattles instead of fading smoothly. Frequency only tunes the rattle rate
+// (higher note = faster chop), the blast itself is unpitched. Everything is
+// derived from HashNoise, so the same note always renders the same explosion.
+function Explode_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  BlastTau = 0.035;   //initial bang decay, seconds
+  TailTau = 0.32;     //rumble tail decay, seconds
+  GateOn = 1.0;       //stutter pass level
+  GateOff = 0.22;     //stutter chop level, low but not silence
+var
+  t, RattlePhase, Gate, Blast, Tail, Rumble, Weight: Double;
+  k: Integer;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  //The bang: full spectrum noise burst, the loudest part of the sound.
+  Blast := HashNoise(Index) * Exp(-t / BlastTau);
+  //The tail: octave layers of hashed noise (DarkNoise style), slow and dark
+  //like debris and smoke after the blast.
+  Rumble := 0;
+  Weight := 1;
+  for k := 0 to 5 do
+  begin
+    Rumble := Rumble + HashNoise(Index shr k) * Weight;
+    Weight := Weight / 2;
+  end;
+  Rumble := Rumble / 1.96875; //sum of the weights, keeps it inside +-1
+  Tail := Rumble * Exp(-t / TailTau);
+  //Trrrr: chop the tail with a square gate. Frac of real time, so the stutter
+  //rate is exact and the gate does not drift with the sample count.
+  RattlePhase := Frac(t * (Frequency * 0.5 + 8));
+  if RattlePhase < 0.4 then
+    Gate := GateOn
+  else
+    Gate := GateOff;
+  Result := Blast + Tail * Gate;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
@@ -1486,6 +1568,8 @@ initialization
 
   Waveforms.Add('Plane', @PlaneNoise_Waveform);
   Waveforms.Add('Engine', @Engine_Waveform);
+  Waveforms.Add('Pew', @Pew_Waveform); //missile launch chirp
+  Waveforms.Add('Explode', @Explode_Waveform); //enemy explosion rumble
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;
