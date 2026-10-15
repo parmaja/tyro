@@ -1427,8 +1427,9 @@ begin
   Lua.State.Register('music', 'noise', Music, Music.Noise_func);
   Lua.State.Register('music', 'play', Music, Music.Play_func);
   Lua.State.Register('music', 'mml', Music, Music.MML_func);
+  Lua.State.Register('music', Music); //Should be last one
 
-  //sound (gapless looping playback, e.g. an engine drone)
+  //sound (gapless/seamless looping playback, e.g. an engine drone)
   //  sound.loopPlay(freq [, volume])
   //  sound.loopPlay(wave, freq [, volume])
   //  sound.pitch(freq)         retune the running loop
@@ -1438,6 +1439,7 @@ begin
   Lua.State.Register('sound', 'loopPitch', Sound, Sound.LoopPitch_func);
   Lua.State.Register('sound', 'loopVolume', Sound, Sound.LoopVolume_func);
   Lua.State.Register('sound', 'loopStop', Sound, Sound.LoopStop_func);
+  Lua.State.Register('sound', Sound); //Should be last one
 
   //radio (radio.play(url), radio.pause(), radio.resume(), radio.stop()
   // + getters: radio.title, radio.station, radio.state, radio.playing ...)

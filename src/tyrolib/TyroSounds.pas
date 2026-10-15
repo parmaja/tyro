@@ -164,7 +164,7 @@ procedure SetLoopVolume(Volume: Single);
 procedure UpdateLoopSounds;
 
 function WhiteNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
-function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function LFSRNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Piano_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -846,7 +846,7 @@ begin
     Result := -1.0;
 end;
 
-function PitchedNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Noise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 begin
   // LFSR-based pitched noise (periodic like NES noise)
   Result := LFSRNoise_Waveform(Index, SampleRate, Frequency);
@@ -1252,10 +1252,10 @@ initialization
   Waveforms.Add('FM', @FM_Waveform);
 
   //Noises
-  Waveforms.Add('Noise', @WhiteNoise_Waveform);
+  Waveforms.Add('Noise', @Noise_Waveform); //Pitched Noise
+  Waveforms.Add('White', @WhiteNoise_Waveform);
   Waveforms.Add('Pink', @PinkNoise_Waveform);
   Waveforms.Add('Dark', @DarkNoise_Waveform);
-  Waveforms.Add('Pitched', @PitchedNoise_Waveform);
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;

@@ -1028,7 +1028,7 @@ begin
   if Freq <= 0 then
     PlayWaveform(@WhiteNoise_Waveform, 400, Period)
   else
-    PlayWaveform(@PitchedNoise_Waveform, Freq, Period);
+    PlayWaveform(@Noise_Waveform, Freq, Period);
 end;
 
 { TPlayMusicFileObject }

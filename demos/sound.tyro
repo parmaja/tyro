@@ -1,9 +1,2 @@
 window.show(640, 480)
-
-music.sound('sequare', 440, 1000);
-pause(2500)
-music.noise(500)      -- white noise (unchanged)
-pause(2500)
-music.noise(100, 500)
-pause(2500)
-sound.loopPLay(800)
+sound.loopPlay('noise',1000)
