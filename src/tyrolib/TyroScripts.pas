@@ -459,7 +459,8 @@ type
 
   TBeepObject = class(TQueueObject)
   public
-    constructor Create;
+    Period: Integer;
+    constructor Create(APeriod: Integer);
     procedure DoExecute; override;
   end;
 
@@ -899,14 +900,17 @@ begin
 end;
 { TBeepObject }
 
-constructor TBeepObject.Create;
+constructor TBeepObject.Create(APeriod: Integer);
 begin
   inherited Create;
+  Period := APeriod;
+  if Period = 0 then
+    Period := 500;
 end;
 
 procedure TBeepObject.DoExecute;
 begin
-  PlayWaveform(@Sin_Waveform, 440, 1000);
+  PlayWaveform(@Sin_Waveform, 1000, Period);
 end;
 
 { TPlayMMLObject }

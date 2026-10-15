@@ -172,12 +172,17 @@ type
     function Noise_func(L: Plua_State): integer; cdecl;
     function Play_func(L: Plua_State): integer; cdecl;
     function MML_func(L: Plua_State): integer; cdecl;
+    constructor Create(AScript: TLuaScript); override;
+  end;
+
+
+  TLuaSound = class(TTyroLuaObject)
+  public
     //sound.loopPlay()/pitch()/volume()/stop()
     function LoopPlay_func(L: Plua_State): integer; cdecl;
     function LoopPitch_func(L: Plua_State): integer; cdecl;
     function LoopVolume_func(L: Plua_State): integer; cdecl;
     function LoopStop_func(L: Plua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
   end;
 
   { TLuaRadio }
@@ -441,6 +446,7 @@ type
     Colors: TLuaColors;
     Font: TLuaFont;
     Music: TLuaMusic;
+    Sound: TLuaSound;
     Radio: TLuaRadio;
     Sprite: TLuaSprite;
     Sprites: TLuaSprites;
@@ -1362,6 +1368,7 @@ begin
   Colors := TLuaColors.Create(Self);
   Font := TLuaFont.Create(Self);
   Music := TLuaMusic.Create(Self);
+  Sound := TLuaSound.Create(Self);
   Radio := TLuaRadio.Create(Self);
   SpectrumLua := TLuaSpectrum.Create(Self);
   Sprite := TLuaSprite.Create(Self);
@@ -1370,6 +1377,7 @@ begin
   Output := TLuaOutput.Create(Self);
   Collision := TLuaCollision.Create(Self);
   Shader := TLuaShader.Create(Self);
+
   Files := TList.Create; //of TLuaFile, freed in Destroy
 
   //window
@@ -1412,6 +1420,8 @@ begin
   Lua.State.Register('font', Font); //Should be last one
 
   //music
+  Lua.State.RegisterGlobal('beep', Music.Beep_func);
+
   Lua.State.Register('music', 'beep', Music, Music.Beep_func);
   Lua.State.Register('music', 'sound', Music, Music.Sound_func);
   Lua.State.Register('music', 'noise', Music, Music.Noise_func);
@@ -1424,10 +1434,10 @@ begin
   //  sound.pitch(freq)         retune the running loop
   //  sound.volume(0..1)
   //  sound.stop()
-  Lua.State.Register('sound', 'loopPlay', Music, Music.LoopPlay_func);
-  Lua.State.Register('sound', 'pitch', Music, Music.LoopPitch_func);
-  Lua.State.Register('sound', 'volume', Music, Music.LoopVolume_func);
-  Lua.State.Register('sound', 'stop', Music, Music.LoopStop_func);
+  Lua.State.Register('sound', 'loopPlay', Sound, Sound.LoopPlay_func);
+  Lua.State.Register('sound', 'loopPitch', Sound, Sound.LoopPitch_func);
+  Lua.State.Register('sound', 'loopVolume', Sound, Sound.LoopVolume_func);
+  Lua.State.Register('sound', 'loopStop', Sound, Sound.LoopStop_func);
 
   //radio (radio.play(url), radio.pause(), radio.resume(), radio.stop()
   // + getters: radio.title, radio.station, radio.state, radio.playing ...)
@@ -1600,6 +1610,7 @@ begin
   FreeAndNil(SpectrumLua);
   FreeAndNil(Radio);
   FreeAndNil(Music);
+  FreeAndNil(Sound);
   FreeAndNil(Font);
   FreeAndNil(Colors);
   FreeAndNil(Console);
@@ -2143,8 +2154,17 @@ end;
 { TLuaMusic }
 
 function TLuaMusic.Beep_func(L: Plua_State): integer; cdecl;
+var
+  c, Period: integer;
 begin
-  FScript.AddQueueObject(TBeepObject.Create);
+  c := L.ArgsCount;
+  if c = 1 then
+  begin
+    Period := round(L.ToNumber(1));
+  end
+  else
+    Period := 500;
+  FScript.AddQueueObject(TBeepObject.Create(Period));
   Result := 0;
 end;
 
@@ -2197,7 +2217,39 @@ begin
   Result := 0;
 end;
 
-function TLuaMusic.LoopPlay_func(L: Plua_State): integer; cdecl;
+function TLuaMusic.Play_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+begin
+  s := L.ToString(1);
+  s := Res.GuessFileName(s, Res.WorkPath);
+  FScript.AddQueueObject(TPlayMusicFileObject.Create(s));
+  Result := 0;
+end;
+
+function TLuaMusic.MML_func(L: Plua_State): integer; cdecl;
+var
+  i, c: integer;
+  s: string;
+  Song: TmmlSong;
+begin
+  Song := nil;
+  c := L.ArgsCount;
+  SetLength(Song, c);
+  for i := 0 to c - 1 do
+  begin
+    s := L.ToString(i + 1);
+    Song[i] := s;
+  end;
+  //Audio objects and raylib audio calls stay on the Engine thread. Playback is
+  //advanced incrementally by TTyroMain.Update, so this does not block drawing.
+  FScript.AddQueueObject(TPlayMMLObject.Create(Song));
+  Result := 0;
+end;
+
+{ TLuaSound }
+
+function TLuaSound.LoopPlay_func(L: Plua_State): integer; cdecl;
 var
   WaveName: string;
   Freq, Volume: Single;
@@ -2226,51 +2278,21 @@ begin
   Result := 0;
 end;
 
-function TLuaMusic.LoopPitch_func(L: Plua_State): integer; cdecl;
+function TLuaSound.LoopPitch_func(L: Plua_State): integer; cdecl;
 begin
   FScript.AddQueueObject(TSetLoopPitchObject.Create(L.ToNumber(1)));
   Result := 0;
 end;
 
-function TLuaMusic.LoopVolume_func(L: Plua_State): integer; cdecl;
+function TLuaSound.LoopVolume_func(L: Plua_State): integer; cdecl;
 begin
   FScript.AddQueueObject(TSetLoopVolumeObject.Create(L.ToNumber(1)));
   Result := 0;
 end;
 
-function TLuaMusic.LoopStop_func(L: Plua_State): integer; cdecl;
+function TLuaSound.LoopStop_func(L: Plua_State): integer; cdecl;
 begin
   FScript.AddQueueObject(TStopLoopSoundObject.Create);
-  Result := 0;
-end;
-
-function TLuaMusic.Play_func(L: Plua_State): integer; cdecl;
-var
-  s: string;
-begin
-  s := L.ToString(1);
-  s := Res.GuessFileName(s, Res.WorkPath);
-  FScript.AddQueueObject(TPlayMusicFileObject.Create(s));
-  Result := 0;
-end;
-
-function TLuaMusic.MML_func(L: Plua_State): integer; cdecl;
-var
-  i, c: integer;
-  s: string;
-  Song: TmmlSong;
-begin
-  Song := nil;
-  c := L.ArgsCount;
-  SetLength(Song, c);
-  for i := 0 to c - 1 do
-  begin
-    s := L.ToString(i + 1);
-    Song[i] := s;
-  end;
-  //Audio objects and raylib audio calls stay on the Engine thread. Playback is
-  //advanced incrementally by TTyroMain.Update, so this does not block drawing.
-  FScript.AddQueueObject(TPlayMMLObject.Create(Song));
   Result := 0;
 end;
 
