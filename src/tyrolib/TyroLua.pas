@@ -59,6 +59,7 @@ type
     function Rectangle_func(L: Plua_State): integer; cdecl;
     function Line_func(L: Plua_State): integer; cdecl;
     function Point_func(L: Plua_State): integer; cdecl;
+    function Test_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
@@ -1491,6 +1492,8 @@ begin
   Lua.State.Register('canvas', 'rectangle', Canvas, Canvas.Rectangle_func);
   Lua.State.Register('canvas', 'line', Canvas, Canvas.Line_func);
   Lua.State.Register('canvas', 'point', Canvas, Canvas.Point_func);
+  //canvas.test(ms): diagnostic slow draw (see TLuaCanvas.Test_func)
+  Lua.State.Register('canvas', 'test', Canvas, Canvas.Test_func);
   Lua.State.Register('canvas', Canvas); //Should be last one
 
   //shader (property-style: shader.effect, shader.value, shader.area)
@@ -2028,6 +2031,39 @@ begin
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
   FScript.AddQueueObject(TDrawPointObject.Create(Engine.Board, x, y));
+  Result := 0;
+end;
+
+// canvas.test(ms [, x, y, w, h]) -- diagnostic: enqueue a drawing command that
+// takes about ms milliseconds to execute on the main thread (it draws a marker
+// rectangle, then spins). Use it to emulate slow drawing: a single draw call
+// longer than a frame, to check that a 'while cycle' body is still committed as
+// one group (see docs/cycle.md). Defaults: ms = 50, a full-width 2px bar.
+function TLuaCanvas.Test_func(L: Plua_State): integer; cdecl;
+var
+  c: integer;
+  ms, x, y, w, h: integer;
+  f: Boolean;
+begin
+  c := L.ArgsCount;
+  ms := 50;
+  if c >= 1 then
+    ms := round(L.ToNumber(1));
+  if ms < 0 then
+    ms := 0;
+  x := 0;
+  y := 0;
+  w := Engine.Board.Width;
+  h := 2;
+  f := True;
+  if c >= 5 then
+  begin
+    x := round(L.ToNumber(2));
+    y := round(L.ToNumber(3));
+    w := round(L.ToNumber(4));
+    h := round(L.ToNumber(5));
+  end;
+  FScript.AddQueueObject(TSlowDrawObject.Create(Engine.Board, ms, x, y, w, h, f));
   Result := 0;
 end;
 

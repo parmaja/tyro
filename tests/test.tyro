@@ -1,0 +1,12 @@
+fps = false
+window.show(640, 480)
+m = 20
+while cycle do
+    canvas.color = colors.black
+    canvas.rectangle(m, m, 640-m*2 , 480-m*2, true)
+    canvas.color = colors.white
+    canvas.text(m*2, m*2, "Hello World")
+    canvas.test(1000)
+    canvas.text(m*2, m*5, "Bye World")
+end
+

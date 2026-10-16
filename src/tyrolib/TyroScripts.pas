@@ -423,6 +423,22 @@ type
     procedure DoExecute; override;
   end;
 
+  { TSlowDrawObject }
+
+  //  Backs canvas.test(ms [, x, y, w, h]): a drawing command whose execution on
+  //  the main thread spins for about ms milliseconds before drawing a marker
+  //  rectangle. It emulates a single draw call slower than a frame, so a script
+  //  can check that the per-'cycle' grouping still commits the whole body in one
+  //  drawing cycle instead of splitting it. Diagnostic helper, always compiled.
+  TSlowDrawObject = class(TDrawObject)
+  public
+    fMillis: Integer;
+    fX, fY, fW, fH: Integer;
+    fFill: Boolean;
+    constructor Create(ACanvas: TTyroCanvas; AMillis, X, Y, W, H: Integer; Fill: Boolean);
+    procedure DoExecute; override;
+  end;
+
   { TDrawTextObject }
 
   TDrawTextObject = class(TDrawObject)
@@ -1704,6 +1720,36 @@ end;
 procedure TDrawPointObject.DoExecute;
 begin
   Canvas.DrawPixel(fX, fY, Canvas.Color);
+end;
+
+{ TSlowDrawObject }
+
+constructor TSlowDrawObject.Create(ACanvas: TTyroCanvas; AMillis, X, Y, W, H: Integer; Fill: Boolean);
+begin
+  inherited Create(ACanvas);
+  fMillis := AMillis;
+  fX := X;
+  fY := Y;
+  fW := W;
+  fH := H;
+  fFill := Fill;
+end;
+
+procedure TSlowDrawObject.DoExecute;
+var
+  t0: Double;
+begin
+  //A real (expensive) draw: the marker first, then burn about fMillis on this
+  //main thread, the same place every scripted draw command runs. The frame that
+  //drains the group therefore takes longer than one frame, which is exactly the
+  //case a split would show up in.
+  Canvas.DrawRectangle(fX, fY, fW, fH, Canvas.Color, fFill);
+  if fMillis > 0 then
+  begin
+    t0 := GetTime();
+    while (GetTime() - t0) * 1000 < fMillis do
+      ; //busy spin: deliberate, deterministic, no scheduler round-trip
+  end;
 end;
 
 { TDrawLineToObject }
