@@ -27,6 +27,10 @@ local function clamp(v, lo, hi)
   if v < lo then return lo elseif v > hi then return hi else return v end
 end
 
+local function explode()
+    music.sound('Explode', 50, 250)
+end
+
 local function beep(freq, ms)
   music.sound(freq, ms)
 end
@@ -237,7 +241,7 @@ local function stepBullets(ft)
           br.segs[idx] = false
           score = score + 500
           blasts[#blasts + 1] = { x = b.x, wy = br.wy, t = 0 }
-          beep(320, 70)
+          explode()
           hit = true
         end
         break
@@ -251,6 +255,7 @@ local function stepBullets(ft)
           score = score + (e.kind == "heli" and 60 or 30)
           blasts[#blasts + 1] = { x = e.x, wy = e.wy, t = 0 }
           beep(e.kind == "heli" and 220 or 300, 90)
+          --explode()
           table.remove(enemies, j)
           hit = true
           break
@@ -370,7 +375,8 @@ local function update(ft)
 
     if iskeypressed("space") and #pbullets < PBULLET_MAX then
       pbullets[#pbullets + 1] = { x = player.x, wy = playerWorldY() + 14 }
-      beep(900, 35)
+      --beep(900, 35)
+      music.sound('Pew', 220, 100)
     end
 
     fuel = fuel - (1.4 + 1.8 * (speed / SPEED_MAX)) * ft
