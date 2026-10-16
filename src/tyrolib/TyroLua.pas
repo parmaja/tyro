@@ -24,7 +24,7 @@ uses
   LuaAPI, LuaClasses,
   RayLib, RayClasses, //remove it
   mnUtils, mnLogs, mnClasses, mnDON,
-  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroPhysics,
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroTiles, TyroPhysics,
   TyroControls, TyroEngines, TyroInput,
   TyroRadio, TyroSpectrum;
 
@@ -275,6 +275,49 @@ type
     function Call_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaTile }
+
+  { One tilemap object handed to the script by tiles.new(). Mirrors TLuaSprite:
+    methods are table fields that receive the map table as argument 1, properties
+    resolve through the metatable getter/setter (map.cols, map.x, ...). }
+  TLuaTile = class(TTyroLuaObject)
+  private
+  protected
+    function Getter(L: Plua_State): integer; override;
+    function Setter(L: Plua_State): integer; override;
+  public
+    function RegisterTile(AHandle: Integer): Integer;
+    //map:load(file [, tilew [, tileh [, columns [, spacing [, margin]]]]])
+    function Load_func(L: Plua_State): integer; cdecl;
+    //map:resize(cols, rows)
+    function Resize_func(L: Plua_State): integer; cdecl;
+    //map:fill(tile) / map:clear()
+    function Fill_func(L: Plua_State): integer; cdecl;
+    function Clear_func(L: Plua_State): integer; cdecl;
+    //map:set(col, row, tile) / map:get(col, row)
+    function Set_func(L: Plua_State): integer; cdecl;
+    function Get_func(L: Plua_State): integer; cdecl;
+    //map:data() -> flat array of tile ids (row-major)
+    function Data_func(L: Plua_State): integer; cdecl;
+    //map:solidtile(tile [, solid])
+    function SolidTile_func(L: Plua_State): integer; cdecl;
+    //map:solid(col, row) -> true when the cell is outside the map or a solid tile
+    function Solid_func(L: Plua_State): integer; cdecl;
+    //map:draw([x, y [, scale]]) -> enqueue one native draw command
+    function Draw_func(L: Plua_State): integer; cdecl;
+  end;
+
+  { TLuaTiles }
+
+  TLuaTiles = class(TTyroLuaObject)
+  protected
+  public
+    //tiles.new([name]) -> a new map object
+    function New_func(L: Plua_State): integer; cdecl;
+    //tiles.find(name) -> the named map object, or nil
+    function Find_func(L: Plua_State): integer; cdecl;
+  end;
+
   { TLuaControls }
 
   { Generic control creation and inspection. controls.new('button', ...)
@@ -450,6 +493,8 @@ type
     Radio: TLuaRadio;
     Sprite: TLuaSprite;
     Sprites: TLuaSprites;
+    Tile: TLuaTile;
+    Tiles: TLuaTiles;
     Controls: TLuaControls;
     Output: TLuaOutput;
     Collision: TLuaCollision;
@@ -510,6 +555,8 @@ const
   cSpriteRegistryBase = $00700000; //HUH
   // Integer key base in the Lua registry for "control handle -> control table"
   cControlRegistryBase = $00800000;
+  // Integer key base in the Lua registry for "tilemap handle -> tilemap table"
+  cTileRegistryBase = $00900000;
   // Key in the Lua registry for the table that caches what require already ran
   cRequireCache = 'tyro.require.cache';
 
@@ -737,6 +784,23 @@ begin
     begin
       L.Pop(1);
       Controls.RegisterControl(AHandle);
+    end;
+    L.PushValue(-1);
+    L.PushValue(2);
+    lua_rawset(L, 1);
+    L.Remove(1); L.Remove(1);
+    Exit;
+  end;
+
+  //5b) Named tilemaps resolve by name, like sprites and controls.
+  AHandle := Engine.Tiles.FindByName(aName);
+  if AHandle > cTileMapInvalid then
+  begin
+    lua_rawgeti(L, LUA_REGISTRYINDEX, cTileRegistryBase + AHandle);
+    if not lua_istable(L, -1) then
+    begin
+      L.Pop(1);
+      Tile.RegisterTile(AHandle);
     end;
     L.PushValue(-1);
     L.PushValue(2);
@@ -1373,6 +1437,8 @@ begin
   SpectrumLua := TLuaSpectrum.Create(Self);
   Sprite := TLuaSprite.Create(Self);
   Sprites := TLuaSprites.Create(Self);
+  Tile := TLuaTile.Create(Self);
+  Tiles := TLuaTiles.Create(Self);
   Controls := TLuaControls.Create(Self);
   Output := TLuaOutput.Create(Self);
   Collision := TLuaCollision.Create(Self);
@@ -1506,6 +1572,13 @@ begin
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
   Lua.State.Register('Sprites', '__call', Self, Sprites.Call_func, True);
 
+  // Tilemap system: tiles.new(...) creates a map, tiles.find(name) finds one.
+  // A map table (returned by tiles.new) carries map:load/resize/set/get/data/
+  // solidtile/solid/draw plus the property fields (map.cols, map.x, ...).
+  Lua.State.RegisterTable('tiles');
+  Lua.State.Register('tiles', 'new', Self, Tiles.New_func);
+  Lua.State.Register('tiles', 'find', Self, Tiles.Find_func);
+
   //controls (generic control table; 'buttons' is a legacy alias to the same
   //object so old scripts keep working). Every function here takes the control as
   //its first argument and each of them also has a field spelling on the control
@@ -1609,6 +1682,8 @@ begin
   FreeAndNil(Controls);
   FreeAndNil(Sprites);
   FreeAndNil(Sprite);
+  FreeAndNil(Tiles);
+  FreeAndNil(Tile);
   FreeAndNil(SpectrumLua);
   FreeAndNil(Radio);
   FreeAndNil(Music);
@@ -3564,6 +3639,14 @@ begin
   Result := L.PopInteger;
 end;
 
+//Same raw read as GetSpriteHandle, for a tilemap table.
+function GetTileHandle(L: Plua_State; idx: integer): integer;
+begin
+  L.PushString('__handle');
+  lua_rawget(L, idx);
+  Result := L.PopInteger;
+end;
+
 //a caption control (button/label/checkbox) keeps its text in Caption, every
 //other control (an edit) in the shared Text. TSetControlTextObject writes to
 //the same place, so a read here always answers what a write stored.
@@ -5277,6 +5360,448 @@ begin
   else
   begin
     // unknown key (e.g. onCollide = function): store it raw in the sprite table
+    L.PushValue(2);
+    L.PushValue(3);
+    lua_rawset(L, 1);
+  end;
+end;
+
+{ TLuaTile }
+
+//First script argument of a tilemap method. A dot call (map.get(col, row))
+//injects the map table as argument 1, so the script's arguments start at 2.
+//A colon call (map:get(col, row)) additionally passes the receiver table, so
+//the map arrives again as argument 2 and the script's arguments start at 3.
+//Tile methods accept only numbers and strings, so a table in slot 2 can only
+//be the receiver of a colon call.
+function TileArgBase(L: Plua_State): Integer;
+begin
+  if L.IsTable(2) then
+    Result := 3
+  else
+    Result := 2;
+end;
+
+// Build a tilemap table bound to AHandle and leave it on the Lua stack. Mirrors
+// TLuaSprite.RegisterSprite: the methods are plain table fields that receive
+// the map table injected as argument 1, while the properties resolve through
+// the metatable getter/setter (Lua passes the table on its own there).
+function TLuaTile.RegisterTile(AHandle: integer): integer;
+var
+  base: integer;
+begin
+  with Script do
+  begin
+    Lua.State.BeginTable; //[map]
+    base := Lua.State.ArgsCount; //index of the map table
+
+    //keep a duplicate, the -3 addressing in Register() hits the map table
+    Lua.State.PushValue(-1); //[map, map]
+
+    Lua.State.PushInteger(AHandle);
+    Lua.State.SetField(-2, '__handle'); //map.__handle = AHandle
+
+    //methods receive the map table injected as argument 1
+    Lua.State.Register('load', Load_func);
+    Lua.State.Register('resize', Resize_func);
+    Lua.State.Register('fill', Fill_func);
+    Lua.State.Register('clear', Clear_func);
+    Lua.State.Register('set', Set_func);
+    Lua.State.Register('get', Get_func);
+    Lua.State.Register('data', Data_func);
+    Lua.State.Register('solidtile', SolidTile_func);
+    Lua.State.Register('solid', Solid_func);
+    Lua.State.Register('draw', Draw_func);
+
+    //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
+    Lua.State.NewTable; //[map, map, meta]
+    Lua.State.RegisterMeta('__index', __getter);
+    Lua.State.RegisterMeta('__newindex', __setter);
+    Lua.State.SetMetaTable(-2); //map.metatable = meta
+
+    // remember this map table so it can be found by handle
+    if AHandle > cTileMapInvalid then
+    begin
+      Lua.State.PushValue(-1); // duplicate the map table
+      lua_rawseti(Lua.State, LUA_REGISTRYINDEX, cTileRegistryBase + AHandle);
+    end;
+
+    Lua.State.Remove(base); //drop the first reference, keep one on the stack
+    Result := 1;
+  end;
+end;
+
+// tiles.new("name"?) -> creates a new map object, returns it on the Lua stack
+function TLuaTiles.New_func(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  handle: integer;
+begin
+  if L.ArgsCount >= 1 then
+    aName := L.ToString(1)
+  else
+    aName := '';
+  //AddEmpty only touches the store's dictionary under its lock, so it is safe
+  //to call straight from the script thread; only the texture upload needs the
+  //main thread, and load() routes that through the engine queue.
+  handle := Engine.Tiles.AddEmpty(aName);
+  if handle > cTileMapInvalid then
+    Script.Tile.RegisterTile(handle)
+  else
+    Script.Tile.RegisterTile(cTileMapInvalid);
+  // Store optional name
+  if aName <> '' then
+  begin
+    L.PushString(aName);
+    L.SetField(-2, '__name');
+  end;
+  Result := 1;
+end;
+
+// tiles.find("name") -> returns the named map object, or nil
+function TLuaTiles.Find_func(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  handle: integer;
+begin
+  aName := L.ToString(1);
+  handle := Engine.Tiles.FindByName(aName);
+  if handle > cTileMapInvalid then
+    Script.Tile.RegisterTile(handle)
+  else
+    L.PushNil;
+  Result := 1;
+end;
+
+// map.load(file [, tilew [, tileh [, columns [, spacing [, margin]]]]])
+// Loads (or replaces) the tileset texture. The upload needs the GL context, so
+// it runs on the main thread through the engine queue.
+function TLuaTile.Load_func(L: Plua_State): integer; cdecl;
+var
+  b: integer;
+  aFile: string;
+  handle: integer;
+  tw, th, cols, spacing, margin: integer;
+  LoadObj: TLoadTileMapObject;
+begin
+  b := TileArgBase(L);
+  aFile := Res.GuessFileName(L.ToString(b));
+  tw := 16;
+  th := 16;
+  cols := 0;
+  spacing := 0;
+  margin := 0;
+  if L.ArgsCount >= b + 1 then
+    tw := L.ToInteger(b + 1);
+  if L.ArgsCount >= b + 2 then
+    th := L.ToInteger(b + 2);
+  if L.ArgsCount >= b + 3 then
+    cols := L.ToInteger(b + 3);
+  if L.ArgsCount >= b + 4 then
+    spacing := L.ToInteger(b + 4);
+  if L.ArgsCount >= b + 5 then
+    margin := L.ToInteger(b + 5);
+
+  handle := GetTileHandle(L, 1);
+  if handle <= cTileMapInvalid then
+    handle := Engine.Tiles.AddEmpty('');
+  LoadObj := TLoadTileMapObject.Create(handle, aFile, tw, th, cols, spacing, margin);
+  try
+    LoadObj.Run(Script.Thread);
+    if LoadObj.HandleResult then
+    begin
+      L.PushInteger(handle);
+      L.SetField(1, '__handle');
+      // re-index the map table under its real handle
+      L.PushValue(1);
+      lua_rawseti(L, LUA_REGISTRYINDEX, cTileRegistryBase + handle);
+    end
+    else
+      Script.DoError('Tileset not loaded: ' + aFile);
+  finally
+    LoadObj.Free;
+  end;
+  Result := 0;
+end;
+
+// map.resize(cols, rows) -> grow/shrink the grid, keeping the overlap
+function TLuaTile.Resize_func(L: Plua_State): integer; cdecl;
+var
+  b, handle: integer;
+begin
+  b := TileArgBase(L);
+  handle := GetTileHandle(L, 1);
+  if handle > cTileMapInvalid then
+    Engine.Tiles.Resize(handle, L.ToInteger(b), L.ToInteger(b + 1));
+  Result := 0;
+end;
+
+// map.fill(tile) -> set every cell to one tile id (0 clears the map)
+function TLuaTile.Fill_func(L: Plua_State): integer; cdecl;
+var
+  b, handle: integer;
+begin
+  b := TileArgBase(L);
+  handle := GetTileHandle(L, 1);
+  if handle > cTileMapInvalid then
+    Engine.Tiles.Fill(handle, L.ToInteger(b));
+  Result := 0;
+end;
+
+// map.clear() -> every cell empty
+function TLuaTile.Clear_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+begin
+  handle := GetTileHandle(L, 1);
+  if handle > cTileMapInvalid then
+    Engine.Tiles.ClearMap(handle);
+  Result := 0;
+end;
+
+// map.set(col, row, tile) -> set one cell (out-of-range is ignored)
+function TLuaTile.Set_func(L: Plua_State): integer; cdecl;
+var
+  b, handle: integer;
+begin
+  b := TileArgBase(L);
+  handle := GetTileHandle(L, 1);
+  if handle > cTileMapInvalid then
+    Engine.Tiles.SetTile(handle, L.ToInteger(b), L.ToInteger(b + 1), L.ToInteger(b + 2));
+  Result := 0;
+end;
+
+// map.get(col, row) -> the tile id of one cell (0 when empty or out of range)
+function TLuaTile.Get_func(L: Plua_State): integer; cdecl;
+var
+  b, handle: integer;
+begin
+  b := TileArgBase(L);
+  handle := GetTileHandle(L, 1);
+  if handle > cTileMapInvalid then
+    L.PushInteger(Engine.Tiles.GetTile(handle, L.ToInteger(b), L.ToInteger(b + 1)))
+  else
+    L.PushInteger(0);
+  Result := 1;
+end;
+
+// map.data() -> a flat array of tile ids, row-major (index = row * cols + col + 1)
+function TLuaTile.Data_func(L: Plua_State): integer; cdecl;
+var
+  handle, i: integer;
+  data: TArray<Integer>;
+begin
+  handle := GetTileHandle(L, 1);
+  data := nil;
+  if handle > cTileMapInvalid then
+    Engine.Tiles.GetData(handle, data);
+  L.NewTable;
+  for i := 0 to Length(data) - 1 do
+  begin
+    L.PushInteger(data[i]);
+    lua_rawseti(L, -2, i + 1);
+  end;
+  Result := 1;
+end;
+
+// map.solidtile(tile [, solid]) -> read or set whether a tile id is a wall
+function TLuaTile.SolidTile_func(L: Plua_State): integer; cdecl;
+var
+  b, handle: integer;
+begin
+  b := TileArgBase(L);
+  handle := GetTileHandle(L, 1);
+  if handle <= cTileMapInvalid then
+  begin
+    L.PushBoolean(False);
+    Result := 1;
+    Exit;
+  end;
+  if L.ArgsCount >= b + 1 then
+  begin
+    Engine.Tiles.SetSolidTile(handle, L.ToInteger(b), L.ToBoolean(b + 1));
+    Result := 0;
+  end
+  else
+  begin
+    L.PushBoolean(Engine.Tiles.GetSolidTile(handle, L.ToInteger(b)));
+    Result := 1;
+  end;
+end;
+
+// map.solid(col, row) -> true when the cell is outside the map or a solid tile
+function TLuaTile.Solid_func(L: Plua_State): integer; cdecl;
+var
+  b, handle: integer;
+begin
+  b := TileArgBase(L);
+  handle := GetTileHandle(L, 1);
+  if handle > cTileMapInvalid then
+    L.PushBoolean(Engine.Tiles.SolidAt(handle, L.ToInteger(b), L.ToInteger(b + 1)))
+  else
+    L.PushBoolean(True);
+  Result := 1;
+end;
+
+// map.draw([x, y [, scale]]) -> enqueue ONE native draw command; the tile loop
+// runs on the main thread. Position/scale default to the map's own properties.
+function TLuaTile.Draw_func(L: Plua_State): integer; cdecl;
+var
+  b, handle: integer;
+  x, y, scale: single;
+begin
+  b := TileArgBase(L);
+  handle := GetTileHandle(L, 1);
+  if handle <= cTileMapInvalid then
+    Exit(0);
+  x := Engine.Tiles.GetX(handle);
+  y := Engine.Tiles.GetY(handle);
+  scale := Engine.Tiles.GetScale(handle);
+  if L.ArgsCount >= b then
+    x := L.ToNumber(b);
+  if L.ArgsCount >= b + 1 then
+    y := L.ToNumber(b + 1);
+  if L.ArgsCount >= b + 2 then
+    scale := L.ToNumber(b + 2);
+  FScript.AddQueueObject(TDrawTileMapObject.Create(Engine.Tiles, handle, x, y, scale, clWhite, Engine.Board));
+  Result := 0;
+end;
+
+// map.__index: read properties cols, rows, width, height, tilewidth,
+// tileheight, columns, spacing, margin, visible, x, y, scale, name; unknown
+// keys raw-read from the map table.
+function TLuaTile.Getter(L: Plua_State): integer;
+var
+  handle: integer;
+  field: string;
+begin
+  // arg 1 is the table, arg 2 is the key
+  handle := GetTileHandle(L, 1);
+  field := L.ToString(2);
+  Result := 0;
+  if handle > cTileMapInvalid then
+  begin
+    if field = 'cols' then
+    begin
+      L.PushInteger(Engine.Tiles.GetCols(handle));
+      Result := 1;
+    end
+    else if field = 'rows' then
+    begin
+      L.PushInteger(Engine.Tiles.GetRows(handle));
+      Result := 1;
+    end
+    else if field = 'width' then
+    begin
+      L.PushInteger(Engine.Tiles.GetWidth(handle));
+      Result := 1;
+    end
+    else if field = 'height' then
+    begin
+      L.PushInteger(Engine.Tiles.GetHeight(handle));
+      Result := 1;
+    end
+    else if field = 'tilewidth' then
+    begin
+      L.PushInteger(Engine.Tiles.GetTileWidth(handle));
+      Result := 1;
+    end
+    else if field = 'tileheight' then
+    begin
+      L.PushInteger(Engine.Tiles.GetTileHeight(handle));
+      Result := 1;
+    end
+    else if field = 'columns' then
+    begin
+      L.PushInteger(Engine.Tiles.GetColumns(handle));
+      Result := 1;
+    end
+    else if field = 'spacing' then
+    begin
+      L.PushInteger(Engine.Tiles.GetSpacing(handle));
+      Result := 1;
+    end
+    else if field = 'margin' then
+    begin
+      L.PushInteger(Engine.Tiles.GetMargin(handle));
+      Result := 1;
+    end
+    else if field = 'visible' then
+    begin
+      L.PushBoolean(Engine.Tiles.GetVisible(handle));
+      Result := 1;
+    end
+    else if field = 'x' then
+    begin
+      L.PushNumber(Engine.Tiles.GetX(handle));
+      Result := 1;
+    end
+    else if field = 'y' then
+    begin
+      L.PushNumber(Engine.Tiles.GetY(handle));
+      Result := 1;
+    end
+    else if field = 'scale' then
+    begin
+      L.PushNumber(Engine.Tiles.GetScale(handle));
+      Result := 1;
+    end
+    else if field = 'name' then
+    begin
+      L.PushString(Engine.Tiles.GetName(handle));
+      Result := 1;
+    end;
+  end;
+  if Result = 0 then
+  begin
+    // unknown key or unloaded map: read raw from the map table
+    L.PushValue(2);
+    lua_rawget(L, 1);
+    Result := 1;
+  end;
+end;
+
+// map.__newindex: write properties visible, x, y, scale, name; unknown keys
+// raw-stored in the map table.
+function TLuaTile.Setter(L: Plua_State): integer;
+var
+  handle: integer;
+  field: string;
+begin
+  // arg 1 is the table, arg 2 is the key, arg 3 is the value
+  handle := GetTileHandle(L, 1);
+  field := L.ToString(2);
+  Result := 0;
+  if handle <= cTileMapInvalid then
+  begin
+    L.PushValue(2);
+    L.PushValue(3);
+    lua_rawset(L, 1);
+    Exit;
+  end;
+  if field = 'visible' then
+  begin
+    Engine.Tiles.SetVisible(handle, L.ToBoolean(3));
+  end
+  else if field = 'x' then
+  begin
+    Engine.Tiles.SetPositionComponent(handle, True, L.ToNumber(3));
+  end
+  else if field = 'y' then
+  begin
+    Engine.Tiles.SetPositionComponent(handle, False, L.ToNumber(3));
+  end
+  else if field = 'scale' then
+  begin
+    Engine.Tiles.SetScale(handle, L.ToNumber(3));
+  end
+  else if field = 'name' then
+  begin
+    Engine.Tiles.SetName(handle, L.ToString(3));
+  end
+  else
+  begin
+    // unknown key: store it raw in the map table
     L.PushValue(2);
     L.PushValue(3);
     lua_rawset(L, 1);

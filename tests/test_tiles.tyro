@@ -1,0 +1,121 @@
+--======================================================================
+--  test_tiles.tyro - smoke test for the native tilemap API (tiles.*)
+--======================================================================
+--  Covers:
+--    - tiles.new / tiles.find and resolution of a named map as a global
+--    - map.load (tileset geometry + column derivation from the texture)
+--    - map.resize / fill / clear / set / get / data
+--    - solid tiles and the map.solid collision query (out of bounds is solid)
+--    - the readable/writable properties (x, y, scale, visible, name)
+--    - both the dot form (map.get(...)) and the colon form (map:get(...))
+--    - map.draw() enqueues a native draw command inside a cycle loop
+--  Writes PASS/FAIL lines plus a final SMOKE-OK / SMOKE-FAILED into
+--  test_tiles_result.txt next to this script.
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_tiles_result.txt", "w")
+local fails = 0
+local function check(name, cond)
+  if cond then
+    out:write("PASS ", name, "\n")
+  else
+    fails = fails + 1
+    out:write("FAIL ", name, "\n")
+  end
+end
+
+-- create + load ---------------------------------------------------------
+local m = tiles.new("testmap")
+check("tiles.new returns a table", type(m) == "table")
+
+-- tilemap.png is 203x186: 16px tiles, 1px spacing, no margin -> 12 columns
+m.load("tiles.png", 16, 16, 0, 1, 0)
+check("tilewidth = 16", m.tilewidth == 16)
+check("tileheight = 16", m.tileheight == 16)
+check("spacing = 1", m.spacing == 1)
+check("columns derived = 12", m.columns == 12)
+
+-- resize + fill ---------------------------------------------------------
+m.resize(4, 3)
+check("cols = 4", m.cols == 4)
+check("rows = 3", m.rows == 3)
+check("width = 64", m.width == 64)
+check("height = 48", m.height == 48)
+
+m.fill(2)
+check("fill sets every cell", m.get(0, 0) == 2 and m.get(3, 2) == 2)
+
+m.clear()
+check("clear empties every cell", m.get(0, 0) == 0 and m.get(3, 2) == 0)
+
+-- set / get -------------------------------------------------------------
+m.set(1, 1, 5)
+check("set/get one cell", m.get(1, 1) == 5)
+check("get out of range = 0", m.get(99, 99) == 0)
+
+-- data() ----------------------------------------------------------------
+m.clear()
+m.set(0, 0, 1)
+m.set(1, 0, 2)
+m.set(0, 1, 3)
+local d = m.data()
+check("data length = cols*rows", #d == 12)
+check("data row-major values", d[1] == 1 and d[2] == 2 and d[5] == 3)
+check("data empty cell = 0", d[3] == 0)
+
+-- solid tiles -----------------------------------------------------------
+m.solidtile(2, true)
+check("solidtile set/get true", m.solidtile(2) == true)
+check("solidtile default false", m.solidtile(1) == false)
+check("cell with solid tile is solid", m.solid(1, 0) == true)
+check("cell with empty tile is not solid", m.solid(3, 0) == false)
+check("out-of-bounds is solid", m.solid(-1, 0) == true and m.solid(0, 4) == true)
+m.solidtile(2, false)
+check("solidtile unset", m.solidtile(2) == false)
+
+-- find by name ----------------------------------------------------------
+local m2 = tiles.find("testmap")
+check("tiles.find returns the map", m2 ~= nil and m2.get(0, 0) == 1)
+check("tiles.find missing = nil", tiles.find("no-such-map") == nil)
+check("named map resolves as global", type(testmap) == "table")
+
+-- properties ------------------------------------------------------------
+m.x = 12
+m.y = 34
+m.scale = 2
+m.visible = false
+check("x property", m.x == 12)
+check("y property", m.y == 34)
+check("scale property", m.scale == 2)
+check("visible property", m.visible == false)
+m.visible = true
+check("visible property back on", m.visible == true)
+
+local oldname = m.name
+m.name = "renamed"
+check("name property", m.name == "renamed")
+m.name = oldname
+
+-- dot and colon forms must agree ---------------------------------------
+check("colon get matches dot get", m:get(0, 0) == m.get(0, 0))
+check("colon solid matches dot solid", m:solid(1, 0) == m.solid(1, 0))
+
+-- draw ------------------------------------------------------------------
+local frames = 0
+for i = 1, 3 do
+  canvas.color = colors.black
+  canvas.clear()
+  m.draw(0, 0)
+  frames = frames + 1
+end
+check("draw ran in a loop", frames == 3)
+
+if fails == 0 then
+  out:write("SMOKE-OK\n")
+else
+  out:write("SMOKE-FAILED fails=", fails, "\n")
+end
+out:close()
+println("test_tiles done, fails=" .. fails)

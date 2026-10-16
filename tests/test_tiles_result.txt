@@ -1,0 +1,35 @@
+PASS tiles.new returns a table
+PASS tilewidth = 16
+PASS tileheight = 16
+PASS spacing = 1
+PASS columns derived = 12
+PASS cols = 4
+PASS rows = 3
+PASS width = 64
+PASS height = 48
+PASS fill sets every cell
+PASS clear empties every cell
+PASS set/get one cell
+PASS get out of range = 0
+PASS data length = cols*rows
+PASS data row-major values
+PASS data empty cell = 0
+PASS solidtile set/get true
+PASS solidtile default false
+PASS cell with solid tile is solid
+PASS cell with empty tile is not solid
+PASS out-of-bounds is solid
+PASS solidtile unset
+PASS tiles.find returns the map
+PASS tiles.find missing = nil
+PASS named map resolves as global
+PASS x property
+PASS y property
+PASS scale property
+PASS visible property
+PASS visible property back on
+PASS name property
+PASS colon get matches dot get
+PASS colon solid matches dot solid
+PASS draw ran in a loop
+SMOKE-OK

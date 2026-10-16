@@ -1,0 +1,424 @@
+--======================================================================
+--  Dungeon - a top-down tile adventure for Tyro
+--======================================================================
+--  A small proof-of-concept game built on the native tilemap API
+--  (tiles.*). The dungeon is drawn from the Kenney "Tiny Dungeon" tileset
+--  (CC0) loaded as a tileset: one tilemap holds the static floor/walls and
+--  a second tilemap is used as an entity layer that is re-stamped every
+--  frame with the player, the slimes, the pickups, the key, the locked
+--  door and the exit.
+--
+--  Level 1: collect every gem, then reach the gate.
+--  Level 2: find the key, open the locked door, then reach the gate.
+--  A slime that catches you costs a life; lose all three and the run ends.
+--
+--  Controls:  ARROWS / WASD   move      SPACE   start / restart
+--             ESC             quit
+--  Run:  tyro games/dungeon/dungeon.tyro
+--======================================================================
+
+window.show(640, 512)
+
+local W = canvas.width
+local H = canvas.height
+
+-- ---- tileset ------------------------------------------------
+-- Tile ids are 1-based into the sheet (id 1 = top-left tile). The sheet is
+-- Kenney's tilemap.png: 12 columns, 16x16 tiles, 1px spacing, no margin.
+local T = {
+  FLOOR  = 49,
+  WALL   = 41,
+  PLAYER = 86,
+  SLIME  = 109,
+  GEM    = 115,
+  KEY    = 126,
+  DOOR   = 66,
+  EXIT   = 64,
+}
+
+-- ---- levels --------------------------------------------------
+-- '#' wall   '.' floor   'P' player start   'S' slime
+-- 'G' gem    'K' key     'D' locked door     'E' exit
+local LEVELS = {
+  {
+    "####################",
+    "#.....#......#.....#",
+    "#.G...#..GG..#...G.#",
+    "#.....###..###.....#",
+    "#..#............#..#",
+    "#..#.##########.#..#",
+    "#.....#......#.....#",
+    "#.###.#.P....#.###.#",
+    "#.#...#......#...#.#",
+    "#.#.###.####.###.#.#",
+    "#.#.....#..#.....#.#",
+    "#.#####.#..#.#####.#",
+    "#....S..#..#...S...#",
+    "#.#####......#####.#",
+    "#......G....E......#",
+    "####################",
+  },
+  {
+    "####################",
+    "#........#.........#",
+    "#..P.....#.........#",
+    "#........#....G....#",
+    "#...K....#.........#",
+    "#........#....E....#",
+    "#........D.........#",
+    "#........#.........#",
+    "#..G.....#.........#",
+    "#........#.....S...#",
+    "#........#.........#",
+    "#........#.........#",
+    "#........#.........#",
+    "#........#.........#",
+    "#........#.........#",
+    "####################",
+  },
+}
+
+local MAXLEVEL = #LEVELS
+local COLS = #LEVELS[1][1]
+local ROWS = #LEVELS[1]
+
+-- ---- tilemaps ------------------------------------------------
+local terrain = tiles.new("terrain")
+terrain.load("tiles.png", 16, 16, 12, 1, 0)
+terrain.resize(COLS, ROWS)
+terrain.fill(T.FLOOR)
+terrain.solidtile(T.WALL, true)
+terrain.scale = 2
+
+local over = tiles.new("over")
+over.load("tiles.png", 16, 16, 12, 1, 0)
+over.resize(COLS, ROWS)
+over.scale = 2
+
+-- ---- helpers -------------------------------------------------
+local function clamp(v, lo, hi)
+  if v < lo then return lo elseif v > hi then return hi else return v end
+end
+
+local function beep(freq, ms)
+  music.sound(freq, ms)
+end
+
+local function center_text(s, y, col)
+  canvas.color = col
+  canvas.text((W - textwidth(s)) / 2, y, s)
+end
+
+-- ---- state ---------------------------------------------------
+local state
+local level           -- current level index (1-based)
+local rows            -- current level rows
+local player          -- { c = col, r = row }
+local start
+local slimes          -- list of { c, r, t }
+local gems            -- list of { c, r }
+local gemTotal
+local keycell         -- { c, r } or nil
+local haskey
+local keyTotal        -- 1 if this level has a key, else 0
+local doors           -- set, key = c * 100 + r
+local exitcell        -- { c, r }
+local walls           -- set, key = c * 100 + r
+local score, lives, msg, msgTimer, moveTimer, flashTimer
+
+local function key(c, r) return c * 100 + r end
+local function iswall(c, r)
+  if c < 0 or r < 0 or c >= COLS or r >= ROWS then return true end
+  if walls[key(c, r)] == true then return true end
+  if doors[key(c, r)] == true and not haskey then return true end
+  return false
+end
+
+-- ---- level load ----------------------------------------------
+local function loadLevel(n)
+  level = n
+  rows = LEVELS[n]
+  walls = {}
+  doors = {}
+  slimes = {}
+  gems = {}
+  keycell = nil
+  haskey = false
+  keyTotal = 0
+  gemTotal = 0
+  start = { c = 1, r = 1 }
+  exitcell = { c = COLS - 2, r = ROWS - 2 }
+
+  terrain.fill(T.FLOOR)
+  over.clear()
+
+  local r, c, ch, col, row
+  for r = 1, ROWS do
+    local line = rows[r]
+    for c = 1, COLS do
+      col = c - 1
+      row = r - 1
+      ch = line:sub(c, c)
+      if ch == '#' then
+        terrain.set(col, row, T.WALL)
+        walls[key(col, row)] = true
+      elseif ch == 'D' then
+        doors[key(col, row)] = true
+      elseif ch == 'K' then
+        keycell = { c = col, r = row }
+        keyTotal = 1
+      elseif ch == 'P' then
+        start = { c = col, r = row }
+      elseif ch == 'S' then
+        slimes[#slimes + 1] = { c = col, r = row, t = rand(30, 90) / 100 }
+      elseif ch == 'G' then
+        gems[#gems + 1] = { c = col, r = row }
+        gemTotal = gemTotal + 1
+      elseif ch == 'E' then
+        exitcell = { c = col, r = row }
+      end
+    end
+  end
+
+  player = { c = start.c, r = start.r }
+end
+
+-- ---- gameplay ------------------------------------------------
+local function respawn()
+  player = { c = start.c, r = start.r }
+  moveTimer = 0
+  -- respawn the slimes at their spawn cells
+  local r, c
+  slimes = {}
+  for r = 1, ROWS do
+    for c = 1, COLS do
+      if rows[r]:sub(c, c) == 'S' then
+        slimes[#slimes + 1] = { c = c - 1, r = r - 1, t = rand(30, 90) / 100 }
+      end
+    end
+  end
+end
+
+local function hit()
+  if flashTimer > 0 then return end
+  lives = lives - 1
+  flashTimer = 0.6
+  msg = "OUCH!"
+  msgTimer = 1.0
+  beep(140, 220)
+  if lives <= 0 then
+    state = "over"
+  else
+    respawn()
+  end
+end
+
+local function reach_exit()
+  if #gems > 0 then
+    msg = "FIND " .. #gems .. " GEMS"
+    msgTimer = 1.0
+    beep(90, 60)
+    return
+  end
+  if level < MAXLEVEL then
+    score = score + 50
+    loadLevel(level + 1)
+    state = "play"
+    msg = "LEVEL " .. level
+    msgTimer = 1.2
+    beep(1200, 300)
+  else
+    state = "win"
+    beep(1200, 300)
+  end
+end
+
+local function try_move(dc, dr)
+  local nc = player.c + dc
+  local nr = player.r + dr
+  if iswall(nc, nr) then
+    beep(90, 40)
+    return
+  end
+  player.c = nc
+  player.r = nr
+  -- pick up a gem on this cell
+  local i
+  for i = #gems, 1, -1 do
+    local g = gems[i]
+    if g.c == player.c and g.r == player.r then
+      table.remove(gems, i)
+      score = score + 10
+      beep(880, 60)
+    end
+  end
+  -- pick up the key
+  if keycell and player.c == keycell.c and player.r == keycell.r then
+    haskey = true
+    keycell = nil
+    msg = "KEY! DOOR OPEN"
+    msgTimer = 1.2
+    beep(1500, 120)
+  end
+  -- the exit only opens once the gems are gone
+  if player.c == exitcell.c and player.r == exitcell.r then
+    reach_exit()
+  end
+end
+
+local function stepSlimes(ft)
+  for i = 1, #slimes do
+    local s = slimes[i]
+    s.t = s.t - ft
+    if s.t <= 0 then
+      s.t = rand(45, 110) / 100
+      local dirs = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+      local d = dirs[rand(1, 4)]
+      local nc, nr = s.c + d[1], s.r + d[2]
+      if not iswall(nc, nr) then
+        s.c = nc
+        s.r = nr
+      end
+    end
+    if s.c == player.c and s.r == player.r then
+      hit()
+      return
+    end
+  end
+end
+
+local function update(ft)
+  if msgTimer > 0 then msgTimer = msgTimer - ft end
+  if flashTimer > 0 then flashTimer = flashTimer - ft end
+  if moveTimer > 0 then moveTimer = moveTimer - ft end
+
+  if state == "play" then
+    local dc, dr = 0, 0
+    if iskeydown("left") or iskeydown("a") then dc = -1
+    elseif iskeydown("right") or iskeydown("d") then dc = 1
+    elseif iskeydown("up") or iskeydown("w") then dr = -1
+    elseif iskeydown("down") or iskeydown("s") then dr = 1 end
+
+    if (dc ~= 0 or dr ~= 0) and moveTimer <= 0 then
+      try_move(dc, dr)
+      moveTimer = 0.11
+    end
+
+    stepSlimes(ft)
+  end
+end
+
+-- ---- rendering -----------------------------------------------
+local function draw_hud()
+  canvas.color = colors.silver
+  canvas.text(8, 6, "LEVEL " .. level .. "/" .. MAXLEVEL)
+  canvas.text(120, 6, "GEMS " .. (gemTotal - #gems) .. "/" .. gemTotal)
+  canvas.text(240, 6, "SCORE " .. score)
+  -- key indicator
+  if keyTotal > 0 then
+    canvas.color = haskey and colors.yellow or colors.silver
+    canvas.text(352, 6, haskey and "KEY" or "no key")
+  end
+  local i
+  for i = 1, clamp(lives, 0, 3) do
+    canvas.color = colors.red
+    canvas.circle(W - 16 - (i - 1) * 18, 11, 6, true)
+  end
+  if msgTimer > 0 then
+    center_text(msg, 40, colors.yellow)
+  end
+end
+
+local function draw_overlay()
+  over.clear()
+  -- locked doors
+  local r, c
+  for r = 0, ROWS - 1 do
+    for c = 0, COLS - 1 do
+      if doors[key(c, r)] == true and not haskey then
+        over.set(c, r, T.DOOR)
+      end
+    end
+  end
+  -- exit
+  over.set(exitcell.c, exitcell.r, T.EXIT)
+  -- key
+  if keycell then
+    over.set(keycell.c, keycell.r, T.KEY)
+  end
+  -- gems
+  local i
+  for i = 1, #gems do
+    over.set(gems[i].c, gems[i].r, T.GEM)
+  end
+  -- slimes
+  for i = 1, #slimes do
+    over.set(slimes[i].c, slimes[i].r, T.SLIME)
+  end
+  -- player on top (blink by hiding on flash frames)
+  if not (flashTimer > 0 and math.floor(millis() / 80) % 2 == 0 and state == "play") then
+    over.set(player.c, player.r, T.PLAYER)
+  end
+  over.draw(0, 0)
+end
+
+local function draw_screen()
+  canvas.color = colors.black
+  canvas.clear()
+  terrain.draw(0, 0)
+  draw_overlay()
+  draw_hud()
+
+  if state == "ready" then
+    canvas.color = colors.black
+    canvas.rectangle(0, 150, W, 190, true)
+    center_text("DUNGEON", 170, colors.yellow)
+    center_text("COLLECT GEMS AND KEYS, REACH THE GATE", 220, colors.white)
+    center_text("ARROWS / WASD  move", 258, colors.silver)
+    center_text("PRESS SPACE TO START", 300, colors.white)
+  elseif state == "win" then
+    canvas.color = colors.black
+    canvas.rectangle(0, 160, W, 170, true)
+    center_text("YOU ESCAPED!", 180, colors.yellow)
+    center_text("SCORE " .. score, 220, colors.white)
+    center_text("PRESS SPACE TO PLAY AGAIN", 270, colors.silver)
+  elseif state == "over" then
+    canvas.color = colors.black
+    canvas.rectangle(0, 160, W, 170, true)
+    center_text("GAME OVER", 180, colors.red)
+    center_text("SCORE " .. score, 220, colors.white)
+    center_text("PRESS SPACE TO PLAY AGAIN", 270, colors.silver)
+  end
+end
+
+-- ---- boot ----------------------------------------------------
+local function reset()
+  score = 0
+  lives = 3
+  msg = ""
+  msgTimer = 0
+  flashTimer = 0
+  moveTimer = 0
+  loadLevel(1)
+  state = "ready"
+end
+
+reset()
+
+while cycle do
+  local ft = frametime()
+  if ft <= 0 then ft = 1 / 60 end
+  if ft > 0.06 then ft = 0.06 end
+
+  if iskeypressed("escape") then exit() end
+
+  if state == "ready" or state == "over" or state == "win" then
+    if iskeypressed("space") or iskeypressed("enter") then
+      reset()
+      state = "play"
+    end
+  end
+
+  update(ft)
+  draw_screen()
+end

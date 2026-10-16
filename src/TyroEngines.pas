@@ -33,7 +33,7 @@ uses
   mnLogs, mnUtils, mnClasses, mnConfigs,
   RayLib, RayClasses, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
-  TyroSprites, TyroPhysics, TyroEditors;
+  TyroSprites, TyroTiles, TyroPhysics, TyroEditors;
 
 //Diagnostics (queue/frame counters and the like) are compiled only when
 //'diagnose' is defined, which tracks the debug switch. Debug builds keep them;
@@ -232,6 +232,7 @@ type
     procedure Clear;
     procedure ClearCanvas(ACanvas: TTyroCanvas);
     procedure ClearScriptSprites;
+    procedure ClearScriptTiles;
     procedure ShowWindowAfterScript;
     //* Service the command line lifecycle (--exit / --screenshot) once per
     //* frame. Returns True when this call terminated the session, so the main
@@ -546,6 +547,7 @@ type
     Editor: TyroEditor;
 
     Sprites: TSprites;
+    Tiles: TTiles;
     Physics: TPhysics;
     //property Board: TTyroImage read FBoard;
     property Running: Boolean read GetRunning write SetRunning;
@@ -1586,6 +1588,7 @@ begin
   FFileList.OnDismiss := FileListDismissed;
 
   Sprites := TSprites.Create;
+  Tiles := TTiles.Create;
   Physics := TPhysics.Create(Sprites);
   Commands := TConsoleCommands.Create();
   RegisterCommands;
@@ -1611,6 +1614,7 @@ begin
   //the window/OpenGL context is still alive.
   FreeAndNil(Physics);
   FreeAndNil(Sprites);
+  FreeAndNil(Tiles);
   FreeAndNil(Board);
   FreeAndNil(Res);
   FreeAndNil(FQueue);
@@ -2347,6 +2351,7 @@ begin
   //new script inherits them.
   ClearScriptControls;
   ClearScriptSprites;
+  ClearScriptTiles;
   Clear;
   //A song the finished run left playing belongs to that run, not to the next one.
   aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
@@ -2403,6 +2408,14 @@ begin
     Physics.RemoveAll;
   if Sprites <> nil then
     Sprites.Clear;
+end;
+
+//Free the tilemaps the previous run created and unload their tileset textures.
+//The store hands out fresh handles, so the new run starts from an empty one.
+procedure TTyroEngine.ClearScriptTiles;
+begin
+  if Tiles <> nil then
+    Tiles.Clear;
 end;
 
 //Wipe the pixels the previous run left on the two canvases it draws through:
