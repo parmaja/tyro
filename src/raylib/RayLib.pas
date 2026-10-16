@@ -9,7 +9,7 @@
 {$MINENUMSIZE 4} //{$Z4} All enum must be sized as Integer
 {**********************************************************************************************
 *
-*   raylib v6.0 - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
+*   raylib v6.2 - A simple and easy-to-use library to enjoy videogames programming (www.raylib.com)
 *
 *   FEATURES:
 *       - NO external dependencies, all required libraries included with raylib
@@ -114,9 +114,9 @@ uses
 
 const
   RAYLIB_VERSION_MAJOR = 6;
-  RAYLIB_VERSION_MINOR = 0;
+  RAYLIB_VERSION_MINOR = 2;
   RAYLIB_VERSION_PATCH = 0;
-  RAYLIB_VERSION = '6.0';
+  RAYLIB_VERSION = '6.2';
 
 type
   PPUTF8Char = ^PUTF8Char;
@@ -362,7 +362,7 @@ type
 
   // Camera2D, defines position/orientation in 2d space
   TCamera2D = record
-    Offset: TVector2;       // Camera offset (screen space offset from window origin)
+    Offset: TVector2;       // Camera offset (screen space offset from window origin, unscaled by DPI, real pixel size)
     Target: TVector2;       // Camera target (world space target point that is mapped to screen space offset)
     Rotation: Single;       // Camera rotation in degrees (pivots around target)
     Zoom: Single;           // Camera zoom (scaling around target), must not be set to 0, set to 1.0f for no scale
@@ -444,7 +444,7 @@ type
 
   // Skeleton, animation bones hierarchy
   TModelSkeleton = record
-    BoneCount: Integer;        // Number of bones
+    BoneCount: Cardinal;       // Number of bones
     Bones: PBoneInfo;          // Bones information (skeleton)
     BindPose: TModelAnimPose;  // Bones base transformation (Transform[])
   end;
@@ -474,7 +474,7 @@ type
   TModelAnimation = record
     Name: array[0..31] of AnsiChar; // Animation name
 
-    BoneCount: Integer;        // Number of bones (per pose)
+    BoneCount: Cardinal;       // Number of bones (per pose)
     KeyframeCount: Integer;    // Number of animation key frames
     KeyframePoses: PPTransform; // Animation sequence keyframe poses [keyframe][pose]
   end;
@@ -1023,7 +1023,7 @@ type
   // FileIO: Load binary data
   TLoadFileDataCallback = function(FileName: PUTF8Char; var dataSize: Integer): PByte; cdecl;
   // FileIO: Save binary data
-  TSaveFileDataCallback = function(FileName: PUTF8Char; var data; dataSize: Integer): Boolean; cdecl;
+  TSaveFileDataCallback = function(FileName: PUTF8Char; const data: Pointer; dataSize: Integer): Boolean; cdecl;
   // FileIO: Load text data
   TLoadFileTextCallback = function(FileName: PUTF8Char): PUTF8Char; cdecl;
   // FileIO: Save text data
@@ -1143,38 +1143,38 @@ var
 
   { Cursor-related functions }
 
-  // Shows cursor
+  // Show cursor
   ShowCursor: procedure; cdecl = nil;
-  // Hides cursor
+  // Hide cursor
   HideCursor: procedure; cdecl = nil;
   // Check if cursor is not visible
   IsCursorHidden: function: Boolean; cdecl = nil;
-  // Enables cursor (unlock cursor)
+  // Enable cursor (unlock cursor)
   EnableCursor: procedure; cdecl = nil;
-  // Disables cursor (lock cursor)
+  // Disable cursor (lock cursor)
   DisableCursor: procedure; cdecl = nil;
   // Check if cursor is on the current screen.
   IsCursorOnScreen: function: Boolean; cdecl = nil;
 
   { Drawing-related functions }
 
-  // Set background color (framebuffer clear color)
+  // Clear background (framebuffer) to color
   ClearBackground: procedure(color: TColor); cdecl = nil;
-  // Setup canvas (framebuffer) to start drawing
+  // Begin canvas (framebuffer) drawing
   BeginDrawing: procedure; cdecl = nil;
-  // End canvas drawing and swap buffers (double buffering)
+  // End canvas (framebuffer) drawing and swap buffers (double buffering)
   EndDrawing: procedure; cdecl = nil;
   // Begin 2D mode with custom camera (2D)
   BeginMode2D: procedure(Camera: TCamera2D); cdecl = nil;
-  // Ends 2D mode with custom camera
+  // End 2D mode with custom camera
   EndMode2D: procedure; cdecl = nil;
   // Begin 3D mode with custom camera (3D)
   BeginMode3D: procedure(Camera: TCamera3D); cdecl = nil;
-  // Ends 3D mode and returns to default 2D orthographic mode
+  // End 3D mode and returns to default 2D orthographic mode
   EndMode3D: procedure; cdecl = nil;
   // Begin drawing to render texture
   BeginTextureMode: procedure(Target: TRenderTexture2D); cdecl = nil;
-  // Ends drawing to render texture
+  // End drawing to render texture
   EndTextureMode: procedure; cdecl = nil;
 
   // Begin custom shader drawing
@@ -1206,7 +1206,7 @@ var
   LoadShader: function(vsFileName: PUTF8Char; fsFileName: PUTF8Char): TShader; cdecl = nil;
   // Load shader from code strings and bind default locations
   LoadShaderFromMemory: function(vsCode: PUTF8Char; fsCode: PUTF8Char): TShader; cdecl = nil;
-  // Check if a shader is valid (loaded on GPU)
+  // Check if shader is valid (loaded on GPU)
   IsShaderValid: function(Shader: TShader): Boolean; cdecl = nil;
   // Get shader uniform location
   GetShaderLocation: function(Shader: TShader; UniformName: PUTF8Char): integer; cdecl = nil;
@@ -1232,13 +1232,13 @@ var
   // Get a ray trace from screen position (i.e mouse) in a viewport
   GetScreenToWorldRayEx: function(Position: TVector2; Camera: TCamera; Width, Height: Integer): TRay; cdecl = nil;
 
-  // Returns the screen space position for a 3d world space position
+  // Get screen space position for a 3d world space position
   GetWorldToScreen: function(Position: TVector3; camera: TCamera): TVector2; cdecl = nil;
-  // Returns size position for a 3d world space position
+  // Get sized screen space position for a 3d world space position
   GetWorldToScreenEx: function(position: TVector3; camera: TCamera; width: Integer; height: Integer): TVector2; cdecl = nil;
-  // Returns the screen space position for a 2d camera world space position
+  // Get screen space position for a 2d camera world space position
   GetWorldToScreen2D: function(position: TVector2; camera: TCamera2D): TVector2; cdecl = nil;
-  // Get the world space position for a 2d camera screen space position
+  // Get world space position for a 2d camera screen space position
   GetScreenToWorld2D: function(Position: TVector2; Camera: TCamera2D): TVector2; cdecl = nil;
   // Get camera transform matrix (view matrix)
   GetCameraMatrix: function(Camera: TCamera): TMatrix; cdecl = nil;
@@ -1279,7 +1279,7 @@ var
 
   // Takes a screenshot of current screen (filename extension defines format)
   TakeScreenshot: procedure(const fileName: PUTF8Char); cdecl = nil;
-  // Setup init configuration flags (view FLAGS)
+  // Set init configuration flags (view FLAGS)
   SetConfigFlags: procedure(flags: TConfigFlags); cdecl = nil;
   // Open URL with default system browser (if available)
   OpenURL: procedure(const url: PUTF8Char); cdecl = nil;
@@ -1317,8 +1317,8 @@ var
   LoadFileData: function(const fileName: PUTF8Char; var dataSize: Integer): PByte; cdecl = nil;
   // Unload file data allocated by LoadFileData()
   UnloadFileData: procedure(Data: PByte); cdecl = nil;
-  // Save data to file from byte array (write)
-  SaveFileData: procedure(const fileName: PUTF8Char; data: Pointer; dataSize: Integer); cdecl = nil;
+  // Save data to file from byte array (write), returns true on success
+  SaveFileData: procedure(const fileName: PUTF8Char; const data: Pointer; dataSize: Integer); cdecl = nil;
   // Export data to code (.h), returns true on success
   ExportDataAsCode: function(Data: PByte; dataSize: Integer; const fileName: PUTF8Char): Boolean; cdecl = nil;
   // Load text data from file (read), returns a '\0' terminated string
@@ -1330,24 +1330,26 @@ var
   //------------------------------------------------------------------
 
   // File system functions
-  // Rename file (if exists)
+  // Rename file (if exists), returns 0 on success
   FileRename: function(const fileName: PUTF8Char; const fileRename: PUTF8Char): Integer; cdecl = nil;
-  // Remove file (if exists)
+  // Remove file (if exists), returns 0 on success
   FileRemove: function(const fileName: PUTF8Char): Integer; cdecl = nil;
-  // Copy file from one path to another, dstPath created if it doesn't exist
+  // Copy file from one path to another, dstPath created if it doesn't exist, returns 0 on success
   FileCopy: function(const srcPath: PUTF8Char; const dstPath: PUTF8Char): Integer; cdecl = nil;
-  // Move file from one directory to another, dstPath created if it doesn't exist
+  // Move file from one directory to another, dstPath created if it doesn't exist, returns 0 on success
   FileMove: function(const srcPath: PUTF8Char; const dstPath: PUTF8Char): Integer; cdecl = nil;
-  // Replace text in an existing file
+  // Replace text in an existing file, returns 0 on success
   FileTextReplace: function(const fileName: PUTF8Char; const search: PUTF8Char; const replacement: PUTF8Char): Integer; cdecl = nil;
-  // Find text in existing file
+  // Find text in existing file, returns -1 if index not found or index otherwise
   FileTextFindIndex: function(const fileName: PUTF8Char; const search: PUTF8Char): Integer; cdecl = nil;
   // Check if file exists
   FileExists: function(const fileName: PUTF8Char): Boolean; cdecl = nil;
-  // Check if a directory path exists
+  // Check if directory path exists
   DirectoryExists: function(const dirPath: PUTF8Char): Boolean; cdecl = nil;
   // Check file extension (recommended include point: .png, .wav)
   IsFileExtension: function(const fileName: PUTF8Char; const ext: PUTF8Char): Boolean; cdecl = nil;
+  // Check if file path (file or directory) is hidden by OS
+  IsFileHidden: function(const filePath: PUTF8Char): Boolean; cdecl = nil;
   // Get file length in bytes (NOTE: GetFileSize() conflicts with windows.h)
   GetFileLength: function(const fileName: PUTF8Char): Integer; cdecl = nil;
   // Get pointer to extension for a filename string (includes dot: '.png')
@@ -1356,9 +1358,9 @@ var
   GetFileName: function(const filePath: PUTF8Char): PUTF8Char; cdecl = nil;
   // Get filename string without extension (uses static string)
   GetFileNameWithoutExt: function(const filePath: PUTF8Char): PUTF8Char; cdecl = nil;
-  // Get full path for a given fileName with path (uses static string)
+  // Get full path for a provided fileName with path (uses static string)
   GetDirectoryPath: function(const filePath: PUTF8Char): PUTF8Char; cdecl = nil;
-  // Get previous directory path for a given path (uses static string)
+  // Get previous directory path for a provided path (uses static string)
   GetPrevDirectoryPath: function(const dirPath: PUTF8Char): PUTF8Char; cdecl = nil;
   // Get current working directory (uses static string)
   GetWorkingDirectory: function: PUTF8Char; cdecl = nil;
@@ -1366,19 +1368,23 @@ var
   GetApplicationDirectory: function: PUTF8Char; cdecl = nil;
   // Create directories (including full path requested), returns 0 on success
   MakeDirectory: function(const dirPath: PUTF8Char): Integer; cdecl = nil;
-  // Change working directory, returns true if success
-  ChangeDirectory: function(const dir: PUTF8Char): Boolean; cdecl = nil;
-	// Check if a given path is a file or a directory
+  // Change working directory, returns 0 on success
+  ChangeDirectory: function(const dir: PUTF8Char): Integer; cdecl = nil;
+  // Check if provided path points to a file
   IsPathFile: function(const Dir: PUTF8Char): Boolean; cdecl = nil;
+  // Check if provided path points to a directory
+  IsPathDirectory: function(const Dir: PUTF8Char): Boolean; cdecl = nil;
+  // Check if provided path is an absolute path
+  IsPathAbsolute: function(const Dir: PUTF8Char): Boolean; cdecl = nil;
   // Check if fileName is valid for the platform/OS
   IsFileNameValid: function(const FileName: PUTF8Char): Boolean; cdecl = nil;
   // Load directory filepaths, files and directories, no subdirs scan
   LoadDirectoryFiles: function(const dirPath: PUTF8Char): TFilePathList; cdecl = nil;
-  // Load directory filepaths with extension filtering and subdir scan; some filters available: "*.*", "FILES*", "DIRS*"
+  // Load directory filepaths with extension filtering and subdir scan; some filters available: '*.*','FILES*','DIRS*'
   LoadDirectoryFilesEx: function(const basePath:PUTF8Char; const filter: PUTF8Char; scanSubdirs: Boolean): TFilePathList; cdecl = nil;
   // Unload filepaths
   UnloadDirectoryFiles: procedure(files: TFilePathList); cdecl = nil;
-  // Check if a file has been dropped into window
+  // Check if file has been dropped into window
   IsFileDropped: function: Boolean; cdecl = nil;
   // Load dropped filepaths
   LoadDroppedFiles: function: TFilePathList; cdecl = nil;
@@ -1401,13 +1407,13 @@ var
   // Decode Base64 string data, memory must be MemFree()
   DecodeDataBase64: function(Data: PByte; outputSize: PInteger): PByte; cdecl = nil;  //TODO zaher, check it by example please
   // Compute CRC32 hash code
-  ComputeCRC32: function(Data: PByte; dataSize: Integer): Cardinal; cdecl = nil;
+  ComputeCRC32: function(const Data: PByte; dataSize: Integer): Cardinal; cdecl = nil;
   // Compute MD5 hash code, returns static int[4] (16 bytes)
-  ComputeMD5: function(Data: PByte; dataSize: Integer): PCardinal; cdecl = nil;
+  ComputeMD5: function(const Data: PByte; dataSize: Integer): PCardinal; cdecl = nil;
   // Compute SHA1 hash code, returns static int[5] (20 bytes)
-  ComputeSHA1: function(Data: PByte; dataSize: Integer): PCardinal; cdecl = nil;
+  ComputeSHA1: function(const Data: PByte; dataSize: Integer): PCardinal; cdecl = nil;
   // Compute SHA256 hash code, returns static int[8] (32 bytes)
-  ComputeSHA256: function(Data: PByte; dataSize: Integer): PCardinal; cdecl = nil;
+  ComputeSHA256: function(const Data: PByte; dataSize: Integer): PCardinal; cdecl = nil;
 
   { Automation events functionality }
 
@@ -1434,15 +1440,15 @@ var
 
   { Input-related functions: keyboard }
 
-  // Check if a key has been pressed once
+  // Check if key has been pressed once
   IsKeyPressed: function(key: TKeyboardKey): Boolean; cdecl = nil;
-  // Check if a key has been pressed again
+  // Check if key has been pressed again
   IsKeyPressedRepeat: function(key: TKeyboardKey): Boolean; cdecl = nil;
-  // Check if a key is being pressed
+  // Check if key is being pressed
   IsKeyDown: function(key: TKeyboardKey): Boolean; cdecl = nil;
-  // Check if a key has been released once
+  // Check if key has been released once
   IsKeyReleased: function(key: TKeyboardKey): Boolean; cdecl = nil;
-  // Detect if a key is NOT being pressed
+  // Check if key is NOT being pressed
   IsKeyUp: function(key: TKeyboardKey): Boolean; cdecl = nil;
   // Get key pressed, call it multiple times for chars queued, returns 0 when the queue is empty
   GetKeyPressed: function: TKeyboardKey; cdecl = nil;
@@ -1455,17 +1461,17 @@ var
 
   // Input-related functions: gamepads
 
-  // Check if a gamepad is available
+  // Check if gamepad is available
   IsGamepadAvailable: function(gamepad: Integer): Boolean; cdecl = nil;
   // Get gamepad internal name id
   GetGamepadName: function(gamepad: Integer): PUTF8Char; cdecl = nil;
-  // Check if a gamepad button has been pressed once
+  // Check if gamepad button has been pressed once
   IsGamepadButtonPressed: function(gamepad: Integer; button: Integer): Boolean; cdecl = nil;
-   // Check if a gamepad button is being pressed
+   // Check if gamepad button is being pressed
   IsGamepadButtonDown: function(gamepad: Integer; button: Integer): Boolean; cdecl = nil;
-  // Check if a gamepad button has been released once
+  // Check if gamepad button has been released once
   IsGamepadButtonReleased: function(gamepad: Integer; button: Integer): Boolean; cdecl = nil;
-  // Check if a gamepad button is NOT being pressed
+  // Check if gamepad button is NOT being pressed
   IsGamepadButtonUp: function(gamepad: Integer; button: Integer): Boolean; cdecl = nil;
   // Get the last gamepad button pressed
   GetGamepadButtonPressed: function: Integer; cdecl = nil;
@@ -1480,13 +1486,13 @@ var
 
   { Input-related functions: mouse }
 
-  // Check if a mouse button has been pressed once
+  // Check if mouse button has been pressed once
   IsMouseButtonPressed: function(button: TMouseButton): Boolean; cdecl = nil;
-  // Check if a mouse button is being pressed
+  // Check if mouse button is being pressed
   IsMouseButtonDown: function(button: TMouseButton): Boolean; cdecl = nil;
-  // Check if a mouse button has been released once
+  // Check if mouse button has been released once
   IsMouseButtonReleased: function(button: TMouseButton): Boolean; cdecl = nil;
-  // Check if a mouse button is NOT being pressed
+  // Check if mouse button is NOT being pressed
   IsMouseButtonUp: function(button: TMouseButton): Boolean; cdecl = nil;
   // Get mouse position X
   GetMouseX: function: Integer; cdecl = nil;
@@ -1517,7 +1523,7 @@ var
   GetTouchY: function: Integer; cdecl = nil;
   // Get touch position XY for a touch point index (relative to screen size)
   GetTouchPosition: function(index: Integer): TVector2; cdecl = nil;
-  // Get touch point identifier for given index
+  // Get touch point identifier for provided index
   GetTouchPointId: function(index: Integer): Integer; cdecl = nil;
   // Get number of touch points
   GetTouchPointCount: function: Integer; cdecl = nil;
@@ -1528,7 +1534,7 @@ var
 
   // Enable a set of gestures using flags
   SetGesturesEnabled: procedure(Flags: Cardinal); cdecl = nil;
-  // Check if a gesture have been detected
+  // Check if gesture has been detected
   IsGestureDetected: function(gesture: Cardinal): Boolean; cdecl = nil;
   // Get latest detected gesture
   GetGestureDetected: function: Integer; cdecl = nil;
@@ -1560,7 +1566,7 @@ var
   // defining a font char white rectangle would allow drawing everything in a single draw call
 
   // Set texture and rectangle to be used on shapes drawing
-  SetShapesTexture: procedure(texture: TTexture2D; Source: TRectangle); cdecl = nil;
+  SetShapesTexture: procedure(texture: TTexture2D; rec: TRectangle); cdecl = nil;
   // Get texture that is used for shapes drawing
   GetShapesTexture: function(): TTexture2D; cdecl = nil;
   // Get texture source rectangle that is used for shapes drawing
@@ -1584,32 +1590,18 @@ var
   DrawLineBezier: procedure(startPos: TVector2; endPos: TVector2; thick: Single; color: TColor); cdecl = nil;
   // Draw a dashed line
   DrawLineDashed: procedure(startPos: TVector2; endPos: TVector2; dashSize: Integer; spaceSize: Integer; color: TColor); cdecl = nil;
-  // Draw a color-filled circle
-  DrawCircle: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl = nil;
-  // Draw a piece of a circle
-  DrawCircleSector: procedure(center: TVector2; radius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl = nil;
-  // Draw circle sector outline
-  DrawCircleSectorLines: procedure(center: TVector2; radius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl = nil;
-  // Draw a gradient-filled circle
-  DrawCircleGradient: procedure(center: TVector2; radius: Single; inner: TColor; outer: TColor); cdecl = nil;
-  // Draw a color-filled circle (Vector version)
-  DrawCircleV: procedure(center: TVector2; radius: Single; color: TColor); cdecl = nil;
-  // Draw circle outline
-  DrawCircleLines: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl = nil;
-  // Draw circle outline (Vector version)
-  DrawCircleLinesV: procedure(Center: TVector2; radius: Single; color: TColor); cdecl = nil;
-  // Draw ellipse
-  DrawEllipse: procedure(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl = nil;
-  // Draw ellipse (Vector version)
-  DrawEllipseV: procedure(center: TVector2; radiusH: Single; radiusV: Single; color: TColor); cdecl = nil;
-  // Draw ellipse outline
-  DrawEllipseLines: procedure(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl = nil;
-  // Draw ellipse outline (Vector version)
-  DrawEllipseLinesV: procedure(center: TVector2; radiusH: Single; radiusV: Single; color: TColor); cdecl = nil;
-  // Draw ring
-  DrawRing: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl = nil;
-  // Draw ring outline
-  DrawRingLines: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl = nil;
+  // Draw a color-filled triangle, counter-clockwise vertex order
+  DrawTriangle: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl = nil;
+  // Draw triangle with interpolated colors, counter-clockwise vertex/color order
+  DrawTriangleGradient: procedure(v1: TVector2; v2: TVector2; v3: TVector2; c1: TColor; c2: TColor; c3: TColor); cdecl = nil;
+  // Draw triangle outline, counter-clockwise vertex order
+  DrawTriangleLines: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl = nil;
+  // Draw triangle outline with line thickness, counter-clockwise vertex order
+  DrawTriangleLinesEx: procedure(v1: TVector2; v2: TVector2; v3: TVector2; thick: Single; color: TColor); cdecl = nil;
+  // Draw a triangle fan defined by points (first vertex is the center)
+  DrawTriangleFan: procedure(const points: PVector2; PointCount: Integer; color: TColor); cdecl = nil;
+  // Draw a triangle strip defined by points
+  DrawTriangleStrip: procedure(const points: PVector2; pointCount: Integer; color: TColor); cdecl = nil;
   // Draw a color-filled rectangle
   DrawRectangle: procedure(posX: Integer; posY: Integer; Width: Integer; Height: Integer; Color: TColor); cdecl = nil;
   // Draw a color-filled rectangle (Vector version)
@@ -1622,32 +1614,58 @@ var
   DrawRectangleGradientV: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; top: TColor; bottom: TColor); cdecl = nil;
   // Draw a horizontal-gradient-filled rectangle
   DrawRectangleGradientH: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; left: TColor; right: TColor); cdecl = nil;
-  // Draw a gradient-filled rectangle with custom vertex colors
-  DrawRectangleGradientEx: procedure(rec: TRectangle; topLeft: TColor; bottomLeft: TColor; bottomRight: TColor; topRight: TColor); cdecl = nil;
+  // Draw a gradient-filled rectangle with custom vertex colors, counter-clockwise color order
+  DrawRectangleGradientEx: procedure(rec: TRectangle; col1: TColor; col2: TColor; col3: TColor; col4: TColor); cdecl = nil;
   // Draw rectangle outline
   DrawRectangleLines: procedure(posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl = nil;
-  // Draw rectangle outline with extended parameters
-  DrawRectangleLinesEx: procedure(rec: TRectangle; lineThick: Single; color: TColor); cdecl = nil;
+  // Draw rectangle outline with line thickness
+  DrawRectangleLinesEx: procedure(rec: TRectangle; thick: Single; color: TColor); cdecl = nil;
   // Draw rectangle with rounded edges
   DrawRectangleRounded: procedure(rec: TRectangle; roundness: Single; segments: Integer; color: TColor); cdecl = nil;
   // Draw rectangle lines with rounded edges
   DrawRectangleRoundedLines: procedure(rec: TRectangle; roundness: Single; segments: Integer; color: TColor); cdecl = nil;
-  // Draw rectangle with rounded edges outline
-  DrawRectangleRoundedLinesEx: procedure(rec: TRectangle; roundness: Single; segments: Integer; lineThick: Single; color: TColor); cdecl = nil;
-  // Draw a color-filled triangle (vertex in counter-clockwise order!)
-  DrawTriangle: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl = nil;
-  // Draw triangle outline (vertex in counter-clockwise order!)
-  DrawTriangleLines: procedure(v1: TVector2; v2: TVector2; v3: TVector2; color: TColor); cdecl = nil;
-  // Draw a triangle fan defined by points (first vertex is the center)
-  DrawTriangleFan: procedure(const points: PVector2; PointCount: Integer; color: TColor); cdecl = nil;
-  // Draw a triangle strip defined by points
-  DrawTriangleStrip: procedure(const points: PVector2; pointCount: Integer; color: TColor); cdecl = nil;
-  // Draw a regular polygon (Vector version)
+  // Draw rectangle lines with rounded edges outline and line thickness
+  DrawRectangleRoundedLinesEx: procedure(rec: TRectangle; roundness: Single; segments: Integer; thick: Single; color: TColor); cdecl = nil;
+  // Draw a polygon of n sides
   DrawPoly: procedure(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl = nil;
   // Draw a polygon outline of n sides
   DrawPolyLines: procedure(center: TVector2; sides: Integer; radius: Single; rotation: Single; color: TColor); cdecl = nil;
-  // Draw a polygon outline of n sides with extended parameters
-  DrawPolyLinesEx: procedure(center: TVector2; Sides: Integer; Radius: Single; Rotation: Single; lineThick: Single; Color: TColor); cdecl = nil;
+  // Draw a polygon outline of n sides with line thickness
+  DrawPolyLinesEx: procedure(center: TVector2; Sides: Integer; Radius: Single; Rotation: Single; thick: Single; Color: TColor); cdecl = nil;
+  // Draw a color-filled circle
+  DrawCircle: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl = nil;
+  // Draw a color-filled circle (Vector version)
+  DrawCircleV: procedure(center: TVector2; radius: Single; color: TColor); cdecl = nil;
+  // Draw a gradient-filled circle
+  DrawCircleGradient: procedure(center: TVector2; radius: Single; inner: TColor; outer: TColor); cdecl = nil;
+  // Draw a piece of a circle
+  DrawCircleSector: procedure(center: TVector2; radius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl = nil;
+  // Draw circle sector outline
+  DrawCircleSectorLines: procedure(center: TVector2; radius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl = nil;
+  // Draw circle sector outline with thickness
+  DrawCircleSectorLinesEx: procedure(center: TVector2; radius: Single; startAngle: Single; endAngle: Single; segments: Integer; thick: Single; color: TColor); cdecl = nil;
+  // Draw circle outline
+  DrawCircleLines: procedure(centerX: Integer; centerY: Integer; radius: Single; color: TColor); cdecl = nil;
+  // Draw circle outline (Vector version)
+  DrawCircleLinesV: procedure(Center: TVector2; radius: Single; color: TColor); cdecl = nil;
+  // Draw circle outline with line thickness
+  DrawCircleLinesEx: procedure(center: TVector2; radius: Single; thick: Single; color: TColor); cdecl = nil;
+  // Draw ellipse
+  DrawEllipse: procedure(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl = nil;
+  // Draw ellipse (Vector version)
+  DrawEllipseV: procedure(center: TVector2; radiusH: Single; radiusV: Single; color: TColor); cdecl = nil;
+  // Draw ellipse outline
+  DrawEllipseLines: procedure(centerX: Integer; centerY: Integer; radiusH: Single; radiusV: Single; color: TColor); cdecl = nil;
+  // Draw ellipse outline (Vector version)
+  DrawEllipseLinesV: procedure(center: TVector2; radiusH: Single; radiusV: Single; color: TColor); cdecl = nil;
+  // Draw ellipse outline with line thickness
+  DrawEllipseLinesEx: procedure(center: TVector2; radiusH: Single; radiusV: Single; thick: Single; color: TColor); cdecl = nil;
+  // Draw ring
+  DrawRing: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl = nil;
+  // Draw ring outline
+  DrawRingLines: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Single; endAngle: Single; segments: Integer; color: TColor); cdecl = nil;
+  // Draw ring outline with line thickness
+  DrawRingLinesEx: procedure(center: TVector2; innerRadius: Single; outerRadius: Single; startAngle: Single; endAngle: Single; segments: Integer; thick: Single; color: TColor); cdecl = nil;
 
   { Splines drawing functions }
   // Draw spline: Linear, minimum 2 points
@@ -1671,7 +1689,7 @@ var
   // Draw spline segment: Cubic Bezier, 2 points, 2 control points
   DrawSplineSegmentBezierCubic: procedure(p1, c2, c3, p4: TVector2; thick: Single; color: TColor); cdecl = nil;
 
-  { Spline segment point evaluation functions, for a given t [0.0 .. 1.0] }
+  { Spline segment point evaluation functions, for a provided t [0.0 .. 1.0] }
 
   // Get (evaluate) spline point: Linear
   GetSplinePointLinear: function(startPos, endPos: TVector2; t: Single): TVector2; cdecl = nil;
@@ -1680,7 +1698,7 @@ var
   // Get (evaluate) spline point: Catmull-Rom
   GetSplinePointCatmullRom: function(p1, p2, p3, p4: TVector2; t: Single): TVector2; cdecl = nil;
   // Get (evaluate) spline point: Quadratic Bezier
-  GetSplinePointBezierQuad: function(p1, c2, p3: TVector2; t: Single): TVector2; cdecl = nil;
+  GetSplinePointBezierQuadratic: function(p1, c2, p3: TVector2; t: Single): TVector2; cdecl = nil;
   // Get (evaluate) spline point: Cubic Bezier
   GetSplinePointBezierCubic: function(p1, c2, c3, p4: TVector2; t: Single): TVector2; cdecl = nil;
 
@@ -1692,7 +1710,7 @@ var
   CheckCollisionCircles: function(center1: TVector2; radius1: Single; center2: TVector2; radius2: Single): Boolean; cdecl = nil;
   // Check collision between circle and rectangle
   CheckCollisionCircleRec: function(center: TVector2; radius: Single; rec: TRectangle): Boolean; cdecl = nil;
-  // Check if circle collides with a line created betweeen two points [p1] and [p2]
+  // Check if circle collides with a line created between two points [p1] and [p2]
   CheckCollisionCircleLine: function(center: TVector2; radius: Single; p1, p2: TVector2): Boolean; cdecl = nil;
 
   { Check if circle collides with a line created between two points [p1] and [p2] }
@@ -1731,7 +1749,7 @@ var
   LoadImageFromMemory: function(const fileType: PUTF8Char; fileData: Pointer; dataSize: Integer): TImage; cdecl = nil;
   // Load image from GPU texture data
   LoadImageFromTexture: function(texture: TTexture2D): TImage; cdecl = nil;
-  // Load image from screen buffer and (screenshot)
+  // Load image from screen buffer (screenshot)
   LoadImageFromScreen: function(): TImage; cdecl = nil;
   // Check if an image is valid (data and parameters)
   IsImageValid: function(image: TImage): Boolean; cdecl = nil;
@@ -1822,7 +1840,7 @@ var
   // Modify image color: grayscale
   ImageColorGrayscale: procedure(var image: TImage); cdecl = nil;
   // Modify image color: contrast (-100 to 100)
-  ImageColorContrast: procedure(var image: TImage; contrast: Single); cdecl = nil;
+  ImageColorContrast: procedure(var image: TImage; contrast: Integer); cdecl = nil;
   // Modify image color: brightness (-255 to 255)
   ImageColorBrightness: procedure(var image: TImage; brightness: Integer); cdecl = nil;
   // Modify image color: replace color
@@ -1843,7 +1861,7 @@ var
   { Image drawing functions }
   // NOTE: Image software-rendering functions (CPU)
 
-  // Clear image background with given color
+  // Clear image background with provided color
   ImageClearBackground: procedure(dst: PImage; color: TColor); cdecl = nil;
   // Draw pixel within an image
   ImageDrawPixel: procedure(dst: PImage; posX: Integer; posY: Integer; color: TColor); cdecl = nil;
@@ -1855,40 +1873,57 @@ var
   ImageDrawLineV: procedure(dst: PImage; StartPos: TVector2; EndPos: TVector2; color: TColor); cdecl = nil;
   // Draw a line defining thickness within an image
   ImageDrawLineEx: procedure(dst: PImage; start: TVector2; &end: TVector2; thick: Integer; color: TColor); cdecl = nil;
-  // Draw a filled circle within an image
-  ImageDrawCircle: procedure(const dst: TImage; CenterX, CenterY, Radius: Integer; Color: TColor); cdecl = nil;
-  // Draw a filled circle within an image (Vector version)
-  ImageDrawCircleV: procedure(dst: PImage; Center: TVector2; Radius: Integer; Color: TColor); cdecl = nil;
-  // Draw circle outline within an image
-  ImageDrawCircleLines: procedure(dst: PImage; CenterX, CenterY, Radius: Integer; Color: TColor); cdecl = nil;
-  // Draw circle outline within an image (Vector version)
-  ImageDrawCircleLinesV: procedure (dst: PImage; Center: TVector2; Radius: Integer; Color: TColor); cdecl = nil;
-  // Draw rectangle within an image
-  ImageDrawRectangle: procedure(dst: PImage; posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl = nil;
-  // Draw rectangle within an image (Vector version)
-  ImageDrawRectangleV: procedure(dst: PImage; position: TVector2; size: TVector2; color: TColor); cdecl = nil;
-  // Draw rectangle within an image
-  ImageDrawRectangleRec: procedure(dst: PImage; rec: TRectangle; color: TColor); cdecl = nil;
-  // Draw rectangle lines within an image
-  ImageDrawRectangleLines: procedure(dst: PImage; rec: TRectangle; thick: Integer; color: TColor); cdecl = nil;
-
+  // Draw a lines sequence within an image
+  ImageDrawLineStrip: procedure(dst: PImage; const points: PVector2; pointCount: Integer; color: TColor); cdecl = nil;
   // Draw triangle within an image
   ImageDrawTriangle: procedure(dst: PImage; v1, v2, v3: TVector2; color: TColor); cdecl = nil;
   // Draw triangle with interpolated colors within an image
-  ImageDrawTriangleEx: procedure(dst: PImage; v1, v2, v3: TVector2; c1, c2, c3: TColor); cdecl = nil;
+  ImageDrawTriangleGradient: procedure(dst: PImage; v1, v2, v3: TVector2; c1, c2, c3: TColor); cdecl = nil;
   // Draw triangle outline within an image
   ImageDrawTriangleLines: procedure(dst: PImage; v1, v2, v3: TVector2; color: TColor); cdecl = nil;
   // Draw a triangle fan defined by points within an image (first vertex is the center)
   ImageDrawTriangleFan: procedure(dst: PImage; const points: PVector2; pointCount: Integer; color: TColor); cdecl = nil;
   // Draw a triangle strip defined by points within an image
   ImageDrawTriangleStrip: procedure(dst: PImage; const points: PVector2; pointCount: Integer; color: TColor); cdecl = nil;
+  // Draw rectangle within an image
+  ImageDrawRectangle: procedure(dst: PImage; posX: Integer; posY: Integer; width: Integer; height: Integer; color: TColor); cdecl = nil;
+  // Draw rectangle within an image (Vector version)
+  ImageDrawRectangleV: procedure(dst: PImage; position: TVector2; size: TVector2; color: TColor); cdecl = nil;
+  // Draw rectangle within an image
+  ImageDrawRectangleRec: procedure(dst: PImage; rec: TRectangle; color: TColor); cdecl = nil;
+  // Draw a color-filled rectangle with pro parameters within and image
+  ImageDrawRectanglePro: procedure(dst: PImage; rec: TRectangle; origin: TVector2; rotation: Single; color: TColor); cdecl = nil;
+  // Draw rectangle lines within an image
+  ImageDrawRectangleLines: procedure(dst: PImage; posX, posY, width, height: Integer; color: TColor); cdecl = nil;
+  // Draw rectangle lines within an image with line thickness
+  ImageDrawRectangleLinesEx: procedure(dst: PImage; rec: TRectangle; thick: Integer; color: TColor); cdecl = nil;
+  // Draw rectangle with gradient colors within an image, counter-clockwise color order
+  ImageDrawRectangleGradientEx: procedure(dst: PImage; rec: TRectangle; col1, col2, col3, col4: TColor); cdecl = nil;
+  // Draw a filled circle within an image
+  ImageDrawCircle: procedure(dst: PImage; centerX, centerY, radius: Integer; color: TColor); cdecl = nil;
+  // Draw a filled circle within an image (Vector version)
+  ImageDrawCircleV: procedure(dst: PImage; Center: TVector2; Radius: Integer; Color: TColor); cdecl = nil;
+  // Draw circle outline within an image
+  ImageDrawCircleLines: procedure(dst: PImage; CenterX, CenterY, Radius: Integer; Color: TColor); cdecl = nil;
+  // Draw circle outline within an image (Vector version)
+  ImageDrawCircleLinesV: procedure (dst: PImage; Center: TVector2; Radius: Integer; Color: TColor); cdecl = nil;
+  // Draw a gradient-filled circle within an image
+  ImageDrawCircleGradient: procedure(dst: PImage; center: TVector2; radius: Single; inner, outer: TColor); cdecl = nil;
 
-  // Draw a source image within a destination image (tint applied to source)
-  ImageDraw: procedure(dst: PImage; src: TImage; srcRec: TRectangle; dstRec: TRectangle; tint: TColor); cdecl = nil;
+  // Draw an image within an image
+  ImageDrawImage: procedure(dst: PImage; src: TImage; posX, posY: Integer; tint: TColor); cdecl = nil;
+  // Draw an image with scaling and rotation within an image
+  ImageDrawImageEx: procedure(dst: PImage; src: TImage; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl = nil;
+  // Draw a part of an image defined by a rectangle within an image
+  ImageDrawImageRec: procedure(dst: PImage; src: TImage; srcRec: TRectangle; position: TVector2; tint: TColor); cdecl = nil;
+  // Draw a part of an image defined by a rectangle into destination rectangle, with scaling and rotation, within an image
+  ImageDrawImagePro: procedure(dst: PImage; src: TImage; srcRec: TRectangle; dstRec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl = nil;
   // Draw text (using default font) within an image (destination)
   ImageDrawText: procedure(dst: PImage; const text: PUTF8Char; posX, posY: Integer; fontSize: Integer; color: TColor); cdecl = nil;
   // Draw text (custom sprite font) within an image (destination)
   ImageDrawTextEx: procedure(dst: PImage; font: TFont; const text: PUTF8Char; position: TVector2; fontSize: Single; spacing: Single; color: TColor); cdecl = nil;
+  // Draw text using Font and pro parameters (rotation)
+  ImageDrawTextPro: procedure(dst: PImage; font: TFont; const text: PUTF8Char; position: TVector2; origin: TVector2; rotation: Single; fontSize: Single; spacing: Single; tint: TColor); cdecl = nil;
 
   { Texture loading functions }
   // NOTE: These functions require GPU access
@@ -1901,11 +1936,13 @@ var
   LoadTextureCubemap: function(Image: TImage; Layout: Integer): TTextureCubemap; cdecl = nil;
   // Load texture for rendering (framebuffer)
   LoadRenderTexture: function(Width: Integer; Height: Integer): TRenderTexture2D; cdecl = nil;
-  // Check if a texture is valid (loaded in GPU)
+  // Load texture for rendering (framebuffer), with specific format
+  LoadRenderTextureEx: function(Width: Integer; Height: Integer; format: Integer): TRenderTexture2D; cdecl = nil;
+  // Check if texture is valid (loaded in GPU)
   IsTextureValid: function(Texture: TTexture2D): Boolean; cdecl = nil;
   // Unload texture from GPU memory (VRAM)
   UnloadTexture: procedure(Texture: TTexture2D); cdecl = nil;
-  // Check if a render texture is valid (loaded in GPU)
+  // Check if render texture is valid (loaded in GPU)
   IsRenderTextureValid: function(Target: TRenderTexture2D): Boolean; cdecl = nil;
   // Unload render texture from GPU memory (VRAM)
   UnloadRenderTexture: procedure(Target: TRenderTexture2D); cdecl = nil;
@@ -1929,14 +1966,14 @@ var
   DrawTexture: procedure(Texture: TTexture2D; posX: Integer; posY: Integer; tint: TColor); cdecl = nil;
   // Draw a Texture2D with position defined as Vector2
   DrawTextureV: procedure(Texture: TTexture2D; position: TVector2; tint: TColor); cdecl = nil;
-  // Draw a Texture2D with extended parameters
+  // Draw a Texture2D with rotation and scale
   DrawTextureEx: procedure(Texture: TTexture2D; position: TVector2; rotation: Single; scale: Single; tint: TColor); cdecl = nil;
   // Draw a part of a texture defined by a rectangle
-  DrawTextureRec: procedure(Texture: TTexture2D; Source: TRectangle; Position: TVector2; tint: TColor); cdecl = nil;
-  // Draw a part of a texture defined by a rectangle with 'pro' parameters
-  DrawTexturePro: procedure(Texture: TTexture2D; source: TRectangle; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl = nil;
-  // Draws a texture (or part of it) that stretches or shrinks nicely
-  DrawTextureNPatch: procedure(Texture: TTexture2D; nPatchInfo: TNPatchInfo; dest: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl = nil;
+  DrawTextureRec: procedure(Texture: TTexture2D; rec: TRectangle; Position: TVector2; tint: TColor); cdecl = nil;
+  // Draw a part of a texture defined by a source rectangle to destination rectangle, with scaling and rotation
+  DrawTexturePro: procedure(Texture: TTexture2D; srcrec: TRectangle; dstrec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl = nil;
+  // Draw a texture (or part of it) that stretches or shrinks nicely
+  DrawTextureNPatch: procedure(Texture: TTexture2D; nPatchInfo: TNPatchInfo; dstrec: TRectangle; origin: TVector2; rotation: Single; tint: TColor); cdecl = nil;
 
   { Image/Texture misc functions }
 
@@ -1971,7 +2008,7 @@ var
   // Get a Color struct from hexadecimal value
   GetColor: function(hexValue: Cardinal): TColor; cdecl = nil;
   // Get Color from a source pixel pointer of certain format
-  GetPixelColor: function(srcPtr: Pointer; format: Integer): TColor; cdecl = nil;
+  GetPixelColor: function(const srcPtr: Pointer; format: Integer): TColor; cdecl = nil;
   // Set color formatted into destination pixel pointer
   SetPixelColor: function(dstPtr: Pointer; Color: TColor; format: Integer): TColor; cdecl = nil;
   // Get pixel data size in bytes (image or texture)
@@ -1987,13 +2024,13 @@ var
   GetFontDefault: function: TFont; cdecl = nil;
   // Load font from file into GPU memory (VRAM)
   LoadFont: function(const fileName: PUTF8Char): TFont; cdecl = nil;
-  // Load font from file with extended parameters, use NULL for fontChars and 0 for glyphCount to load the default character set
+  // Load font from file with defined codepoints and generation size, use NULL for codepoints and 0 for codepointCount to load the default character set, font size is provided in pixels height
   LoadFontEx: function(const fileName: PUTF8Char; fontSize: Integer; codepoints: PInteger; codepointCount: Integer): TFont; cdecl = nil;
   // Load font from Image (XNA style)
   LoadFontFromImage: function(image: TImage; key: TColor; firstChar: Integer): TFont; cdecl = nil;
   // Load font from memory buffer, fileType refers to extension: i.e. "ttf"
   LoadFontFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer; fontSize: Integer; codepoints: PInteger; codepointCount: Integer): TFont; cdecl = nil;
-  // Check if a font is valid (font data loaded, WARNING: GPU texture not checked)
+  // Check if font is valid (font data loaded, WARNING: GPU texture not checked)
   IsFontValid: function(Font: TFont): Boolean; cdecl = nil;
   // Load font data for further use
   LoadFontData: function(fileData: PByte; dataSize, fontSize: Integer; codepoints: PInteger; codepointCount: Integer; &type: TFontType; glyphCount: PInteger): PGlyphInfo; cdecl = nil;
@@ -2019,7 +2056,7 @@ var
 
   // Draw text using font inside rectangle limits with support for text selection
   DrawTextCodepoint: procedure(font: TFont; codepoint: Integer; position: TVector2; fontSize: Single; tint: TColor); cdecl = nil;
-  // Draw multiple character (codepoint)
+  // Draw multiple characters (codepoint)
   DrawTextCodepoints: procedure(Font: TFont; const codepoints: PInteger; codepointCount: integer; position: TVector2; fontSize, spacing: Single; tint: TColor); cdecl = nil;
 
   // Text font info functions
@@ -2070,7 +2107,7 @@ var
   UnloadTextLines: procedure(text: PPUTF8Char; lineCount: Integer); cdecl = nil;
   // Copy one string to another, returns bytes copied
   TextCopy: function(dst: PUTF8Char; const src: PUTF8Char): Integer; cdecl = nil;
-  // Check if two text string are equal
+  // Check if two text strings are equal
   TextIsEqual: function(const text1: PUTF8Char; const text2: PUTF8Char): Boolean; cdecl = nil;
   // Get text length, checks for '\0' ending
   TextLength: function(const text: PUTF8Char): Cardinal; cdecl = nil;
@@ -2130,7 +2167,7 @@ var
   DrawPoint3D: procedure(position: TVector3; color: TColor); cdecl = nil;
   // Draw a circle in 3D world space
   DrawCircle3D: procedure(center: TVector3; radius: Single; rotationAxis: TVector3; rotationAngle: Single; color: TColor); cdecl = nil;
-  // Draw a color-filled triangle (vertex in counter-clockwise order!)
+  // Draw a color-filled triangle, counter-clockwise vertex order
   DrawTriangle3D: procedure(v1: TVector3; v2: TVector3; v3: TVector3; color: TColor); cdecl = nil;
   // Draw a triangle strip defined by points
   DrawTriangleStrip3D: procedure(const Points: PVector3; pointCount: integer; Color: TColor); cdecl = nil;
@@ -2144,22 +2181,22 @@ var
   DrawCubeWiresV: procedure(position: TVector3; size: TVector3; color: TColor); cdecl = nil;
   // Draw sphere
   DrawSphere: procedure(centerPos: TVector3; radius: Single; color: TColor); cdecl = nil;
-  // Draw sphere with extended parameters
+  // Draw sphere with defined rings and slices
   DrawSphereEx: procedure(centerPos: TVector3; radius: Single; rings: Integer; slices: Integer; color: TColor); cdecl = nil;
   // Draw sphere wires
   DrawSphereWires: procedure(centerPos: TVector3; radius: Single; rings: Integer; slices: Integer; color: TColor); cdecl = nil;
   // Draw a cylinder/cone
-  DrawCylinder: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl = nil;
+  DrawCylinder: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; sides: Integer; color: TColor); cdecl = nil;
   // Draw a cylinder with base at startPos and top at endPos
   DrawCylinderEx: procedure(startPos: TVector3; endPos: TVector3; startRadius: Single; endRadius: Single; sides: Integer; Color: TColor); cdecl = nil;
   // Draw a cylinder/cone wires
-  DrawCylinderWires: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; slices: Integer; color: TColor); cdecl = nil;
+  DrawCylinderWires: procedure(position: TVector3; radiusTop: Single; radiusBottom: Single; height: Single; sides: Integer; color: TColor); cdecl = nil;
   // Draw a cylinder wires with base at startPos and top at endPos
   DrawCylinderWiresEx: procedure(startPos: TVector3; endPos: TVector3; startRadius: Single; endRadius: Single; sides: Integer; Color: TColor); cdecl = nil;
   // Draw a capsule with the center of its sphere caps at startPos and endPos
-  DrawCapsule: procedure(startPos: TVector3; endPos: TVector3; Radius: Single; slices, rings: Integer; Color: TColor); cdecl = nil;
+  DrawCapsule: procedure(startPos: TVector3; endPos: TVector3; Radius: Single; rings, slices: Integer; Color: TColor); cdecl = nil;
   // Draw capsule wireframe with the center of its sphere caps at startPos and endPos
-  DrawCapsuleWires: procedure(startPos: TVector3; endPos: TVector3; radius: Single; slices, rings: Integer; Color: TColor); cdecl = nil;
+  DrawCapsuleWires: procedure(startPos: TVector3; endPos: TVector3; radius: Single; rings, slices: Integer; Color: TColor); cdecl = nil;
   // Draw a plane XZ
   DrawPlane: procedure(centerPos: TVector3; size: TVector2; color: TColor); cdecl = nil;
   // Draw a ray line
@@ -2175,7 +2212,7 @@ var
 
   // Load model from files (meshes and materials)
   LoadModel: function(const fileName: PUTF8Char): TModel; cdecl = nil;
-  // Check if a model is valid (loaded in GPU, VAO/VBOs)
+  // Check if model is valid (loaded in GPU, VAO/VBOs)
   IsModelValid: function(Model: TModel): Boolean; cdecl = nil;
   // Load model from generated mesh (default material)
   LoadModelFromMesh: function(mesh: TMesh): TModel; cdecl = nil;
@@ -2188,20 +2225,20 @@ var
 
   // Draw a model (with texture if set)
   DrawModel: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl = nil;
-  // Draw a model with extended parameters
+  // Draw a model with custom transform
   DrawModelEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl = nil;
   // Draw a model wires (with texture if set)
   DrawModelWires: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl = nil;
-  // Draw a model wires (with texture if set) with extended parameters
+  // Draw a model wires with custom transform
   DrawModelWiresEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl = nil;
   // Draw bounding box (wires)
   DrawBoundingBox: procedure(box: TBoundingBox; color: TColor); cdecl = nil;
   // Draw a billboard texture
   DrawBillboard: procedure(camera: TCamera; texture: TTexture2D; center: TVector3; scale: Single; tint: TColor); cdecl = nil;
-  // Draw a billboard texture defined by sourceRec
-  DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; source: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl = nil;
-  // Draw a billboard texture defined by source and rotation
-  DrawBillboardPro: procedure(camera: TCamera; Texture: TTexture2D; source: TRectangle; position: TVector3; up: TVector3; size: TVector2; origin: TVector2; Rotation: Single; tint: TColor); cdecl = nil;
+  // Draw a billboard texture defined by rectangle
+  DrawBillboardRec: procedure(camera: TCamera; texture: TTexture2D; rec: TRectangle; center: TVector3; size: Single; tint: TColor); cdecl = nil;
+  // Draw a billboard texture defined by source rectangle with scaling and rotation
+  DrawBillboardPro: procedure(camera: TCamera; Texture: TTexture2D; rec: TRectangle; position: TVector3; up: TVector3; size: TVector2; origin: TVector2; Rotation: Single; tint: TColor); cdecl = nil;
 
   // Mesh management functions
   // Upload mesh vertex data in GPU and provide VAO/VBO ids
@@ -2252,7 +2289,7 @@ var
 
   // Load materials from model file
   LoadMaterials: function(const fileName: PUTF8Char; materialCount: PInteger): PMaterial; cdecl = nil;
-  // Check if a material is valid (shader assigned, map textures loaded in GPU)
+  // Check if material is valid (shader assigned, map textures loaded in GPU)
   IsMaterialValid: function(Material: TMaterial): Boolean; cdecl = nil;
   // Load default material (Supports: DIFFUSE, SPECULAR, NORMAL maps)
   LoadMaterialDefault: function: TMaterial; cdecl = nil;
@@ -2323,23 +2360,23 @@ var
   LoadWave: function(const fileName: PUTF8Char): TWave; cdecl = nil;
   // Load wave from memory buffer, fileType refers to extension: i.e. "wav"
   LoadWaveFromMemory: function(const fileType: PUTF8Char; fileData: PByte; dataSize: Integer): TWave; cdecl = nil;
-  // Checks if wave data is valid (data loaded and parameters)
+  // Check if wave data is valid (data loaded and parameters)
   IsWaveValid: function(Wave: TWave): Boolean; cdecl = nil;
   // Load sound from file
   LoadSound: function(const fileName: PUTF8Char): TSound; cdecl = nil;
   // Load sound from wave data
   LoadSoundFromWave: function(Wave: TWave): TSound; cdecl = nil;
-  // Create a new sound that shares the same sample data as the source sound, does not own the sound data
+  // Load sound alias, new sound that shares the same sample data as the source sound, does not own the sound data
   LoadSoundAlias: function(Source: TSound): TSound; cdecl = nil;
-  // Checks if a sound is valid (data loaded and buffers initialized)
+  // Check if sound is valid (data loaded and buffers initialized)
   IsSoundValid: function(Sound: TSound): Boolean; cdecl = nil;
   // Update sound buffer with new data (default data format: 32 bit float, stereo)
-  UpdateSound: procedure(sound: TSound; const data: Pointer; sampleCount: Integer); cdecl = nil;
+  UpdateSound: procedure(sound: TSound; const data: Pointer; frameCount: Integer); cdecl = nil;
   // Unload wave data
   UnloadWave: procedure(wave: TWave); cdecl = nil;
   // Unload sound
   UnloadSound: procedure(sound: TSound); cdecl = nil;
-  // Unload a sound alias (does not deallocate sample data)
+  // Unload sound alias (does not deallocate sample data)
   UnloadSoundAlias: procedure(alias: TSound); cdecl = nil;
   // Export wave data to file
   ExportWave: function(wave: TWave; const fileName: PUTF8Char): Boolean; cdecl = nil;
@@ -2356,7 +2393,7 @@ var
   PauseSound: procedure(Sound: TSound); cdecl = nil;
   // Resume a paused sound
   ResumeSound: procedure(Sound: TSound); cdecl = nil;
-  // Check if a sound is currently playing
+  // Check if sound is currently playing
   IsSoundPlaying: function(Sound: TSound): Boolean; cdecl = nil;
   // Set volume for a sound (1.0 is max level)
   SetSoundVolume: procedure(Sound: TSound; volume: Single); cdecl = nil;
@@ -2381,7 +2418,7 @@ var
   LoadMusicStream: function(const FileName: PUTF8Char): TMusic; cdecl = nil;
   // Load music stream from data
   LoadMusicStreamFromMemory: function(fileType: PUTF8Char; data:PByte; dataSize: Integer): TMusic; cdecl = nil;
-  // Checks if a music stream is valid (context and buffers initialized)
+  // Check if music stream is valid (context and buffers initialized)
   IsMusicValid: function(Music: TMusic): Boolean; cdecl = nil;
   // Unload music stream
   UnloadMusicStream: procedure(Music: TMusic); cdecl = nil;
@@ -2389,7 +2426,7 @@ var
   PlayMusicStream: procedure(Music: TMusic); cdecl = nil;
   // Check if music is playing
   IsMusicStreamPlaying:function(music: TMusic): Boolean; cdecl = nil;
-  // Updates buffers for music streaming
+  // Update buffers for music streaming
   UpdateMusicStream: procedure(Music: TMusic); cdecl = nil;
   // Stop music playing
   StopMusicStream: procedure(Music: TMusic); cdecl = nil;
@@ -2401,9 +2438,9 @@ var
   SeekMusicStream: procedure(music:TMusic; position: Single); cdecl = nil;
   // Set volume for music (1.0 is max level)
   SetMusicVolume: procedure(Music: TMusic; volume: Single); cdecl = nil;
-  // Set pitch for a music (1.0 is base level)
+  // Set pitch for music (1.0 is base level)
   SetMusicPitch: procedure(Music: TMusic; pitch: Single); cdecl = nil;
-  // Set pan for a music (-1.0 left, 0.0 center, 1.0 right)
+  // Set pan for music (-1.0 left, 0.0 center, 1.0 right)
   SetMusicPan: procedure(Music: TMusic; pan: Single); cdecl = nil;
   // Get music time length (in seconds)
   GetMusicTimeLength: function(Music: TMusic): Single; cdecl = nil;
@@ -2414,7 +2451,7 @@ var
 
   // Load audio stream (to stream raw audio pcm data)
   LoadAudioStream: function(SampleRate: Cardinal; SampleSize: Cardinal; Channels: Cardinal): TAudioStream; cdecl = nil;
-  // Checks if an audio stream is valid (buffers initialized)
+  // Check if audio stream is valid (buffers initialized)
   IsAudioStreamValid: function(Stream: TAudioStream): Boolean; cdecl = nil;
   // Unload audio stream and free memory
   UnloadAudioStream: procedure(stream: TAudioStream); cdecl = nil;
@@ -2436,7 +2473,7 @@ var
   SetAudioStreamVolume: procedure(stream: TAudioStream; volume: Single); cdecl = nil;
   // Set pitch for audio stream (1.0 is base level)
   SetAudioStreamPitch: procedure(stream: TAudioStream; pitch: Single); cdecl = nil;
-  // Set pan for audio stream (-1.0 to 1.0 range, 0.0 is centered)
+  // Set pan for audio stream (-1.0 left, 0.0 center, 1.0 right)
   SetAudioStreamPan: procedure(stream: TAudioStream; pan: Single); cdecl = nil;
   // Default size for new audio streams
   SetAudioStreamBufferSizeDefault: procedure(size: Integer); cdecl = nil;
@@ -2786,6 +2823,7 @@ begin
   GetAddress(@FileTextFindIndex, 'FileTextFindIndex');
   GetAddress(@FileExists, 'FileExists');
   GetAddress(@IsFileExtension, 'IsFileExtension');
+  GetAddress(@IsFileHidden, 'IsFileHidden');
   GetAddress(@GetFileLength, 'GetFileLength');
   GetAddress(@DirectoryExists, 'DirectoryExists');
   GetAddress(@GetFileExtension, 'GetFileExtension');
@@ -2795,8 +2833,11 @@ begin
   GetAddress(@GetPrevDirectoryPath, 'GetPrevDirectoryPath');
   GetAddress(@GetWorkingDirectory, 'GetWorkingDirectory');
   GetAddress(@GetApplicationDirectory, 'GetApplicationDirectory');
+  GetAddress(@MakeDirectory, 'MakeDirectory');
   GetAddress(@ChangeDirectory, 'ChangeDirectory');
   GetAddress(@IsPathFile, 'IsPathFile');
+  GetAddress(@IsPathDirectory, 'IsPathDirectory');
+  GetAddress(@IsPathAbsolute, 'IsPathAbsolute');
   GetAddress(@IsFileNameValid, 'IsFileNameValid');
   GetAddress(@LoadDirectoryFiles, 'LoadDirectoryFiles');
   GetAddress(@LoadDirectoryFilesEx, 'LoadDirectoryFilesEx');
@@ -2889,16 +2930,20 @@ begin
   GetAddress(@DrawCircle, 'DrawCircle');
   GetAddress(@DrawCircleSector, 'DrawCircleSector');
   GetAddress(@DrawCircleSectorLines, 'DrawCircleSectorLines');
+  GetAddress(@DrawCircleSectorLinesEx, 'DrawCircleSectorLinesEx');
   GetAddress(@DrawCircleGradient, 'DrawCircleGradient');
   GetAddress(@DrawCircleV, 'DrawCircleV');
   GetAddress(@DrawCircleLines, 'DrawCircleLines');
   GetAddress(@DrawCircleLinesV, 'DrawCircleLinesV');
+  GetAddress(@DrawCircleLinesEx, 'DrawCircleLinesEx');
   GetAddress(@DrawEllipse, 'DrawEllipse');
   GetAddress(@DrawEllipseV, 'DrawEllipseV');
   GetAddress(@DrawEllipseLines, 'DrawEllipseLines');
   GetAddress(@DrawEllipseLinesV, 'DrawEllipseLinesV');
+  GetAddress(@DrawEllipseLinesEx, 'DrawEllipseLinesEx');
   GetAddress(@DrawRing, 'DrawRing');
   GetAddress(@DrawRingLines, 'DrawRingLines');
+  GetAddress(@DrawRingLinesEx, 'DrawRingLinesEx');
   GetAddress(@DrawRectangle, 'DrawRectangle');
   GetAddress(@DrawRectangleV, 'DrawRectangleV');
   GetAddress(@DrawRectangleRec, 'DrawRectangleRec');
@@ -2912,7 +2957,9 @@ begin
   GetAddress(@DrawRectangleRoundedLines, 'DrawRectangleRoundedLines');
   GetAddress(@DrawRectangleRoundedLinesEx, 'DrawRectangleRoundedLinesEx');
   GetAddress(@DrawTriangle, 'DrawTriangle');
+  GetAddress(@DrawTriangleGradient, 'DrawTriangleGradient');
   GetAddress(@DrawTriangleLines, 'DrawTriangleLines');
+  GetAddress(@DrawTriangleLinesEx, 'DrawTriangleLinesEx');
   GetAddress(@DrawTriangleFan, 'DrawTriangleFan');
   GetAddress(@DrawTriangleStrip, 'DrawTriangleStrip');
   GetAddress(@DrawPoly, 'DrawPoly');
@@ -2931,7 +2978,7 @@ begin
   GetAddress(@GetSplinePointLinear, 'GetSplinePointLinear');
   GetAddress(@GetSplinePointBasis, 'GetSplinePointBasis');
   GetAddress(@GetSplinePointCatmullRom, 'GetSplinePointCatmullRom');
-  GetAddress(@GetSplinePointBezierQuad, 'GetSplinePointBezierQuad');
+  GetAddress(@GetSplinePointBezierQuadratic, 'GetSplinePointBezierQuadratic');
   GetAddress(@GetSplinePointBezierCubic, 'GetSplinePointBezierCubic');
   GetAddress(@CheckCollisionRecs, 'CheckCollisionRecs');
   GetAddress(@CheckCollisionCircles, 'CheckCollisionCircles');
@@ -3007,26 +3054,36 @@ begin
   GetAddress(@ImageDrawLine, 'ImageDrawLine');
   GetAddress(@ImageDrawLineV, 'ImageDrawLineV');
   GetAddress(@ImageDrawLineEx, 'ImageDrawLineEx');
+  GetAddress(@ImageDrawLineStrip, 'ImageDrawLineStrip');
+  GetAddress(@ImageDrawTriangle, 'ImageDrawTriangle');
+  GetAddress(@ImageDrawTriangleGradient, 'ImageDrawTriangleGradient');
+  GetAddress(@ImageDrawTriangleLines, 'ImageDrawTriangleLines');
+  GetAddress(@ImageDrawTriangleFan, 'ImageDrawTriangleFan');
+  GetAddress(@ImageDrawTriangleStrip, 'ImageDrawTriangleStrip');
+  GetAddress(@ImageDrawRectangle, 'ImageDrawRectangle');
+  GetAddress(@ImageDrawRectangleV, 'ImageDrawRectangleV');
+  GetAddress(@ImageDrawRectangleRec, 'ImageDrawRectangleRec');
+  GetAddress(@ImageDrawRectanglePro, 'ImageDrawRectanglePro');
+  GetAddress(@ImageDrawRectangleLines, 'ImageDrawRectangleLines');
+  GetAddress(@ImageDrawRectangleLinesEx, 'ImageDrawRectangleLinesEx');
+  GetAddress(@ImageDrawRectangleGradientEx, 'ImageDrawRectangleGradientEx');
   GetAddress(@ImageDrawCircle, 'ImageDrawCircle');
   GetAddress(@ImageDrawCircleV, 'ImageDrawCircleV');
   GetAddress(@ImageDrawCircleLines, 'ImageDrawCircleLines');
   GetAddress(@ImageDrawCircleLinesV, 'ImageDrawCircleLinesV');
-  GetAddress(@ImageDrawRectangle, 'ImageDrawRectangle');
-  GetAddress(@ImageDrawRectangleV, 'ImageDrawRectangleV');
-  GetAddress(@ImageDrawRectangleRec, 'ImageDrawRectangleRec');
-  GetAddress(@ImageDrawRectangleLines, 'ImageDrawRectangleLines');
-  GetAddress(@ImageDrawTriangle, 'ImageDrawTriangle');
-  GetAddress(@ImageDrawTriangleEx, 'ImageDrawTriangleEx');
-  GetAddress(@ImageDrawTriangleLines, 'ImageDrawTriangleLines');
-  GetAddress(@ImageDrawTriangleFan, 'ImageDrawTriangleFan');
-  GetAddress(@ImageDrawTriangleStrip, 'ImageDrawTriangleStrip');
-  GetAddress(@ImageDraw, 'ImageDraw');
+  GetAddress(@ImageDrawCircleGradient, 'ImageDrawCircleGradient');
+  GetAddress(@ImageDrawImage, 'ImageDrawImage');
+  GetAddress(@ImageDrawImageEx, 'ImageDrawImageEx');
+  GetAddress(@ImageDrawImageRec, 'ImageDrawImageRec');
+  GetAddress(@ImageDrawImagePro, 'ImageDrawImagePro');
   GetAddress(@ImageDrawText, 'ImageDrawText');
   GetAddress(@ImageDrawTextEx, 'ImageDrawTextEx');
+  GetAddress(@ImageDrawTextPro, 'ImageDrawTextPro');
   GetAddress(@LoadTexture, 'LoadTexture');
   GetAddress(@LoadTextureFromImage, 'LoadTextureFromImage');
   GetAddress(@LoadTextureCubemap, 'LoadTextureCubemap');
   GetAddress(@LoadRenderTexture, 'LoadRenderTexture');
+  GetAddress(@LoadRenderTextureEx, 'LoadRenderTextureEx');
   GetAddress(@IsTextureValid, 'IsTextureValid');
   GetAddress(@UnloadTexture, 'UnloadTexture');
   GetAddress(@IsRenderTextureValid, 'IsRenderTextureValid');
@@ -3260,9 +3317,9 @@ end;
 
 initialization
   {$ifdef WIN64}
-  RayLibrary := TmncRayLib.Create('raylib-6.0-64.dll');
+  RayLibrary := TmncRayLib.Create('raylib-6.2-64.dll');
   {$else}
-  RayLibrary := TmncRayLib.Create('raylib-6.0-32.dll');
+  RayLibrary := TmncRayLib.Create('raylib-6.2-32.dll');
   {$endif}
 finalization
   FreeAndNil(RayLibrary);
