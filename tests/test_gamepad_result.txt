@@ -1,0 +1,10 @@
+isgamepadpressed => function
+isgamepaddown => function
+gamepadaxis => function
+gamepadavailable => function
+gamepadname => function
+available => false
+name => 
+a pressed/down => false/false
+leftx/lefty => 0.0/0.0
+VERDICT => PASS

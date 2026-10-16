@@ -1,0 +1,3 @@
+sound.play => function
+play calls accepted
+VERDICT => PASS

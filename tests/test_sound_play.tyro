@@ -1,0 +1,35 @@
+--======================================================================
+--  test_sound_play.tyro - the sound.play("file.wav" [, volume]) API
+--======================================================================
+--  sound.play loads an audio file (raylib LoadSound: .wav) and plays it
+--  once. The file is resolved like every other script asset (next to the
+--  script, workspace assets/, app folder). A missing file is ignored, not
+--  an error - so a typo cannot kill a running game.
+--  A bad call aborts the script before the result file is written.
+--  Run:  tyro.exe tests\test_sound_play.tyro --exit
+--  Result: tests\test_sound_play_result.txt
+
+window.show(320, 240)
+
+local out = openfile("test_sound_play_result.txt", "w")
+
+local ok = true
+if type(sound.play) ~= "function" then ok = false end
+out:write("sound.play => " .. type(sound.play) .. "\n")
+
+-- existing file next to the script (a 100 ms 440 Hz beep)
+sound.play("sfx_test.wav")
+-- with an explicit volume
+sound.play("sfx_test.wav", 0.5)
+-- missing file: ignored, must not raise
+sound.play("no_such_file_xyz.wav")
+
+out:write("play calls accepted\n")
+out:write("VERDICT => " .. (ok and "PASS" or "FAIL") .. "\n")
+out:close()
+
+-- let the queued sound commands run on the main thread before exiting
+local t0 = millis()
+while millis() - t0 < 300 do
+  if not cycle then break end
+end

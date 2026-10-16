@@ -68,6 +68,20 @@ type
     procedure Generate(Proc: TWaveformProc; Frequency, Duration: Single; Amplitude: Single = 100; SampleRate: Integer = 44100; BitRate: Integer = 16);
   end;
 
+  { TTyroFileSound }
+
+  { A one-shot sound effect loaded from an audio file (raylib LoadSound,
+    .wav). It subclasses TTyroRayWave without generating anything, so
+    PlayingWaveforms and its UpdateWaveforms poll - which cast their entries
+    to TTyroRayWave and ask IsPlaying - reclaim it exactly like a generated
+    waveform. }
+  TTyroFileSound = class(TTyroRayWave)
+  public
+    constructor CreateFromFile(const AFileName: string);
+    function Valid: Boolean;
+    procedure SetVolume(Volume: Single);
+  end;
+
   { TTyroRayAudio }
 
   TTyroRayAudio = class(TRayAudio)
@@ -186,6 +200,8 @@ procedure PlayMML(const Song: TmmlSong);
 
 procedure PlayWaveform(Proc: TWaveformProc; Freq, Duration: Single); overload;
 procedure PlayWaveform(WaveformName: string; Freq, Duration: Single); overload;
+//One-shot SFX from an audio file (raylib LoadSound: .wav) - sound.play().
+procedure PlaySoundFile(const AFileName: string; AVolume: Single = 1.0);
 procedure UpdateMelodies;
 procedure UpdateWaveforms;
 procedure ShutdownMelodies;
@@ -227,6 +243,9 @@ function PinkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Sing
 function DarkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Pew_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Explode_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Kick_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Snare_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function HiHat_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
@@ -396,6 +415,51 @@ begin
     //RayLib.MemFree(Wave.Data); //* no it is our memory
     //Wave.Data := nil;
     //UnloadWave(Wave);
+  end;
+end;
+
+{ TTyroFileSound }
+
+constructor TTyroFileSound.CreateFromFile(const AFileName: string);
+begin
+  inherited Create(False);
+  //TRaySound.Destroy only unloads a Sound with FrameCount > 0, so a failed
+  //LoadSound (FrameCount 0) is freed safely by the inherited destructor.
+  Sound := RayLib.LoadSound(PUTF8Char(AFileName));
+end;
+
+function TTyroFileSound.Valid: Boolean;
+begin
+  Result := Sound.FrameCount > 0;
+end;
+
+procedure TTyroFileSound.SetVolume(Volume: Single);
+begin
+  SetSoundVolume(Sound, Volume);
+end;
+
+procedure PlaySoundFile(const AFileName: string; AVolume: Single);
+var
+  Effect: TTyroFileSound;
+begin
+  //Same forgiving contract as PlayWaveform: a missing or undecodable file is
+  //ignored instead of raising, so a typo in a game script cannot kill the run.
+  if (AFileName = '') or not SysUtils.FileExists(AFileName) then
+    Exit;
+  if PlayingWaveforms = nil then
+    Exit;
+  RayLibSound.Open;
+  Effect := TTyroFileSound.CreateFromFile(AFileName);
+  try
+    if not Effect.Valid then
+      Exit;
+    if AVolume <> 1 then
+      Effect.SetVolume(AVolume);
+    Effect.Play;
+    PlayingWaveforms.Add(Effect);
+    Effect := nil;
+  finally
+    Effect.Free;
   end;
 end;
 
@@ -1540,6 +1604,89 @@ begin
   else if Result < -1.0 then Result := -1.0;
 end;
 
+// Bass drum: a sine whose pitch drops from ~3x the tuned note down to it in
+// the first 30 ms (the classic "boom"), plus a short noise click for the
+// beater attack. Frequency is the drum pitch (a 60 Hz note is a deep kick,
+// 120 a tight one). The phase is the closed-form integral of the pitch curve
+// (F * (t + depth * tau * (1 - e^(-t/tau)))), so the sweep never jumps.
+function Kick_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  SweepDepth = 2.2;  //pitch starts at (1 + depth) x Frequency
+  SweepTau = 0.030;  //seconds the pitch glide lasts
+  BodyTau = 0.120;   //amplitude decay of the body
+  ClickTau = 0.002;  //beater click length
+var
+  t, Phase, Body, Click: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Phase := 2 * Pi * Frequency *
+    (t + SweepDepth * SweepTau * (1 - Exp(-t / SweepTau)));
+  Body := Sin(Phase) * Exp(-t / BodyTau);
+  Click := HashNoise(Index) * Exp(-t / ClickTau) * 0.3;
+  Result := Body + Click;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
+// Snare drum: the shell tone (two detuned sines at the tuned pitch, the beat
+// between them gives the skin ring) under a broadband noise burst from the
+// snare wires. Both decay in tens of milliseconds; Frequency tunes the shell
+// note (music.sound('Snare', 200, 300)).
+function Snare_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  BodyTau = 0.045;   //shell tone decay
+  NoiseTau = 0.080;  //snare-wire noise decay
+  Detune = 1.51;     //second partial ratio
+var
+  t, Tone, Noise: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Tone := (Sin(2 * Pi * Frequency * t) + Sin(2 * Pi * Frequency * Detune * t))
+    * 0.5 * Exp(-t / BodyTau);
+  Noise := HashNoise(Index) * Exp(-t / NoiseTau);
+  Result := Tone * 0.6 + Noise * 0.8;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
+// Closed hi-hat: an inharmonic metallic ring (the classic cymbal partial
+// stack) under a very short bright noise burst for the stick attack; gone in
+// ~50 ms. Frequency tunes the ring (music.sound('HiHat', 500, 80)).
+function HiHat_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  RingTau = 0.030;   //metallic ring decay
+  NoiseTau = 0.012;  //stick-click noise decay
+  Ratios: array[0..5] of Double = (1.0, 1.51, 1.89, 2.31, 2.66, 3.15);
+var
+  t, Ring, Noise: Double;
+  k: Integer;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Ring := 0;
+  for k := 0 to High(Ratios) do
+    Ring := Ring + Sin(2 * Pi * Frequency * Ratios[k] * t);
+  Ring := Ring / Length(Ratios) * Exp(-t / RingTau);
+  Noise := HashNoise(Index) * Exp(-t / NoiseTau) * 0.6;
+  Result := Ring + Noise;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
@@ -1570,6 +1717,11 @@ initialization
   Waveforms.Add('Engine', @Engine_Waveform);
   Waveforms.Add('Pew', @Pew_Waveform); //missile launch chirp
   Waveforms.Add('Explode', @Explode_Waveform); //enemy explosion rumble
+
+  //Drums
+  Waveforms.Add('Kick', @Kick_Waveform);
+  Waveforms.Add('Snare', @Snare_Waveform);
+  Waveforms.Add('HiHat', @HiHat_Waveform);
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;

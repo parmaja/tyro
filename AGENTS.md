@@ -1,5 +1,7 @@
 # AI Agents Project Rules
 
+This is a simple game engine for kids and noobs, using RayLib and Lua for endusers, built using FPC/Delphi
+
 ## Compile
 - Use FPC that exists in the system, do not use Delphi
 - Keep code compatible with Delphi
@@ -8,6 +10,7 @@
 
 You have full access to the current folder and this relative paths.
 
+- `.\`
 - `..\minilib`
 - `..\lua\`
 

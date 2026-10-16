@@ -492,6 +492,17 @@ type
     procedure DoExecute; override;
   end;
 
+  { TPlaySoundFileObject }
+
+  { sound.play("file.wav" [, volume]) - one-shot SFX from an audio file. }
+  TPlaySoundFileObject = class(TQueueObject)
+  public
+    FileName: string;
+    Volume: Single;
+    constructor Create(const AFileName: string; AVolume: Single = 1.0);
+    procedure DoExecute; override;
+  end;
+
    { TPlayMMLObject }
 
    TPlayMMLObject = class(TQueueObject)
@@ -1042,6 +1053,20 @@ end;
 procedure TPlayMusicFileObject.DoExecute;
 begin
   RayLibSound.PlayMusicFile(FileName);
+end;
+
+{ TPlaySoundFileObject }
+
+constructor TPlaySoundFileObject.Create(const AFileName: string; AVolume: Single);
+begin
+  inherited Create;
+  FileName := AFileName;
+  Volume := AVolume;
+end;
+
+procedure TPlaySoundFileObject.DoExecute;
+begin
+  PlaySoundFile(FileName, Volume);
 end;
 
 { TStartLoopSoundObject }

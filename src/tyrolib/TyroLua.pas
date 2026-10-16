@@ -178,7 +178,9 @@ type
 
   TLuaSound = class(TTyroLuaObject)
   public
+    //sound.play("file.wav" [, volume])
     //sound.loopPlay()/pitch()/volume()/stop()
+    function Play_func(L: Plua_State): integer; cdecl;
     function LoopPlay_func(L: Plua_State): integer; cdecl;
     function LoopPitch_func(L: Plua_State): integer; cdecl;
     function LoopVolume_func(L: Plua_State): integer; cdecl;
@@ -514,6 +516,12 @@ type
     function MouseX_func(L: Plua_State): integer; cdecl;
     function MouseY_func(L: Plua_State): integer; cdecl;
     function IsMouseButtonPressed_func(L: Plua_State): integer; cdecl;
+    //gamepad
+    function IsGamepadPressed_func(L: Plua_State): integer; cdecl;
+    function IsGamepadDown_func(L: Plua_State): integer; cdecl;
+    function GamepadAxis_func(L: Plua_State): integer; cdecl;
+    function GamepadAvailable_func(L: Plua_State): integer; cdecl;
+    function GamepadName_func(L: Plua_State): integer; cdecl;
     function FrameTime_func(L: Plua_State): integer; cdecl;
     function TotalTime_func(L: Plua_State): integer; cdecl;
     function Millis_func(L: Plua_State): integer; cdecl;
@@ -1495,12 +1503,14 @@ begin
   Lua.State.Register('music', 'mml', Music, Music.MML_func);
   Lua.State.Register('music', Music); //Should be last one
 
-  //sound (gapless/seamless looping playback, e.g. an engine drone)
+  //sound (one-shot file SFX + gapless/seamless looping playback)
+  //  sound.play("file.wav" [, volume])   one-shot SFX from an audio file
   //  sound.loopPlay(freq [, volume])
   //  sound.loopPlay(wave, freq [, volume])
   //  sound.pitch(freq)         retune the running loop
   //  sound.volume(0..1)
   //  sound.stop()
+  Lua.State.Register('sound', 'play', Sound, Sound.Play_func);
   Lua.State.Register('sound', 'loopPlay', Sound, Sound.LoopPlay_func);
   Lua.State.Register('sound', 'loopPitch', Sound, Sound.LoopPitch_func);
   Lua.State.Register('sound', 'loopVolume', Sound, Sound.LoopVolume_func);
@@ -1527,6 +1537,13 @@ begin
   Lua.State.RegisterGlobal('mousex', MouseX_func);
   Lua.State.RegisterGlobal('mousey', MouseY_func);
   Lua.State.RegisterGlobal('ismousepressed', IsMouseButtonPressed_func);
+  //gamepad: isgamepadpressed("a" [, gamepad=0]) / isgamepaddown / gamepadaxis
+  //         gamepadavailable([gamepad]) / gamepadname([gamepad])
+  Lua.State.RegisterGlobal('isgamepadpressed', IsGamepadPressed_func);
+  Lua.State.RegisterGlobal('isgamepaddown', IsGamepadDown_func);
+  Lua.State.RegisterGlobal('gamepadaxis', GamepadAxis_func);
+  Lua.State.RegisterGlobal('gamepadavailable', GamepadAvailable_func);
+  Lua.State.RegisterGlobal('gamepadname', GamepadName_func);
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
   Lua.State.RegisterGlobal('millis', Millis_func);
@@ -2326,6 +2343,24 @@ end;
 
 { TLuaSound }
 
+function TLuaSound.Play_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+  Volume: Single;
+begin
+  // sound.play("file.wav" [, volume]) - one-shot SFX from an audio file
+  // (raylib LoadSound: .wav). The file is resolved like every other script
+  // asset (script dir, workspace assets/, app folder) and played on the
+  // main thread; a missing file is ignored, not an error.
+  s := L.ToString(1);
+  Volume := 1;
+  if L.ArgsCount >= 2 then
+    Volume := L.ToNumber(2);
+  s := Res.GuessFileName(s, Res.WorkPath);
+  FScript.AddQueueObject(TPlaySoundFileObject.Create(s, Volume));
+  Result := 0;
+end;
+
 function TLuaSound.LoopPlay_func(L: Plua_State): integer; cdecl;
 var
   WaveName: string;
@@ -2612,6 +2647,72 @@ var
 begin
   s := L.ToString(1);
   L.PushBoolean(TyroInput.IsMouseButtonPressed(s));
+  Result := 1;
+end;
+
+function TLuaScript.IsGamepadPressed_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+  Gamepad: Integer;
+begin
+  // isgamepadpressed("a" [, gamepad=0]) - true once on the press edge
+  s := L.ToString(1);
+  Gamepad := 0;
+  if L.ArgsCount >= 2 then
+    Gamepad := round(L.ToNumber(2));
+  L.PushBoolean(TyroInput.IsGamepadPressed(s, Gamepad));
+  Result := 1;
+end;
+
+function TLuaScript.IsGamepadDown_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+  Gamepad: Integer;
+begin
+  // isgamepaddown("a" [, gamepad=0]) - true every frame while held
+  s := L.ToString(1);
+  Gamepad := 0;
+  if L.ArgsCount >= 2 then
+    Gamepad := round(L.ToNumber(2));
+  L.PushBoolean(TyroInput.IsGamepadDown(s, Gamepad));
+  Result := 1;
+end;
+
+function TLuaScript.GamepadAxis_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+  Gamepad: Integer;
+begin
+  // gamepadaxis("leftx" [, gamepad=0]) - axis movement -1..1 (0 if absent)
+  s := L.ToString(1);
+  Gamepad := 0;
+  if L.ArgsCount >= 2 then
+    Gamepad := round(L.ToNumber(2));
+  L.PushNumber(TyroInput.GamepadAxis(s, Gamepad));
+  Result := 1;
+end;
+
+function TLuaScript.GamepadAvailable_func(L: Plua_State): integer; cdecl;
+var
+  Gamepad: Integer;
+begin
+  // gamepadavailable([gamepad=0])
+  Gamepad := 0;
+  if L.ArgsCount >= 1 then
+    Gamepad := round(L.ToNumber(1));
+  L.PushBoolean(TyroInput.GamepadAvailable(Gamepad));
+  Result := 1;
+end;
+
+function TLuaScript.GamepadName_func(L: Plua_State): integer; cdecl;
+var
+  Gamepad: Integer;
+begin
+  // gamepadname([gamepad=0]) - controller name, '' when not connected
+  Gamepad := 0;
+  if L.ArgsCount >= 1 then
+    Gamepad := round(L.ToNumber(1));
+  L.PushString(TyroInput.GamepadName(Gamepad));
   Result := 1;
 end;
 
@@ -5226,6 +5327,16 @@ begin
       L.PushBoolean(Engine.Sprites.GetLooping(handle));
       Result := 1;
     end
+    else if field = 'flipH' then
+    begin
+      L.PushBoolean(Engine.Sprites.GetFlipH(handle));
+      Result := 1;
+    end
+    else if field = 'flipV' then
+    begin
+      L.PushBoolean(Engine.Sprites.GetFlipV(handle));
+      Result := 1;
+    end
     else if field = 'width' then
     begin
       L.PushValue(2); // key
@@ -5348,6 +5459,14 @@ begin
   else if field = 'looping' then
   begin
     Engine.Sprites.SetLooping(handle, L.ToBoolean(3));
+  end
+  else if field = 'flipH' then
+  begin
+    Engine.Sprites.SetFlipH(handle, L.ToBoolean(3));
+  end
+  else if field = 'flipV' then
+  begin
+    Engine.Sprites.SetFlipV(handle, L.ToBoolean(3));
   end
   {else if (field = 'width') or (field = 'height') then
   begin

@@ -1,0 +1,50 @@
+--======================================================================
+--  test_gamepad.tyro - the gamepad input API
+--======================================================================
+--  isgamepadpressed("a" [, gamepad=0])  true once on the press edge
+--  isgamepaddown("a" [, gamepad=0])     true while held
+--  gamepadaxis("leftx" [, gamepad=0])   axis movement -1..1 (0 if absent)
+--  gamepadavailable([gamepad=0])        true when a controller is connected
+--  gamepadname([gamepad=0])             controller name, '' when absent
+--  Button names: a b x y lb rb lt rt start select guide lstick rstick
+--                dpad_up dpad_down dpad_left dpad_right
+--  Axis names:   leftx lefty rightx righty ltrigger rtrigger
+--  Without a controller every query answers false/0 and nothing raises.
+--  Run:  tyro.exe <abs path>\tests\test_gamepad.tyro --exit
+--  Result: tests\test_gamepad_result.txt
+
+window.show(320, 240)
+
+local out = openfile("test_gamepad_result.txt", "w")
+
+local ok = true
+local names = { "isgamepadpressed", "isgamepaddown", "gamepadaxis",
+                "gamepadavailable", "gamepadname" }
+for _, n in ipairs(names) do
+  out:write(n .. " => " .. type(_G[n]) .. "\n")
+  if type(_G[n]) ~= "function" then ok = false end
+end
+
+-- every call must answer without raising, controller or not
+local avail = gamepadavailable()
+local name = gamepadname()
+local pressed = isgamepadpressed("a")
+local down = isgamepaddown("a")
+local ax = gamepadaxis("leftx")
+local ay = gamepadaxis("lefty")
+
+-- unknown names answer false/0, never an error
+if isgamepadpressed("not_a_button") then ok = false end
+if gamepadaxis("not_an_axis") ~= 0 then ok = false end
+
+out:write("available => " .. tostring(avail) .. "\n")
+out:write("name => " .. name .. "\n")
+out:write("a pressed/down => " .. tostring(pressed) .. "/" .. tostring(down) .. "\n")
+out:write("leftx/lefty => " .. ax .. "/" .. ay .. "\n")
+out:write("VERDICT => " .. (ok and "PASS" or "FAIL") .. "\n")
+out:close()
+
+local t0 = millis()
+while millis() - t0 < 200 do
+  if not cycle then break end
+end

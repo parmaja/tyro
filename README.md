@@ -78,7 +78,13 @@ without gaps—an engine drone, a siren, a wind loop—use `sound.loopPlay(freq
 [, volume])` or `sound.loopPlay(wave, freq [, volume])`. It keeps looping until
 `sound.loopStop()`, and `sound.loopPitch(freq)` / `sound.loopVolume(0..1)` retune
 it while it plays. Available `wave` names include `Sin`, `Square`, `Saw`, `Tri`,
-`Organ`, `FM`, `Noise`, `Pink` and `Engine`.
+`Organ`, `FM`, `Noise`, `Pink`, `Engine` and the drum waveforms `Kick`, `Snare`
+and `HiHat`.
+
+For a one-shot sound effect from an audio file, `sound.play("file.wav" [, volume])`
+loads the file (raylib `LoadSound`, `.wav`) and plays it once. The file is resolved
+like every other script asset (next to the script, the workspace, the app folder);
+a missing file is ignored, not an error.
 
 # Input
 
@@ -143,6 +149,20 @@ while true do
      sleep(10)
  end
  ```
+
+## Gamepad
+
+| Function | Description | Examples |
+|----------|-------------|----------|
+| `gamepadavailable([gamepad])` | True when a gamepad is connected (default pad 0) | — |
+| `gamepadname([gamepad])` | The pad's name, or empty when there is no pad | — |
+| `isgamepadpressed(button [, gamepad])` | True once when a pad button transitions to pressed | `"a"`, `"start"`, `"dpad_up"` |
+| `isgamepaddown(button [, gamepad])` | True every frame while a pad button is held | `"a"`, `"lb"`, `"dpad_left"` |
+| `gamepadaxis(axis [, gamepad])` | Axis value in -1..1 (0 without a pad) | `"leftx"`, `"lefty"`, `"rightx"`, `"righty"`, `"ltrigger"`, `"rtrigger"` |
+
+Supported button names: `a`, `b`, `x`, `y`, `lb`, `rb`, `lt`, `rt`, `start`,
+`select`, `guide`, `lstick`, `rstick`, `dpad_up`, `dpad_down`, `dpad_left`,
+`dpad_right`.
 
 # Files
 
@@ -311,6 +331,8 @@ positioned with `move` or by setting `x`/`y` properties.
 | `sprite.playing` | `boolean` | Whether the animation is running (read/write). |
 | `sprite.speed` | `number` | Animation speed in frames-per-second; 0 = use the file timings (read/write). |
 | `sprite.looping` | `boolean` | Whether the animation loops when it reaches the last frame (read/write). |
+| `sprite.flipH` | `boolean` | Mirror the texture horizontally (read/write). |
+| `sprite.flipV` | `boolean` | Mirror the texture vertically (read/write). |
 
 Image files are searched in the script directory, the workspace `sprites/`
 folder, and the current directory.

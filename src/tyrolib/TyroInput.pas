@@ -36,6 +36,21 @@ function KeyNameToEnum(const Name: string): TKeyboardKey;
   Returns False for unknown names rather than silently querying left. }
 function TryMouseButtonNameToEnum(const Name: string; out Button: TMouseButton): Boolean;
 
+{ Maps a human-readable gamepad-button name to a RayLib TGamepadButton.
+  Supported names (Xbox layout, PS names in brackets):
+    "a" [cross] "b" [circle] "x" [square] "y" [triangle]
+    "lb" "rb" "lt" "rt"
+    "start" "select" "guide"
+    "lstick" "rstick"          (stick clicks)
+    "dpad_up" "dpad_down" "dpad_left" "dpad_right"
+  Returns False for unknown names rather than silently querying a button. }
+function TryGamepadButtonNameToEnum(const Name: string; out Button: TGamepadButton): Boolean;
+
+{ Maps a human-readable gamepad-axis name to a RayLib TGamepadAxis.
+  Supported names: "leftx" "lefty" "rightx" "righty" "ltrigger" "rtrigger"
+  Returns False for unknown names. }
+function TryGamepadAxisNameToEnum(const Name: string; out Axis: TGamepadAxis): Boolean;
+
 { --- Query functions (thread-safe atomic reads of RayLib internal state) --- }
 
 function IsKeyPressed(const KeyName: string): Boolean;
@@ -43,6 +58,16 @@ function IsKeyDown(const KeyName: string): Boolean;
 function MouseX: Integer;
 function MouseY: Integer;
 function IsMouseButtonPressed(const ButtonName: string): Boolean;
+
+{ --- Gamepad queries (Gamepad is the player index, 0 by default) --- }
+
+function GamepadAvailable(Gamepad: Integer = 0): Boolean;
+{ Controller name, '' when the gamepad is not connected }
+function GamepadName(Gamepad: Integer = 0): string;
+function IsGamepadPressed(const ButtonName: string; Gamepad: Integer = 0): Boolean;
+function IsGamepadDown(const ButtonName: string; Gamepad: Integer = 0): Boolean;
+{ Axis movement -1..1 (triggers 1..-1); 0 for an unknown axis or gamepad }
+function GamepadAxis(const AxisName: string; Gamepad: Integer = 0): Single;
 
 { --- Frame timing --- }
 
@@ -128,6 +153,72 @@ begin
     Result := False;
 end;
 
+function TryGamepadButtonNameToEnum(const Name: string; out Button: TGamepadButton): Boolean;
+var
+  n: string;
+begin
+  n := LowerCase(Trim(Name));
+  Result := True;
+  if n = 'a' then
+    Button := GAMEPAD_BUTTON_RIGHT_FACE_DOWN      // Xbox A / PS cross
+  else if n = 'b' then
+    Button := GAMEPAD_BUTTON_RIGHT_FACE_RIGHT     // Xbox B / PS circle
+  else if n = 'x' then
+    Button := GAMEPAD_BUTTON_RIGHT_FACE_LEFT      // Xbox X / PS square
+  else if n = 'y' then
+    Button := GAMEPAD_BUTTON_RIGHT_FACE_UP        // Xbox Y / PS triangle
+  else if n = 'lb' then
+    Button := GAMEPAD_BUTTON_LEFT_TRIGGER_1
+  else if n = 'rb' then
+    Button := GAMEPAD_BUTTON_RIGHT_TRIGGER_1
+  else if n = 'lt' then
+    Button := GAMEPAD_BUTTON_LEFT_TRIGGER_2
+  else if n = 'rt' then
+    Button := GAMEPAD_BUTTON_RIGHT_TRIGGER_2
+  else if n = 'select' then
+    Button := GAMEPAD_BUTTON_MIDDLE_LEFT
+  else if n = 'guide' then
+    Button := GAMEPAD_BUTTON_MIDDLE
+  else if n = 'start' then
+    Button := GAMEPAD_BUTTON_MIDDLE_RIGHT
+  else if n = 'lstick' then
+    Button := GAMEPAD_BUTTON_LEFT_THUMB
+  else if n = 'rstick' then
+    Button := GAMEPAD_BUTTON_RIGHT_THUMB
+  else if n = 'dpad_up' then
+    Button := GAMEPAD_BUTTON_LEFT_FACE_UP
+  else if n = 'dpad_down' then
+    Button := GAMEPAD_BUTTON_LEFT_FACE_DOWN
+  else if n = 'dpad_left' then
+    Button := GAMEPAD_BUTTON_LEFT_FACE_LEFT
+  else if n = 'dpad_right' then
+    Button := GAMEPAD_BUTTON_LEFT_FACE_RIGHT
+  else
+    Result := False;
+end;
+
+function TryGamepadAxisNameToEnum(const Name: string; out Axis: TGamepadAxis): Boolean;
+var
+  n: string;
+begin
+  n := LowerCase(Trim(Name));
+  Result := True;
+  if n = 'leftx' then
+    Axis := GAMEPAD_AXIS_LEFT_X
+  else if n = 'lefty' then
+    Axis := GAMEPAD_AXIS_LEFT_Y
+  else if n = 'rightx' then
+    Axis := GAMEPAD_AXIS_RIGHT_X
+  else if n = 'righty' then
+    Axis := GAMEPAD_AXIS_RIGHT_Y
+  else if n = 'ltrigger' then
+    Axis := GAMEPAD_AXIS_LEFT_TRIGGER
+  else if n = 'rtrigger' then
+    Axis := GAMEPAD_AXIS_RIGHT_TRIGGER
+  else
+    Result := False;
+end;
+
 function IsKeyPressed(const KeyName: string): Boolean;
 begin
   Result := RayLib.IsKeyPressed(KeyNameToEnum(KeyName));
@@ -154,6 +245,49 @@ var
 begin
   Result := TryMouseButtonNameToEnum(ButtonName, Button) and
     RayLib.IsMouseButtonPressed(Button);
+end;
+
+function GamepadAvailable(Gamepad: Integer): Boolean;
+begin
+  Result := RayLib.IsGamepadAvailable(Gamepad);
+end;
+
+function GamepadName(Gamepad: Integer): string;
+var
+  p: PUTF8Char;
+begin
+  if not RayLib.IsGamepadAvailable(Gamepad) then
+    Exit('');
+  p := RayLib.GetGamepadName(Gamepad);
+  if p = nil then
+    Result := ''
+  else
+    Result := string(p);
+end;
+
+function IsGamepadPressed(const ButtonName: string; Gamepad: Integer): Boolean;
+var
+  Button: TGamepadButton;
+begin
+  Result := TryGamepadButtonNameToEnum(ButtonName, Button) and
+    RayLib.IsGamepadButtonPressed(Gamepad, Ord(Button));
+end;
+
+function IsGamepadDown(const ButtonName: string; Gamepad: Integer): Boolean;
+var
+  Button: TGamepadButton;
+begin
+  Result := TryGamepadButtonNameToEnum(ButtonName, Button) and
+    RayLib.IsGamepadButtonDown(Gamepad, Ord(Button));
+end;
+
+function GamepadAxis(const AxisName: string; Gamepad: Integer): Single;
+var
+  Axis: TGamepadAxis;
+begin
+  if not TryGamepadAxisNameToEnum(AxisName, Axis) then
+    Exit(0);
+  Result := RayLib.GetGamepadAxisMovement(Gamepad, Ord(Axis));
 end;
 
 function FrameTime: Single;

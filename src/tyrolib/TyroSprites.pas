@@ -58,6 +58,8 @@ type
     Angle: single;
     Scale: single;
     Visible: boolean;
+    FlipH: boolean;    //mirror the texture horizontally (right-facing art from a left-facing sheet)
+    FlipV: boolean;    //mirror the texture vertically
     Collides: boolean;
     Kind: TSpriteKind;
     Mass: single;
@@ -118,11 +120,15 @@ type
     procedure SetAngle(Handle: integer; Angle: single);
     procedure SetScale(Handle: integer; Scale: single);
     procedure SetVisible(Handle: integer; AVisible: boolean);
+    procedure SetFlipH(Handle: integer; AFlip: boolean);
+    procedure SetFlipV(Handle: integer; AFlip: boolean);
     function GetX(Handle: integer): single;
     function GetY(Handle: integer): single;
     function GetAngle(Handle: integer): single;
     function GetScale(Handle: integer): single;
     function GetVisible(Handle: integer): boolean;
+    function GetFlipH(Handle: integer): boolean;
+    function GetFlipV(Handle: integer): boolean;
     function GetWidth(Handle: integer): integer;
     function GetHeight(Handle: integer): integer;
     function GetName(Handle: integer): string;
@@ -252,6 +258,8 @@ begin
   Angle := 0;
   Scale := 1.0;
   Visible := True;
+  FlipH := False;
+  FlipV := False;
   Collides := False;
   Kind := skDynamic;
   Mass := 1.0;
@@ -757,6 +765,32 @@ begin
   end;
 end;
 
+procedure TSprites.SetFlipH(Handle: integer; AFlip: boolean);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.FlipH := AFlip;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetFlipV(Handle: integer; AFlip: boolean);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.FlipV := AFlip;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 function TSprites.GetX(Handle: integer): single;
 var
   Sprite: TSprite;
@@ -825,6 +859,36 @@ begin
   try
     if FItems.TryGetValue(Handle, Sprite) then
       Result := Sprite.Visible
+    else
+      Result := False;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetFlipH(Handle: integer): boolean;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.FlipH
+    else
+      Result := False;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetFlipV(Handle: integer): boolean;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.FlipV
     else
       Result := False;
   finally
@@ -1209,6 +1273,7 @@ procedure TSprites.DrawAll;
 var
   Sprite: TSprite;
   W, H: Single;
+  sx, sy, sw, sh: Single;
   Src, Dst: TRectangle;
 begin
   FLock.Enter;
@@ -1221,7 +1286,30 @@ begin
         // the documented "sprite.x/y = position" model.
         W := Sprite.Texture.width * Sprite.Scale;
         H := Sprite.Texture.height * Sprite.Scale;
-        Src := RectangleOf(0, 0, Sprite.Texture.width, Sprite.Texture.height);
+        // FlipH/FlipV mirror the texture by reversing the source rectangle:
+        // the UVs run from the far edge back to the near one (raylib renders
+        // negative source dimensions as a flip).
+        if Sprite.FlipH then
+        begin
+          sx := Sprite.Texture.width;
+          sw := -Sprite.Texture.width;
+        end
+        else
+        begin
+          sx := 0;
+          sw := Sprite.Texture.width;
+        end;
+        if Sprite.FlipV then
+        begin
+          sy := Sprite.Texture.height;
+          sh := -Sprite.Texture.height;
+        end
+        else
+        begin
+          sy := 0;
+          sh := Sprite.Texture.height;
+        end;
+        Src := RectangleOf(sx, sy, sw, sh);
         Dst := RectangleOf(Sprite.X, Sprite.Y, W, H);
         RayLib.DrawTexturePro(Sprite.Texture, Src, Dst,
           Vector2Of(W / 2, H / 2), Sprite.Angle, clWhite);
@@ -1261,6 +1349,7 @@ var
   W, H: Single;
   Texture: TTexture2D;
   Angle: Single;
+  sx, sy, sw, sh: Single;
   Src, Dst: TRectangle;
 begin
   FLock.Enter;
@@ -1280,7 +1369,28 @@ begin
     // Snapshot under the lock; the DrawTexturePro call happens outside it.
     W := Texture.width * Sprite.Scale;
     H := Texture.height * Sprite.Scale;
-    Src := RectangleOf(0, 0, Texture.width, Texture.height);
+    // FlipH/FlipV mirror the texture via a reversed source rectangle.
+    if Sprite.FlipH then
+    begin
+      sx := Texture.width;
+      sw := -Texture.width;
+    end
+    else
+    begin
+      sx := 0;
+      sw := Texture.width;
+    end;
+    if Sprite.FlipV then
+    begin
+      sy := Texture.height;
+      sh := -Texture.height;
+    end
+    else
+    begin
+      sy := 0;
+      sh := Texture.height;
+    end;
+    Src := RectangleOf(sx, sy, sw, sh);
     Dst := RectangleOf(Sprite.X, Sprite.Y, W, H);
     Angle := Sprite.Angle;
   finally
