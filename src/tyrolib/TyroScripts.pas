@@ -503,6 +503,26 @@ type
     procedure DoExecute; override;
   end;
 
+  { TLoadSoundFileObject }
+
+  { sound.load("file.wav") - preload a file into the permanent sound cache. }
+  TLoadSoundFileObject = class(TQueueObject)
+  public
+    FileName: string;
+    constructor Create(const AFileName: string);
+    procedure DoExecute; override;
+  end;
+
+  { TUnloadSoundFileObject }
+
+  { sound.unload("file.wav") - drop a preloaded file from the sound cache. }
+  TUnloadSoundFileObject = class(TQueueObject)
+  public
+    FileName: string;
+    constructor Create(const AFileName: string);
+    procedure DoExecute; override;
+  end;
+
    { TPlayMMLObject }
 
    TPlayMMLObject = class(TQueueObject)
@@ -1067,6 +1087,32 @@ end;
 procedure TPlaySoundFileObject.DoExecute;
 begin
   PlaySoundFile(FileName, Volume);
+end;
+
+{ TLoadSoundFileObject }
+
+constructor TLoadSoundFileObject.Create(const AFileName: string);
+begin
+  inherited Create;
+  FileName := AFileName;
+end;
+
+procedure TLoadSoundFileObject.DoExecute;
+begin
+  LoadSoundFile(FileName);
+end;
+
+{ TUnloadSoundFileObject }
+
+constructor TUnloadSoundFileObject.Create(const AFileName: string);
+begin
+  inherited Create;
+  FileName := AFileName;
+end;
+
+procedure TUnloadSoundFileObject.DoExecute;
+begin
+  UnloadSoundFile(FileName);
 end;
 
 { TStartLoopSoundObject }

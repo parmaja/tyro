@@ -78,11 +78,32 @@ type
   TTyroFileSound = class(TTyroRayWave)
   private
     FFileName: string;
+    FIsAlias: Boolean;
   public
     constructor CreateFromFile(const AFileName: string);
+    //A cheap second voice over a cached sound (raylib LoadSoundAlias): it
+    //shares the sample data, so several copies of one effect can overlap and
+    //the cached original is never touched by the one-shot.
+    constructor CreateAlias(Source: TTyroFileSound);
+    destructor Destroy; override;
     function Valid: Boolean;
     procedure SetVolume(Volume: Single);
     property FileName: string read FFileName;
+    property IsAlias: Boolean read FIsAlias;
+  end;
+
+  { TTyroFileSounds }
+
+  { The preload cache behind sound.load/sound.unload: decoded sound files kept
+    resident and found by their resolved file name (case-insensitive). The list
+    owns its entries, so dropping one unloads the raylib sound. sound.play()
+    looks here first and plays a cheap alias when the file was preloaded, but it
+    never adds to the cache itself; only sound.load() does. }
+  TTyroFileSounds = class(TmnObjectList<TTyroFileSound>)
+  public
+    function Find(const AFileName: string): TTyroFileSound;
+    function Load(const AFileName: string): TTyroFileSound;
+    procedure Unload(const AFileName: string);
   end;
 
   { TTyroRayAudio }
@@ -198,15 +219,20 @@ type
 
 var
   WaveForms: TWaveForms = nil;
+  SoundCache: TTyroFileSounds = nil;
 
 procedure PlayMML(const Song: TmmlSong);
 
 procedure PlayWaveform(Proc: TWaveformProc; Freq, Duration: Single); overload;
 procedure PlayWaveform(WaveformName: string; Freq, Duration: Single); overload;
 //One-shot SFX from an audio file (raylib LoadSound: .wav) - sound.play().
+//If the file was preloaded with LoadSoundFile it is played as an alias of the
+//cached sound; otherwise it is decoded and reclaimed when it finishes.
 procedure PlaySoundFile(const AFileName: string; AVolume: Single = 1.0);
-//TODO procedure LoadSoundFile(const AFileName: string);
-//TODO procedure UnloadSoundFile(const AFileName: string);
+//Preload a file into the permanent sound cache - sound.load().
+procedure LoadSoundFile(const AFileName: string);
+//Drop a preloaded file from the sound cache - sound.unload().
+procedure UnloadSoundFile(const AFileName: string);
 
 procedure UpdateMelodies;
 procedure UpdateWaveforms;
@@ -432,7 +458,40 @@ begin
   //TRaySound.Destroy only unloads a Sound with FrameCount > 0, so a failed
   //LoadSound (FrameCount 0) is freed safely by the inherited destructor.
   Sound := RayLib.LoadSound(PUTF8Char(AFileName));
-  FFileName := FileName;
+  FFileName := AFileName;
+end;
+
+constructor TTyroFileSound.CreateAlias(Source: TTyroFileSound);
+begin
+  inherited Create(False);
+  FIsAlias := True;
+  if Source <> nil then
+  begin
+    FFileName := Source.FileName;
+    //LoadSoundAlias shares the source's sample data; an alias is unloaded with
+    //UnloadSoundAlias (see Destroy), never UnloadSound, so the source survives.
+    if Assigned(RayLib.LoadSoundAlias) and (Source.Sound.FrameCount > 0) then
+      Sound := LoadSoundAlias(Source.Sound);
+  end;
+end;
+
+destructor TTyroFileSound.Destroy;
+begin
+  if FIsAlias then
+  begin
+    //An alias owns no data, so release it with UnloadSoundAlias and hand a
+    //cleared Sound to the inherited destructor (which then does nothing).
+    if Sound.FrameCount > 0 then
+    begin
+      StopSound(Sound);
+      if Assigned(RayLib.UnloadSoundAlias) then
+        UnloadSoundAlias(Sound)
+      else
+        UnloadSound(Sound);
+      Sound := Default(TSound);
+    end;
+  end;
+  inherited;
 end;
 
 function TTyroFileSound.Valid: Boolean;
@@ -445,29 +504,128 @@ begin
   SetSoundVolume(Sound, Volume);
 end;
 
+{ TTyroFileSounds }
+
+function TTyroFileSounds.Find(const AFileName: string): TTyroFileSound;
+var
+  I: Integer;
+begin
+  Result := nil;
+  if AFileName = '' then
+    Exit;
+  for I := 0 to Count - 1 do
+    if SameText(Items[I].FileName, AFileName) then
+    begin
+      Result := Items[I];
+      Exit;
+    end;
+end;
+
+function TTyroFileSounds.Load(const AFileName: string): TTyroFileSound;
+var
+  Item: TTyroFileSound;
+begin
+  Result := Find(AFileName);
+  if Result <> nil then
+    Exit;
+  //Same forgiving contract as PlaySoundFile: a missing or undecodable file is
+  //ignored and the caller gets nil instead of an exception.
+  if (AFileName = '') or not SysUtils.FileExists(AFileName) then
+    Exit;
+  RayLibSound.Open;
+  Item := TTyroFileSound.CreateFromFile(AFileName);
+  if not Item.Valid then
+  begin
+    Item.Free;
+    Exit;
+  end;
+  Add(Item);
+  Result := Item;
+end;
+
+procedure TTyroFileSounds.Unload(const AFileName: string);
+var
+  Item: TTyroFileSound;
+  Index: Integer;
+begin
+  Item := Find(AFileName);
+  if Item = nil then
+    Exit;
+  Index := IndexOf(Item);
+  if Index >= 0 then
+    Delete(Index); //the list owns the sound, so this unloads it
+end;
+
+procedure LoadSoundFile(const AFileName: string);
+begin
+  if SoundCache = nil then
+    Exit;
+  SoundCache.Load(AFileName);
+end;
+
+procedure UnloadSoundFile(const AFileName: string);
+begin
+  if SoundCache = nil then
+    Exit;
+  SoundCache.Unload(AFileName);
+end;
+
 procedure PlaySoundFile(const AFileName: string; AVolume: Single);
 var
+  Master: TTyroFileSound;
   Effect: TTyroFileSound;
 begin
   //Same forgiving contract as PlayWaveform: a missing or undecodable file is
   //ignored instead of raising, so a typo in a game script cannot kill the run.
-  //TODO Should be find it from cache
   if (AFileName = '') or not SysUtils.FileExists(AFileName) then
     Exit;
   if PlayingWaveforms = nil then
     Exit;
   RayLibSound.Open;
-  Effect := TTyroFileSound.CreateFromFile(AFileName);
-  try
-    if not Effect.Valid then
-      Exit;
-    if AVolume <> 1 then
-      Effect.SetVolume(AVolume);
-    Effect.Play;
-    PlayingWaveforms.Add(Effect);
-    Effect := nil;
-  finally
-    Effect.Free;
+  //Only sound.load() puts a sound in the cache; sound.play never does. When the
+  //file was preloaded, play a cheap alias of the cached sound (it shares the
+  //sample data and survives the one-shot). Otherwise decode it here and let the
+  //one-shot be reclaimed when it finishes, exactly as before.
+  Master := nil;
+  if SoundCache <> nil then
+    Master := SoundCache.Find(AFileName);
+  if Master <> nil then
+  begin
+    Effect := TTyroFileSound.CreateAlias(Master);
+    try
+      if Effect.Valid then
+      begin
+        if AVolume <> 1 then
+          Effect.SetVolume(AVolume);
+        Effect.Play;
+        PlayingWaveforms.Add(Effect);
+        Effect := nil;
+      end
+      else
+      begin
+        //No alias support in the loaded raylib: fall back to the cached sound.
+        if AVolume <> 1 then
+          Master.SetVolume(AVolume);
+        Master.Play;
+      end;
+    finally
+      Effect.Free;
+    end;
+  end
+  else
+  begin
+    Effect := TTyroFileSound.CreateFromFile(AFileName);
+    try
+      if not Effect.Valid then
+        Exit;
+      if AVolume <> 1 then
+        Effect.SetVolume(AVolume);
+      Effect.Play;
+      PlayingWaveforms.Add(Effect);
+      Effect := nil;
+    finally
+      Effect.Free;
+    end;
   end;
 end;
 
@@ -711,11 +869,15 @@ var
   I: Integer;
 begin
   FreeAndNil(LoopSound);
-  if PlayingWaveforms = nil then
-    Exit;
-  for I := PlayingWaveforms.Count - 1 downto 0 do
-    TObject(PlayingWaveforms[I]).Free;
-  PlayingWaveforms.Clear;
+  //Free the one-shot voices (aliases share the cached sounds' data) before the
+  //cache itself, so no alias is left pointing at unloaded sample data.
+  if PlayingWaveforms <> nil then
+  begin
+    for I := PlayingWaveforms.Count - 1 downto 0 do
+      TObject(PlayingWaveforms[I]).Free;
+    PlayingWaveforms.Clear;
+  end;
+  FreeAndNil(SoundCache);
 end;
 
 procedure ShutdownMelodies;
@@ -1733,6 +1895,7 @@ initialization
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;
+  SoundCache := TTyroFileSounds.Create;
 finalization
   ShutdownMelodies;
   ShutdownWaveforms;

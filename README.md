@@ -82,9 +82,14 @@ it while it plays. Available `wave` names include `Sin`, `Square`, `Saw`, `Tri`,
 and `HiHat`.
 
 For a one-shot sound effect from an audio file, `sound.play("file.wav" [, volume])`
-loads the file (raylib `LoadSound`, `.wav`) and plays it once. The file is resolved
-like every other script asset (next to the script, the workspace, the app folder);
-a missing file is ignored, not an error.
+plays the file (raylib `LoadSound`, `.wav`) once. The file is resolved like every
+other script asset (next to the script, the workspace, the app folder); a missing
+file is ignored, not an error. Use `sound.load("file.wav")` to decode a file ahead
+of time and keep it cached (so the first `sound.play` is instant), and
+`sound.unload("file.wav")` to drop it from the cache again. A preloaded file is
+played as a cheap alias of the cached copy; a file that was never loaded is decoded
+on the spot and released once it finishes, so `sound.play` on its own does not keep
+anything cached.
 
 # Input
 

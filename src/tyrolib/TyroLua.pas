@@ -1511,12 +1511,16 @@ begin
   Lua.State.Register('music', Music); //Should be last one
 
   //sound (one-shot file SFX + gapless/seamless looping playback)
+  //  sound.load("file.wav")              preload a file into the sound cache
+  //  sound.unload("file.wav")            drop a preloaded file from the cache
   //  sound.play("file.wav" [, volume])   one-shot SFX from an audio file
   //  sound.loopPlay(freq [, volume])
   //  sound.loopPlay(wave, freq [, volume])
   //  sound.pitch(freq)         retune the running loop
   //  sound.volume(0..1)
   //  sound.stop()
+  Lua.State.Register('sound', 'load', Sound, Sound.Load_func);
+  Lua.State.Register('sound', 'unload', Sound, Sound.Unload_func);
   Lua.State.Register('sound', 'play', Sound, Sound.Play_func);
   Lua.State.Register('sound', 'noise', Music, Sound.Noise_func);
   Lua.State.Register('sound', 'loopPlay', Sound, Sound.LoopPlay_func);
@@ -2352,13 +2356,28 @@ begin
 end;
 
 function TLuaSound.Load_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
 begin
-  //TODO
+  // sound.load("file.wav") - decode a file once and keep it resident so later
+  // sound.play calls are instant. The file is resolved like every other script
+  // asset (script dir, workspace assets/, app folder). A missing file is
+  // ignored, like sound.play; the cached sound stays until sound.unload.
+  s := L.ToString(1);
+  s := Res.GuessFileName(s, Res.WorkPath);
+  FScript.AddQueueObject(TLoadSoundFileObject.Create(s));
+  Result := 0;
 end;
 
 function TLuaSound.Unload_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
 begin
-  //TODO
+  // sound.unload("file.wav") - release a sound.load()ed file from the cache.
+  s := L.ToString(1);
+  s := Res.GuessFileName(s, Res.WorkPath);
+  FScript.AddQueueObject(TUnloadSoundFileObject.Create(s));
+  Result := 0;
 end;
 
 function TLuaSound.Play_func(L: Plua_State): integer; cdecl;
