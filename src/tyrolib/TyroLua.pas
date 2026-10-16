@@ -169,18 +169,26 @@ type
   public
     function Beep_func(L: Plua_State): integer; cdecl;
     function Sound_func(L: Plua_State): integer; cdecl;
-    function Noise_func(L: Plua_State): integer; cdecl;
     function Play_func(L: Plua_State): integer; cdecl;
     function MML_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
   end;
 
 
+  { TLuaSound }
+
   TLuaSound = class(TTyroLuaObject)
   public
+    //Cache the file to play any time, faster
+    function Load_func(L: Plua_State): integer; cdecl;
+    function Unload_func(L: Plua_State): integer; cdecl;
     //sound.play("file.wav" [, volume])
-    //sound.loopPlay()/pitch()/volume()/stop()
     function Play_func(L: Plua_State): integer; cdecl;
+    //sound.wave("waveformname" [, freq[, ms]])
+    function Wave_func(L: Plua_State): integer; cdecl;
+    //sound.wave("waveformname" [, freq[, ms]])
+    function Noise_func(L: Plua_State): integer; cdecl;
+    //sound.loopPlay()/pitch()/volume()/stop()
     function LoopPlay_func(L: Plua_State): integer; cdecl;
     function LoopPitch_func(L: Plua_State): integer; cdecl;
     function LoopVolume_func(L: Plua_State): integer; cdecl;
@@ -1498,7 +1506,6 @@ begin
 
   Lua.State.Register('music', 'beep', Music, Music.Beep_func);
   Lua.State.Register('music', 'sound', Music, Music.Sound_func);
-  Lua.State.Register('music', 'noise', Music, Music.Noise_func);
   Lua.State.Register('music', 'play', Music, Music.Play_func);
   Lua.State.Register('music', 'mml', Music, Music.MML_func);
   Lua.State.Register('music', Music); //Should be last one
@@ -1511,6 +1518,7 @@ begin
   //  sound.volume(0..1)
   //  sound.stop()
   Lua.State.Register('sound', 'play', Sound, Sound.Play_func);
+  Lua.State.Register('sound', 'noise', Music, Sound.Noise_func);
   Lua.State.Register('sound', 'loopPlay', Sound, Sound.LoopPlay_func);
   Lua.State.Register('sound', 'loopPitch', Sound, Sound.LoopPitch_func);
   Lua.State.Register('sound', 'loopVolume', Sound, Sound.LoopVolume_func);
@@ -2262,55 +2270,6 @@ begin
   Result := 0;
 end;
 
-function TLuaMusic.Sound_func(L: Plua_State): integer; cdecl;
-var
-  Freq, Period: integer;
-  WaveName: string;
-begin
-  //Use lua_type, not L.IsString: lua_isstring is also true for numbers, so
-  //music.sound(freq, ms) would be misread as music.sound(name, freq [, ms]).
-  if lua_type(L, 1) = LUA_TSTRING then
-  begin
-    WaveName := L.ToString(1);
-    Freq := round(L.ToNumber(2));
-    if l.ArgsCount = 3 then
-      Period := round(L.ToNumber(3))
-    else
-      Period := 500;
-  end
-  else
-  begin
-    WaveName := '';
-    Freq := round(L.ToNumber(1));
-    if l.ArgsCount = 2 then
-      Period := round(L.ToNumber(2))
-    else
-      Period := 500;
-  end;
-  Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
-  Result := 0;
-end;
-
-function TLuaMusic.Noise_func(L: Plua_State): integer; cdecl;
-var
-  c, Freq, Period: integer;
-begin
-  c := L.ArgsCount;
-  if c = 1 then
-  begin
-    Freq := 0;
-    Period := round(L.ToNumber(1));
-    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
-  end
-  else
-  begin
-    Freq := round(L.ToNumber(1));
-    Period := round(L.ToNumber(2));
-    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
-  end;
-  Result := 0;
-end;
-
 function TLuaMusic.Play_func(L: Plua_State): integer; cdecl;
 var
   s: string;
@@ -2341,7 +2300,66 @@ begin
   Result := 0;
 end;
 
+function TLuaMusic.Sound_func(L: Plua_State): integer; cdecl;
+var
+  Freq, Period: integer;
+  WaveName: string;
+begin
+  //Use lua_type, not L.IsString: lua_isstring is also true for numbers, so
+  //music.sound(freq, ms) would be misread as music.sound(name, freq [, ms]).
+  if L.GetType(1) = LUA_TSTRING then
+  begin
+    WaveName := L.ToString(1);
+    Freq := round(L.ToNumber(2));
+    if l.ArgsCount = 3 then
+      Period := round(L.ToNumber(3))
+    else
+      Period := 500;
+  end
+  else
+  begin
+    WaveName := '';
+    Freq := round(L.ToNumber(1));
+    if l.ArgsCount = 2 then
+      Period := round(L.ToNumber(2))
+    else
+      Period := 500;
+  end;
+  Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
+  Result := 0;
+end;
+
 { TLuaSound }
+
+function TLuaSound.Noise_func(L: Plua_State): integer; cdecl;
+var
+  c, Freq, Period: integer;
+begin
+  c := L.ArgsCount;
+  if c = 1 then
+  begin
+    Freq := 0;
+    Period := round(L.ToNumber(1));
+    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
+  end
+  else
+  begin
+    Freq := round(L.ToNumber(1));
+    Period := round(L.ToNumber(2));
+    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
+  end;
+  Result := 0;
+end;
+
+function TLuaSound.Load_func(L: Plua_State): integer; cdecl;
+begin
+  //TODO
+end;
+
+function TLuaSound.Unload_func(L: Plua_State): integer; cdecl;
+begin
+  //TODO
+end;
 
 function TLuaSound.Play_func(L: Plua_State): integer; cdecl;
 var
@@ -2358,6 +2376,22 @@ begin
     Volume := L.ToNumber(2);
   s := Res.GuessFileName(s, Res.WorkPath);
   FScript.AddQueueObject(TPlaySoundFileObject.Create(s, Volume));
+  Result := 0;
+end;
+
+function TLuaSound.Wave_func(L: Plua_State): integer; cdecl;
+var
+  Freq, Period: integer;
+  WaveName: string;
+begin
+  //sound.wave('saw', freq, ms)
+  WaveName := L.ToString(1);
+  Freq := round(L.ToNumber(2));
+  if l.ArgsCount = 3 then
+    Period := round(L.ToNumber(3))
+  else
+    Period := 500;
+  Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
   Result := 0;
 end;
 

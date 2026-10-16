@@ -1,11 +1,12 @@
 window.show(640, 480)
-sound.loopPlay('noise', 500, 0.2)
+music.sound('Kick', 440, 1000);
+--sound.loopPlay('hihat', 500, 0.2)
 exit()
 music.sound('sequare', 440, 1000);
 pause(2500)
-music.noise(500)      -- white noise (unchanged)
+sound.noise(500)      -- white noise (unchanged)
 pause(2500)
-music.noise(100, 500)
+sound.noise(100, 500)
 pause(2500)
-music.noise(800, 500)
+sound.noise(800, 500)
 pause(2500)

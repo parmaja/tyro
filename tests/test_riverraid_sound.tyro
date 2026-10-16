@@ -3,8 +3,8 @@
 --======================================================================
 --  The crash effect is a white-noise burst and the plane engine is a gapless
 --  looping drone that is retuned with the throttle:
---    music.noise(ms)          white noise       (crash)
---    music.noise(freq, ms)    pitched noise
+--    sound.noise(ms)          white noise       (crash)
+--    sound.noise(freq, ms)    pitched noise
 --    sound.loopPlay(wave, freq [, volume])      start a gapless loop
 --    sound.loopPitch(freq) / sound.loopVolume(v) retune while it plays
 --    sound.loopStop()
@@ -17,7 +17,7 @@ window.show(320, 240)
 local out = openfile("test_riverraid_sound_result.txt", "w")
 
 -- crash
-music.noise(150)
+sound.noise(150)
 -- one-shot tone and named waveform
 music.sound("Saw", 90, 150)
 music.sound(440, 120)

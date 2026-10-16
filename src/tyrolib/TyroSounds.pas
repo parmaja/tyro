@@ -76,10 +76,13 @@ type
     to TTyroRayWave and ask IsPlaying - reclaim it exactly like a generated
     waveform. }
   TTyroFileSound = class(TTyroRayWave)
+  private
+    FFileName: string;
   public
     constructor CreateFromFile(const AFileName: string);
     function Valid: Boolean;
     procedure SetVolume(Volume: Single);
+    property FileName: string read FFileName;
   end;
 
   { TTyroRayAudio }
@@ -202,6 +205,9 @@ procedure PlayWaveform(Proc: TWaveformProc; Freq, Duration: Single); overload;
 procedure PlayWaveform(WaveformName: string; Freq, Duration: Single); overload;
 //One-shot SFX from an audio file (raylib LoadSound: .wav) - sound.play().
 procedure PlaySoundFile(const AFileName: string; AVolume: Single = 1.0);
+//TODO procedure LoadSoundFile(const AFileName: string);
+//TODO procedure UnloadSoundFile(const AFileName: string);
+
 procedure UpdateMelodies;
 procedure UpdateWaveforms;
 procedure ShutdownMelodies;
@@ -426,6 +432,7 @@ begin
   //TRaySound.Destroy only unloads a Sound with FrameCount > 0, so a failed
   //LoadSound (FrameCount 0) is freed safely by the inherited destructor.
   Sound := RayLib.LoadSound(PUTF8Char(AFileName));
+  FFileName := FileName;
 end;
 
 function TTyroFileSound.Valid: Boolean;
@@ -444,6 +451,7 @@ var
 begin
   //Same forgiving contract as PlayWaveform: a missing or undecodable file is
   //ignored instead of raising, so a typo in a game script cannot kill the run.
+  //TODO Should be find it from cache
   if (AFileName = '') or not SysUtils.FileExists(AFileName) then
     Exit;
   if PlayingWaveforms = nil then

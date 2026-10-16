@@ -1,7 +1,7 @@
 --======================================================================
 --  music_demo.tyro - Sound and music effects
 --======================================================================
---  Demonstrates: music.sound() for tone effects, music.noise() for
+--  Demonstrates: music.sound() for tone effects, sound.noise() for
 --  noise effects, music.mml() for Music Macro Language melodies
 --======================================================================
 
@@ -12,23 +12,23 @@ canvas.text(10, 50, "You should hear sound effects...")
 
 -- Simple tone effects (frequency Hz, duration ms)
 music.sound(440, 200)  -- A note
-sleep(250)
+sleep(2500)
 music.sound(523, 200)  -- C note (higher)
-sleep(250)
+pause(250)
 music.sound(587, 200)  -- D note
-sleep(250)
+pause(250)
 music.sound(659, 200)  -- E note
-sleep(300)
+pause(300)
 
 -- Noise effects:
--- music.noise(ms)              - white noise (unpitched)
--- music.noise(freq, ms)        - pitched noise (LFSR), freq controls pitch
-music.noise(250)           -- white noise burst
-sleep(200)
-music.noise(400, 250)      -- pitched noise - lower pitch
-sleep(200)
-music.noise(800, 250)      -- pitched noise - higher pitch
-sleep(400)
+-- sound.noise(ms)              - white noise (unpitched)
+-- sound.noise(freq, ms)        - pitched noise (LFSR), freq controls pitch
+sound.noise(250)           -- white noise burst
+pause(200)
+sound.noise(400, 250)      -- pitched noise - lower pitch
+pause(200)
+sound.noise(800, 250)      -- pitched noise - higher pitch
+pause(400)
 
 canvas.color = colors.green
 canvas.text(10, 100, "Tone sequence done!")
@@ -37,5 +37,5 @@ canvas.text(10, 120, "Now playing MML melody...")
 -- Music Macro Language - simple scale
 music.mml("c", "d", "e", "f", "g", "a", "b", "c5")
 
-sleep(2000)
+pause(2000)
 canvas.text(10, 150, "That's all, folks!")
