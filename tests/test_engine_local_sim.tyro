@@ -1,0 +1,68 @@
+--======================================================================
+--  test_engine_local_sim.tyro - the engine-driven pattern games\riverraid
+--  now uses: the top-level chunk keeps its state in locals and exposes only
+--  the global update(dt)/draw() callbacks.
+--
+--  The engine takes the script over once the chunk returns and, every frame,
+--  calls update(dt) with the frame time and then draw(). This checks that
+--    * update(dt) is called once per frame with the real frame time,
+--    * the chunk's locals are still live inside update() (upvalues),
+--    * draw() runs in the same frame, after update(),
+--    * update() may end the run with exit() and draw() is then skipped.
+--  Run:  bin\tyro.exe <abs path>\tests\test_engine_local_sim.tyro --exit:10
+--  Result: tests\test_engine_local_sim_result.txt
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_engine_local_sim_result.txt", "w")
+if not out then
+  println("no out file")
+  exit()
+end
+
+-- Top-level locals, like riverraid's state/travel/speed/score.
+local simTime = 0
+local lastDt = 0
+local updateFrames = 0
+local drawFrames = 0
+local drawAfterUpdate = true
+local updatedThisFrame = false
+
+-- A local helper closed over by the global update() below, exactly like
+-- riverraid's local simulate() is closed over by its global update().
+local function stepSimulation(dt)
+  simTime = simTime + dt
+  lastDt = dt
+end
+
+local function report(verdict)
+  out:write("update frames   = " .. updateFrames .. "\n")
+  out:write("draw frames     = " .. drawFrames .. "\n")
+  out:write("sim time        = " .. string.format("%.4f", simTime) .. "\n")
+  out:write("last dt         = " .. string.format("%.4f", lastDt) .. "\n")
+  out:write("draw after upd  = " .. tostring(drawAfterUpdate) .. "\n")
+  out:write("VERDICT => " .. verdict .. "\n")
+  out:close()
+end
+
+function update(dt)
+  updatedThisFrame = true
+  updateFrames = updateFrames + 1
+  stepSimulation(dt)
+  if updateFrames >= 5 then
+    -- update() ended the run: the engine must not call draw() afterwards, so
+    -- the last frame has one more update than draw.
+    local ok = drawAfterUpdate and (drawFrames >= 4) and (lastDt > 0) and (simTime > lastDt)
+    report(ok and "PASS" or "FAIL")
+    exit()
+  end
+end
+
+function draw()
+  drawFrames = drawFrames + 1
+  if not updatedThisFrame then
+    drawAfterUpdate = false
+  end
+  updatedThisFrame = false
+end

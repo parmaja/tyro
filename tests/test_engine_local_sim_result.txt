@@ -1,0 +1,6 @@
+update frames   = 5
+draw frames     = 4
+sim time        = 0.1667
+last dt         = 0.0333
+draw after upd  = true
+VERDICT => PASS

@@ -347,7 +347,9 @@ local function stepDepots()
   end
 end
 
-local function update(ft)
+-- One simulation tick. The engine calls this from the global update() below,
+-- once per frame, with the frame time in seconds.
+local function simulate(ft)
   -- explosions and the on-screen message animate in every state
   for i = #blasts, 1, -1 do
     local bl = blasts[i]
@@ -624,7 +626,8 @@ local function draw_overlay()
   end
 end
 
-local function render()
+-- Frame callback: the engine calls this once per frame, after update().
+function draw()
   draw_world()
   draw_depots()
   draw_islands()
@@ -668,10 +671,14 @@ end
 
 reset()
 
-while cycle do
-  local ft = frametime()
-  if ft <= 0 then ft = 1 / 60 end
-  if ft > 0.06 then ft = 0.06 end
+-- ---- frame callbacks -------------------------------------------------
+-- The top-level chunk returns here, so the engine takes the script over and
+-- calls update(dt) then draw() once per frame on the main thread. dt is the
+-- frame time in seconds, clamped to sane bounds exactly as the old
+-- "while cycle do" loop did.
+function update(dt)
+  if dt <= 0 then dt = 1 / 60 end
+  if dt > 0.06 then dt = 0.06 end
 
   if iskeypressed("escape") then exit() end
 
@@ -683,6 +690,5 @@ while cycle do
     end
   end
 
-  update(ft)
-  render()
+  simulate(dt)
 end
