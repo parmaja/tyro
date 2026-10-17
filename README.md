@@ -19,10 +19,8 @@ script argument Tyro starts an interactive console session.
 | Option | Description |
 |--------|-------------|
 | `--help`, `-h` | Show the help page and exit |
-| `--list` | List the supported programming languages and exit |
 | `--console`, `-c` | Force a command prompt / console output |
 | `--debug`, `-d` | Enable debug logging |
-| `--main`, `-m` | Legacy compatibility alias; scripts always run on a worker thread with main-thread dispatch |
 | `--exit[:N]` | Exit after *N* seconds, or — with a bare `--exit` (no `:N`) — as soon as the script finishes |
 | `--screenshot:N` | Save `screenshot.png` *N* seconds into the run; opens a window so the screen can be captured |
 | `--workpath=<path>` | Workspace directory (defaults to the executable location) |
@@ -1022,7 +1020,7 @@ by `Stop`, so a shut-down never waits on user input.
 
 # Issues
 
-There is problem in raylib, in fact in OpenGL that cannot/not easy share texture between threads, we need another trick to pass drawing commands to main thread, but now i am sending objects to draw it in main thread, it is work fine until now
+There is problem in raylib, in fact in OpenGL that cannot/not easy share texture between threads, we need used a trick to pass drawing commands to main thread
 
 https://github.com/raysan5/raylib/issues/454
 
@@ -1043,11 +1041,15 @@ You need only MiniLua package minilib.lpk
 
 ### Competition
 
+[love2d](https://love2d.org/)
 [yabasic](http://www.yabasic.de)
 
 ## Fonts ##
 
 Thanks for
+
 https://pixelfonts.org/#116
+
 https://github.com/IT-Studio-Rech/bdf-fonts
+
 https://forums.adafruit.com/viewtopic.php?t=203655
