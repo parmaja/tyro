@@ -1724,16 +1724,13 @@ var
   itm: TScriptType;
   s: string;
 begin
+  //Return the first type that claims the extension: a plain 'break' here would
+  //only leave the inner loop, so a later duplicate would overwrite the match.
   Result := nil;
   for itm in Self do
-  begin
     for s in itm.Extentions do
       if SameText(s, Extension) then
-      begin
-        Result := itm;
-        break;
-      end;
-  end;
+        Exit(itm);
 end;
 
 procedure TScriptTypes.RegisterLanguage(ATitle: string; AExtentions: TArray<string>; AScriptClass: TTyroScriptClass);
@@ -1978,7 +1975,7 @@ begin
   if (Canvas = nil) then
     Log.WriteLn('You need to init window to use this command, ' + ClassName + ' line: ' + IntToStr(LineNo))
   else
-    inherited Execute;
+    inherited;
 end;
 
 { TDrawCircleObject }

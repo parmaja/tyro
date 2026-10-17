@@ -1580,11 +1580,10 @@ begin
     if aColor <> '' then
       BackColor := StrToColor(aColor);
 
+    //Only 'show.fps' has an option behind it; a second block that read
+    //'show.window' here also toggled moShowFPS, so show.window=false silently
+    //hid the counter that show.fps=true had just enabled.
     if Config.Sections.ReadBool('show', 'fps', True) then
-      Options := Options + [moShowFPS]
-    else
-      Options := Options - [moShowFPS];
-    if Config.Sections.ReadBool('show', 'window', True) then
       Options := Options + [moShowFPS]
     else
       Options := Options - [moShowFPS];

@@ -1470,11 +1470,8 @@ begin
     if Engine.Board <> nil then
       area := Engine.Board.GetEffectArea
     else
-    begin
+      //No board yet: answer an empty rectangle rather than dereferencing it.
       area := Default(TRectangle);
-      area.width := Engine.Board.Width;
-      area.height := Engine.Board.Height;
-    end;
     lua_createtable(L, 4, 0);
     lua_pushnumber(L, area.x);
     lua_rawseti(L, -2, 1);
@@ -3324,8 +3321,11 @@ begin
     //"f:write(#s, s)" writes only the first n bytes of s. Only a real number
     //is a byte count, like the stock io.write: L.IsNumber also accepts a
     //string that converts, so f:write(tostring(7) .. "\n") would be read as
-    //"write 7 bytes" and silently write nothing at all
-    if (i = first) and (lua_type(L, i) = LUA_TNUMBER) and (L.ToInteger(i) < L.ArgsCount) then
+    //"write 7 bytes" and silently write nothing at all. The count applies only
+    //when another argument follows it, which is a test on the index, not on the
+    //number's value: f.write(3, "abcdef") has 3 = ArgsCount but still means
+    //"write 3 bytes of the string".
+    if (i = first) and (lua_type(L, i) = LUA_TNUMBER) and (i < L.ArgsCount) then
     begin
       Inc(i); //now on the string that follows the count
       Buf := Buf + Copy(AnsiString(L.ToString(i)), 1, Integer(L.ToInteger(first)));
@@ -3408,7 +3408,9 @@ begin
   for I := 1 to Len do
     if Buf[I] = #10 then
     begin
-      LineStr := Copy(Buf, Start, I - Start - 1);
+      //Content runs Start..I-1, so the length is I - Start. The trailing #13
+      //of a CRLF file is stripped below, which keeps CRLF and LF both correct.
+      LineStr := Copy(Buf, Start, I - Start);
       if (LineStr <> '') and (LineStr[Length(LineStr)] = #13) then
         Delete(LineStr, Length(LineStr), 1);
       FLines.Add(LineStr);

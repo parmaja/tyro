@@ -407,7 +407,8 @@ end
 -- ---- main --------------------------------------------------------------
 refresh()
 
-while cycle do
+--while cycle do
+function draw()
   draw_screen()
   if iskeypressed("r") then refresh() end
   if iskeypressed("q") then exit() end

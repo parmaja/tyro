@@ -1,4 +1,0 @@
-started
-draw 1
-draw 2
-draw 3
