@@ -33,7 +33,7 @@ uses
   mnLogs, mnUtils, mnClasses, mnConfigs,
   RayLib, RayClasses, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
-  TyroSprites, TyroTiles, TyroPhysics, TyroEditors;
+  TyroSprites, TyroTiles, TyroPhysics, TyroEditors, TyroParallax;
 
 //Diagnostics (queue/frame counters and the like) are compiled only when
 //'diagnose' is defined, which tracks the debug switch. Debug builds keep them;
@@ -201,6 +201,11 @@ type
     FFPS: Integer;
     FOptions: TTyroEngineOptions;
     FBackColor: TColor;
+    //* When True the script's Board canvas is composited ABOVE the sprites
+    //* instead of below them, so a script can use the canvas for a HUD/overlay
+    //* (see the Lua 'canvas.front'). The board must be cleared to a transparent
+    //* colour for the sprites to show through it.
+    FBoardOnTop: Boolean;
     //* Signaled by the main loop after every drawing cycle (EndDrawing). The
     //* Lua 'cycle' gate waits on it so "while cycle do" runs at most once per
     //* drawn frame. Auto-reset: an unwaited signal is simply lost.
@@ -533,6 +538,9 @@ type
     //* True while a Lua pause() has frozen the scene (see BeginScriptPause).
     property ScriptPaused: Boolean read GetScriptPaused;
     property Opaque: Boolean read FOpaque write FOpaque;
+    //* Draw the Board canvas above the sprites (for a canvas-based HUD) instead
+    //* of below them. Backs the Lua 'canvas.front'.
+    property BoardOnTop: Boolean read FBoardOnTop write FBoardOnTop;
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
     ScriptSource: string; //Shout pass to Thread to run it
@@ -549,6 +557,8 @@ type
     Sprites: TSprites;
     Tiles: TTiles;
     Physics: TPhysics;
+    //* Scrolling parallax backgrounds the script created (see TyroParallax).
+    Parallaxes: TParallaxes;
     //property Board: TTyroImage read FBoard;
     property Running: Boolean read GetRunning write SetRunning;
     property Active: Boolean read GetActive;
@@ -1590,6 +1600,7 @@ begin
   Sprites := TSprites.Create;
   Tiles := TTiles.Create;
   Physics := TPhysics.Create(Sprites);
+  Parallaxes := TParallaxes.Create;
   Commands := TConsoleCommands.Create();
   RegisterCommands;
 end;
@@ -1615,6 +1626,8 @@ begin
   FreeAndNil(Physics);
   FreeAndNil(Sprites);
   FreeAndNil(Tiles);
+  //Parallaxes own layer textures: unload them while the GL context is alive.
+  FreeAndNil(Parallaxes);
   FreeAndNil(Board);
   FreeAndNil(Res);
   FreeAndNil(FQueue);
@@ -1660,25 +1673,38 @@ begin
 end;
 
 procedure TTyroEngine.Draw;
+var
+  W, H: Integer;
 begin
-  if Board <> nil then
-  begin
-    // Canvas layer sits at the bottom: blit the legacy Board first so its
-    // opaque background does not cover the sprites drawn on top of it.
+  if Board = nil then
+    Exit;
+
+  //The parallax backgrounds are the farthest layer, so they go down first and
+  //fill the whole drawable area (the same area Board covers).
+  W := Board.Width;
+  H := Board.Height;
+  if Parallaxes <> nil then
+    Parallaxes.Draw(W, H);
+
+  //Canvas layer: normally at the bottom (its opaque background must not cover
+  //the sprites); when BoardOnTop is set the script uses the canvas as a HUD and
+  //it is composited after the sprites instead.
+  if not FBoardOnTop then
     Board.PostDraw;
-    try
-      Sprites.DrawAll;
-    except
-      on E: Exception do
-      begin
-        if IsConsole then WriteLn('EX-DRAW: ' + E.ClassName + ': ' + E.Message);
-        raise;
-      end;
+  try
+    Sprites.DrawAll;
+  except
+    on E: Exception do
+    begin
+      if IsConsole then WriteLn('EX-DRAW: ' + E.ClassName + ': ' + E.Message);
+      raise;
     end;
-    // scripted on_draw() overlays run last so they stay above the texture
-    // and the legacy Board layer
-    Sprites.DrawScripts;
   end;
+  // scripted on_draw() overlays run last so they stay above the texture
+  // and the legacy Board layer
+  Sprites.DrawScripts;
+  if FBoardOnTop then
+    Board.PostDraw;
 end;
 
 procedure TTyroEngine.Update;
@@ -2429,6 +2455,9 @@ begin
   try
     ClearCanvas(Board);
     ClearCanvas(Main.Canvas);
+    //Drop the finished run's parallax backgrounds and their textures too.
+    if Parallaxes <> nil then
+      Parallaxes.Clear;
   finally
     CanvasLock.Leave;
   end;

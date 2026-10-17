@@ -116,6 +116,10 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
+        <Filename Value="tyrolib\TyroParallax.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
         <Filename Value="chipmunk.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>

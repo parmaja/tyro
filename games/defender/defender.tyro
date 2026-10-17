@@ -1,0 +1,829 @@
+--======================================================================
+--  Defender - a side-scrolling arcade shooter for Tyro
+--======================================================================
+--  The classic: fly your ship over a wrap-around alien world, blast the
+--  landers before they abduct the humanoids, and rescue whoever is left.
+--  An abducted human is turned into a fast, vengeful mutant; pods burst
+--  into swarms of escort fighters when you shoot them; bombers sow mines.
+--  A scanner across the top tracks the whole world, one smart bomb clears
+--  the screen, and hyperspace throws you somewhere - maybe nowhere good.
+--
+--  The world, the ship and every enemy are sprites; the background is a
+--  five layer parallax (star field, nebula, mountains, hills, ground).
+--  The board canvas is used only for the HUD/scanner/titles (canvas.front).
+--
+--  Controls:  LEFT / RIGHT  (A / D)   thrust
+--             UP   / DOWN   (W / S)   climb / dive
+--             SPACE / Z              fire
+--             B                      smart bomb
+--             H / SHIFT              hyperspace
+--             ESC                    quit
+--
+--  Run:  tyro games/defender/defender.tyro
+--  Assets: games/defender/def_*.png
+--          (regenerate: python games/defender/make_defender_assets.py)
+--======================================================================
+
+window.show(960, 540)
+-- Space is black (the engine default clear colour is a bright cornflower blue).
+window.backcolor = colors.black
+
+local W = canvas.width
+local H = canvas.height
+
+-- The board canvas is composited ABOVE the sprites and cleared transparent,
+-- so it carries the HUD/scanner/titles without hiding the world.
+canvas.front = true
+
+-- ---- tuning ----------------------------------------------------------
+local WORLD      = 6144          -- wrap-around world width (multiple of the 512px tiles)
+local SCALE      = 2
+local PLAYER_SX  = math.floor(W * 0.38)
+local GROUND_TOP = H - 56
+local SKY_TOP    = 26
+local THRUST     = 900           -- px/s^2
+local DRAG       = 3.2
+local VMAX       = 340
+local FIRE_CD    = 0.14
+local BULLET_SPD = 900
+local BULLET_MAX = 6
+local PLAYER_HW  = 15
+local PLAYER_HH  = 7
+
+-- ---- parallax background --------------------------------------------
+-- Speeds are multiples of 1/12 so the wrap (a jump of WORLD in the offset)
+-- lands on a tile boundary for every layer and the scroll never snaps.
+local bg = parallax.new('space')
+bg.add('def_stars.png', 1 / 12)
+bg.add('def_nebula.png', 3 / 12)
+bg.addground('def_mountains.png', 6 / 12, -40)
+bg.addground('def_hills.png', 9 / 12, -20)
+bg.addground('def_ground.png', 1.0)
+
+-- ---- sprite pools ----------------------------------------------------
+-- Reusing one sprite per live instance keeps the texture uploads to one per
+-- pool, and hiding a sprite is all it takes to retire it.
+local function make_pool(tex, scl)
+  return { tex = tex, scale = scl or SCALE, list = {} }
+end
+
+local function acquire(pool)
+  local list = pool.list
+  for i = 1, #list do
+    local s = list[i]
+    if s.visible == false then return s end
+  end
+  local s = Sprites.new()
+  s.load(pool.tex)
+  s.scale = pool.scale
+  s.visible = false
+  list[#list + 1] = s
+  return s
+end
+
+local function release(s)
+  if s ~= nil then s.visible = false end
+end
+
+local P = {
+  ship    = make_pool('def_ship.png'),
+  lander  = make_pool('def_lander.png'),
+  mutant  = make_pool('def_mutant.png'),
+  bomber  = make_pool('def_bomber.png'),
+  pod     = make_pool('def_pod.png'),
+  swarmer = make_pool('def_swarmer.png', 1.5),
+  human   = make_pool('def_human.png'),
+  bullet  = make_pool('def_bullet.png', 1.5),
+  bomb    = make_pool('def_bomb.png', 1.5),
+}
+P.boom = { make_pool('def_boom0.png', 1.5), make_pool('def_boom1.png', 1.5),
+           make_pool('def_boom2.png', 1.5), make_pool('def_boom3.png', 1.5) }
+
+-- ---- entity model ----------------------------------------------------
+-- X lives in a continuous, wrap-around world: px grows forever, an entity's
+-- on-screen X is PLAYER_SX + ddx(wx, px), and ddx keeps the shortest wrap.
+local enemies, bullets, bombs, booms, humans
+local ship, px, py, pvx, pvy, face
+local state, score, high, lives, wave, smart
+local fireCd, invuln, dyingTimer, waveTimer, spawnLeft, spawnCd, flash
+local msg, msgTimer
+
+local function ddx(a, b)
+  local d = (a - b) % WORLD
+  if d > WORLD / 2 then d = d - WORLD end
+  return d
+end
+
+local function scrx(wx) return PLAYER_SX + ddx(wx, px) end
+
+local function beep(f, ms) music.sound(f, ms) end
+local function boom_sound()
+  beep(90, 260)
+  sound.noise(360, 240)
+end
+
+-- ---- explosions ------------------------------------------------------
+local function add_boom(wx, wy, big)
+  -- A death blast is drawn at twice the size of a routine hit.
+  local sc = big and 3 or 1.5
+  local sp = {}
+  for i = 1, 4 do
+    local s = acquire(P.boom[i])
+    s.scale = sc
+    sp[i] = s
+  end
+  booms[#booms + 1] = { wx = wx, wy = wy, t = 0, sp = sp, big = big }
+  return booms[#booms]
+end
+
+-- ---- humans ----------------------------------------------------------
+local function place_humans(n)
+  humans = {}
+  for i = 1, n do
+    local wx = ((i - 0.5) / n) * WORLD + rand(-120, 120)
+    local s = acquire(P.human)
+    s.x = scrx(wx)
+    s.y = GROUND_TOP
+    s.visible = true
+    humans[#humans + 1] = { wx = wx, y = GROUND_TOP, alive = true, s = s, grabbed = nil }
+  end
+end
+
+local function alive_humans()
+  local n = 0
+  for i = 1, #humans do if humans[i].alive then n = n + 1 end end
+  return n
+end
+
+-- ---- bullets ---------------------------------------------------------
+local function fire()
+  if fireCd > 0 or #bullets >= BULLET_MAX then return end
+  fireCd = FIRE_CD
+  local s = acquire(P.bullet)
+  s.visible = true
+  s.flipH = face < 0
+  local wx = px + face * 26
+  bullets[#bullets + 1] = { wx = wx, wy = py, vx = face * BULLET_SPD, s = s, y = py }
+  beep(1250, 35)
+end
+
+-- ---- enemies ---------------------------------------------------------
+local function enemy_def(kind)
+  if kind == 'lander'  then return { hw = 12, hh = 10, pts = 150 }
+  elseif kind == 'mutant' then return { hw = 12, hh = 10, pts = 150 }
+  elseif kind == 'bomber' then return { hw = 13, hh = 9,  pts = 250 }
+  elseif kind == 'pod'    then return { hw = 11, hh = 11, pts = 1000 }
+  else return { hw = 9, hh = 6, pts = 150 } end
+end
+
+local function add_enemy(kind, wx, wy)
+  local d = enemy_def(kind)
+  local pool = P[kind]
+  local s = acquire(pool)
+  s.visible = true
+  s.flipH = (kind == 'bomber' or kind == 'lander')
+  local e = { kind = kind, wx = wx, wy = wy, vx = 0, vy = 0, s = s,
+              hw = d.hw, hh = d.hh, pts = d.pts, t = 0,
+              fire = rand(150, 350) / 100, target = nil, mode = 'patrol' }
+  enemies[#enemies + 1] = e
+  return e
+end
+
+local function spawn_wave_enemy()
+  local r = rand(1, 100)
+  local kind
+  if wave <= 1 then
+    kind = (r <= 80) and 'lander' or 'mutant'
+  elseif wave <= 3 then
+    if r <= 55 then kind = 'lander'
+    elseif r <= 78 then kind = 'mutant'
+    elseif r <= 92 then kind = 'pod'
+    else kind = 'bomber' end
+  else
+    if r <= 40 then kind = 'lander'
+    elseif r <= 62 then kind = 'mutant'
+    elseif r <= 78 then kind = 'bomber'
+    elseif r <= 90 then kind = 'pod'
+    else kind = 'swarmer' end
+  end
+  local right = rand(0, 1) == 1
+  local wx = px + (right and 1 or -1) * (W * 0.5 + rand(30, 160))
+  add_enemy(kind, wx, rand(SKY_TOP + 30, GROUND_TOP - 70))
+end
+
+local function release_swarm(wx, wy, n)
+  for i = 1, n do
+    add_enemy('swarmer', wx + rand(-30, 30), wy + rand(-24, 24))
+    beep(500 + i * 60, 40)
+  end
+end
+
+-- ---- particles/score -------------------------------------------------
+local function award(n)
+  score = score + n
+  if score < 0 then score = 0 end
+end
+
+-- A human whose carrier was destroyed falls back to the ground: shooting the
+-- lander before it reaches the top is how you rescue a captured humanoid.
+local function drop_human(e)
+  for i = 1, #humans do
+    local h = humans[i]
+    if h.alive and h.grabbed == e then
+      h.grabbed = nil
+      h.wx = e.wx
+      h.y = GROUND_TOP
+      h.s.x = scrx(h.wx)
+      h.s.y = GROUND_TOP
+      h.s.visible = true
+      award(100)
+    end
+  end
+end
+
+-- ---- player lifecycle ------------------------------------------------
+local function kill_player()
+  if state ~= 'play' or invuln > 0 then return end
+  add_boom(px, py, true)
+  boom_sound()
+  window.shake(500, 12)
+  ship.visible = false
+  lives = lives - 1
+  state = 'dying'
+  dyingTimer = 1.4
+end
+
+local function respawn()
+  if lives <= 0 then
+    state = 'over'
+    if score > high then high = score end
+    return
+  end
+  -- Clear the fire aimed at where we died, but leave the wave running (the
+  -- arcade game never resets the wave on a death).
+  for i = 1, #bombs do release(bombs[i].s) end
+  for i = 1, #bullets do release(bullets[i].s) end
+  bombs = {}
+  bullets = {}
+  px = px + rand(-W, W)
+  py = math.floor((SKY_TOP + GROUND_TOP) / 2)
+  pvx, pvy = 0, 0
+  face = 1
+  invuln = 2.5
+  state = 'play'
+  waveTimer = 0
+end
+
+-- ---- wave control ----------------------------------------------------
+local function start_wave()
+  spawnLeft = 6 + wave * 2
+  if spawnLeft > 26 then spawnLeft = 26 end
+  spawnCd = 0.6
+  waveTimer = 0
+end
+
+-- ---- hyperspace ------------------------------------------------------
+local function hyperspace()
+  if state ~= 'play' then return end
+  add_boom(px, py, false)
+  px = px + rand(-WORLD / 2, WORLD / 2)
+  py = rand(SKY_TOP + 20, GROUND_TOP - 40)
+  pvx, pvy = 0, 0
+  beep(300, 120)
+  beep(700, 120)
+  if rand(1, 14) == 1 then
+    kill_player()
+  else
+    invuln = math.max(invuln, 0.6)
+  end
+end
+
+-- ---- smart bomb ------------------------------------------------------
+local function smart_bomb()
+  if state ~= 'play' or smart <= 0 then return end
+  smart = smart - 1
+  flash = 1
+  for i = #enemies, 1, -1 do
+    local e = enemies[i]
+    add_boom(e.wx, e.wy, false)
+    award(e.pts)
+    drop_human(e)
+    release(e.s)
+    table.remove(enemies, i)
+  end
+  for i = #bombs, 1, -1 do release(bombs[i].s) end
+  bombs = {}
+  boom_sound()
+  window.shake(350, 8)
+end
+
+-- ---- simulation ------------------------------------------------------
+local function step_player(ft)
+  local ax, ay = 0, 0
+  if iskeydown('left') or iskeydown('a') then ax = ax - 1 end
+  if iskeydown('right') or iskeydown('d') then ax = ax + 1 end
+  if iskeydown('up') or iskeydown('w') then ay = ay - 1 end
+  if iskeydown('down') or iskeydown('s') then ay = ay + 1 end
+
+  if ax ~= 0 then face = ax end
+  pvx = pvx + ax * THRUST * ft
+  pvy = pvy + ay * THRUST * ft
+  pvx = pvx - pvx * DRAG * ft
+  pvy = pvy - pvy * DRAG * ft
+  if pvx > VMAX then pvx = VMAX elseif pvx < -VMAX then pvx = -VMAX end
+  if pvy > VMAX then pvy = VMAX elseif pvy < -VMAX then pvy = -VMAX end
+
+  px = px + pvx * ft
+  py = py + pvy * ft
+  if py < SKY_TOP then py = SKY_TOP; pvy = 0 end
+  if py > GROUND_TOP - 16 then py = GROUND_TOP - 16; pvy = 0 end
+
+  if iskeydown('space') or iskeydown('z') then fire() end
+  if iskeypressed('b') then smart_bomb() end
+  if iskeypressed('h') or iskeypressed('shift') then hyperspace() end
+end
+
+local function step_bullets(ft)
+  for i = #bullets, 1, -1 do
+    local b = bullets[i]
+    b.wx = b.wx + b.vx * ft
+    local hit = false
+    for j = #enemies, 1, -1 do
+      local e = enemies[j]
+      if math.abs(ddx(b.wx, e.wx)) < e.hw + 4 and math.abs(b.y - e.wy) < e.hh + 4 then
+        hit = true
+        if e.kind == 'pod' then
+          award(e.pts)
+          add_boom(e.wx, e.wy, false)
+          release_swarm(e.wx, e.wy, 3 + wave)
+        else
+          award(e.pts)
+          add_boom(e.wx, e.wy, false)
+        end
+        drop_human(e)
+        release(e.s)
+        table.remove(enemies, j)
+        break
+      end
+    end
+    if hit or math.abs(ddx(b.wx, px)) > W * 1.1 then
+      release(b.s)
+      table.remove(bullets, i)
+    else
+      b.s.x = scrx(b.wx)
+      b.s.y = b.y
+    end
+  end
+end
+
+local function lander_ai(e, ft)
+  local d = e
+  if d.mode == 'patrol' then
+    if d.vx == 0 then d.vx = (rand(0, 1) == 1) and 60 or -60 end
+    d.wx = d.wx + d.vx * ft
+    -- choose a human to abduct
+    d.t = d.t + ft
+    if d.t > 0.6 then
+      d.t = 0
+      local best, bd = nil, 1e9
+      for i = 1, #humans do
+        local h = humans[i]
+        if h.alive and h.grabbed == nil then
+          local hd = math.abs(ddx(h.wx, e.wx))
+          if hd < bd then bd, best = hd, i end
+        end
+      end
+      if best ~= nil and bd < W * 0.75 then
+        d.target = best
+        d.mode = 'descend'
+      end
+    end
+  elseif d.mode == 'descend' then
+    local h = humans[d.target]
+    if h == nil or not h.alive or h.grabbed ~= nil then
+      d.mode = 'patrol'; d.target = nil
+      return
+    end
+    local dx = ddx(h.wx, e.wx)
+    e.wx = e.wx + (dx > 0 and 1 or -1) * 90 * ft
+    e.wy = e.wy + 110 * ft
+    if math.abs(ddx(h.wx, e.wx)) < 10 and e.wy > GROUND_TOP - 40 then
+      h.grabbed = e
+      d.mode = 'ascend'
+      beep(520, 60)
+    end
+  elseif d.mode == 'ascend' then
+    e.wy = e.wy - 90 * ft
+    local h = humans[d.target]
+    if h ~= nil and h.alive then
+      h.s.x = scrx(e.wx)
+      h.s.y = e.wy + 16
+    end
+    if e.wy < SKY_TOP + 10 then
+      -- abduction complete: the human is lost and the lander mutates
+      if h ~= nil and h.alive then
+        h.alive = false
+        release(h.s)
+        award(-150)
+        msg, msgTimer = "HUMANOID LOST", 1.2
+      end
+      e.kind = 'mutant'
+      e.hw, e.hh, e.pts = enemy_def('mutant').hw, enemy_def('mutant').hh, 150
+      release(e.s)
+      e.s = acquire(P.mutant)
+      e.s.visible = true
+      e.vx, e.vy = 0, 0
+      e.mode = 'hunt'
+      beep(240, 160)
+    end
+  end
+end
+
+local function mutant_ai(e, ft)
+  local dx = ddx(px, e.wx)
+  local dy = py - e.wy
+  local len = math.sqrt(dx * dx + dy * dy) + 1
+  local spd = 190
+  e.wx = e.wx + (dx / len) * spd * ft
+  e.wy = e.wy + (dy / len) * spd * ft
+  e.fire = e.fire - ft * 60
+  if e.fire <= 0 then
+    e.fire = rand(90, 180)
+    local bs = acquire(P.bomb)
+    bs.visible = true
+    local bl = { wx = e.wx, wy = e.wy, vx = (dx / len) * 320, vy = (dy / len) * 320, s = bs, y = e.wy }
+    bombs[#bombs + 1] = bl
+    beep(260, 60)
+  end
+end
+
+local function bomber_ai(e, ft)
+  if e.vx == 0 then e.vx = (rand(0, 1) == 1) and 80 or -80 end
+  e.wx = e.wx + e.vx * ft
+  e.fire = e.fire - ft * 60
+  if e.fire <= 0 and math.abs(ddx(px, e.wx)) < 220 then
+    e.fire = rand(120, 220)
+    local bs = acquire(P.bomb)
+    bs.visible = true
+    bombs[#bombs + 1] = { wx = e.wx, wy = e.wy + 12, vx = 0, vy = 210, s = bs, y = e.wy + 12 }
+    beep(200, 60)
+  end
+end
+
+local function swarmer_ai(e, ft)
+  local dx = ddx(px, e.wx)
+  local dy = py - e.wy
+  local len = math.sqrt(dx * dx + dy * dy) + 1
+  e.wx = e.wx + (dx / len) * 280 * ft
+  e.wy = e.wy + (dy / len) * 280 * ft
+end
+
+local function step_enemies(ft)
+  for i = #enemies, 1, -1 do
+    local e = enemies[i]
+    if e.kind == 'lander' then lander_ai(e, ft)
+    elseif e.kind == 'mutant' then mutant_ai(e, ft)
+    elseif e.kind == 'bomber' then bomber_ai(e, ft)
+    elseif e.kind == 'swarmer' then swarmer_ai(e, ft)
+    else -- pod drifts
+      if e.vx == 0 then e.vx = (rand(0, 1) == 1) and 40 or -40 end
+      e.wx = e.wx + e.vx * ft
+    end
+
+    -- cull anything that wandered off the wrap window
+    if math.abs(ddx(e.wx, px)) > W * 1.15 then
+      if e.kind == 'lander' and e.target ~= nil and humans[e.target] ~= nil
+          and humans[e.target].alive and humans[e.target].grabbed == e then
+        -- never drop a carried human by culling
+        e.wx = px + (ddx(e.wx, px) > 0 and W * 1.1 or -W * 1.1)
+      else
+        release(e.s)
+        table.remove(enemies, i)
+      end
+    else
+      e.s.x = scrx(e.wx)
+      e.s.y = e.wy
+      if e.kind == 'mutant' or e.kind == 'bomber' then
+        e.s.flipH = ddx(px, e.wx) < 0
+      end
+    end
+
+    -- player collision
+    if state == 'play' and invuln <= 0 then
+      if math.abs(ddx(e.wx, px)) < e.hw + PLAYER_HW and math.abs(e.wy - py) < e.hh + PLAYER_HH then
+        add_boom(e.wx, e.wy, false)
+        drop_human(e)
+        release(e.s)
+        table.remove(enemies, i)
+        kill_player()
+        return
+      end
+    end
+  end
+end
+
+local function step_bombs(ft)
+  for i = #bombs, 1, -1 do
+    local b = bombs[i]
+    b.wx = b.wx + b.vx * ft
+    b.y = b.y + b.vy * ft
+    b.s.x = scrx(b.wx)
+    b.s.y = b.y
+    local gone = false
+    if b.y > GROUND_TOP + 10 then gone = true end
+    if math.abs(ddx(b.wx, px)) > W * 1.1 then gone = true end
+    if not gone and state == 'play' and invuln <= 0 then
+      if math.abs(ddx(b.wx, px)) < PLAYER_HW + 4 and math.abs(b.y - py) < PLAYER_HH + 4 then
+        gone = true
+        add_boom(b.wx, b.y, false)
+        kill_player()
+      end
+    end
+    if gone then
+      release(b.s)
+      table.remove(bombs, i)
+    end
+  end
+end
+
+local function step_booms(ft)
+  for i = #booms, 1, -1 do
+    local b = booms[i]
+    b.t = b.t + ft
+    local frame = math.floor(b.t / 0.06) + 1
+    if frame > 4 then frame = 4 end
+    for k = 1, 4 do
+      local s = b.sp[k]
+      s.x = scrx(b.wx)
+      s.y = b.wy
+      s.visible = (k == frame)
+    end
+    if b.t > 0.26 then
+      for k = 1, 4 do release(b.sp[k]) end
+      table.remove(booms, i)
+    end
+  end
+end
+
+-- ---- wave / spawn ----------------------------------------------------
+local function step_waves(ft)
+  if spawnLeft > 0 then
+    spawnCd = spawnCd - ft
+    if spawnCd <= 0 then
+      spawnCd = math.max(0.35, 1.1 - wave * 0.05)
+      spawn_wave_enemy()
+      spawnLeft = spawnLeft - 1
+    end
+  elseif #enemies == 0 then
+    waveTimer = waveTimer + ft
+    if waveTimer > 1.6 then
+      -- wave cleared: bonus for humans still alive
+      local saved = alive_humans()
+      award(saved * 100)
+      if saved > 0 then msg, msgTimer = "WAVE CLEARED  +" .. (saved * 100), 1.6 end
+      wave = wave + 1
+      start_wave()
+    end
+  end
+end
+
+local function update(ft)
+  if msgTimer > 0 then msgTimer = msgTimer - ft end
+  if flash > 0 then flash = math.max(0, flash - ft * 3) end
+
+  if state == 'play' then
+    if invuln > 0 then invuln = math.max(0, invuln - ft) end
+    if fireCd > 0 then fireCd = math.max(0, fireCd - ft) end
+    step_player(ft)
+    step_bullets(ft)
+    step_enemies(ft)
+    step_bombs(ft)
+    step_waves(ft)
+  elseif state == 'dying' then
+    dyingTimer = dyingTimer - ft
+    if dyingTimer <= 0 then
+      if lives <= 0 then
+        state = 'over'
+        if score > high then high = score end
+      else
+        respawn()
+      end
+    end
+  end
+  step_booms(ft)
+end
+
+-- ---- rendering -------------------------------------------------------
+local function draw_ship()
+  if state == 'over' then return end
+  if state == 'dying' then return end
+  if invuln > 0 and math.floor(millis() / 90) % 2 == 0 then
+    ship.visible = false
+    return
+  end
+  ship.visible = true
+  ship.x = PLAYER_SX
+  ship.y = py
+  ship.flipH = face < 0
+end
+
+local function human_blips(target)
+  for i = 1, #humans do
+    local h = humans[i]
+    if h.alive and h.grabbed == nil then
+      local sx = scrx(h.wx)
+      if sx > -8 and sx < W + 8 then
+        h.s.x = sx
+        h.s.y = h.y
+        h.s.visible = true
+      else
+        h.s.visible = false
+      end
+    end
+  end
+end
+
+-- ---- HUD (canvas.front) ---------------------------------------------
+local function center_text(s, y, col)
+  canvas.color = col
+  canvas.text((W - textwidth(s)) / 2, y, s)
+end
+
+local function draw_scanner()
+  local sy0 = 4
+  local sh = 14
+  canvas.color = colors.darkgray
+  canvas.rectangle(0, sy0, W, sh, true)
+  canvas.color = colors.gray
+  canvas.rectangle(0, sy0, W, 1, false)
+  canvas.rectangle(0, sy0 + sh, W, 1, false)
+
+  local function bx(wx)
+    return math.floor(((wx % WORLD) / WORLD) * W)
+  end
+
+  -- humans: white ticks
+  for i = 1, #humans do
+    local h = humans[i]
+    if h.alive then
+      canvas.color = colors.white
+      canvas.rectangle(bx(h.wx), sy0 + 2, 1, sh - 4, true)
+    end
+  end
+  -- enemies: colored dots by kind
+  for i = 1, #enemies do
+    local e = enemies[i]
+    if e.kind == 'human' then
+    elseif e.kind == 'mutant' or e.kind == 'swarmer' then canvas.color = colors.red
+    elseif e.kind == 'bomber' then canvas.color = colors.violet
+    elseif e.kind == 'pod' then canvas.color = colors.yellow
+    else canvas.color = colors.lime end
+    canvas.rectangle(bx(e.wx), sy0 + 4, 2, sh - 8, true)
+  end
+  -- player: cyan marker
+  canvas.color = colors.aqua
+  canvas.rectangle(bx(px) - 1, sy0 + 1, 3, sh - 2, true)
+end
+
+local function draw_hud()
+  draw_scanner()
+  canvas.color = colors.yellow
+  canvas.text(8, 24, "SCORE " .. score)
+  canvas.color = colors.white
+  canvas.text(8, 40, "WAVE " .. wave)
+  canvas.text(W - 120, 24, "HIGH " .. high)
+  canvas.text(W - 120, 40, "HUMANS " .. alive_humans())
+  -- lives as little ships
+  for i = 1, math.min(lives, 5) do
+    canvas.color = colors.skyblue
+    canvas.rectangle(8 + (i - 1) * 12, 56, 9, 3, true)
+    canvas.color = colors.white
+    canvas.rectangle(8 + (i - 1) * 12 + 6, 55, 3, 5, true)
+  end
+  -- smart bombs
+  for i = 1, math.min(smart, 5) do
+    canvas.color = colors.orange
+    canvas.circle(120 + (i - 1) * 12, 58, 4, true)
+  end
+  if msgTimer > 0 then center_text(msg, 70, colors.yellow) end
+end
+
+local function draw_title()
+  canvas.color = colors.black
+  canvas.rectangle(0, H / 2 - 110, W, 220, true)
+  center_text("D E F E N D E R", H / 2 - 86, colors.aqua)
+  center_text("D E F E N D E R", H / 2 - 88, colors.white)
+  center_text("PRESS SPACE TO START", H / 2 - 30, colors.yellow)
+  center_text("LEFT / RIGHT  A / D     thrust", H / 2 + 10, colors.silver)
+  center_text("UP / DOWN  W / S       climb / dive", H / 2 + 28, colors.silver)
+  center_text("SPACE / Z   fire      B  smart bomb", H / 2 + 46, colors.silver)
+  center_text("H / SHIFT   hyperspace      ESC  quit", H / 2 + 64, colors.silver)
+  center_text("Protect the humanoids from the landers", H / 2 + 92, colors.lightgray)
+end
+
+local function draw_over()
+  canvas.color = colors.black
+  canvas.rectangle(0, H / 2 - 70, W, 150, true)
+  center_text("GAME OVER", H / 2 - 46, colors.red)
+  center_text("SCORE " .. score, H / 2 - 10, colors.white)
+  if score >= high then
+    center_text("NEW HIGH SCORE!", H / 2 + 14, colors.yellow)
+  end
+  center_text("PRESS SPACE TO PLAY AGAIN", H / 2 + 46, colors.silver)
+end
+
+local function render()
+  -- Wipe last frame's HUD: the board is a persistent render texture, so a
+  -- canvas.clear() (transparent while canvas.front is on) is what keeps the
+  -- overlay from smearing. The world is drawn by the engine underneath.
+  canvas.clear()
+
+  -- HUD board first (it is composited on top by the engine)
+  if state == 'title' then
+    draw_title()
+  elseif state == 'over' then
+    draw_hud()
+    draw_over()
+  else
+    draw_hud()
+  end
+  if flash > 0 then
+    canvas.color = colors.white
+    canvas.alpha = math.floor(flash * 120)
+    canvas.rectangle(0, 0, W, H, true)
+    canvas.alpha = 255
+  end
+
+  -- world (sprites + parallax are drawn natively by the engine)
+  draw_ship()
+  human_blips()
+  bg.offset = px
+end
+
+-- ---- boot ------------------------------------------------------------
+-- Hand every pooled sprite back before the world is rebuilt. Without this the
+-- leftovers stay visible at their last position: a human frozen at the bottom,
+-- or enemies that survive into the next game. Guarded for nil because the very
+-- first reset() runs before any of these tables exist.
+local function release_world()
+  if enemies then for i = 1, #enemies do release(enemies[i].s) end end
+  if bullets then for i = 1, #bullets do release(bullets[i].s) end end
+  if bombs   then for i = 1, #bombs   do release(bombs[i].s)   end end
+  if booms   then
+    for i = 1, #booms do
+      local b = booms[i]
+      for k = 1, 4 do release(b.sp[k]) end
+    end
+  end
+  if humans then for i = 1, #humans do release(humans[i].s) end end
+end
+
+local function reset()
+  release_world()
+  state = 'title'
+  score = 0
+  lives = 3
+  wave = 1
+  smart = 3
+  invuln = 0
+  fireCd = 0
+  pvx, pvy = 0, 0
+  face = 1
+  px = 0
+  py = math.floor((SKY_TOP + GROUND_TOP) / 2)
+  enemies, bullets, bombs, booms = {}, {}, {}, {}
+  flash = 0
+  msg, msgTimer = "", 0
+  if ship == nil then ship = acquire(P.ship) end
+  ship.visible = false
+  place_humans(10)
+  start_wave()
+  spawnLeft = 0
+end
+
+local function start_game()
+  reset()
+  state = 'play'
+  invuln = 2.0
+  start_wave()
+end
+
+high = 0
+reset()
+
+while cycle do
+  local ft = frametime()
+  if ft <= 0 then ft = 1 / 60 end
+  if ft > 0.05 then ft = 0.05 end
+
+  if iskeypressed('escape') then exit() end
+
+  if state == 'title' then
+    if iskeypressed('space') or iskeypressed('enter') then start_game() end
+  elseif state == 'over' then
+    if iskeypressed('space') or iskeypressed('enter') then start_game() end
+  end
+
+  update(ft)
+  render()
+end

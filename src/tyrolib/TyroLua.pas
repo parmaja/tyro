@@ -24,7 +24,7 @@ uses
   LuaAPI, LuaClasses,
   RayLib, RayClasses, //remove it
   mnUtils, mnLogs, mnClasses, mnDON,
-  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroTiles, TyroPhysics,
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroTiles, TyroPhysics, TyroParallax,
   TyroControls, TyroEngines, TyroInput,
   TyroRadio, TyroSpectrum;
 
@@ -329,6 +329,41 @@ type
     function Find_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaParallax }
+
+  { One scrolling parallax background handed to the script by parallax.new().
+    The methods are table fields that receive the parallax table as argument 1,
+    the properties resolve through the metatable getter/setter (bg.offset,
+    bg.speed, bg.visible, ...). }
+  TLuaParallax = class(TTyroLuaObject)
+  protected
+    function Getter(L: Plua_State): integer; override;
+    function Setter(L: Plua_State): integer; override;
+    //Common body of add/addground (not part of the Lua surface).
+    function DoAdd(L: Plua_State; AAnchor: TParallaxAnchor): integer;
+  public
+    function RegisterParallax(AHandle: Integer): Integer;
+    //bg:add(file, speed [, y [, scale]]) - a layer anchored to the top edge
+    function Add_func(L: Plua_State): integer; cdecl;
+    //bg:addground(file, speed [, y [, scale]]) - a layer anchored to the floor
+    function AddGround_func(L: Plua_State): integer; cdecl;
+    //bg:clear() - drop every layer and unload its texture
+    function Clear_func(L: Plua_State): integer; cdecl;
+    //bg:reset() - put the scroll offset back to 0
+    function Reset_func(L: Plua_State): integer; cdecl;
+  end;
+
+  { TLuaParallaxes }
+
+  TLuaParallaxes = class(TTyroLuaObject)
+  protected
+  public
+    //parallax.new([name]) -> a new parallax background object
+    function New_func(L: Plua_State): integer; cdecl;
+    //parallax.find(name) -> the named parallax object, or nil
+    function Find_func(L: Plua_State): integer; cdecl;
+  end;
+
   { TLuaControls }
 
   { Generic control creation and inspection. controls.new('button', ...)
@@ -506,6 +541,8 @@ type
     Sprites: TLuaSprites;
     Tile: TLuaTile;
     Tiles: TLuaTiles;
+    Parallax: TLuaParallax;
+    Parallaxes: TLuaParallaxes;
     Controls: TLuaControls;
     Output: TLuaOutput;
     Collision: TLuaCollision;
@@ -574,6 +611,8 @@ const
   cControlRegistryBase = $00800000;
   // Integer key base in the Lua registry for "tilemap handle -> tilemap table"
   cTileRegistryBase = $00900000;
+  // Integer key base in the Lua registry for "parallax handle -> parallax table"
+  cParallaxRegistryBase = $00A00000;
   // Key in the Lua registry for the table that caches what require already ran
   cRequireCache = 'tyro.require.cache';
 
@@ -1237,6 +1276,11 @@ begin
   AddColor('darkbrown', clDarkbrown);
   AddColor('beige', clBeige);
   AddColor('raywhite', clRayWhite);
+  //Fully transparent; use it for a canvas.clear() that lets the sprites behind
+  //it show through (see the canvas.front HUD mode).
+  AddColor('blank', clBlank);
+  AddColor('transparent', clBlank);
+  AddColor('none', clBlank);
 end;
 
 { TLuaCanvas }
@@ -1248,6 +1292,18 @@ var
 begin
   Result := 0;
   field := L.ToString(2);
+
+  //canvas.front = true: composite the board ABOVE the sprites so its content
+  //(text, HUD) stays on top of the world. The board is cleared to a transparent
+  //colour for the sprites to show through it; canvas.clear() with no argument
+  //uses BackColor, which is what makes the switch take effect.
+  if field = 'front' then
+  begin
+    Engine.BoardOnTop := L.ToBoolean(-1);
+    if Engine.BoardOnTop and (Engine.Board <> nil) then
+      Engine.Board.BackColor := clBlank;
+    Exit(1);
+  end;
 
   if L.IsInteger(-1) then
   begin
@@ -1308,6 +1364,11 @@ begin
   else if field = 'height' then
   begin
     L.PushInteger(Engine.Board.Height);
+    Result := 1;
+  end
+  else if field = 'front' then
+  begin
+    L.PushBoolean(Engine.BoardOnTop);
     Result := 1;
   end
   else if (field = 'pen') then
@@ -1456,6 +1517,8 @@ begin
   Sprites := TLuaSprites.Create(Self);
   Tile := TLuaTile.Create(Self);
   Tiles := TLuaTiles.Create(Self);
+  Parallax := TLuaParallax.Create(Self);
+  Parallaxes := TLuaParallaxes.Create(Self);
   Controls := TLuaControls.Create(Self);
   Output := TLuaOutput.Create(Self);
   Collision := TLuaCollision.Create(Self);
@@ -1611,6 +1674,13 @@ begin
   Lua.State.Register('tiles', 'new', Self, Tiles.New_func);
   Lua.State.Register('tiles', 'find', Self, Tiles.Find_func);
 
+  // Parallax backgrounds: parallax.new([name]) creates one, parallax.find(name)
+  // finds a named one. A parallax object carries add/addground/clear/reset plus
+  // the property fields (bg.offset, bg.speed, bg.visible, bg.tile, bg.groundy).
+  Lua.State.RegisterTable('parallax');
+  Lua.State.Register('parallax', 'new', Self, Parallaxes.New_func);
+  Lua.State.Register('parallax', 'find', Self, Parallaxes.Find_func);
+
   //controls (generic control table; 'buttons' is a legacy alias to the same
   //object so old scripts keep working). Every function here takes the control as
   //its first argument and each of them also has a field spelling on the control
@@ -1714,6 +1784,8 @@ begin
   FreeAndNil(Controls);
   FreeAndNil(Sprites);
   FreeAndNil(Sprite);
+  FreeAndNil(Parallaxes);
+  FreeAndNil(Parallax);
   FreeAndNil(Tiles);
   FreeAndNil(Tile);
   FreeAndNil(SpectrumLua);
@@ -6010,6 +6082,292 @@ begin
   else
   begin
     // unknown key: store it raw in the map table
+    L.PushValue(2);
+    L.PushValue(3);
+    lua_rawset(L, 1);
+  end;
+end;
+
+{ TLuaParallax }
+
+//Read the parallax table's __handle raw, without re-entering the metatable
+//getter (see GetSpriteHandle for why). 0 means "not a parallax table".
+function GetParallaxHandle(L: Plua_State; idx: integer): integer;
+begin
+  L.PushString('__handle');
+  lua_rawget(L, idx);
+  Result := L.PopInteger;
+end;
+
+//First script argument of a parallax method. A dot call (bg.add(...)) injects
+//the parallax table as argument 1, so the script's arguments start at 2. A colon
+//call (bg:add(...)) passes the receiver again as argument 2 and the arguments
+//start at 3. The first argument is always a string (a file name), so a table in
+//slot 2 can only be the receiver of a colon call.
+function ParallaxArgBase(L: Plua_State): Integer;
+begin
+  if L.IsTable(2) then
+    Result := 3
+  else
+    Result := 2;
+end;
+
+// Build a parallax table bound to AHandle and leave it on the Lua stack. Mirrors
+// TLuaTile.RegisterTile: the methods are plain table fields receiving the table
+// as argument 1, the properties resolve through the metatable getter/setter.
+function TLuaParallax.RegisterParallax(AHandle: integer): integer;
+var
+  base: integer;
+begin
+  with Script do
+  begin
+    Lua.State.BeginTable; //[bg]
+    base := Lua.State.ArgsCount; //index of the parallax table
+
+    //keep a duplicate, the -3 addressing in Register() hits the parallax table
+    Lua.State.PushValue(-1); //[bg, bg]
+
+    Lua.State.PushInteger(AHandle);
+    Lua.State.SetField(-2, '__handle'); //bg.__handle = AHandle
+
+    //methods receive the parallax table injected as argument 1
+    Lua.State.Register('add', Add_func);
+    Lua.State.Register('addground', AddGround_func);
+    Lua.State.Register('clear', Clear_func);
+    Lua.State.Register('reset', Reset_func);
+
+    //metatable with property getter/setter (no table injection)
+    Lua.State.NewTable; //[bg, bg, meta]
+    Lua.State.RegisterMeta('__index', __getter);
+    Lua.State.RegisterMeta('__newindex', __setter);
+    Lua.State.SetMetaTable(-2); //bg.metatable = meta
+
+    //remember this table so it can be found by handle
+    if AHandle > cParallaxInvalid then
+    begin
+      Lua.State.PushValue(-1); // duplicate the parallax table
+      lua_rawseti(Lua.State, LUA_REGISTRYINDEX, cParallaxRegistryBase + AHandle);
+    end;
+
+    Lua.State.Remove(base); //drop the first reference, keep one on the stack
+    Result := 1;
+  end;
+end;
+
+//Common body of add/addground: read the file and the optional speed/y/scale and
+//load the layer on the main thread (the texture upload needs the GL context).
+function TLuaParallax.DoAdd(L: Plua_State; AAnchor: TParallaxAnchor): integer;
+var
+  b, handle: integer;
+  aFile: string;
+  aSpeed, aY, aScale: Single;
+  LoadObj: TAddParallaxLayerObject;
+begin
+  Result := 0;
+  b := ParallaxArgBase(L);
+  handle := GetParallaxHandle(L, 1);
+  if handle <= cParallaxInvalid then
+    Exit;
+  aFile := L.ToString(b);
+  aSpeed := 1.0;
+  aY := 0;
+  aScale := 1.0;
+  if L.ArgsCount >= b + 1 then
+    aSpeed := L.ToNumber(b + 1);
+  if L.ArgsCount >= b + 2 then
+    aY := L.ToNumber(b + 2);
+  if L.ArgsCount >= b + 3 then
+    aScale := L.ToNumber(b + 3);
+  LoadObj := TAddParallaxLayerObject.Create(handle, aFile, aSpeed, aY, aScale, AAnchor);
+  try
+    LoadObj.Run(Script.Thread);
+  finally
+    LoadObj.Free;
+  end;
+end;
+
+// bg:add(file, speed [, y [, scale]]) - a layer anchored to the top edge
+function TLuaParallax.Add_func(L: Plua_State): integer; cdecl;
+begin
+  Result := DoAdd(L, paTop);
+end;
+
+// bg:addground(file, speed [, y [, scale]]) - a layer glued to the floor
+function TLuaParallax.AddGround_func(L: Plua_State): integer; cdecl;
+begin
+  Result := DoAdd(L, paBottom);
+end;
+
+// bg:clear() - drop every layer and unload its texture (main thread, as the
+//unload is a GL call)
+function TLuaParallax.Clear_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+  ClearObj: TClearParallaxLayersObject;
+begin
+  Result := 0;
+  handle := GetParallaxHandle(L, 1);
+  if handle <= cParallaxInvalid then
+    Exit;
+  ClearObj := TClearParallaxLayersObject.Create(handle);
+  try
+    ClearObj.Run(Script.Thread);
+  finally
+    ClearObj.Free;
+  end;
+end;
+
+// bg:reset() - put the scroll offset back to 0
+function TLuaParallax.Reset_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+begin
+  Result := 0;
+  handle := GetParallaxHandle(L, 1);
+  if handle > cParallaxInvalid then
+    Engine.Parallaxes.SetOffset(handle, 0);
+end;
+
+// parallax.new("name"?) -> creates a new parallax object, returns it on the stack
+function TLuaParallaxes.New_func(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  handle: integer;
+begin
+  if L.ArgsCount >= 1 then
+    aName := L.ToString(1)
+  else
+    aName := '';
+  //Add only inserts into the store's dictionary under its lock, so it is safe
+  //to call straight from the script thread; only the layer texture upload needs
+  //the main thread, and add() routes that through the engine thread.
+  handle := Engine.Parallaxes.Add(aName);
+  if handle > cParallaxInvalid then
+    Script.Parallax.RegisterParallax(handle)
+  else
+    Script.Parallax.RegisterParallax(cParallaxInvalid);
+  // Store optional name
+  if aName <> '' then
+  begin
+    L.PushString(aName);
+    L.SetField(-2, '__name');
+  end;
+  Result := 1;
+end;
+
+// parallax.find("name") -> returns the named parallax object, or nil
+function TLuaParallaxes.Find_func(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  handle: integer;
+begin
+  aName := L.ToString(1);
+  handle := Engine.Parallaxes.Find(aName);
+  if handle > cParallaxInvalid then
+    Script.Parallax.RegisterParallax(handle)
+  else
+    L.PushNil;
+  Result := 1;
+end;
+
+// Parallax __index: read properties offset, speed, visible, tile, groundy,
+// layers, name; unknown keys raw-read from the parallax table.
+function TLuaParallax.Getter(L: Plua_State): integer;
+var
+  handle: integer;
+  field: string;
+begin
+  // arg 1 is the table, arg 2 is the key
+  handle := GetParallaxHandle(L, 1);
+  field := L.ToString(2);
+  Result := 0;
+  if handle > cParallaxInvalid then
+  begin
+    if field = 'offset' then
+    begin
+      L.PushNumber(Engine.Parallaxes.GetOffset(handle));
+      Result := 1;
+    end
+    else if field = 'speed' then
+    begin
+      L.PushNumber(Engine.Parallaxes.GetGlobalSpeed(handle));
+      Result := 1;
+    end
+    else if field = 'visible' then
+    begin
+      L.PushBoolean(Engine.Parallaxes.GetVisible(handle));
+      Result := 1;
+    end
+    else if field = 'tile' then
+    begin
+      L.PushBoolean(Engine.Parallaxes.GetTile(handle));
+      Result := 1;
+    end
+    else if field = 'layers' then
+    begin
+      L.PushInteger(Engine.Parallaxes.GetLayerCount(handle));
+      Result := 1;
+    end
+    else if field = 'groundy' then
+    begin
+      if (Engine.Board <> nil) then
+        L.PushNumber(Engine.Parallaxes.GetGroundY(handle, Engine.Board.Height))
+      else
+        L.PushNumber(0);
+      Result := 1;
+    end
+    else if field = 'name' then
+    begin
+      L.PushString(Engine.Parallaxes.GetName(handle));
+      Result := 1;
+    end;
+  end;
+  if Result = 0 then
+  begin
+    // unknown key or unloaded parallax: read raw from the parallax table
+    L.PushValue(2);
+    lua_rawget(L, 1);
+    Result := 1;
+  end;
+end;
+
+// Parallax __newindex: write properties offset, speed, visible, tile; unknown
+// keys raw-stored in the parallax table.
+function TLuaParallax.Setter(L: Plua_State): integer;
+var
+  handle: integer;
+  field: string;
+begin
+  // arg 1 is the table, arg 2 is the key, arg 3 is the value
+  handle := GetParallaxHandle(L, 1);
+  field := L.ToString(2);
+  Result := 0;
+  if handle <= cParallaxInvalid then
+  begin
+    L.PushValue(2);
+    L.PushValue(3);
+    lua_rawset(L, 1);
+    Exit;
+  end;
+  if field = 'offset' then
+  begin
+    Engine.Parallaxes.SetOffset(handle, L.ToNumber(3));
+  end
+  else if field = 'speed' then
+  begin
+    Engine.Parallaxes.SetGlobalSpeed(handle, L.ToNumber(3));
+  end
+  else if field = 'visible' then
+  begin
+    Engine.Parallaxes.SetVisible(handle, L.ToBoolean(3));
+  end
+  else if field = 'tile' then
+  begin
+    Engine.Parallaxes.SetTile(handle, L.ToBoolean(3));
+  end
+  else
+  begin
+    // unknown key: store it raw in the parallax table
     L.PushValue(2);
     L.PushValue(3);
     lua_rawset(L, 1);

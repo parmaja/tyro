@@ -1,0 +1,92 @@
+--======================================================================
+--  test_parallax.tyro - the 'parallax' scrolling-background API
+--======================================================================
+--  Covers the engine feature added for games/defender:
+--    parallax.new([name]) / parallax.find(name)
+--    bg:add(file, speed [, y [, scale]])   - layer anchored to the top
+--    bg:addground(file, speed [, y [, scale]]) - layer glued to the floor
+--    bg:clear() / bg:reset()
+--    properties offset, speed, visible, tile, layers, groundy, name
+--    canvas.front (HUD on top) and colors.blank/transparent/none
+--
+--  Layer textures upload on the main thread through the engine queue, so the
+--  script calls sleep() to let the frame cycle drain before reading layers.
+--
+--  Run:    tyro.exe tests\test_parallax.tyro --exit:5
+--  Result: tests\test_parallax_result.txt
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_parallax_result.txt", "w")
+if not out then exit() end
+
+local fails = 0
+local function check(name, cond)
+  out:write(string.format("%-36s %s\n", name, cond and "ok" or "FAIL"))
+  if not cond then fails = fails + 1 end
+end
+
+-- API surface ---------------------------------------------------------
+check("type(parallax) == 'table'", type(parallax) == "table")
+check("parallax.new is a function", type(parallax.new) == "function")
+check("parallax.find is a function", type(parallax.find) == "function")
+
+local bg = parallax.new("bg")
+check("new() returns a table", type(bg) == "table")
+check("bg.add exists", type(bg.add) == "function")
+check("bg.addground exists", type(bg.addground) == "function")
+check("bg.clear exists", type(bg.clear) == "function")
+check("bg.reset exists", type(bg.reset) == "function")
+
+-- name / find ---------------------------------------------------------
+check("name round-trips", bg.name == "bg")
+check("find('bg') returns an object", parallax.find("bg") ~= nil)
+check("find(unknown) returns nil", parallax.find("no_such_layer") == nil)
+
+-- defaults ------------------------------------------------------------
+check("default offset == 0", bg.offset == 0)
+check("default speed == 1", bg.speed == 1)
+check("default visible == true", bg.visible == true)
+check("default layers == 0", bg.layers == 0)
+check("groundy is a number", type(bg.groundy) == "number")
+
+-- property writes -----------------------------------------------------
+bg.offset = 42
+check("offset write reads back", bg.offset == 42)
+bg.speed = 0.5
+check("speed write reads back", bg.speed == 0.5)
+bg.visible = false
+check("visible write reads back", bg.visible == false)
+bg.tile = true
+check("tile write reads back", bg.tile == true)
+bg.reset()
+check("reset() zeroes the offset", bg.offset == 0)
+bg.visible = true
+
+-- layers (queued: the texture uploads on the main thread) -------------
+bg.add("test_image_tile.png", 0.5)
+bg.addground("test_image_tile.png", 1.0)
+sleep(300)
+check("add + addground => 2 layers", bg.layers == 2)
+
+-- clear ---------------------------------------------------------------
+bg.clear()
+sleep(200)
+check("clear() drops every layer", bg.layers == 0)
+
+-- canvas.front: composite the board above the sprites (HUD mode) ------
+check("canvas.front default is false", canvas.front == false)
+canvas.front = true
+check("canvas.front write reads back", canvas.front == true)
+canvas.front = false
+check("canvas.front restores false", canvas.front == false)
+
+-- colors.blank: transparent clear for the front HUD -------------------
+check("colors.blank is a number", type(colors.blank) == "number")
+check("colors.transparent == colors.blank", colors.transparent == colors.blank)
+check("colors.none == colors.blank", colors.none == colors.blank)
+
+out:write("VERDICT => " .. (fails == 0 and "PASS" or ("FAIL(" .. fails .. ")")) .. "\n")
+out:close()
+exit()

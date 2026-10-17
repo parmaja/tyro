@@ -1,0 +1,30 @@
+type(parallax) == 'table'            ok
+parallax.new is a function           ok
+parallax.find is a function          ok
+new() returns a table                ok
+bg.add exists                        ok
+bg.addground exists                  ok
+bg.clear exists                      ok
+bg.reset exists                      ok
+name round-trips                     ok
+find('bg') returns an object         ok
+find(unknown) returns nil            ok
+default offset == 0                  ok
+default speed == 1                   ok
+default visible == true              ok
+default layers == 0                  ok
+groundy is a number                  ok
+offset write reads back              ok
+speed write reads back               ok
+visible write reads back             ok
+tile write reads back                ok
+reset() zeroes the offset            ok
+add + addground => 2 layers          ok
+clear() drops every layer            ok
+canvas.front default is false        ok
+canvas.front write reads back        ok
+canvas.front restores false          ok
+colors.blank is a number             ok
+colors.transparent == colors.blank   ok
+colors.none == colors.blank          ok
+VERDICT => PASS
