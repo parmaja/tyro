@@ -22,11 +22,9 @@ script argument Tyro starts an interactive console session.
 | `--list` | List the supported programming languages and exit |
 | `--console`, `-c` | Force a command prompt / console output |
 | `--debug`, `-d` | Enable debug logging |
-| `--lint`, `-l` | Syntax-check the script with Lua and exit without running it (nothing is executed, no window opens) |
 | `--main`, `-m` | Legacy compatibility alias; scripts always run on a worker thread with main-thread dispatch |
 | `--exit[:N]` | Exit after *N* seconds, or — with a bare `--exit` (no `:N`) — as soon as the script finishes |
 | `--screenshot:N` | Save `screenshot.png` *N* seconds into the run; opens a window so the screen can be captured |
-| `--show=true/false`, `-s` | Force the window visible/hidden; default keeps script-controlled behavior |
 | `--workpath=<path>` | Workspace directory (defaults to the executable location) |
 
 With an engine-driven script — one that defines `update`/`draw` (see
@@ -39,8 +37,7 @@ to run. Use `--exit:N` to let such a script play for *N* seconds.
 | Status | Meaning |
 |--------|---------|
 | `0` | Success (also `--help`/`--list`, and interactive sessions closed normally) |
-| `1` | Lua runtime error while running with `--exit`, or `--lint` found syntax errors |
-| `2` | Invalid command line usage: unknown option, `--lint` without a script file, or an invalid `--show` value |
+| `1` | Lua runtime error while running with `--exit` |
 
 # Lua Example
 
