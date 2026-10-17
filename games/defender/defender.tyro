@@ -55,7 +55,7 @@ local PLAYER_HH  = 7
 -- lands on a tile boundary for every layer and the scroll never snaps.
 local bg = parallax.new('space')
 bg.add('def_stars.png', 1 / 12)
-bg.add('def_nebula.png', 3 / 12)
+bg.add('nebula.png', 3 / 12)
 bg.addground('def_mountains.png', 6 / 12, -40)
 bg.addground('def_hills.png', 9 / 12, -20)
 bg.addground('def_ground.png', 1.0)
