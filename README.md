@@ -24,17 +24,22 @@ script argument Tyro starts an interactive console session.
 | `--debug`, `-d` | Enable debug logging |
 | `--lint`, `-l` | Syntax-check the script with Lua and exit without running it (nothing is executed, no window opens) |
 | `--main`, `-m` | Legacy compatibility alias; scripts always run on a worker thread with main-thread dispatch |
-| `--exit`, `-x` | Exit automatically after the script finishes |
-| `--execute`, `-e` | Alias for `--exit` (run the script, then exit) |
+| `--exit[:N]` | Exit after *N* seconds, or — with a bare `--exit` (no `:N`) — as soon as the script finishes |
+| `--screenshot:N` | Save `screenshot.png` *N* seconds into the run; opens a window so the screen can be captured |
 | `--show=true/false`, `-s` | Force the window visible/hidden; default keeps script-controlled behavior |
 | `--workpath=<path>` | Workspace directory (defaults to the executable location) |
+
+With an engine-driven script — one that defines `update`/`draw` (see
+[Timing](#timing)) — the script "finishes" the moment its top-level chunk
+returns, so a bare `--exit` ends the run right away, before the callbacks get
+to run. Use `--exit:N` to let such a script play for *N* seconds.
 
 ### Exit statuses
 
 | Status | Meaning |
 |--------|---------|
 | `0` | Success (also `--help`/`--list`, and interactive sessions closed normally) |
-| `1` | Lua runtime error while running with `--exit`/`--execute`, or `--lint` found syntax errors |
+| `1` | Lua runtime error while running with `--exit`, or `--lint` found syntax errors |
 | `2` | Invalid command line usage: unknown option, `--lint` without a script file, or an invalid `--show` value |
 
 # Lua Example
@@ -721,6 +726,42 @@ while cycle do                      -- one iteration per drawing frame
 end                                 -- no sleep() needed for ~60 FPS pacing
 ```
 
+## The other loop: `update(dt)` / `draw()`
+
+`while cycle do` is one of **two** game loops. The other is engine-driven: a
+script that defines `update` and/or `draw` as globals and lets its top-level
+chunk **return** hands the frame to the engine.
+
+```lua
+window.show(640, 480)
+
+local t = 0
+
+function update(dt)          -- once per frame, before drawing; dt in seconds
+    t = t + dt
+    if iskeypressed("space") then exit() end
+end
+
+function draw()              -- once per frame, after update()
+    canvas.color = colors.black
+    canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+    canvas.color = colors.green
+    canvas.circle(320 + 100 * math.sin(t), 240, 20, true)
+end                          -- chunk returns: the engine drives from here
+```
+
+Both callbacks are optional. Once the top-level chunk returns **normally**, the
+engine looks for them; if either exists it keeps the script (and its locals,
+which stay live inside the callbacks as upvalues) and calls `update(dt)` then
+`draw()` once per frame on the main thread — no `while cycle do` and no
+`sleep()` pacing needed. `exit()` inside `update` ends the run, and `cycle`
+never blocks in this mode. If the chunk never returns (it keeps a `while cycle
+do` loop) or defines neither callback, nothing changes.
+
+Because only these callbacks touch the state after the hand-off — the loader
+thread stops before the engine takes over — the two models are interchangeable
+and never race. See [docs/cycle.md](docs/cycle.md) for the details.
+
 ## Automatic grouping (default)
 
 Each `while cycle do` iteration is drawn as one group automatically. From the
@@ -945,6 +986,13 @@ thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
   (also triggered by `--exit`/window close) cancels a pending queue wait,
   signals blocked `console.read()`, then pumps `CheckSynchronize` until the
   thread has actually finished before `WaitFor` and disposal.
+- **Frame hand-off (`update`/`draw`).** When the main chunk returns *normally*
+  and its globals define `update` and/or `draw`, the finished worker's
+  `lua_State` is kept alive and those callbacks are driven once per frame on the
+  main thread; only the main thread touches the state from then on. Otherwise —
+  no callbacks, or a chunk that never returns — the worker closes the state as
+  usual. A later `Stop`/new run releases a handed-off state (see
+  [docs/cycle.md](docs/cycle.md)).
 - **Queue admission.** A stopped/inactive script rejects new asynchronous work
   (the request is freed immediately instead). Right after the worker exits the
   engine cancels and clears any stale queue entries so they cannot leak into a
