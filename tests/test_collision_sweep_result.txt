@@ -1,0 +1,10 @@
+PASS sprite:width() > 0
+PASS sprite:height() > 0
+PASS scale scales the drawn width
+PASS scale scales the drawn height
+PASS end-point test misses the 45px step
+PASS swept test catches the 45px step
+PASS hit at the drawn edge
+PASS clean miss above
+PASS clean miss short
+SMOKE-OK

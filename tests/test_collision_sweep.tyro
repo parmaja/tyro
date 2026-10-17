@@ -1,0 +1,80 @@
+--======================================================================
+--  test_collision_sweep.tyro
+--======================================================================
+--  Regression test for the hit rule games/defender/defender.tyro uses.
+--
+--  Two things made its collisions feel wrong:
+--    * the hitboxes were hand-typed numbers about half the size of the
+--      drawn sprite, so bullets that visibly hit an enemy missed it, and
+--    * a fast bullet (900 px/s -> 30px at 30fps, up to 45px at the 0.05s
+--      dt clamp) was only tested at its end point, so it could jump over a
+--      whole enemy between two frames.
+--
+--  The fix derives the box from the drawn sprite (sprite:width()/height()
+--  times sprite.scale, over 2) and tests the whole travelled span. This test
+--  pins that engine contract and the swept test itself.
+--
+--  The sweep_hit() below mirrors the one in defender.tyro; keep them in step.
+--  Run:  bin\tyro.exe <abs path>\tests\test_collision_sweep.tyro
+--  Result: tests\test_collision_sweep_result.txt
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_collision_sweep_result.txt", "w")
+local fails = 0
+local function check(name, cond)
+  out:write((cond and "PASS " or "FAIL "), name, "\n")
+  if not cond then fails = fails + 1 end
+end
+
+-- ---- the engine contract the boxes rest on ---------------------------
+-- sprite:width()/height() return the texture size; sprite.scale scales the
+-- drawn size. So the drawn half extents are width*scale/2, height*scale/2.
+local spr = Sprites.new("size_probe")
+spr.load("tiles.png")
+spr.scale = 1
+local tw, th = spr:width(), spr:height()
+check("sprite:width() > 0", tw > 0)
+check("sprite:height() > 0", th > 0)
+spr.scale = 2
+check("scale scales the drawn width", spr:width() * spr.scale == tw * 2)
+check("scale scales the drawn height", spr:height() * spr.scale == th * 2)
+spr.hide()
+
+-- ---- the swept hit rule (mirrors defender's sweep_hit) ---------------
+-- A box at (ax0,ay0)->(ax1,ay1) relative to the target, half extents (bx,by),
+-- against a target box at the origin with half extents (hw,hh).
+local function sweep_hit(ax0, ay0, ax1, ay1, bx, by, hw, hh)
+  return math.min(ax0, ax1) - bx <= hw and math.max(ax0, ax1) + bx >= -hw
+     and math.min(ay0, ay1) - by <= hh and math.max(ay0, ay1) + by >= -hh
+end
+
+-- End-point-only test, i.e. what the old code did.
+local function point_hit(ax, ay, bx, by, hw, hh)
+  return math.abs(ax) <= hw + bx and math.abs(ay) <= hh + by
+end
+
+-- A lander (22x18 texture at scale 2) with the 0.90 art factor, and a bullet
+-- (12x4 at scale 1.5).
+local HW, HH = 22 * 2 / 2 * 0.90, 18 * 2 / 2 * 0.90
+local BX, BY = 12 * 1.5 / 2, 4 * 1.5 / 2
+
+-- A 45px step that ends 30px past the enemy centre: the end point is out of
+-- range, but the bullet clearly crossed the enemy on the way.
+check("end-point test misses the 45px step", point_hit(30, 0, BX, BY, HW, HH) == false)
+check("swept test catches the 45px step", sweep_hit(-15, 0, 30, 0, BX, BY, HW, HH) == true)
+
+-- The box now follows the art: 16px above centre is inside a 36px-tall sprite.
+check("hit at the drawn edge", sweep_hit(-40, 16, 0, 16, BX, BY, HW, HH) == true)
+-- ...but clear of the sprite is a clean miss, so nothing got over-sensitive.
+check("clean miss above", sweep_hit(-40, 25, 0, 25, BX, BY, HW, HH) == false)
+check("clean miss short", sweep_hit(150, 0, 195, 0, BX, BY, HW, HH) == false)
+
+if fails == 0 then
+  out:write("SMOKE-OK\n")
+else
+  out:write("SMOKE-FAILED fails=", fails, "\n")
+end
+out:close()
+println("test_collision_sweep done, fails=" .. fails)

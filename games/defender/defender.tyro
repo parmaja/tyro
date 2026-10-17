@@ -45,10 +45,17 @@ local THRUST     = 900           -- px/s^2
 local DRAG       = 3.2
 local VMAX       = 340
 local FIRE_CD    = 0.14
-local BULLET_SPD = 900
+local BULLET_SPD = 800
 local BULLET_MAX = 6
-local PLAYER_HW  = 15
-local PLAYER_HH  = 7
+local SPEED      = 1              -- game speed: scales the frame time (2 = double)
+-- Collision boxes are derived from the drawn sprite (texture size x scale / 2),
+-- not hand-typed numbers, so a hit lands where the pixels are. These factors
+-- are the one place to tune forgiveness: 1.0 is the full sprite, lower is a
+-- smaller, more forgiving box. The player's ship is deliberately forgiving.
+local HIT_ENEMY  = 0.90
+local HIT_PLAYER = 0.70
+-- Filled from the ship sprite once it is loaded (see reset()).
+local PLAYER_HW, PLAYER_HH
 
 -- ---- parallax background --------------------------------------------
 -- Speeds are multiples of 1/12 so the wrap (a jump of WORLD in the offset)
@@ -116,6 +123,23 @@ end
 
 local function scrx(wx) return PLAYER_SX + ddx(wx, px) end
 
+-- Half the drawn size of a sprite: its texture size times its scale, halved.
+-- width()/height() are sprite *methods* (they return the texture dimensions).
+local function sprite_half(s)
+  return s:width() * s.scale / 2, s:height() * s.scale / 2
+end
+
+-- Swept axis-aligned overlap. A box travelling from (ax0,ay0) to (ax1,ay1)
+-- (both given relative to the target) with half extents (bx,by) against a
+-- target box at the origin with half extents (hw,hh). Testing the whole span
+-- instead of the end point is what stops a fast bullet (up to 45px in one
+-- step) or a falling bomb from tunnelling straight through a target between
+-- two frames.
+local function sweep_hit(ax0, ay0, ax1, ay1, bx, by, hw, hh)
+  return math.min(ax0, ax1) - bx <= hw and math.max(ax0, ax1) + bx >= -hw
+     and math.min(ay0, ay1) - by <= hh and math.max(ay0, ay1) + by >= -hh
+end
+
 local function beep(f, ms) music.sound(f, ms) end
 local function boom_sound()
   beep(90, 260)
@@ -134,6 +158,17 @@ local function add_boom(wx, wy, big)
   end
   booms[#booms + 1] = { wx = wx, wy = wy, t = 0, sp = sp, big = big }
   return booms[#booms]
+end
+
+-- ---- bombs -----------------------------------------------------------
+-- One place to drop a bomb: pool the sprite, remember its drawn half extents
+-- for the swept collision test, and queue it.
+local function spawn_bomb(wx, wy, vx, vy)
+  local s = acquire(P.bomb)
+  s.visible = true
+  local bhw, bhh = sprite_half(s)
+  bombs[#bombs + 1] = { wx = wx, wy = wy, vx = vx, vy = vy, s = s,
+                        y = wy, bhw = bhw, bhh = bhh }
 end
 
 -- ---- humans ----------------------------------------------------------
@@ -162,18 +197,30 @@ local function fire()
   local s = acquire(P.bullet)
   s.visible = true
   s.flipH = face < 0
+  local bhw, bhh = sprite_half(s)
   local wx = px + face * 26
-  bullets[#bullets + 1] = { wx = wx, wy = py, vx = face * BULLET_SPD, s = s, y = py }
+  bullets[#bullets + 1] = { wx = wx, wy = py, vx = face * BULLET_SPD, s = s,
+                            y = py, bhw = bhw, bhh = bhh }
   beep(1250, 35)
 end
 
 -- ---- enemies ---------------------------------------------------------
+-- enemy_def carries only the score a kill is worth; the collision box comes
+-- from the sprite it is drawn with (see fit_box).
 local function enemy_def(kind)
-  if kind == 'lander'  then return { hw = 12, hh = 10, pts = 150 }
-  elseif kind == 'mutant' then return { hw = 12, hh = 10, pts = 150 }
-  elseif kind == 'bomber' then return { hw = 13, hh = 9,  pts = 250 }
-  elseif kind == 'pod'    then return { hw = 11, hh = 11, pts = 1000 }
-  else return { hw = 9, hh = 6, pts = 150 } end
+  if kind == 'lander'  then return { pts = 150 }
+  elseif kind == 'mutant' then return { pts = 150 }
+  elseif kind == 'bomber' then return { pts = 250 }
+  elseif kind == 'pod'    then return { pts = 1000 }
+  else return { pts = 150 } end
+end
+
+-- Collision half-extents from the sprite an entity is drawn with, so the box
+-- follows the art (and any future change to it) instead of a magic number.
+local function fit_box(e)
+  local hw, hh = sprite_half(e.s)
+  e.hw = hw * HIT_ENEMY
+  e.hh = hh * HIT_ENEMY
 end
 
 local function add_enemy(kind, wx, wy)
@@ -183,8 +230,9 @@ local function add_enemy(kind, wx, wy)
   s.visible = true
   s.flipH = (kind == 'bomber' or kind == 'lander')
   local e = { kind = kind, wx = wx, wy = wy, vx = 0, vy = 0, s = s,
-              hw = d.hw, hh = d.hh, pts = d.pts, t = 0,
+              hw = 0, hh = 0, pts = d.pts, t = 0,
               fire = rand(150, 350) / 100, target = nil, mode = 'patrol' }
+  fit_box(e)
   enemies[#enemies + 1] = e
   return e
 end
@@ -346,11 +394,15 @@ end
 local function step_bullets(ft)
   for i = #bullets, 1, -1 do
     local b = bullets[i]
+    local wx0 = b.wx
     b.wx = b.wx + b.vx * ft
     local hit = false
     for j = #enemies, 1, -1 do
       local e = enemies[j]
-      if math.abs(ddx(b.wx, e.wx)) < e.hw + 4 and math.abs(b.y - e.wy) < e.hh + 4 then
+      -- Sweep the segment the bullet travelled (plus its own half size) past
+      -- the enemy box; the end point alone would miss a fast bullet entirely.
+      if sweep_hit(ddx(wx0, e.wx), b.y - e.wy, ddx(b.wx, e.wx), b.y - e.wy,
+                   b.bhw, b.bhh, e.hw, e.hh) then
         hit = true
         if e.kind == 'pod' then
           award(e.pts)
@@ -428,10 +480,11 @@ local function lander_ai(e, ft)
         msg, msgTimer = "HUMANOID LOST", 1.2
       end
       e.kind = 'mutant'
-      e.hw, e.hh, e.pts = enemy_def('mutant').hw, enemy_def('mutant').hh, 150
+      e.pts = 150
       release(e.s)
       e.s = acquire(P.mutant)
       e.s.visible = true
+      fit_box(e)
       e.vx, e.vy = 0, 0
       e.mode = 'hunt'
       beep(240, 160)
@@ -449,10 +502,7 @@ local function mutant_ai(e, ft)
   e.fire = e.fire - ft * 60
   if e.fire <= 0 then
     e.fire = rand(90, 180)
-    local bs = acquire(P.bomb)
-    bs.visible = true
-    local bl = { wx = e.wx, wy = e.wy, vx = (dx / len) * 320, vy = (dy / len) * 320, s = bs, y = e.wy }
-    bombs[#bombs + 1] = bl
+    spawn_bomb(e.wx, e.wy, (dx / len) * 320, (dy / len) * 320)
     beep(260, 60)
   end
 end
@@ -463,9 +513,7 @@ local function bomber_ai(e, ft)
   e.fire = e.fire - ft * 60
   if e.fire <= 0 and math.abs(ddx(px, e.wx)) < 220 then
     e.fire = rand(120, 220)
-    local bs = acquire(P.bomb)
-    bs.visible = true
-    bombs[#bombs + 1] = { wx = e.wx, wy = e.wy + 12, vx = 0, vy = 210, s = bs, y = e.wy + 12 }
+    spawn_bomb(e.wx, e.wy + 12, 0, 210)
     beep(200, 60)
   end
 end
@@ -481,6 +529,8 @@ end
 local function step_enemies(ft)
   for i = #enemies, 1, -1 do
     local e = enemies[i]
+    local ex0, ey0 = e.wx, e.wy   -- where it was, for the swept player test
+
     if e.kind == 'lander' then lander_ai(e, ft)
     elseif e.kind == 'mutant' then mutant_ai(e, ft)
     elseif e.kind == 'bomber' then bomber_ai(e, ft)
@@ -496,6 +546,8 @@ local function step_enemies(ft)
           and humans[e.target].alive and humans[e.target].grabbed == e then
         -- never drop a carried human by culling
         e.wx = px + (ddx(e.wx, px) > 0 and W * 1.1 or -W * 1.1)
+        e.s.x = scrx(e.wx)
+        e.s.y = e.wy
       else
         release(e.s)
         table.remove(enemies, i)
@@ -506,17 +558,19 @@ local function step_enemies(ft)
       if e.kind == 'mutant' or e.kind == 'bomber' then
         e.s.flipH = ddx(px, e.wx) < 0
       end
-    end
 
-    -- player collision
-    if state == 'play' and invuln <= 0 then
-      if math.abs(ddx(e.wx, px)) < e.hw + PLAYER_HW and math.abs(e.wy - py) < e.hh + PLAYER_HH then
-        add_boom(e.wx, e.wy, false)
-        drop_human(e)
-        release(e.s)
-        table.remove(enemies, i)
-        kill_player()
-        return
+      -- player collision, swept so a fast enemy cannot skip past the ship
+      if state == 'play' and invuln <= 0 then
+        local dx0, dy0 = ddx(ex0, px), ey0 - py
+        local dx1, dy1 = ddx(e.wx, px), e.wy - py
+        if sweep_hit(dx0, dy0, dx1, dy1, e.hw, e.hh, PLAYER_HW, PLAYER_HH) then
+          add_boom(e.wx, e.wy, false)
+          drop_human(e)
+          release(e.s)
+          table.remove(enemies, i)
+          kill_player()
+          return
+        end
       end
     end
   end
@@ -525,6 +579,7 @@ end
 local function step_bombs(ft)
   for i = #bombs, 1, -1 do
     local b = bombs[i]
+    local wx0, y0 = b.wx, b.y
     b.wx = b.wx + b.vx * ft
     b.y = b.y + b.vy * ft
     b.s.x = scrx(b.wx)
@@ -533,7 +588,9 @@ local function step_bombs(ft)
     if b.y > GROUND_TOP + 10 then gone = true end
     if math.abs(ddx(b.wx, px)) > W * 1.1 then gone = true end
     if not gone and state == 'play' and invuln <= 0 then
-      if math.abs(ddx(b.wx, px)) < PLAYER_HW + 4 and math.abs(b.y - py) < PLAYER_HH + 4 then
+      -- swept, so a falling bomb cannot tunnel through the thin ship
+      if sweep_hit(ddx(wx0, px), y0 - py, ddx(b.wx, px), b.y - py,
+                   b.bhw, b.bhh, PLAYER_HW, PLAYER_HH) then
         gone = true
         add_boom(b.wx, b.y, false)
         kill_player()
@@ -587,7 +644,7 @@ local function step_waves(ft)
   end
 end
 
-local function update(ft)
+local function simulate(ft)
   if msgTimer > 0 then msgTimer = msgTimer - ft end
   if flash > 0 then flash = math.max(0, flash - ft * 3) end
 
@@ -732,7 +789,7 @@ local function draw_over()
   center_text("PRESS SPACE TO PLAY AGAIN", H / 2 + 46, colors.silver)
 end
 
-local function render()
+function draw()
   -- Wipe last frame's HUD: the board is a persistent render texture, so a
   -- canvas.clear() (transparent while canvas.front is on) is what keeps the
   -- overlay from smearing. The world is drawn by the engine underneath.
@@ -794,7 +851,12 @@ local function reset()
   enemies, bullets, bombs, booms = {}, {}, {}, {}
   flash = 0
   msg, msgTimer = "", 0
-  if ship == nil then ship = acquire(P.ship) end
+  if ship == nil then
+    ship = acquire(P.ship)
+    local shw, shh = sprite_half(ship)
+    PLAYER_HW = shw * HIT_PLAYER
+    PLAYER_HH = shh * HIT_PLAYER
+  end
   ship.visible = false
   place_humans(10)
   start_wave()
@@ -811,10 +873,13 @@ end
 high = 0
 reset()
 
-while cycle do
-  local ft = frametime()
-  if ft <= 0 then ft = 1 / 60 end
-  if ft > 0.05 then ft = 0.05 end
+-- The engine drives the frame from here: update(dt) steps the world, draw()
+-- draws it. (See docs/cycle.md; the old `while cycle do` loop is equivalent.)
+function update(dt)
+  local ft = dt
+  if ft == nil or ft <= 0 then ft = 1 / 60 end
+  if ft > 0.05 then ft = 0.05 end   -- bound a stalled frame, then scale time
+  ft = ft * SPEED                   -- SPEED > 1 makes the whole game run faster
 
   if iskeypressed('escape') then exit() end
 
@@ -824,6 +889,5 @@ while cycle do
     if iskeypressed('space') or iskeypressed('enter') then start_game() end
   end
 
-  update(ft)
-  render()
+  simulate(ft)
 end
