@@ -1,0 +1,39 @@
+--======================================================================
+--  engine_driven.tyro - main-thread update()/draw() callbacks.
+--
+--  The top-level chunk returns (there is no "while cycle do" loop), so the
+--  engine leaves the worker thread and drives update(dt)/draw() once per
+--  frame on the main thread. Each callback appends a line to
+--  engine_driven_out.txt, which is the read-out used by the check.
+--
+--  Run:  bin\tyro.exe tests\engine_driven.tyro --exit:5
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("engine_driven_out.txt", "w")
+if not out then
+  println("no out file")
+  exit()
+end
+
+frame = 0
+
+function update(dt)
+  frame = frame + 1
+  out:write("update " .. frame .. "\n")
+end
+
+function draw()
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+  canvas.color = colors.white
+  canvas.rectangle(10, 10, 100, 50, false)
+  out:write("draw " .. frame .. "\n")
+  if frame >= 5 then
+    out:close()
+    exit()
+  end
+end
+
+out:write("started\n")

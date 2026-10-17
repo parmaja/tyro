@@ -1,0 +1,37 @@
+--======================================================================
+--  engine_sprites.tyro - a sprite created in the top-level chunk is then
+--  moved from update() after the state was handed to the main thread. The
+--  sprite registry/proxy machinery must survive the handoff.
+--
+--  Run:  bin\tyro.exe tests\engine_sprites.tyro --exit:5
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("engine_sprites_out.txt", "w")
+if not out then
+  println("no out file")
+  exit()
+end
+
+player = Sprites.new("player")
+player.x = 0
+player.y = 100
+player.visible = false
+
+frame = 0
+
+function update(dt)
+  frame = frame + 1
+  player.x = player.x + 5
+  out:write("x=" .. player.x .. "\n")
+  if frame >= 3 then
+    out:close()
+    exit()
+  end
+end
+
+function draw()
+end
+
+out:write("started\n")

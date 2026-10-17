@@ -1,0 +1,30 @@
+--======================================================================
+--  engine_draw_only.tyro - only draw() is defined, no update(). The engine
+--  must take the state over and call draw() once per frame; update() is an
+--  absent global and must be ignored without error.
+--
+--  Run:  bin\tyro.exe tests\engine_draw_only.tyro --exit:5
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("engine_draw_only_out.txt", "w")
+if not out then
+  println("no out file")
+  exit()
+end
+
+frame = 0
+
+function draw()
+  frame = frame + 1
+  canvas.color = colors.green
+  canvas.rectangle(0, 0, 64, 64, true)
+  out:write("draw " .. frame .. "\n")
+  if frame >= 3 then
+    out:close()
+    exit()
+  end
+end
+
+out:write("started\n")

@@ -1,0 +1,36 @@
+--======================================================================
+--  engine_callback_error.tyro - update() raises on frame 2. The engine
+--  must catch the error (pcall), report it, keep the session alive and
+--  keep calling the callbacks; it must not crash or hang.
+--
+--  Run:  bin\tyro.exe tests\engine_callback_error.tyro --exit:4
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("engine_callback_error_out.txt", "w")
+if not out then
+  println("no out file")
+  exit()
+end
+
+frame = 0
+
+function update(dt)
+  frame = frame + 1
+  out:write("update " .. frame .. "\n")
+  if frame == 2 then
+    local broken = nil
+    broken.field = 1   -- runtime error, caught by the engine's pcall
+  end
+  if frame >= 4 then
+    out:close()
+    exit()
+  end
+end
+
+function draw()
+  out:write("draw " .. frame .. "\n")
+end
+
+out:write("started\n")

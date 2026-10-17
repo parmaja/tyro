@@ -1,0 +1,17 @@
+--======================================================================
+--  engine_idle.tyro - a script whose top-level chunk returns without
+--  defining update()/draw(). The engine must dispose its Lua state (release
+--  the finished worker) instead of keeping it, and must not crash.
+--
+--  Run:  bin\tyro.exe tests\engine_idle.tyro --exit:2
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("engine_idle_out.txt", "w")
+if not out then
+  println("no out file")
+  exit()
+end
+out:write("ran once\n")
+out:close()

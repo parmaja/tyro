@@ -553,6 +553,10 @@ type
     Files: TList;
     procedure DoError(S: string);
     procedure Run; override;
+    //Look up the global AName and pcall it on the main thread. AArgs arguments
+    //must already be on the stack (they are consumed); an absent or non-function
+    //global just drains the stack and is ignored. Errors are reported via DoError.
+    procedure CallGlobal(const AName: string; AArgs: Integer);
   protected
 
     //input & timing
@@ -596,6 +600,11 @@ type
     destructor Destroy; override;
     procedure Stop; override;
     function RunLine(const ALine: string; out AOutput: string): Boolean; override;
+    //Engine-driven mode: the top-level chunk returned normally and exposed
+    //update()/draw() globals. The engine calls these on the main thread each frame.
+    function HasEngineCallbacks: Boolean; override;
+    procedure EngineUpdate(ADeltaTime: Double); override;
+    procedure EngineDraw; override;
 
     procedure AddQueueObject(AQueueObject: TQueueObject); override;
     //Global environment hooks: unresolved globals resolve to sprites/controls by name
@@ -1764,7 +1773,7 @@ var
   aFile: TLuaFile;
 begin
   // Lua holds light-userdata/method pointers to these facade objects, so close
-  // the state before releasing them.
+  // the state before releasing them. Lua.Close is a no-op when State is nil.
   Lua.Close;
   //Any file still open is closed and released here; the closures that referenced
   //it died with the state, so nothing can call back into it afterwards.
@@ -1812,6 +1821,8 @@ var
   Msg: string;
 begin
   // A stopped script object may be run again from the interactive console.
+  if Lua.State = nil then
+    Exit;
   Lua.SetReady;
   //Publish the failure state for the CLI --exit lifecycle: the worker thread
   //reads this after the run and the Engine loop surfaces it as the exit code.
@@ -1829,8 +1840,46 @@ procedure TLuaScript.Stop;
 begin
   //abort the running Lua bytecode: HookCount calls luaL_error when
   //this state's status is terminated, and RunString returns on the next hook tick
-  Lua.SetTerminated;
+  if Lua.State <> nil then
+    Lua.SetTerminated;
   inherited;
+end;
+
+// Look up the global AName and pcall it. The caller pushes the arguments (AArgs
+// of them) first; an absent or non-function global drains the stack and returns.
+// The call itself lives in LuaClasses (TLuaHelper.CallGlobal).
+procedure TLuaScript.CallGlobal(const AName: string; AArgs: Integer);
+var
+  Msg: string;
+begin
+  if Lua.State = nil then
+    Exit;
+  if not Lua.State.CallGlobal(AName, AArgs, Msg) then
+    DoError(AName + ': ' + Msg);
+end;
+
+// The engine takes over only when the returned script defines at least one of
+// the frame callbacks. A script that never returns (while cycle do) keeps its
+// worker thread and never reaches this point.
+function TLuaScript.HasEngineCallbacks: Boolean;
+begin
+  Result := (Lua.State <> nil) and
+    (Lua.State.FunctionExists('update') or Lua.State.FunctionExists('draw'));
+end;
+
+procedure TLuaScript.EngineUpdate(ADeltaTime: Double);
+begin
+  if Lua.State = nil then
+    Exit;
+  Lua.State.PushNumber(ADeltaTime);
+  CallGlobal('update', 1);
+end;
+
+procedure TLuaScript.EngineDraw;
+begin
+  if Lua.State = nil then
+    Exit;
+  CallGlobal('draw', 0);
 end;
 
 // Runs a single console line on the persistent Lua state (same globals as the

@@ -1,0 +1,29 @@
+--======================================================================
+--  engine_update_only.tyro - only update() is defined, no draw(). The
+--  engine must take the state over (HasEngineCallbacks is true when either
+--  callback exists) and call update(dt) once per frame. The read-out shows
+--  update lines and no draw line.
+--
+--  Run:  bin\tyro.exe tests\engine_update_only.tyro --exit:5
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("engine_update_only_out.txt", "w")
+if not out then
+  println("no out file")
+  exit()
+end
+
+frame = 0
+
+function update(dt)
+  frame = frame + 1
+  out:write("update " .. frame .. "\n")
+  if frame >= 3 then
+    out:close()
+    exit()
+  end
+end
+
+out:write("started\n")

@@ -262,6 +262,15 @@ type
     //* The current worker. It owns the script clone it executes and frees it
     //* with the thread, hence a run is always a fresh clone + a fresh thread.
     FScriptThread: TTyroScriptThread;
+    //* Engine-driven mode. When the worker's top-level chunk returns normally
+    //* and the script defines update()/draw(), the engine keeps the worker's
+    //* script (and its Lua state) alive and calls those callbacks on the main
+    //* thread each frame (see OnScriptFinished). False while a script drives its
+    //* own loop from the worker (while cycle do), which never returns. Main thread.
+    FEngineDriven: Boolean;
+    //* A finished run exposed no frame callbacks (or errored): the main loop
+    //* releases its worker, which closes the Lua state. Main thread.
+    FPendingDispose: Boolean;
     //Command line script, should run in main thread only
     FScriptREPL: TTyroScript;
     //F4 script picker: lists the *.tyro and *.lua files of the current directory;
@@ -457,6 +466,13 @@ type
     //* AScript was stopped while waiting, termination is polled here because
     //* the Lua debug hook cannot fire while a C function blocks the thread.
     function WaitToNextFrame(AScript: TTyroScript): Boolean;
+
+    //* Called on the main thread (queued by the worker) after a script's
+    //* top-level chunk returned. Decides the run's fate: when the script exposes
+    //* update()/draw() the engine keeps its state and drives it from the main
+    //* loop (FEngineDriven); otherwise (or on a Lua error) the completed worker
+    //* is released, which closes the Lua state. See TTyroScriptThread.Execute.
+    procedure OnScriptFinished(AScript: TTyroScript);
 
     //* Register the queue object a script thread is about to block on, so Stop
     //* can signal its event and unblock the thread (e.g. console read()).
@@ -740,6 +756,25 @@ begin
     end
     else
     begin
+      // Engine-driven mode: the top-level chunk returned but the script defined
+      // update()/draw(), so run them here on the main thread. They queue their
+      // drawing commands like any script code, and the ProcessQueue pass below
+      // drains them in this same frame. pause() freezes the scene (the script's
+      // own update is part of that scene, so it is skipped while paused).
+      if FEngineDriven and (FScriptThread <> nil) then
+      begin
+        if FScriptThread.Script.Stopped then
+          //exit() (or Stop) ended the run: release the worker and its state.
+          FPendingDispose := True
+        else if not ScriptPaused then
+        begin
+          FScriptThread.Script.EngineUpdate(RayLib.GetFrameTime());
+          //update() may have called exit(); do not call into a terminated state.
+          if (not FScriptThread.Script.Stopped) and (not ScriptPaused) then
+            FScriptThread.Script.EngineDraw;
+        end;
+      end;
+
       // Queue work and media updates are independent of presentation. Hidden
       // mode still owns a live graphics/audio context and must service accepted
       // script commands before --exit can shut it down.
@@ -830,7 +865,16 @@ begin
       //session; a screenshot armed here is captured at the next present.
       AutoLifecycle;
     end;
+    //Run the worker->main-thread notifications (OnScriptFinished) first, so a
+    //run that just ended is reflected in the flags before they are acted on.
     CheckSynchronize;
+    //A finished run that exposed no frame callbacks (or errored) is released
+    //here, which closes its Lua state. Done outside CheckSynchronize so the
+    //worker (the source of the notification) is never freed from its own
+    //callback. Engine-driven runs keep their worker and are released on the
+    //next run/Stop.
+    if FPendingDispose then
+      StopScriptThread;
     {$ifdef FPC}
     {$else}
     //YieldProcessor;
@@ -906,6 +950,11 @@ end;
 function TTyroEngine.WaitToNextFrame(AScript: TTyroScript): Boolean;
 begin
   Result := True;
+  //An engine-driven script runs its update()/draw() on the main thread; 'cycle'
+  //there would wait for a frame this very thread has to present, so it must not
+  //block. Treat it as "no more cycles", ending any stray loop.
+  if AScript.Handoff then
+    Exit(False);
   //Reading 'cycle' is the commit point of the previous body: release the
   //implicit hold so the main loop draws everything queued since the last read
   //(also when no window is up, so the hold can never stay stuck).
@@ -1402,6 +1451,11 @@ begin
   Limit := TInterlocked.Add(FQueueLimit, 0);
   if Limit <= 0 then
     Exit;
+  //Engine-driven callbacks run on the main thread, which is also the consumer
+  //(ProcessQueue). Waiting for the queue to drain here would deadlock, so
+  //behave as unlimited in that mode.
+  if (FScriptThread <> nil) and (FScriptThread.Script <> nil) and FScriptThread.Script.Handoff then
+    Exit;
   //A held group (enter()/leave() or the automatic 'cycle' hold) is
   //built before it is drawn: ProcessQueue executes nothing while a hold is
   //open, so waiting here would deadlock the script before it could leave().
@@ -1466,6 +1520,11 @@ end;}
 
 procedure TTyroEngine.StopScriptThread;
 begin
+  //Releasing the worker also releases any engine-driven script it still holds
+  //(its script clone, and with it the Lua state). Drop the mode flags first so
+  //no frame can call into a script that is on its way out.
+  FEngineDriven := False;
+  FPendingDispose := False;
   if FScriptThread = nil then
     Exit;
   FScriptThread.Terminate;
@@ -1477,6 +1536,36 @@ begin
     CheckSynchronize(10);
   FScriptThread.WaitFor;
   FreeAndNil(FScriptThread);
+end;
+
+//Runs on the main thread, queued by the worker (TTyroScriptThread.Execute) once
+//its top-level chunk returned. The worker is done executing Lua, so from here on
+//the main thread is the only one touching that lua_State. When the script exposed
+//update()/draw() the engine keeps the completed worker alive and calls the
+//callbacks each frame (FEngineDriven); otherwise the state is disposed.
+procedure TTyroEngine.OnScriptFinished(AScript: TTyroScript);
+begin
+  //The engine is going away, or a rerun already replaced/stopped this worker:
+  //the notification is stale (its Script may even have been freed) so drop it.
+  if IsTerminated then
+    Exit;
+  if (FScriptThread = nil) or (FScriptThread.Script <> AScript) then
+    Exit;
+  if AScript.LastError <> '' then
+  begin
+    //The chunk raised: the error was already surfaced, just dispose the state.
+    FPendingDispose := True;
+    Exit;
+  end;
+  if AScript.HasEngineCallbacks then
+  begin
+    //Active is already False (the top-level chunk returned); Handoff keeps the
+    //script's queued drawing commands admitted while the engine drives it.
+    AScript.Handoff := True;
+    FEngineDriven := True;
+  end
+  else
+    FPendingDispose := True;
 end;
 
 procedure TTyroEngine.LoadConfig;
@@ -2837,7 +2926,8 @@ procedure TTyroEngine.State_Command(Params: TStrings);
 begin
   if not Active then
     Exit;
-  if (FScriptThread <> nil) and FScriptThread.Active then
+  if (FScriptThread <> nil) and
+     ((FScriptThread.Active) or ((FScriptThread.Script <> nil) and FScriptThread.Script.Handoff)) then
     Console.Writeln(ScriptFile + ' is running')
   else
     Console.Writeln(ScriptFile + ' is loaded');

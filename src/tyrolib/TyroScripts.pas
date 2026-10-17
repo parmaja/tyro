@@ -657,10 +657,15 @@ type
   TTyroScript = class abstract(TObject)
   private
     FActive: LongInt;
+    FStopRequested: LongInt;
+    FHandoff: LongInt;
     FFileName: string;
     FStarted: LongInt;
     function GetActive: Boolean;
  function GetStarted: Boolean;
+    function GetStopped: Boolean;
+    function GetHandoff: Boolean;
+    procedure SetHandoff(AValue: Boolean);
     procedure ExecuteQueueObject; //this for sync do not call it
     procedure ExecuteQueueObjectNoFree; //this for sync do not call it
   protected
@@ -672,6 +677,7 @@ type
     //* the thread marks itself Completed, read once by the main thread during
     //* the --exit lifecycle. Not used by the interactive REPL (RunLine).
     FLastError: string;
+    FKeepAlive: Boolean;
 
     procedure RunQueueObject(AQueueObject: TQueueObject);
     procedure RunQueueObjectNoFree(AQueueObject: TQueueObject);
@@ -693,11 +699,32 @@ type
     //(e.g. x = 5) survive across lines; used by the console REPL. AOutput is
     //the error message when Result = False.
     function RunLine(const ALine: string; out AOutput: string): Boolean; virtual;
+
+    //True when the finished script exposes engine-driven callbacks (update/
+    //draw) and should be kept alive on the main thread instead of disposing its
+    //state. Called on the main thread after the worker returned normally.
+    function HasEngineCallbacks: Boolean; virtual;
+    //Called once per frame on the main thread when HasEngineCallbacks is True.
+    //Implementations queue drawing commands like any other script code.
+    procedure EngineUpdate(ADeltaTime: Double); virtual;
+    procedure EngineDraw; virtual;
+
     property FileName: string read FFileName write FFileName; //TODO FFileName
     property Active: Boolean read GetActive;
     property Started: Boolean read GetStarted; //started true even after stopped
+    //* Stop() was asked for (Lua exit(), engine Stop). Distinct from Active,
+    //* which is already False once a script returns normally: the engine uses
+    //* this to tell an engine-driven script that ended its own run from one that
+    //* simply finished its top-level chunk.
+    property Stopped: Boolean read GetStopped;
+    //* The engine took the script's state over for main-thread update()/draw()
+    //* callbacks. Active is already False by then (the top-level chunk returned),
+    //* so queue admission (AddQueueObject) and the drawing-cycle gate consult
+    //* this flag to keep treating the script as current.
+    property Handoff: Boolean read GetHandoff write SetHandoff;
     property LastError: string read FLastError; //'' when the last run was clean
     property Source: TStringList read FSource; //the loaded script lines
+    property KeepAlive: Boolean read FKeepAlive write FKeepAlive;
   end;
 
   { TTyroScriptThread }
@@ -766,10 +793,22 @@ begin
 end;
 
 procedure TTyroScriptThread.Execute;
+var
+  aScript: TTyroScript;
+  aEngine: TTyroEngine;
 begin
   try
     Script.Start;
   finally
+    // Script finished normally (or was stopped). If it finished without being
+    // terminated and should be kept alive for callbacks, notify engine.
+    // Capture the targets in locals: the queued method runs later on the main
+    // thread and must not read this thread's fields, which may already be freed
+    // by then. The engine re-validates the script against its current worker.
+    aScript := Script;
+    aEngine := Engine;
+    if (aScript <> nil) and not Terminated and aScript.KeepAlive and (aEngine <> nil) then
+      TThread.Queue(TThread.CurrentThread, procedure begin aEngine.OnScriptFinished(aScript); end);
     // TThread.Finished is a plain Boolean written by the worker. Publish
     // completion atomically for lifecycle decisions made by the main thread.
     TInterlocked.Exchange(FCompleted, 1);
@@ -1970,6 +2009,24 @@ begin
   Result := TInterlocked.Add(FStarted, 0) <> 0;
 end;
 
+function TTyroScript.GetStopped: Boolean;
+begin
+  Result := TInterlocked.Add(FStopRequested, 0) <> 0;
+end;
+
+function TTyroScript.GetHandoff: Boolean;
+begin
+  Result := TInterlocked.Add(FHandoff, 0) <> 0;
+end;
+
+procedure TTyroScript.SetHandoff(AValue: Boolean);
+begin
+  if AValue then
+    TInterlocked.Exchange(FHandoff, 1)
+  else
+    TInterlocked.Exchange(FHandoff, 0);
+end;
+
 procedure TTyroScript.ExecuteQueueObject;
 begin
   QueueObject.Execute;
@@ -2023,7 +2080,10 @@ begin
   try
     // A stopped script must not leave Engine-thread work behind for a later
     // interactive run. Ownership remains here when the request is rejected.
-    if GetActive and (Engine <> nil) and Engine.Running then
+    // An engine-driven script (Handoff) is admitted even though Active is
+    // already False: the engine keeps calling its update()/draw() on the main
+    // thread, and those callbacks keep queueing drawing commands.
+    if (GetActive or GetHandoff) and (Engine <> nil) and Engine.Running then
     begin
       //Stamp the enqueue time (before the queue lock is contended) so the
       //engine can report how long the script stalled between two commands
@@ -2051,6 +2111,11 @@ constructor TTyroScript.Create(ASource: string);
 begin
   inherited Create;
   TInterlocked.Exchange(FActive, 1);
+  //A script that returns normally may hand its state to the engine for
+  //update()/draw() callbacks. KeepAlive only enables the notification; the
+  //engine disposes the state when no callbacks are present (see
+  //TTyroScript.HasEngineCallbacks).
+  FKeepAlive := True;
   FSource := TStringList.Create;
   FSource.Text := ASource;
   Init;
@@ -2064,12 +2129,18 @@ end;
 
 procedure TTyroScript.Stop;
 begin
+  TInterlocked.Exchange(FStopRequested, 1);
+  //A stop ends the run for good: drop the handoff so a late callback frame (or
+  //a queued command) is not admitted after exit()/Stop.
+  TInterlocked.Exchange(FHandoff, 0);
   TInterlocked.Exchange(FActive, 0);
 end;
 
 procedure TTyroScript.Start;
 begin
   TInterlocked.Exchange(FStarted, 1);
+  TInterlocked.Exchange(FStopRequested, 0);
+  TInterlocked.Exchange(FHandoff, 0);
   TInterlocked.Exchange(FActive, 1);
   try
     BeforeRun;
@@ -2097,6 +2168,19 @@ function TTyroScript.RunLine(const ALine: string; out AOutput: string): Boolean;
 begin
   Result := False;
   AOutput := '';
+end;
+
+function TTyroScript.HasEngineCallbacks: Boolean;
+begin
+  Result := False;
+end;
+
+procedure TTyroScript.EngineUpdate(ADeltaTime: Double);
+begin
+end;
+
+procedure TTyroScript.EngineDraw;
+begin
 end;
 
 initialization
