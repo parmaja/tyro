@@ -53,7 +53,7 @@ type
   TTyroTerminal = class;
 
   { EOnTerminalInput - Event handler for terminal input completion }
-  EOnTerminalInput = procedure(ATerminal: TTyroTerminal; Input: utf8string) of object;
+  EOnTerminalInput = procedure(Input: utf8string) of object;
 
   { EOnTerminalInputChange - Event handler for input buffer changes }
   EOnTerminalInputChange = procedure(ATerminal: TTyroTerminal; const InputData: utf8string) of object;
@@ -957,7 +957,7 @@ begin
   ClearKeyRepeat;
   FInputOn := False;
   if Assigned(FOnInput) then
-    FOnInput(Self, s);
+    FOnInput(s);
   Invalidate;
 end;
 

@@ -186,7 +186,7 @@ type
     Blocked: Integer;
   end;
 
-  TConsoleReadEvent = procedure(AConsole: TTyroTerminal; AInput: UTF8String) of object;
+  TConsoleReadEvent = procedure(AInput: UTF8String) of object;
 
   { TTyroMain }
 
@@ -390,7 +390,7 @@ type
     //* same step without starting a worker.
     procedure SetTitle(AValue: string);
     procedure ClearScriptControls;
-    procedure ConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
+    procedure ConsoleInput(AInput: UTF8String);
     procedure ExecuteCommand(ACommand: string);
     //If the word typed is not a builtin command it is treated as a one line
     //Lua script run on FScriptREPL's Lua state, so variables assigned in the
@@ -484,7 +484,7 @@ type
     procedure CancelWaiting;
 
     procedure StartConsoleRead;
-    procedure StartConsoleReadEx(ACallback: TConsoleReadEvent);
+    procedure StartConsoleReadEx(const Prompt: string; ACallback: TConsoleReadEvent);
     procedure CancelConsoleRead(AReader: TReadConsoleObject);
     //* Request a screenshot of the next presented frame. Safe to call from any
     //* thread (e.g. the Lua script thread); the file is written right after
@@ -2368,12 +2368,12 @@ begin
   ShowEditor;
 end;
 
-procedure TTyroEngine.ConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
+procedure TTyroEngine.ConsoleInput(AInput: UTF8String);
 begin
   // The terminal echoes the submitted command line itself, so only execute it
   if Assigned(FReadCallback) then
   begin
-    FReadCallback(AConsole, AInput);
+    FReadCallback(AInput);
     Exit;
   end;
 
@@ -2703,6 +2703,7 @@ function TTyroEngine.RunLuaLine(const ALine: string): Boolean;
 var
   aScriptType: TScriptType;
   Output: string;
+  aError: Boolean;
 begin
   Result := False;
   Output := '';
@@ -2719,13 +2720,12 @@ begin
     FScriptREPL := aScriptType.ScriptClass.Create('');
   end;
 
-  if FScriptREPL.RunLine(ALine, Output) then
-    Result := True
-  else if Output <> '' then
+  Result := FScriptREPL.RunLine(ALine, Output);
+  if Output <> '' then
   begin
-    Console.Writeln(Output);
-    Console.Writeln('');
-    Result := True; //handled: it was the Lua line that failed
+    Console.Writeln(sPromptChar + Output);
+    //Console.Writeln('');
+    //Result := True; //handled: it was the Lua line that failed
   end;
 end;
 
@@ -2760,11 +2760,12 @@ begin
   Console.StartRead(sPromptChar);
 end;
 
-procedure TTyroEngine.StartConsoleReadEx(ACallback: TConsoleReadEvent);
+procedure TTyroEngine.StartConsoleReadEx(const Prompt: string; ACallback: TConsoleReadEvent);
 begin
   //console.read() from a script: make sure the console is visible and focused
   //so the user can actually type a reply. (Do not call StartConsoleRead here;
   //it would clear the callback we are installing.)
+  CheckSynchronize;
   if not Console.Visible then
   begin
     Console.CharWidth := Res.Font.Width;
@@ -2774,7 +2775,10 @@ begin
   Console.Focused := True;
   FReadCallback := ACallback;
   Console.OnInput := ACallback;
-  Console.StartRead(sPromptChar);
+  if Prompt <> '' then
+    Console.StartRead(Prompt)
+  else
+    Console.StartRead(sPromptChar);
 end;
 
 procedure TTyroEngine.CancelConsoleRead(AReader: TReadConsoleObject);

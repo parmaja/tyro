@@ -83,8 +83,6 @@ type
   public
     function Print_func(L: Plua_State): integer; cdecl;
     function PrintLn_func(L: Plua_State): integer; cdecl;
-    function PrintOut_func(L: Plua_State): integer; cdecl;
-    function PrintLnOut_func(L: Plua_State): integer; cdecl;
     function Show_func(L: Plua_State): integer; cdecl;
     function Read_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
@@ -1543,8 +1541,8 @@ begin
   Lua.State.Register('queue', QueueLua); //Should be last one
 
   //global functions
-  Lua.State.RegisterGlobal('print', Console.PrintOut_func);
-  Lua.State.RegisterGlobal('println', Console.PrintLnOut_func);
+  Lua.State.RegisterGlobal('print', Console.Print_func);
+  Lua.State.RegisterGlobal('println', Console.PrintLn_func);
 
   //console
   Lua.State.Register('console', 'print', Console, Console.Print_func);
@@ -1912,7 +1910,8 @@ var
         lua_pop(Lua.State, 1);
       end;
       if S <> '' then
-        Log.WriteLn(S);
+        AOutput := S;
+        //Log.WriteLn(S);
       //Discard the converted return values from the persistent Lua stack.
       lua_pop(Lua.State, n);
     end
@@ -2216,42 +2215,6 @@ begin
     s := s + L.ToString(i);
   end;
   FScript.AddQueueObject(TPrintObject.Create(s, True));//TODO
-  Result := 0;
-end;
-
-function TLuaConsole.PrintOut_func(L: Plua_State): integer; cdecl;
-var
-  i, c: integer;
-  s: string;
-begin
-  c := L.ArgsCount;
-  s := '';
-  for i := 1 to c do
-  begin
-    if i > 1 then
-      s := s + #9;
-    s := s + L.ToString(i);
-  end;
-  FScript.AddQueueObject(TPrintObject.Create(s, False));
-  FScript.AddQueueObject(TOutputPrintObject.Create(s, False));
-  Result := 0;
-end;
-
-function TLuaConsole.PrintLnOut_func(L: Plua_State): integer; cdecl;
-var
-  i, c: integer;
-  s: string;
-begin
-  c := L.ArgsCount;
-  s := '';
-  for i := 1 to c do
-  begin
-    if i > 1 then
-      s := s + #9;
-    s := s + L.ToString(i);
-  end;
-  FScript.AddQueueObject(TPrintObject.Create(s, True));
-  FScript.AddQueueObject(TOutputPrintObject.Create(s, True));
   Result := 0;
 end;
 

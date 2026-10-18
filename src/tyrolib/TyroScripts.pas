@@ -66,46 +66,46 @@ type
     procedure DoExecute; override;
   end;
 
-   { TShowConsoleObject }
+  { TShowConsoleObject }
 
-    TShowConsoleObject = class(TQueueObject)
-    public
-      fX, fY: Integer;
-      fW, fH: Integer;
-      constructor Create(AX, AY: Integer); overload;
-      constructor Create(AX, AY, AW, AH: Integer); overload;
-      procedure DoExecute; override;
-    end;
+  TShowConsoleObject = class(TQueueObject)
+  public
+    fX, fY: Integer;
+    fW, fH: Integer;
+    constructor Create(AX, AY: Integer); overload;
+    constructor Create(AX, AY, AW, AH: Integer); overload;
+    procedure DoExecute; override;
+  end;
 
-   { TShowOutputObject }
+  { TShowOutputObject }
 
-   TShowOutputObject = class(TQueueObject)
-   public
-     fX, fY: Integer;
-     fW, fH: Integer;
-     constructor Create(AX, AY: Integer); overload;
-     constructor Create(AX, AY, AW, AH: Integer); overload;
-     procedure DoExecute; override;
-   end;
+  TShowOutputObject = class(TQueueObject)
+  public
+    fX, fY: Integer;
+    fW, fH: Integer;
+    constructor Create(AX, AY: Integer); overload;
+    constructor Create(AX, AY, AW, AH: Integer); overload;
+    procedure DoExecute; override;
+  end;
 
-   { THideOutputObject }
+  { THideOutputObject }
 
-   THideOutputObject = class(TQueueObject)
-   public
-     procedure DoExecute; override;
-   end;
+  THideOutputObject = class(TQueueObject)
+  public
+    procedure DoExecute; override;
+  end;
 
-   { TReadConsoleObject }
+  { TReadConsoleObject }
 
   TReadConsoleObject = class(TQueueObject)
   public
-     Prompt: string;
-     ResultString: string;
+    Prompt: string;
+    ResultString: string;
     constructor Create(APrompt: string);
     destructor Destroy; override;
     procedure DoExecute; override;
     procedure Cancel; override;
-    procedure HandleConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
+    procedure HandleConsoleInput(AInput: UTF8String);
   end;
 
    { TCreateControlObject }
@@ -944,20 +944,15 @@ end;
 
 procedure TReadConsoleObject.DoExecute;
 begin
-  if Cancelled then
-  begin
-    SetEvent;
-    Exit;
-  end;
   // Register before exposing the callback. Otherwise shutdown can happen
   // after Synchronize returns but before the script thread enters Wait.
   if Engine.RegisterWaiting(Self) then
-    Engine.StartConsoleReadEx(HandleConsoleInput)
+    Engine.StartConsoleReadEx(Prompt, HandleConsoleInput)
   else
     SetEvent;
 end;
 
-procedure TReadConsoleObject.HandleConsoleInput(AConsole: TTyroTerminal; AInput: UTF8String);
+procedure TReadConsoleObject.HandleConsoleInput(AInput: UTF8String);
 begin
   ResultString := AInput;
   // Re-arm for built-in command mode
@@ -1284,7 +1279,11 @@ end;
 procedure TQueueObject.Execute;
 begin
   if Cancelled then
+  begin
+    SetEvent;
     Exit;
+  end;
+
   try
     DoExecute;
   finally

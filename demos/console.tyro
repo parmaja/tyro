@@ -5,9 +5,10 @@ console.margin = 10
 console.borderColor = red
 --console.height = 20
 console.show(50, 50, 600, 400);
-console.print('Hello World');
-x = console.read();
-log(x)
+console.println('Hello World');
+x = console.read("Enter number: ");
+console.println(tonumber(x)*2);
+--log(x)
 --for i = 1,10 do
 --    console.print(i.."\r\n")
 --end
