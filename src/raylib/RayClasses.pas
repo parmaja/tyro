@@ -253,12 +253,9 @@ end;
 
 procedure TRayFont.LoadFromFile(FileName: utf8string; FontSize: Integer);
 begin
-  if SameText(ExtractFileExt(FileName), '.bdf') then
-  begin
-    LoadFromBDF(FileName, FontSize);
-    exit;
-  end;
-  if SysUtils.FileExists(FileName) then
+  if SameText(ExtractFileExt(FileName), '.bdf') then //while RayLib doesn't load it (idk why)
+    LoadFromBDF(FileName, FontSize)
+  else if SysUtils.FileExists(FileName) then
   begin
     Unload;
     if FontSize = 0 then
@@ -266,7 +263,7 @@ begin
     else
       Data := RayLib.LoadFontEx(PUTF8Char(FileName), FontSize, nil, 255);
     RefCount := False;
-    if Data.Texture.ID<=2 then
+    if Data.Texture.ID <= 2 then
       Log.WriteLn('Fail to load font: ' + FileName);
     //GenTextureMipmaps(Data.texture);
     SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);

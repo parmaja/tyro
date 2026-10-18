@@ -1,0 +1,19 @@
+@echo off
+if exist ..\bin\tyro.exe (del ..\bin\tyro.exe)
+
+lazbuild --build-mode=Release tyro.lpr -r -B
+if errorlevel 1 goto erroroccurred
+
+goto noerrors
+
+:erroroccurred
+echo ???????????????????
+echo    Error compile
+echo ???????????????????
+pause
+goto :EOF
+:noerrors
+echo #######################
+echo    Compile completed
+echo #######################
+pause

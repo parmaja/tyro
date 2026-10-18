@@ -1107,7 +1107,7 @@ begin
   Config := TConfFile.Create;
   Theme := TTyroTheme.Create;
   Font := TRayFont.Create;
-  {$include 'font.inc'}
+  {$include 'tyrofont.inc'}
   LoadConfig;
 end;
 

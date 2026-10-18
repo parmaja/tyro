@@ -76,3 +76,4 @@ __recovery/
 /tests/*.log
 /ref
 /games/res
+/release
