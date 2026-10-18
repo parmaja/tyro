@@ -125,7 +125,7 @@ type
 
   TTyroLayoutStates = set of TTyroLayoutState;
 
-  TAlign = (alNone, alLeft, alTop, alRight, alBottom, alClient);
+  TAlign = (alNone, alCenter, alLeft, alTop, alRight, alBottom, alClient);
   TBorder = (brdNone, brdThin, brdThick, brdSizable);
 
   TTyroResizeSide = (rsLeft, rsRight, rsTop, rsBottom);

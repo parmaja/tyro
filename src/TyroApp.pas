@@ -273,7 +273,7 @@ begin
 
   ScriptFile := CorrectPath(ExpandToPath(Arguments.ReadString(''), Res.WorkPath)); //File come without switch name
 
-  if SysUtils.FileExists(ScriptFile) or SysUtils.DirectoryExists(ScriptFile)  then
+  if (ScriptFile <> '') and (SysUtils.FileExists(ScriptFile) or SysUtils.DirectoryExists(ScriptFile)) then
     Engine.ScriptFile := ScriptFile;
 
   if (Engine.ScriptFile = '') or SysUtils.DirectoryExists(ScriptFile) or Arguments.ReadSwitch('-window', true) or Arguments.ReadSwitch('-w', true) then

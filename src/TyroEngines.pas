@@ -1571,10 +1571,14 @@ end;
 procedure TTyroEngine.LoadConfig;
 var
   aColor: string;
+  aRunFile: string;
 begin
   with Res do
   begin
     FPS := Config.ReadInteger('fps', cFramePerSeconds);
+    aRunFile := ExpandToPath(Config.ReadString('run', ScriptFile), Res.WorkPath);
+    if (aRunFile <> '') and (SysUtils.FileExists(aRunFile)) then
+      ScriptFile := aRunFile;
     IsDebug := Config.ReadBool('debug', IsDebug);
     aColor := Config.ReadString('backcolor', '');
     if aColor <> '' then
@@ -1648,6 +1652,8 @@ begin
   Output.Important := True;
   Output.Name := 'Output';
   Output.BoundsRect := Rect(0, 0, Width, Height);
+  Output.Margin:= 5;
+  Output.Padding:= 5;
   Output.Align := alClient;
   Output.Show;
 
@@ -2854,6 +2860,8 @@ end;
 
 procedure TTyroEngine.Run_Command(Params: TStrings);
 begin
+  HideConsole;
+  HideEditor;
   RunScriptThread;
 end;
 
