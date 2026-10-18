@@ -1730,6 +1730,8 @@ begin
 end;
 
 procedure TTyroEngine.PrepareWindow(AWidth, AHeight: Integer);
+var
+  Icon: RayLib.TImage;
 begin
   if AWidth = 0 then
     raise exception.Create('Screen width can not be 0');
@@ -1739,6 +1741,12 @@ begin
   //Do not use FLAG_VSYNC_HINT it block the other threads, or use YieldProcess, TODO
   RayLib.SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   RayLib.InitWindow(AWidth, AHeight, PUTF8Char(UTF8String(Title)));
+  if SysUtils.FileExists(Res.AppPath + 'tyro.png') then
+  begin
+    Icon := RayLib.LoadImage(PUTF8Char(PUTF8String(Res.AppPath + 'tyro.png')));
+    SetWindowIcon(icon);
+    UnloadImage(icon);
+  end;
   FWidth := AWidth;
   FHeight := AHeight;
   //Board is a render-texture: script draw commands run inside Board.BeginDraw
@@ -2705,7 +2713,6 @@ var
   Output: string;
   aError: Boolean;
 begin
-  Result := False;
   Output := '';
   if FScriptREPL = nil then
   begin

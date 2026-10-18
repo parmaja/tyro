@@ -59,7 +59,7 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
-        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_ExeOutput>..\bin</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -108,14 +108,11 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <Manifest_File>(None)</Manifest_File>
-        <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <DCC_ExeOutput>..\bin</DCC_ExeOutput>
         <Debugger_DebugSourcePath>D:\lab\pascal\tyro\src\tyrolib\;$(Debugger_DebugSourcePath)</Debugger_DebugSourcePath>
         <DCC_DUPLICATE_CTOR_DTOR>false</DCC_DUPLICATE_CTOR_DTOR>
         <Debugger_RunParams>&quot;D:\lab\pascal\tyro\demos\shader_demo.tyro&quot;</Debugger_RunParams>
@@ -153,7 +150,28 @@
                 <Source>
                     <Source Name="MainSource">tyro.dpr</Source>
                 </Source>
-                <Excluded_Packages/>
+                <Excluded_Packages>
+                    <Excluded_Packages Name="w:\system\win32\dwsLibDesignOnly.bpl">DelphiWebScript Runtime</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\cseLib.bpl">(untitled)</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\csLibDesign.bpl">CS Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\cseLibDesign.bpl">CSE Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\csaLibDesign.bpl">CSE Accounts Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\cposLibDesign.bpl">CS POS Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\cseMainLibDesign.bpl">CSE Main Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\csrLibDesign.bpl">CSE Archives Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\agnLibDesign.bpl">CSE Agneda Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\srvLibDesign.bpl">CSE Services Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\grntLibDesign.bpl">CSE Guarantee Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\stcLibDesign.bpl">CSE Stocks Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\smpsLibDesign.bpl">CSE Simple Stocks Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\ordLibDesign.bpl">CSE Orders Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\salLibDesign.bpl">CSE Salary Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\medLibDesign.bpl">CSE Medicals Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\dasLibDesign.bpl">CSE DATA SYNC Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\cdbaDesign.bpl">CSE DBAdmin Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\trsLibDesign.bpl">CSE Tours Lib</Excluded_Packages>
+                    <Excluded_Packages Name="W:\system\win32\cspLibDesign.bpl">CSE Protection Lib</Excluded_Packages>
+                </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="5"/>
             <Platforms>

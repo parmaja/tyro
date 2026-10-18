@@ -150,9 +150,9 @@ EditViewName=c:\program files (x86)\embarcadero\studio\37.0\SOURCE\RTL\SYS\Syste
 
 [ClosedView_RDpcbGFiXHBhc2NhbFx0eXJvXHNyY1x0eXJvbGliXFR5cm9MdWEucGFz]
 Module=D:\lab\pascal\tyro\src\tyrolib\TyroLua.pas
-CursorX=111
-CursorY=96
-TopLine=1
+CursorX=7
+CursorY=4631
+TopLine=4617
 LeftCol=1
 Elisions=
 Bookmarks=
@@ -600,9 +600,9 @@ EditViewName=D:\lab\pascal\tyro\src\raylib\RayLib.pas
 
 [ClosedView_ZDpcbGFiXHBhc2NhbFxtaW5pbGliXHNvY2tldFxzb3VyY2VcbW5JY2VDYXN0cy5wYXM=]
 Module=d:\lab\pascal\minilib\socket\source\mnIceCasts.pas
-CursorX=1
-CursorY=336
-TopLine=326
+CursorX=5
+CursorY=1145
+TopLine=1135
 LeftCol=1
 Elisions=
 Bookmarks=

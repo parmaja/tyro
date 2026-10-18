@@ -4561,6 +4561,12 @@ begin
       L.PushString((ctrl as TTyroCaptionControl).Caption);
       Result := 1;
     end;
+  end
+  else
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
   end;
 end;
 
@@ -4619,6 +4625,12 @@ begin
       L.PushBoolean((ctrl as TTyroCheckBox).Checked);
       Result := 1;
     end;
+  end
+  else
+  begin
+    L.PushNil;
+    Result := 1;
+    Exit;
   end;
 end;
 
