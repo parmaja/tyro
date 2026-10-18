@@ -1,6 +1,10 @@
 @echo off
 
-7z a "..\release\tyro-%DATE:~-4%-%DATE:~4,2%-%DATE:~7,2%.7z" @..\bin\release.conf
+set file=tyro-%DATE:~-4%-%DATE:~4,2%-%DATE:~7,2%-alpha.7z
+cd ..\bin
+7z a -tzip "..\release\%file%" @release.conf
+cd ..
+7z a -tzip "release\%file%" @games\games.conf
 goto noerrors
 
 :erroroccurred
