@@ -23,14 +23,31 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
+  {$IFDEF MSWINDOWS}
+  Windows,
+  {$ENDIF}
   TyroApp, TyroEditors, Melodies, TyroLua, TyroScripts, TyroControls,
   TyroTerminal, TyroSounds;
 
 {$R *.res}
 
+var
+  Engineless: Boolean;
+
 begin
+  Engineless := False;
   Application := TTyroApplication.Create;
   Application.Title := 'Tyro';
   Application.Run;
+  Engineless := Application.Engineless;
   Application.Free;
+
+  {$IFDEF MSWINDOWS}
+  //A console-only run (--help, --fuse) never creates the engine, and some
+  //engine-related unit finalizations fault when the engine is absent. The
+  //console was already flushed and closed by CloseConsole, so exit directly
+  //with the recorded exit code instead of running those finalizations.
+  if Engineless then
+    ExitProcess(ExitCode);
+  {$ENDIF}
 end.

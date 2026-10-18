@@ -1,6 +1,6 @@
 @echo off
 
-7z a "..\release\tyro-%DATE:~-4%-%DATE:~4,2%-%DATE:~7,2%.7z" @release_files.conf
+7z a "..\release\tyro-%DATE:~-4%-%DATE:~4,2%-%DATE:~7,2%.7z" @..\bin\release.conf
 goto noerrors
 
 :erroroccurred

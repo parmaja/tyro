@@ -38,7 +38,7 @@ uses
   {$endif}
   SysUtils, Classes, RayLib, mnUtils, mnConfigs, StrUtils,
   Melodies, TyroControls, TyroClasses, mnLogs, TyroEngines,
-  TyroLua;
+  TyroLua, TyroFuse;
 
 type
 
@@ -51,11 +51,16 @@ type
     FArguments: TConfFile;
     FTerminated: Boolean;
     MainOptions: TTyroEngineOptions;
+    procedure DoFuse(const APathTo, AZipFile: string);
   protected
     procedure SetTitle(const AValue: string);
     procedure DoRun;
   public
     RunConsole: Boolean;
+    //* True when the process handled a console-only command (--help, --fuse)
+    //* and never created the engine; such runs must exit without running the
+    //* engine-related unit finalizations.
+    Engineless: Boolean;
 
     constructor Create; virtual;
     destructor Destroy; override;
@@ -138,7 +143,9 @@ var
   IsVisible: Boolean;
 begin
   if IsConsole then
+  begin
     exit(True);
+  end;
 
   if AttachConsole(ATTACH_PARENT_PROCESS) then
   begin
@@ -153,7 +160,9 @@ begin
       exit;
     end
     else if Force then
+    begin
       FreeConsole;
+    end;
   end;
   if Force then
   begin
@@ -163,7 +172,9 @@ begin
     Result := True;
   end
   else
+  begin
     Result := False;
+  end;
 end;
 
 procedure CloseConsole;
@@ -188,6 +199,7 @@ procedure PrintHelp;
 begin
   WriteLn('Tyro to run script in graphical mode with media function, using RayLib library, for learning proramming languages students and kids.');
   WriteLn('usage: tyro [<script>] [--workpath=<workpath>] [<options>]');
+  WriteLn('       tyro --fuse <path> <zip>');
   WriteLn('');
   WriteLn('--help -h              Show this help page');
   WriteLn('--console -c           Show command prompt');
@@ -195,6 +207,7 @@ begin
   WriteLn('--debug -d             Run in debug mode');
   WriteLn('--exit[:N]             Exit after N seconds, or when the script ends');
   WriteLn('--screenshot:N         Save a screenshot after N seconds');
+  WriteLn('--fuse <path> <zip>    Pack <path> with engine files into a fuse zip package');
   //WriteLn('--window -w            Show window');
 end;
 
@@ -228,18 +241,100 @@ begin
   end;
 end;
 
+//* Looks up the --fuse switch and its two arguments. The mini library
+//* argument parser keeps a single valueless positional argument while fuse
+//* takes two, so they are read directly from the command line. Both the
+//* "--fuse <path> <zip>" and "--fuse=<path> <zip>" forms are accepted.
+//* Returns True when the switch is present; the outputs stay '' when an
+//* argument is missing, the caller reports the usage error.
+function ReadFuseArguments(out APathTo, AZipFile: string): Boolean;
+var
+  i: Integer;
+  S, N: string;
+begin
+  Result := False;
+  APathTo := '';
+  AZipFile := '';
+  for i := 1 to ParamCount do
+  begin
+    S := ParamStr(i);
+    N := S;
+    if StartsText('/', N) then
+      N := '-' + Copy(N, 2, MaxInt)
+    else if StartsText('--', N) then
+      N := Copy(N, 2, MaxInt);
+    if SameText(N, '-fuse') then
+    begin
+      Result := True;
+      if i + 1 <= ParamCount then
+        APathTo := ParamStr(i + 1);
+      if i + 2 <= ParamCount then
+      begin
+        AZipFile := ParamStr(i + 2);
+        AZipFile := SysUtils.ChangeFileExt(AZipFile, '.zip');
+      end;
+      exit;
+    end;
+    if StartsText('-fuse=', N) or StartsText('-fuse:', N) then
+    begin
+      Result := True;
+      APathTo := Copy(N, Length('-fuse') + 2, MaxInt);
+      if i + 1 <= ParamCount then
+        AZipFile := ParamStr(i + 1);
+      exit;
+    end;
+  end;
+end;
+
+//* Packs the game given by --fuse together with the engine files listed in
+//* release.conf (next to tyro.exe) into the target zip, reports to the
+//* console and sets a failing exit code when the package was not written.
+procedure TTyroApplication.DoFuse(const APathTo, AZipFile: string);
+var
+  aConfFile: string;
+  aMessage: string;
+begin
+  aConfFile := FLocation + 'release.conf';
+  if not SysUtils.FileExists(aConfFile) then
+    aConfFile := 'release.conf';
+  WriteLn('fusing ' + APathTo + ' into ' + AZipFile);
+  if FusePackage(APathTo, AZipFile, aConfFile, aMessage) then
+  begin
+    if aMessage <> '' then
+      WriteLn(aMessage);
+    WriteLn('done: ' + AZipFile);
+  end
+  else
+  begin
+    WriteLn('fuse failed: ' + aMessage);
+    ExitCode := 1;
+  end;
+end;
+
 constructor TTyroApplication.Create;
 var
   LogLevel: TLogLevel;
   s: string;
   ScriptFile: string;
   i: Integer;
+  aFuse: Boolean;
+  aFusePath: string;
+  aFuseZip: string;
+  aHelp: Boolean;
 begin
   inherited;
   FLocation := ExtractFilePath(ParamStr(0));
   FArguments := ParseArguments([]);
 
-  RunConsole := Arguments.ReadSwitch('-console') or Arguments.ReadSwitch('-c');
+  //--fuse packs a game with the engine into a distributable zip, it needs
+  //the console for its report and quits without creating the engine.
+  aFuse := ReadFuseArguments(aFusePath, aFuseZip);
+
+  //Help prints to the console too; without this it would write to the
+  //never-opened GUI stdout and fail.
+  aHelp := Arguments.ReadSwitch('-help') or Arguments.ReadSwitch('-h');
+
+  RunConsole := Arguments.ReadSwitch('-console') or Arguments.ReadSwitch('-c') or aFuse or aHelp;
   OpenConsole(RunConsole);
   RunConsole := RunConsole or IsConsole;
   if RunConsole then
@@ -260,9 +355,24 @@ begin
   if Arguments.ReadSwitch('-debug') or Arguments.ReadSwitch('-d') then
     IsDebug := True;
 
-  if Arguments.ReadSwitch('-help') or Arguments.ReadSwitch('-h') then
+  if aHelp then
   begin
     PrintHelp;
+    Engineless := True;
+    Terminate;
+    exit;
+  end;
+
+  if aFuse then
+  begin
+    if (aFusePath = '') or (aFuseZip = '') then
+    begin
+      WriteLn('usage: tyro --fuse <path> <zip>');
+      ExitCode := 1;
+    end
+    else
+      DoFuse(aFusePath, aFuseZip);
+    Engineless := True;
     Terminate;
     exit;
   end;
@@ -339,7 +449,6 @@ begin
     // Interactive sessions only report through the console and keep running.
     if (ExitCode = 0) and Engine.ScriptFailed then
       ExitCode := 1;
-    Terminate;
   end;
 end;
 
