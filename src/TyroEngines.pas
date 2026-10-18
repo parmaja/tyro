@@ -1792,7 +1792,8 @@ begin
   except
     on E: Exception do
     begin
-      if IsConsole then WriteLn('EX-DRAW: ' + E.ClassName + ': ' + E.Message);
+      if IsConsole then
+        WriteLn('EX-DRAW: ' + E.ClassName + ': ' + E.Message);
       raise;
     end;
   end;
@@ -1837,9 +1838,7 @@ begin
     on E: Exception do
     begin
       if IsConsole then
-      begin
         WriteLn('EX-STEP: ' + E.ClassName + ': ' + E.Message + ' @' + IntToHex(NativeUInt(ExceptAddr), 16));
-      end;
       raise;
     end;
   end;
@@ -1867,7 +1866,8 @@ begin
   except
     on E: Exception do
     begin
-      if IsConsole then WriteLn('EX-SCRIPT: ' + E.ClassName + ': ' + E.Message);
+      if IsConsole then
+        WriteLn('EX-SCRIPT: ' + E.ClassName + ': ' + E.Message);
       raise;
     end;
   end;
@@ -1879,7 +1879,8 @@ begin
   except
     on E: Exception do
     begin
-      if IsConsole then WriteLn('EX-CONTROL: ' + E.ClassName + ': ' + E.Message);
+      if IsConsole then
+        WriteLn('EX-CONTROL: ' + E.ClassName + ': ' + E.Message);
       raise;
     end;
   end;
@@ -2161,7 +2162,6 @@ begin
   Console.BringToFront;
   //Route typed input to the console now that it is visible.
   Console.Focused := True;
-  Writeln(Console.WindowRect.Height);
   StartConsoleRead;
 end;
 

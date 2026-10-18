@@ -11,7 +11,7 @@ program tyro;
 }
 
 {$ifopt D+}
-{$apptype console}
+{.$apptype console}
 {$endif}
 
 {$mode objfpc}

@@ -610,22 +610,22 @@ type
   // By default all flags are set to 0
   TConfigFlag = (
 	  FLAG_NONE               = 0,  // Not used
-    FLAG_FULLSCREEN_MODE    = 1,  //$00000002,   // Set to run program in fullscreen
-    FLAG_WINDOW_RESIZABLE   = 2,  //$00000004,   // Set to allow resizable window
-    FLAG_WINDOW_UNDECORATED = 3,  //$00000008,   // Set to disable window decoration (frame and buttons)
-    FLAG_WINDOW_TRANSPARENT = 4,  //$00000010,   // Set to allow transparent framebuffer
-    FLAG_MSAA_4X_HINT       = 5,  //$00000020,   // Set to try enabling MSAA 4X
-    FLAG_VSYNC_HINT         = 6,  //$00000040,   // Set to try enabling V-Sync on GPU
-    FLAG_WINDOW_HIDDEN      = 7,  //$00000080,   // Set to hide window
-    FLAG_WINDOW_ALWAYS_RUN  = 8,  //$00000100,   // Set to allow windows running while minimized
-    FLAG_WINDOW_MINIMIZED   = 9,  //$00000200,   // Set to minimize window (iconify)
-    FLAG_WINDOW_MAXIMIZED   = 10, //$00000400,   // Set to maximize window (expanded to monitor)
-    FLAG_WINDOW_UNFOCUSED   = 11, //$00000800,   // Set to window non focused
-    FLAG_WINDOW_TOPMOST     = 12, //$00001000,   // Set to window always on top
-    FLAG_WINDOW_HIGHDPI     = 13, //$00002000,   // Set to support HighDPI
-    FLAG_WINDOW_MOUSE_PASSTHROUGH = 14, //$00004000, // Set to support mouse passthrough, only supported when FLAG_WINDOW_UNDECORATED
-    FLAG_BORDERLESS_WINDOWED_MODE = 15, //0x00008000, // Set to run program in borderless windowed mode
-    FLAG_INTERLACED_HINT    = 16 //$00010000    // Set to try enabling interlaced video format (for V3D)
+    FLAG_FULLSCREEN_MODE    = 1,  // $00000002,   // Set to run program in fullscreen
+    FLAG_WINDOW_RESIZABLE   = 2,  // $00000004,   // Set to allow resizable window
+    FLAG_WINDOW_UNDECORATED = 3,  // $00000008,   // Set to disable window decoration (frame and buttons)
+    FLAG_WINDOW_TRANSPARENT = 4,  // $00000010,   // Set to allow transparent framebuffer
+    FLAG_MSAA_4X_HINT       = 5,  // $00000020,   // Set to try enabling MSAA 4X
+    FLAG_VSYNC_HINT         = 6,  // $00000040,   // Set to try enabling V-Sync on GPU
+    FLAG_WINDOW_HIDDEN      = 7,  // $00000080,   // Set to hide window
+    FLAG_WINDOW_ALWAYS_RUN  = 8,  // $00000100,   // Set to allow windows running while minimized
+    FLAG_WINDOW_MINIMIZED   = 9,  // $00000200,   // Set to minimize window (iconify)
+    FLAG_WINDOW_MAXIMIZED   = 10, // $00000400,   // Set to maximize window (expanded to monitor)
+    FLAG_WINDOW_UNFOCUSED   = 11, // $00000800,   // Set to window non focused
+    FLAG_WINDOW_TOPMOST     = 12, // $00001000,   // Set to window always on top
+    FLAG_WINDOW_HIGHDPI     = 13, // $00002000,   // Set to support HighDPI
+    FLAG_WINDOW_MOUSE_PASSTHROUGH = 14, // $00004000, // Set to support mouse passthrough, only supported when FLAG_WINDOW_UNDECORATED
+    FLAG_BORDERLESS_WINDOWED_MODE = 15, // $00008000, // Set to run program in borderless windowed mode
+    FLAG_INTERLACED_HINT    = 16 // $00010000    // Set to try enabling interlaced video format (for V3D)
   );
   TConfigFlags = set of TConfigFlag;
 
