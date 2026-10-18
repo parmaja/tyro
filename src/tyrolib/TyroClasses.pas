@@ -1133,6 +1133,9 @@ begin
   aFileNameEx:= IncludePathDelimiter(WorkPath) + aConfigFile;
   if not SameFileName(aFileNameEx, aFileName) and SysUtils.FileExists(aFileNameEx) then
     Config.MergeFromFile(aFileNameEx);
+  aFileNameEx:= IncludePathDelimiter(WorkPath) + 'fuse.conf';
+  if SysUtils.FileExists(aFileNameEx) then
+    Config.MergeFromFile(aFileNameEx);
   Config.MergeArguments;
   WorkPath := ExpandToPath(Config.ReadString('workpath', WorkPath), WorkPath);
 end;
