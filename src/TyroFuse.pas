@@ -226,7 +226,11 @@ var
 begin
   aZip := TZipFile.Create;
   try
+    {$ifdef FPC}
     aZip.Open(AZipFile, fmCreate);
+    {$else}
+    aZip.Open(AZipFile, zmWrite);
+    {$endif}
     for i := 0 to AFiles.Count - 1 do
       aZip.Add(AFiles.ValueFromIndex[i], AFiles.Names[i]);
     aZip.Close;

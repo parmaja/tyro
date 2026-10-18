@@ -40,12 +40,12 @@ EditViewName=D:\lab\pascal\tyro\src\tyrolib\TyroControls.pas
 
 [ClosedView_RDpcbGFiXHBhc2NhbFx0eXJvXHNyY1xUeXJvRW5naW5lcy5wYXM=]
 Module=D:\lab\pascal\tyro\src\TyroEngines.pas
-CursorX=3
-CursorY=35
-TopLine=9
+CursorX=1
+CursorY=2708
+TopLine=2698
 LeftCol=1
 Elisions=
-Bookmarks={2,1068,1}
+Bookmarks=
 EditViewName=D:\lab\pascal\tyro\src\TyroEngines.pas
 [ClosedView_YzpccHJvZ3JhbSBmaWxlcyAoeDg2KVxlbWJhcmNhZGVyb1xzdHVkaW9cMzcuMFxTT1VSQ0VcUlRM
 XFNZU1xTeXN0ZW0ucGFz]
@@ -777,4 +777,14 @@ LeftCol=1
 Elisions=
 Bookmarks=
 EditViewName=c:\program files (x86)\embarcadero\studio\37.0\SOURCE\RTL\SYS\System.pas
+
+[ClosedView_RDpcbGFiXHBhc2NhbFx0eXJvXHNyY1xUeXJvRnVzZS5wYXM=]
+Module=D:\lab\pascal\tyro\src\TyroFuse.pas
+CursorX=15
+CursorY=236
+TopLine=219
+LeftCol=1
+Elisions=
+Bookmarks=
+EditViewName=D:\lab\pascal\tyro\src\TyroFuse.pas
 
