@@ -1,0 +1,35 @@
+frames => 960
+slot 0 available=true name='GAME BOX JOYSTICK'
+slot 1 available=true name='GAME BOX JOYSTICK'
+slot 2 available=false name=''
+slot 3 available=false name=''
+slot 0 axes min/max:
+  leftx => min -1.00 max 1.00
+  lefty => min -1.00 max 1.00
+  rightx => min -1.00 max 1.00
+  righty => min -1.00 max 1.00
+  ltrigger => min -1.00 max 1.00
+  rtrigger => min -1.00 max 1.00
+slot 0 buttons pressed:
+  a => 38
+  b => 45
+  y => 66
+  lb => 102
+  lt => 148
+  rt => 289
+  start => 198
+  select => 116
+  lstick => 9
+  rstick => 15
+  dpup => 58
+  dpdown => 5
+  dpleft => 54
+  dpright => 23
+slot 1 axes min/max:
+  leftx => min 0.00 max 0.00
+  lefty => min 0.00 max 0.00
+  rightx => min 0.00 max 0.00
+  righty => min 0.00 max 0.00
+  ltrigger => min -1.00 max 0.00
+  rtrigger => min -1.00 max 0.00
+slot 1 buttons pressed:

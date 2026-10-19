@@ -1,0 +1,124 @@
+--======================================================================
+--  test_gamepad_map.tyro - per-slot control mapping probe
+--======================================================================
+--  Records, for every slot and every axis, the signed min and max seen,
+--  and counts every button press per slot. Rewrites the log every 15
+--  frames so the last file is the summary of the run.
+--  Run: tyro.exe <abs path>\tests\test_gamepad_map.tyro --exit:36
+--======================================================================
+
+window.show(760, 560)
+
+local BUTTONS = { "a", "b", "x", "y", "lb", "rb", "lt", "rt",
+                  "start", "select", "guide", "lstick", "rstick",
+                  "dpup", "dpdown", "dpleft", "dpright" }
+local REALBTN = { "a", "b", "x", "y", "lb", "rb", "lt", "rt",
+                  "start", "select", "guide", "lstick", "rstick",
+                  "dpad_up", "dpad_down", "dpad_left", "dpad_right" }
+local AXES = { "leftx", "lefty", "rightx", "righty", "ltrigger", "rtrigger" }
+
+local axMin = {}   -- [g][axis] = min value
+local axMax = {}   -- [g][axis] = max value
+local btnCount = {} -- [g][button] = press count
+local frames = 0
+
+local function init()
+  for g = 0, 3 do
+    axMin[g] = {}; axMax[g] = {}; btnCount[g] = {}
+    for i = 1, #AXES do axMin[g][AXES[i]] = 0; axMax[g][AXES[i]] = 0 end
+    for i = 1, #BUTTONS do btnCount[g][BUTTONS[i]] = 0 end
+  end
+end
+init()
+
+local function save()
+  local out = openfile("test_gamepad_map_out.txt", "w")
+  if out == nil then return end
+  out:write("frames => " .. frames .. "\n")
+  for g = 0, 3 do
+    out:write("slot " .. g .. " available=" .. tostring(gamepadavailable(g))
+              .. " name='" .. gamepadname(g) .. "'\n")
+  end
+  for g = 0, 3 do
+    if gamepadavailable(g) then
+      out:write("slot " .. g .. " axes min/max:\n")
+      for i = 1, #AXES do
+        out:write("  " .. AXES[i] .. " => min "
+                  .. string.format("%.2f", axMin[g][AXES[i]])
+                  .. " max " .. string.format("%.2f", axMax[g][AXES[i]]) .. "\n")
+      end
+      out:write("slot " .. g .. " buttons pressed:\n")
+      for i = 1, #BUTTONS do
+        if btnCount[g][BUTTONS[i]] > 0 then
+          out:write("  " .. BUTTONS[i] .. " => " .. btnCount[g][BUTTONS[i]] .. "\n")
+        end
+      end
+    end
+  end
+  out:close()
+end
+
+function update(dt)
+  frames = frames + 1
+  for g = 0, 3 do
+    if gamepadavailable(g) then
+      for i = 1, #AXES do
+        local v = gamepadaxis(AXES[i], g)
+        if v < axMin[g][AXES[i]] then axMin[g][AXES[i]] = v end
+        if v > axMax[g][AXES[i]] then axMax[g][AXES[i]] = v end
+      end
+      for i = 1, #BUTTONS do
+        if isgamepaddown(REALBTN[i], g) then
+          btnCount[g][BUTTONS[i]] = btnCount[g][BUTTONS[i]] + 1
+        end
+      end
+    end
+  end
+  if frames % 15 == 0 then save() end
+end
+
+function draw()
+  canvas.clear()
+  local secs = math.floor(frames / 30)
+  canvas.color = colors.yellow
+  canvas.text(12, 10, "t=" .. secs .. "s   follow the steps on the console message")
+
+  local g = 0
+  local y = 40
+  canvas.color = colors.white
+  canvas.text(12, y, "slot 0 name: " .. gamepadname(0)); y = y + 20
+  for i = 1, #AXES do
+    local v = gamepadaxis(AXES[i], 0)
+    canvas.color = (v > 0.2 or v < -0.2) and colors.green or colors.gray
+    canvas.text(12, y, AXES[i] .. " = " .. string.format("%+.2f", v)
+                .. "  [" .. string.format("%+.2f", axMin[0][AXES[i]])
+                .. " .. " .. string.format("%+.2f", axMax[0][AXES[i]]) .. "]")
+    y = y + 18
+  end
+  y = y + 6
+  for i = 1, #BUTTONS do
+    local n = btnCount[0][BUTTONS[i]]
+    canvas.color = n > 0 and colors.green or colors.darkgray
+    canvas.text(12, y, BUTTONS[i] .. " x" .. n)
+    y = y + 16
+    if y > 540 then break end
+  end
+
+  canvas.color = colors.white
+  canvas.text(400, 40, "slot 1 name: " .. gamepadname(1))
+  local by = 60
+  for i = 1, #AXES do
+    local v = gamepadaxis(AXES[i], 1)
+    canvas.color = (v > 0.2 or v < -0.2) and colors.green or colors.gray
+    canvas.text(400, by, AXES[i] .. " = " .. string.format("%+.2f", v))
+    by = by + 18
+  end
+  by = by + 6
+  for i = 1, #BUTTONS do
+    local n = btnCount[1][BUTTONS[i]]
+    canvas.color = n > 0 and colors.green or colors.darkgray
+    canvas.text(400, by, BUTTONS[i] .. " x" .. n)
+    by = by + 16
+    if by > 540 then break end
+  end
+end

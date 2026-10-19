@@ -1,0 +1,15 @@
+# Extra gamepad mappings, SDL/GLFW format, one controller per line.
+#
+# Most pads (Xbox, PlayStation, ...) are already known to the engine's input
+# library and need nothing here. Generic/no-name pads usually are not: without
+# an entry every button and axis reads as released, even though Windows itself
+# sees the controller fine. Adding a line makes it behave like an Xbox pad.
+#
+# Get the GUID from the tool that prints "GLFW: ..." or from SDL's database.
+# Format: <GUID>,<name>,<controls>
+
+# GAME BOX JOYSTICK (VID_20BC PID_5560), a Betop-family pad.
+# The two GUID forms below cover both ways GLFW can derive a Windows pad's id;
+# only the one that matches is used, the other line is simply ignored.
+03000000bc2000006055000000000000,GAME BOX JOYSTICK,a:b0,b:b1,back:b8,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,leftshoulder:b4,leftstick:b10,lefttrigger:b6,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b11,righttrigger:b7,rightx:a2,righty:a3,start:b9,x:b2,y:b3,platform:Windows
+0500000047414d4520424f58204a4f00,GAME BOX JOYSTICK,a:b0,b:b1,back:b8,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,leftshoulder:b4,leftstick:b10,lefttrigger:b6,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b11,righttrigger:b7,rightx:a2,righty:a3,start:b9,x:b2,y:b3,platform:Windows

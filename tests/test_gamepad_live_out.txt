@@ -1,0 +1,9 @@
+frames => 750
+ever_available => true
+name => GAME BOX JOYSTICK
+-- buttons seen down --
+-- axes max magnitude --
+leftx => 0.000
+lefty => 0.000
+rightx => 0.000
+righty => 0.000

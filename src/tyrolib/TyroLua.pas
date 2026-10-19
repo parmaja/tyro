@@ -570,6 +570,7 @@ type
     function GamepadAxis_func(L: Plua_State): integer; cdecl;
     function GamepadAvailable_func(L: Plua_State): integer; cdecl;
     function GamepadName_func(L: Plua_State): integer; cdecl;
+    function SetGamepadMappings_func(L: Plua_State): integer; cdecl;
     function FrameTime_func(L: Plua_State): integer; cdecl;
     function TotalTime_func(L: Plua_State): integer; cdecl;
     function Millis_func(L: Plua_State): integer; cdecl;
@@ -1621,11 +1622,13 @@ begin
   Lua.State.RegisterGlobal('ismousepressed', IsMouseButtonPressed_func);
   //gamepad: isgamepadpressed("a" [, gamepad=0]) / isgamepaddown / gamepadaxis
   //         gamepadavailable([gamepad]) / gamepadname([gamepad])
+  //         gamepadmappings(text) adds SDL/GLFW mappings, returns count added
   Lua.State.RegisterGlobal('isgamepadpressed', IsGamepadPressed_func);
   Lua.State.RegisterGlobal('isgamepaddown', IsGamepadDown_func);
   Lua.State.RegisterGlobal('gamepadaxis', GamepadAxis_func);
   Lua.State.RegisterGlobal('gamepadavailable', GamepadAvailable_func);
   Lua.State.RegisterGlobal('gamepadname', GamepadName_func);
+  Lua.State.RegisterGlobal('gamepadmappings', SetGamepadMappings_func);
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
   Lua.State.RegisterGlobal('millis', Millis_func);
@@ -2883,6 +2886,13 @@ begin
   if L.ArgsCount >= 1 then
     Gamepad := round(L.ToNumber(1));
   L.PushString(TyroInput.GamepadName(Gamepad));
+  Result := 1;
+end;
+
+function TLuaScript.SetGamepadMappings_func(L: Plua_State): integer; cdecl;
+begin
+  // gamepadmappings(text) - add SDL/GLFW gamepad mappings, returns count added
+  L.PushNumber(TyroInput.SetGamepadMappings(L.ToString(1)));
   Result := 1;
 end;
 

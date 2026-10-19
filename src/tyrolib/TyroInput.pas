@@ -69,6 +69,13 @@ function IsGamepadDown(const ButtonName: string; Gamepad: Integer = 0): Boolean;
 { Axis movement -1..1 (triggers 1..-1); 0 for an unknown axis or gamepad }
 function GamepadAxis(const AxisName: string; Gamepad: Integer = 0): Single;
 
+{ Adds gamepad mappings in the SDL/GLFW format RayLib understands, one
+  mapping per line (<GUID>,<name>,<controls>). Most controllers need no
+  mapping, but generic ones do: without an entry every button and axis
+  reads as released. Returns the number of mappings added (0 when the text
+  held no valid mapping or the library does not expose the call). }
+function SetGamepadMappings(const Mappings: string): Integer;
+
 { --- Frame timing --- }
 
 { Seconds elapsed since the last frame was drawn }
@@ -288,6 +295,17 @@ begin
   if not TryGamepadAxisNameToEnum(AxisName, Axis) then
     Exit(0);
   Result := RayLib.GetGamepadAxisMovement(Gamepad, Ord(Axis));
+end;
+
+function SetGamepadMappings(const Mappings: string): Integer;
+var
+  s: UTF8String;
+begin
+  Result := 0;
+  if not Assigned(RayLib.SetGamepadMappings) then
+    Exit;
+  s := UTF8String(Mappings);
+  Result := RayLib.SetGamepadMappings(PUTF8Char(PAnsiChar(s)));
 end;
 
 function FrameTime: Single;

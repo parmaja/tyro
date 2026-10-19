@@ -14,6 +14,8 @@
 --             UP   / DOWN   (W / S)   speed up / slow down
 --             SPACE                  fire          (start / restart)
 --             ESC                    quit
+--  Gamepad:   left stick / D-pad     steer and speed
+--             A                      fire          (start / restart)
 --  Run:  tyro games/riverraid/riverraid.tyro
 --======================================================================
 
@@ -25,6 +27,20 @@ local H = canvas.height
 -- ---- helpers ---------------------------------------------------------
 local function clamp(v, lo, hi)
   if v < lo then return lo elseif v > hi then return hi else return v end
+end
+
+-- ---- gamepad -----------------------------------------------------------
+-- The left stick gives analog steering and throttle. A dead zone keeps
+-- stick drift from nudging the plane, and movement past it is rescaled so
+-- the controls still start gently. D-pad mirrors the keyboard.
+local PAD_DEAD = 0.25
+
+local function pad_axis(name)
+  local v = gamepadaxis(name)
+  if v > -PAD_DEAD and v < PAD_DEAD then return 0 end
+  local sign = 1
+  if v < 0 then sign = -1 end
+  return sign * ((math.abs(v) - PAD_DEAD) / (1 - PAD_DEAD))
 end
 
 local function explode()
@@ -362,20 +378,23 @@ local function simulate(ft)
     invuln = math.max(0, invuln - ft)
 
     local dir = 0
-    if iskeydown("left") or iskeydown("a") then dir = dir - 1 end
-    if iskeydown("right") or iskeydown("d") then dir = dir + 1 end
+    if iskeydown("left") or iskeydown("a") or isgamepaddown("dpad_left") then dir = dir - 1 end
+    if iskeydown("right") or iskeydown("d") or isgamepaddown("dpad_right") then dir = dir + 1 end
+    dir = clamp(dir + pad_axis("leftx"), -1, 1)
     player.x = clamp(player.x + dir * STEER * ft, 0, W)
 
-    if iskeydown("up") or iskeydown("w") then
-      speed = clamp(speed + ACCEL * ft, SPEED_MIN, SPEED_MAX)
-    elseif iskeydown("down") or iskeydown("s") then
-      speed = clamp(speed - ACCEL * ft, SPEED_MIN, SPEED_MAX)
+    local throttle = 0
+    if iskeydown("up") or iskeydown("w") or isgamepaddown("dpad_up") then throttle = throttle + 1 end
+    if iskeydown("down") or iskeydown("s") or isgamepaddown("dpad_down") then throttle = throttle - 1 end
+    throttle = clamp(throttle - pad_axis("lefty"), -1, 1)
+    if throttle ~= 0 then
+      speed = clamp(speed + throttle * ACCEL * ft, SPEED_MIN, SPEED_MAX)
     end
 
     travel = travel + speed * ft
     generate()
 
-    if iskeypressed("space") and #pbullets < PBULLET_MAX then
+    if (iskeypressed("space") or isgamepadpressed("a")) and #pbullets < PBULLET_MAX then
       pbullets[#pbullets + 1] = { x = player.x, wy = playerWorldY() + 14 }
       --beep(900, 35)
       music.sound('Pew', 220, 100)
@@ -613,16 +632,16 @@ local function draw_overlay()
     canvas.rectangle(0, 120, W, 180, true)
     center_text("RIVER RAID", 136, colors.red)
     center_text("RIVER RAID", 134, colors.yellow)
-    center_text("PRESS SPACE TO START", 196, colors.white)
-    center_text("LEFT / RIGHT  steer", 236, colors.silver)
-    center_text("UP / DOWN  speed", 254, colors.silver)
-    center_text("SPACE  fire      ESC  quit", 272, colors.silver)
+    center_text("PRESS SPACE / GAMEPAD A TO START", 196, colors.white)
+    center_text("LEFT / RIGHT  steer      UP / DOWN  speed", 236, colors.silver)
+    center_text("SPACE  fire      ESC  quit", 254, colors.silver)
+    center_text("GAMEPAD  stick / D-pad, A fire", 276, colors.silver)
   elseif state == "over" then
     canvas.color = colors.black
     canvas.rectangle(0, 180, W, 150, true)
     center_text("GAME OVER", 196, colors.red)
     center_text("SCORE " .. score, 228, colors.white)
-    center_text("PRESS SPACE TO PLAY AGAIN", 272, colors.silver)
+    center_text("PRESS SPACE / GAMEPAD A TO PLAY AGAIN", 272, colors.silver)
   end
 end
 
@@ -683,7 +702,8 @@ function update(dt)
   if iskeypressed("escape") then exit() end
 
   if state == "ready" or state == "over" then
-    if iskeypressed("space") or iskeypressed("enter") then
+    if iskeypressed("space") or iskeypressed("enter")
+        or isgamepadpressed("a") or isgamepadpressed("start") then
       reset()
       state = "play"
       invuln = 1.5

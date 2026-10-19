@@ -1,0 +1,76 @@
+--======================================================================
+--  test_gamepad_scan.tyro - list every gamepad slot raylib can see
+--======================================================================
+window.show(640, 480)
+
+local BUTTONS = { "a", "b", "x", "y", "lb", "rb", "lt", "rt",
+                  "start", "select", "guide", "lstick", "rstick",
+                  "dpad_up", "dpad_down", "dpad_left", "dpad_right" }
+local AXES = { "leftx", "lefty", "rightx", "righty", "ltrigger", "rtrigger" }
+
+local seen = {}
+local axisMax = {}
+local slots = {}
+local frames = 0
+
+local function save()
+  local out = openfile("test_gamepad_scan_out.txt", "w")
+  if out == nil then return end
+  out:write("frames => " .. frames .. "\n")
+  for g = 0, 3 do
+    out:write("slot " .. g .. " available => " .. tostring(gamepadavailable(g))
+              .. " name => '" .. gamepadname(g) .. "'\n")
+  end
+  out:write("-- buttons seen down (any slot) --\n")
+  for i = 1, #BUTTONS do
+    if seen[BUTTONS[i]] then out:write(BUTTONS[i] .. " => YES\n") end
+  end
+  out:write("-- axes max magnitude (any slot) --\n")
+  for i = 1, #AXES do
+    out:write(AXES[i] .. " => " .. string.format("%.3f", axisMax[AXES[i]] or 0) .. "\n")
+  end
+  out:close()
+end
+
+function update(dt)
+  frames = frames + 1
+  for g = 0, 3 do
+    if gamepadavailable(g) then
+      slots[g] = true
+      for i = 1, #BUTTONS do
+        if isgamepaddown(BUTTONS[i], g) then seen[BUTTONS[i]] = seen[BUTTONS[i]] or g end
+      end
+      for i = 1, #AXES do
+        local m = math.abs(gamepadaxis(AXES[i], g))
+        if m > (axisMax[AXES[i]] or 0) then axisMax[AXES[i]] = m end
+      end
+    end
+  end
+  if frames % 15 == 0 then save() end
+end
+
+function draw()
+  canvas.clear()
+  canvas.color = colors.white
+  canvas.text(12, 12, "frame " .. frames)
+  local y = 40
+  for g = 0, 3 do
+    canvas.color = gamepadavailable(g) and colors.green or colors.darkgray
+    canvas.text(12, y, "slot " .. g .. " " .. tostring(gamepadavailable(g))
+                .. "  '" .. gamepadname(g) .. "'")
+    y = y + 18
+  end
+  y = y + 10
+  for i = 1, #BUTTONS do
+    local b = BUTTONS[i]
+    canvas.color = isgamepaddown(b) and colors.green or (seen[b] and colors.gray or colors.darkgray)
+    canvas.text(12, y, b .. (isgamepaddown(b) and "  DOWN" or (seen[b] and "  seen" or "")))
+    y = y + 16
+  end
+  local ay = 40
+  for i = 1, #AXES do
+    canvas.color = colors.skyblue
+    canvas.text(360, ay, AXES[i] .. " = " .. string.format("%.2f", gamepadaxis(AXES[i])))
+    ay = ay + 18
+  end
+end

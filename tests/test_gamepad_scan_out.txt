@@ -1,0 +1,13 @@
+frames => 750
+slot 0 available => true name => 'GAME BOX JOYSTICK'
+slot 1 available => true name => 'GAME BOX JOYSTICK'
+slot 2 available => false name => ''
+slot 3 available => false name => ''
+-- buttons seen down (any slot) --
+-- axes max magnitude (any slot) --
+leftx => 0.000
+lefty => 0.000
+rightx => 0.000
+righty => 0.000
+ltrigger => 1.000
+rtrigger => 1.000

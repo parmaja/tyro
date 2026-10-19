@@ -169,10 +169,18 @@ while true do
 | `isgamepadpressed(button [, gamepad])` | True once when a pad button transitions to pressed | `"a"`, `"start"`, `"dpad_up"` |
 | `isgamepaddown(button [, gamepad])` | True every frame while a pad button is held | `"a"`, `"lb"`, `"dpad_left"` |
 | `gamepadaxis(axis [, gamepad])` | Axis value in -1..1 (0 without a pad) | `"leftx"`, `"lefty"`, `"rightx"`, `"righty"`, `"ltrigger"`, `"rtrigger"` |
+| `gamepadmappings(text)` | Add gamepad mappings in SDL/GLFW format; returns how many were added | — |
 
 Supported button names: `a`, `b`, `x`, `y`, `lb`, `rb`, `lt`, `rt`, `start`,
 `select`, `guide`, `lstick`, `rstick`, `dpad_up`, `dpad_down`, `dpad_left`,
 `dpad_right`.
+
+Xbox and PlayStation pads work out of the box. Generic or no-name pads often
+have no built-in mapping, so every button and axis reads as released even
+though Windows itself sees the controller. In that case drop a
+`gamepadmappings.txt` next to `tyro.exe`. It holds SDL/GLFW mapping lines
+(`<GUID>,<name>,<controls>`, one per controller) that are loaded at startup for
+every script; `gamepadmappings(text)` does the same from a script.
 
 # Files
 

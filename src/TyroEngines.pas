@@ -403,6 +403,10 @@ type
 
     //* TextureMode create texture with canvas
     procedure PrepareWindow(AWidth, AHeight: Integer); overload;
+    //* Load optional extra gamepad mappings from 'gamepadmappings.txt' next to
+    //* the executable (SDL/GLFW format). Generic controllers need an entry
+    //* here or every button and axis reads as released.
+    procedure LoadGamepadMappings;
     procedure ShowWindow(AWidth, AHeight: Integer); overload;
     procedure ShowWindow; overload;
     procedure SetFPS(FPS: Integer); virtual;
@@ -1735,6 +1739,37 @@ begin
   FreeAndNil(FFrameEvent);
 end;
 
+procedure TTyroEngine.LoadGamepadMappings;
+var
+  aFileName: string;
+  aList: TStringList;
+  s: UTF8String;
+  Count: Integer;
+begin
+  //Generic controllers have no entry in the library's built-in database, so
+  //every button and axis reads as released. A 'gamepadmappings.txt' next to
+  //the executable (SDL/GLFW format, one mapping per line) fixes that without
+  //touching any script.
+  if not Assigned(RayLib.SetGamepadMappings) then
+    Exit;
+  aFileName := Res.AppPath + 'gamepadmappings.txt';
+  if not SysUtils.FileExists(aFileName) then
+    Exit;
+  aList := TStringList.Create;
+  try
+    aList.LoadFromFile(aFileName);
+    s := UTF8String(aList.Text);
+    if s <> '' then
+    begin
+      Count := RayLib.SetGamepadMappings(PUTF8Char(PAnsiChar(s)));
+      if Count > 0 then
+        Log.WriteLn('Gamepad: added ' + IntToStr(Count) + ' custom mapping(s)');
+    end;
+  finally
+    aList.Free;
+  end;
+end;
+
 procedure TTyroEngine.PrepareWindow(AWidth, AHeight: Integer);
 var
   Icon: RayLib.TImage;
@@ -1747,6 +1782,7 @@ begin
   //Do not use FLAG_VSYNC_HINT it block the other threads, or use YieldProcess, TODO
   RayLib.SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   RayLib.InitWindow(AWidth, AHeight, PUTF8Char(UTF8String(Title)));
+  LoadGamepadMappings;
   if SysUtils.FileExists(Res.AppPath + 'tyro.png') then
   begin
     Icon := RayLib.LoadImage(PUTF8Char(PUTF8String(Res.AppPath + 'tyro.png')));

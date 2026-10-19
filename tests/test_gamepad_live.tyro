@@ -1,0 +1,86 @@
+--======================================================================
+--  test_gamepad_live.tyro - watch a controller in real time
+--======================================================================
+--  Polls every frame and records each button that has gone down and the
+--  largest push of each axis. Rewrites test_gamepad_live_out.txt every
+--  15 frames, so the last file left behind is the summary of the run.
+--  Run:  tyro.exe tests\test_gamepad_live.tyro --exit:15
+--======================================================================
+
+window.show(640, 480)
+
+local BUTTONS = { "a", "b", "x", "y", "lb", "rb", "lt", "rt",
+                  "start", "select", "guide", "lstick", "rstick",
+                  "dpad_up", "dpad_down", "dpad_left", "dpad_right" }
+local AXES = { "leftx", "lefty", "rightx", "righty" }
+
+local seen = {}          -- button -> true once pressed
+local axisMax = {}       -- axis -> largest magnitude seen
+local everAvailable = false
+local padName = ""
+local frames = 0
+
+local function save()
+  local out = openfile("test_gamepad_live_out.txt", "w")
+  if out == nil then return end
+  out:write("frames => " .. frames .. "\n")
+  out:write("ever_available => " .. tostring(everAvailable) .. "\n")
+  out:write("name => " .. padName .. "\n")
+  out:write("-- buttons seen down --\n")
+  for i = 1, #BUTTONS do
+    if seen[BUTTONS[i]] then out:write(BUTTONS[i] .. " => YES\n") end
+  end
+  out:write("-- axes max magnitude --\n")
+  for i = 1, #AXES do
+    out:write(AXES[i] .. " => " .. string.format("%.3f", axisMax[AXES[i]] or 0) .. "\n")
+  end
+  out:close()
+end
+
+function update(dt)
+  frames = frames + 1
+
+  if gamepadavailable() then
+    everAvailable = true
+    local n = gamepadname()
+    if n ~= "" then padName = n end
+    for i = 1, #BUTTONS do
+      if isgamepaddown(BUTTONS[i]) then seen[BUTTONS[i]] = true end
+    end
+    for i = 1, #AXES do
+      local m = math.abs(gamepadaxis(AXES[i]))
+      if m > (axisMax[AXES[i]] or 0) then axisMax[AXES[i]] = m end
+    end
+  end
+
+  if frames % 15 == 0 then save() end
+end
+
+function draw()
+  canvas.clear()
+  canvas.color = colors.white
+  canvas.text(12, 12, "frame " .. frames)
+
+  local avail = gamepadavailable()
+  canvas.color = avail and colors.green or colors.red
+  canvas.text(12, 32, "available: " .. tostring(avail))
+  canvas.color = colors.yellow
+  canvas.text(12, 52, "name: " .. gamepadname())
+
+  local y = 80
+  for i = 1, #BUTTONS do
+    local b = BUTTONS[i]
+    local down = isgamepaddown(b)
+    canvas.color = down and colors.green or (seen[b] and colors.gray or colors.darkgray)
+    canvas.text(12, y, b .. (down and "  DOWN" or (seen[b] and "  seen" or "")))
+    y = y + 18
+  end
+
+  local ay = 80
+  for i = 1, #AXES do
+    local a = AXES[i]
+    canvas.color = colors.skyblue
+    canvas.text(340, ay, a .. " = " .. string.format("%.2f", gamepadaxis(a)))
+    ay = ay + 18
+  end
+end
