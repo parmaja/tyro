@@ -275,6 +275,9 @@ function PinkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Sing
 function DarkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Pew_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Explode_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Fire_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Boing_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Siren_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Kick_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Snare_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function HiHat_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -1774,6 +1777,112 @@ begin
   else if Result < -1.0 then Result := -1.0;
 end;
 
+// Fire crackle: a bed of hashed noise for the hiss and the low roar, with
+// short noise pops on top for the crackles. Frequency controls the crackle
+// rate (higher note = faster, denser pops), so a game can retune the ambience
+// as the scene gets hotter. Everything comes from HashNoise, so it renders the
+// same again on every play and is safe to loop.
+function Fire_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  HissLevel = 0.52;    //continuous bed of the fire
+  PopLevel = 0.62;     //crackles on top
+  PopThreshold = 0.42;
+var
+  t, Hiss, Rumble, Pop, Phase: Double;
+  k, Period, Block: Integer;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+
+  //Three octaves of hashed noise: fine hiss, a mid layer and a slow
+  //breathing one. The swell keeps it from sounding like radio static.
+  Hiss := (HashNoise(Index) * 0.45
+         + HashNoise(Index shr 2) * 0.33
+         + HashNoise(Index shr 6) * 0.22) * HissLevel;
+  Hiss := Hiss * (0.72 + 0.28 * Sin(2 * Pi * 0.55 * t));
+
+  //Low rumble of the burning building.
+  Rumble := Sin(2 * Pi * Frequency * 0.21 * t) * 0.10
+          * (0.55 + 0.45 * Sin(2 * Pi * Frequency * 0.028 * t));
+
+  //Crackles: each short block may fire one decaying noise burst. Two layers
+  //at different block lengths keep the pattern from sounding metronomic.
+  Period := Round(SampleRate / (Frequency * 2.5));
+  if Period < 2 then
+    Period := 2;
+  Pop := 0;
+  for k := 0 to 1 do
+  begin
+    Block := Period * (k + 1);
+    if HashNoise(Index div Block + k * 1013) > PopThreshold then
+    begin
+      Phase := (Index mod Block) / Block;
+      Pop := Pop + HashNoise(Index xor (k * 7919)) * (1 - Phase) * (1 - Phase);
+    end;
+  end;
+  Pop := Pop * PopLevel;
+
+  Result := Hiss + Rumble + Pop;
+  if Result > 1.0 then
+    Result := 1.0
+  else if Result < -1.0 then
+    Result := -1.0;
+end;
+
+// Springy net bounce "boing": the pitch rises quickly from 70% of the tuned
+// note to 170% (the closed-form phase integral keeps it sample accurate),
+// with a little decaying vibrato and a fast attack / body decay envelope.
+// Used when a jumper lands on the life net.
+function Boing_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  SweepDepth = 1.0;
+  SweepTau = 0.035;
+  DecayTau = 0.16;
+  VibRate = 22.0;
+  VibDepth = 0.10;
+var
+  t, Phase, Env, Vib: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Phase := 2 * Pi * Frequency *
+    (0.7 * t + SweepDepth * (t - SweepTau * (1 - Exp(-t / SweepTau))));
+  Vib := VibDepth * Sin(2 * Pi * VibRate * t) * Exp(-t / 0.10);
+  Env := (1 - Exp(-t * 800)) * Exp(-t / DecayTau);
+  Result := Sin(Phase + Vib) * Env;
+end;
+
+// Fire engine siren: a sine wailing between 55% and 145% of the tuned note.
+// The phase is the closed-form integral of that sweep, so the tone glides
+// instead of stepping. Frequency is the centre pitch, low notes are a big
+// engine and high ones a hand siren.
+function Siren_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  WailRate = 1.6;    //wails per second
+  WailDepth = 0.45;
+var
+  t, w, Phase: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  w := 2 * Pi * WailRate;
+  //integral of (1 + WailDepth * sin(w*t))
+  Phase := 2 * Pi * Frequency * (t - (WailDepth / w) * Cos(w * t));
+  Result := Sin(Phase) * 0.75;
+end;
+
 // Bass drum: a sine whose pitch drops from ~3x the tuned note down to it in
 // the first 30 ms (the classic "boom"), plus a short noise click for the
 // beater attack. Frequency is the drum pitch (a 60 Hz note is a deep kick,
@@ -1887,6 +1996,9 @@ initialization
   Waveforms.Add('Engine', @Engine_Waveform);
   Waveforms.Add('Pew', @Pew_Waveform); //missile launch chirp
   Waveforms.Add('Explode', @Explode_Waveform); //enemy explosion rumble
+  Waveforms.Add('Fire', @Fire_Waveform); //crackling fire bed, loopable
+  Waveforms.Add('Boing', @Boing_Waveform); //springy life-net bounce
+  Waveforms.Add('Siren', @Siren_Waveform); //wailing fire engine siren
 
   //Drums
   Waveforms.Add('Kick', @Kick_Waveform);

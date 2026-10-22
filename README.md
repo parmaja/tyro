@@ -83,8 +83,8 @@ without gaps—an engine drone, a siren, a wind loop—use `sound.loopPlay(freq
 [, volume])` or `sound.loopPlay(wave, freq [, volume])`. It keeps looping until
 `sound.loopStop()`, and `sound.loopPitch(freq)` / `sound.loopVolume(0..1)` retune
 it while it plays. Available `wave` names include `Sin`, `Square`, `Saw`, `Tri`,
-`Organ`, `FM`, `Noise`, `Pink`, `Engine` and the drum waveforms `Kick`, `Snare`
-and `HiHat`.
+`Organ`, `FM`, `Noise`, `Pink`, `Engine`, the game effects `Fire`, `Boing` and
+`Siren`, and the drum waveforms `Kick`, `Snare` and `HiHat`.
 
 For a one-shot sound effect from an audio file, `sound.play("file.wav" [, volume])`
 plays the file (raylib `LoadSound`, `.wav`) once. The file is resolved like every
