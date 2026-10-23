@@ -166,8 +166,8 @@ type
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
   public
-    function Beep_func(L: Plua_State): integer; cdecl; deprecated; //TODO move to Sound
-    function Sound_func(L: Plua_State): integer; cdecl; deprecated; //TODO move to Sound
+    function Beep_func(L: Plua_State): integer; cdecl;
+    function Sound_func(L: Plua_State): integer; cdecl;
     function Play_func(L: Plua_State): integer; cdecl;
     function MML_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
