@@ -368,10 +368,10 @@ end
 -- ---- simulation ------------------------------------------------------
 local function step_player(ft)
   local ax, ay = 0, 0
-  if iskeydown('left') or iskeydown('a') then ax = ax - 1 end
-  if iskeydown('right') or iskeydown('d') then ax = ax + 1 end
-  if iskeydown('up') or iskeydown('w') then ay = ay - 1 end
-  if iskeydown('down') or iskeydown('s') then ay = ay + 1 end
+  if keyboard.down('left') or keyboard.down('a') then ax = ax - 1 end
+  if keyboard.down('right') or keyboard.down('d') then ax = ax + 1 end
+  if keyboard.down('up') or keyboard.down('w') then ay = ay - 1 end
+  if keyboard.down('down') or keyboard.down('s') then ay = ay + 1 end
 
   if ax ~= 0 then face = ax end
   pvx = pvx + ax * THRUST * ft
@@ -386,9 +386,9 @@ local function step_player(ft)
   if py < SKY_TOP then py = SKY_TOP; pvy = 0 end
   if py > GROUND_TOP - 16 then py = GROUND_TOP - 16; pvy = 0 end
 
-  if iskeydown('space') or iskeydown('z') then fire() end
-  if iskeypressed('b') then smart_bomb() end
-  if iskeypressed('h') or iskeypressed('shift') then hyperspace() end
+  if keyboard.down('space') or keyboard.down('z') then fire() end
+  if keyboard.pressed('b') then smart_bomb() end
+  if keyboard.pressed('h') or keyboard.pressed('shift') then hyperspace() end
 end
 
 local function step_bullets(ft)
@@ -881,12 +881,12 @@ function update(dt)
   if ft > 0.05 then ft = 0.05 end   -- bound a stalled frame, then scale time
   ft = ft * SPEED                   -- SPEED > 1 makes the whole game run faster
 
-  if iskeypressed('escape') then exit() end
+  if keyboard.pressed('escape') then exit() end
 
   if state == 'title' then
-    if iskeypressed('space') or iskeypressed('enter') then start_game() end
+    if keyboard.pressed('space') or keyboard.pressed('enter') then start_game() end
   elseif state == 'over' then
-    if iskeypressed('space') or iskeypressed('enter') then start_game() end
+    if keyboard.pressed('space') or keyboard.pressed('enter') then start_game() end
   end
 
   simulate(ft)

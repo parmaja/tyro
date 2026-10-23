@@ -52,18 +52,18 @@ println("sprite_atlas_demo: " .. walk.frames .. " frames from sprite_sheet.sprit
 
 while cycle do
   -- input ---------------------------------------------------------------
-  if iskeypressed("space") then
+  if keyboard.pressed("space") then
     if walk.playing then
       walk:stop()
     else
       walk:play(speed)
     end
   end
-  if iskeypressed("up") then
+  if keyboard.pressed("up") then
     speed = math.min(speed + 1, 30)
     if walk.playing then walk:play(speed) end
   end
-  if iskeypressed("down") then
+  if keyboard.pressed("down") then
     speed = math.max(speed - 1, 1)
     if walk.playing then walk:play(speed) end
   end
@@ -86,7 +86,7 @@ while cycle do
   canvas.color = colors.lightgray
   canvas.text(150, 382, "SPACE: play/pause   Up/Down: speed   ESC: exit")
 
-  if iskeypressed("escape") then
+  if keyboard.pressed("escape") then
     break
   end
 end

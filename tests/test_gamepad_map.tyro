@@ -36,11 +36,11 @@ local function save()
   if out == nil then return end
   out:write("frames => " .. frames .. "\n")
   for g = 0, 3 do
-    out:write("slot " .. g .. " available=" .. tostring(gamepadavailable(g))
-              .. " name='" .. gamepadname(g) .. "'\n")
+    out:write("slot " .. g .. " available=" .. tostring(gamepad.available(g))
+              .. " name='" .. gamepad.name(g) .. "'\n")
   end
   for g = 0, 3 do
-    if gamepadavailable(g) then
+    if gamepad.available(g) then
       out:write("slot " .. g .. " axes min/max:\n")
       for i = 1, #AXES do
         out:write("  " .. AXES[i] .. " => min "
@@ -61,14 +61,14 @@ end
 function update(dt)
   frames = frames + 1
   for g = 0, 3 do
-    if gamepadavailable(g) then
+    if gamepad.available(g) then
       for i = 1, #AXES do
-        local v = gamepadaxis(AXES[i], g)
+        local v = gamepad.axis(AXES[i], g)
         if v < axMin[g][AXES[i]] then axMin[g][AXES[i]] = v end
         if v > axMax[g][AXES[i]] then axMax[g][AXES[i]] = v end
       end
       for i = 1, #BUTTONS do
-        if isgamepaddown(REALBTN[i], g) then
+        if gamepad.down(REALBTN[i], g) then
           btnCount[g][BUTTONS[i]] = btnCount[g][BUTTONS[i]] + 1
         end
       end
@@ -86,9 +86,9 @@ function draw()
   local g = 0
   local y = 40
   canvas.color = colors.white
-  canvas.text(12, y, "slot 0 name: " .. gamepadname(0)); y = y + 20
+  canvas.text(12, y, "slot 0 name: " .. gamepad.name(0)); y = y + 20
   for i = 1, #AXES do
-    local v = gamepadaxis(AXES[i], 0)
+    local v = gamepad.axis(AXES[i], 0)
     canvas.color = (v > 0.2 or v < -0.2) and colors.green or colors.gray
     canvas.text(12, y, AXES[i] .. " = " .. string.format("%+.2f", v)
                 .. "  [" .. string.format("%+.2f", axMin[0][AXES[i]])
@@ -105,10 +105,10 @@ function draw()
   end
 
   canvas.color = colors.white
-  canvas.text(400, 40, "slot 1 name: " .. gamepadname(1))
+  canvas.text(400, 40, "slot 1 name: " .. gamepad.name(1))
   local by = 60
   for i = 1, #AXES do
-    local v = gamepadaxis(AXES[i], 1)
+    local v = gamepad.axis(AXES[i], 1)
     canvas.color = (v > 0.2 or v < -0.2) and colors.green or colors.gray
     canvas.text(400, by, AXES[i] .. " = " .. string.format("%+.2f", v))
     by = by + 18

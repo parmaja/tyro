@@ -45,27 +45,27 @@ while cycle do
     canvas.color = colors.yellow
     canvas.circle(canvas.width / 2, canvas.height / 2, 20, true)
 
-    if iskeypressed("space") then
+    if keyboard.pressed("space") then
         window.shake(400)
         hits = hits + 1
     end
-    if iskeypressed("1") then
+    if keyboard.pressed("1") then
         window.shake(200, 6)
         hits = hits + 1
     end
-    if iskeypressed("2") then
+    if keyboard.pressed("2") then
         -- an accident: a long, hard jolt
         window.shake(800, 40)
         hits = hits + 1
     end
-    if iskeypressed("3") then
+    if keyboard.pressed("3") then
         shake(2000, 20) -- the global form
         hits = hits + 1
     end
-    if iskeypressed("s") then
+    if keyboard.pressed("s") then
         window.shake(0) -- 0 stops it
     end
-    if iskeypressed("q") then
+    if keyboard.pressed("q") then
         break
     end
 end

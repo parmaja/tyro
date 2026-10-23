@@ -98,16 +98,16 @@ anything cached.
 
 # Input
 
-Keyboard and mouse input can be queried from script. Key and button names are
-strings that map to RayLib key/button enums — they work identically in Lua and
-PascalScript.
+Keyboard and mouse input is exposed as the `keyboard`, `mouse` and `gamepad`
+tables. Key and button names are strings that map to RayLib key/button enums —
+they work identically in Lua and PascalScript.
 
 ## Keyboard
 
-| Function | Description | Examples |
+| API | Description | Examples |
 |----------|-------------|----------|
-| `iskeypressed(key)` | True once when the key transitions from released to pressed | `"space"`, `"w"`, `"f1"` |
-| `iskeydown(key)` | True every frame while the key is held | `"ctrl"`, `"up"`, `"a"` |
+| `keyboard.pressed(key)` | True once when the key transitions from released to pressed | `"space"`, `"w"`, `"f1"` |
+| `keyboard.down(key)` | True every frame while the key is held | `"ctrl"`, `"up"`, `"a"` |
 
 Supported key names: letters `a`-`z`, digits `0`-`9`, `space`, `enter`, `tab`,
 `escape`, `backspace`, `delete`, `insert`, `up`, `down`, `left`, `right`,
@@ -136,25 +136,25 @@ while the console, the output panel, the editor and the `F4` picker stay put.
 ```lua
 window.show()
 while true do
-    if iskeydown("w") then print("W is held") end
-    if iskeypressed("space") then print("Space pressed!") end
+    if keyboard.down("w") then print("W is held") end
+    if keyboard.pressed("space") then print("Space pressed!") end
     sleep(16)
 end
 ```
 
 ## Mouse
 
-| Function | Description | Examples |
+| API | Description | Examples |
 |----------|-------------|----------|
-| `mousex()` | Current mouse X position | — |
-| `mousey()` | Current mouse Y position | — |
-| `ismousepressed(button)` | True once when a mouse button is pressed | `"left"`, `"right"`, `"middle"` |
+| `mouse.x` | Current mouse X position | — |
+| `mouse.y` | Current mouse Y position | — |
+| `mouse.pressed([button])` | True once when a mouse button is pressed (default `"left"`) | `"left"`, `"right"`, `"middle"` |
 
 ```lua
 window.show()
 while true do
-    if ismousepressed("left") then
-        canvas.circle(mousex(), mousey(), 5, true)
+    if mouse.pressed("left") then
+        canvas.circle(mouse.x, mouse.y, 5, true)
     end
      sleep(10)
  end
@@ -162,14 +162,14 @@ while true do
 
 ## Gamepad
 
-| Function | Description | Examples |
+| API | Description | Examples |
 |----------|-------------|----------|
-| `gamepadavailable([gamepad])` | True when a gamepad is connected (default pad 0) | — |
-| `gamepadname([gamepad])` | The pad's name, or empty when there is no pad | — |
-| `isgamepadpressed(button [, gamepad])` | True once when a pad button transitions to pressed | `"a"`, `"start"`, `"dpad_up"` |
-| `isgamepaddown(button [, gamepad])` | True every frame while a pad button is held | `"a"`, `"lb"`, `"dpad_left"` |
-| `gamepadaxis(axis [, gamepad])` | Axis value in -1..1 (0 without a pad) | `"leftx"`, `"lefty"`, `"rightx"`, `"righty"`, `"ltrigger"`, `"rtrigger"` |
-| `gamepadmappings(text)` | Add gamepad mappings in SDL/GLFW format; returns how many were added | — |
+| `gamepad.available([gamepad])` | True when a gamepad is connected (default pad 0) | — |
+| `gamepad.name([gamepad])` | The pad's name, or empty when there is no pad | — |
+| `gamepad.pressed(button [, gamepad])` | True once when a pad button transitions to pressed | `"a"`, `"start"`, `"dpad_up"` |
+| `gamepad.down(button [, gamepad])` | True every frame while a pad button is held | `"a"`, `"lb"`, `"dpad_left"` |
+| `gamepad.axis(axis [, gamepad])` | Axis value in -1..1 (0 without a pad) | `"leftx"`, `"lefty"`, `"rightx"`, `"righty"`, `"ltrigger"`, `"rtrigger"` |
+| `gamepad.mappings(text)` | Add gamepad mappings in SDL/GLFW format; returns how many were added | — |
 
 Supported button names: `a`, `b`, `x`, `y`, `lb`, `rb`, `lt`, `rt`, `start`,
 `select`, `guide`, `lstick`, `rstick`, `dpad_up`, `dpad_down`, `dpad_left`,
@@ -180,7 +180,7 @@ have no built-in mapping, so every button and axis reads as released even
 though Windows itself sees the controller. In that case drop a
 `gamepadmappings.txt` next to `tyro.exe`. It holds SDL/GLFW mapping lines
 (`<GUID>,<name>,<controls>`, one per controller) that are loaded at startup for
-every script; `gamepadmappings(text)` does the same from a script.
+every script; `gamepad.mappings(text)` does the same from a script.
 
 # Files
 
@@ -381,7 +381,7 @@ while true do
     canvas.clear()
 
     -- Engine draws all sprites automatically; just update properties
-    mysprite1.move(mousex(), mousey())
+    mysprite1.move(mouse.x, mouse.y)
     mysprite1.angle = a
 
     a = a + 1
@@ -520,12 +520,12 @@ to whichever effect is active. Toggle effects and tweak the parameters at any
 time:
 
 ```lua
-if iskeypressed("1") then shader.effect = "water" end
-if iskeypressed("2") then shader.effect = "glow" end
-if iskeypressed("0") then shader.effect = "none" end
-if iskeypressed("q") then shader.value = shader.value - 0.1 end
-if iskeypressed("e") then shader.value = shader.value + 0.1 end
-if iskeypressed("z") then shader.area = {0, canvas.height/2, canvas.width, canvas.height/2} end
+if keyboard.pressed("1") then shader.effect = "water" end
+if keyboard.pressed("2") then shader.effect = "glow" end
+if keyboard.pressed("0") then shader.effect = "none" end
+if keyboard.pressed("q") then shader.value = shader.value - 0.1 end
+if keyboard.pressed("e") then shader.value = shader.value + 0.1 end
+if keyboard.pressed("z") then shader.area = {0, canvas.height/2, canvas.width, canvas.height/2} end
 ```
 
 The `"water"` effect tints and distorts the lower part of the canvas, so draw a
@@ -591,7 +591,7 @@ while cycle do
     canvas.color = colors.red
     canvas.circle(300, 240, 30, true)
 
-    if iskeypressed("space") then
+    if keyboard.pressed("space") then
         window.shake(400)  -- 400ms with the default power
     end
 end
@@ -742,7 +742,7 @@ local t = 0
 
 function update(dt)          -- once per frame, before drawing; dt in seconds
     t = t + dt
-    if iskeypressed("space") then exit() end
+    if keyboard.pressed("space") then exit() end
 end
 
 function draw()              -- once per frame, after update()
@@ -1020,7 +1020,7 @@ thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
   the window/OpenGL context and audio device are still alive; the context and
   device are closed last, after every owner has been released.
 
-The worker thread reads current input/timing values (`iskeydown`, `mousex`,
+The worker thread reads current input/timing values (`keyboard.down`, `mouse.x`,
 `frametime`, ...) and submits drawing/mutation requests through the queue; it
 must not hold references into the control tree or RayLib objects across
 calls. Scripts blocking on `console.read()` or `while cycle do` are cancelled
@@ -1039,17 +1039,23 @@ Lazarus or Delphi
 # Libraries
 
 You need MiniLib package minilib.lpk
+
 [minilib](https://github.com/parmaja/minilib)
+
 You need only MiniLua package minilib.lpk
+
 [miniLua](https://github.com/parmaja/miniLua)
 
 # Dependencies
 
 [raylib](https://www.raylib.com/) for raylib.dll/so put it in same of tyro exe folder
 
+[pluto](https://pluto-lang.org/)
+
 ### Competition
 
 [love2d](https://love2d.org/)
+
 [yabasic](http://www.yabasic.de)
 
 ## Fonts ##

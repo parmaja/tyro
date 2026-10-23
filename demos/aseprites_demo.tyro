@@ -63,13 +63,13 @@ println("Aseprite demo: idle=" .. idleS.frames .. "f walk=" .. walkS.frames .. "
 
 while cycle do
   -- input ---------------------------------------------------------------
-  local moving = iskeydown("left") or iskeydown("right")
-              or iskeydown("a") or iskeydown("d")
+  local moving = keyboard.down("left") or keyboard.down("right")
+              or keyboard.down("a") or keyboard.down("d")
 
   local newMode
   if not moving then
     newMode = "idle"
-  elseif iskeydown("shift") or iskeydown("r") then
+  elseif keyboard.down("shift") or keyboard.down("r") then
     newMode = "run"
   else
     newMode = "walk"
@@ -154,7 +154,7 @@ while cycle do
   canvas.text(360, 374, "playing: " .. tostring(hero.playing))
   canvas.text(510, 374, "speed: " .. hero.speed .. " fps")
 
-  if iskeypressed("escape") then
+  if keyboard.pressed("escape") then
     break
   end
 end

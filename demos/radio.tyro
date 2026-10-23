@@ -41,10 +41,10 @@ end
 
 while cycle do
   -- left/right arrow keys change the number of bars
-  if iskeypressed("left") and spectrum.bars > 8 then
+  if keyboard.pressed("left") and spectrum.bars > 8 then
     spectrum.bars = spectrum.bars - 8
   end
-  if iskeypressed("right") and spectrum.bars < 128 then
+  if keyboard.pressed("right") and spectrum.bars < 128 then
     spectrum.bars = spectrum.bars + 8
   end
 

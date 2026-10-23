@@ -519,6 +519,37 @@ type
     function Pump_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaMouse }
+
+  // mouse.x / mouse.y are read-only fields; mouse.pressed(button) is a method
+  TLuaMouse = class(TTyroLuaObject)
+  protected
+    function Getter(L: Plua_State): integer; override;
+  public
+    function Pressed_func(L: Plua_State): integer; cdecl;
+  end;
+
+  { TLuaKeyboard }
+
+  // keyboard.pressed(key) is the press edge, keyboard.down(key) is held
+  TLuaKeyboard = class(TTyroLuaObject)
+  public
+    function Pressed_func(L: Plua_State): integer; cdecl;
+    function Down_func(L: Plua_State): integer; cdecl;
+  end;
+
+  { TLuaGamepad }
+
+  TLuaGamepad = class(TTyroLuaObject)
+  public
+    function Pressed_func(L: Plua_State): integer; cdecl;
+    function Down_func(L: Plua_State): integer; cdecl;
+    function Axis_func(L: Plua_State): integer; cdecl;
+    function Available_func(L: Plua_State): integer; cdecl;
+    function Name_func(L: Plua_State): integer; cdecl;
+    function Mappings_func(L: Plua_State): integer; cdecl;
+  end;
+
   { TLuaScript }
 
   TLuaScript = class(TTyroScript)
@@ -546,6 +577,9 @@ type
     Collision: TLuaCollision;
     Shader: TLuaShader;
     SpectrumLua: TLuaSpectrum;
+    Mouse: TLuaMouse;
+    Keyboard: TLuaKeyboard;
+    Gamepad: TLuaGamepad;
     //Owns every TLuaFile handed out by openfile(); freed after Lua.Close,
     //because the Lua closures hold pointers into those objects
     Files: TList;
@@ -559,18 +593,6 @@ type
 
     //input & timing
 
-    function IsKeyPressed_func(L: Plua_State): integer; cdecl;
-    function IsKeyDown_func(L: Plua_State): integer; cdecl;
-    function MouseX_func(L: Plua_State): integer; cdecl;
-    function MouseY_func(L: Plua_State): integer; cdecl;
-    function IsMouseButtonPressed_func(L: Plua_State): integer; cdecl;
-    //gamepad
-    function IsGamepadPressed_func(L: Plua_State): integer; cdecl;
-    function IsGamepadDown_func(L: Plua_State): integer; cdecl;
-    function GamepadAxis_func(L: Plua_State): integer; cdecl;
-    function GamepadAvailable_func(L: Plua_State): integer; cdecl;
-    function GamepadName_func(L: Plua_State): integer; cdecl;
-    function SetGamepadMappings_func(L: Plua_State): integer; cdecl;
     function FrameTime_func(L: Plua_State): integer; cdecl;
     function TotalTime_func(L: Plua_State): integer; cdecl;
     function Millis_func(L: Plua_State): integer; cdecl;
@@ -1528,6 +1550,9 @@ begin
   Output := TLuaOutput.Create(Self);
   Collision := TLuaCollision.Create(Self);
   Shader := TLuaShader.Create(Self);
+  Mouse := TLuaMouse.Create(Self);
+  Keyboard := TLuaKeyboard.Create(Self);
+  Gamepad := TLuaGamepad.Create(Self);
 
   Files := TList.Create; //of TLuaFile, freed in Destroy
 
@@ -1614,21 +1639,24 @@ begin
   Lua.State.Register('spectrum', 'hide', SpectrumLua, SpectrumLua.Hide_func);
   Lua.State.Register('spectrum', SpectrumLua); //Should be last one
 
-  //input & timing (global functions)
-  Lua.State.RegisterGlobal('iskeypressed', IsKeyPressed_func);
-  Lua.State.RegisterGlobal('iskeydown', IsKeyDown_func);
-  Lua.State.RegisterGlobal('mousex', MouseX_func);
-  Lua.State.RegisterGlobal('mousey', MouseY_func);
-  Lua.State.RegisterGlobal('ismousepressed', IsMouseButtonPressed_func);
-  //gamepad: isgamepadpressed("a" [, gamepad=0]) / isgamepaddown / gamepadaxis
-  //         gamepadavailable([gamepad]) / gamepadname([gamepad])
-  //         gamepadmappings(text) adds SDL/GLFW mappings, returns count added
-  Lua.State.RegisterGlobal('isgamepadpressed', IsGamepadPressed_func);
-  Lua.State.RegisterGlobal('isgamepaddown', IsGamepadDown_func);
-  Lua.State.RegisterGlobal('gamepadaxis', GamepadAxis_func);
-  Lua.State.RegisterGlobal('gamepadavailable', GamepadAvailable_func);
-  Lua.State.RegisterGlobal('gamepadname', GamepadName_func);
-  Lua.State.RegisterGlobal('gamepadmappings', SetGamepadMappings_func);
+  //input & timing (input tables + global functions)
+  //mouse: mouse.x / mouse.y are fields, mouse.pressed("left") is the button edge
+  Lua.State.Register('mouse', 'pressed', Mouse, Mouse.Pressed_func);
+  Lua.State.Register('mouse', Mouse); //Should be last one
+  //keyboard: keyboard.pressed("space") / keyboard.down("a")
+  Lua.State.Register('keyboard', 'pressed', Keyboard, Keyboard.Pressed_func);
+  Lua.State.Register('keyboard', 'down', Keyboard, Keyboard.Down_func);
+  Lua.State.Register('keyboard', Keyboard); //Should be last one
+  //gamepad: gamepad.pressed("a" [, gamepad=0]) / gamepad.down / gamepad.axis
+  //         gamepad.available([gamepad]) / gamepad.name([gamepad])
+  //         gamepad.mappings(text) adds SDL/GLFW mappings, returns count added
+  Lua.State.Register('gamepad', 'pressed', Gamepad, Gamepad.Pressed_func);
+  Lua.State.Register('gamepad', 'down', Gamepad, Gamepad.Down_func);
+  Lua.State.Register('gamepad', 'axis', Gamepad, Gamepad.Axis_func);
+  Lua.State.Register('gamepad', 'available', Gamepad, Gamepad.Available_func);
+  Lua.State.Register('gamepad', 'name', Gamepad, Gamepad.Name_func);
+  Lua.State.Register('gamepad', 'mappings', Gamepad, Gamepad.Mappings_func);
+  Lua.State.Register('gamepad', Gamepad); //Should be last one
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
   Lua.State.RegisterGlobal('millis', Millis_func);
@@ -1786,6 +1814,9 @@ begin
     FreeAndNil(Files);
   end;
   FreeAndNil(Shader);
+  FreeAndNil(Gamepad);
+  FreeAndNil(Keyboard);
+  FreeAndNil(Mouse);
   FreeAndNil(Collision);
   FreeAndNil(Output);
   FreeAndNil(Controls);
@@ -2784,114 +2815,131 @@ begin
   Spectrum.Hide;
 end;
 
-function TLuaScript.IsKeyPressed_func(L: Plua_State): integer; cdecl;
+{ TLuaMouse }
+
+function TLuaMouse.Getter(L: Plua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'x' then
+  begin
+    L.PushInteger(TyroInput.MouseX);
+    Result := 1;
+  end
+  else if field = 'y' then
+  begin
+    L.PushInteger(TyroInput.MouseY);
+    Result := 1;
+  end;
+end;
+
+function TLuaMouse.Pressed_func(L: Plua_State): integer; cdecl;
 var
   s: string;
 begin
+  // mouse.pressed(["left"]) - true once on the press edge
+  s := L.ToString(1);
+  if s = '' then
+    s := 'left';
+  L.PushBoolean(TyroInput.IsMouseButtonPressed(s));
+  Result := 1;
+end;
+
+{ TLuaKeyboard }
+
+function TLuaKeyboard.Pressed_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+begin
+  // keyboard.pressed("space") - true once on the press edge
   s := L.ToString(1);
   L.PushBoolean(TyroInput.IsKeyPressed(s));
   Result := 1;
 end;
 
-function TLuaScript.IsKeyDown_func(L: Plua_State): integer; cdecl;
+function TLuaKeyboard.Down_func(L: Plua_State): integer; cdecl;
 var
   s: string;
 begin
+  // keyboard.down("a") - true every frame while held
   s := L.ToString(1);
   L.PushBoolean(TyroInput.IsKeyDown(s));
   Result := 1;
 end;
 
-function TLuaScript.MouseX_func(L: Plua_State): integer; cdecl;
-begin
-  L.PushInteger(TyroInput.MouseX);
-  Result := 1;
-end;
+{ TLuaGamepad }
 
-function TLuaScript.MouseY_func(L: Plua_State): integer; cdecl;
-begin
-  L.PushInteger(TyroInput.MouseY);
-  Result := 1;
-end;
-
-function TLuaScript.IsMouseButtonPressed_func(L: Plua_State): integer; cdecl;
+function TLuaGamepad.Pressed_func(L: Plua_State): integer; cdecl;
 var
   s: string;
+  Pad: Integer;
 begin
+  // gamepad.pressed("a" [, gamepad=0]) - true once on the press edge
   s := L.ToString(1);
-  L.PushBoolean(TyroInput.IsMouseButtonPressed(s));
-  Result := 1;
-end;
-
-function TLuaScript.IsGamepadPressed_func(L: Plua_State): integer; cdecl;
-var
-  s: string;
-  Gamepad: Integer;
-begin
-  // isgamepadpressed("a" [, gamepad=0]) - true once on the press edge
-  s := L.ToString(1);
-  Gamepad := 0;
+  Pad := 0;
   if L.ArgsCount >= 2 then
-    Gamepad := round(L.ToNumber(2));
-  L.PushBoolean(TyroInput.IsGamepadPressed(s, Gamepad));
+    Pad := round(L.ToNumber(2));
+  L.PushBoolean(TyroInput.IsGamepadPressed(s, Pad));
   Result := 1;
 end;
 
-function TLuaScript.IsGamepadDown_func(L: Plua_State): integer; cdecl;
+function TLuaGamepad.Down_func(L: Plua_State): integer; cdecl;
 var
   s: string;
-  Gamepad: Integer;
+  Pad: Integer;
 begin
-  // isgamepaddown("a" [, gamepad=0]) - true every frame while held
+  // gamepad.down("a" [, gamepad=0]) - true every frame while held
   s := L.ToString(1);
-  Gamepad := 0;
+  Pad := 0;
   if L.ArgsCount >= 2 then
-    Gamepad := round(L.ToNumber(2));
-  L.PushBoolean(TyroInput.IsGamepadDown(s, Gamepad));
+    Pad := round(L.ToNumber(2));
+  L.PushBoolean(TyroInput.IsGamepadDown(s, Pad));
   Result := 1;
 end;
 
-function TLuaScript.GamepadAxis_func(L: Plua_State): integer; cdecl;
+function TLuaGamepad.Axis_func(L: Plua_State): integer; cdecl;
 var
   s: string;
-  Gamepad: Integer;
+  Pad: Integer;
 begin
-  // gamepadaxis("leftx" [, gamepad=0]) - axis movement -1..1 (0 if absent)
+  // gamepad.axis("leftx" [, gamepad=0]) - axis movement -1..1 (0 if absent)
   s := L.ToString(1);
-  Gamepad := 0;
+  Pad := 0;
   if L.ArgsCount >= 2 then
-    Gamepad := round(L.ToNumber(2));
-  L.PushNumber(TyroInput.GamepadAxis(s, Gamepad));
+    Pad := round(L.ToNumber(2));
+  L.PushNumber(TyroInput.GamepadAxis(s, Pad));
   Result := 1;
 end;
 
-function TLuaScript.GamepadAvailable_func(L: Plua_State): integer; cdecl;
+function TLuaGamepad.Available_func(L: Plua_State): integer; cdecl;
 var
-  Gamepad: Integer;
+  Pad: Integer;
 begin
-  // gamepadavailable([gamepad=0])
-  Gamepad := 0;
+  // gamepad.available([gamepad=0])
+  Pad := 0;
   if L.ArgsCount >= 1 then
-    Gamepad := round(L.ToNumber(1));
-  L.PushBoolean(TyroInput.GamepadAvailable(Gamepad));
+    Pad := round(L.ToNumber(1));
+  L.PushBoolean(TyroInput.GamepadAvailable(Pad));
   Result := 1;
 end;
 
-function TLuaScript.GamepadName_func(L: Plua_State): integer; cdecl;
+function TLuaGamepad.Name_func(L: Plua_State): integer; cdecl;
 var
-  Gamepad: Integer;
+  Pad: Integer;
 begin
-  // gamepadname([gamepad=0]) - controller name, '' when not connected
-  Gamepad := 0;
+  // gamepad.name([gamepad=0]) - controller name, '' when not connected
+  Pad := 0;
   if L.ArgsCount >= 1 then
-    Gamepad := round(L.ToNumber(1));
-  L.PushString(TyroInput.GamepadName(Gamepad));
+    Pad := round(L.ToNumber(1));
+  L.PushString(TyroInput.GamepadName(Pad));
   Result := 1;
 end;
 
-function TLuaScript.SetGamepadMappings_func(L: Plua_State): integer; cdecl;
+function TLuaGamepad.Mappings_func(L: Plua_State): integer; cdecl;
 begin
-  // gamepadmappings(text) - add SDL/GLFW gamepad mappings, returns count added
+  // gamepad.mappings(text) - add SDL/GLFW gamepad mappings, returns count added
   L.PushNumber(TyroInput.SetGamepadMappings(L.ToString(1)));
   Result := 1;
 end;

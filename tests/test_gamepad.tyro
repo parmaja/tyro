@@ -1,11 +1,11 @@
 --======================================================================
 --  test_gamepad.tyro - the gamepad input API
 --======================================================================
---  isgamepadpressed("a" [, gamepad=0])  true once on the press edge
---  isgamepaddown("a" [, gamepad=0])     true while held
---  gamepadaxis("leftx" [, gamepad=0])   axis movement -1..1 (0 if absent)
---  gamepadavailable([gamepad=0])        true when a controller is connected
---  gamepadname([gamepad=0])             controller name, '' when absent
+--  gamepad.pressed("a" [, gamepad=0])  true once on the press edge
+--  gamepad.down("a" [, gamepad=0])     true while held
+--  gamepad.axis("leftx" [, gamepad=0])   axis movement -1..1 (0 if absent)
+--  gamepad.available([gamepad=0])        true when a controller is connected
+--  gamepad.name([gamepad=0])             controller name, '' when absent
 --  Button names: a b x y lb rb lt rt start select guide lstick rstick
 --                dpad_up dpad_down dpad_left dpad_right
 --  Axis names:   leftx lefty rightx righty ltrigger rtrigger
@@ -18,24 +18,23 @@ window.show(320, 240)
 local out = openfile("test_gamepad_result.txt", "w")
 
 local ok = true
-local names = { "isgamepadpressed", "isgamepaddown", "gamepadaxis",
-                "gamepadavailable", "gamepadname" }
+local names = { "pressed", "down", "axis", "available", "name" }
 for _, n in ipairs(names) do
-  out:write(n .. " => " .. type(_G[n]) .. "\n")
-  if type(_G[n]) ~= "function" then ok = false end
+  out:write("gamepad." .. n .. " => " .. type(gamepad[n]) .. "\n")
+  if type(gamepad[n]) ~= "function" then ok = false end
 end
 
 -- every call must answer without raising, controller or not
-local avail = gamepadavailable()
-local name = gamepadname()
-local pressed = isgamepadpressed("a")
-local down = isgamepaddown("a")
-local ax = gamepadaxis("leftx")
-local ay = gamepadaxis("lefty")
+local avail = gamepad.available()
+local name = gamepad.name()
+local pressed = gamepad.pressed("a")
+local down = gamepad.down("a")
+local ax = gamepad.axis("leftx")
+local ay = gamepad.axis("lefty")
 
 -- unknown names answer false/0, never an error
-if isgamepadpressed("not_a_button") then ok = false end
-if gamepadaxis("not_an_axis") ~= 0 then ok = false end
+if gamepad.pressed("not_a_button") then ok = false end
+if gamepad.axis("not_an_axis") ~= 0 then ok = false end
 
 out:write("available => " .. tostring(avail) .. "\n")
 out:write("name => " .. name .. "\n")

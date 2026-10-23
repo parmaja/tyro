@@ -80,7 +80,7 @@ end
 local PAD_DEAD = 0.25
 
 local function pad_axis(name)
-  local v = gamepadaxis(name)
+  local v = gamepad.axis(name)
   if v > -PAD_DEAD and v < PAD_DEAD then return 0 end
   local sign = 1
   if v < 0 then sign = -1 end
@@ -177,8 +177,8 @@ end
 -- ---- simulation ------------------------------------------------------
 local function move_net(dt)
   local dir = 0
-  if iskeydown("left") or iskeydown("a") or isgamepaddown("dpad_left") then dir = dir - 1 end
-  if iskeydown("right") or iskeydown("d") or isgamepaddown("dpad_right") then dir = dir + 1 end
+  if keyboard.down("left") or keyboard.down("a") or gamepad.down("dpad_left") then dir = dir - 1 end
+  if keyboard.down("right") or keyboard.down("d") or gamepad.down("dpad_right") then dir = dir + 1 end
   dir = clamp(dir + pad_axis("leftx"), -1, 1)
   netX = clamp(netX + dir * NET_SPEED * dt, NET_MIN_X, NET_MAX_X)
 end
@@ -664,11 +664,11 @@ function update(dt)
   if dt <= 0 then dt = 1 / 60 end
   if dt > 0.06 then dt = 0.06 end
 
-  if iskeypressed("escape") then exit() end
+  if keyboard.pressed("escape") then exit() end
 
   if state == "ready" or state == "over" then
-    if iskeypressed("space") or iskeypressed("enter")
-        or isgamepadpressed("a") or isgamepadpressed("start") then
+    if keyboard.pressed("space") or keyboard.pressed("enter")
+        or gamepad.pressed("a") or gamepad.pressed("start") then
       reset_game()
     end
   end

@@ -48,10 +48,10 @@ print("W/S to move paddle | Close window to quit")
 -- ---- Main game loop ---------------------------------------------------
 while true do
   -- Input: player paddle (W/S keys)
-  if iskeydown("w") then
+  if keyboard.down("w") then
     left_y = left_y - paddle_speed
   end
-  if iskeydown("s") then
+  if keyboard.down("s") then
     left_y = left_y + paddle_speed
   end
 

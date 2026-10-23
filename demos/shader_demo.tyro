@@ -85,59 +85,59 @@ set_area("canvas", 0, 0, canvas.width, canvas.height)
 update_text()
 
 while true do
-    if iskeypressed("1") then
+    if keyboard.pressed("1") then
         effect = "water"
         shader.effect = effect
         update_text()
-    elseif iskeypressed("2") then
+    elseif keyboard.pressed("2") then
         effect = "glow"
         shader.effect = effect
         update_text()
-    elseif iskeypressed("3") then
+    elseif keyboard.pressed("3") then
         effect = "gray"
         shader.effect = effect
         update_text()
-    elseif iskeypressed("4") then
+    elseif keyboard.pressed("4") then
         effect = "sepia"
         shader.effect = effect
         update_text()
-    elseif iskeypressed("5") then
+    elseif keyboard.pressed("5") then
         effect = "invert"
         shader.effect = effect
         update_text()
-    elseif iskeypressed("6") then
+    elseif keyboard.pressed("6") then
         effect = "vignette"
         shader.effect = effect
         update_text()
-    elseif iskeypressed("7") then
+    elseif keyboard.pressed("7") then
         effect = "pixelate"
         shader.effect = effect
         update_text()
-    elseif iskeypressed("8") then
+    elseif keyboard.pressed("8") then
         effect = "custom.frag"
         shader.load("custom.frag")
         update_text()
-    elseif iskeypressed("0") then
+    elseif keyboard.pressed("0") then
         effect = "none"
         shader.effect = effect
         update_text()
-    elseif iskeypressed("q") then
+    elseif keyboard.pressed("q") then
         value = value - 0.1
         if value < 0.0 then value = 0.0 end
         shader.value = value
         update_text()
-    elseif iskeypressed("e") then
+    elseif keyboard.pressed("e") then
         value = value + 0.1
         if value > 1.0 then value = 1.0 end
         shader.value = value
         update_text()
-    elseif iskeypressed("z") then
+    elseif keyboard.pressed("z") then
         set_area("bottom", 0, canvas.height / 2, canvas.width, canvas.height / 2)
         update_text()
-    elseif iskeypressed("x") then
+    elseif keyboard.pressed("x") then
         set_area("canvas", 0, 0, canvas.width, canvas.height)
         update_text()
-    elseif iskeypressed("c") then
+    elseif keyboard.pressed("c") then
         set_area("center", 170, 90, 300, 300)
         update_text()
     end

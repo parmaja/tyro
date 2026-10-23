@@ -1,0 +1,60 @@
+--======================================================================
+--  test_input_tables.tyro - mouse/keyboard/gamepad are tables
+--======================================================================
+--  mouse.x / mouse.y                    read-only position fields
+--  mouse.pressed(["left"])              mouse button press edge
+--  keyboard.pressed("space")            key press edge
+--  keyboard.down("a")                   key held
+--  gamepad.pressed/down/axis/available/name/mappings
+--  The old flat globals (mousex, iskeypressed, ...) are gone.
+--  Run:  tyro.exe <abs path>\tests\test_input_tables.tyro --exit
+--  Result: tests\test_input_tables_result.txt
+
+window.show(320, 240)
+
+local out = openfile("test_input_tables_result.txt", "w")
+local ok = true
+
+local function check(name, value)
+  out:write(name .. " => " .. tostring(value) .. "\n")
+  if not value then ok = false end
+end
+
+check("mouse is table", type(mouse) == "table")
+check("mouse.x is number", type(mouse.x) == "number")
+check("mouse.y is number", type(mouse.y) == "number")
+check("mouse.pressed is function", type(mouse.pressed) == "function")
+check("mouse.pressed('left') is boolean", type(mouse.pressed("left")) == "boolean")
+check("mouse.pressed() defaults to left", type(mouse.pressed()) == "boolean")
+
+check("keyboard is table", type(keyboard) == "table")
+check("keyboard.pressed is function", type(keyboard.pressed) == "function")
+check("keyboard.down is function", type(keyboard.down) == "function")
+check("keyboard.pressed('a') is boolean", type(keyboard.pressed("a")) == "boolean")
+check("keyboard.down('a') is boolean", type(keyboard.down("a")) == "boolean")
+
+check("gamepad is table", type(gamepad) == "table")
+check("gamepad.pressed is function", type(gamepad.pressed) == "function")
+check("gamepad.down is function", type(gamepad.down) == "function")
+check("gamepad.axis is function", type(gamepad.axis) == "function")
+check("gamepad.available is function", type(gamepad.available) == "function")
+check("gamepad.name is function", type(gamepad.name) == "function")
+check("gamepad.mappings is function", type(gamepad.mappings) == "function")
+check("gamepad.axis('leftx') is number", type(gamepad.axis("leftx")) == "number")
+
+-- the old flat names must not resolve any more
+check("mousex removed", mousex == nil)
+check("mousey removed", mousey == nil)
+check("ismousepressed removed", ismousepressed == nil)
+check("iskeypressed removed", iskeypressed == nil)
+check("iskeydown removed", iskeydown == nil)
+check("isgamepadpressed removed", isgamepadpressed == nil)
+check("isgamepaddown removed", isgamepaddown == nil)
+check("gamepadaxis removed", gamepadaxis == nil)
+check("gamepadavailable removed", gamepadavailable == nil)
+check("gamepadname removed", gamepadname == nil)
+check("gamepadmappings removed", gamepadmappings == nil)
+
+out:write("VERDICT => " .. (ok and "PASS" or "FAIL") .. "\n")
+out:close()
+running = false

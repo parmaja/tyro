@@ -52,7 +52,7 @@ while cycle do
   canvas.clear()
 
   -- The engine draws all spirits automatically, so we just update properties
-  player.move(mousex(), mousey())
+  player.move(mouse.x, mouse.y)
   player.angle = angle
 
   ghost.x = ghost.x + 1
@@ -66,12 +66,12 @@ while cycle do
   angle = angle + 1
   if angle >= 360 then angle = 0 end
 
-  if iskeypressed("space") then
+  if keyboard.pressed("space") then
     ghost.scale = ghost.scale + 0.2
     if ghost.scale > 3.0 then ghost.scale = 0.5 end
   end
 
-  if iskeypressed("r") then
+  if keyboard.pressed("r") then
     angle = 0
     player.angle = 0
   end

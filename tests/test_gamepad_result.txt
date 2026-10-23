@@ -1,8 +1,8 @@
-isgamepadpressed => function
-isgamepaddown => function
-gamepadaxis => function
-gamepadavailable => function
-gamepadname => function
+gamepad.pressed => function
+gamepad.down => function
+gamepad.axis => function
+gamepad.available => function
+gamepad.name => function
 available => false
 name => 
 a pressed/down => false/false

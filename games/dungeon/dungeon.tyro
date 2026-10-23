@@ -294,10 +294,10 @@ local function update(ft)
 
   if state == "play" then
     local dc, dr = 0, 0
-    if iskeydown("left") or iskeydown("a") then dc = -1
-    elseif iskeydown("right") or iskeydown("d") then dc = 1
-    elseif iskeydown("up") or iskeydown("w") then dr = -1
-    elseif iskeydown("down") or iskeydown("s") then dr = 1 end
+    if keyboard.down("left") or keyboard.down("a") then dc = -1
+    elseif keyboard.down("right") or keyboard.down("d") then dc = 1
+    elseif keyboard.down("up") or keyboard.down("w") then dr = -1
+    elseif keyboard.down("down") or keyboard.down("s") then dr = 1 end
 
     if (dc ~= 0 or dr ~= 0) and moveTimer <= 0 then
       try_move(dc, dr)
@@ -410,10 +410,10 @@ while cycle do
   if ft <= 0 then ft = 1 / 60 end
   if ft > 0.06 then ft = 0.06 end
 
-  if iskeypressed("escape") then exit() end
+  if keyboard.pressed("escape") then exit() end
 
   if state == "ready" or state == "over" or state == "win" then
-    if iskeypressed("space") or iskeypressed("enter") then
+    if keyboard.pressed("space") or keyboard.pressed("enter") then
       reset()
       state = "play"
     end

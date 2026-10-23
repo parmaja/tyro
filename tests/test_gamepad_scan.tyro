@@ -18,8 +18,8 @@ local function save()
   if out == nil then return end
   out:write("frames => " .. frames .. "\n")
   for g = 0, 3 do
-    out:write("slot " .. g .. " available => " .. tostring(gamepadavailable(g))
-              .. " name => '" .. gamepadname(g) .. "'\n")
+    out:write("slot " .. g .. " available => " .. tostring(gamepad.available(g))
+              .. " name => '" .. gamepad.name(g) .. "'\n")
   end
   out:write("-- buttons seen down (any slot) --\n")
   for i = 1, #BUTTONS do
@@ -35,13 +35,13 @@ end
 function update(dt)
   frames = frames + 1
   for g = 0, 3 do
-    if gamepadavailable(g) then
+    if gamepad.available(g) then
       slots[g] = true
       for i = 1, #BUTTONS do
-        if isgamepaddown(BUTTONS[i], g) then seen[BUTTONS[i]] = seen[BUTTONS[i]] or g end
+        if gamepad.down(BUTTONS[i], g) then seen[BUTTONS[i]] = seen[BUTTONS[i]] or g end
       end
       for i = 1, #AXES do
-        local m = math.abs(gamepadaxis(AXES[i], g))
+        local m = math.abs(gamepad.axis(AXES[i], g))
         if m > (axisMax[AXES[i]] or 0) then axisMax[AXES[i]] = m end
       end
     end
@@ -55,22 +55,22 @@ function draw()
   canvas.text(12, 12, "frame " .. frames)
   local y = 40
   for g = 0, 3 do
-    canvas.color = gamepadavailable(g) and colors.green or colors.darkgray
-    canvas.text(12, y, "slot " .. g .. " " .. tostring(gamepadavailable(g))
-                .. "  '" .. gamepadname(g) .. "'")
+    canvas.color = gamepad.available(g) and colors.green or colors.darkgray
+    canvas.text(12, y, "slot " .. g .. " " .. tostring(gamepad.available(g))
+                .. "  '" .. gamepad.name(g) .. "'")
     y = y + 18
   end
   y = y + 10
   for i = 1, #BUTTONS do
     local b = BUTTONS[i]
-    canvas.color = isgamepaddown(b) and colors.green or (seen[b] and colors.gray or colors.darkgray)
-    canvas.text(12, y, b .. (isgamepaddown(b) and "  DOWN" or (seen[b] and "  seen" or "")))
+    canvas.color = gamepad.down(b) and colors.green or (seen[b] and colors.gray or colors.darkgray)
+    canvas.text(12, y, b .. (gamepad.down(b) and "  DOWN" or (seen[b] and "  seen" or "")))
     y = y + 16
   end
   local ay = 40
   for i = 1, #AXES do
     canvas.color = colors.skyblue
-    canvas.text(360, ay, AXES[i] .. " = " .. string.format("%.2f", gamepadaxis(AXES[i])))
+    canvas.text(360, ay, AXES[i] .. " = " .. string.format("%.2f", gamepad.axis(AXES[i])))
     ay = ay + 18
   end
 end

@@ -40,15 +40,15 @@ end
 function update(dt)
   frames = frames + 1
 
-  if gamepadavailable() then
+  if gamepad.available() then
     everAvailable = true
-    local n = gamepadname()
+    local n = gamepad.name()
     if n ~= "" then padName = n end
     for i = 1, #BUTTONS do
-      if isgamepaddown(BUTTONS[i]) then seen[BUTTONS[i]] = true end
+      if gamepad.down(BUTTONS[i]) then seen[BUTTONS[i]] = true end
     end
     for i = 1, #AXES do
-      local m = math.abs(gamepadaxis(AXES[i]))
+      local m = math.abs(gamepad.axis(AXES[i]))
       if m > (axisMax[AXES[i]] or 0) then axisMax[AXES[i]] = m end
     end
   end
@@ -61,16 +61,16 @@ function draw()
   canvas.color = colors.white
   canvas.text(12, 12, "frame " .. frames)
 
-  local avail = gamepadavailable()
+  local avail = gamepad.available()
   canvas.color = avail and colors.green or colors.red
   canvas.text(12, 32, "available: " .. tostring(avail))
   canvas.color = colors.yellow
-  canvas.text(12, 52, "name: " .. gamepadname())
+  canvas.text(12, 52, "name: " .. gamepad.name())
 
   local y = 80
   for i = 1, #BUTTONS do
     local b = BUTTONS[i]
-    local down = isgamepaddown(b)
+    local down = gamepad.down(b)
     canvas.color = down and colors.green or (seen[b] and colors.gray or colors.darkgray)
     canvas.text(12, y, b .. (down and "  DOWN" or (seen[b] and "  seen" or "")))
     y = y + 18
@@ -80,7 +80,7 @@ function draw()
   for i = 1, #AXES do
     local a = AXES[i]
     canvas.color = colors.skyblue
-    canvas.text(340, ay, a .. " = " .. string.format("%.2f", gamepadaxis(a)))
+    canvas.text(340, ay, a .. " = " .. string.format("%.2f", gamepad.axis(a)))
     ay = ay + 18
   end
 end

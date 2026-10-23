@@ -451,9 +451,9 @@ function update(dt)
   if dt > 0.08 then dt = 0.08 end
   elapsed = elapsed + dt
 
-  if iskeypressed("escape") then exit() end
+  if keyboard.pressed("escape") then exit() end
 
-  if iskeypressed("w") then
+  if keyboard.pressed("w") then
     waterOn = not waterOn
     if waterOn then
       shader.load("water.frag")
@@ -463,20 +463,20 @@ function update(dt)
     end
   end
 
-  if iskeypressed("b") then
+  if keyboard.pressed("b") then
     blow_burst(rnd(40, W - 40), BUBBLER_Y, 12)
   end
 
-  if ismousepressed("left") then
-    blow_burst(clamp(mousex(), 16, W - 16),
-               clamp(mousey(), 16, H - 16), 7)
+  if mouse.pressed("left") then
+    blow_burst(clamp(mouse.x, 16, W - 16),
+               clamp(mouse.y, 16, H - 16), 7)
   end
 
   if waterOn then
-    if iskeydown("up") then
+    if keyboard.down("up") then
       waterValue = clamp(waterValue + dt * 0.5, 0.0, 1.0)
       shader.value = waterValue
-    elseif iskeydown("down") then
+    elseif keyboard.down("down") then
       waterValue = clamp(waterValue - dt * 0.5, 0.0, 1.0)
       shader.value = waterValue
     end

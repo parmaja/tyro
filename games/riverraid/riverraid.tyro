@@ -36,7 +36,7 @@ end
 local PAD_DEAD = 0.25
 
 local function pad_axis(name)
-  local v = gamepadaxis(name)
+  local v = gamepad.axis(name)
   if v > -PAD_DEAD and v < PAD_DEAD then return 0 end
   local sign = 1
   if v < 0 then sign = -1 end
@@ -378,14 +378,14 @@ local function simulate(ft)
     invuln = math.max(0, invuln - ft)
 
     local dir = 0
-    if iskeydown("left") or iskeydown("a") or isgamepaddown("dpad_left") then dir = dir - 1 end
-    if iskeydown("right") or iskeydown("d") or isgamepaddown("dpad_right") then dir = dir + 1 end
+    if keyboard.down("left") or keyboard.down("a") or gamepad.down("dpad_left") then dir = dir - 1 end
+    if keyboard.down("right") or keyboard.down("d") or gamepad.down("dpad_right") then dir = dir + 1 end
     dir = clamp(dir + pad_axis("leftx"), -1, 1)
     player.x = clamp(player.x + dir * STEER * ft, 0, W)
 
     local throttle = 0
-    if iskeydown("up") or iskeydown("w") or isgamepaddown("dpad_up") then throttle = throttle + 1 end
-    if iskeydown("down") or iskeydown("s") or isgamepaddown("dpad_down") then throttle = throttle - 1 end
+    if keyboard.down("up") or keyboard.down("w") or gamepad.down("dpad_up") then throttle = throttle + 1 end
+    if keyboard.down("down") or keyboard.down("s") or gamepad.down("dpad_down") then throttle = throttle - 1 end
     throttle = clamp(throttle - pad_axis("lefty"), -1, 1)
     if throttle ~= 0 then
       speed = clamp(speed + throttle * ACCEL * ft, SPEED_MIN, SPEED_MAX)
@@ -394,7 +394,7 @@ local function simulate(ft)
     travel = travel + speed * ft
     generate()
 
-    if (iskeypressed("space") or isgamepadpressed("a")) and #pbullets < PBULLET_MAX then
+    if (keyboard.pressed("space") or gamepad.pressed("a")) and #pbullets < PBULLET_MAX then
       pbullets[#pbullets + 1] = { x = player.x, wy = playerWorldY() + 14 }
       --beep(900, 35)
       music.sound('Pew', 220, 100)
@@ -699,11 +699,11 @@ function update(dt)
   if dt <= 0 then dt = 1 / 60 end
   if dt > 0.06 then dt = 0.06 end
 
-  if iskeypressed("escape") then exit() end
+  if keyboard.pressed("escape") then exit() end
 
   if state == "ready" or state == "over" then
-    if iskeypressed("space") or iskeypressed("enter")
-        or isgamepadpressed("a") or isgamepadpressed("start") then
+    if keyboard.pressed("space") or keyboard.pressed("enter")
+        or gamepad.pressed("a") or gamepad.pressed("start") then
       reset()
       state = "play"
       invuln = 1.5

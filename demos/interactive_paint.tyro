@@ -1,8 +1,8 @@
 --======================================================================
 --  interactive_paint.tyro - Mouse drawing with keyboard controls
 --======================================================================
---  Demonstrates: mousex(), mousey(), ismousepressed(), iskeypressed(),
---  iskeydown() — the new input APIs
+--  Demonstrates: mouse.x, mouse.y, mouse.pressed(), keyboard.pressed(),
+--  keyboard.down() — the new input APIs
 --
 --  Controls:
 --    Left mouse button  - draw circles at cursor
@@ -24,22 +24,22 @@ print("Current color: " .. palette[colorIndex + 1])
 
 while true do
   -- Draw with left mouse button
-  if ismousepressed("left") then
-    mx = mousex()
-    my = mousey()
+  if mouse.pressed("left") then
+    mx = mouse.x
+    my = mouse.y
     canvas.color = palette[colorIndex + 1]
     canvas.circle(mx, my, 5, true)
   end
 
   -- Clear with SPACE (one press per key press)
-  if iskeypressed("space") then
+  if keyboard.pressed("space") then
     canvas.color = colors.black
     canvas.clear()
     print("Screen cleared")
   end
 
   -- Cycle color with C
-  if iskeypressed("c") then
+  if keyboard.pressed("c") then
     colorIndex = (colorIndex + 1) % #palette
     print("Color changed")
   end

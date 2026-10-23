@@ -59,7 +59,7 @@ while true do
   canvas.color = colors.black
   canvas.clear()
 
-  player.move(mousex(), mousey())
+  player.move(mouse.x, mouse.y)
   player.angle = a
   a = a + 1
   if a >= 360 then a = 0 end

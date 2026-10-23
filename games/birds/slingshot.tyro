@@ -166,7 +166,7 @@ while cycle do
     if pops[i].t > 18 then table.remove(pops, i) end
   end
 
-  if iskeypressed("r") and state ~= "resetting" then
+  if keyboard.pressed("r") and state ~= "resetting" then
     startReset()
 
   elseif state == "resetting" then
@@ -193,8 +193,8 @@ while cycle do
     end
 
   elseif state == "aiming" then
-    local px = mousex() - ANCHOR_X
-    local py = mousey() - ANCHOR_Y
+    local px = mouse.x - ANCHOR_X
+    local py = mouse.y - ANCHOR_Y
     if px > 0 then px = 0 end
     if py < 0 then py = 0 end
     local len = speed2(px, py)
@@ -208,7 +208,7 @@ while cycle do
     launchVX = -px * LAUNCH_K
     launchVY = -py * LAUNCH_K
 
-    if (ismousepressed("left") or iskeypressed("space")) and len > 12 then
+    if (mouse.pressed("left") or keyboard.pressed("space")) and len > 12 then
       bird.collide = true
       bird.vx = launchVX
       bird.vy = launchVY
