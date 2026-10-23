@@ -282,6 +282,7 @@ function Bubble_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Kick_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Snare_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function HiHat_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Coin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
@@ -2000,6 +2001,28 @@ begin
   else if Result < -1.0 then Result := -1.0;
 end;
 
+// Coin collect sound like Sonic games - classic bleep with rising pitch
+function Coin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  SweepTau = 0.015;
+var
+  t, Phase, Env: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  // Pitch rises quickly from lower to higher
+  Phase := 2 * Pi * Frequency * (1.0 + 0.5 * (1 - Exp(-t / SweepTau))) * t;
+  Env := (1 - Exp(-t * 2000)) * Exp(-t / 0.25);
+  // Two sine waves for a richer tone
+  Result := (Sin(Phase) * 0.7 + Sin(Phase * 2) * 0.3) * Env;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
@@ -2039,6 +2062,7 @@ initialization
   Waveforms.Add('Kick', @Kick_Waveform);
   Waveforms.Add('Snare', @Snare_Waveform);
   Waveforms.Add('HiHat', @HiHat_Waveform);
+  Waveforms.Add('Coin', @Coin_Waveform);
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;

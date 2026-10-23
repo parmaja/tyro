@@ -166,8 +166,8 @@ type
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
   public
-    function Beep_func(L: Plua_State): integer; cdecl;
-    function Sound_func(L: Plua_State): integer; cdecl;
+    function Beep_func(L: Plua_State): integer; cdecl; deprecated; //TODO move to Sound
+    function Sound_func(L: Plua_State): integer; cdecl; deprecated; //TODO move to Sound
     function Play_func(L: Plua_State): integer; cdecl;
     function MML_func(L: Plua_State): integer; cdecl;
     constructor Create(AScript: TLuaScript); override;
@@ -178,14 +178,13 @@ type
 
   TLuaSound = class(TTyroLuaObject)
   public
+    function Beep_func(L: Plua_State): integer; cdecl; deprecated; //TODO move to Sound
     //Cache the file to play any time, faster
     function Load_func(L: Plua_State): integer; cdecl;
     function Unload_func(L: Plua_State): integer; cdecl;
     //sound.play("file.wav" [, volume])
     function Play_func(L: Plua_State): integer; cdecl;
-    //sound.wave("waveformname" [, freq[, ms]])
-    function Wave_func(L: Plua_State): integer; cdecl;
-    //sound.wave("waveformname" [, freq[, ms]])
+    //sound.noise("waveformname" [, freq[, ms]])
     function Noise_func(L: Plua_State): integer; cdecl;
     //sound.loopPlay()/pitch()/volume()/stop()
     function LoopPlay_func(L: Plua_State): integer; cdecl;
@@ -1617,6 +1616,7 @@ begin
   //  sound.stop()
   Lua.State.Register('sound', 'load', Sound, Sound.Load_func);
   Lua.State.Register('sound', 'unload', Sound, Sound.Unload_func);
+  Lua.State.Register('sount', 'beep', Sound, Sound.Beep_func);
   Lua.State.Register('sound', 'play', Sound, Sound.Play_func);
   Lua.State.Register('sound', 'noise', Music, Sound.Noise_func);
   Lua.State.Register('sound', 'loopPlay', Sound, Sound.LoopPlay_func);
@@ -2510,6 +2510,21 @@ begin
   Result := 0;
 end;
 
+function TLuaSound.Beep_func(L: Plua_State): integer; cdecl;
+var
+  c, Period: integer;
+begin
+  c := L.ArgsCount;
+  if c = 1 then
+  begin
+    Period := round(L.ToNumber(1));
+  end
+  else
+    Period := 500;
+  FScript.AddQueueObject(TBeepObject.Create(Period));
+  Result := 0;
+end;
+
 function TLuaSound.Load_func(L: Plua_State): integer; cdecl;
 var
   s: string;
@@ -2537,35 +2552,46 @@ end;
 
 function TLuaSound.Play_func(L: Plua_State): integer; cdecl;
 var
-  s: string;
+  WaveName: string;
+  Freq, Period: integer;
   Volume: Single;
 begin
-  // sound.play("file.wav" [, volume]) - one-shot SFX from an audio file
-  // (raylib LoadSound: .wav). The file is resolved like every other script
-  // asset (script dir, workspace assets/, app folder) and played on the
-  // main thread; a missing file is ignored, not an error.
-  s := L.ToString(1);
-  Volume := 1;
-  if L.ArgsCount >= 2 then
-    Volume := L.ToNumber(2);
-  s := Res.GuessFileName(s, Res.WorkPath);
-  FScript.AddQueueObject(TPlaySoundFileObject.Create(s, Volume));
-  Result := 0;
-end;
-
-function TLuaSound.Wave_func(L: Plua_State): integer; cdecl;
-var
-  Freq, Period: integer;
-  WaveName: string;
-begin
-  //sound.wave('saw', freq, ms)
-  WaveName := L.ToString(1);
-  Freq := round(L.ToNumber(2));
-  if l.ArgsCount = 3 then
-    Period := round(L.ToNumber(3))
+  if L.GetType(1) = LUA_TNUMBER then
+  begin
+    WaveName := '';
+    Freq := round(L.ToNumber(1));
+    if l.ArgsCount = 2 then
+      Period := round(L.ToNumber(2))
+    else
+      Period := 500;
+    Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
+  end
   else
-    Period := 500;
-  Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
+  begin
+    WaveName := L.ToString(1);
+    if SysUtils.ExtractFileExt(WaveName) <> '' then
+    begin
+      // sound.play("file.wav" [, volume]) - one-shot SFX from an audio file
+      Volume := 1;
+      if L.ArgsCount >= 2 then
+        Volume := L.ToNumber(2);
+      WaveName := Res.GuessFileName(WaveName, Res.WorkPath);
+      FScript.AddQueueObject(TPlaySoundFileObject.Create(WaveName, Volume));
+    end
+    else
+    begin
+      //music.sound(name, freq [, ms])
+      WaveName := L.ToString(1);
+      Freq := round(L.ToNumber(2));
+      if l.ArgsCount = 3 then
+        Period := round(L.ToNumber(3))
+      else
+        Period := 500;
+      if Freq = 0 then
+        Freq := 440;
+      Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
+    end;
+  end;
   Result := 0;
 end;
 
