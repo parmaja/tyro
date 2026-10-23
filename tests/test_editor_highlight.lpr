@@ -214,7 +214,7 @@ begin
     WriteLn;
 
     //1. the line of the bug report: every string of it ends at its own quote
-    Setup(['local b = controls.new("button", "Hi", 10, 10, 120, 40, "btn1")']);
+    Setup(['local b = controls.new("button", "Hi", 10, 10, 120, 40)\ncontrols.name(b, "btn1")']);
     DumpRuns('the reported line');
     CheckColored('the reported line: local is a keyword', 'local', clYellow);
     CheckColored('the reported line: new is an api name', 'new', clSkyBlue);

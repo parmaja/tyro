@@ -2,7 +2,8 @@
 --also registered on the control table itself (lst.additem("a"))
 local f = openfile("test_list.txt", "w")
 
-local l = controls.new("listbox", "", 0, 0, 200, 100, "lst")
+local l = controls.new("listbox", "", 0, 0, 200, 100)
+controls.name(l, "lst")
 f:write("created=" .. tostring(l ~= nil) .. "\n")
 
 controls.additem(lst, "a")
@@ -28,7 +29,8 @@ f:write("viewcountset=" .. tostring(controls.viewcount(lst)) .. "\n")
 
 --a plain handle works as well, and anything that is not a listbox answers nil
 f:write("bynumber=" .. tostring(controls.items(1)) .. "\n")
-local btn = controls.new("button", "hi", 0, 0, 100, 30, "btn")
+local btn = controls.new("button", "hi", 0, 0, 100, 30)
+controls.name(btn, "btn")
 f:write("notalist=" .. tostring(controls.items(btn)) .. "\n")
 f:write("badhandle=" .. tostring(controls.items(999)) .. "\n")
 

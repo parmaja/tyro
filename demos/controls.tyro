@@ -5,9 +5,9 @@
 --  window and self-drawn every frame by the main drawing cycle.
 --
 --  API:
---    controls.new(class, captionOrText, x?, y?, w?, h?, name?) -> handle
+--    controls.new(class, name, x?, y?, w?, h?) -> handle
 --      class: 'button' | 'panel' | 'label' | 'checkbox' | 'edit' | 'spectrum'
---             | 'listbox' | 'image'  ('image' reads the caption as a file name)
+--             | 'listbox' | 'image'  ('image' uses name as the file name; for buttons/labels/checkboxes/edits name becomes the caption)
 --    controls.text(handle [, s])   get/set text (caption or edited text)
 --    controls.caption(handle [,s]) alias of text (legacy buttons.caption)
 --    controls.checked(handle [,v]) get/set checked state (checkbox)
@@ -43,7 +43,8 @@ bClose  = controls.new("button", "Close", 280, 40, 100, 36)
 bCounter = controls.new("button", "Click me!", 120, 130, 160, 40)
 
 -- named control: the global 'okbtn' resolves to its handle from now on
-bOK     = controls.new("button", "OK", 400, 40, 100, 36, "okbtn")
+bOK     = controls.new("button", "OK", 400, 40, 100, 36)
+controls.name(bOK, "okbtn")
 
 -- label
 lbl     = controls.new("label", "Label demo", 40, 210, 150, 24)

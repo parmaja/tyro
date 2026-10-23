@@ -1,6 +1,7 @@
 local f = openfile("test_edit.txt", "w")
 f:write("start\n")
-local e = controls.new("edit", "txt", 0,0,100,20, "e1")
+local e = controls.new("edit", "txt", 0,0,100,20)
+controls.name(e, "e1")
 f:write("ok1\n")
 f:write(tostring(e1.placeholder) .. "\n")
 e1.placeholder = "hint"

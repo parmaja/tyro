@@ -3,7 +3,8 @@
 local f = openfile("test_props.txt", "w")
 
 --geometry
-local b = controls.new("button", "Hi", 10, 20, 120, 32, "btn")
+local b = controls.new("button", "Hi", 10, 20, 120, 32)
+controls.name(b, "btn")
 f:write("x,y=" .. b.x .. "," .. b.y .. "\n")
 f:write("w,h=" .. b.width .. "," .. b.height .. "\n")
 b.width = 200
@@ -38,14 +39,16 @@ b.mine = 7
 f:write("raw field=" .. tostring(b.mine) .. "\n")
 
 --checkbox: checked is a property
-local chk = controls.new("checkbox", "On", 10, 100, 90, 24, "chk")
+local chk = controls.new("checkbox", "On", 10, 100, 90, 24)
+controls.name(chk, "chk")
 f:write("checked=" .. tostring(chk.checked) .. "\n")
 chk.checked = true
 f:write("checked set=" .. tostring(chk.checked) .. "\n")
 f:write("checked on button=" .. tostring(b.checked) .. "\n")
 
 --listbox: items/itemindex/viewcount are properties, the actions stay methods
-local l = controls.new("listbox", "", 10, 140, 200, 100, "lst")
+local l = controls.new("listbox", "", 10, 140, 200, 100)
+controls.name(l, "lst")
 l.items = {"a", "b", "c"}
 f:write("items=" .. l.items .. " item1=" .. tostring(l.item(1)) .. "\n")
 f:write("itemindex=" .. l.itemindex .. "\n")
@@ -65,14 +68,16 @@ f:write("cleared=" .. l.items .. "\n")
 f:write("items on button=" .. tostring(b.items) .. "\n")
 
 --image: loaded reads, file writes
-local img = controls.new("image", "test_image_tile.png", 300, 10, 64, 64, "img")
+local img = controls.new("image", "test_image_tile.png", 300, 10, 64, 64)
+controls.name(img, "img")
 f:write("loaded=" .. tostring(img.loaded) .. "\n")
 img.file = "test_image_tile.png"
 f:write("loaded after file=" .. tostring(img.loaded) .. " w,h=" .. img.width .. "," .. img.height .. "\n")
 f:write("loaded on button=" .. tostring(b.loaded) .. "\n")
 
 --parent: a handle that can be passed straight back
-local pan = controls.new("panel", "", 300, 100, 200, 200, "pan")
+local pan = controls.new("panel", "", 300, 100, 200, 200)
+controls.name(pan, "pan")
 b.parent = pan
 f:write("parent=" .. b.parent .. "\n")
 f:write("parent by table=" .. controls.parent(b) .. "\n")

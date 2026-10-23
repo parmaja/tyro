@@ -650,22 +650,15 @@ also takes the handle as its first argument on the table: `controls.additem(lst,
 
 | Function | Description |
 |----------|-------------|
-| `controls.new(class, caption, x, y, w, h, name?)` | Create a `button`, `panel`, `label`, `checkbox`, `edit`, `spectrum`, `listbox`, or `image`; returns a handle |
+| `controls.new(class, name, x, y, w, h)` | Create a `button`, `panel`, `label`, `checkbox`, `edit`, `spectrum`, `listbox`, or `image`; returns a handle. If `name` is a number, the name is omitted and coordinates follow. |
 | `controls.align(handle [, value])` | Get/set `none`, `left`, `top`, `right`, `bottom`, or `client` |
 | `controls.parent(handle [, parentHandle])` | Get/set the container; the getter returns `0` for the main window, and `nil`/`0` moves the control there |
 | `controls.width/height(handle [, value])` | Get/set the preferred size |
 | `controls.position/move(handle, x, y)` | Get/set the preferred position |
-| `controls.text/caption(handle [, value])` | Get/set a caption, label, or edit value |
 | `controls.visible/show/hide(handle)` | Show or hide a control; hidden aligned controls release their space |
 | `controls.hover/down/clicked(handle)` | Read mouse state |
-| `controls.checked(handle [, value])` | Get/set the checked state of a checkbox |
 | `controls.border(handle [, style])` | `0` none, `1` thin, `2` thick, `3` sizable |
 | `controls.backcolor(handle [, color])` | Set a color from the `colors` table |
-| `controls.load(handle, file)` | Load the texture of an `image`; answers `true` when the file produced one |
-| `controls.items(handle [, item...])` | Replace the items of a `listbox` (also one table of strings); with no argument it returns the count |
-| `controls.item(handle, index [, text])` | Get/set a single item, `nil` outside the list |
-| `controls.additem(handle, text)` / `controls.clear(handle)` | Append an item / remove them all |
-| `controls.itemindex(handle [, index])` / `controls.viewcount(handle [, rows])` | Get/set the selected row (`-1` is none) / the visible rows (`0` is the control size) |
 
 `BoundsRect` stores a control's preferred position and size. Docking changes only
 its effective `WindowRect`, so `controls.width`, `controls.height`, and
@@ -680,7 +673,8 @@ with top- and bottom-docked buttons.
 show, so the common case is one line:
 
 ```lua
-logo = controls.new("image", "logo.png", 40, 40, 128, 128, "logo")
+logo = controls.new("image", "logo.png", 40, 40, 128, 128)
+controls.name(logo, "logo")
 ```
 
 The texture is loaded on the main thread, and a texture larger than the requested
@@ -1038,13 +1032,9 @@ Lazarus or Delphi
 
 # Libraries
 
-You need MiniLib package minilib.lpk
+[minilib](https://github.com/parmaja/minilib) MiniLib package minilib.lpk
 
-[minilib](https://github.com/parmaja/minilib)
-
-You need only MiniLua package minilib.lpk
-
-[miniLua](https://github.com/parmaja/miniLua)
+[miniLua](https://github.com/parmaja/miniLua) MiniLua package minilua.lpk
 
 # Dependencies
 

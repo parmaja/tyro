@@ -16,7 +16,8 @@ end
 -- Leave a control in the window, focused, so the test can check that a rerun
 -- takes both the control and the focus it holds away again. The name carries the
 -- tag: the test edits the tag above, so a rerun has to produce a new name.
-local ctrl = controls.new('button', tag, 10, 10, 120, 30, 'ctrl' .. tag)
+local ctrl = controls.new('button', tag, 10, 10, 120, 30)
+controls.name(ctrl, 'ctrl' .. tag)
 controls.focus(ctrl)
 
 -- Leave a sprite in the store too. A texture-less sprite needs no graphics

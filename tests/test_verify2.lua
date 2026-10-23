@@ -1,6 +1,7 @@
 local f = openfile("test_verify2.txt", "w")
 f:write("start\n")
-local b = controls.new("button", "Hi", 10, 10, 120, 40, "btn1")
+local b = controls.new("button", "Hi", 10, 10, 120, 40)
+controls.name(b, "btn1")
 f:write("created\n")
 local t = controls.text(b)
 f:write(tostring(t) .. "\n")

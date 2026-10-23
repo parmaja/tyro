@@ -4,7 +4,8 @@
 --hold has to answer nil instead, and the getters must keep answering values.
 local f = openfile("test_luatable.txt", "w")
 
-local l = controls.new("listbox", "", 0, 0, 200, 100, "lst")
+local l = controls.new("listbox", "", 0, 0, 200, 100)
+controls.name(l, "lst")
 controls.additem(lst, "a")
 
 f:write("unknown-control-table=" .. tostring(lst.nosuchfield) .. "\n")

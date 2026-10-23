@@ -1724,6 +1724,7 @@ begin
   //which stay methods on the control table and take a colon call.
   Lua.State.RegisterTable('controls');
   Lua.State.Register('controls', 'new', Controls, Controls.New_func);
+  //Lua.State.Register('controls', 'find', Controls, Controls.Find_func); TODO find by handle or name
   Lua.State.Register('controls', 'position', Controls, Controls.Position_func);
   Lua.State.Register('controls', 'move', Controls, Controls.Move_func);
   Lua.State.Register('controls', 'width', Controls, Controls.Width_func);
@@ -1739,13 +1740,15 @@ begin
   Lua.State.Register('controls', 'border', Controls, Controls.Border_func);
   Lua.State.Register('controls', 'backcolor', Controls, Controls.BackColor_func);
   Lua.State.Register('controls', 'name', Controls, Controls.Name_func);
+  Lua.State.Register('controls', 'align', Controls, Controls.Align_func);
+  Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
   //caption/text: both spellings work on a caption control, and text also
   //covers an edit; btn.caption and btn.text are the field spellings of both
+{ TODO
+  //No derived properties method should not accessed by controls
   Lua.State.Register('controls', 'caption', Controls, Controls.Caption_func);
   Lua.State.Register('controls', 'text', Controls, Controls.Text_func);
   Lua.State.Register('controls', 'checked', Controls, Controls.Checked_func);
-  Lua.State.Register('controls', 'align', Controls, Controls.Align_func);
-  Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
   //listbox: items/viewcount/itemindex are fields on the control table
   //(lst.items), the three actions additem/item/clear are also methods there
   //(lst:additem("a")); the table form takes the handle first
@@ -1758,6 +1761,7 @@ begin
   Lua.State.Register('controls', 'itemindex', Controls, Controls.ItemIndex_func);
   //image control: load the texture an image shows (img.load(...) is the same)
   Lua.State.Register('controls', 'load', Controls, Controls.LoadImage_func);
+}
   Lua.State.Register('controls', Controls); //should be last one
 
   //output (catches print/println/log)
@@ -4497,7 +4501,7 @@ begin
   end;
 end;
 
-//controls.new(class, captionOrText, x?, y?, w?, h?, name?) -> handle
+//controls.new(class, name, x?, y?, w?, h?) -> handle
 //(created on the Engine thread, self-drawn by the Engine cycle; the returned
 //handle is 1-based over the controls created by this script)
 //legacy call buttons.new(caption, x?, y?, w?, h?, borderSize?) still works
@@ -4507,6 +4511,7 @@ var
   c: Integer;
   x, y, w, h: Integer;
   popStart: Integer; //position of the first optional numeric argument
+  argIndex: Integer;
   CreateObj: TCreateControlObject;
 begin
   Result := 1;
@@ -4521,10 +4526,34 @@ begin
      (clsName = 'checkbox') or (clsName = 'edit') or (clsName = 'spectrum') or
      (clsName = 'listbox') or (clsName = 'image') then
   begin
-    //new style: controls.new(class, captionOrText, x?, y?, w?, h?, name?)
+    //new style: controls.new(class, name, x?, y?, w?, h?)
+    //if second arg is number, skip the name
     clsName := caption;
-    caption := L.ToString(2);
-    popStart := 3;
+    aName := '';
+    if c >= 2 then
+    begin
+      if L.IsNumber(2) then
+      begin
+        popStart := 2;
+        caption := '';
+      end
+      else
+      begin
+        aName := L.ToString(2);
+        popStart := 3;
+        caption := '';
+        if (clsName = 'button') or (clsName = 'label') or (clsName = 'checkbox') or
+           (clsName = 'edit') then
+          caption := aName
+        else if clsName = 'image' then
+          caption := aName;
+      end;
+    end
+    else
+    begin
+      popStart := 2;
+      caption := '';
+    end;
     if clsName = 'button' then
     begin
       w := 100; h := 32;
@@ -4559,8 +4588,6 @@ begin
       //grows the control, a smaller one keeps these bounds
       w := 64; h := 64;
     end;
-    if c >= 7 then
-      aName := L.ToString(7);
   end
   else
   begin
@@ -4570,10 +4597,39 @@ begin
     w := 100; h := 32;
   end;
 
-  if c >= popStart then x := round(L.ToNumber(popStart));
-  if c >= popStart + 1 then y := round(L.ToNumber(popStart + 1));
-  if c >= popStart + 2 then w := round(L.ToNumber(popStart + 2));
-  if c >= popStart + 3 then h := round(L.ToNumber(popStart + 3));
+  argIndex := popStart;
+  if c >= argIndex then
+  begin
+    if L.IsNumber(argIndex) then
+    begin
+      x := round(L.ToNumber(argIndex));
+      argIndex := argIndex + 1;
+    end;
+  end;
+  if c >= argIndex then
+  begin
+    if L.IsNumber(argIndex) then
+    begin
+      y := round(L.ToNumber(argIndex));
+      argIndex := argIndex + 1;
+    end;
+  end;
+  if c >= argIndex then
+  begin
+    if L.IsNumber(argIndex) then
+    begin
+      w := round(L.ToNumber(argIndex));
+      argIndex := argIndex + 1;
+    end;
+  end;
+  if c >= argIndex then
+  begin
+    if L.IsNumber(argIndex) then
+    begin
+      h := round(L.ToNumber(argIndex));
+      argIndex := argIndex + 1;
+    end;
+  end;
 
   CreateObj := TCreateControlObject.Create(clsName, caption, x, y, w, h, aName);
   try

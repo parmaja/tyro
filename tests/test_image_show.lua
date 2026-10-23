@@ -5,7 +5,8 @@
 
 window.show(320, 240)
 
-local pic = controls.new("image", "test_image_tile.png", 40, 40, 128, 128, "pic")
+local pic = controls.new("image", "test_image_tile.png", 40, 40, 128, 128)
+controls.name(pic, "pic")
 
 canvas.clear()
 

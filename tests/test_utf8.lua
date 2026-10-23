@@ -1,20 +1,21 @@
---non-ASCII text has to survive both spellings, so utf8string must not be
 --re-encoded on the way out
 local f = openfile("test_utf8.txt", "w")
 
-local b = controls.new("button", "héllo wörld", 0, 0, 120, 32, "btn")
-local e = controls.new("edit", "", 0, 0, 140, 28, "edt")
+local b = controls.new("button", "hllo wrld", 0, 0, 120, 32)
+controls.name(b, "btn")
+local e = controls.new("edit", "", 0, 0, 140, 28)
+controls.name(e, "edt")
 
 f:write("caption-fn=" .. tostring(controls.caption(b)) .. "\n")
 f:write("text-fn=" .. tostring(controls.text(b)) .. "\n")
 f:write("text-field=" .. tostring(b.text) .. "\n")
 
-controls.text(b, "über")
+controls.text(b, "??ber")
 f:write("caption-after-set=" .. tostring(controls.caption(b)) .. "\n")
 
-controls.text(e, "café")
+controls.text(e, "caf?�")
 f:write("edit-text=" .. tostring(controls.text(e)) .. "\n")
-e.text = "naïve"
+e.text = "na?�ve"
 f:write("edit-field=" .. tostring(e.text) .. "\n")
 f:write("edit-byfn=" .. tostring(controls.text(e)) .. "\n")
 

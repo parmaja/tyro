@@ -2,7 +2,8 @@ local f = openfile("test_image.txt", "w")
 f:write("start\n")
 
 --controls.new('image', file, ...) : the caption slot names the texture
-local img = controls.new("image", "test_image_tile.png", 10, 10, 128, 128, "pic")
+local img = controls.new("image", "test_image_tile.png", 10, 10, 128, 128)
+controls.name(img, "pic")
 f:write("created=" .. tostring(img ~= nil) .. "\n")
 f:write("loaded=" .. tostring(pic.loaded) .. "\n")
 
@@ -27,7 +28,8 @@ pic.load("")
 f:write("empty=" .. tostring(pic.loaded) .. "\n")
 
 --controls that are not images never load
-local lbl = controls.new("label", "text", 0, 0, 100, 20, "lbl")
+local lbl = controls.new("label", "text", 0, 0, 100, 20)
+controls.name(lbl, "lbl")
 f:write("notimage=" .. tostring(controls.load(lbl, "test_image_tile.png")) .. "\n")
 f:write("loaded=" .. tostring(lbl.loaded) .. "\n")
 f:write("badhandle=" .. tostring(controls.load(0, "test_image_tile.png")) .. "\n")
