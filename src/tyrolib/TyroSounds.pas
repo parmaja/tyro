@@ -278,6 +278,7 @@ function Explode_Waveform(Index, SampleRate: Integer; Frequency: Single): Single
 function Fire_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Boing_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Siren_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Bubble_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Kick_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Snare_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function HiHat_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -1883,6 +1884,39 @@ begin
   Result := Sin(Phase) * 0.75;
 end;
 
+// A single water bubble surfacing: the classic "bloop". The pitch glides up
+// from 55% of the tuned note to the note itself in about 20 ms (closed-form
+// phase integral, so the rise is smooth and sample accurate), while a short
+// high ping adds the little resonant tick a bubble makes as it leaves the
+// water. The envelope is a fast soft attack and a ~65 ms decay, so one note
+// reads as one bubble. Frequency is the final pitch: low notes are big lazy
+// bubbles, high notes are small fizzy ones.
+function Bubble_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  RiseStart = 0.45;   //pitch starts 45% below the tuned note
+  RiseTau = 0.018;    //seconds the upward glide lasts
+  DecayTau = 0.065;   //amplitude decay of the body
+  PingLevel = 0.18;   //high resonant tick on top
+  PingTau = 0.012;
+var
+  t, Phase, Env, Ping: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  //f(t) = F * (1 - RiseStart * exp(-t/RiseTau)), integrated in closed form.
+  Phase := 2 * Pi * Frequency *
+    (t - RiseStart * RiseTau * (1 - Exp(-t / RiseTau)));
+  Env := (1 - Exp(-t * 1200)) * Exp(-t / DecayTau);
+  Ping := Sin(2 * Pi * Frequency * 2.6 * t) * Exp(-t / PingTau) * PingLevel;
+  Result := Sin(Phase) * Env + Ping;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 // Bass drum: a sine whose pitch drops from ~3x the tuned note down to it in
 // the first 30 ms (the classic "boom"), plus a short noise click for the
 // beater attack. Frequency is the drum pitch (a 60 Hz note is a deep kick,
@@ -1999,6 +2033,7 @@ initialization
   Waveforms.Add('Fire', @Fire_Waveform); //crackling fire bed, loopable
   Waveforms.Add('Boing', @Boing_Waveform); //springy life-net bounce
   Waveforms.Add('Siren', @Siren_Waveform); //wailing fire engine siren
+  Waveforms.Add('Bubble', @Bubble_Waveform); //single water bubble "bloop"
 
   //Drums
   Waveforms.Add('Kick', @Kick_Waveform);
