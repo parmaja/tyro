@@ -283,6 +283,8 @@ function Kick_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Snare_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function HiHat_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Coin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Cash_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Phaser_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
@@ -2023,6 +2025,103 @@ begin
   else if Result < -1.0 then Result := -1.0;
 end;
 
+// Cash drawer: the drawer is pulled open with a mechanical rattle, hits the
+// end of its travel, then the register chimes twice ("ka-ching"). Frequency
+// tunes the register bell; the mechanical parts are derived from HashNoise, so
+// the same note renders exactly the same sound on every play.
+function Cash_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  SlideTau = 0.11;      //drawer slide hiss decay, seconds
+  StopDelay = 0.135;    //when the drawer reaches the end of its travel
+  StopTau = 0.045;      //mechanical stop thump decay
+  BellDelay1 = 0.055;   //first chime, while the drawer is still moving
+  BellDelay2 = 0.190;   //second chime, the "ching"
+  BellTau = 0.30;       //chime ring decay
+  BellLevel = 0.46;     //chime level against the mechanical noise
+var
+  t, d, Slide, Rattle, StopThump, Bell, Env, Phase: Double;
+  Strike: Integer;
+begin
+  Result := 0;
+  if (Frequency <= 0) or (SampleRate <= 0) then
+    Exit;
+  t := Index / SampleRate;
+  //Drawer on its runners: bright noise with a darker layer under it. A fast
+  //gate turns the hiss into the rattle of the drawer rolling out.
+  Slide := HashNoise(Index) * 0.5 + HashNoise(Index shr 3) * 0.5;
+  Rattle := Frac(t * (Frequency * 0.04 + 18));
+  if Rattle < 0.55 then
+    Rattle := 1.0
+  else
+    Rattle := 0.35;
+  Slide := Slide * (1 - Exp(-t * 220)) * Exp(-t / SlideTau) * Rattle;
+  //The drawer hitting the stop: a low knock, not a musical note.
+  StopThump := 0;
+  d := t - StopDelay;
+  if d >= 0 then
+    StopThump := Sin(2 * Pi * Frequency * 0.5 * d)
+      * Exp(-d / StopTau) * (1 - Exp(-d * 3000)) * 0.55;
+  //Two strikes of the register bell. The partials are deliberately inharmonic
+  //so it reads as struck metal instead of an organ chord.
+  Bell := 0;
+  for Strike := 0 to 1 do
+  begin
+    if Strike = 0 then
+      d := t - BellDelay1
+    else
+      d := t - BellDelay2;
+    if d >= 0 then
+    begin
+      Phase := 2 * Pi * Frequency * 2.0 * d; //bell an octave above the note
+      Env := (1 - Exp(-d * 2500)) * Exp(-d / BellTau);
+      Bell := Bell + (Sin(Phase) * 0.6
+        + Sin(Phase * 1.51) * 0.3
+        + Sin(Phase * 2.37) * 0.15) * Env;
+    end;
+  end;
+  Bell := Bell * BellLevel;
+  Result := Slide * 0.55 + StopThump + Bell;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
+// Sci-fi phaser: the beam fires high and drops to the tuned note, warbling
+// fast as it goes. The sweep is a closed-form phase integral so it glides; the
+// warble is phase modulation, and a detuned second oscillator plus ring
+// modulation give the metallic "phase" edge. A short noise crack adds the
+// energy discharge. Frequency is the pitch the beam settles on: low notes are
+// an alien stun gun, high ones a starship rifle.
+function Phaser_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  SweepDepth = 2.6;    //pitch starts 3.6x above the tuned note
+  SweepTau = 0.10;     //pitch fall time, seconds
+  DecayTau = 0.35;     //beam decay, seconds
+  WarbleRate = 27.0;   //fast flutter, Hz
+  WarbleDepth = 0.55;  //flutter depth, radians
+  TremoloRate = 16.0;
+var
+  t, Phase, Warble, Tremolo, Tone, Detune, Ring, Noise, Env: Double;
+begin
+  Result := 0;
+  if (Frequency <= 0) or (SampleRate <= 0) then
+    Exit;
+  t := Index / SampleRate;
+  //f(t) = F * (1 + SweepDepth*exp(-t/SweepTau)), integrated analytically.
+  Phase := 2 * Pi * Frequency * (t + SweepDepth * SweepTau * (1 - Exp(-t / SweepTau)));
+  Warble := WarbleDepth * Sin(2 * Pi * WarbleRate * t) * Exp(-t / 0.22);
+  Tremolo := 0.65 + 0.35 * Sin(2 * Pi * TremoloRate * t);
+  Tone := Sin(Phase + Warble);
+  Detune := Sin(Phase * 1.51 - Warble * 0.6);
+  Ring := Sin(Phase * 2.73 + Warble * 0.3);
+  //The beam's energy discharge, brightest at the muzzle flash.
+  Noise := HashNoise(Index) * Exp(-t / 0.045);
+  Env := (1 - Exp(-t * 900)) * Exp(-t / DecayTau);
+  Result := (Tone * 0.55 + Detune * 0.25 + Tone * Ring * 0.28
+    + Noise * 0.18) * Tremolo * Env;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
@@ -2063,6 +2162,10 @@ initialization
   Waveforms.Add('Snare', @Snare_Waveform);
   Waveforms.Add('HiHat', @HiHat_Waveform);
   Waveforms.Add('Coin', @Coin_Waveform);
+
+  //Cash register and weapons
+  Waveforms.Add('Cash', @Cash_Waveform); //cash drawer sliding open + register chime
+  Waveforms.Add('Phaser', @Phaser_Waveform); //sci-fi gun phaser beam
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;
