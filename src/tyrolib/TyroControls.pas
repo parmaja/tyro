@@ -46,7 +46,9 @@ uses
   Classes, SysUtils, Types,
   mnUtils, mnClasses,
   {$ifdef FPC}
-  LCLType, //LazUTF8, //Keep it after mnUtils
+  {$IFDEF LCL}
+  LCLType,
+  {$ENDIF}
   {$endif}
   RayLib, RayClasses,
   TyroClasses;
@@ -65,7 +67,11 @@ const
 
 type
   {$ifdef FPC}
+  {$IFDEF LCL}
   TUTF8Char = LCLType.TUTF8Char;
+  {$ELSE}
+  TUTF8Char = String[7];
+  {$ENDIF}
   {$else}
   TUTF8Char = String[7]; //* ported from LCLType;
   {$endif}
@@ -3148,6 +3154,8 @@ begin
           aControl.PaintWindow(Canvas);
         end;
     finally
+      if (Canvas <> nil) and (Canvas is TTyroTextureCanvas) then
+        TTyroTextureCanvas(Canvas).PostDraw(0, 0);
     end;
   end;
 end;

@@ -2,7 +2,13 @@
 
 This is a simple game engine for kids and noobs, using RayLib and Lua for endusers, built using FPC/Delphi
 
+## Implementation
+
+* If the task is a game, use Sprites as possible, add features that needed it in Tyro project
+
+
 ## Compile
+
 - Use FPC that exists in the system, do not use Delphi
 - Keep code compatible with Delphi
 

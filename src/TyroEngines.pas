@@ -29,6 +29,11 @@ unit TyroEngines;
 interface
 
 uses
+  {$ifdef MSWINDOWS}
+  //Has to come before Classes: its RECT record would otherwise hide the Rect()
+  //function of Classes, FPC being case insensitive.
+  Windows,
+  {$endif}
   Classes, SysUtils, SyncObjs, StrUtils,
   mnLogs, mnUtils, mnClasses, mnConfigs,
   RayLib, RayClasses, TyroScripts, TyroSounds,
@@ -641,6 +646,14 @@ type
 var
   Engine : TTyroEngine = nil;
 
+// The window icon of the engine is the application's own icon: tyro.ico is
+// linked into the executable by the {$R *.res} of tyro.lpr, so nothing has to
+// ship beside the exe. Returns the biggest PNG picture of those icon resources
+// decoded by raylib, or an empty image (Data = nil) when the executable carries
+// none; in that case a tyro.png next to the executable, if there is one, is
+// used instead.
+function LoadApplicationIconImage: TImage;
+
 implementation
 
 uses
@@ -815,13 +828,11 @@ begin
           if UpdateShake(RayLib.GetFrameTime()) then
             Camera2D.Offset := Vector2Of(Margin + FShakeX, Margin + FShakeY);
 
-          //Board.BeginDraw;
           BeginMode2D(Camera2D);
           Draw;
           EndMode2D;
-          //Board.EndDraw;
-//          Main.Canvas.PostDraw;
-          Main.Paint;
+          if Main <> nil then
+            Main.Paint;
 
           if moShowFPS in Options then
           begin
@@ -1770,6 +1781,80 @@ begin
   end;
 end;
 
+// Reads the icon resources of the executable and returns the biggest PNG image
+// found in them. ImageMagick stores the large sizes of tyro.ico as PNG and the
+// small ones as DIB: PNG needs no decoder of ours (raylib has one) and a window
+// icon only cares about the large sizes anyway. The images of an icon are
+// resources of type 3 (RT_ICON) named by ordinal 1..N, no matter whether
+// Lazarus or windres wrote the .res.
+{$ifdef MSWINDOWS}
+function LoadEmbeddedIconImage: TImage;
+var
+  i: Integer;
+  hRes: Windows.HRSRC;
+  hData: HGLOBAL;
+  p: PByte;
+  Size: Cardinal;
+  W, H, Area: Integer;
+  BestData: Pointer;
+  BestSize, BestArea: Integer;
+  PngType: UTF8String;
+begin
+  Result := Default(TImage);
+  PngType := '.png';
+  BestData := nil;
+  BestSize := 0;
+  BestArea := -1;
+  for i := 1 to 32 do
+  begin
+    hRes := FindResource(HInstance, MakeIntResource(i), MakeIntResource(3));
+    if hRes = 0 then
+      Continue;
+    hData := LoadResource(HInstance, hRes);
+    if hData = 0 then
+      Continue;
+    p := LockResource(hData);
+    Size := SizeofResource(HInstance, hRes);
+    if (p = nil) or (Size < 24) then
+      Continue;
+    //PNG signature
+    if (p^ = $89) and ((p + 1)^ = $50) and ((p + 2)^ = $4E) and ((p + 3)^ = $47) and
+      ((p + 4)^ = $0D) and ((p + 5)^ = $0A) and ((p + 6)^ = $1A) and ((p + 7)^ = $0A) then
+    begin
+      //IHDR width/height, stored big endian
+      W := (Integer((p + 16)^) shl 24) or (Integer((p + 17)^) shl 16) or
+        (Integer((p + 18)^) shl 8) or Integer((p + 19)^);
+      H := (Integer((p + 20)^) shl 24) or (Integer((p + 21)^) shl 16) or
+        (Integer((p + 22)^) shl 8) or Integer((p + 23)^);
+      Area := W * H;
+      if Area > BestArea then
+      begin
+        BestArea := Area;
+        BestData := p;
+        BestSize := Size;
+      end;
+    end;
+  end;
+  if BestData <> nil then
+    Result := RayLib.LoadImageFromMemory(PUTF8Char(PUTF8String(PngType)), BestData, BestSize);
+end;
+{$endif}
+
+function LoadApplicationIconImage: TImage;
+begin
+  Result := Default(TImage);
+  {$ifdef MSWINDOWS}
+  Result := LoadEmbeddedIconImage;
+  if Result.Data <> nil then
+    Exit;
+  {$endif}
+  //Fallback: the png that was the only icon source before the icon got embedded
+  //in the executable, a non Windows build gets its icon this way (Res is the
+  //engine's global, nil until the engine is created)
+  if (Res <> nil) and SysUtils.FileExists(Res.AppPath + 'tyro.png') then
+    Result := RayLib.LoadImage(PUTF8Char(PUTF8String(Res.AppPath + 'tyro.png')));
+end;
+
 procedure TTyroEngine.PrepareWindow(AWidth, AHeight: Integer);
 var
   Icon: RayLib.TImage;
@@ -1783,11 +1868,13 @@ begin
   RayLib.SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   RayLib.InitWindow(AWidth, AHeight, PUTF8Char(UTF8String(Title)));
   LoadGamepadMappings;
-  if SysUtils.FileExists(Res.AppPath + 'tyro.png') then
+  //The window, taskbar and alt-tab icon is the application's own icon, the one
+  //Explorer shows for the executable, no icon file has to ship with it.
+  Icon := LoadApplicationIconImage;
+  if Icon.Data <> nil then
   begin
-    Icon := RayLib.LoadImage(PUTF8Char(PUTF8String(Res.AppPath + 'tyro.png')));
-    SetWindowIcon(icon);
-    UnloadImage(icon);
+    RayLib.SetWindowIcon(Icon);
+    RayLib.UnloadImage(Icon);
   end;
   FWidth := AWidth;
   FHeight := AHeight;
