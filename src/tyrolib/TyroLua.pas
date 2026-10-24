@@ -57,6 +57,8 @@ type
     function Circle_func(L: Plua_State): integer; cdecl;
     function Triangle_func(L: Plua_State): integer; cdecl;
     function Rectangle_func(L: Plua_State): integer; cdecl;
+    function GradientH_func(L: Plua_State): integer; cdecl;
+    function GradientV_func(L: Plua_State): integer; cdecl;
     function Line_func(L: Plua_State): integer; cdecl;
     function Point_func(L: Plua_State): integer; cdecl;
     function Test_func(L: Plua_State): integer; cdecl;
@@ -1582,6 +1584,8 @@ begin
   Lua.State.Register('canvas', 'circle', Canvas, Canvas.Circle_func);
   Lua.State.Register('canvas', 'triangle', Canvas, Canvas.Triangle_func);
   Lua.State.Register('canvas', 'rectangle', Canvas, Canvas.Rectangle_func);
+  Lua.State.Register('canvas', 'gradientH', Canvas, Canvas.GradientH_func);
+  Lua.State.Register('canvas', 'gradientV', Canvas, Canvas.GradientV_func);
   Lua.State.Register('canvas', 'line', Canvas, Canvas.Line_func);
   Lua.State.Register('canvas', 'point', Canvas, Canvas.Point_func);
   //canvas.test(ms): diagnostic slow draw (see TLuaCanvas.Test_func)
@@ -2149,6 +2153,66 @@ begin
   if c >= 4 then
     f := L.ToBoolean(5);
   FScript.AddQueueObject(TDrawRectangleObject.Create(Engine.Board, x, y, w, h, f));
+  Result := 0;
+end;
+
+// canvas gradient colors take the same forms as canvas.color/canvas.clear: a
+// colors.* integer or a color name string. False means the argument was not
+// given, so the draw command keeps using the canvas color for that side.
+function CanvasColorArg(L: Plua_State; Index: Integer; out Color: TColor): Boolean;
+begin
+  Color := clBlank;
+  if L.IsString(Index) then
+  begin
+    Color := StrToColor(L.ToString(Index));
+    Result := True;
+  end
+  else if L.IsNumber(Index) then
+  begin
+    Color := IntToColor(round(L.ToNumber(Index)));
+    Result := True;
+  end
+  else
+    Result := False;
+end;
+
+// canvas.gradientV(x, y, w, h [, startColor, endColor]) -- top to bottom
+function TLuaCanvas.GradientV_func(L: Plua_State): integer; cdecl;
+var
+  x, y, w, h: integer;
+  startColor, endColor: TColor;
+  o: TDrawGradientObject;
+begin
+  x := round(L.ToNumber(1));
+  y := round(L.ToNumber(2));
+  w := round(L.ToNumber(3));
+  h := round(L.ToNumber(4));
+  o := TDrawGradientObject.Create(Engine.Board, x, y, w, h, clBlank, clBlank, True);
+  o.fHasStartColor := CanvasColorArg(L, 5, startColor);
+  o.fStartColor := startColor;
+  o.fHasEndColor := CanvasColorArg(L, 6, endColor);
+  o.fEndColor := endColor;
+  FScript.AddQueueObject(o);
+  Result := 0;
+end;
+
+// canvas.gradientH(x, y, w, h [, startColor, endColor]) -- left to right
+function TLuaCanvas.GradientH_func(L: Plua_State): integer; cdecl;
+var
+  x, y, w, h: integer;
+  startColor, endColor: TColor;
+  o: TDrawGradientObject;
+begin
+  x := round(L.ToNumber(1));
+  y := round(L.ToNumber(2));
+  w := round(L.ToNumber(3));
+  h := round(L.ToNumber(4));
+  o := TDrawGradientObject.Create(Engine.Board, x, y, w, h, clBlank, clBlank, False);
+  o.fHasStartColor := CanvasColorArg(L, 5, startColor);
+  o.fStartColor := startColor;
+  o.fHasEndColor := CanvasColorArg(L, 6, endColor);
+  o.fEndColor := endColor;
+  FScript.AddQueueObject(o);
   Result := 0;
 end;
 

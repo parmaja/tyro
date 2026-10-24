@@ -268,6 +268,13 @@ type
     procedure FillRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor); overload;
     procedure FillRectangle(ARectangle: TRectangle; Color: TColor); overload;
 
+    //Gradient fills: StartColor is at the top (V) or the left (H), EndColor at
+    //the bottom (V) or the right (H).
+    procedure FillGradientV(X: Single; Y: Single; AWidth: Single; AHeight: Single; StartColor, EndColor: TColor); overload;
+    procedure FillGradientV(ARectangle: TRectangle; StartColor, EndColor: TColor); overload;
+    procedure FillGradientH(X: Single; Y: Single; AWidth: Single; AHeight: Single; StartColor, EndColor: TColor); overload;
+    procedure FillGradientH(ARectangle: TRectangle; StartColor, EndColor: TColor); overload;
+
     //Triangle: filled uses raylib's 2D triangle, an outline follows the pen size
     //so canvas.Pen / the thickness argument control how heavy it looks.
     procedure DrawTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor);
@@ -750,6 +757,32 @@ end;
 procedure TTyroCanvas.FillRectangle(ARectangle: TRectangle; Color: TColor);
 begin
   RayLib.DrawRectangleRec(OffsetRect(ARectangle), Color)
+end;
+
+procedure TTyroCanvas.FillGradientV(X: Single; Y: Single; AWidth: Single; AHeight: Single; StartColor, EndColor: TColor);
+begin
+  FillGradientV(RectangleOf(X, Y, AWidth, AHeight), StartColor, EndColor);
+end;
+
+procedure TTyroCanvas.FillGradientV(ARectangle: TRectangle; StartColor, EndColor: TColor);
+var
+  R: TRectangle;
+begin
+  R := OffsetRect(ARectangle);
+  RayLib.DrawRectangleGradientV(Round(R.X), Round(R.Y), Round(R.Width), Round(R.Height), StartColor, EndColor);
+end;
+
+procedure TTyroCanvas.FillGradientH(X: Single; Y: Single; AWidth: Single; AHeight: Single; StartColor, EndColor: TColor);
+begin
+  FillGradientH(RectangleOf(X, Y, AWidth, AHeight), StartColor, EndColor);
+end;
+
+procedure TTyroCanvas.FillGradientH(ARectangle: TRectangle; StartColor, EndColor: TColor);
+var
+  R: TRectangle;
+begin
+  R := OffsetRect(ARectangle);
+  RayLib.DrawRectangleGradientH(Round(R.X), Round(R.Y), Round(R.Width), Round(R.Height), StartColor, EndColor);
 end;
 
 procedure TTyroCanvas.FillRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Color: TColor);

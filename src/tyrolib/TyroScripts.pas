@@ -392,6 +392,21 @@ type
     procedure DoExecute; override;
   end;
 
+  { TDrawGradientObject }
+
+  TDrawGradientObject = class(TDrawObject)
+  public
+    fX, fY, fW, fH: Integer;
+    fStartColor, fEndColor: TColor;
+    //A color that the script did not pass is taken from Canvas.Color when the
+    //command runs, the same way canvas.rectangle uses the current color.
+    fHasStartColor, fHasEndColor: Boolean;
+    //True draws top-to-bottom, False draws left-to-right.
+    fVertical: Boolean;
+    constructor Create(ACanvas: TTyroCanvas; X, Y, W, H: Integer; StartColor, EndColor: TColor; Vertical: Boolean);
+    procedure DoExecute; override;
+  end;
+
   { TDrawLineObject }
 
   TDrawLineObject = class(TDrawObject)
@@ -1915,6 +1930,40 @@ begin
     Canvas.FillRectangle(fX, fY, fW, fH, Canvas.Color)
   else
     Canvas.DrawRectangle(fX, fY, fW, fH, Canvas.Color);
+end;
+
+{ TDrawGradientObject }
+
+constructor TDrawGradientObject.Create(ACanvas: TTyroCanvas; X, Y, W, H: Integer; StartColor, EndColor: TColor; Vertical: Boolean);
+begin
+  inherited Create(ACanvas);
+  fX := X;
+  fY := Y;
+  fW := W;
+  fH := H;
+  fStartColor := StartColor;
+  fEndColor := EndColor;
+  fHasStartColor := True;
+  fHasEndColor := True;
+  fVertical := Vertical;
+end;
+
+procedure TDrawGradientObject.DoExecute;
+var
+  StartColor, EndColor: TColor;
+begin
+  if fHasStartColor then
+    StartColor := fStartColor
+  else
+    StartColor := Canvas.Color;
+  if fHasEndColor then
+    EndColor := fEndColor
+  else
+    EndColor := Canvas.Color;
+  if fVertical then
+    Canvas.FillGradientV(fX, fY, fW, fH, StartColor, EndColor)
+  else
+    Canvas.FillGradientH(fX, fY, fW, fH, StartColor, EndColor);
 end;
 
 { TPrintObject }

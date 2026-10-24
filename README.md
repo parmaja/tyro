@@ -64,9 +64,13 @@ to run. Use `--exit:N` to let such a script play for *N* seconds.
 The canvas primitives are `canvas.clear()`, `canvas.text(x, y, s)`,
 `canvas.rectangle(x, y, w, h [, fill])`, `canvas.circle(x, y, r [, fill])`,
 `canvas.triangle(x1, y1, x2, y2, x3, y3 [, fill])`,
-`canvas.line(x1, y1, x2, y2 [, thickness])` and `canvas.point(x, y)`. Set the
-color with `canvas.color = colors.red` (and `canvas.backcolor` / `canvas.clear()`
-for the background). `canvas.pensize` (alias `canvas.linewidth`) sets the
+`canvas.line(x1, y1, x2, y2 [, thickness])` and `canvas.point(x, y)`.
+`canvas.gradientV(x, y, w, h [, startColor, endColor])` fills a rectangle with
+a top-to-bottom gradient, and `canvas.gradientH(...)` with a left-to-right one;
+their colors take the same `colors.*` values as `canvas.color` and default to
+the current color when omitted. Set the color with `canvas.color = colors.red`
+(and `canvas.backcolor` / `canvas.clear()` for the background).
+`canvas.pensize` (alias `canvas.linewidth`) sets the
 thickness of lines and of rectangle/triangle outlines; `canvas.line` also takes
 a per-call thickness. `textwidth(s)` and `textheight()` measure the built-in
 font, and `canvas.width` / `canvas.height` report the canvas size.
