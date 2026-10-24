@@ -21,7 +21,7 @@ unit TyroClasses;
 interface
 
 uses
-  Classes, SysUtils, Types, SyncObjs,
+  Classes, SysUtils, Types, Character, SyncObjs,
   mnClasses, mnUtils, mnLogs, mnConfigs, mnTypes,
   RayLib, RayClasses,
   Melodies, TyroSounds;
@@ -231,8 +231,8 @@ type
     procedure SetWidth(AValue: Integer);
     procedure SetBackColor(const Value: TColor);
   protected
-    function OffsetRect(const ARect: TRect): TRectangle; overload;
-    function OffsetRect(const ARect: TRectangle): TRectangle; overload;
+    function OffsetRect(const ARect: TRect): TRect; overload;
+    function OffsetRectangle(const ARect: TRectangle): TRectangle; overload;
   public
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
@@ -270,10 +270,10 @@ type
 
     //Gradient fills: StartColor is at the top (V) or the left (H), EndColor at
     //the bottom (V) or the right (H).
-    procedure FillGradientV(X: Single; Y: Single; AWidth: Single; AHeight: Single; StartColor, EndColor: TColor); overload;
-    procedure FillGradientV(ARectangle: TRectangle; StartColor, EndColor: TColor); overload;
-    procedure FillGradientH(X: Single; Y: Single; AWidth: Single; AHeight: Single; StartColor, EndColor: TColor); overload;
-    procedure FillGradientH(ARectangle: TRectangle; StartColor, EndColor: TColor); overload;
+    procedure FillGradientV(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; StartColor, EndColor: TColor); overload;
+    procedure FillGradientV(ARect: TRect; StartColor, EndColor: TColor); overload;
+    procedure FillGradientH(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; StartColor, EndColor: TColor); overload;
+    procedure FillGradientH(ARect: TRect; StartColor, EndColor: TColor); overload;
 
     //Triangle: filled uses raylib's 2D triangle, an outline follows the pen size
     //so canvas.Pen / the thickness argument control how heavy it looks.
@@ -426,6 +426,7 @@ type
     destructor Destroy; override;
   end;
 
+function IsNumber(const Value: string): Boolean;
 function StrToColor(Value: String): TColor;
 function IntToColor(I: Integer): TColor;
 function ColorToInt(C: TColor): Integer;
@@ -456,12 +457,30 @@ implementation
 uses
   minibidi;
 
+function IsNumber(const Value: string): Boolean;
+var
+  I: Integer;
+begin
+  if Value = '' then
+    Exit(False);
+
+  Result := True;
+  for I := 1 to Length(Value) do
+  begin
+    if not CharInSet(Value[I], ['0'..'9', '-', '+', '_', '.']) then
+    begin
+      Result := False;
+      Break;
+    end;
+  end;
+end;
+
 function StrToColor(Value: String): TColor;
 var
   s: string;
   v: Integer;
 begin
-  Result := clBlack;
+  Result := clBlank;
   s := Trim(Value);
   if s = '' then
     Exit;
@@ -481,7 +500,9 @@ begin
       Exit;
     end;
   end;
-  if SameText(Value, 'black') then
+  if IsNumber(Value) then
+    Result := IntToColor(StrToIntDef(Value, 0))
+  else if SameText(Value, 'black') then
     Result := clBlack
   else if SameText(Value, 'white') then
     Result := clWhite
@@ -682,12 +703,12 @@ begin
   FOrigin := Point(0, 0);
 end;
 
-function TTyroCanvas.OffsetRect(const ARect: TRect): TRectangle;
+function TTyroCanvas.OffsetRect(const ARect: TRect): TRect;
 begin
-  Result := RectangleOf(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height);
+  Result := RectOf(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height);
 end;
 
-function TTyroCanvas.OffsetRect(const ARect: TRectangle): TRectangle;
+function TTyroCanvas.OffsetRectangle(const ARect: TRectangle): TRectangle;
 begin
   Result := RectangleOf(ARect.X + FOrigin.X, ARect.Y + FOrigin.Y, ARect.Width, ARect.Height);
 end;
@@ -745,7 +766,7 @@ end;
 
 procedure TTyroCanvas.DrawRectangle(ARectangle: TRectangle; Color: TColor);
 begin
-  RayLib.DrawRectangleLinesEx(OffsetRectangle(ARectangle, Origin.X, Origin.Y), Pen, Color);
+  RayLib.DrawRectangleLinesEx(OffsetRectangle(ARectangle), Pen, Color);
   SetCurrent(Round(ARectangle.X + ARectangle.Width), Round(ARectangle.Y + ARectangle.Height));
 end;
 
@@ -756,43 +777,43 @@ end;
 
 procedure TTyroCanvas.FillRectangle(ARectangle: TRectangle; Color: TColor);
 begin
-  RayLib.DrawRectangleRec(OffsetRect(ARectangle), Color)
+  RayLib.DrawRectangleRec(OffsetRectangle(ARectangle), Color)
 end;
 
-procedure TTyroCanvas.FillGradientV(X: Single; Y: Single; AWidth: Single; AHeight: Single; StartColor, EndColor: TColor);
+procedure TTyroCanvas.FillGradientV(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; StartColor, EndColor: TColor);
 begin
-  FillGradientV(RectangleOf(X, Y, AWidth, AHeight), StartColor, EndColor);
+  FillGradientV(RectOf(X, Y, AWidth, AHeight), StartColor, EndColor);
 end;
 
-procedure TTyroCanvas.FillGradientV(ARectangle: TRectangle; StartColor, EndColor: TColor);
+procedure TTyroCanvas.FillGradientV(ARect: TRect; StartColor, EndColor: TColor);
 var
-  R: TRectangle;
+  R: TRect;
 begin
-  R := OffsetRect(ARectangle);
-  RayLib.DrawRectangleGradientV(Round(R.X), Round(R.Y), Round(R.Width), Round(R.Height), StartColor, EndColor);
+  R := OffsetRect(ARect);
+  RayLib.DrawRectangleGradientV(R.Top, R.Left, R.Width, R.Height, StartColor, EndColor);
 end;
 
-procedure TTyroCanvas.FillGradientH(X: Single; Y: Single; AWidth: Single; AHeight: Single; StartColor, EndColor: TColor);
+procedure TTyroCanvas.FillGradientH(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; StartColor, EndColor: TColor);
 begin
-  FillGradientH(RectangleOf(X, Y, AWidth, AHeight), StartColor, EndColor);
+  FillGradientH(RectOf(X, Y, AWidth, AHeight), StartColor, EndColor);
 end;
 
-procedure TTyroCanvas.FillGradientH(ARectangle: TRectangle; StartColor, EndColor: TColor);
+procedure TTyroCanvas.FillGradientH(ARect: TRect; StartColor, EndColor: TColor);
 var
-  R: TRectangle;
+  R: TRect;
 begin
-  R := OffsetRect(ARectangle);
-  RayLib.DrawRectangleGradientH(Round(R.X), Round(R.Y), Round(R.Width), Round(R.Height), StartColor, EndColor);
+  R := OffsetRect(ARect);
+  RayLib.DrawRectangleGradientH(R.Left, R.Top, R.Width, R.Height, StartColor, EndColor);
 end;
 
 procedure TTyroCanvas.FillRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Color: TColor);
 begin
-  RayLib.DrawRectangleRounded(OffsetRectangle(ARectangle, Origin.X, Origin.Y), Roundness, Segments, Color)
+  RayLib.DrawRectangleRounded(OffsetRectangle(ARectangle), Roundness, Segments, Color)
 end;
 
 procedure TTyroCanvas.DrawRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Thick: Single; Color: TColor);
 begin
-  RayLib.DrawRectangleRoundedLinesEx(OffsetRectangle(ARectangle, Origin.X, Origin.Y), Roundness, Segments, Thick, Color);
+  RayLib.DrawRectangleRoundedLinesEx(OffsetRectangle(ARectangle), Roundness, Segments, Thick, Color);
 end;
 
 function TTyroCanvas.MeasureText(const Text: string): Single;

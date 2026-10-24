@@ -2517,6 +2517,7 @@ function Vector2Of(X, Y: Single): TVector2;
 function Vector3Of(X, Y, Z: Single): TVector3;
 function RectangleOf(X, Y, W, H: Single): TRectangle; overload;
 function RectangleOf(ARect: TRect): TRectangle; overload;
+function RectOf(X, Y, W, H: Integer): TRect; overload;
 function PointOf(Vector2: TVector2): TPoint;
 
 procedure InitLibrary;
@@ -2541,6 +2542,11 @@ end;
 function RectangleOf(ARect: TRect): TRectangle; overload;
 begin
   Result := TRectangle.Create(ARect.Left, ARect.Top, ARect.Width, ARect.Height);
+end;
+
+function RectOf(X, Y, W, H: Integer): TRect;
+begin
+  Result := Rect(X, Y, W, H);
 end;
 
 function PointOf(Vector2: TVector2): TPoint;
