@@ -3,11 +3,11 @@
 --======================================================================
 --  Demonstrates the screen shake:
 --
---    window.shake(ms [, power]) - jolt the world for ms milliseconds,
---                                  power = max offset in pixels
---                                  (0/omitted = default)
---    shake(ms [, power])        - the same function as a global
---    window.shaking             - true while the shake is still running
+--    world.shake(ms [, power]) - jolt the world for ms milliseconds,
+--                                 power = max offset in pixels
+--                                 (0/omitted = default)
+--    shake(ms [, power])       - the same function as a global
+--    world.shaking             - true while the shake is still running
 --
 --  The canvas and the sprites move together while the terminal and the
 --  other controls stay glued to the window.
@@ -37,7 +37,7 @@ while cycle do
 
     canvas.color = colors.white
     canvas.text(10, 10, "space = shake   1 = small   2 = crash   3 = long   s = stop   q = quit")
-    canvas.text(10, 30, "shaking: " .. tostring(window.shaking) .. "   shakes: " .. hits)
+    canvas.text(10, 30, "shaking: " .. tostring(world.shaking) .. "   shakes: " .. hits)
 
     -- the "world" that gets jolted
     canvas.color = colors.red
@@ -46,16 +46,16 @@ while cycle do
     canvas.circle(canvas.width / 2, canvas.height / 2, 20, true)
 
     if keyboard.pressed("space") then
-        window.shake(400)
+        world.shake(400)
         hits = hits + 1
     end
     if keyboard.pressed("1") then
-        window.shake(200, 6)
+        world.shake(200, 6)
         hits = hits + 1
     end
     if keyboard.pressed("2") then
         -- an accident: a long, hard jolt
-        window.shake(800, 40)
+        world.shake(800, 40)
         hits = hits + 1
     end
     if keyboard.pressed("3") then
@@ -63,7 +63,7 @@ while cycle do
         hits = hits + 1
     end
     if keyboard.pressed("s") then
-        window.shake(0) -- 0 stops it
+        world.shake(0) -- 0 stops it
     end
     if keyboard.pressed("q") then
         break

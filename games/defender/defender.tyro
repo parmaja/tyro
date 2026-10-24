@@ -294,7 +294,7 @@ local function kill_player()
   if state ~= 'play' or invuln > 0 then return end
   add_boom(px, py, true)
   boom_sound()
-  window.shake(500, 12)
+  world.shake(500, 12)
   ship.visible = false
   lives = lives - 1
   state = 'dying'
@@ -362,7 +362,7 @@ local function smart_bomb()
   for i = #bombs, 1, -1 do release(bombs[i].s) end
   bombs = {}
   boom_sound()
-  window.shake(350, 8)
+  world.shake(350, 8)
 end
 
 -- ---- simulation ------------------------------------------------------

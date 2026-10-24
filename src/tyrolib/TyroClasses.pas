@@ -31,6 +31,12 @@ const
   clFrenchSkyBlue: TRGBAColor = (Red: $77; Green: $B5; Blue: $FE; Alpha: $FF);
   clCornflowerBlue: TRGBAColor = (Red: $5d; Green: $9f; Blue: $f9; Alpha: $FF);
 
+  cMainMargin = 0;
+  cDefaultWindowWidth = 640;
+  cDefaultWindowHeight = 480;
+  //Default screen shake amplitude in pixels (used when Shake gets no power)
+  cShakePower = 10;
+
   // Built-in post-processing shaders (GLSL 330 fragment sources).
   // All share two uniforms:
   //   value - a 0..1 effect parameter (water height, glow boundary, intensity...)
@@ -358,6 +364,50 @@ type
     property Texture: TRenderTexture2D read FTexture;
   end;
 
+  { TTyroWorld }
+
+  TTyroWorld = class(TObject)
+  private
+    FOpaque: Boolean;
+    FTitle: string;
+    FMargin: Integer;
+    FWidth: Integer;
+    FHeight: Integer;
+    FBackColor: TColor;
+    // Screen shake state
+    FShakeTime, FShakeDuration: Double;
+    FShakePower: Integer;
+    FShakeX, FShakeY: Integer;
+    procedure SetBackColor(AValue: TColor);
+    function GetShaking: Boolean;
+    // Getters/setters for Engine access
+    procedure SetTitle(AValue: string);
+    procedure SetMarginValue(AValue: Integer);
+    procedure SetWidth(AValue: Integer);
+    procedure SetHeight(AValue: Integer);
+    function GetShakeX: Integer;
+    function GetShakeY: Integer;
+  public
+    constructor Create;
+    procedure Clear;
+
+    // Screen shake
+    procedure Shake(ATimeMS: Integer; APower: Integer = 0);
+    procedure StopShake;
+    function UpdateShake(ADeltaTime: Double): Boolean;
+    property Shaking: Boolean read GetShaking;
+
+    property Title: string read FTitle write SetTitle;
+    property Width: Integer read FWidth write SetWidth;
+    property Height: Integer read FHeight write SetHeight;
+
+    property BackColor: TColor read FBackColor write SetBackColor;
+    property Margin: Integer read FMargin write FMargin;
+    property Opaque: Boolean read FOpaque write FOpaque;
+    property ShakeX: Integer read GetShakeX;
+    property ShakeY: Integer read GetShakeY;
+  end;
+
   TTyroResource = class(TmnNamedObject)
   public
     ResType: string;
@@ -388,7 +438,6 @@ type
     Thin: Integer;
     Thick: Integer;
   end;
-
 
   { TTyroTheme }
 
@@ -1177,6 +1226,117 @@ begin
   inherited Resize(AWidth, AHeight);
   if FTextureMode then
     FTexture := LoadRenderTexture(Width, Height);
+end;
+
+{ TTyroWorld }
+
+constructor TTyroWorld.Create;
+begin
+  inherited Create;
+  FOpaque := True;
+  FMargin := cMainMargin;
+  FWidth := cDefaultWindowWidth;
+  FHeight := cDefaultWindowHeight;
+  FBackColor := Res.Theme.Window.BackColor;
+end;
+
+procedure TTyroWorld.SetBackColor(AValue: TColor);
+begin
+  if FBackColor = AValue then Exit;
+  FBackColor := AValue;
+end;
+
+procedure TTyroWorld.SetTitle(AValue: string);
+begin
+  AValue := 'Tyro - ' + AValue;
+  RayLib.SetWindowTitle(PUTF8Char(UTF8String(AValue)));
+end;
+
+function TTyroWorld.GetShaking: Boolean;
+begin
+  Result := FShakeTime > 0;
+end;
+
+procedure TTyroWorld.Clear;
+begin
+  RayLib.ClearBackground(BackColor);
+end;
+
+procedure TTyroWorld.Shake(ATimeMS: Integer; APower: Integer);
+begin
+  if ATimeMS <= 0 then
+  begin
+    StopShake;
+    Exit;
+  end;
+  FShakeTime := ATimeMS / 1000;
+  FShakeDuration := FShakeTime;
+  if APower > 0 then
+    FShakePower := APower
+  else
+    FShakePower := cShakePower;
+end;
+
+procedure TTyroWorld.StopShake;
+begin
+  FShakeTime := 0;
+  FShakeDuration := 0;
+  FShakeX := 0;
+  FShakeY := 0;
+end;
+
+function TTyroWorld.UpdateShake(ADeltaTime: Double): Boolean;
+var
+  a: Integer;
+begin
+  Result := False;
+  if FShakeTime <= 0 then
+  begin
+    FShakeX := 0;
+    FShakeY := 0;
+    Exit;
+  end;
+  FShakeTime := FShakeTime - ADeltaTime;
+  if FShakeTime <= 0 then
+  begin
+    // Time is up: leave the world exactly where it started.
+    FShakeTime := 0;
+    FShakeDuration := 0;
+    FShakeX := 0;
+    FShakeY := 0;
+    Exit;
+  end;
+  Result := True;
+  // Amplitude fades out with the remaining time, so the shake settles instead
+  // of stopping dead. Random(a * 2) - a gives an offset in [-a, a).
+  a := Round(FShakePower * FShakeTime / FShakeDuration);
+  FShakeX := Random(a * 2) - a;
+  FShakeY := Random(a * 2) - a;
+end;
+
+procedure TTyroWorld.SetMarginValue(AValue: Integer);
+begin
+  FMargin := AValue;
+end;
+
+procedure TTyroWorld.SetWidth(AValue: Integer);
+begin
+  FWidth := AValue;
+end;
+
+procedure TTyroWorld.SetHeight(AValue: Integer);
+begin
+  FHeight := AValue;
+end;
+
+function TTyroWorld.GetShakeX: Integer;
+begin
+  Result := FShakeX;
+end;
+
+function TTyroWorld.GetShakeY: Integer;
+begin
+  Result := FShakeY;
 end;
 
 { TTyroResources }

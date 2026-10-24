@@ -83,7 +83,7 @@ procedure TTyroApplication.SetTitle(const AValue: string);
 begin
   FTitle := AValue;;
   if Engine <> nil then
-    Engine.Title := AValue;
+    Engine.World.Title := AValue;
 end;
 
 {$ifdef MSWINDOWS}
@@ -379,7 +379,7 @@ begin
 
   Engine := TTyroEngine.Create;
 
-  Engine.Title := Title;
+  Engine.World.Title := Title;
 
   ScriptFile := CorrectPath(ExpandToPath(Arguments.ReadString(''), Res.WorkPath)); //File come without switch name
 

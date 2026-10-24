@@ -64,7 +64,7 @@ local function onPigHit(rec, other, st)
     score               = score + 100
     pops[#pops + 1]     = {x = rec.s.x, y = rec.s.y, t = 0}
     music.sound(1050, 70)
-    window.shake(140, 5)
+    world.shake(140, 5)
   end
 end
 
@@ -134,7 +134,7 @@ local function buildLevel()
   bird.onCollide = function(other, st)
     if st == "enter" and speed2(bird.vx, bird.vy) > 260 then
       music.sound(170, 40)
-      window.shake(110, 4)
+      world.shake(110, 4)
     end
   end
 end

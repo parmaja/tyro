@@ -56,12 +56,6 @@ const
   sPromptChar: UTF8string = '>';
   sPromptDOT: UTF8string = '*';
 
-  cMainMargin = 0;
-  cDefaultWindowWidth = 640;
-  cDefaultWindowHeight = 480;
-  //Default screen shake amplitude in pixels (used when Shake gets no power)
-  cShakePower = 10;
-
 var
   // Debug switch: when True, DBG messages are written to the console.
   // Off by default (globals are zero-initialized) to keep the output clean.
@@ -197,15 +191,9 @@ type
 
   TTyroEngine = class(TObject)
   private
-    FOpaque: Boolean;
-    FTitle: string;
-    FMargin: Integer;
-    FWidth: Integer;
-    FHeight: Integer;
     FSizable: Boolean;
     FFPS: Integer;
     FOptions: TTyroEngineOptions;
-    FBackColor: TColor;
     //* When True the script's Board canvas is composited ABOVE the sprites
     //* instead of below them, so a script can use the canvas for a HUD/overlay
     //* (see the Lua 'canvas.front'). The board must be cleared to a transparent
@@ -379,21 +367,13 @@ type
     FQueueWaits: LongInt;
     FQueueBlocked: LongInt;
     {$endif}
-    //* Screen shake state (see Shake). FShakeTime counts the seconds left,
-    //* FShakeDuration the full length of the current shake so the amplitude can
-    //* fade out, and FShakeX/FShakeY hold this frame's random offset in pixels.
-    FShakeTime, FShakeDuration: Double;
-    FShakePower: Integer;
-    FShakeX, FShakeY: Integer;
     function GetRunning: Boolean;
     procedure SetRunning(AValue: Boolean);
-    function GetShaking: Boolean;
   protected
     Commands: TConsoleCommands;
     //* Free the controls a finished run left in the window. Every run calls this
     //* before it starts the next one; it is protected so a test can drive the
     //* same step without starting a worker.
-    procedure SetTitle(AValue: string);
     procedure ClearScriptControls;
     procedure ConsoleInput(AInput: UTF8String);
     procedure ExecuteCommand(ACommand: string);
@@ -402,6 +382,7 @@ type
     //console survive across lines (and are shared with the main script).
     function RunLuaLine(const ALine: string): Boolean;
     procedure RegisterCommands;
+
   public
     constructor Create;
     destructor Destroy; override;
@@ -428,11 +409,6 @@ type
     procedure Start; virtual;
     procedure Update;
     procedure Draw; virtual;
-
-    //* Advance the screen shake by ADeltaTime seconds and pick a new random
-    //* offset for this frame (FShakeX/FShakeY). Returns True while the shake is
-    //* still running, so the drawing cycle can offset the world camera.
-    function UpdateShake(ADeltaTime: Double): Boolean;
 
     //When application exit, unload your resources
     procedure ProcessQueue;
@@ -500,18 +476,6 @@ type
     //* EndDrawing on the main thread.
     procedure QueueScreenshot(const AFileName: String);
 
-    //* Shake the world (canvas + sprites) for ATimeMS milliseconds, the jolt of
-    //* an accident or an error: every frame the world camera is moved by a
-    //* random offset that fades out until the time is up. APower is the maximum
-    //* offset in pixels (0 = cShakePower). A new call restarts the shake, so a
-    //* longer/harder one simply wins. Safe to call from any thread (e.g. the
-    //* Lua script thread); ATimeMS <= 0 stops the shake.
-    procedure Shake(ATimeMS: Integer; APower: Integer = 0);
-    //* Stop a running shake at once.
-    procedure StopShake;
-    //* True while a shake is still running.
-    property Shaking: Boolean read GetShaking;
-
     //* Lua enter(): hold the processing queue. Commands keep being queued by
     //* the script, but ProcessQueue stops executing them until ReleaseQueue
     //* balances the hold, so the group is drawn at one drawing cycle. Nested
@@ -562,7 +526,6 @@ type
     property AutoGroup: Boolean read FAutoGroup write FAutoGroup;
     //* True while a Lua pause() has frozen the scene (see BeginScriptPause).
     property ScriptPaused: Boolean read GetScriptPaused;
-    property Opaque: Boolean read FOpaque write FOpaque;
     //* Draw the Board canvas above the sprites (for a canvas-based HUD) instead
     //* of below them. Backs the Lua 'canvas.front'.
     property BoardOnTop: Boolean read FBoardOnTop write FBoardOnTop;
@@ -570,6 +533,7 @@ type
     ScriptFile: string;//Full file name , that to run in ScriptThread
     ScriptSource: string; //Shout pass to Thread to run it
 
+    World: TTyroWorld;
     //Main for UI controls
     Main: TTyroWindow;
     //Board where Lua drawing on it
@@ -611,7 +575,6 @@ type
 
     property CanvasLock: TmnCriticalSection read FCanvasLock;
     property Options: TTyroEngineOptions read FOptions write FOptions;
-    property BackColor: TColor read FBackColor write FBackColor;
     property FPS: Integer read FFPS write SetFPS;
     property Queue: TQueueObjects read FQueue;
     //* Admission limit of the queue (0 = unlimited). See ThrottleQueue.
@@ -630,11 +593,6 @@ type
     //* File the timed screenshot is written to; empty picks screenshot.png in
     //* the working path.
     property ScreenshotFile: String read FScreenshotFile write FScreenshotFile;
-
-    property Title: string read FTitle write SetTitle;
-    property Margin: Integer read FMargin write FMargin;
-    property Width: Integer read FWidth  write FWidth;
-    property Height: Integer read FHeight write FHeight;
 
     property Sizable: Boolean read FSizable write FSizable;
   end;
@@ -813,20 +771,20 @@ begin
           ResizeWindow(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
 
         RayLib.BeginDrawing;
-        if Opaque then
-          RayLib.ClearBackground(BackColor);
+        if World.Opaque then
+          World.Clear;
 
         try
           Camera2D.Target := Vector2Of(0, 0);
-          Camera2D.Offset := Vector2Of(Margin, Margin);
+          Camera2D.Offset := Vector2Of(World.Margin, World.Margin);
           Camera2D.Zoom := 1;
           Camera2D.Rotation := 0;
 
           //A running shake (accident/error feedback) jitters the world camera,
           //so the canvas and the sprites move together while the terminal and
           //the other controls stay glued to the window.
-          if UpdateShake(RayLib.GetFrameTime()) then
-            Camera2D.Offset := Vector2Of(Margin + FShakeX, Margin + FShakeY);
+          if World.UpdateShake(RayLib.GetFrameTime()) then
+            Camera2D.Offset := Vector2Of(World.Margin + World.ShakeX, World.Margin + World.ShakeY);
 
           BeginMode2D(Camera2D);
           Draw;
@@ -1084,51 +1042,6 @@ begin
   end;
 end;
 
-procedure TTyroEngine.Shake(ATimeMS: Integer; APower: Integer);
-begin
-  if ATimeMS <= 0 then
-  begin
-    StopShake;
-    Exit;
-  end;
-  Lock.Enter;
-  try
-    //Called from any thread (script worker), so the state is published under
-    //the engine lock and only read by the drawing cycle.
-    FShakeTime := ATimeMS / 1000;
-    FShakeDuration := FShakeTime;
-    if APower > 0 then
-      FShakePower := APower
-    else
-      FShakePower := cShakePower;
-  finally
-    Lock.Leave;
-  end;
-end;
-
-procedure TTyroEngine.StopShake;
-begin
-  Lock.Enter;
-  try
-    FShakeTime := 0;
-    FShakeDuration := 0;
-    FShakeX := 0;
-    FShakeY := 0;
-  finally
-    Lock.Leave;
-  end;
-end;
-
-function TTyroEngine.GetShaking: Boolean;
-begin
-  Lock.Enter;
-  try
-    Result := FShakeTime > 0;
-  finally
-    Lock.Leave;
-  end;
-end;
-
 procedure TTyroEngine.MarkQueueCommit;
 begin
   //Watermark = total commands enqueued so far. ProcessQueue drains while
@@ -1157,46 +1070,6 @@ begin
     //whole held group in a single drawing cycle, without stopping at the
     //per-frame time budget the streaming drain uses.
     TInterlocked.Exchange(FQueueFlush, 1);
-  end;
-end;
-
-procedure TTyroEngine.SetTitle(AValue: string);
-begin
-  AValue := 'Tyro - ' + AValue;
-  RayLib.SetWindowTitle(PUTF8Char(UTF8String(AValue)));
-end;
-
-function TTyroEngine.UpdateShake(ADeltaTime: Double): Boolean;
-var
-  a: Integer;
-begin
-  Lock.Enter;
-  try
-    Result := False;
-    if FShakeTime <= 0 then
-    begin
-      FShakeX := 0;
-      FShakeY := 0;
-      Exit;
-    end;
-    FShakeTime := FShakeTime - ADeltaTime;
-    if FShakeTime <= 0 then
-    begin
-      //Time is up: leave the world exactly where it started.
-      FShakeTime := 0;
-      FShakeDuration := 0;
-      FShakeX := 0;
-      FShakeY := 0;
-      Exit;
-    end;
-    Result := True;
-    //Amplitude fades out with the remaining time, so the shake settles instead
-    //of stopping dead. Random(a * 2) - a gives an offset in [-a, a).
-    a := Round(FShakePower * FShakeTime / FShakeDuration);
-    FShakeX := Random(a * 2) - a;
-    FShakeY := Random(a * 2) - a;
-  finally
-    Lock.Leave;
   end;
 end;
 
@@ -1597,7 +1470,7 @@ begin
     IsDebug := Config.ReadBool('debug', IsDebug);
     aColor := Config.ReadString('backcolor', '');
     if aColor <> '' then
-      BackColor := StrToColor(aColor);
+      World.BackColor := StrToColor(aColor);
 
     //Only 'show.fps' has an option behind it; a second block that read
     //'show.window' here also toggled moShowFPS, so show.window=false silently
@@ -1618,12 +1491,12 @@ constructor TTyroEngine.Create;
 begin
   inherited;
   RayLibrary.Load;
+  Res := TTyroResources.Create;
   FControlCapture := nil;
   FOptions := [];
-  FOpaque := True;
   //Each 'while cycle' body is drawn atomically by default (see AutoGroup).
   FAutoGroup := True;
-  Res := TTyroResources.Create;
+  World := TTyroWorld.Create;
   FCanvasLock := TmnCriticalSection.Create;
   //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
   //loop signals it after every EndDrawing.
@@ -1632,12 +1505,12 @@ begin
   //FQueueLimit waits on it. Unlimited by default (Lua queuelimit turns it on).
   FQueueSpaceEvent := TEvent.Create(nil, False, False, '');
   FQueueLimit := 0;
-  FWidth := ScreenWidth;
-  FHeight := ScreenHeight;
-  FBackColor := clCornflowerBlue;
+  World.Width := ScreenWidth;
+  World.Height := ScreenHeight;
+  World.BackColor := clCornflowerBlue;
 
   //Configured margin only; absent key must not clobber the default with 0.
-  Margin := Res.Config.Sections['window'].ReadInteger('margin', cMainMargin);
+  World.Margin := Res.Config.Sections['window'].ReadInteger('margin', cMainMargin);
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
@@ -1648,8 +1521,8 @@ begin
   Main.Name := 'Main';
   Main.Border := brdNone;
   Main.Padding := 0;
-  Main.Margin := Margin;
-  Main.BoundsRect := Rect(0, 0, Width, Height);
+  Main.Margin := World.Margin;
+  Main.BoundsRect := Rect(0, 0, World.Width, World.Height);
   Main.Show;
 
   {with TTyroLabel.Create(Main) do
@@ -1666,14 +1539,14 @@ begin
   Output := TTyroOutput.Create(Main);
   Output.Important := True;
   Output.Name := 'Output';
-  Output.BoundsRect := Rect(0, 0, Width, Height);
+  Output.BoundsRect := Rect(0, 0, World.Width, World.Height);
   Output.Margin:= 5;
   Output.Padding:= 5;
   Output.Align := alClient;
   Output.Show;
 
   Console := TTyroTerminal.Create(Main);
-  Console.BoundsRect := Rect(0, 0, Width, Height div 2);
+  Console.BoundsRect := Rect(0, 0, World.Width, World.Height div 2);
   Console.Important := True;
   Console.Border:= brdThick;
   Console.Visible := False;
@@ -1748,6 +1621,7 @@ begin
   FreeAndNil(FCanvasLock);
   FreeAndNil(FQueueSpaceEvent);
   FreeAndNil(FFrameEvent);
+  FreeAndNil(World);
 end;
 
 procedure TTyroEngine.LoadGamepadMappings;
@@ -1866,7 +1740,7 @@ begin
 
   //Do not use FLAG_VSYNC_HINT it block the other threads, or use YieldProcess, TODO
   RayLib.SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
-  RayLib.InitWindow(AWidth, AHeight, PUTF8Char(UTF8String(Title)));
+  RayLib.InitWindow(AWidth, AHeight, PUTF8Char(UTF8String(World.Title)));
   LoadGamepadMappings;
   //The window, taskbar and alt-tab icon is the application's own icon, the one
   //Explorer shows for the executable, no icon file has to ship with it.
@@ -1876,13 +1750,13 @@ begin
     RayLib.SetWindowIcon(Icon);
     RayLib.UnloadImage(Icon);
   end;
-  FWidth := AWidth;
-  FHeight := AHeight;
+  World.Width := AWidth;
+  World.Height := AHeight;
   //Board is a render-texture: script draw commands run inside Board.BeginDraw
   //during ProcessQueue and are composited by Board.PostDraw inside the camera.
-  Board := TTyroTextureCanvas.Create(AWidth - Margin * 2, AHeight - Margin * 2, True);
+  Board := TTyroTextureCanvas.Create(AWidth - World.Margin * 2, AHeight - World.Margin * 2, True);
 
-  Main.Margin := Margin;
+  Main.Margin := World.Margin;
   Main.BoundsRect := Rect(0, 0, AWidth, AHeight);
   //The script draws through Engine.Main.Canvas during ProcessQueue, which runs
   //before the first Paint: make sure the canvas exists (and is sized) now.
@@ -2180,14 +2054,14 @@ begin
   if (AWidth <= 0) or (AHeight <= 0) then
     Exit;
 
-  FWidth := AWidth;
-  FHeight := AHeight;
+  World.Width := AWidth;
+  World.Height := AHeight;
 
-  Main.Margin := Margin;
+  Main.Margin := World.Margin;
   Main.BoundsRect := Rect(0, 0, AWidth , AHeight);
     //Keep the script canvas in step with the window so a resize does not leave
     //script draw commands hitting a canvas sized for the old window.
-  Board.Resize(AWidth - Margin * 2, AHeight - Margin * 2);
+  Board.Resize(AWidth - World.Margin * 2, AHeight - World.Margin * 2);
 end;
 
 procedure TTyroEngine.Stop;
@@ -2326,8 +2200,8 @@ begin
   //Center the picker over the main window, keeping a small margin around it.
   LW := 420;
   LH := 300;
-  W := Width;
-  H := Height;
+  W := World.Width;
+  H := World.Height;
   if LW > W - 40 then
     LW := W - 40;
   if LH > H - 40 then
@@ -2405,7 +2279,7 @@ begin
   StopScriptRun;
   Editor.FileName := ScriptFile;
   Editor.LoadSource(ScriptSource);
-  Editor.BoundsRect := Rect(0, 0, Width, Height);
+  Editor.BoundsRect := Rect(0, 0, World.Width, World.Height);
   Editor.Margin := 10;
   Editor.BackColor := clBlack;
   Editor.Show;
@@ -2567,7 +2441,6 @@ begin
   end
   else
   begin
-    Title := ScriptFile;
     aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
     if (aScriptType <> nil) and SysUtils.FileExists(ScriptFile) then
     begin
@@ -2575,12 +2448,15 @@ begin
       if LeftStr(ScriptFile, 1) = '.' then
         ScriptFile := ExpandFileName(Res.WorkPath + ScriptFile);
       Res.WorkPath := ExtractFilePath(ScriptFile);
-      Title := ScriptFile;
+      World.Title := ScriptFile;
 
       ScriptSource := mnUtils.LoadFileString(ScriptFile);
     end
     else
+    begin
+      World.Title := ScriptFile;
       Log.WriteLn('Type of file not found: ' + ScriptFile);
+    end;
   end;
 end;
 

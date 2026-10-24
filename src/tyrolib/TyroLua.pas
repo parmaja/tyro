@@ -110,9 +110,18 @@ type
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
   public
-    constructor Create(AScript: TLuaScript); override;
   published
-    function Window_func(L: Plua_State): integer; cdecl;
+    function Show_func(L: Plua_State): integer; cdecl;
+  end;
+
+  { TLuaWorld }
+
+  TLuaWorld = class(TTyroLuaObject)
+  protected
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
+  public
+    constructor Create(AScript: TLuaScript); override;
     function Shake_func(L: Plua_State): integer; cdecl;
   end;
 
@@ -561,6 +570,7 @@ type
     Canvas: TLuaCanvas;
     Console: TLuaConsole;
     Window: TLuaWindow;
+    World: TLuaWorld;
     QueueLua: TLuaQueue;
     Colors: TLuaColors;
     Font: TLuaFont;
@@ -1008,24 +1018,10 @@ var
 begin
   Result := 0;
   field := L.ToString(2);
-  if L.IsInteger(-1) or L.IsNumber(-1) then
+  if lua_isboolean(L, -1) then
   begin
-    i := L.ToInteger(-1);
-    if field = 'margin' then
-      Engine.Margin := i
-    else if field = 'backcolor' then
-      Engine.BackColor := IntToColor(i);
-  end
-  else if L.IsString(-1) then
-  begin
-    color := L.ToString(-1);
-    if field = 'backcolor' then
-      Engine.Board.BackColor := StrToColor(color);
-  end
-  else if lua_isboolean(L, -1) then
-  begin
-    if field = 'opaque' then
-      Engine.Opaque := L.ToBoolean(-1);
+    if field = 'sizable' then
+      Engine.Sizable := L.ToBoolean(-1);
   end;
 end;
 
@@ -1035,42 +1031,107 @@ var
 begin
   Result := 0;
   field := L.ToString(2);
-
-  if field = 'margin' then
+  if field = 'sizable' then
   begin
-    L.PushInteger(Engine.Margin);
-    Result := 1;
-  end
-  else if field = 'backcolor' then
-  begin
-    L.PushInteger(ColorToInt(Engine.BackColor));
-    Result := 1;
-  end
-  else if field = 'width' then
-  begin
-    L.PushInteger(Engine.Width);
-    Result := 1;
-  end
-  else if field = 'height' then
-  begin
-    L.PushInteger(Engine.Height);
-    Result := 1;
-  end
-  else if field = 'shaking' then
-  begin
-    L.PushBoolean(Engine.Shaking);
-    Result := 1;
-  end
-  else if field = 'opaque' then
-  begin
-    L.PushBoolean(Engine.Opaque);
+    L.PushBoolean(Engine.Sizable);
     Result := 1;
   end;
 end;
 
-constructor TLuaWindow.Create(AScript: TLuaScript);
+{ TLuaWorld }
+
+function TLuaWorld.Setter(L: PLua_State): integer;
+var
+  i: integer;
+  field: string;
+  color: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if L.IsInteger(-1) or L.IsNumber(-1) then
+  begin
+    i := L.ToInteger(-1);
+    if field = 'margin' then
+      Engine.World.Margin := i
+    else if field = 'width' then
+      Engine.World.Width := i
+    else if field = 'height' then
+      Engine.World.Height := i
+    else if field = 'backcolor' then
+      Engine.World.BackColor := IntToColor(i);
+  end
+  else if L.IsString(-1) then
+  begin
+    color := L.ToString(-1);
+    if field = 'backcolor' then
+      Engine.World.BackColor := StrToColor(color);
+  end
+  else if lua_isboolean(L, -1) then
+  begin
+    if field = 'title' then
+      Engine.World.Title := L.ToString(-1);
+  end;
+end;
+
+function TLuaWorld.Getter(L: PLua_State): Integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+
+  if field = 'margin' then
+  begin
+    L.PushInteger(Engine.World.Margin);
+    Result := 1;
+  end
+  else if field = 'width' then
+  begin
+    L.PushInteger(Engine.World.Width);
+    Result := 1;
+  end
+  else if field = 'height' then
+  begin
+    L.PushInteger(Engine.World.Height);
+    Result := 1;
+  end
+  else if field = 'backcolor' then
+  begin
+    L.PushInteger(ColorToInt(Engine.World.BackColor));
+    Result := 1;
+  end
+  else if field = 'shaking' then
+  begin
+    L.PushBoolean(Engine.World.Shaking);
+    Result := 1;
+  end
+  else if field = 'title' then
+  begin
+    L.PushString(Engine.World.Title);
+    Result := 1;
+  end;
+end;
+
+constructor TLuaWorld.Create(AScript: TLuaScript);
 begin
   inherited Create(AScript);
+end;
+
+function TLuaWorld.Shake_func(L: Plua_State): integer; cdecl;
+var
+  ms, power: Integer;
+begin
+  ms := 0;
+  power := 0;
+  if L.ArgsCount > 0 then
+    ms := Round(L.ToNumber(1));
+  if L.ArgsCount > 1 then
+    power := Round(L.ToNumber(2));
+  if Engine <> nil then
+    //Thread safe: the engine takes the request from the script thread and
+    //jitters the world camera on the next frames.
+    Engine.World.Shake(ms, power);
+  Result := 0;
 end;
 
 { TLuaQueue }
@@ -1533,6 +1594,7 @@ begin
 
   Canvas := TLuaCanvas.Create(Self);
   Window := TLuaWindow.Create(Self);
+  World := TLuaWorld.Create(Self);
   QueueLua := TLuaQueue.Create(Self);
   Console := TLuaConsole.Create(Self);
   Colors := TLuaColors.Create(Self);
@@ -1558,11 +1620,13 @@ begin
   Files := TList.Create; //of TLuaFile, freed in Destroy
 
   //window
-  Lua.State.Register('window', 'show', Window, Window.Window_func);
-  //Screen shake: window.shake(ms [, power]) and the global shake(ms [, power])
-  Lua.State.Register('window', 'shake', Window, Window.Shake_func);
-  Lua.State.RegisterGlobal('shake', Window.Shake_func);
+  Lua.State.Register('window', 'show', Window, Window.Show_func);
   Lua.State.Register('window', Window); //Should be last one for window
+
+  //world
+  Lua.State.Register('world', 'shake', World, World.Shake_func);
+  Lua.State.RegisterGlobal('shake', World.Shake_func);
+  Lua.State.Register('world', World); //Should be last one for world
 
   //queue: read-only queue/frame diagnostics (see TLuaQueue / TQueueStats)
   Lua.State.Register('queue', QueueLua); //Should be last one
@@ -1842,6 +1906,7 @@ begin
   FreeAndNil(Colors);
   FreeAndNil(Console);
   FreeAndNil(Window);
+  FreeAndNil(World);
   FreeAndNil(QueueLua);
   FreeAndNil(Canvas);
   inherited;
@@ -2026,7 +2091,7 @@ begin
   Result := 0;
 end;
 
-function TLuaWindow.Window_func(L: Plua_State): integer; cdecl;
+function TLuaWindow.Show_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   w, h: integer;
@@ -2042,26 +2107,6 @@ begin
   Result := 0;
 end;
 
-// window.shake(ms [, power]) / shake(ms [, power])
-// Jolt the world like an accident or an error. Works as a plain function too,
-// so the first argument is always the time in milliseconds.
-function TLuaWindow.Shake_func(L: Plua_State): integer; cdecl;
-var
-  ms, power: Integer;
-begin
-  ms := 0;
-  power := 0;
-  if L.ArgsCount > 0 then
-    ms := Round(L.ToNumber(1));
-  if L.ArgsCount > 1 then
-    power := Round(L.ToNumber(2));
-  if Engine <> nil then
-    //Thread safe: the engine takes the request from the script thread and
-    //jitters the world camera on the next frames.
-    Engine.Shake(ms, power);
-  Result := 0;
-end;
-
 function TLuaConsole.Show_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
@@ -2069,8 +2114,8 @@ var
 begin
   c := L.ArgsCount;
   x := 0;
-  y := Engine.Height div 2;
-  w := Engine.Width;
+  y := Engine.World.Height div 2;
+  w := Engine.World.Width;
   h := y;
   if c >= 2 then
   begin

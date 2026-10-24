@@ -143,7 +143,7 @@ local function crash()
   blasts[#blasts + 1] = { x = player.x, wy = playerWorldY(), t = 0, big = true }
   beep(90, 300)
   sound.noise(400, 300)              -- white-noise burst on top of the low boom
-  window.shake(600, 12)
+  world.shake(600, 12)
 end
 
 local function respawn()
