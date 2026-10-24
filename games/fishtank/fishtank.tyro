@@ -274,19 +274,7 @@ end
 
 -- ---- drawing ----------------------------------------------------------
 local function draw_water()
-  canvas.color = colors.darkblue
-  canvas.rectangle(0, 0, W, H, true)
-
-  -- Semitransparent bands blend darkblue at the bottom into a lighter,
-  -- greener blue at the top. The shader adds the moving light on top.
-  local bands = 28
-  for i = 0, bands - 1 do
-    local t = i / (bands - 1)
-    canvas.color = colors.aqua
-    canvas.alpha = math.floor(86 * (1 - t) ^ 1.6)
-    canvas.rectangle(0, math.floor(i * H / bands), W, math.ceil(H / bands) + 1, true)
-  end
-  canvas.alpha = 255
+  canvas.gradientV(0, 0, W, H, colors.aqua, colors.darkblue)
 end
 
 local function draw_plants()
