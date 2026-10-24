@@ -1298,7 +1298,7 @@ begin
           on E: Exception do
           begin
             if IsConsole then
-              WriteLn('EX-QUEUE: ' + E.ClassName + ': ' + E.Message);
+              WriteLn('EX-QUEUE: ' + ClassName+ ', ' + E.ClassName + ', ' + E.Message);
             //A failing queue object must not leak, abort the rest of the queue,
             //or leave the canvas half-drawn (EndDraw below still runs); log and
             //move on to the next queued object.

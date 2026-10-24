@@ -1,4 +1,4 @@
-unit TyroControls;
+﻿unit TyroControls;
 {**
  *  This file is part of the "Tyro"
  *
@@ -61,10 +61,7 @@ const
   cKeyRepeatInterval = 0.03; //delay between repeats
 
 type
-  {$ifdef FPC}
   TUTF8Char = String[7]; //* ported from LCLType;
-  {$else}
-  {$endif}
 
   TMouseButton = (mbLeft, mbRight, mbMiddle);
 

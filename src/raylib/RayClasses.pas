@@ -181,7 +181,7 @@ type
     Scale: Integer;
     constructor Create;
     destructor Destroy; override;
-    procedure LoadFromFile(FileName: utf8string; FontSize: Integer = 0);
+    procedure LoadFromFile(FileName: string; FontSize: Integer);
     procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
     procedure LoadFromBDF(FileName: utf8string; FontSize: Integer = 0);
     procedure LoadFromMemory(FileType: utf8string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger = nil; CodepointsCount: Integer = 0);
@@ -253,7 +253,7 @@ begin
   Height := 0;
 end;
 
-procedure TRayFont.LoadFromFile(FileName: utf8string; FontSize: Integer);
+procedure TRayFont.LoadFromFile(FileName: string; FontSize: Integer);
 begin
   if SameText(ExtractFileExt(FileName), '.bdf') then //while RayLib doesn't load it (idk why)
     LoadFromBDF(FileName, FontSize)
@@ -263,7 +263,7 @@ begin
     if FontSize = 0 then
       Data := RayLib.LoadFont(PUTF8Char(FileName))
     else
-      Data := RayLib.LoadFontEx(PUTF8Char(FileName), FontSize, nil, 255);
+      Data := RayLib.LoadFontEx(PUTF8Char(UTF8String(FileName)), FontSize, nil, 0); //BUG fontsize = 16 in matrix game
     RefCount := False;
     if Data.Texture.ID <= 2 then
       Log.WriteLn('Fail to load font: ' + FileName);
