@@ -1,0 +1,656 @@
+--======================================================================
+--  The Matrix Digital Rain & Cyber Defense
+--  Built for Tyro Engine
+--======================================================================
+--  Features:
+--    - Cascading digital rain with glowing lead characters, fading tails,
+--      dynamic character mutations, and parallax column speeds/depths.
+--    - Official Matrix Trailer soundtrack playback with looping support.
+--    - CRT scanline / phosphor glow shader integration.
+--    - Interactive cyber-defense minigame:
+--        * Incoming Sentinel drones & Agent glitches infiltrating the code streams.
+--        * Player targeting reticle (Crosshair) controlled with Mouse or Arrows/Space.
+--        * Collect Red Pills to enter Bullet Time (slow-motion rain).
+--        * Collect Blue Pills / White Rabbits for EMP matrix-clearing blasts.
+--        * Dial emergency exit Hardline Phones to escape or advance threat levels.
+--    - Audio synthesis SFX (lasers, warps, EMP explosions, glitch static).
+--
+--  Controls:
+--    - Mouse Move / Click : Aim and fire EMP beam / shoot Sentinels
+--    - SPACE / ENTER      : Fire / Start game
+--    - R                  : Replay / Restart soundtrack
+--    - M                  : Mute / Unmute music
+--    - S                  : Toggle CRT shader effect
+--    - B                  : Trigger Bullet Time
+--    - ESC                : Exit
+--======================================================================
+
+window.show(800, 600)
+local W = canvas.width
+local H = canvas.height
+
+-- Load custom Matrix font (White Rabbit)
+font.load("whitrabt.ttf", 12)
+
+-- Enable CRT phosphor shader
+local shaderOn = true
+if shader then
+  shader.load("matrix.frag")
+  shader.value = 0.55
+end
+
+-- Load Background Music (The Matrix Trailer)
+local musicFile = "matrix_trailer.mp3"
+local musicMuted = false
+local musicTimer = 0
+local MUSIC_DURATION = 139.5 -- 2m 19.5s
+music.play(musicFile)
+
+-- Helper color functions (ABGR packed integer format for Tyro)
+local function rgba(r, g, b, a)
+  a = a or 255
+  return r + g * 256 + b * 65536 + a * 16777216
+end
+
+local COL_BG       = rgba(3, 8, 5, 255)
+local COL_TRAIL_BG = rgba(0, 0, 0, 110)
+local COL_HEAD     = rgba(230, 255, 235, 255)  -- Pure brilliant white-green
+local COL_BRIGHT   = rgba(80, 255, 120, 255)   -- Bright neon green
+local COL_MID      = rgba(35, 200, 65, 255)    -- Standard matrix green
+local COL_DIM      = rgba(15, 120, 35, 200)    -- Deep fading green
+local COL_FAINT    = rgba(8, 60, 20, 140)      -- Dark tail green
+local COL_CYAN     = rgba(100, 255, 255, 255)
+local COL_GOLD     = rgba(255, 215, 0, 255)
+local COL_RED      = rgba(255, 60, 60, 255)
+local COL_WHITE    = rgba(255, 255, 255, 255)
+
+-- Character glyphs pool for digital rain
+local GLYPHS = {
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
+  "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
+  "U", "V", "W", "X", "Y", "Z",
+  "*", "+", "-", "<", ">", "#", "$", "%", "&", ":",
+  "|", "=", "/", "\\", "{", "}", "[", "]", "~", "^"
+}
+local NUM_GLYPHS = #GLYPHS
+
+local function randomGlyph()
+  return GLYPHS[math.random(1, NUM_GLYPHS)]
+end
+
+-- ======================================================================
+--  Digital Rain Columns
+-- ======================================================================
+local FONT_SIZE = 16
+local COL_WIDTH = 18
+local ROW_HEIGHT = 18
+local NUM_COLS = math.floor(W / COL_WIDTH)
+local NUM_ROWS = math.floor(H / ROW_HEIGHT) + 2
+
+local columns = {}
+for i = 1, NUM_COLS do
+  local col = {
+    x = (i - 1) * COL_WIDTH + 2,
+    y = math.random(-H, 0),
+    speed = math.random(120, 380), -- pixels per sec
+    length = math.random(12, 32),
+    chars = {},
+    mutateCd = math.random(3, 10) * 0.01,
+    brightness = math.random(8, 10) * 0.1,
+  }
+  for r = 1, NUM_ROWS do
+    col.chars[r] = randomGlyph()
+  end
+  columns[i] = col
+end
+
+-- ======================================================================
+--  Sprites
+-- ======================================================================
+local sCrosshair = Sprites.new("crosshair")
+sCrosshair.load("crosshair.png")
+sCrosshair.move(W / 2, H / 2)
+sCrosshair:show()
+
+local MAX_ENEMIES = 8
+local enemySprites = {}
+for i = 1, MAX_ENEMIES do
+  local s = Sprites.new("sentinel_" .. i)
+  s.load("sentinel.png")
+  s:hide()
+  enemySprites[i] = {
+    spr = s,
+    active = false,
+    kind = "sentinel", -- "sentinel" or "agent"
+    x = 0, y = 0,
+    vx = 0, vy = 0,
+    hp = 1,
+    radius = 18,
+    timer = 0
+  }
+end
+
+local MAX_ITEMS = 4
+local itemSprites = {}
+for i = 1, MAX_ITEMS do
+  local s = Sprites.new("item_" .. i)
+  s.load("pill_red.png")
+  s:hide()
+  itemSprites[i] = {
+    spr = s,
+    active = false,
+    kind = "red", -- "red", "blue", "rabbit", "phone"
+    x = 0, y = 0,
+    vx = 0, vy = 0,
+    radius = 16,
+    timer = 0
+  }
+end
+
+-- Particles / Glitch bursts
+local particles = {}
+local function spawnBurst(x, y, count, pColor)
+  for k = 1, count do
+    local angle = math.random() * math.pi * 2
+    local spd = math.random(40, 240)
+    particles[#particles + 1] = {
+      x = x, y = y,
+      vx = math.cos(angle) * spd,
+      vy = math.sin(angle) * spd,
+      life = math.random(3, 8) * 0.1,
+      maxLife = 0.8,
+      char = randomGlyph(),
+      color = pColor or COL_BRIGHT
+    }
+  end
+end
+
+-- Sound Synthesizer Effects
+local function sfxLaser()
+  music.sound("Laser", 880, 70)
+end
+
+local function sfxExplode()
+  music.sound("Explode", 110, 260)
+end
+
+local function sfxHit()
+  music.sound("Hit", 320, 120)
+end
+
+local function sfxPowerup()
+  music.sound("Bell", 1320, 180)
+  music.sound("Bell", 1760, 240)
+end
+
+local function sfxWarp()
+  music.sound("Warp", 220, 300)
+end
+
+-- ======================================================================
+--  Game State
+-- ======================================================================
+local score = 0
+local integrity = 100 -- Matrix system integrity / Health
+local threatLevel = 1
+local waveTimer = 0
+local bulletTime = 0
+local empWaveRadius = 0
+local empActive = false
+local empOriginX, empOriginY = 0, 0
+local notification = "THE MATRIX HAS YOU... PRESS SPACE TO ENGAGE"
+local notifTimer = 5.0
+local crosshairX, crosshairY = W / 2, H / 2
+local totalElapsed = 0
+
+-- Spawn helpers
+local function spawnEnemy()
+  for i = 1, MAX_ENEMIES do
+    local e = enemySprites[i]
+    if not e.active then
+      e.active = true
+      e.kind = (math.random(1, 3) == 1) and "agent" or "sentinel"
+      if e.kind == "agent" then
+        e.spr.load("agent.png")
+        e.hp = 2
+        e.radius = 16
+      else
+        e.spr.load("sentinel.png")
+        e.hp = 1
+        e.radius = 20
+      end
+      -- Enter from screen edges
+      if math.random(1, 2) == 1 then
+        e.x = (math.random(1, 2) == 1) and -30 or (W + 30)
+        e.y = math.random(50, H - 100)
+      else
+        e.x = math.random(50, W - 50)
+        e.y = -30
+      end
+      local targetX = math.random(100, W - 100)
+      local targetY = math.random(100, H - 150)
+      local dx, dy = targetX - e.x, targetY - e.y
+      local dist = math.sqrt(dx*dx + dy*dy) + 0.001
+      local spd = math.random(60, 140) + threatLevel * 10
+      e.vx = (dx / dist) * spd
+      e.vy = (dy / dist) * spd
+      e.spr.move(e.x, e.y)
+      e.spr:show()
+      break
+    end
+  end
+end
+
+local function spawnItem()
+  for i = 1, MAX_ITEMS do
+    local it = itemSprites[i]
+    if not it.active then
+      it.active = true
+      local roll = math.random(1, 10)
+      if roll <= 4 then
+        it.kind = "red"
+        it.spr.load("pill_red.png")
+      elseif roll <= 7 then
+        it.kind = "blue"
+        it.spr.load("pill_blue.png")
+      elseif roll <= 9 then
+        it.kind = "rabbit"
+        it.spr.load("rabbit.png")
+      else
+        it.kind = "phone"
+        it.spr.load("phone.png")
+      end
+      it.x = math.random(60, W - 60)
+      it.y = -20
+      it.vx = math.random(-20, 20)
+      it.vy = math.random(50, 110)
+      it.spr.move(it.x, it.y)
+      it.spr:show()
+      break
+    end
+  end
+end
+
+-- ======================================================================
+--  Main Loop
+-- ======================================================================
+while cycle do
+  local dt = frametime()
+  if dt <= 0 or dt > 0.1 then dt = 1 / 60 end
+  totalElapsed = totalElapsed + dt
+
+  -- Track music loop
+  musicTimer = musicTimer + dt
+  if musicTimer >= MUSIC_DURATION then
+    musicTimer = 0
+    if not musicMuted then
+      music.play(musicFile)
+    end
+  end
+
+  -- ------------------------------------------------------------------
+  -- Input Handling
+  -- ------------------------------------------------------------------
+  if keyboard.pressed("escape") then
+    exit()
+  end
+
+  if keyboard.pressed("m") then
+    musicMuted = not musicMuted
+    if musicMuted then
+      notification = "AUDIO MUTED"
+    else
+      music.play(musicFile)
+      musicTimer = 0
+      notification = "AUDIO UNMUTED"
+    end
+    notifTimer = 2.0
+  end
+
+  if keyboard.pressed("r") then
+    music.play(musicFile)
+    musicTimer = 0
+    notification = "SOUNDTRACK RESTARTED: THE MATRIX (1999)"
+    notifTimer = 3.0
+  end
+
+  if keyboard.pressed("s") and shader then
+    shaderOn = not shaderOn
+    if shaderOn then
+      shader.load("matrix.frag")
+      shader.value = 0.55
+      notification = "CRT PHOSPHOR SHADER: ON"
+    else
+      shader.effect = "none"
+      notification = "CRT PHOSPHOR SHADER: OFF"
+    end
+    notifTimer = 2.0
+  end
+
+  if keyboard.pressed("b") then
+    if bulletTime <= 0 then
+      bulletTime = 5.0
+      sfxWarp()
+      notification = "BULLET TIME ENGAGED"
+      notifTimer = 2.0
+    end
+  end
+
+  -- Mouse targeting & firing
+  local mx = mouse.x
+  local my = mouse.y
+  if mx and my and (mx ~= 0 or my ~= 0) then
+    crosshairX, crosshairY = mx, my
+  end
+
+  -- Keyboard targeting fallback
+  if keyboard.down("left") or keyboard.down("a") then crosshairX = crosshairX - 350 * dt end
+  if keyboard.down("right") or keyboard.down("d") then crosshairX = crosshairX + 350 * dt end
+  if keyboard.down("up") or keyboard.down("w") then crosshairY = crosshairY - 350 * dt end
+  if keyboard.down("down") or keyboard.down("s") then crosshairY = crosshairY + 350 * dt end
+
+  if crosshairX < 10 then crosshairX = 10 end
+  if crosshairX > W - 10 then crosshairX = W - 10 end
+  if crosshairY < 10 then crosshairY = 10 end
+  if crosshairY > H - 10 then crosshairY = H - 10 end
+  sCrosshair.move(crosshairX, crosshairY)
+
+  -- Firing EMP Laser
+  local fired = mouse.pressed("left") or keyboard.pressed("space") or keyboard.pressed("enter")
+  if fired then
+    sfxLaser()
+    spawnBurst(crosshairX, crosshairY, 12, COL_HEAD)
+
+    -- Check hits against items
+    for i = 1, MAX_ITEMS do
+      local it = itemSprites[i]
+      if it.active then
+        local dx = it.x - crosshairX
+        local dy = it.y - crosshairY
+        if math.sqrt(dx*dx + dy*dy) < (it.radius + 15) then
+          it.active = false
+          it.spr:hide()
+          sfxPowerup()
+          spawnBurst(it.x, it.y, 25, COL_CYAN)
+
+          if it.kind == "red" then
+            bulletTime = 7.0
+            score = score + 250
+            notification = "RED PILL TAKEN: BULLET TIME & TRUTH"
+          elseif it.kind == "blue" then
+            empActive = true
+            empWaveRadius = 10
+            empOriginX, empOriginY = it.x, it.y
+            score = score + 150
+            notification = "BLUE PILL: MATRIX REBOOT EMP"
+          elseif it.kind == "rabbit" then
+            score = score + 500
+            integrity = math.min(100, integrity + 25)
+            notification = "FOLLOW THE WHITE RABBIT: +25% INTEGRITY"
+          elseif it.kind == "phone" then
+            threatLevel = threatLevel + 1
+            score = score + 1000
+            notification = "HARDLINE SECURED! THREAT LEVEL " .. threatLevel
+          end
+          notifTimer = 3.0
+        end
+      end
+    end
+
+    -- Check hits against enemies
+    for i = 1, MAX_ENEMIES do
+      local e = enemySprites[i]
+      if e.active then
+        local dx = e.x - crosshairX
+        local dy = e.y - crosshairY
+        if math.sqrt(dx*dx + dy*dy) < (e.radius + 14) then
+          e.hp = e.hp - 1
+          if e.hp <= 0 then
+            e.active = false
+            e.spr:hide()
+            sfxExplode()
+            spawnBurst(e.x, e.y, 35, (e.kind == "agent") and COL_GOLD or COL_RED)
+            score = score + ((e.kind == "agent") and 300 or 100)
+          else
+            sfxHit()
+            spawnBurst(e.x, e.y, 15, COL_HEAD)
+          end
+        end
+      end
+    end
+  end
+
+  -- ------------------------------------------------------------------
+  -- EMP Shockwave Update
+  -- ------------------------------------------------------------------
+  if empActive then
+    empWaveRadius = empWaveRadius + 750 * dt
+    -- Destroy all active enemies caught in radius
+    for i = 1, MAX_ENEMIES do
+      local e = enemySprites[i]
+      if e.active then
+        local dx = e.x - empOriginX
+        local dy = e.y - empOriginY
+        local dist = math.sqrt(dx*dx + dy*dy)
+        if math.abs(dist - empWaveRadius) < 30 then
+          e.active = false
+          e.spr:hide()
+          sfxExplode()
+          spawnBurst(e.x, e.y, 25, COL_CYAN)
+          score = score + 150
+        end
+      end
+    end
+    if empWaveRadius > math.max(W, H) * 1.5 then
+      empActive = false
+    end
+  end
+
+  -- ------------------------------------------------------------------
+  -- Time Dilation & Spawners
+  -- ------------------------------------------------------------------
+  local timeScale = 1.0
+  if bulletTime > 0 then
+    bulletTime = bulletTime - dt
+    timeScale = 0.35
+  end
+
+  waveTimer = waveTimer + dt
+  if waveTimer >= (2.8 - math.min(1.5, threatLevel * 0.15)) then
+    waveTimer = 0
+    spawnEnemy()
+    if math.random(1, 3) == 1 then
+      spawnItem()
+    end
+  end
+
+  -- ------------------------------------------------------------------
+  -- Update Digital Rain
+  -- ------------------------------------------------------------------
+  for i = 1, NUM_COLS do
+    local col = columns[i]
+    col.y = col.y + col.speed * timeScale * dt
+    if col.y - (col.length * ROW_HEIGHT) > H then
+      col.y = math.random(-80, 0)
+      col.speed = math.random(120, 380)
+      col.length = math.random(12, 32)
+    end
+
+    col.mutateCd = col.mutateCd - dt
+    if col.mutateCd <= 0 then
+      col.mutateCd = math.random(4, 12) * 0.01
+      local rIdx = math.random(1, NUM_ROWS)
+      col.chars[rIdx] = randomGlyph()
+    end
+  end
+
+  -- ------------------------------------------------------------------
+  -- Update Entities (Enemies, Items, Particles)
+  -- ------------------------------------------------------------------
+  for i = 1, MAX_ENEMIES do
+    local e = enemySprites[i]
+    if e.active then
+      e.x = e.x + e.vx * timeScale * dt
+      e.y = e.y + e.vy * timeScale * dt
+      e.spr.move(e.x, e.y)
+
+      -- Sentinels inflict integrity damage if they reach bottom
+      if e.y > H + 20 or e.x < -40 or e.x > W + 40 then
+        if e.y > H + 20 then
+          integrity = integrity - 10
+          sfxHit()
+          spawnBurst(e.x, H - 20, 15, COL_RED)
+          notification = "WARNING: AGENT PENETRATION DETECTED (-10% INTEGRITY)"
+          notifTimer = 2.5
+        end
+        e.active = false
+        e.spr:hide()
+      end
+    end
+  end
+
+  for i = 1, MAX_ITEMS do
+    local it = itemSprites[i]
+    if it.active then
+      it.x = it.x + it.vx * timeScale * dt
+      it.y = it.y + it.vy * timeScale * dt
+      it.spr.move(it.x, it.y)
+      if it.y > H + 20 then
+        it.active = false
+        it.spr:hide()
+      end
+    end
+  end
+
+  for k = #particles, 1, -1 do
+    local p = particles[k]
+    p.life = p.life - dt
+    if p.life <= 0 then
+      table.remove(particles, k)
+    else
+      p.x = p.x + p.vx * dt
+      p.y = p.y + p.vy * dt
+    end
+  end
+
+  if notifTimer > 0 then
+    notifTimer = notifTimer - dt
+  end
+
+  if integrity <= 0 then
+    integrity = 100
+    score = math.floor(score * 0.7)
+    notification = "SYSTEM REBOOTED FROM SOURCE"
+    notifTimer = 3.0
+    sfxExplode()
+  end
+
+  -- ------------------------------------------------------------------
+  -- DRAW SCREEN
+  -- ------------------------------------------------------------------
+  canvas.color = COL_BG
+  canvas.clear()
+
+  -- 1. Draw Digital Rain Columns
+  for i = 1, NUM_COLS do
+    local col = columns[i]
+    local headRow = math.floor(col.y / ROW_HEIGHT)
+
+    for step = 0, col.length - 1 do
+      local r = headRow - step
+      local charY = r * ROW_HEIGHT
+      if charY >= -ROW_HEIGHT and charY <= H + ROW_HEIGHT then
+        local cIdx = (r % NUM_ROWS) + 1
+        local ch = col.chars[cIdx]
+
+        if step == 0 then
+          -- Bright white-hot leading character
+          canvas.color = COL_HEAD
+        elseif step <= 3 then
+          canvas.color = COL_BRIGHT
+        elseif step <= 9 then
+          canvas.color = COL_MID
+        elseif step <= 18 then
+          canvas.color = COL_DIM
+        else
+          canvas.color = COL_FAINT
+        end
+
+        canvas.text(col.x, charY, ch)
+      end
+    end
+  end
+
+  -- 2. Draw Particles
+  for k = 1, #particles do
+    local p = particles[k]
+    canvas.color = p.color
+    canvas.text(p.x, p.y, p.char)
+  end
+
+  -- 3. Draw EMP Ring if active
+  if empActive then
+    canvas.color = COL_CYAN
+    canvas.circle(empOriginX, empOriginY, math.floor(empWaveRadius), false)
+    canvas.circle(empOriginX, empOriginY, math.floor(empWaveRadius - 2), false)
+  end
+
+  -- 4. Draw HUD / Matrix Terminal Status
+  -- Top bar backdrop
+  canvas.color = rgba(5, 15, 10, 210)
+  canvas.rectangle(0, 0, W, 42, true)
+  canvas.color = COL_BRIGHT
+  canvas.line(0, 42, W, 42)
+
+  canvas.color = COL_BRIGHT
+  canvas.text(14, 12, "SYSTEM INTEGRITY:")
+
+  -- Integrity health bar
+  local barW = 120
+  canvas.color = rgba(20, 50, 30, 255)
+  canvas.rectangle(170, 14, barW, 14, true)
+  local fillW = math.floor((integrity / 100) * barW)
+  if integrity > 50 then
+    canvas.color = COL_BRIGHT
+  elseif integrity > 25 then
+    canvas.color = COL_GOLD
+  else
+    canvas.color = COL_RED
+  end
+  if fillW > 0 then
+    canvas.rectangle(170, 14, fillW, 14, true)
+  end
+  canvas.color = COL_HEAD
+  canvas.rectangle(170, 14, barW, 14, false)
+
+  -- Score & Threat
+  canvas.color = COL_HEAD
+  canvas.text(310, 12, string.format("CODE: %06d", score))
+  canvas.color = COL_CYAN
+  canvas.text(470, 12, string.format("THREAT: LVL %d", threatLevel))
+
+  -- Bullet Time indicator
+  if bulletTime > 0 then
+    canvas.color = COL_GOLD
+    canvas.text(630, 12, string.format("BULLET-TIME: %.1fs", bulletTime))
+  else
+    canvas.color = COL_DIM
+    canvas.text(630, 12, "[B]ULLET TIME")
+  end
+
+  -- Bottom status / notification ticker
+  if notifTimer > 0 and notification ~= "" then
+    canvas.color = rgba(0, 15, 5, 230)
+    canvas.rectangle(0, H - 36, W, 36, true)
+    canvas.color = COL_BRIGHT
+    canvas.line(0, H - 36, W, 36)
+    canvas.color = COL_HEAD
+    canvas.text(20, H - 26, "> " .. notification)
+  else
+    canvas.color = rgba(0, 10, 5, 160)
+    canvas.rectangle(0, H - 26, W, 26, true)
+    canvas.color = COL_DIM
+    canvas.text(14, H - 20, "CONTROLS: MOUSE/ARROWS to AIM | SPACE/CLICK FIRE | [B] BULLET TIME | [M] MUTE | [R] SOUNDTRACK | [S] CRT SHADER | [ESC] QUIT")
+  end
+end

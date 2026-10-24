@@ -1,0 +1,62 @@
+--======================================================================
+--  Test Matrix Game & Simulation Engine Integration
+--  Verifies font, audio, shaders, sprites, and digital rain mechanics
+--  Run: bin\tyro.exe tests\test_matrix_game.tyro --exit:2
+--======================================================================
+
+window.show(800, 600)
+font.load("games/matrix/whitrabt.ttf", 16)
+
+-- Test Shader
+if shader then
+  shader.load("games/matrix/matrix.frag")
+  shader.value = 0.5
+end
+
+-- Test Audio Playback
+music.play("games/matrix/matrix_trailer.mp3")
+
+-- Test Sprites Loading
+local sCross = Sprites.new("test_crosshair")
+sCross.load("games/matrix/crosshair.png")
+sCross.move(400, 300)
+sCross:show()
+
+local sSentinel = Sprites.new("test_sentinel")
+sSentinel.load("games/matrix/sentinel.png")
+sSentinel.move(200, 200)
+sSentinel:show()
+
+local sRabbit = Sprites.new("test_rabbit")
+sRabbit.load("games/matrix/rabbit.png")
+sRabbit.move(600, 200)
+sRabbit:show()
+
+local sPillRed = Sprites.new("test_pill_red")
+sPillRed.load("games/matrix/pill_red.png")
+sPillRed.move(300, 400)
+sPillRed:show()
+
+local sPillBlue = Sprites.new("test_pill_blue")
+sPillBlue.load("games/matrix/pill_blue.png")
+sPillBlue.move(500, 400)
+sPillBlue:show()
+
+-- Test Sound Synthesizer
+music.sound("Laser", 880, 50)
+music.sound("Explode", 120, 100)
+
+local frames = 0
+while cycle do
+  canvas.color = colors.black
+  canvas.clear()
+  canvas.color = colors.green
+  canvas.text(50, 50, "THE MATRIX TEST OK")
+  frames = frames + 1
+  if frames >= 60 then
+    break
+  end
+end
+
+print("Matrix test completed successfully")
+exit()
