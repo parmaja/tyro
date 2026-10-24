@@ -989,31 +989,29 @@ end;
 procedure TTyroButton.DoPaint(ACanvas: TTyroCanvas);
 var
   r: TRectangle;
-  body: TColor;
+  FillColor: TColor;
   tx, ty, tw, th: Single;
 begin
   inherited;
-  r := RectangleOf(ClientRect);
-  if (r.Width <= 0) or (r.Height <= 0) then
-    Exit;
-
   if FDown then
-    body := Res.Theme.Button.BackColor //TODO make it darker
+    FillColor := Res.Theme.Button.BackColor //TODO make it darker
   else if FHover then
-    body := Res.Theme.HighlightColor
+    FillColor := Res.Theme.HighlightColor
   else
-    body := Res.Theme.Button.BackColor;
+    FillColor := Res.Theme.Button.BackColor;
 
+  r := RectangleOf(ClientRect);
   r.X := r.X + 2;
   r.Y := r.Y + 2;
   r.Width := r.Width - 4;
   r.Height := r.Height - 4;
 
-  ACanvas.FillRectangleRounded(r, 0.5, 15, body);
-  ACanvas.DrawRectangleRounded(r, 0.5, 15, 0.4, Res.Theme.Button.BorderColor);
+  ACanvas.FillRectangleRounded(r, 0.5, 15, FillColor);
+  ACanvas.DrawRectangleRounded(r, 0.5, 15, 2, Res.Theme.Button.BorderColor);
 
   th := Res.Font.Height;
-  tw := RayLib.MeasureTextEx(Res.Font.Data, PUTF8Char(FCaption), Res.Font.Height, 0).x;
+  //tw := RayLib.MeasureTextEx(Res.Font.Data, PUTF8Char(FCaption), Res.Font.Height, 0).x;
+  tw := ACanvas.MeasureText(FCaption);
   tx := r.X + (r.Width - tw) / 2;
   ty := r.Y + (r.Height - th) / 2;
   if FDown then

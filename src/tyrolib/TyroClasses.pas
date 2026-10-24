@@ -237,17 +237,15 @@ type
     constructor Create(AWidth, AHeight: Integer);
     destructor Destroy; override;
 
+    procedure Resize(AWidth, AHeight: Integer); virtual;
+
     procedure SetCurrent(X, Y: Integer);
 
     procedure SetOrigin(X, Y: Integer); overload;
     procedure SetOrigin(D: Integer); overload;
     procedure ResetOrigin;
-    procedure BeginDraw; virtual;
-    procedure PostDraw(AX: Integer = 0; AY: Integer = 0); virtual;
-    procedure EndDraw; virtual;
 
-    procedure Resize(AWidth, AHeight: Integer); virtual;
-
+    //Draw/Fill Functions must care about Origin
     procedure FillCircle(X, Y, R: Integer; Color: TColor);
     procedure DrawCircle(X, Y, R: Integer; Color: TColor);
 
@@ -277,10 +275,17 @@ type
 
     procedure FillRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Color: TColor); overload;
     procedure DrawRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Thick: Single; Color: TColor); overload;
+    //End of drawing functions
+
+    function MeasureText(const Text: string): Single;
 
     //Screen coordinate
     procedure BeginClip(const ARect: TRect);
     procedure EndClip;
+
+    procedure BeginDraw; virtual;
+    procedure EndDraw; virtual;
+    procedure PostDraw(AX: Integer = 0; AY: Integer = 0); virtual;
 
     procedure Clear;
     procedure ClearBackground(const AColor: TColor); virtual;
@@ -295,6 +300,8 @@ type
     procedure SetEffectArea(const AArea: TRectangle); virtual;
     function GetEffectArea: TRectangle; virtual;
 
+    property Origin:TPoint read FOrigin;
+
     property PenAlpha: Byte read GetPenAlpha write SetPenAlpha;
     property Pen: Integer read FPen write SetPen;
     property Color: TColor read FColor write SetColor;
@@ -302,7 +309,6 @@ type
     property BackColor: TColor read FBackColor write SetBackColor;
     property Width: Integer read FWidth write SetWidth;
     property Height: Integer read FHeight write SetHeight;
-    property Origin:TPoint read FOrigin;
   end;
 
   TTyroTextureCanvas = class(TTyroCanvas)
@@ -754,6 +760,11 @@ end;
 procedure TTyroCanvas.DrawRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Thick: Single; Color: TColor);
 begin
   RayLib.DrawRectangleRoundedLinesEx(OffsetRectangle(ARectangle, Origin.X, Origin.Y), Roundness, Segments, Thick, Color);
+end;
+
+function TTyroCanvas.MeasureText(const Text: string): Single;
+begin
+  Result := RayLib.MeasureTextEx(Res.Font.Data, PUTF8Char(Text), Res.Font.Height, 0).x;
 end;
 
 procedure TTyroCanvas.DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor);
