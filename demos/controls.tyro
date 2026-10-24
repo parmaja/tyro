@@ -8,9 +8,6 @@
 --    controls.new(class, name, x?, y?, w?, h?) -> handle
 --      class: 'button' | 'panel' | 'label' | 'checkbox' | 'edit' | 'spectrum'
 --             | 'listbox' | 'image'  ('image' uses name as the file name; for buttons/labels/checkboxes/edits name becomes the caption)
---    controls.text(handle [, s])   get/set text (caption or edited text)
---    controls.caption(handle [,s]) alias of text (legacy buttons.caption)
---    controls.checked(handle [,v]) get/set checked state (checkbox)
 --    controls.position(handle [,x, y]) get/move position
 --    controls.move(handle, x, y)   move (keeps size)
 --    controls.width/h(andle [,v])  get/set size
@@ -43,15 +40,17 @@ bClose  = controls.new("button", "Close", 280, 40, 100, 36)
 bCounter = controls.new("button", "Click me!", 120, 130, 160, 40)
 
 -- named control: the global 'okbtn' resolves to its handle from now on
-bOK     = controls.new("button", "OK", 400, 40, 100, 36)
-controls.name(bOK, "okbtn")
+bOK     = controls.new("button", "OKBtn", 400, 40, 100, 36)
+bOK.caption = "OK"
 
 -- label
-lbl     = controls.new("label", "Label demo", 40, 210, 150, 24)
+lbl     = controls.new("label", 40, 210, 150, 24)
+lbl.caption = "Label demo"
 controls.backcolor(lbl, colors.blue)      -- 'blue' from the colors table
 
 -- checkbox (toggles itself when clicked)
-chk     = controls.new("checkbox", "Enable sound", 40, 250, 170, 26)
+chk     = controls.new("checkbox", 40, 250, 170, 26)
+chk.caption = "Enable sound"
 
 -- edit box: click it to focus, then type (caret, selection, arrows,
 -- backspace/delete, home/end all work)
@@ -70,11 +69,11 @@ function bstate(h)
   else return "idle" end
 end
 
-while true do
+while cycle do
   -- counter button: click it to change its caption
   if controls.clicked(bCounter) then
     clicks = clicks + 1
-    controls.text(bCounter, "Clicked " .. clicks)
+    bCounter.text = "Clicked " .. clicks
   end
 
   -- Close hides itself; Open brings it back
@@ -88,7 +87,7 @@ while true do
 
   -- the named global 'okbtn' equals the bOK handle
   sound = "off"
-  if controls.checked(chk) then sound = "on" end
+  if chk.checked then sound = "on" end
 
   fe = "no"
   if controls.focused(ed) then fe = "yes" end
@@ -102,7 +101,5 @@ while true do
   canvas.text(30, 360, "counter=" .. clicks .. "  sound=" .. sound ..
                        "  controls.count=" .. controls.count)
   canvas.text(30, 380, "edit focused=" .. fe .. "  border=" .. controls.border(panel))
-  canvas.text(30, 400, "edit text: " .. controls.text(ed))
-
-  sleep(16)
+  canvas.text(30, 400, "edit text: " .. ed.text)
 end
