@@ -1778,7 +1778,10 @@ begin
   //main thread, the same place every scripted draw command runs. The frame that
   //drains the group therefore takes longer than one frame, which is exactly the
   //case a split would show up in.
-  Canvas.DrawRectangle(fX, fY, fW, fH, Canvas.Color, fFill);
+  if fFill then
+    Canvas.FillRectangle(fX, fY, fW, fH, Canvas.Color)
+  else
+    Canvas.DrawRectangle(fX, fY, fW, fH, Canvas.Color);
   if fMillis > 0 then
   begin
     t0 := GetTime();
@@ -1850,7 +1853,10 @@ end;
 
 procedure TDrawTriangleObject.DoExecute;
 begin
-  Canvas.DrawTriangle(fX1, fY1, fX2, fY2, fX3, fY3, Canvas.Color, fFill);
+  if fFill then
+    Canvas.FillTriangle(fX1, fY1, fX2, fY2, fX3, fY3, Canvas.Color)
+  else
+    Canvas.DrawTriangle(fX1, fY1, fX2, fY2, fX3, fY3, Canvas.Color);
 end;
 
 { TDrawSetPenObject }
@@ -1905,7 +1911,10 @@ end;
 
 procedure TDrawRectangleObject.DoExecute;
 begin
-  Canvas.DrawRectangle(fX, fY, fW, fH, Canvas.Color, fFill)
+  if fFill then
+    Canvas.FillRectangle(fX, fY, fW, fH, Canvas.Color)
+  else
+    Canvas.DrawRectangle(fX, fY, fW, fH, Canvas.Color);
 end;
 
 { TPrintObject }
@@ -1990,7 +1999,10 @@ end;
 
 procedure TDrawCircleObject.DoExecute;
 begin
-  Canvas.DrawCircle(fX, fY, fR, Canvas.Color, fFill);
+  if fFill then
+    Canvas.FillCircle(fX, fY, fR, Canvas.Color)
+  else
+    Canvas.DrawCircle(fX, fY, fR, Canvas.Color);
 end;
 
 { TTyroScript }

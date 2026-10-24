@@ -8,6 +8,11 @@ unit TyroClasses;
  *
  *}
 
+{
+  TRect is Integer, Left and Right ...
+  TRectangle is Single (float),  X, Width ...
+}
+
 {$ifdef FPC}
 {$mode delphi}
 {$H+}{$M+}
@@ -233,18 +238,19 @@ type
     destructor Destroy; override;
 
     procedure SetCurrent(X, Y: Integer);
+
     procedure SetOrigin(X, Y: Integer); overload;
     procedure SetOrigin(D: Integer); overload;
     procedure ResetOrigin;
     procedure BeginDraw; virtual;
-    procedure EndDraw; virtual;
     procedure PostDraw(AX: Integer = 0; AY: Integer = 0); virtual;
+    procedure EndDraw; virtual;
+
     procedure Resize(AWidth, AHeight: Integer); virtual;
 
-    procedure DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
-    //Triangle: filled uses raylib's 2D triangle, an outline follows the pen size
-    //so canvas.Pen / the thickness argument control how heavy it looks.
-    procedure DrawTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor; Fill: Boolean = false);
+    procedure FillCircle(X, Y, R: Integer; Color: TColor);
+    procedure DrawCircle(X, Y, R: Integer; Color: TColor);
+
     procedure DrawText(X, Y: Integer; S: utf8string; Color: TColor); overload;
     procedure DrawText(X, Y: Single; S: utf8string; Color: TColor); overload;
     procedure DrawPixel(X, Y: Integer; Color: TColor);
@@ -254,15 +260,23 @@ type
     procedure DrawLineF(X1, Y1, X2, Y2: Single); overload;
     procedure DrawLineTo(X2, Y2: Integer; Color: TColor);
 
-    procedure FillRect(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor); overload;
-    procedure FillRect(Rect: TRect; Color: TColor); overload;
-
-    procedure DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor; Fill: Boolean); overload;
-    procedure DrawRectangle(ARectangle: TRectangle; Color: TColor; Fill: Boolean); overload;
-
-    procedure DrawRect(const ARect: TRect; const Color: TColor; Fill: Boolean); overload;
-    //Only inner outline
     procedure DrawRect(const ARect: TRect; Size: Integer; const Color: TColor); overload;
+    procedure FillRect(Rect: TRect; Color: TColor); overload;
+    procedure FillRect(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; Color: TColor); overload;
+
+    procedure DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor); overload;
+    procedure DrawRectangle(ARectangle: TRectangle; Color: TColor); overload;
+
+    procedure FillRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor); overload;
+    procedure FillRectangle(ARectangle: TRectangle; Color: TColor); overload;
+
+    //Triangle: filled uses raylib's 2D triangle, an outline follows the pen size
+    //so canvas.Pen / the thickness argument control how heavy it looks.
+    procedure DrawTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor);
+    procedure FillTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor);
+
+    procedure FillRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Color: TColor); overload;
+    procedure DrawRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Thick: Single; Color: TColor); overload;
 
     //Screen coordinate
     procedure BeginClip(const ARect: TRect);
@@ -313,9 +327,11 @@ type
   public
     constructor Create(AWidth, AHeight: Integer; ATextureMode: Boolean = False);
     destructor Destroy; override;
+
     procedure BeginDraw; override;
-    procedure EndDraw; override;
     procedure PostDraw(AX: Integer = 0; AY: Integer = 0); override;
+    procedure EndDraw; override;
+
     procedure Resize(AWidth, AHeight: Integer); override;
     procedure SetEffect(const AEffectName: string); override;
     procedure LoadCustomEffect(const AFileName: string); override;
@@ -676,39 +692,26 @@ procedure TTyroCanvas.EndDraw;
 begin
 end;
 
-procedure TTyroCanvas.DrawCircle(X, Y, R: Integer; Color: TColor; Fill: Boolean = false);
+procedure TTyroCanvas.DrawCircle(X, Y, R: Integer; Color: TColor);
 begin
-  if Fill then
-    RayLib.DrawCircle(X + FOrigin.X, Y + FOrigin.Y, R, Color)
-  else
-    RayLib.DrawCircleLines(X + FOrigin.X, Y + FOrigin.Y, R, Color);
+  RayLib.DrawCircleLinesEx(Vector2Of(X + FOrigin.X, Y + FOrigin.Y), R, Pen, Color);
   SetCurrent(X, Y);
 end;
 
-procedure TTyroCanvas.DrawTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor; Fill: Boolean = false);
+procedure TTyroCanvas.DrawTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor);
 begin
-  if Fill then
-    RayLib.DrawTriangle(Vector2Of(X1 + FOrigin.X, Y1 + FOrigin.Y),
-      Vector2Of(X2 + FOrigin.X, Y2 + FOrigin.Y),
-      Vector2Of(X3 + FOrigin.X, Y3 + FOrigin.Y), Color)
-  else
-  begin
-    //An outline is drawn as three pen-size lines rather than DrawTriangleLines,
-    //so it honours Pen and stays consistent with canvas.line.
-    DrawLine(X1, Y1, X2, Y2, Color);
-    DrawLine(X2, Y2, X3, Y3, Color);
-    DrawLine(X3, Y3, X1, Y1, Color);
-  end;
+  RayLib.DrawTriangleLines(Vector2Of(X1 + FOrigin.X, Y1 + FOrigin.Y),
+    Vector2Of(X2 + FOrigin.X, Y2 + FOrigin.Y),
+    Vector2Of(X3 + FOrigin.X, Y3 + FOrigin.Y), Color);
   SetCurrent(X3, Y3);
 end;
 
-procedure TTyroCanvas.DrawRect(const ARect: TRect; const Color: TColor; Fill: Boolean);
+procedure TTyroCanvas.FillTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor);
 begin
-  if Fill then
-    RayLib.DrawRectangle(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height, Color)
-  else
-    RayLib.DrawRectangleLinesEx(RectangleOf(ARect.Left + FOrigin.X, ARect.Top + FOrigin.Y, ARect.Width, ARect.Height), Pen, Color);
-  SetCurrent(ARect.Right, ARect.Bottom);
+  RayLib.DrawTriangle(Vector2Of(X1 + FOrigin.X, Y1 + FOrigin.Y),
+    Vector2Of(X2 + FOrigin.X, Y2 + FOrigin.Y),
+    Vector2Of(X3 + FOrigin.X, Y3 + FOrigin.Y), Color);
+  SetCurrent(X3, Y3);
 end;
 
 procedure TTyroCanvas.DrawRect(const ARect: TRect; Size: Integer; const Color: TColor);
@@ -727,21 +730,35 @@ begin
   EndScissorMode;
 end;
 
-procedure TTyroCanvas.DrawRectangle(ARectangle: TRectangle; Color: TColor; Fill: Boolean);
-var
-  R: TRectangle;
+procedure TTyroCanvas.DrawRectangle(ARectangle: TRectangle; Color: TColor);
 begin
-  R := OffsetRect(ARectangle);
-  if Fill then
-    RayLib.DrawRectangleRec(R, Color)
-  else
-    RayLib.DrawRectangleLinesEx(R, Pen, Color);
+  RayLib.DrawRectangleLinesEx(OffsetRectangle(ARectangle, Origin.X, Origin.Y), Pen, Color);
   SetCurrent(Round(ARectangle.X + ARectangle.Width), Round(ARectangle.Y + ARectangle.Height));
 end;
 
-procedure TTyroCanvas.DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor; Fill: Boolean);
+procedure TTyroCanvas.FillRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor);
 begin
-  DrawRectangle(RectangleOf(X, Y, AWidth, AHeight), Color, Fill)
+  FillRectangle(RectangleOf(X, Y, AWidth, AHeight), Color);
+end;
+
+procedure TTyroCanvas.FillRectangle(ARectangle: TRectangle; Color: TColor);
+begin
+  RayLib.DrawRectangleRec(OffsetRect(ARectangle), Color)
+end;
+
+procedure TTyroCanvas.FillRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Color: TColor);
+begin
+  RayLib.DrawRectangleRounded(OffsetRectangle(ARectangle, Origin.X, Origin.Y), Roundness, Segments, Color)
+end;
+
+procedure TTyroCanvas.DrawRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Thick: Single; Color: TColor);
+begin
+  RayLib.DrawRectangleRoundedLinesEx(OffsetRectangle(ARectangle, Origin.X, Origin.Y), Roundness, Segments, Thick, Color);
+end;
+
+procedure TTyroCanvas.DrawRectangle(X: Single; Y: Single; AWidth: Single; AHeight: Single; Color: TColor);
+begin
+  DrawRectangle(RectangleOf(X, Y, AWidth, AHeight), Color)
 end;
 
 procedure TTyroCanvas.DrawText(X, Y: Integer; S: utf8string; Color: TColor);
@@ -810,6 +827,12 @@ begin
   if (FWidth = AWidth) and (FHeight = AHeight) then Exit;
   FWidth := AWidth;
   FHeight := AHeight;
+end;
+
+procedure TTyroCanvas.FillCircle(X, Y, R: Integer; Color: TColor);
+begin
+  RayLib.DrawCircle(X + FOrigin.X, Y + FOrigin.Y, R, Color);
+  SetCurrent(X, Y);
 end;
 
 procedure TTyroCanvas.Clear;

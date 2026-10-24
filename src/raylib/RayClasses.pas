@@ -196,6 +196,8 @@ var
 function MouseX: Integer;
 function MouseY: Integer;
 
+function OffsetRectangle(const ARectangle: TRectangle; OffsetX, OffsetY: Single): TRectangle; overload;
+
 implementation
 
 var
@@ -691,6 +693,14 @@ function MouseY: Integer;
 begin
   Result := RayLib.GetMouseY;
 end;
+
+function OffsetRectangle(const ARectangle: TRectangle; OffsetX, OffsetY: Single): TRectangle;
+begin
+  Result := ARectangle;
+  Result.X :=  Result.X + OffsetX;
+  Result.Y := Result.Y + OffsetY;
+end;
+
 
 initialization
   RayUpdates := TRayUpdateList.Create(False); //Do not own controls

@@ -45,11 +45,6 @@ interface
 uses
   Classes, SysUtils, Types,
   mnUtils, mnClasses,
-  {$ifdef FPC}
-  {$IFDEF LCL}
-  LCLType,
-  {$ENDIF}
-  {$endif}
   RayLib, RayClasses,
   TyroClasses;
 
@@ -67,13 +62,8 @@ const
 
 type
   {$ifdef FPC}
-  {$IFDEF LCL}
-  TUTF8Char = LCLType.TUTF8Char;
-  {$ELSE}
-  TUTF8Char = String[7];
-  {$ENDIF}
-  {$else}
   TUTF8Char = String[7]; //* ported from LCLType;
+  {$else}
   {$endif}
 
   TMouseButton = (mbLeft, mbRight, mbMiddle);
@@ -974,7 +964,7 @@ begin
   inherited;
   r := ClientRect;
   //r.Inflate(-2,-2);
-  ACanvas.DrawRect(r, BackColor, True);
+  ACanvas.FillRect(r, BackColor);
 end;
 
 { TTyroButton }
@@ -1019,8 +1009,8 @@ begin
   r.Width := r.Width - 4;
   r.Height := r.Height - 4;
 
-  RayLib.DrawRectangleRounded(r, 0.5, 15, body);
-  RayLib.DrawRectangleRoundedLinesEx(r, 0.5, 15, 0.4, Res.Theme.Button.BorderColor);
+  ACanvas.FillRectangleRounded(r, 0.5, 15, body);
+  ACanvas.DrawRectangleRounded(r, 0.5, 15, 0.4, Res.Theme.Button.BorderColor);
 
   th := Res.Font.Height;
   tw := RayLib.MeasureTextEx(Res.Font.Data, PUTF8Char(FCaption), Res.Font.Height, 0).x;
@@ -2628,7 +2618,7 @@ begin
   if (Track.Right <= Track.Left) or (Track.Bottom <= Track.Top) then
     Exit;
   TrackColor := clDarkGray.ReplaceAlpha(140);
-  ACanvas.DrawRect(Track, TrackColor, True);
+  ACanvas.FillRect(Track, TrackColor);
   Thumb := ScrollThumbRect(Which);
   if (Thumb.Right <= Thumb.Left) or (Thumb.Bottom <= Thumb.Top) then
     Exit;
@@ -2640,7 +2630,7 @@ begin
     ThumbColor := clLightgray
   else
     ThumbColor := clLightgray.ReplaceAlpha(170);
-  ACanvas.DrawRect(Thumb, ThumbColor, True);
+  ACanvas.FillRect(Thumb, ThumbColor);
   ACanvas.DrawRect(Thumb, 1, clDarkGray);
 end;
 
@@ -3154,8 +3144,8 @@ begin
           aControl.PaintWindow(Canvas);
         end;
     finally
-      if (Canvas <> nil) and (Canvas is TTyroTextureCanvas) then
-        TTyroTextureCanvas(Canvas).PostDraw(0, 0);
+      if (Canvas <> nil) then
+        Canvas.PostDraw(0, 0);
     end;
   end;
 end;

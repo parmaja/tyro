@@ -169,12 +169,12 @@ begin
   else
     Color := clGreen;
   if BarHeight > 0 then
-    ACanvas.DrawRectangle(X, ABaseY - BarHeight, AWidth, BarHeight, Color, True);
+    ACanvas.FillRectangle(X, ABaseY - BarHeight, AWidth, BarHeight, Color);
 
   PeakY := ABaseY - AMaxHeight * Peak - 1;
   if PeakY < 0 then
     PeakY := 0;
-  ACanvas.DrawRectangle(X, PeakY, AWidth, 1.5, clWhite, True);
+  ACanvas.FillRectangle(X, PeakY, AWidth, 1.5, clWhite);
 end;
 
 procedure TTyroSpectrum.DoPaint(ACanvas: TTyroCanvas);

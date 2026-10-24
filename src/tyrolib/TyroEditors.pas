@@ -1598,7 +1598,7 @@ begin
       x2 := ClientRect.Width;
     if x2 > x1 then
     begin
-      ACanvas.DrawRectangle(x1, aY, x2 - x1, FCharHeight, clDarkGray, True);
+      ACanvas.FillRectangle(x1, aY, x2 - x1, FCharHeight, clDarkGray);
       for I := 0 to High(Runs) do
       begin
         From := Runs[I].Start;
@@ -1624,7 +1624,7 @@ var
   Mode: string;
 begin
   sbY := ClientRect.Height - GetStatusHeight;
-  ACanvas.DrawRectangle(0, sbY, ClientRect.Width, GetStatusHeight, clBlack, True);
+  ACanvas.FillRectangle(0, sbY, ClientRect.Width, GetStatusHeight, clBlack);
   tx := ' ' + ExtractFileName(FFileName);
   if FModified then
     tx := tx + ' *';
@@ -1669,9 +1669,9 @@ begin
   col := clWhite.ReplaceAlpha(Round(255 * FCaretDim));
   if FOverwrite then
     //overwrite is shown by an underline, the sign every other editor uses
-    ACanvas.DrawRectangle(x, y + FCharHeight - 2, FCharWidth, 2, col, True)
+    ACanvas.FillRectangle(x, y + FCharHeight - 2, FCharWidth, 2, col)
   else
-    ACanvas.DrawRectangle(x, y, 2, FCharHeight, col, True);
+    ACanvas.FillRectangle(x, y, 2, FCharHeight, col);
 end;
 
 procedure TyroEditor.DoPaint(ACanvas: TTyroCanvas);
@@ -1690,7 +1690,7 @@ begin
   begin
     Y := (FCaretLine - FTopLine) * FCharHeight;
     if Y + FCharHeight <= ClientRect.Height - GetStatusHeight then
-      ACanvas.DrawRectangle(0, Y, ClientRect.Width, FCharHeight, TColor.CreateRGBA(cEditorCaretLineColor), True);
+      ACanvas.FillRectangle(0, Y, ClientRect.Width, FCharHeight, TColor.CreateRGBA(cEditorCaretLineColor));
   end;
 
   Y := 0;

@@ -77,9 +77,6 @@
       <Item>
         <PackageName Value="RayLibPkg"/>
       </Item>
-      <Item>
-        <PackageName Value="LCLBase"/>
-      </Item>
     </RequiredPackages>
     <Units>
       <Unit>

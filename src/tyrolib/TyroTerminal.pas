@@ -1489,7 +1489,7 @@ begin
     Suffix := UTF8SubStr(S, selEnd, L - selEnd);
     if Prefix <> '' then
       ACanvas.DrawText(0, AY, Prefix, c);
-    ACanvas.DrawRectangle(selStart * FCharWidth, AY, (selEnd - selStart) * FCharWidth, FCharHeight, FSelectionColor, True);
+    ACanvas.FillRectangle(selStart * FCharWidth, AY, (selEnd - selStart) * FCharWidth, FCharHeight, FSelectionColor);
     if SelText <> '' then
       ACanvas.DrawText(selStart * FCharWidth, AY, SelText, BackColor);
     if Suffix <> '' then
@@ -1507,7 +1507,7 @@ var
   x: Integer;
   Sc, sE: Integer;
 begin
-  ACanvas.DrawRectangle(0, AY, ClientRect.Width, FCharHeight, BackColor, True);
+  ACanvas.FillRectangle(0, AY, ClientRect.Width, FCharHeight, BackColor);
   if (ClientRect.Width <= 0) or (FCharWidth <= 0) then
     Exit;
 
@@ -1568,7 +1568,7 @@ begin
     if sE > Sc then
     begin
       x := promptX + (Sc - FInputScroll) * FCharWidth;
-      ACanvas.DrawRectangle(x, AY, (sE - Sc) * FCharWidth, FCharHeight, FSelectionColor, True);
+      ACanvas.FillRectangle(x, AY, (sE - Sc) * FCharWidth, FCharHeight, FSelectionColor);
       if FPasswordMode then
         ACanvas.DrawText(x, AY, StringOfChar(Char(FPasswordChar[1]), sE - Sc), BackColor)
       else
