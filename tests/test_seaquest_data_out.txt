@@ -1,0 +1,48 @@
+PASS  the module loads
+PASS  a diver starts at 50
+PASS  ten deliveries in, a diver is 550
+PASS  the diver value saturates at 1000
+PASS  the diver value never goes backwards
+PASS  an enemy starts at 20
+PASS  ten deliveries in, an enemy is 120 -> 90
+PASS  the enemy value saturates at 90
+PASS  six divers pay 6 x 50 at the start
+PASS  six divers pay 6 x 550 at delivery 10
+PASS  a partial load pays nothing
+PASS  no divers pay nothing
+PASS  the extra life interval is 10000
+PASS  four lives to start
+PASS  the boat holds six
+PASS  the alarm window is 8 seconds
+PASS  a full tank lasts 26 seconds
+PASS  a full second of diving costs 100/26
+PASS  later deliveries burn oxygen faster
+PASS  the siren sounds below 22
+PASS  there are eight levels
+PASS  level 1 is the Sunlit Reef
+PASS  level 8 is the Kraken's Lair
+PASS  level 8 is the boss level
+PASS  only the last level is a boss level
+PASS  level 0 clamps to level 1
+PASS  level 9 wraps back to level 1
+PASS  the quotas never drop before the boss level
+PASS  speeds rise level to level
+PASS  past the last level it keeps accelerating
+PASS  every level has a name
+PASS  every level spawns sea life
+PASS  no patrols before two deliveries
+PASS  patrols join after two deliveries
+PASS  the picker only returns real kinds
+PASS  the picker spreads the roster out
+PASS  sharks are the commonest thing on level 4
+PASS  no patrols at all before delivery two
+PASS  an empty roster still returns a shark
+PASS  the sub's box is forgiving
+PASS  the boss has a hit box
+PASS  the torpedo has a hit box
+PASS  sweep catches a crossing hit
+PASS  sweep misses a clean miss
+PASS  sweep hits a resting overlap
+PASS  the Kraken takes 14 torpedoes
+PASS  the Kraken is the biggest thing in the game
+failures: 0

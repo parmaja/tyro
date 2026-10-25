@@ -1,0 +1,238 @@
+--======================================================================
+--  seaquest_data.tyro - the rules and tuning of Seaquest, as pure data
+--======================================================================
+--  Everything in here is plain Lua: no window, no sprites, no engine calls.
+--  That is deliberate - the game reads its tables and its arithmetic from
+--  here, and tests/test_seaquest_data.tyro checks the numbers directly
+--  without having to boot the engine.
+--
+--  Loaded by the game with:  local D = require("seaquest_data")
+--  (require finds it next to seaquest.tyro, inside the workspace)
+--
+--  The values follow the arcade original where it is well documented
+--  (Atari Seaquest, 1976) and branch off into our own variant where the
+--  original's hardware quirks do not translate: see README.md.
+--======================================================================
+
+local D = {}
+
+-- ---- scoring ---------------------------------------------------------
+-- Both score tables grow with the number of successful 6-diver deliveries
+-- already made, exactly like the arcade: the tenth delivery is worth far
+-- more than the first. Both saturate so the game cannot run away.
+
+D.DIVER_STEP  = 50      -- +50 per delivery
+D.DIVER_MAX   = 1000    -- a diver is worth at most 1000
+D.DIVER_BASE  = 50      -- first delivery: 50 each
+
+D.ENEMY_STEP  = 10      -- +10 per delivery
+D.ENEMY_MAX   = 90      -- an enemy is worth at most 90
+D.ENEMY_BASE  = 20      -- first delivery: 20 each
+
+--Value of one diver on a delivery (deliveries = completed 6-diver returns).
+function D.diver_value(deliveries)
+  deliveries = deliveries or 0
+  if deliveries < 0 then deliveries = 0 end
+  return math.min(D.DIVER_BASE + deliveries * D.DIVER_STEP, D.DIVER_MAX)
+end
+
+--Value of one enemy kill on a delivery.
+function D.enemy_value(deliveries)
+  deliveries = deliveries or 0
+  if deliveries < 0 then deliveries = 0 end
+  return math.min(D.ENEMY_BASE + deliveries * D.ENEMY_STEP, D.ENEMY_MAX)
+end
+
+--Score for returning divers. Only a full boat pays: the arcade pays 6 x
+--diver value, and surfacing with a partial load loses one (see README).
+function D.delivery_score(divers, deliveries)
+  divers = divers or 0
+  if divers < 6 then return 0 end
+  return 6 * D.diver_value(deliveries)
+end
+
+--How many points until the next extra life. One every 10000, no cap on
+--how many can be earned.
+D.EXTRA_LIFE = 10000
+
+-- ---- lives -----------------------------------------------------------
+D.START_LIVES = 4
+
+-- ---- divers ----------------------------------------------------------
+D.MAX_DIVERS = 6        -- the boat holds six, and only six pay
+
+-- ---- oxygen ----------------------------------------------------------
+-- The tank empties in OXYGEN_SECONDS and then gives you OXYGEN_GRACE more
+-- seconds before the sub is lost; the arcade's alarm window is 8 seconds.
+D.OXYGEN_MAX     = 100
+D.OXYGEN_SECONDS = 26      -- full tank to empty, at speed
+D.OXYGEN_GRACE   = 8       -- the alarm window: oxygen 0 -> hull lost
+D.OXYGEN_REFILL  = 170     -- per second while surfaced
+
+function D.oxygen_drain(dt, deliveries)
+  --A touch faster on later deliveries, so the pressure rises with the score.
+  local extra = 1.0 + math.min(deliveries or 0, 10) * 0.03
+  return (D.OXYGEN_MAX / D.OXYGEN_SECONDS) * dt * extra
+end
+
+--Should the low-oxygen siren be sounding?
+function D.oxygen_alarm(oxygen)
+  return oxygen <= 22
+end
+
+-- ---- levels ----------------------------------------------------------
+-- Eight levels. Each needs `quota` deliveries to move on; the roster and
+-- the speeds come from the arcade's own escalation (sharks first, then
+-- squid and eels, the red Patrol Sub after the second delivery, and our
+-- Kraken waiting at the bottom of the Abyss).
+D.LEVELS = {
+  {
+    name = "Sunlit Reef",
+    quota = 3,
+    palette = 1,
+    sharks = 2, squids = 0, eels = 0, patrols = 0,
+    speed = 1.00, spawn = 2.6,
+    divers = 3,
+    boss = false,
+  },
+  {
+    name = "Kelp Forest",
+    quota = 4,
+    palette = 2,
+    sharks = 3, squids = 1, eels = 0, patrols = 0,
+    speed = 1.06, spawn = 2.3,
+    divers = 4,
+    boss = false,
+  },
+  {
+    name = "Rocky Canyon",
+    quota = 4,
+    palette = 3,
+    sharks = 3, squids = 2, eels = 1, patrols = 0,
+    speed = 1.12, spawn = 2.1,
+    divers = 4,
+    boss = false,
+  },
+  {
+    name = "Shipwreck Graveyard",
+    quota = 5,
+    palette = 4,
+    sharks = 3, squids = 2, eels = 2, patrols = 0,
+    speed = 1.18, spawn = 1.9,
+    divers = 5,
+    boss = false,
+  },
+  {
+    name = "Volcanic Vent",
+    quota = 5,
+    palette = 5,
+    sharks = 3, squids = 3, eels = 2, patrols = 1,
+    speed = 1.25, spawn = 1.8,
+    divers = 5,
+    boss = false,
+  },
+  {
+    name = "Midnight Zone",
+    quota = 6,
+    palette = 6,
+    sharks = 3, squids = 3, eels = 3, patrols = 1,
+    speed = 1.32, spawn = 1.7,
+    divers = 6,
+    boss = false,
+  },
+  {
+    name = "The Abyss",
+    quota = 6,
+    palette = 7,
+    sharks = 4, squids = 3, eels = 3, patrols = 2,
+    speed = 1.40, spawn = 1.6,
+    divers = 6,
+    boss = false,
+  },
+  {
+    name = "Kraken's Lair",
+    quota = 4,
+    palette = 8,
+    sharks = 2, squids = 2, eels = 2, patrols = 2,
+    speed = 1.46, spawn = 1.5,
+    divers = 6,
+    boss = true,
+  },
+}
+
+D.LEVEL_COUNT = #D.LEVELS
+
+--The level to play, wrapping past the end (so a long game keeps going and
+--keeps getting faster).
+function D.level(index)
+  if index < 1 then index = 1 end
+  local n = ((index - 1) % D.LEVEL_COUNT) + 1
+  return D.LEVELS[n]
+end
+
+--How fast this level's enemies move. Past the last hand-made level the
+--roster wraps but the speed keeps climbing, so a long game stays hard.
+function D.level_speed(index)
+  if index < 1 then index = 1 end
+  if index <= D.LEVEL_COUNT then
+    return D.LEVELS[index].speed
+  end
+  return D.LEVELS[D.LEVEL_COUNT].speed * (1 + (index - D.LEVEL_COUNT) * 0.06)
+end
+
+-- ---- enemy behaviour -------------------------------------------------
+--Weights in the spawn roll. A Patrol Sub only joins after the second
+--delivery, like the arcade.
+function D.spawn_weights(level, deliveries)
+  local w = {
+    shark = level.sharks,
+    squid = level.squids,
+    eel   = level.eels,
+    patrol = 0,
+  }
+  if deliveries and deliveries >= 2 then
+    w.patrol = level.patrols
+  end
+  return w
+end
+
+--Picks a random enemy kind from the weights, using rng() as the 0..1 source
+--(math.random by default, so the game can pass a seeded one in tests).
+function D.pick_enemy(level, deliveries, rng)
+  local w = D.spawn_weights(level, deliveries)
+  local total = w.shark + w.squid + w.eel + w.patrol
+  if total <= 0 then return "shark" end
+  local r = (rng or math.random)() * total
+  if r < w.shark then return "shark" end
+  r = r - w.shark
+  if r < w.squid then return "squid" end
+  r = r - w.squid
+  if r < w.eel then return "eel" end
+  return "patrol"
+end
+
+-- ---- collisions ------------------------------------------------------
+--Half-extents of the hit boxes, as a fraction of the drawn sprite. The
+--sub and the divers are forgiving; the enemies are not.
+D.HIT = {
+  sub    = 0.62,
+  enemy  = 0.78,
+  diver  = 0.60,
+  torpedo = 0.85,
+  boss   = 0.80,
+}
+
+--A swept overlap test, so a fast torpedo cannot phase through a shark
+--between two frames. Boxes are half-extents; (ax0,ay0)->(ax1,ay1) is the
+--torpedo's travel, relative to the target which sits at the origin.
+function D.sweep_hit(ax0, ay0, ax1, ay1, bx, by, hw, hh)
+  return math.min(ax0, ax1) - bx <= hw and math.max(ax0, ax1) + bx >= -hw
+     and math.min(ay0, ay1) - by <= hh and math.max(ay0, ay1) + by >= -hh
+end
+
+-- ---- the Kraken ------------------------------------------------------
+D.KRAKEN_HP     = 14      -- torpedoes to kill it
+D.KRAKEN_WIDTH  = 76
+D.KRAKEN_HEIGHT = 56
+
+return D

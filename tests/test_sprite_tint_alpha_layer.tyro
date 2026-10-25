@@ -1,0 +1,108 @@
+--======================================================================
+--  test_sprite_tint_alpha_layer.tyro - the sprite style properties
+--  Run:  tyro tests/test_sprite_tint_alpha_layer.tyro --exit
+--  Writes test_sprite_tint_alpha_layer_out.txt and fails the run (nonzero
+--  exit) when any check does not hold.
+--
+--  Covers sprite.alpha (0..255 opacity), sprite.tint ($AABBGGRR colour,
+--  same format as canvas.color) and sprite.layer (draw order): defaults,
+--  round-trips, clamping and the fact that a non-number never corrupts
+--  the engine value.
+--======================================================================
+
+console.show()
+
+failures = 0
+out = openfile("test_sprite_tint_alpha_layer_out.txt", "w")
+
+function check(label, ok)
+  if ok then
+    out:write("PASS  " .. label .. "\n")
+  else
+    failures = failures + 1
+    out:write("FAIL  " .. label .. "\n")
+  end
+end
+
+-- split a color integer into its red/green/blue/alpha bytes ($AABBGGRR)
+-- colors arrive as signed 32-bit values ($FFFFFFFF reads back as -1), so
+-- normalise to the unsigned 32-bit range first (same trick Lua's bit32 uses)
+function rgba(t)
+  t = t % 4294967296
+  if t < 0 then t = t + 4294967296 end
+  local a = math.floor(t / 16777216)
+  local b = math.floor(t / 65536) % 256
+  local g = math.floor(t / 256) % 256
+  local r = t % 256
+  return r, g, b, a
+end
+
+window.show(320, 240)
+
+local s = Sprites.new("style")
+s.load("tiles.png")
+
+-- ---- defaults -------------------------------------------------------
+local r, g, b, a = rgba(s.tint)
+check("default tint is opaque white", r == 255 and g == 255 and b == 255 and a == 255)
+check("default alpha is 255", s.alpha == 255)
+check("default layer is 0", s.layer == 0)
+
+-- ---- alpha ----------------------------------------------------------
+s.alpha = 128
+check("alpha 128 readback", s.alpha == 128)
+s.alpha = 999
+check("alpha clamps to 255", s.alpha == 255)
+s.alpha = -40
+check("alpha clamps to 0", s.alpha == 0)
+s.alpha = 255
+check("alpha write keeps the tint's colour", (rgba(s.tint)) == 255)
+
+-- ---- tint -----------------------------------------------------------
+s.tint = colors.red
+check("tint round-trips colors.red", s.tint == colors.red)
+r, g, b, a = rgba(s.tint)
+check("colors.red reads back reddish", r > g and r > b)
+
+-- a tint carries alpha in its top byte: alpha reads it back
+s.tint = 100 * 16777216 + 30 * 65536 + 30 * 256 + 255
+check("tint alpha channel is readable as alpha", s.alpha == 100)
+
+s.tint = colors.white
+check("alpha follows the new tint's alpha", s.alpha == 255)
+
+-- a non-number never reaches the engine value (raw-stored at worst)
+s.tint = "red"
+check("string tint is ignored", s.tint == colors.white)
+s.alpha = nil
+check("nil alpha is ignored", s.alpha == 255)
+
+-- ---- layer ----------------------------------------------------------
+s.layer = 7
+check("layer 7 readback", s.layer == 7)
+s.layer = -3
+check("negative layer readback", s.layer == -3)
+s.layer = "x"
+check("string layer is ignored", s.layer == -3)
+
+-- other property writes must not disturb the style properties
+s.scale = 2
+s.x = 40
+s.y = 60
+s.angle = 15
+check("style properties survive position writes",
+  s.layer == -3 and s.alpha == 255 and s.tint == colors.white)
+
+-- ---- texture-less sprite (Sprites.new without load) -----------------
+local t = Sprites.new("empty")
+t.alpha = 64
+t.layer = 5
+check("texture-less sprite accepts alpha", t.alpha == 64)
+check("texture-less sprite accepts layer", t.layer == 5)
+
+out:write("failures: " .. failures .. "\n")
+out:close()
+
+if failures > 0 then
+  error("test_sprite_tint_alpha_layer: " .. failures .. " check(s) failed")
+end

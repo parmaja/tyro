@@ -1,0 +1,180 @@
+--======================================================================
+--  test_seaquest_data.tyro - the pure rules module of Seaquest
+--======================================================================
+--  seaquest_data.tyro holds the arcade scoring tables, the level roster and
+--  the hit-box fractions with no engine calls at all, so this test checks
+--  the numbers directly.
+--
+--  The module's one source is games/seaquest/seaquest_data.tyro. Tyro
+--  resolves require() inside the workspace - the folder of the running
+--  script - so games/seaquest is unreachable from here. The copy next to
+--  this test is generated (never hand-edited) by
+--  python games/seaquest/make_seaquest_assets.py, which reads the real one.
+--
+--  Run:  tyro tests/test_seaquest_data.tyro --exit
+--
+--  Writes tests/test_seaquest_data_out.txt and fails the run (nonzero exit)
+--  when any check does not hold.
+--======================================================================
+
+local D = require("seaquest_data")
+
+failures = 0
+out = openfile("test_seaquest_data_out.txt", "w")
+
+function check(label, ok)
+  if ok then
+    out:write("PASS  " .. label .. "\n")
+  else
+    failures = failures + 1
+    out:write("FAIL  " .. label .. "\n")
+  end
+end
+
+check("the module loads", D ~= nil)
+if D == nil then
+  out:close()
+  error("test_seaquest_data: seaquest_data did not load")
+end
+
+-- ---- scoring ---------------------------------------------------------
+check("a diver starts at 50", D.diver_value(0) == 50)
+check("ten deliveries in, a diver is 550", D.diver_value(10) == 550)
+check("the diver value saturates at 1000", D.diver_value(200) == 1000)
+check("the diver value never goes backwards", D.diver_value(-5) == 50)
+
+check("an enemy starts at 20", D.enemy_value(0) == 20)
+check("ten deliveries in, an enemy is 120 -> 90", D.enemy_value(10) == 90)
+check("the enemy value saturates at 90", D.enemy_value(999) == 90)
+
+check("six divers pay 6 x 50 at the start", D.delivery_score(6, 0) == 300)
+check("six divers pay 6 x 550 at delivery 10", D.delivery_score(6, 10) == 3300)
+check("a partial load pays nothing", D.delivery_score(5, 0) == 0)
+check("no divers pay nothing", D.delivery_score(0, 0) == 0)
+
+check("the extra life interval is 10000", D.EXTRA_LIFE == 10000)
+check("four lives to start", D.START_LIVES == 4)
+check("the boat holds six", D.MAX_DIVERS == 6)
+
+-- ---- oxygen ----------------------------------------------------------
+check("the alarm window is 8 seconds", D.OXYGEN_GRACE == 8)
+check("a full tank lasts 26 seconds", D.OXYGEN_SECONDS == 26)
+local full = D.oxygen_drain(1.0, 0)
+check("a full second of diving costs 100/26",
+      math.abs(full - 100 / 26) < 0.0001)
+check("later deliveries burn oxygen faster",
+      D.oxygen_drain(1.0, 10) > full)
+check("the siren sounds below 22",
+      D.oxygen_alarm(22) and D.oxygen_alarm(1) and not D.oxygen_alarm(23))
+
+-- ---- levels ----------------------------------------------------------
+check("there are eight levels", D.LEVEL_COUNT == 8)
+check("level 1 is the Sunlit Reef", D.level(1).name == "Sunlit Reef")
+check("level 8 is the Kraken's Lair", D.level(8).name == "Kraken's Lair")
+check("level 8 is the boss level", D.level(8).boss == true)
+check("only the last level is a boss level",
+      (function()
+        for i = 1, D.LEVEL_COUNT do
+          if D.level(i).boss and i ~= 8 then return false end
+        end
+        return true
+      end)())
+check("level 0 clamps to level 1", D.level(0).name == "Sunlit Reef")
+check("level 9 wraps back to level 1", D.level(9).name == "Sunlit Reef")
+check("the quotas never drop before the boss level",
+      (function()
+        for i = 2, D.LEVEL_COUNT - 1 do
+          if D.level(i).quota < D.level(i - 1).quota then return false end
+        end
+        --the boss level asks for less: you are fighting the Kraken as well
+        return D.level(D.LEVEL_COUNT).quota <= D.level(D.LEVEL_COUNT - 1).quota
+      end)())
+check("speeds rise level to level",
+      (function()
+        for i = 2, D.LEVEL_COUNT do
+          if D.level_speed(i) <= D.level_speed(i - 1) then return false end
+        end
+        return true
+      end)())
+check("past the last level it keeps accelerating",
+      D.level_speed(D.LEVEL_COUNT + 3) > D.level_speed(D.LEVEL_COUNT))
+
+-- every level names its palette and spawns something
+local all_named = true
+local all_rosters = true
+for i = 1, D.LEVEL_COUNT do
+  local lv = D.level(i)
+  if type(lv.name) ~= "string" or lv.name == "" then all_named = false end
+  if lv.sharks + lv.squids + lv.eels <= 0 then all_rosters = false end
+end
+check("every level has a name", all_named)
+check("every level spawns sea life", all_rosters)
+
+-- ---- spawning --------------------------------------------------------
+-- The Patrol Sub must stay out of the game until two deliveries, arcade
+-- rules: weight it with a seeded rng so the check is exact.
+local lv5 = D.level(5)
+check("no patrols before two deliveries",
+      D.spawn_weights(lv5, 0).patrol == 0 and
+      D.spawn_weights(lv5, 1).patrol == 0)
+check("patrols join after two deliveries",
+      D.spawn_weights(lv5, 2).patrol == lv5.patrols)
+
+local seed = 12345
+local function seeded()
+  -- a tiny LCG, enough to make the roll reproducible
+  seed = (seed * 1103515245 + 12345) % 2147483648
+  return seed / 2147483648
+end
+local counts = { shark = 0, squid = 0, eel = 0, patrol = 0 }
+local lv = D.level(4)
+for i = 1, 3000 do
+  local kind = D.pick_enemy(lv, 5, seeded)
+  counts[kind] = counts[kind] + 1
+end
+check("the picker only returns real kinds",
+      counts.shark + counts.squid + counts.eel + counts.patrol == 3000)
+check("the picker spreads the roster out",
+      counts.shark > 0 and counts.squid > 0 and counts.eel > 0)
+check("sharks are the commonest thing on level 4",
+      counts.shark > counts.squid and counts.shark > counts.eel)
+
+-- with no deliveries the patrol never appears
+counts = { shark = 0, squid = 0, eel = 0, patrol = 0 }
+seed = 999
+for i = 1, 2000 do
+  local kind = D.pick_enemy(lv, 0, seeded)
+  counts[kind] = counts[kind] + 1
+end
+check("no patrols at all before delivery two", counts.patrol == 0)
+
+-- a level that spawns nothing falls back to sharks
+local empty = { sharks = 0, squids = 0, eels = 0, patrols = 0 }
+check("an empty roster still returns a shark",
+      D.pick_enemy(empty, 0, seeded) == "shark")
+
+-- ---- hit boxes -------------------------------------------------------
+check("the sub's box is forgiving", D.HIT.sub < D.HIT.enemy)
+check("the boss has a hit box", D.HIT.boss > 0)
+check("the torpedo has a hit box", D.HIT.torpedo > 0)
+
+-- the swept test must catch a fast pass-through: a torpedo that starts and
+-- ends outside a 10px box but crosses it in between still hits
+check("sweep catches a crossing hit",
+      D.sweep_hit(-40, 0, 40, 0, 8, 8, 10, 10) == true)
+check("sweep misses a clean miss",
+      D.sweep_hit(-40, 40, 40, 40, 8, 8, 10, 10) == false)
+check("sweep hits a resting overlap",
+      D.sweep_hit(0, 0, 0, 0, 8, 8, 10, 10) == true)
+
+-- ---- the Kraken ------------------------------------------------------
+check("the Kraken takes 14 torpedoes", D.KRAKEN_HP == 14)
+check("the Kraken is the biggest thing in the game",
+      D.KRAKEN_WIDTH > 40 and D.KRAKEN_HEIGHT > 30)
+
+out:write("failures: " .. failures .. "\n")
+out:close()
+
+if failures > 0 then
+  error("test_seaquest_data: " .. failures .. " check(s) failed")
+end

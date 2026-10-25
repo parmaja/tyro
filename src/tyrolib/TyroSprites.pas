@@ -60,6 +60,8 @@ type
     Visible: boolean;
     FlipH: boolean;    //mirror the texture horizontally (right-facing art from a left-facing sheet)
     FlipV: boolean;    //mirror the texture vertically
+    Tint: TColor;      //multiplied colour, alpha included: tint and fade the sprite
+    Layer: Integer;    //draw order: lower layers are drawn first (behind), 0 = default
     Collides: boolean;
     Kind: TSpriteKind;
     Mass: single;
@@ -122,6 +124,11 @@ type
     procedure SetVisible(Handle: integer; AVisible: boolean);
     procedure SetFlipH(Handle: integer; AFlip: boolean);
     procedure SetFlipV(Handle: integer; AFlip: boolean);
+    //Visual style: the tint multiplies the texture (alpha included, so a tint
+    //with alpha < 255 fades the sprite); the layer picks the draw order.
+    procedure SetTint(Handle: integer; ATint: TColor);
+    procedure SetAlpha(Handle: integer; AAlpha: Integer);
+    procedure SetLayer(Handle: integer; ALayer: Integer);
     function GetX(Handle: integer): single;
     function GetY(Handle: integer): single;
     function GetAngle(Handle: integer): single;
@@ -129,6 +136,9 @@ type
     function GetVisible(Handle: integer): boolean;
     function GetFlipH(Handle: integer): boolean;
     function GetFlipV(Handle: integer): boolean;
+    function GetTint(Handle: integer): TColor;
+    function GetAlpha(Handle: integer): Integer;
+    function GetLayer(Handle: integer): Integer;
     function GetWidth(Handle: integer): integer;
     function GetHeight(Handle: integer): integer;
     function GetName(Handle: integer): string;
@@ -260,6 +270,8 @@ begin
   Visible := True;
   FlipH := False;
   FlipV := False;
+  Tint := clWhite;
+  Layer := 0;
   Collides := False;
   Kind := skDynamic;
   Mass := 1.0;
@@ -791,6 +803,49 @@ begin
   end;
 end;
 
+procedure TSprites.SetTint(Handle: integer; ATint: TColor);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Tint := ATint;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetAlpha(Handle: integer; AAlpha: Integer);
+var
+  Sprite: TSprite;
+begin
+  if AAlpha < 0 then
+    AAlpha := 0
+  else if AAlpha > 255 then
+    AAlpha := 255;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Tint.RGBA.Alpha := AAlpha;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetLayer(Handle: integer; ALayer: Integer);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Layer := ALayer;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 function TSprites.GetX(Handle: integer): single;
 var
   Sprite: TSprite;
@@ -891,6 +946,51 @@ begin
       Result := Sprite.FlipV
     else
       Result := False;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetTint(Handle: integer): TColor;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Tint
+    else
+      Result := clWhite;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetAlpha(Handle: integer): Integer;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Tint.RGBA.Alpha
+    else
+      Result := 255;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetLayer(Handle: integer): Integer;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Layer
+    else
+      Result := 0;
   finally
     FLock.Leave;
   end;
@@ -1269,51 +1369,90 @@ begin
   end;
 end;
 
+//Draw order of two drawable sprites: the lower layer goes behind, and sprites
+//that share a layer keep a stable order by handle so the frame never flickers
+//between two arrangements.
+function SpriteDrawBefore(A, B: TSprite): Boolean;
+begin
+  if A.Layer <> B.Layer then
+    Result := A.Layer < B.Layer
+  else
+    Result := A.Handle < B.Handle;
+end;
+
 procedure TSprites.DrawAll;
 var
   Sprite: TSprite;
+  Order: array of TSprite;
+  Count, I, J: Integer;
+  Key: TSprite;
   W, H: Single;
   sx, sy, sw, sh: Single;
   Src, Dst: TRectangle;
 begin
   FLock.Enter;
   try
+    //Collect the drawable sprites, then sort them by layer so a script can
+    //stack its world deterministically (distant decor first, effects last).
+    //The lists are tiny, so an insertion sort into one small array beats
+    //allocating a comparer every frame (same trick as TParallax.Draw).
+    Count := 0;
+    SetLength(Order, FItems.Count);
     for Sprite in FItems.Values do
       if Sprite.Visible and (Sprite.Texture.id > 0) then
       begin
-        // Draw the texture centred on (X, Y) with its rotation pivot at the
-        // centre, matching the physics body (whose origin is the centre) and
-        // the documented "sprite.x/y = position" model.
-        W := Sprite.Texture.width * Sprite.Scale;
-        H := Sprite.Texture.height * Sprite.Scale;
-        // FlipH/FlipV mirror the texture by reversing the source rectangle:
-        // the UVs run from the far edge back to the near one (raylib renders
-        // negative source dimensions as a flip).
-        if Sprite.FlipH then
-        begin
-          sx := Sprite.Texture.width;
-          sw := -Sprite.Texture.width;
-        end
-        else
-        begin
-          sx := 0;
-          sw := Sprite.Texture.width;
-        end;
-        if Sprite.FlipV then
-        begin
-          sy := Sprite.Texture.height;
-          sh := -Sprite.Texture.height;
-        end
-        else
-        begin
-          sy := 0;
-          sh := Sprite.Texture.height;
-        end;
-        Src := RectangleOf(sx, sy, sw, sh);
-        Dst := RectangleOf(Sprite.X, Sprite.Y, W, H);
-        RayLib.DrawTexturePro(Sprite.Texture, Src, Dst,
-          Vector2Of(W / 2, H / 2), Sprite.Angle, clWhite);
+        Order[Count] := Sprite;
+        Inc(Count);
       end;
+    for I := 1 to Count - 1 do
+    begin
+      Key := Order[I];
+      J := I - 1;
+      while (J >= 0) and SpriteDrawBefore(Key, Order[J]) do
+      begin
+        Order[J + 1] := Order[J];
+        Dec(J);
+      end;
+      Order[J + 1] := Key;
+    end;
+
+    for I := 0 to Count - 1 do
+    begin
+      Sprite := Order[I];
+      // Draw the texture centred on (X, Y) with its rotation pivot at the
+      // centre, matching the physics body (whose origin is the centre) and
+      // the documented "sprite.x/y = position" model.
+      W := Sprite.Texture.width * Sprite.Scale;
+      H := Sprite.Texture.height * Sprite.Scale;
+      // FlipH/FlipV mirror the texture by reversing the source rectangle:
+      // the UVs run from the far edge back to the near one (raylib renders
+      // negative source dimensions as a flip).
+      if Sprite.FlipH then
+      begin
+        sx := Sprite.Texture.width;
+        sw := -Sprite.Texture.width;
+      end
+      else
+      begin
+        sx := 0;
+        sw := Sprite.Texture.width;
+      end;
+      if Sprite.FlipV then
+      begin
+        sy := Sprite.Texture.height;
+        sh := -Sprite.Texture.height;
+      end
+      else
+      begin
+        sy := 0;
+        sh := Sprite.Texture.height;
+      end;
+      Src := RectangleOf(sx, sy, sw, sh);
+      Dst := RectangleOf(Sprite.X, Sprite.Y, W, H);
+      //The tint multiplies the texture; its alpha channel fades the sprite.
+      RayLib.DrawTexturePro(Sprite.Texture, Src, Dst,
+        Vector2Of(W / 2, H / 2), Sprite.Angle, Sprite.Tint);
+    end;
   finally
     FLock.Leave;
   end;

@@ -1,0 +1,1103 @@
+--======================================================================
+--  Seaquest - a deep-sea rescue arcade game for Tyro
+--======================================================================
+--  An hommage to the 1976 Atari coin-op. Pilot the yellow sub through eight
+--  levels of reef, trench and abyss: rescue the stranded divers, keep the
+--  tank full of air, and blast the sharks, squid, eels and red Patrol Subs
+--  that come for you. Surface with a full boat of six and they are handed
+--  over for the big score. The Kraken is waiting at the bottom.
+--
+--  Everything in the water is a sprite (animated .sprite atlases); the
+--  background is a two-layer parallax baked per level. The board canvas is
+--  a translucent overlay ABOVE the sprites (canvas.front): it carries the
+--  HUD and the water-light washes that seaquest.frag turns into caustics,
+--  light shafts and depth grading - so the water lights the sprites without
+--  ever hiding them. shader.area gates the whole thing to the water band,
+--  which leaves the HUD strip at the top untouched.
+--
+--  The rules (scoring tables, oxygen, level roster, hit boxes) live in
+--  seaquest_data.tyro, kept pure so tests/test_seaquest_data.tyro can check
+--  them without booting the engine.
+--
+--  Controls:  ARROWS / WASD   swim
+--             SPACE / Z       fire a torpedo (one at a time, like the arcade)
+--             X               drop a rescued diver back into the water
+--             ESC             quit
+--
+--  Run:  tyro games/seaquest/seaquest.tyro
+--  Assets: games/seaquest/sq_*.*
+--          (regenerate: python games/seaquest/make_seaquest_assets.py)
+--======================================================================
+
+local D = require("seaquest_data")
+
+window.show(960, 540)
+window.backcolor = colors.black
+
+local W = canvas.width
+local H = canvas.height
+
+-- The board is composited ABOVE the sprites and cleared transparent, so it
+-- carries the HUD and the water light without hiding the world.
+canvas.front = true
+
+-- ---- world layout ----------------------------------------------------
+local SKY_H     = 62              -- the band above the waterline
+local WATER_TOP = SKY_H           -- first pixel of water
+local FLOOR_H   = 150             -- the seabed strip, drawn by parallax
+local DEEP      = H - 40          -- where the sub stops (the seabed)
+
+-- ---- tuning ----------------------------------------------------------
+local SCALE        = 2.4          -- every sprite is drawn at this scale
+local SUB_SPD      = 250          -- px/s at full tilt
+local SUB_DRAG     = 6.0          -- per second, when no key is held
+local TORP_SPD     = 430
+local TORP_LIFE    = 1.6
+local TORP_MAX     = 1            -- the arcade only lets one fly at a time
+local SHARK_SPD    = 78
+local SQUID_SPD    = 96
+local EEL_SPD      = 132
+local PATROL_SPD   = 118
+local PATROL_FIRE  = 2.2
+local DIVER_SPD    = 26
+local BOSS_SPD     = 46
+local RESPAWN      = 2.2
+
+-- Collision boxes come from the drawn sprite (texture x scale), scaled by
+-- the forgiving fractions in the rules module: the sub and the divers get a
+-- smaller box than the enemies, and the torpedo a tighter one still.
+local function half(s, frac)
+  local hw = s:width() * s.scale / 2
+  local hh = s:height() * s.scale / 2
+  return hw * frac, hh * frac
+end
+
+-- ---- sounds ----------------------------------------------------------
+local function pew()    music.sound("Pew", 520, 90) end
+local function boom()   music.sound("Explode", 150, 320) end
+local function blip(f)  music.sound("Bubble", f or 660, 70) end
+local function ding()   music.sound("Coin", 880, 120) end
+
+-- The engine drone runs for as long as the sub is under power.
+local engineOn = false
+local function engine(on)
+  if on == engineOn then return end
+  engineOn = on
+  if on then
+    sound.loopPlay("Engine", 82, 0.16)
+  else
+    sound.loopStop()
+  end
+end
+
+-- ---- sprite pools ----------------------------------------------------
+-- One sprite per live instance: retiring it is just hiding it, and each
+-- pool uploads its texture once.
+local function pool(tex, opts)
+  return { tex = tex, list = {}, opts = opts or {} }
+end
+
+local function acquire(p)
+  for i = 1, #p.list do
+    local s = p.list[i]
+    if s.visible == false then return s end
+  end
+  local s = Sprites.new()
+  s.load(p.tex)
+  s.scale = p.opts.scale or SCALE
+  if p.opts.fps then
+    s:play(p.opts.fps)
+  end
+  s.visible = false
+  p.list[#p.list + 1] = s
+  return s
+end
+
+local function release(s)
+  if s ~= nil then s.visible = false end
+end
+
+-- Explosions carry their own animation (5 frames), so they are their own
+-- pool and are retired the moment the animation stops.
+local P = {
+  sub     = pool("sq_sub.sprite", { fps = 14 }),
+  shark   = pool("sq_shark.sprite", { fps = 4.4 }),
+  squid   = pool("sq_squid.sprite", { fps = 5.6 }),
+  eel     = pool("sq_eel.sprite", { fps = 9.0 }),
+  patrol  = pool("sq_patrol.sprite", { fps = 9.0 }),
+  kraken  = pool("sq_kraken.sprite", { fps = 5.0, scale = 3.0 }),
+  diver   = pool("sq_diver.sprite", { fps = 3.8 }),
+  torpedo = pool("sq_torpedo.png", { scale = SCALE }),
+  etorp   = pool("sq_torpedo_e.png", { scale = SCALE }),
+  boom    = pool("sq_boom.sprite", { fps = 22, scale = 2.0 }),
+  bubble  = pool("sq_bubble.png", { scale = 1.6 }),
+  pearl   = pool("sq_pearl.png", { scale = 1.6 }),
+}
+
+-- ---- parallax --------------------------------------------------------
+-- Two layers per level: the baked backdrop and the seabed, both drawn by
+-- the engine. bg.offset follows the sub so the world drifts as you swim.
+local bg = parallax.new('sea')
+
+local function load_level_bg(n)
+  bg.clear()
+  bg.add('sq_bg' .. n .. '.png', 0.06)
+  bg.addground('sq_flr' .. n .. '.png', 1.0)
+end
+
+-- ---- shader ----------------------------------------------------------
+-- The water shader grades the band below the surface; the HUD strip above
+-- it stays clean because shader.area stops at the waterline.
+local shaderReady = false
+local function load_water()
+  local ok = pcall(function() shader.load("seaquest.frag") end)
+  shaderReady = ok and shader.effect ~= "none"
+  if shaderReady then
+    shader.value = 0.85
+    shader.area = { 0, WATER_TOP, W, H - WATER_TOP }
+  end
+end
+
+-- ---- entity model ----------------------------------------------------
+-- One table per live thing, sprites hidden when the table dies.
+local enemies, torps, etorps, divers, booms, bubbles, pearls
+local sub, px, py, pvx, pvy, face
+local state, score, high, lives, levelNo, deliveries, quota
+local oxygen, surfaced, docking, dyingTimer, invuln, fireCd
+local boss, bossHp, bossAlive
+local msg, msgTimer, flash, spawnTimer, bubbleTimer
+local levelTimer, cardTimer, overTimer
+local nextLife, oxygenAlarm, bossFlash, diverTimer
+
+local function clamp(v, lo, hi)
+  if v < lo then return lo end
+  if v > hi then return hi end
+  return v
+end
+
+-- ---- explosions & bubbles --------------------------------------------
+local function add_boom(x, y, big)
+  local s = acquire(P.boom)
+  s.x, s.y = x, y
+  s.scale = (big and 3.0 or 2.0)
+  s.visible = true
+  s:play(0)                     -- restart the 5 frames from the top
+  booms[#booms + 1] = { s = s, x = x, y = y }
+end
+
+local function add_bubble(x, y, rise)
+  local s = acquire(P.bubble)
+  s.x, s.y = x, y
+  s.visible = true
+  s.alpha = rand(120, 200)
+  s.tint = colors.aqua
+  bubbles[#bubbles + 1] = { s = s, x = x, y = y, rise = rise or rand(24, 60),
+                            drift = rand(-14, 14), life = rand(12, 24) / 10 }
+end
+
+-- ---- divers ----------------------------------------------------------
+-- Divers swim on their own, drift toward the sub once rescued, and trail
+-- behind it in a line - exactly like the arcade's little convoy.
+local function add_diver(x, y)
+  local s = acquire(P.diver)
+  s.x, s.y = x, y
+  s.visible = true
+  divers[#divers + 1] = { s = s, x = x, y = y, vx = rand(-DIVER_SPD, DIVER_SPD),
+                          vy = rand(-10, 10), saved = false, t = rand(0, 6),
+                          hx = x, hy = y }
+end
+
+local function saved_count()
+  local n = 0
+  for i = 1, #divers do if divers[i].saved then n = n + 1 end end
+  return n
+end
+
+-- ---- enemies ---------------------------------------------------------
+local function enemy_stats(kind)
+  if kind == 'shark' then
+    return { tex = P.shark, spd = SHARK_SPD, wob = 26 }
+  elseif kind == 'squid' then
+    return { tex = P.squid, spd = SQUID_SPD, wob = 60 }
+  elseif kind == 'eel' then
+    return { tex = P.eel, spd = EEL_SPD, wob = 90 }
+  else
+    return { tex = P.patrol, spd = PATROL_SPD, wob = 14 }
+  end
+end
+
+local function add_enemy(kind, x, y)
+  local st = enemy_stats(kind)
+  local s = acquire(st.tex)
+  s.x, s.y = x, y
+  s.visible = true
+  -- everything swims the way it faces
+  s.flipH = (s.x > px)
+  local e = { kind = kind, s = s, x = x, y = y, t = rand(0, 6),
+              spd = st.spd, wob = st.wob, dir = (s.x > px) and -1 or 1,
+              fire = rand(60, math.floor(PATROL_FIRE * 160)) / 100, hx = 0, hh = 0 }
+  e.hw, e.hh = half(s, D.HIT.enemy)
+  enemies[#enemies + 1] = e
+  return e
+end
+
+-- ---- the Kraken ------------------------------------------------------
+local function spawn_boss()
+  local s = acquire(P.kraken)
+  s.x, s.y = W / 2, WATER_TOP + 90
+  s.visible = true
+  boss = { s = s, x = W / 2, y = WATER_TOP + 90, t = 0, dir = 1,
+           hx = 0, hh = 0 }
+  boss.hw, boss.hh = half(s, D.HIT.boss)
+  bossHp = D.KRAKEN_HP
+  bossAlive = true
+end
+
+-- ---- torpedoes -------------------------------------------------------
+local function fire()
+  if fireCd > 0 or #torps >= TORP_MAX then return end
+  if surfaced then return end       -- the arcade will not let you shoot up top
+  fireCd = 0.28
+  local s = acquire(P.torpedo)
+  s.x, s.y = px + face * 34, py
+  s.flipH = face < 0
+  s.visible = true
+  torps[#torps + 1] = { s = s, x = s.x, y = s.y, vx = face * TORP_SPD,
+                        life = TORP_LIFE, hx = 0, hh = 0 }
+  torps[#torps].hw, torps[#torps].hh = half(s, D.HIT.torpedo)
+  pew()
+end
+
+local function enemy_fire(e)
+  local s = acquire(P.etorp)
+  local dx, dy = px - e.x, py - e.y
+  local len = math.max(1, math.sqrt(dx * dx + dy * dy))
+  s.x, s.y = e.x, e.y
+  s.flipH = dx < 0
+  s.visible = true
+  etorps[#etorps + 1] = { s = s, x = e.x, y = e.y,
+                          vx = dx / len * TORP_SPD * 0.8,
+                          vy = dy / len * TORP_SPD * 0.8,
+                          life = 2.4, hx = 0, hh = 0 }
+  etorps[#etorps].hw, etorps[#etorps].hh = half(s, D.HIT.torpedo)
+  music.sound("Pew", 300, 90)
+end
+
+-- ---- scoring ---------------------------------------------------------
+local function award(n)
+  local before = score
+  score = score + n
+  if score < 0 then score = 0 end
+  -- one extra life every EXTRA_LIFE points, counted from the last one earned
+  while score - nextLife >= D.EXTRA_LIFE do
+    nextLife = nextLife + D.EXTRA_LIFE
+    lives = lives + 1
+    music.mml("e8 g8 c8 e8 g8 c8")
+    msg, msgTimer = "EXTRA SUB!", 1.8
+  end
+end
+
+local function enemy_points(kind)
+  if kind == 'patrol' then return D.enemy_value(deliveries) * 2 end
+  if kind == 'eel' then return D.enemy_value(deliveries) * 3 end
+  if kind == 'squid' then return D.enemy_value(deliveries) * 2 end
+  return D.enemy_value(deliveries)
+end
+
+-- ---- level flow ------------------------------------------------------
+local function release_world()
+  local function sweep(list)
+    if not list then return end
+    for i = 1, #list do release(list[i].s) end
+  end
+  sweep(enemies); sweep(torps); sweep(etorps); sweep(divers)
+  sweep(booms); sweep(bubbles); sweep(pearls)
+  if boss then release(boss.s) end
+end
+
+local function build_level(n)
+  local lv = D.level(n)
+  levelNo = n
+  quota = lv.quota
+  deliveries = 0
+  load_level_bg(lv.palette)
+  load_water()
+
+  enemies, torps, etorps = {}, {}, {}
+  divers, booms, bubbles, pearls = {}, {}, {}, {}
+  boss, bossAlive = nil, false
+
+  -- a handful of divers are always in the water
+  for i = 1, lv.divers do
+    add_diver(rand(60, W - 60), rand(WATER_TOP + 70, DEEP - 60))
+  end
+  -- and the initial population of the level
+  for i = 1, lv.sharks do
+    add_enemy('shark', rand(60, W - 60), rand(WATER_TOP + 60, DEEP - 40))
+  end
+  for i = 1, lv.squids do
+    add_enemy('squid', rand(60, W - 60), rand(WATER_TOP + 60, DEEP - 40))
+  end
+  for i = 1, lv.eels do
+    add_enemy('eel', rand(60, W - 60), rand(WATER_TOP + 60, DEEP - 40))
+  end
+  for i = 1, lv.patrols do
+    add_enemy('patrol', rand(60, W - 60), rand(WATER_TOP + 60, DEEP - 40))
+  end
+  if lv.boss then spawn_boss() end
+
+  spawnTimer = lv.spawn
+  diverTimer = 1.0
+  cardTimer = 2.4
+  msg, msgTimer = "", 0
+end
+
+local function place_sub()
+  px, py = W * 0.3, WATER_TOP + 40
+  pvx, pvy = 0, 0
+  face = 1
+  oxygen = D.OXYGEN_MAX
+  surfaced = false
+  docking = false
+  oxygenAlarm = false
+  invuln = 2.0
+  fireCd = 0
+  -- lose_sub() hid it; a respawn must show it again
+  if sub ~= nil then sub.visible = true end
+end
+
+local function reset_game()
+  release_world()
+  sub = acquire(P.sub)
+  sub.visible = true
+  score = 0
+  lives = D.START_LIVES
+  nextLife = D.EXTRA_LIFE
+  levelNo = 1
+  place_sub()
+  build_level(1)
+  state = 'card'
+  overTimer = 0
+end
+
+-- ---- death & delivery ------------------------------------------------
+local function lose_sub()
+  if dyingTimer > 0 or invuln > 0 then return end
+  add_boom(px, py, true)
+  boom()
+  flash = 1.0
+  engine(false)
+  -- the divers scatter, exactly as they do when the sub is lost
+  for i = 1, #divers do
+    local d = divers[i]
+    if d.saved then
+      d.saved = false
+      d.vx = rand(-DIVER_SPD, DIVER_SPD)
+      d.vy = rand(-20, 20)
+    end
+  end
+  dyingTimer = RESPAWN
+  sub.visible = false
+  -- a partial load costs a diver, an empty boat costs nothing
+  local lost = saved_count()
+  if lost > 0 then
+    for i = 1, #divers do
+      if divers[i].saved and lost > 1 then
+        divers[i].saved = false
+        lost = lost - 1
+      end
+    end
+  end
+end
+
+local function game_over()
+  state = 'over'
+  engine(false)
+  if score > high then
+    high = score
+    music.mml("c8 e8 g8 c6", "e8 g8 c6 e6")
+  else
+    music.mml("c6 a8 f8 d6")
+  end
+  overTimer = 0
+end
+
+-- Surfacing with the full boat of six hands the divers over: this is the
+-- big score, and it is what the whole game is built around.
+local function deliver()
+  local n = saved_count()
+  if n >= D.MAX_DIVERS then
+    local pts = D.delivery_score(n, deliveries)
+    award(pts)
+    deliveries = deliveries + 1
+    -- back into the water they go, to be rescued all over again
+    for i = 1, #divers do
+      local d = divers[i]
+      d.saved = false
+      d.x, d.y = px + rand(-60, 60), WATER_TOP + rand(20, 60)
+      d.vx, d.vy = rand(-DIVER_SPD, DIVER_SPD), rand(0, 20)
+      d.hx, d.hy = d.x, d.y
+    end
+    music.mml("c8 e8 g8 c6", "e8 g8 c6 e6")
+    msg = "DELIVERY!  +" .. pts
+    msgTimer = 2.0
+    ding()
+    if deliveries >= quota then
+      if D.level(levelNo).boss and bossAlive then
+        msg = "KILL THE KRAKEN!"
+        msgTimer = 2.4
+      else
+        msg = "LEVEL CLEAR!"
+        msgTimer = 2.0
+        levelTimer = 1.6
+      end
+    end
+  elseif n > 0 then
+    -- a partial load: one diver is handed over and lost (our variant)
+    award(D.diver_value(deliveries))
+    for i = 1, #divers do
+      if divers[i].saved then
+        divers[i].saved = false
+        divers[i].x, divers[i].y = px, WATER_TOP + 24
+        divers[i].vx, divers[i].vy = 0, 10
+        break
+      end
+    end
+    msg = "NEED SIX TO DELIVER!"
+    msgTimer = 1.8
+    music.sound("Cash", 400, 140)
+  end
+end
+
+-- ---- input -----------------------------------------------------------
+local function read_keys()
+  local ax, ay = 0, 0
+  if keyboard.down('left') or keyboard.down('a') then ax = ax - 1 end
+  if keyboard.down('right') or keyboard.down('d') then ax = ax + 1 end
+  if keyboard.down('up') or keyboard.down('w') then ay = ay - 1 end
+  if keyboard.down('down') or keyboard.down('s') then ay = ay + 1 end
+  return ax, ay
+end
+
+-- ---- update ----------------------------------------------------------
+local function update_sub(dt)
+  if dyingTimer > 0 then
+    dyingTimer = dyingTimer - dt
+    if dyingTimer <= 0 then
+      lives = lives - 1
+      if lives <= 0 then
+        game_over()
+      else
+        place_sub()
+        state = 'play'
+      end
+    end
+    return
+  end
+
+  local ax, ay = read_keys()
+
+  -- docking: on the surface the sub is locked until the tank is full
+  if docking then
+    ax, ay = 0, 0
+    pvx, pvy = 0, 0
+  end
+
+  pvx = pvx + ax * SUB_SPD * 4 * dt
+  pvy = pvy + ay * SUB_SPD * 4 * dt
+  if ax == 0 then pvx = pvx - pvx * SUB_DRAG * dt end
+  if ay == 0 then pvy = pvy - pvy * SUB_DRAG * dt end
+  local sp = math.sqrt(pvx * pvx + pvy * pvy)
+  if sp > SUB_SPD then
+    pvx, pvy = pvx / sp * SUB_SPD, pvy / sp * SUB_SPD
+  end
+  if ax ~= 0 then face = ax > 0 and 1 or -1 end
+
+  px = clamp(px + pvx * dt, 24, W - 24)
+  py = clamp(py + pvy * dt, WATER_TOP + 16, DEEP)
+  sub.x, sub.y = px, py
+  sub.flipH = face < 0
+
+  -- are we at the surface?
+  local atSurface = py <= WATER_TOP + 22
+  if atSurface and not surfaced then
+    surfaced = true
+    if saved_count() >= 1 then deliver() end
+    if D.OXYGEN_MAX - oxygen > 4 then
+      docking = true
+      blip(520)
+    end
+  elseif not atSurface and surfaced then
+    surfaced = false
+    docking = false
+  end
+
+  if docking then
+    oxygen = oxygen + D.OXYGEN_REFILL * dt
+    if oxygen >= D.OXYGEN_MAX then
+      oxygen = D.OXYGEN_MAX
+      docking = false
+      blip(880)
+      engine(true)
+    end
+    -- bubbles trail off the tank while it fills
+    if rand(0, 1) < 0.4 then add_bubble(px - face * 26, py - 6, 40) end
+  else
+    oxygen = oxygen - D.oxygen_drain(dt, deliveries)
+    if oxygen <= 0 then
+      -- NOT clamped to 0: the tank runs into the negative during the grace
+      -- window, and losing the sub is measured against -OXYGEN_GRACE.
+      -- (draw_hud clamps it for display anyway.)
+      if D.OXYGEN_GRACE > 0 then
+        -- the alarm window: siren, then the sub is lost
+        if not oxygenAlarm then
+          oxygenAlarm = true
+          music.sound("Siren", 700, 900)
+        end
+        if oxygen < -D.OXYGEN_GRACE then
+          lose_sub()
+          return
+        end
+      else
+        lose_sub()
+        return
+      end
+    elseif oxygenAlarm and oxygen > 20 then
+      oxygenAlarm = false
+    end
+    engine(sp > 24 and not surfaced)
+  end
+
+  -- the engine drone follows the throttle
+  if not docking and not surfaced and dyingTimer <= 0 then
+    sound.loopPitch(60 + sp * 0.35)
+    sound.loopVolume(clamp(sp / SUB_SPD, 0, 1) * 0.2)
+  end
+end
+
+local function update_torps(dt)
+  for i = #torps, 1, -1 do
+    local t = torps[i]
+    t.x = t.x + t.vx * dt
+    t.life = t.life - dt
+    t.s.x, t.s.y = t.x, t.y
+    -- the torpedo leaves a bubble trail
+    if rand(0, 1) < 0.5 then add_bubble(t.x, t.y, 10) end
+    if t.life <= 0 or t.x < -40 or t.x > W + 40 then
+      release(t.s)
+      table.remove(torps, i)
+    end
+  end
+  for i = #etorps, 1, -1 do
+    local t = etorps[i]
+    t.x = t.x + t.vx * dt
+    t.y = t.y + t.vy * dt
+    t.life = t.life - dt
+    t.s.x, t.s.y = t.x, t.y
+    if t.life <= 0 or t.x < -40 or t.x > W + 40 or t.y < -40 or t.y > H + 40 then
+      release(t.s)
+      table.remove(etorps, i)
+    end
+  end
+end
+
+local function update_divers(dt)
+  -- The arcade keeps a fresh diver in the water whenever one is rescued, so
+  -- the boat can always be filled to six even on levels that start short.
+  local lv = D.level(levelNo)
+  local free = 0
+  for i = 1, #divers do
+    if not divers[i].saved then free = free + 1 end
+  end
+  if free < lv.divers and #divers < D.MAX_DIVERS then
+    diverTimer = diverTimer - dt
+    if diverTimer <= 0 then
+      diverTimer = 3.0
+      -- a new diver swims in from the side, like the coin-op's rescue chopper
+      local side = rand(0, 1) == 1
+      add_diver(side and -20 or W + 20, rand(WATER_TOP + 60, DEEP - 60))
+    end
+  end
+
+  for i = #divers, 1, -1 do
+    local d = divers[i]
+    d.t = d.t + dt
+    if d.saved then
+      -- trail behind the sub in a tidy line
+      local want = math.min(i, D.MAX_DIVERS)
+      local tx = px - face * (30 + want * 16)
+      local ty = WATER_TOP + 18 + (want % 3) * 12
+      d.hx = d.hx + (tx - d.hx) * math.min(1, dt * 3.2)
+      d.hy = d.hy + (ty - d.hy) * math.min(1, dt * 3.2)
+      d.x, d.y = d.hx, d.hy
+      d.s.x, d.s.y = d.x, d.y
+      d.s.flipH = face < 0
+    else
+      -- free divers wander, drift down and can be picked up again
+      d.vx = d.vx + math.sin(d.t * 0.9) * 8 * dt
+      d.vy = d.vy + math.cos(d.t * 0.7) * 5 * dt
+      d.vx = clamp(d.vx, -DIVER_SPD, DIVER_SPD)
+      d.vy = clamp(d.vy, -14, 14)
+      d.x = d.x + d.vx * dt
+      d.y = d.y + d.vy * dt
+      if d.y > DEEP - 10 then d.vy = -math.abs(d.vy) end
+      if d.y < WATER_TOP + 14 then d.vy = math.abs(d.vy) end
+      if d.x < 12 then d.vx = math.abs(d.vx) end
+      if d.x > W - 12 then d.vx = -math.abs(d.vx) end
+      d.s.x, d.s.y = d.x, d.y
+      d.s.flipH = d.vx < 0
+      -- pick one up by swimming into it
+      if dyingTimer <= 0 and saved_count() < D.MAX_DIVERS then
+        local dx, dy = d.x - px, d.y - py
+        if dx * dx + dy * dy < 34 * 34 then
+          d.saved = true
+          d.hx, d.hy = d.x, d.y
+          blip(760)
+        end
+      end
+    end
+  end
+end
+
+local function update_enemies(dt)
+  local lv = D.level(levelNo)
+  local spdScale = D.level_speed(levelNo)
+  for i = #enemies, 1, -1 do
+    local e = enemies[i]
+    e.t = e.t + dt
+    -- everything drifts toward the sub and wobbles on the way
+    local dx, dy = px - e.x, py - e.y
+    local len = math.max(1, math.sqrt(dx * dx + dy * dy))
+    local chase = (e.kind == 'squid') and 1.0 or 0.55
+    e.x = e.x + (dx / len) * e.spd * spdScale * chase * dt
+    e.y = e.y + (dy / len) * e.spd * spdScale * chase * dt
+    e.y = e.y + math.sin(e.t * 2.2) * e.wob * dt
+    e.x = clamp(e.x, -60, W + 60)
+    e.y = clamp(e.y, WATER_TOP + 8, DEEP + 10)
+    e.s.x, e.s.y = e.x, e.y
+    e.s.flipH = e.x > px
+    -- Patrol Subs shoot, and only when you have earned them
+    if e.kind == 'patrol' then
+      e.fire = e.fire - dt
+      if e.fire <= 0 and math.abs(dy) < 120 then
+        e.fire = PATROL_FIRE / spdScale
+        enemy_fire(e)
+      end
+    end
+    -- keep the roster stocked
+    if e.x < -50 or e.x > W + 50 or e.y > H + 40 then
+      release(e.s)
+      table.remove(enemies, i)
+    end
+  end
+  -- top the level up from the rules' roster
+  spawnTimer = spawnTimer - dt
+  if spawnTimer <= 0 and #enemies < 8 and dyingTimer <= 0 then
+    spawnTimer = lv.spawn / spdScale
+    local kind = D.pick_enemy(lv, deliveries)
+    local side = rand(0, 1) == 1
+    add_enemy(kind, side and (W + 40) or -40,
+              rand(WATER_TOP + 40, DEEP - 30))
+  end
+end
+
+local function update_boss(dt)
+  if not bossAlive or not boss then return end
+  boss.t = boss.t + dt
+  boss.x = boss.x + boss.dir * BOSS_SPD * dt
+  if boss.x < 120 then boss.dir = 1 end
+  if boss.x > W - 120 then boss.dir = -1 end
+  boss.y = WATER_TOP + 80 + math.sin(boss.t * 0.8) * 40
+  boss.s.x, boss.s.y = boss.x, boss.y
+  boss.s.flipH = boss.dir < 0
+  -- it spits squid at you
+  boss.fire = (boss.fire or 1.6) - dt
+  if boss.fire <= 0 then
+    boss.fire = 1.8
+    add_enemy('squid', boss.x, boss.y + 40)
+  end
+end
+
+local function update_booms(dt)
+  for i = #booms, 1, -1 do
+    local b = booms[i]
+    if not b.s.playing then
+      release(b.s)
+      table.remove(booms, i)
+    end
+  end
+  for i = #bubbles, 1, -1 do
+    local b = bubbles[i]
+    b.life = b.life - dt
+    b.y = b.y - b.rise * dt
+    b.x = b.x + b.drift * dt
+    b.s.x, b.s.y = b.x, b.y
+    if b.life <= 0 or b.y < WATER_TOP then
+      release(b.s)
+      table.remove(bubbles, i)
+    end
+  end
+  for i = #pearls, 1, -1 do
+    local p = pearls[i]
+    p.t = p.t + dt
+    p.s.x, p.s.y = p.x, p.y + math.sin(p.t * 2) * 6
+    if p.life <= 0 then
+      release(p.s)
+      table.remove(pearls, i)
+    else
+      p.life = p.life - dt
+    end
+  end
+end
+
+-- ---- collisions ------------------------------------------------------
+local function hit(ax, ay, ahw, ahh, bx, by, bhw, bhh)
+  return math.abs(ax - bx) <= ahw + bhw and math.abs(ay - by) <= ahh + bhh
+end
+
+local function kill_enemy(i, e)
+  add_boom(e.x, e.y, e.kind == 'patrol')
+  boom()
+  award(enemy_points(e.kind))
+  -- a shark or a squid sometimes leaves a pearl behind
+  if rand(0, 1) < 0.10 then
+    local s = acquire(P.pearl)
+    s.x, s.y = e.x, e.y
+    s.visible = true
+    pearls[#pearls + 1] = { s = s, x = e.x, y = e.y, t = 0, life = 6 }
+  end
+  release(e.s)
+  table.remove(enemies, i)
+end
+
+local function update_collisions(dt)
+  if dyingTimer > 0 then return end
+  local shw, shh = half(sub, D.HIT.sub)
+
+  -- torpedoes vs everything that swims
+  for ti = #torps, 1, -1 do
+    local t = torps[ti]
+    local dead = false
+    for ei = #enemies, 1, -1 do
+      local e = enemies[ei]
+      if hit(t.x, t.y, t.hw, t.hh, e.x, e.y, e.hw, e.hh) then
+        kill_enemy(ei, e)
+        add_boom(t.x, t.y, false)
+        release(t.s)
+        table.remove(torps, ti)
+        dead = true
+        break
+      end
+    end
+    if dead then goto continue end
+    if bossAlive and hit(t.x, t.y, t.hw, t.hh, boss.x, boss.y, boss.hw, boss.hh) then
+      bossHp = bossHp - 1
+      add_boom(t.x, t.y, false)
+      music.sound("Explode", 240, 160)
+      boss.s.tint = colors.white
+      bossFlash = 0.12
+      release(t.s)
+      table.remove(torps, ti)
+      if bossHp <= 0 then
+        add_boom(boss.x, boss.y, true)
+        add_boom(boss.x - 40, boss.y + 20, true)
+        add_boom(boss.x + 40, boss.y - 10, true)
+        boom()
+        award(5000)
+        bossAlive = false
+        release(boss.s)
+        msg, msgTimer = "THE KRAKEN IS DEAD!", 3.0
+        levelTimer = 2.6
+        music.mml("c8 e8 g8 c8 e8 g8 c6", "g8 c8 e8 g8 c8 e8 g6")
+      end
+      goto continue
+    end
+    ::continue::
+  end
+
+  -- enemy torpedoes vs the sub
+  for ti = #etorps, 1, -1 do
+    local t = etorps[ti]
+    if hit(t.x, t.y, t.hw, t.hh, px, py, shw, shh) then
+      add_boom(t.x, t.y, false)
+      release(t.s)
+      table.remove(etorps, ti)
+      lose_sub()
+      return
+    end
+  end
+
+  -- enemies vs the sub
+  for ei = #enemies, 1, -1 do
+    local e = enemies[ei]
+    if hit(px, py, shw, shh, e.x, e.y, e.hw, e.hh) then
+      lose_sub()
+      return
+    end
+  end
+  if bossAlive and hit(px, py, shw, shh, boss.x, boss.y, boss.hw, boss.hh) then
+    lose_sub()
+    return
+  end
+
+  -- the sub vs a pearl
+  for pi = #pearls, 1, -1 do
+    local p = pearls[pi]
+    if hit(px, py, shw, shh, p.s.x, p.s.y, 8, 8) then
+      award(500)
+      music.sound("Cash", 700, 160)
+      release(p.s)
+      table.remove(pearls, pi)
+    end
+  end
+end
+
+-- ---- draw ------------------------------------------------------------
+local function center_text(s, y, col)
+  canvas.color = col
+  canvas.text((W - textwidth(s)) / 2, y, s)
+end
+
+local function draw_hud()
+  -- the HUD sits in the sky band, above the waterline, so the water shader
+  -- (gated by shader.area) never touches it
+  canvas.color = colors.black
+  canvas.alpha = 130
+  canvas.rectangle(0, 0, W, SKY_H, true)
+  canvas.alpha = 255
+
+  canvas.color = colors.white
+  canvas.text(10, 6, "SCORE " .. score)
+  canvas.text(10, 22, "HIGH  " .. math.max(high, score))
+  canvas.text(W - 150, 6, D.level(levelNo).name)
+  canvas.text(W - 150, 22, "DELIVERIES " .. deliveries .. "/" .. quota)
+
+  -- the oxygen gauge: a bar that empties left to right, red when it bites
+  local gw, gh = 150, 12
+  local gx, gy = W / 2 - gw / 2, 8
+  canvas.color = colors.gray
+  canvas.rectangle(gx - 2, gy - 2, gw + 4, gh + 4, false)
+  local frac = clamp(oxygen / D.OXYGEN_MAX, 0, 1)
+  if frac > 0.5 then canvas.color = colors.aqua
+  elseif frac > 0.22 then canvas.color = colors.yellow
+  else canvas.color = colors.red end
+  canvas.rectangle(gx, gy, gw * frac, gh, true)
+  canvas.color = colors.white
+  canvas.text(gx + gw / 2 - 34, gy + gh + 2, "OXYGEN")
+
+  -- the rescued divers, as a little row of sub icons
+  local n = saved_count()
+  for i = 1, D.MAX_DIVERS do
+    canvas.color = (i <= n) and colors.gold or colors.darkgray
+    canvas.circle(28 + (i - 1) * 14, 46, 5, true)
+  end
+
+  -- spare subs
+  for i = 1, math.max(0, lives - 1) do
+    canvas.color = colors.silver
+    canvas.rectangle(W - 30 - (i - 1) * 12, 44, 8, 5, true)
+  end
+end
+
+local function draw_water_washes()
+  -- Painted into the board (which sits ABOVE the sprites); seaquest.frag
+  -- turns these flat washes into moving water light over the world.
+  local band = H - WATER_TOP
+
+  -- a deep-water wash, stronger the further down you look
+  canvas.color = colors.navy
+  canvas.alpha = 60
+  canvas.rectangle(0, WATER_TOP, W, band, true)
+
+  -- a bright shimmer at the surface, seen from below
+  canvas.color = colors.aqua
+  canvas.alpha = 70
+  canvas.rectangle(0, WATER_TOP, W, 10, true)
+
+  -- the low-oxygen alarm: a red pulse over everything
+  if oxygenAlarm and math.floor(clock() * 6) % 2 == 0 then
+    canvas.color = colors.red
+    canvas.alpha = 46
+    canvas.rectangle(0, WATER_TOP, W, band, true)
+  end
+  canvas.alpha = 255
+
+  -- vignette corners, painted so the shader has something to grade
+  canvas.color = colors.black
+  canvas.alpha = 90
+  canvas.circle(0, WATER_TOP, 120, true)
+  canvas.circle(W, WATER_TOP, 120, true)
+  canvas.alpha = 255
+end
+
+local function draw_title()
+  canvas.color = colors.black
+  canvas.alpha = 170
+  canvas.rectangle(0, H / 2 - 130, W, 270, true)
+  canvas.alpha = 255
+  center_text("S E A Q U E S T", H / 2 - 104, colors.aqua)
+  center_text("S E A Q U E S T", H / 2 - 106, colors.white)
+  center_text("PRESS SPACE TO DIVE", H / 2 - 58, colors.yellow)
+  center_text("ARROWS / WASD    swim", H / 2 - 20, colors.silver)
+  center_text("SPACE / Z        fire one torpedo", H / 2 - 2, colors.silver)
+  center_text("X                drop a rescued diver", H / 2 + 16, colors.silver)
+  center_text("ESC              quit", H / 2 + 34, colors.silver)
+  center_text("Rescue six divers, surface, deliver.", H / 2 + 64, colors.lightgray)
+  center_text("Watch the oxygen. Fear the Kraken.", H / 2 + 82, colors.lightgray)
+end
+
+local function draw_card()
+  canvas.color = colors.black
+  canvas.alpha = 150
+  canvas.rectangle(0, H / 2 - 40, W, 90, true)
+  canvas.alpha = 255
+  center_text("LEVEL " .. levelNo, H / 2 - 26, colors.yellow)
+  center_text(D.level(levelNo).name, H / 2 + 2, colors.white)
+  center_text("RESCUE " .. quota .. " FULL BOATS", H / 2 + 26, colors.silver)
+end
+
+local function draw_over()
+  canvas.color = colors.black
+  canvas.alpha = 170
+  canvas.rectangle(0, H / 2 - 70, W, 160, true)
+  canvas.alpha = 255
+  center_text("GAME OVER", H / 2 - 46, colors.red)
+  center_text("SCORE " .. score, H / 2 - 12, colors.white)
+  if score >= high and score > 0 then
+    center_text("NEW HIGH SCORE!", H / 2 + 12, colors.yellow)
+  end
+  center_text("PRESS SPACE TO DIVE AGAIN", H / 2 + 44, colors.silver)
+end
+
+function draw()
+  -- Wipe last frame's board: it is a persistent render texture, so a
+  -- clear (transparent while canvas.front is on) stops the overlay smearing.
+  canvas.clear()
+
+  bg.offset = px
+
+  if state == 'title' then
+    draw_title()
+  elseif state == 'over' then
+    draw_hud()
+    draw_over()
+  else
+    draw_hud()
+    draw_water_washes()
+    if cardTimer > 0 then draw_card() end
+  end
+
+  if msgTimer > 0 then center_text(msg, SKY_H + 18, colors.yellow) end
+
+  if flash > 0 then
+    canvas.color = colors.white
+    canvas.alpha = math.floor(flash * 150)
+    canvas.rectangle(0, 0, W, H, true)
+    canvas.alpha = 255
+  end
+end
+
+-- ---- engine callback -------------------------------------------------
+function update(dt)
+  if keyboard.pressed('escape') then
+    engine(false)
+    exit()
+    return
+  end
+
+  if state == 'title' then
+    if keyboard.pressed('space') or keyboard.pressed('enter') then
+      reset_game()
+      music.mml("c8 e8 g8 c6")
+    end
+    return
+  end
+
+  if state == 'over' then
+    overTimer = overTimer + dt
+    if overTimer > 0.8 and (keyboard.pressed('space') or keyboard.pressed('enter')) then
+      state = 'title'
+      release_world()
+    end
+    return
+  end
+
+  -- play / card
+  local ft = dt
+  flash = math.max(0, flash - ft * 2.5)
+  msgTimer = math.max(0, msgTimer - ft)
+  fireCd = math.max(0, fireCd - ft)
+  invuln = math.max(0, invuln - ft)
+  if bossFlash and bossFlash > 0 then
+    bossFlash = bossFlash - ft
+    if bossFlash <= 0 and boss and boss.s then boss.s.tint = colors.white end
+  end
+
+  if cardTimer > 0 then
+    cardTimer = cardTimer - ft
+    -- the level card is a still hold; the water keeps moving behind it
+  end
+
+  if levelTimer and levelTimer > 0 then
+    levelTimer = levelTimer - ft
+    if levelTimer <= 0 then
+      if D.level(levelNo).boss and bossAlive then
+        -- stay on the boss level until it is dead
+        levelTimer = 1.0
+      else
+        build_level(levelNo + 1)
+        place_sub()
+        state = 'card'
+      end
+    end
+  end
+
+  if state == 'play' or state == 'card' then
+    if state == 'play' and dyingTimer <= 0 then
+      if keyboard.down('space') or keyboard.down('z') then fire() end
+      if keyboard.pressed('x') and saved_count() > 0 then
+        -- drop the last rescued diver back into the water
+        for i = #divers, 1, -1 do
+          if divers[i].saved then
+            local d = divers[i]
+            d.saved = false
+            d.x, d.y = px + face * 30, py + 10
+            d.vx, d.vy = face * 40, 10
+            blip(320)
+            break
+          end
+        end
+      end
+    end
+    update_sub(ft)
+    update_torps(ft)
+    update_divers(ft)
+    update_enemies(ft)
+    update_boss(ft)
+    update_booms(ft)
+    update_collisions(ft)
+  end
+end
+
+-- ---- boot ------------------------------------------------------------
+-- The sub is the one sprite that always exists; everything else is pooled.
+high = 0
+dyingTimer = 0
+invuln = 0
+fireCd = 0
+flash = 0
+msg, msgTimer = "", 0
+nextLife = D.EXTRA_LIFE
+oxygenAlarm = false
+bossFlash = 0
+levelTimer = 0
+cardTimer = 0
+overTimer = 0
+
+state = 'title'
+enemies, torps, etorps = {}, {}, {}
+divers, booms, bubbles, pearls = {}, {}, {}, {}
+sub = acquire(P.sub)
+sub.visible = false
+load_level_bg(1)
+load_water()

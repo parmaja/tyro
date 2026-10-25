@@ -1,0 +1,20 @@
+PASS  default tint is opaque white
+PASS  default alpha is 255
+PASS  default layer is 0
+PASS  alpha 128 readback
+PASS  alpha clamps to 255
+PASS  alpha clamps to 0
+PASS  alpha write keeps the tint's colour
+PASS  tint round-trips colors.red
+PASS  colors.red reads back reddish
+PASS  tint alpha channel is readable as alpha
+PASS  alpha follows the new tint's alpha
+PASS  string tint is ignored
+PASS  nil alpha is ignored
+PASS  layer 7 readback
+PASS  negative layer readback
+PASS  string layer is ignored
+PASS  style properties survive position writes
+PASS  texture-less sprite accepts alpha
+PASS  texture-less sprite accepts layer
+failures: 0

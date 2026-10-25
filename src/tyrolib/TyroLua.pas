@@ -5773,6 +5773,21 @@ begin
       L.PushBoolean(Engine.Sprites.GetFlipV(handle));
       Result := 1;
     end
+    else if field = 'alpha' then
+    begin
+      L.PushInteger(Engine.Sprites.GetAlpha(handle));
+      Result := 1;
+    end
+    else if field = 'tint' then
+    begin
+      L.PushInteger(ColorToInt(Engine.Sprites.GetTint(handle)));
+      Result := 1;
+    end
+    else if field = 'layer' then
+    begin
+      L.PushInteger(Engine.Sprites.GetLayer(handle));
+      Result := 1;
+    end
     else if field = 'width' then
     begin
       L.PushValue(2); // key
@@ -5903,6 +5918,24 @@ begin
   else if field = 'flipV' then
   begin
     Engine.Sprites.SetFlipV(handle, L.ToBoolean(3));
+  end
+  else if (field = 'alpha') or (field = 'tint') or (field = 'layer') then
+  begin
+    //style properties live in the engine, never in the sprite table: a raw
+    //store here would shadow the metatable getter (Lua reads the table before
+    //consulting __index), so a non-number is ignored instead of stored
+    if L.IsNumber(3) then
+    begin
+      if field = 'alpha' then
+        //0..255 opacity, folded into the tint's alpha channel
+        Engine.Sprites.SetAlpha(handle, Integer(Round(L.ToNumber(3))))
+      else if field = 'tint' then
+        //same integer format as canvas.color / colors.* ($AABBGGRR)
+        Engine.Sprites.SetTint(handle, IntToColor(L.ToInteger(3)))
+      else
+        //draw order: lower layers are drawn first (behind)
+        Engine.Sprites.SetLayer(handle, L.ToInteger(3));
+    end;
   end
   {else if (field = 'width') or (field = 'height') then
   begin

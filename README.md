@@ -355,6 +355,16 @@ positioned with `move` or by setting `x`/`y` properties.
 | `sprite.looping` | `boolean` | Whether the animation loops when it reaches the last frame (read/write). |
 | `sprite.flipH` | `boolean` | Mirror the texture horizontally (read/write). |
 | `sprite.flipV` | `boolean` | Mirror the texture vertically (read/write). |
+| `sprite.tint` | `number` | Colour multiplied over the texture, the same `$AABBGGRR` integer format as `canvas.color` / `colors.*`; white (`colors.white`) is the default (read/write). |
+| `sprite.alpha` | `number` | Opacity `0..255` folded into the tint's alpha: `0` hides the sprite without touching `visible`, in-between values fade it (read/write). |
+| `sprite.layer` | `number` | Draw order: every frame the sprites are drawn sorted by layer, lower layers first (behind); the default is `0`, and sprites that share a layer keep a stable order by handle (read/write). |
+
+The layer sort makes stacking deterministic, so distant decor can sit at
+`layer = -10`, the actors at `0`, and effects that must cover the action (an
+explosion, a muzzle flash) at `layer = 10` — no matter in which order the
+sprites were created. `sprite.tint` and `sprite.alpha` are the cheap way to
+flash a hit, fade a ghost or sink an object into the blue without swapping
+textures.
 
 Image files are searched in the script directory, the workspace `sprites/`
 folder, and the current directory.
