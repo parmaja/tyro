@@ -274,7 +274,7 @@ end
 
 -- ---- drawing ----------------------------------------------------------
 local function draw_water()
-  canvas.gradientV(0, 0, W, H, colors.aqua, colors.darkblue)
+  canvas.gradient.rectV(0, 0, W, H, colors.aqua, colors.darkblue)
 end
 
 local function draw_plants()

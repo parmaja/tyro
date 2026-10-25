@@ -59,6 +59,7 @@ type
     function Rectangle_func(L: Plua_State): integer; cdecl;
     function GradientH_func(L: Plua_State): integer; cdecl;
     function GradientV_func(L: Plua_State): integer; cdecl;
+    function GradientCircle_func(L: Plua_State): integer; cdecl;
     function Line_func(L: Plua_State): integer; cdecl;
     function Point_func(L: Plua_State): integer; cdecl;
     function Test_func(L: Plua_State): integer; cdecl;
@@ -1648,13 +1649,20 @@ begin
   Lua.State.Register('canvas', 'circle', Canvas, Canvas.Circle_func);
   Lua.State.Register('canvas', 'triangle', Canvas, Canvas.Triangle_func);
   Lua.State.Register('canvas', 'rectangle', Canvas, Canvas.Rectangle_func);
-  Lua.State.Register('canvas', 'gradientH', Canvas, Canvas.GradientH_func);
-  Lua.State.Register('canvas', 'gradientV', Canvas, Canvas.GradientV_func);
   Lua.State.Register('canvas', 'line', Canvas, Canvas.Line_func);
   Lua.State.Register('canvas', 'point', Canvas, Canvas.Point_func);
   //canvas.test(ms): diagnostic slow draw (see TLuaCanvas.Test_func)
   Lua.State.Register('canvas', 'test', Canvas, Canvas.Test_func);
+  //canvas.gradient: rectH / rectV / circle (direct field, before metatable)
+  lua_getglobal(Lua.State, PUTF8Char(UTF8String('canvas')));
+  Lua.State.NewTable;
+  Lua.State.RegisterMethod('rectH', Canvas.GradientH_func);
+  Lua.State.RegisterMethod('rectV', Canvas.GradientV_func);
+  Lua.State.RegisterMethod('circle', Canvas.GradientCircle_func);
+  Lua.State.SetField(-2, 'gradient');
+  lua_pop(Lua.State, 1);
   Lua.State.Register('canvas', Canvas); //Should be last one
+
 
   //shader (property-style: shader.effect, shader.value, shader.area)
   Lua.State.Register('shader', 'load', Shader, Shader.Load_func);
@@ -2257,6 +2265,25 @@ begin
   o.fStartColor := startColor;
   o.fHasEndColor := CanvasColorArg(L, 6, endColor);
   o.fEndColor := endColor;
+  FScript.AddQueueObject(o);
+  Result := 0;
+end;
+
+// canvas.gradient.circle(x, y, r [, innerColor, outerColor]) -- radial gradient
+function TLuaCanvas.GradientCircle_func(L: Plua_State): integer; cdecl;
+var
+  x, y, r: integer;
+  innerColor, outerColor: TColor;
+  o: TDrawCircleGradientObject;
+begin
+  x := round(L.ToNumber(1));
+  y := round(L.ToNumber(2));
+  r := round(L.ToNumber(3));
+  o := TDrawCircleGradientObject.Create(Engine.Board, x, y, r, clBlank, clBlank);
+  o.fHasInnerColor := CanvasColorArg(L, 4, innerColor);
+  o.fInnerColor := innerColor;
+  o.fHasOuterColor := CanvasColorArg(L, 5, outerColor);
+  o.fOuterColor := outerColor;
   FScript.AddQueueObject(o);
   Result := 0;
 end;

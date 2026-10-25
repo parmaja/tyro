@@ -65,8 +65,10 @@ The canvas primitives are `canvas.clear()`, `canvas.text(x, y, s)`,
 `canvas.rectangle(x, y, w, h [, fill])`, `canvas.circle(x, y, r [, fill])`,
 `canvas.triangle(x1, y1, x2, y2, x3, y3 [, fill])`,
 `canvas.line(x1, y1, x2, y2 [, thickness])` and `canvas.point(x, y)`.
-`canvas.gradientV(x, y, w, h [, startColor, endColor])` fills a rectangle with
-a top-to-bottom gradient, and `canvas.gradientH(...)` with a left-to-right one;
+`canvas.gradient.rectV(x, y, w, h [, startColor, endColor])` fills a rectangle with
+a top-to-bottom gradient, `canvas.gradient.rectH(...)` with a left-to-right one,
+and `canvas.gradient.circle(x, y, r [, innerColor, outerColor])` fills a circle
+with a radial gradient (inner colour at the centre, outer at the edge);
 their colors take the same `colors.*` values as `canvas.color` and default to
 the current color when omitted. Set the color with `canvas.color = colors.red`
 (and `canvas.backcolor` / `canvas.clear()` for the background).

@@ -363,6 +363,17 @@ type
     procedure DoExecute; override;
   end;
 
+  { TDrawCircleGradientObject }
+
+  TDrawCircleGradientObject = class(TDrawObject)
+  public
+    fX, fY, fR: Integer;
+    fInnerColor, fOuterColor: TColor;
+    fHasInnerColor, fHasOuterColor: Boolean;
+    constructor Create(ACanvas: TTyroCanvas; X, Y, R: Integer; InnerColor, OuterColor: TColor);
+    procedure DoExecute; override;
+  end;
+
   { TDrawTriangleObject }
 
   TDrawTriangleObject = class(TDrawObject)
@@ -2052,6 +2063,35 @@ begin
     Canvas.FillCircle(fX, fY, fR, Canvas.Color)
   else
     Canvas.DrawCircle(fX, fY, fR, Canvas.Color);
+end;
+
+{ TDrawCircleGradientObject }
+
+constructor TDrawCircleGradientObject.Create(ACanvas: TTyroCanvas; X, Y, R: Integer; InnerColor, OuterColor: TColor);
+begin
+  inherited Create(ACanvas);
+  fX := X;
+  fY := Y;
+  fR := R;
+  fInnerColor := InnerColor;
+  fOuterColor := OuterColor;
+  fHasInnerColor := True;
+  fHasOuterColor := True;
+end;
+
+procedure TDrawCircleGradientObject.DoExecute;
+var
+  InnerColor, OuterColor: TColor;
+begin
+  if fHasInnerColor then
+    InnerColor := fInnerColor
+  else
+    InnerColor := Canvas.Color;
+  if fHasOuterColor then
+    OuterColor := fOuterColor
+  else
+    OuterColor := Canvas.Color;
+  Canvas.FillCircleGradient(fX, fY, fR, InnerColor, OuterColor);
 end;
 
 { TTyroScript }

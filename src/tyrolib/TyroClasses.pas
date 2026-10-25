@@ -281,6 +281,9 @@ type
     procedure FillGradientH(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; StartColor, EndColor: TColor); overload;
     procedure FillGradientH(ARect: TRect; StartColor, EndColor: TColor); overload;
 
+    //Radial gradient circle: InnerColor at the centre, OuterColor at the edge.
+    procedure FillCircleGradient(X, Y, R: Integer; InnerColor, OuterColor: TColor);
+
     //Triangle: filled uses raylib's 2D triangle, an outline follows the pen size
     //so canvas.Pen / the thickness argument control how heavy it looks.
     procedure DrawTriangle(X1, Y1, X2, Y2, X3, Y3: Integer; Color: TColor);
@@ -853,6 +856,11 @@ var
 begin
   R := OffsetRect(ARect);
   RayLib.DrawRectangleGradientH(R.Left, R.Top, R.Width, R.Height, StartColor, EndColor);
+end;
+
+procedure TTyroCanvas.FillCircleGradient(X, Y, R: Integer; InnerColor, OuterColor: TColor);
+begin
+  RayLib.DrawCircleGradient(Vector2Of(X + FOrigin.X, Y + FOrigin.Y), R, InnerColor, OuterColor);
 end;
 
 procedure TTyroCanvas.FillRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Color: TColor);
