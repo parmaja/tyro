@@ -1,0 +1,10 @@
+PASS: Player X stops exactly at min_px when moving left
+PASS: Player dx reset to 0 at left wall
+PASS: Player Y stops exactly at min_py when moving up
+PASS: Player dy reset to 0 at top wall
+PASS: Player X stops exactly at max_px when moving right
+PASS: Player dx reset to 0 at right wall
+PASS: Player Y stops exactly at max_py when moving down
+PASS: Player dy reset to 0 at bottom wall
+
+Completed with 0 failures.

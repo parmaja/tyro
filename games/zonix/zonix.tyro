@@ -33,7 +33,7 @@ local W, H = canvas.width, canvas.height
 -- and claimed territory, while all Sprites render ON TOP of the canvas!
 
 -- Custom cyber arcade post-processing shader
-local shader_val = 0.8
+local shader_val = 0.0
 local shader_ok = pcall(function()
   shader.load("zonix.frag")
   shader.value = shader_val
@@ -792,10 +792,39 @@ function update(dt)
     end
   end
 
-  -- 2. Move Player across grid
+  -- 2. Move Player across grid with strict playfield boundary clamping
+  local min_px = D.FIELD_X + D.CELL_SIZE / 2
+  local max_px = D.FIELD_X + (D.COLS - 1) * D.CELL_SIZE + D.CELL_SIZE / 2
+  local min_py = D.FIELD_Y + D.CELL_SIZE / 2
+  local max_py = D.FIELD_Y + (D.ROWS - 1) * D.CELL_SIZE + D.CELL_SIZE / 2
+
   local move_dist = P.speed * speed_mult * dt
   local next_x = P.x + P.dx * move_dist
   local next_y = P.y + P.dy * move_dist
+
+  -- Hard clamp to playfield outer walls so hero CANNOT go off screen
+  if next_x < min_px then
+    next_x = min_px
+    P.dx = 0
+  elseif next_x > max_px then
+    next_x = max_px
+    P.dx = 0
+  end
+
+  if next_y < min_py then
+    next_y = min_py
+    P.dy = 0
+  elseif next_y > max_py then
+    next_y = max_py
+    P.dy = 0
+  end
+
+  -- Grid lock axis when moving purely orthogonally
+  if P.dx ~= 0 and P.dy == 0 then
+    next_y = D.FIELD_Y + P.gy * D.CELL_SIZE + D.CELL_SIZE / 2
+  elseif P.dy ~= 0 and P.dx == 0 then
+    next_x = D.FIELD_X + P.gx * D.CELL_SIZE + D.CELL_SIZE / 2
+  end
 
   local target_gx, target_gy = D.pixel_to_grid(next_x, next_y)
   target_gx = math.max(0, math.min(D.COLS - 1, target_gx))

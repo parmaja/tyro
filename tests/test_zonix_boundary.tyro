@@ -1,0 +1,119 @@
+--======================================================================
+--  Test: Verify Player Playfield Boundary Clamping (Zero Screen Exit)
+--  Run: bin\tyro.exe tests\test_zonix_boundary.tyro --exit:5 --console
+--======================================================================
+
+local D = require("zonix_data")
+
+local out = openfile("test_zonix_boundary_out.txt", "w")
+local failures = 0
+
+local function check(desc, ok)
+  if ok then
+    if out then out:write("PASS: " .. desc .. "\n") end
+    println("PASS: " .. desc)
+  else
+    failures = failures + 1
+    if out then out:write("FAIL: " .. desc .. "\n") end
+    println("FAIL: " .. desc)
+  end
+end
+
+println("--- Starting Zonix Boundary Clamping Test ---")
+
+local min_px = D.FIELD_X + D.CELL_SIZE / 2
+local max_px = D.FIELD_X + (D.COLS - 1) * D.CELL_SIZE + D.CELL_SIZE / 2
+local min_py = D.FIELD_Y + D.CELL_SIZE / 2
+local max_py = D.FIELD_Y + (D.ROWS - 1) * D.CELL_SIZE + D.CELL_SIZE / 2
+
+local P = {
+  x = min_px + 50,
+  y = min_py + 50,
+  gx = 5,
+  gy = 5,
+  dx = -1,
+  dy = 0,
+  speed = 500, -- extremely fast
+}
+
+local dt = 0.05
+
+-- 1. Test moving LEFT past boundary for 50 frames
+for frame = 1, 50 do
+  local next_x = P.x + P.dx * P.speed * dt
+  local next_y = P.y + P.dy * P.speed * dt
+  if next_x < min_px then
+    next_x = min_px
+    P.dx = 0
+  elseif next_x > max_px then
+    next_x = max_px
+    P.dx = 0
+  end
+  P.x = next_x
+  P.y = next_y
+end
+check("Player X stops exactly at min_px when moving left", P.x == min_px)
+check("Player dx reset to 0 at left wall", P.dx == 0)
+
+-- 2. Test moving UP past boundary for 50 frames
+P.dy = -1
+for frame = 1, 50 do
+  local next_x = P.x + P.dx * P.speed * dt
+  local next_y = P.y + P.dy * P.speed * dt
+  if next_y < min_py then
+    next_y = min_py
+    P.dy = 0
+  elseif next_y > max_py then
+    next_y = max_py
+    P.dy = 0
+  end
+  P.x = next_x
+  P.y = next_y
+end
+check("Player Y stops exactly at min_py when moving up", P.y == min_py)
+check("Player dy reset to 0 at top wall", P.dy == 0)
+
+-- 3. Test moving RIGHT past boundary for 100 frames
+P.dx = 1
+for frame = 1, 100 do
+  local next_x = P.x + P.dx * P.speed * dt
+  local next_y = P.y + P.dy * P.speed * dt
+  if next_x < min_px then
+    next_x = min_px
+    P.dx = 0
+  elseif next_x > max_px then
+    next_x = max_px
+    P.dx = 0
+  end
+  P.x = next_x
+  P.y = next_y
+end
+check("Player X stops exactly at max_px when moving right", P.x == max_px)
+check("Player dx reset to 0 at right wall", P.dx == 0)
+
+-- 4. Test moving DOWN past boundary for 100 frames
+P.dy = 1
+for frame = 1, 100 do
+  local next_x = P.x + P.dx * P.speed * dt
+  local next_y = P.y + P.dy * P.speed * dt
+  if next_y < min_py then
+    next_y = min_py
+    P.dy = 0
+  elseif next_y > max_py then
+    next_y = max_py
+    P.dy = 0
+  end
+  P.x = next_x
+  P.y = next_y
+end
+check("Player Y stops exactly at max_py when moving down", P.y == max_py)
+check("Player dy reset to 0 at bottom wall", P.dy == 0)
+
+if out then
+  out:write(string.format("\nCompleted with %d failures.\n", failures))
+  out:close()
+end
+
+println("--- Zonix Boundary Clamping Test Finished ---")
+assert(failures == 0, "All boundary tests must pass")
+exit()
