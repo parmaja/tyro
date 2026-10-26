@@ -1,0 +1,45 @@
+--======================================================================
+--  Test: Verify new "Bee" wavetable (insect wing buzz for bee/fly)
+--  Run: bin\tyro.exe tests\test_bee_waveform.tyro --exit:5 --console
+--======================================================================
+
+local out = openfile("test_bee_waveform_out.txt", "w")
+local failures = 0
+
+local function check(desc, ok)
+  if ok then
+    if out then out:write("PASS: " .. desc .. "\n") end
+    println("PASS: " .. desc)
+  else
+    failures = failures + 1
+    if out then out:write("FAIL: " .. desc .. "\n") end
+    println("FAIL: " .. desc)
+  end
+end
+
+println("--- Starting Bee Waveform Test ---")
+
+-- 1. Test Bee waveform existence and playback
+local res_default = sound.play("Bee")
+check("sound.play('Bee') returns true", res_default == true)
+
+-- 2. Test Bee with typical bumblebee pitch (220 Hz)
+local res_bee = sound.play("Bee", 220, 200)
+check("sound.play('Bee', 220, 200) returns true", res_bee == true)
+
+-- 3. Test Bee with fly pitch (160 Hz)
+local res_fly = sound.play("Bee", 160, 200)
+check("sound.play('Bee', 160, 200) returns true", res_fly == true)
+
+-- 4. Test Bee with high pitch mosquito buzz (440 Hz)
+local res_mosquito = sound.play("Bee", 440, 200)
+check("sound.play('Bee', 440, 200) returns true", res_mosquito == true)
+
+if out then
+  out:write(string.format("\nCompleted with %d failures.\n", failures))
+  out:close()
+end
+
+println("--- Bee Waveform Test Finished ---")
+assert(failures == 0, "All Bee waveform checks must pass")
+exit()

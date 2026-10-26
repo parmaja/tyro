@@ -1,0 +1,6 @@
+PASS: sound.play('Bee') returns true
+PASS: sound.play('Bee', 220, 200) returns true
+PASS: sound.play('Bee', 160, 200) returns true
+PASS: sound.play('Bee', 440, 200) returns true
+
+Completed with 0 failures.

@@ -289,6 +289,7 @@ function Zap_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Laser_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Chime_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sweep_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Bee_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
@@ -2216,6 +2217,43 @@ begin
   else if Result < -1.0 then Result := -1.0;
 end;
 
+function Bee_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  t, Phase, Vibrato, Harm1, Harm2, Harm3, Harm4, Harm5, Harm6, Tone, Air, Wobble, Env: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  // Natural wingbeat micro-flutter / frequency tremor
+  Vibrato := 0.035 * Sin(2 * Pi * 18.0 * t) + 0.015 * Sin(2 * Pi * 6.5 * t);
+  Phase := 2 * Pi * Frequency * t + Vibrato;
+
+  // Rich harmonic spectrum characteristic of insect wing stroke aerodynamics
+  Harm1 := Sin(Phase) * 0.36;
+  Harm2 := Sin(Phase * 2.0) * 0.28;
+  Harm3 := Sin(Phase * 3.0) * 0.18;
+  Harm4 := Sin(Phase * 4.0) * 0.12;
+  Harm5 := Sin(Phase * 5.0) * 0.08;
+  Harm6 := Sin(Phase * 6.0) * 0.06;
+  Tone := Harm1 + Harm2 + Harm3 + Harm4 + Harm5 + Harm6;
+
+  // Air vortex turbulence shed by wingtips (modulated by wingstroke phase)
+  Air := HashNoise(Index) * (0.5 + 0.5 * Sin(Phase * 2.0)) * 0.08;
+
+  // Body wobble / flight amplitude modulation
+  Wobble := 0.85 + 0.15 * Sin(2 * Pi * 22.0 * t);
+
+  // Smooth onset to avoid click at start
+  Env := 1.0 - Exp(-t * 800.0);
+
+  Result := (Tone * 0.78 + Air) * Wobble * Env;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
@@ -2264,6 +2302,7 @@ initialization
   Waveforms.Add('Laser', @Laser_Waveform); //sci-fi cutter laser
   Waveforms.Add('Chime', @Chime_Waveform); //harmonic crystalline chime
   Waveforms.Add('Sweep', @Sweep_Waveform); //ascending sci-fi sweep
+  Waveforms.Add('Bee', @Bee_Waveform); //insect wing buzz (bee/fly)
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;
