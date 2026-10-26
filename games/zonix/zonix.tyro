@@ -1,0 +1,1184 @@
+--======================================================================
+--  ZONIX - Cyber Arcade Territorial Conquest for Tyro Game Engine
+--======================================================================
+--  An advanced, polished homage to the 1982 classic Xonix / Qix.
+--  Pilot the high-energy Cutter Craft across a cybernetic grid, slicing
+--  territory away from quantum orbs, tracking drones, and the menacing
+--  boss core while dodging border sparks on the perimeter.
+--
+--  Features:
+--  * Animated multi-frame .sprite atlases (Cutter, Orbs, Boss, Sparks, Powerups, Explosions)
+--  * Post-processing CRT & Neon Glow fragment shader (zonix.frag)
+--  * Pure procedural wavetable synthesis SFX (Zap, Laser, Chime, Sweep, Pew, Explode)
+--  * High-performance connected component flood fill territory claiming
+--  * Fuse spark tracking player trails
+--  * Power-ups (Freeze, Speed, Slow, Score, Life, Smart Bomb)
+--  * 8 Progressive Cyber Levels with custom neon palettes and targets
+--  * Arcade HUD, floating combat text, high scores, screen shake, attract mode
+--
+--  Controls:
+--    ARROWS / WASD   Move cutter craft
+--    SPACE / SHIFT   Fast cut booster
+--    P               Pause / Resume
+--    M               Mute / Unmute sound
+--    Q / E           Shader strength adjust
+--    ESC             Quit
+--======================================================================
+
+local D = require("zonix_data")
+
+window.show(960, 540)
+local W, H = canvas.width, canvas.height
+-- Note: canvas.front is FALSE so the board canvas renders the background, grid,
+-- and claimed territory, while all Sprites render ON TOP of the canvas!
+
+-- Custom cyber arcade post-processing shader
+local shader_val = 0.8
+local shader_ok = pcall(function()
+  shader.load("zonix.frag")
+  shader.value = shader_val
+  shader.area = {0, 0, W, H}
+end)
+
+-- Sound manager with mute toggle and fallback to TyroSounds wavetables
+local muted = false
+local function play_sfx(name, vol)
+  if muted then return end
+  vol = vol or 0.8
+  -- Try pre-rendered WAV first, fall back to procedural wavetable sound
+  local ok = pcall(function() sound.play("sfx/" .. name .. ".wav", vol) end)
+  if not ok then
+    if name == "cut" then sound.play("Laser", 350, 80)
+    elseif name == "claim" then sound.play("Chime", 880, 400)
+    elseif name == "hit" then sound.play("Zap", 440, 150)
+    elseif name == "boom" then sound.play("Explode", 110, 450)
+    elseif name == "freeze" then sound.play("Sweep", 1200, 300)
+    elseif name == "powerup" then sound.play("Coin", 660, 250)
+    elseif name == "alarm" then sound.play("Pew", 800, 120)
+    end
+  end
+end
+
+-- Helper: RGBA to int32 color
+local function rgba(r, g, b, a)
+  a = a or 255
+  return r + g * 256 + b * 65536 + a * 16777216
+end
+
+-- Game State
+local state = "title" -- "title", "ready", "play", "captured", "dying", "level_clear", "over"
+local level = 1
+local lives = 3
+local score = 0
+local highscore = 10000
+local claimed_pct = 0.0
+local time_left = 90.0
+local state_timer = 0.0
+
+-- Highscore persistence
+local function load_high()
+  local f = openfile("zonix.hi", "r")
+  if f then
+    local s = f:read("*a")
+    f:close()
+    if s then highscore = tonumber(s) or highscore end
+  end
+end
+local function save_high()
+  local f = openfile("zonix.hi", "w")
+  if f then
+    f:write(tostring(highscore))
+    f:close()
+  end
+end
+load_high()
+
+-- Grid & Trail State
+local grid = D.create_grid()
+local trail = {}       -- list of {gx, gy}
+local trail_set = {}   -- lookup key "gx,gy" -> true
+local trail_pulse = 0
+
+-- Attract / Autopilot Mode (triggers via attract.txt or after idle on title screen)
+local attract = false
+local attract_f = openfile("attract.txt", "r")
+if attract_f then
+  attract = true
+  attract_f:close()
+end
+local title_idle_timer = 0
+
+-- Entities
+local player = nil
+local sp_fuse = nil
+local sp_sparks = {}
+local sp_orbs = {}
+local sp_fast_orbs = {}
+local sp_boss = nil
+local powerup_item = nil
+local sp_powerup = nil
+local boom_pool = {}
+local floating_texts = {}
+
+-- Title Showcase Sprites
+local showcase_cutter = nil
+local showcase_orb = nil
+local showcase_fast = nil
+local showcase_boss = nil
+local showcase_spark = nil
+local showcase_powerup = nil
+
+-- Create Sprite Helper with safe error handling
+local function make_sprite(name, file)
+  local sp = Sprites.new(name)
+  if sp then
+    sp.load(file)
+    sp.layer = 10
+    sp.hide()
+  end
+  return sp
+end
+
+-- Initialize Engine Sprites
+player = make_sprite("player", "img/cutter.sprite")
+if player then
+  player.layer = 25
+  player.hide()
+end
+
+sp_fuse = make_sprite("fuse", "img/fuse.sprite")
+if sp_fuse then
+  sp_fuse.layer = 28
+  sp_fuse.hide()
+end
+
+sp_powerup = make_sprite("powerup", "img/powerups.sprite")
+if sp_powerup then
+  sp_powerup.layer = 15
+  sp_powerup.hide()
+end
+
+for i = 1, 8 do
+  local b = make_sprite("boom" .. i, "img/boom.sprite")
+  if b then
+    b.layer = 30
+    boom_pool[#boom_pool + 1] = {sp = b, active = false, life = 0}
+  end
+end
+
+-- Initialize Title Showcase Sprites
+showcase_cutter = make_sprite("sc_cutter", "img/cutter.sprite")
+showcase_orb = make_sprite("sc_orb", "img/orb.sprite")
+showcase_fast = make_sprite("sc_fast", "img/fast_orb.sprite")
+showcase_boss = make_sprite("sc_boss", "img/boss_core.sprite")
+showcase_spark = make_sprite("sc_spark", "img/spark.sprite")
+showcase_powerup = make_sprite("sc_powerup", "img/powerups.sprite")
+
+local function show_title_sprites()
+  if showcase_cutter then
+    showcase_cutter.x = W / 2
+    showcase_cutter.y = H / 2 - 110
+    showcase_cutter.layer = 20
+    showcase_cutter.frame = 4 -- Cutting mode with laser
+    showcase_cutter.show()
+  end
+  if showcase_orb then
+    showcase_orb.x = W / 2 - 200
+    showcase_orb.y = H / 2 + 25
+    showcase_orb.layer = 20
+    showcase_orb.show()
+    showcase_orb.play()
+  end
+  if showcase_fast then
+    showcase_fast.x = W / 2 - 100
+    showcase_fast.y = H / 2 + 25
+    showcase_fast.layer = 20
+    showcase_fast.show()
+    showcase_fast.play()
+  end
+  if showcase_boss then
+    showcase_boss.x = W / 2
+    showcase_boss.y = H / 2 + 25
+    showcase_boss.layer = 20
+    showcase_boss.show()
+    showcase_boss.play()
+  end
+  if showcase_spark then
+    showcase_spark.x = W / 2 + 100
+    showcase_spark.y = H / 2 + 25
+    showcase_spark.layer = 20
+    showcase_spark.show()
+    showcase_spark.play()
+  end
+  if showcase_powerup then
+    showcase_powerup.x = W / 2 + 200
+    showcase_powerup.y = H / 2 + 25
+    showcase_powerup.layer = 20
+    showcase_powerup.frame = 3 -- Gold gem
+    showcase_powerup.show()
+  end
+end
+
+local function hide_title_sprites()
+  if showcase_cutter then showcase_cutter.hide() end
+  if showcase_orb then showcase_orb.hide() end
+  if showcase_fast then showcase_fast.hide() end
+  if showcase_boss then showcase_boss.hide() end
+  if showcase_spark then showcase_spark.hide() end
+  if showcase_powerup then showcase_powerup.hide() end
+end
+
+-- Show title sprites initially
+show_title_sprites()
+
+-- Spawn a localized explosion
+local function spawn_boom(x, y)
+  for _, b in ipairs(boom_pool) do
+    if not b.active then
+      b.active = true
+      b.life = 0.4
+      b.sp.x = x
+      b.sp.y = y
+      b.sp.frame = 0
+      b.sp.show()
+      b.sp.play()
+      break
+    end
+  end
+end
+
+-- Spawn floating score text
+local function add_float_text(x, y, text, col)
+  floating_texts[#floating_texts + 1] = {
+    x = x,
+    y = y,
+    text = text,
+    color = col or rgba(255, 255, 255),
+    life = 1.0,
+    max_life = 1.0
+  }
+end
+
+-- Player Variables
+local P = {
+  gx = 0,
+  gy = 0,
+  x = 0,
+  y = 0,
+  dx = 0,
+  dy = 0,
+  dir = 0, -- 0: Right, 1: Down, 2: Left, 3: Up
+  cutting = false,
+  speed = 135,
+  boost = 1.0,
+  freeze_time = 0.0,
+  invuln = 0.0,
+  stuck_timer = 0.0,
+}
+
+-- Fuse Variables
+local Fuse = {
+  active = false,
+  index = 1,
+  progress = 0.0,
+  speed = 16.0, -- cells per second
+}
+
+-- Border Sparks
+local sparks = {}
+
+-- Sea Enemies (Orbs, Fast Orbs, Boss)
+local enemies = {}
+
+-- Hide all active gameplay sprites
+local function hide_game_sprites()
+  if player then player.hide() end
+  if sp_fuse then sp_fuse.hide() end
+  if sp_powerup then sp_powerup.hide() end
+  for _, s in ipairs(sp_sparks) do s.hide() end
+  for _, o in ipairs(sp_orbs) do o.hide() end
+  for _, fo in ipairs(sp_fast_orbs) do fo.hide() end
+  if sp_boss then sp_boss.hide() end
+end
+
+-- Clear/Reset entities for current level
+local function reset_level_entities()
+  hide_title_sprites()
+  hide_game_sprites()
+
+  sp_sparks = {}
+  sp_orbs = {}
+  sp_fast_orbs = {}
+  sp_boss = nil
+  sparks = {}
+  enemies = {}
+  powerup_item = nil
+  trail = {}
+  trail_set = {}
+  Fuse.active = false
+
+  local cfg = D.LEVELS[level] or D.LEVELS[#D.LEVELS]
+
+  -- Setup regular bouncing orbs
+  for i = 1, cfg.orbs do
+    local sp = make_sprite("orb" .. i, "img/orb.sprite")
+    if sp then
+      sp.layer = 12
+      sp.show()
+      sp.play()
+      sp_orbs[#sp_orbs + 1] = sp
+    end
+    -- Random spawn within central sea
+    local a = math.random() * math.pi * 2
+    local sx = D.FIELD_X + math.random(100, D.FIELD_W - 100)
+    local sy = D.FIELD_Y + math.random(80, D.FIELD_H - 80)
+    enemies[#enemies + 1] = {
+      type = "orb",
+      x = sx,
+      y = sy,
+      vx = math.cos(a) * cfg.orb_speed,
+      vy = math.sin(a) * cfg.orb_speed,
+      radius = 10,
+      sp = sp
+    }
+  end
+
+  -- Setup fast hunter orbs
+  for i = 1, cfg.fast_orbs do
+    local sp = make_sprite("fast_orb" .. i, "img/fast_orb.sprite")
+    if sp then
+      sp.layer = 14
+      sp.show()
+      sp.play()
+      sp_fast_orbs[#sp_fast_orbs + 1] = sp
+    end
+    local a = math.random() * math.pi * 2
+    local sx = D.FIELD_X + math.random(150, D.FIELD_W - 150)
+    local sy = D.FIELD_Y + math.random(100, D.FIELD_H - 100)
+    enemies[#enemies + 1] = {
+      type = "fast_orb",
+      x = sx,
+      y = sy,
+      vx = math.cos(a) * (cfg.orb_speed * 1.35),
+      vy = math.sin(a) * (cfg.orb_speed * 1.35),
+      radius = 9,
+      sp = sp
+    }
+  end
+
+  -- Setup Boss Core if present
+  if cfg.boss > 0 then
+    local sp = make_sprite("boss_core", "img/boss_core.sprite")
+    if sp then
+      sp.layer = 16
+      sp.show()
+      sp.play()
+      sp_boss = sp
+    end
+    enemies[#enemies + 1] = {
+      type = "boss",
+      x = D.FIELD_X + D.FIELD_W / 2,
+      y = D.FIELD_Y + D.FIELD_H / 2,
+      vx = cfg.orb_speed * 0.75,
+      vy = cfg.orb_speed * 0.75,
+      radius = 15,
+      sp = sp
+    }
+  end
+
+  -- Setup Perimeter Sparks
+  for i = 1, cfg.sparks do
+    local sp = make_sprite("spark" .. i, "img/spark.sprite")
+    if sp then
+      sp.layer = 18
+      sp.show()
+      sp.play()
+      sp_sparks[#sp_sparks + 1] = sp
+    end
+    -- Spawn on border edges: top, right, bottom, left
+    local gx, gy = 1, 1
+    local t_gx, t_gy = 2, 1
+    if i == 2 then
+      gx, gy = D.COLS - 2, 1
+      t_gx, t_gy = D.COLS - 2, 2
+    elseif i == 3 then
+      gx, gy = D.COLS - 2, D.ROWS - 2
+      t_gx, t_gy = D.COLS - 3, D.ROWS - 2
+    elseif i == 4 then
+      gx, gy = 1, D.ROWS - 2
+      t_gx, t_gy = 1, D.ROWS - 3
+    end
+    local px, py = D.grid_to_pixel(gx, gy)
+    sparks[#sparks + 1] = {
+      gx = gx,
+      gy = gy,
+      target_gx = t_gx,
+      target_gy = t_gy,
+      prev_gx = gx,
+      prev_gy = gy,
+      progress = 0.0,
+      x = px + D.CELL_SIZE / 2,
+      y = py + D.CELL_SIZE / 2,
+      cw = (i % 2 == 1),
+      speed = cfg.spark_speed / D.CELL_SIZE, -- speed in cells per second
+      sp = sp
+    }
+  end
+end
+
+-- Reset Player Position onto initial top-left safe perimeter
+local function reset_player()
+  P.gx = 1
+  P.gy = 1
+  P.x, P.y = D.grid_to_pixel(P.gx, P.gy)
+  P.x = P.x + D.CELL_SIZE / 2
+  P.y = P.y + D.CELL_SIZE / 2
+  P.dx = 0
+  P.dy = 0
+  P.dir = 0
+  P.cutting = false
+  P.boost = 1.0
+  P.invuln = 1.5
+  P.stuck_timer = 0
+  trail = {}
+  trail_set = {}
+  Fuse.active = false
+  if sp_fuse then sp_fuse.hide() end
+  if player then
+    player.x = P.x
+    player.y = P.y
+    player.frame = 0
+    player.show()
+  end
+end
+
+-- Start a New Game
+local function start_game()
+  hide_title_sprites()
+  level = 1
+  lives = 3
+  score = 0
+  grid = D.create_grid()
+  claimed_pct = 0.0
+  time_left = 90.0
+  reset_level_entities()
+  reset_player()
+  state = "ready"
+  state_timer = 1.8
+  play_sfx("start", 0.9)
+end
+
+-- Advance to Next Level
+local function next_level()
+  level = level + 1
+  if level > #D.LEVELS then
+    level = #D.LEVELS -- loop or cap at final challenge
+  end
+  grid = D.create_grid()
+  claimed_pct = 0.0
+  time_left = 90.0
+  reset_level_entities()
+  reset_player()
+  state = "ready"
+  state_timer = 1.8
+  play_sfx("start", 0.9)
+end
+
+-- Kill player upon hit
+local function kill_player(cause)
+  if P.invuln > 0 then return end
+  play_sfx("hit", 0.9)
+  play_sfx("boom", 0.8)
+  spawn_boom(P.x, P.y)
+  world.shake(300, 7)
+
+  -- Cancel trail and erase trail cells back to sea
+  for _, pt in ipairs(trail) do
+    if grid[pt.gy] and grid[pt.gy][pt.gx] == D.STATE_TRAIL then
+      grid[pt.gy][pt.gx] = D.STATE_SEA
+    end
+  end
+  trail = {}
+  trail_set = {}
+  Fuse.active = false
+  if sp_fuse then sp_fuse.hide() end
+
+  lives = lives - 1
+  if player then player.hide() end
+
+  if lives <= 0 then
+    state = "over"
+    state_timer = 3.0
+    play_sfx("over", 0.9)
+    if score > highscore then
+      highscore = score
+      save_high()
+    end
+  else
+    state = "dying"
+    state_timer = 1.5
+  end
+end
+
+-- Spawn a random powerup inside remaining sea territory
+local function maybe_spawn_powerup()
+  if powerup_item or math.random() > 0.003 then return end
+  -- Find random sea cell
+  for _ = 1, 20 do
+    local gx = math.random(D.INNER_MIN_X, D.INNER_MAX_X)
+    local gy = math.random(D.INNER_MIN_Y, D.INNER_MAX_Y)
+    if grid[gy][gx] == D.STATE_SEA then
+      local kind = math.random(0, 5) -- 0: Freeze, 1: Speed, 2: Slow, 3: Score, 4: Life, 5: Bomb
+      local px, py = D.grid_to_pixel(gx, gy)
+      powerup_item = {
+        gx = gx,
+        gy = gy,
+        x = px + D.CELL_SIZE / 2,
+        y = py + D.CELL_SIZE / 2,
+        kind = kind,
+        life = 12.0
+      }
+      if sp_powerup then
+        sp_powerup.x = powerup_item.x
+        sp_powerup.y = powerup_item.y
+        sp_powerup.frame = kind
+        sp_powerup.show()
+      end
+      break
+    end
+  end
+end
+
+-- Apply collected powerup effect
+local function collect_powerup(kind)
+  play_sfx("powerup", 0.9)
+  if kind == 0 then
+    P.freeze_time = 5.0
+    play_sfx("freeze", 0.8)
+    add_float_text(P.x, P.y - 12, "FREEZE 5s!", rgba(0, 240, 255))
+  elseif kind == 1 then
+    P.boost = 1.5
+    add_float_text(P.x, P.y - 12, "SUPER SPEED!", rgba(255, 230, 40))
+  elseif kind == 2 then
+    for _, e in ipairs(enemies) do
+      e.vx = e.vx * 0.65
+      e.vy = e.vy * 0.65
+    end
+    add_float_text(P.x, P.y - 12, "SLOW MOTION!", rgba(180, 50, 240))
+  elseif kind == 3 then
+    score = score + 2500
+    add_float_text(P.x, P.y - 12, "+2500 PTS", rgba(40, 255, 120))
+  elseif kind == 4 then
+    lives = math.min(5, lives + 1)
+    add_float_text(P.x, P.y - 12, "+1 LIFE!", rgba(255, 50, 60))
+  elseif kind == 5 then
+    world.shake(250, 6)
+    play_sfx("boom", 0.9)
+    for _, spk in ipairs(sparks) do
+      spawn_boom(spk.x, spk.y)
+    end
+    sparks = {}
+    Fuse.active = false
+    if sp_fuse then sp_fuse.hide() end
+    add_float_text(P.x, P.y - 12, "SMART BOMB!", rgba(255, 130, 20))
+  end
+  powerup_item = nil
+  if sp_powerup then sp_powerup.hide() end
+end
+
+-- Territory Claim Resolution
+local function finish_cut()
+  P.cutting = false
+  Fuse.active = false
+  if sp_fuse then sp_fuse.hide() end
+
+  local newly_claimed = D.claim_territory(grid, enemies, trail)
+  trail = {}
+  trail_set = {}
+
+  local pct_now = D.calc_percentage(grid)
+  local diff = pct_now - claimed_pct
+  claimed_pct = pct_now
+
+  -- Score calculation: 15 pts per cell + bonus for large captures
+  local pts = newly_claimed * 15
+  if diff >= 10.0 then
+    pts = pts + math.floor(diff * 200)
+    add_float_text(P.x, P.y - 18, "MEGA CUT! +" .. pts, rgba(255, 230, 40))
+  else
+    add_float_text(P.x, P.y - 18, "+" .. pts, rgba(0, 240, 255))
+  end
+  score = score + pts
+  play_sfx("claim", 0.85)
+
+  local cfg = D.LEVELS[level] or D.LEVELS[#D.LEVELS]
+  if claimed_pct >= cfg.target then
+    state = "level_clear"
+    state_timer = 2.5
+    local time_bonus = math.floor(time_left) * 100
+    local clear_bonus = 2000 + level * 500
+    score = score + time_bonus + clear_bonus
+    play_sfx("clear", 0.9)
+  end
+end
+
+-- Update Loop: Input & Simulation
+function update(dt)
+  dt = math.min(dt, 0.05) -- clamp dt for stability
+  trail_pulse = trail_pulse + dt * 8.0
+
+  -- Global Toggles
+  if keyboard.pressed("p") then
+    if state == "play" then state = "paused"
+    elseif state == "paused" then state = "play" end
+    return
+  end
+  if keyboard.pressed("m") then
+    muted = not muted
+  end
+  if keyboard.pressed("q") then
+    shader_val = math.max(0.0, shader_val - 0.1)
+    shader.value = shader_val
+  elseif keyboard.pressed("e") then
+    shader_val = math.min(1.0, shader_val + 0.1)
+    shader.value = shader_val
+  end
+
+  -- Update Floating Texts
+  for i = #floating_texts, 1, -1 do
+    local f = floating_texts[i]
+    f.life = f.life - dt
+    f.y = f.y - dt * 25
+    if f.life <= 0 then
+      table.remove(floating_texts, i)
+    end
+  end
+
+  -- Update Boom Explosions
+  for _, b in ipairs(boom_pool) do
+    if b.active then
+      b.life = b.life - dt
+      if b.life <= 0 then
+        b.active = false
+        b.sp.hide()
+      end
+    end
+  end
+
+  -- State Dispatch
+  if state == "title" then
+    show_title_sprites()
+    title_idle_timer = title_idle_timer + dt
+    if attract or title_idle_timer > 5.0 or keyboard.pressed("space") or keyboard.pressed("enter") or gamepad.pressed("a") then
+      start_game()
+    end
+    return
+  elseif state == "ready" then
+    state_timer = state_timer - dt
+    if state_timer <= 0 then
+      state = "play"
+    end
+    return
+  elseif state == "dying" then
+    state_timer = state_timer - dt
+    if state_timer <= 0 then
+      reset_player()
+      state = "play"
+    end
+    return
+  elseif state == "level_clear" then
+    state_timer = state_timer - dt
+    if state_timer <= 0 then
+      next_level()
+    end
+    return
+  elseif state == "over" then
+    state_timer = state_timer - dt
+    if state_timer <= 0 and (keyboard.pressed("space") or keyboard.pressed("enter")) then
+      hide_game_sprites()
+      show_title_sprites()
+      state = "title"
+      title_idle_timer = 0
+    end
+    return
+  elseif state == "paused" then
+    return
+  end
+
+  -- =========================================================================
+  -- ACTIVE GAMEPLAY LOGIC
+  -- =========================================================================
+  time_left = math.max(0.0, time_left - dt)
+  if time_left <= 0 then
+    kill_player("time")
+    return
+  end
+
+  if P.invuln > 0 then
+    P.invuln = math.max(0, P.invuln - dt)
+  end
+
+  -- Freeze Powerup timer
+  local enemies_frozen = false
+  if P.freeze_time > 0 then
+    P.freeze_time = P.freeze_time - dt
+    enemies_frozen = true
+  end
+
+  -- 1. Player Directional Input
+  local input_dx = 0
+  local input_dy = 0
+  if keyboard.down("right") or keyboard.down("d") or gamepad.axis("leftx") > 0.4 then
+    input_dx = 1
+  elseif keyboard.down("left") or keyboard.down("a") or gamepad.axis("leftx") < -0.4 then
+    input_dx = -1
+  elseif keyboard.down("down") or keyboard.down("s") or gamepad.axis("lefty") > 0.4 then
+    input_dy = 1
+  elseif keyboard.down("up") or keyboard.down("w") or gamepad.axis("lefty") < -0.4 then
+    input_dy = -1
+  end
+
+  -- Attract mode autopilot steering (smart carver)
+  if attract then
+    if not P.cutting then
+      if P.gy <= 2 then
+        if P.gx < 14 then input_dx = 1; input_dy = 0
+        else input_dx = 0; input_dy = 1 end
+      elseif P.gy >= D.ROWS - 3 then
+        if P.gx < 26 then input_dx = 1; input_dy = 0
+        else input_dx = 0; input_dy = -1 end
+      else
+        input_dx = 1; input_dy = 0
+      end
+    else
+      input_dx = P.dx
+      input_dy = P.dy
+    end
+  end
+
+  -- Speed booster (Space / Shift)
+  local speed_mult = P.boost
+  if (keyboard.down("space") or keyboard.down("shift") or gamepad.down("a")) and not attract then
+    speed_mult = speed_mult * 1.35
+  end
+
+  -- Direction change
+  if input_dx ~= 0 or input_dy ~= 0 then
+    if P.cutting then
+      if not (input_dx == -P.dx and input_dy == 0 and P.dx ~= 0) and
+         not (input_dy == -P.dy and input_dx == 0 and P.dy ~= 0) then
+        P.dx = input_dx
+        P.dy = input_dy
+      end
+    else
+      P.dx = input_dx
+      P.dy = input_dy
+    end
+
+    if P.dx > 0 then P.dir = 0
+    elseif P.dy > 0 then P.dir = 1
+    elseif P.dx < 0 then P.dir = 2
+    elseif P.dy < 0 then P.dir = 3
+    end
+  end
+
+  -- Update Player Sprite Frame and Visibility
+  if player then
+    player.frame = P.dir + (P.cutting and 4 or 0)
+    if (P.invuln <= 0) or ((math.floor(P.invuln * 10) % 2) == 0) then
+      player.show()
+    else
+      player.hide()
+    end
+  end
+
+  -- 2. Move Player across grid
+  local move_dist = P.speed * speed_mult * dt
+  local next_x = P.x + P.dx * move_dist
+  local next_y = P.y + P.dy * move_dist
+
+  local target_gx, target_gy = D.pixel_to_grid(next_x, next_y)
+  target_gx = math.max(0, math.min(D.COLS - 1, target_gx))
+  target_gy = math.max(0, math.min(D.ROWS - 1, target_gy))
+
+  local target_state = grid[target_gy][target_gx]
+
+  -- Cell transition
+  if target_gx ~= P.gx or target_gy ~= P.gy then
+    if not P.cutting then
+      if target_state == D.STATE_SEA then
+        P.cutting = true
+        trail = {{gx = target_gx, gy = target_gy}}
+        trail_set[target_gx .. "," .. target_gy] = true
+        grid[target_gy][target_gx] = D.STATE_TRAIL
+        play_sfx("cut", 0.6)
+      end
+    else
+      if target_state == D.STATE_LAND then
+        P.gx = target_gx
+        P.gy = target_gy
+        P.x = next_x
+        P.y = next_y
+        finish_cut()
+      elseif target_state == D.STATE_TRAIL then
+        kill_player("own_trail")
+        return
+      elseif target_state == D.STATE_SEA then
+        grid[target_gy][target_gx] = D.STATE_TRAIL
+        trail[#trail + 1] = {gx = target_gx, gy = target_gy}
+        trail_set[target_gx .. "," .. target_gy] = true
+        play_sfx("cut", 0.3)
+      end
+    end
+  end
+
+  P.gx = target_gx
+  P.gy = target_gy
+  P.x = next_x
+  P.y = next_y
+  if player then
+    player.x = P.x
+    player.y = P.y
+  end
+
+  -- Check Powerup Collection
+  if powerup_item and P.gx == powerup_item.gx and P.gy == powerup_item.gy then
+    collect_powerup(powerup_item.kind)
+  end
+
+  maybe_spawn_powerup()
+  if powerup_item then
+    powerup_item.life = powerup_item.life - dt
+    if powerup_item.life <= 0 then
+      powerup_item = nil
+      if sp_powerup then sp_powerup.hide() end
+    end
+  end
+
+  -- 3. Fuse Mechanic
+  if P.cutting and #trail > 4 then
+    if not Fuse.active then
+      Fuse.active = true
+      Fuse.index = 1
+      Fuse.progress = 0
+      play_sfx("alarm", 0.7)
+    end
+    Fuse.progress = Fuse.progress + dt * Fuse.speed
+    while Fuse.progress >= 1.0 and Fuse.index < #trail do
+      Fuse.progress = Fuse.progress - 1.0
+      Fuse.index = Fuse.index + 1
+      if Fuse.index >= #trail - 1 then
+        kill_player("fuse")
+        return
+      end
+    end
+    if sp_fuse and trail[Fuse.index] then
+      local fx, fy = D.grid_to_pixel(trail[Fuse.index].gx, trail[Fuse.index].gy)
+      sp_fuse.x = fx + D.CELL_SIZE / 2
+      sp_fuse.y = fy + D.CELL_SIZE / 2
+      sp_fuse.show()
+      sp_fuse.play()
+    end
+  else
+    Fuse.active = false
+    if sp_fuse then sp_fuse.hide() end
+  end
+
+  -- 4. Update Border Sparks
+  if not enemies_frozen then
+    for _, spk in ipairs(sparks) do
+      spk.progress = spk.progress + dt * spk.speed
+      while spk.progress >= 1.0 do
+        spk.progress = spk.progress - 1.0
+        local old_gx = spk.gx
+        local old_gy = spk.gy
+        spk.gx = spk.target_gx
+        spk.gy = spk.target_gy
+        spk.prev_gx = old_gx
+        spk.prev_gy = old_gy
+
+        local nbs = D.get_border_neighbors(grid, spk.gx, spk.gy)
+        local candidates = {}
+        for _, nb in ipairs(nbs) do
+          if not (nb.gx == old_gx and nb.gy == old_gy) then
+            candidates[#candidates + 1] = nb
+          end
+        end
+        if #candidates == 0 then
+          candidates = nbs
+        end
+
+        if #candidates > 0 then
+          local cdx = spk.gx - old_gx
+          local cdy = spk.gy - old_gy
+          if cdx == 0 and cdy == 0 then cdx = 1 end
+
+          local chosen = candidates[1]
+          if #candidates > 1 then
+            local best_score = -999
+            for _, cand in ipairs(candidates) do
+              local ndx = cand.gx - spk.gx
+              local ndy = cand.gy - spk.gy
+              local cross = cdx * ndy - cdy * ndx
+              local dot = cdx * ndx + cdy * ndy
+              local score = dot
+              if spk.cw then
+                if cross < 0 then score = score + 5
+                elseif cross > 0 then score = score - 5 end
+              else
+                if cross > 0 then score = score + 5
+                elseif cross < 0 then score = score - 5 end
+              end
+              if score > best_score then
+                best_score = score
+                chosen = cand
+              end
+            end
+          end
+          spk.target_gx = chosen.gx
+          spk.target_gy = chosen.gy
+        else
+          spk.target_gx = spk.gx
+          spk.target_gy = spk.gy
+        end
+      end
+
+      -- Smoothly interpolate current screen pixel position
+      local px1, py1 = D.grid_to_pixel(spk.gx, spk.gy)
+      local px2, py2 = D.grid_to_pixel(spk.target_gx, spk.target_gy)
+      local t = spk.progress
+      spk.x = (px1 * (1.0 - t) + px2 * t) + D.CELL_SIZE / 2
+      spk.y = (py1 * (1.0 - t) + py2 * t) + D.CELL_SIZE / 2
+
+      if spk.sp then
+        spk.sp.x = spk.x
+        spk.sp.y = spk.y
+        spk.sp.show()
+      end
+
+      if not P.cutting and math.abs(spk.x - P.x) < 12 and math.abs(spk.y - P.y) < 12 then
+        kill_player("spark")
+        return
+      end
+    end
+  end
+
+  -- 5. Update Sea Enemies
+  if not enemies_frozen then
+    for _, e in ipairs(enemies) do
+      e.x = e.x + e.vx * dt
+      e.y = e.y + e.vy * dt
+
+      if e.sp then
+        e.sp.x = e.x
+        e.sp.y = e.y
+        e.sp.show()
+      end
+
+      local egx, egy = D.pixel_to_grid(e.x, e.y)
+      egx = math.max(0, math.min(D.COLS - 1, egx))
+      egy = math.max(0, math.min(D.ROWS - 1, egy))
+
+      local check_hx = e.vx > 0 and (egx + 1) or (egx - 1)
+      if check_hx < 0 or check_hx >= D.COLS or grid[egy][check_hx] == D.STATE_LAND then
+        e.vx = -e.vx
+      end
+
+      local check_vy = e.vy > 0 and (egy + 1) or (egy - 1)
+      if check_vy < 0 or check_vy >= D.ROWS or grid[check_vy][egx] == D.STATE_LAND then
+        e.vy = -e.vy
+      end
+
+      if P.cutting and grid[egy][egx] == D.STATE_TRAIL then
+        kill_player("enemy_cut_trail")
+        return
+      end
+
+      local dist_p = math.sqrt((e.x - P.x)^2 + (e.y - P.y)^2)
+      if dist_p < (e.radius + 8) then
+        kill_player("enemy_ram")
+        return
+      end
+    end
+  end
+end
+
+-- Draw Loop: Playfield Canvas, Grid, Claimed Territory, HUD & Overlays
+function draw()
+  local cfg = D.LEVELS[level] or D.LEVELS[#D.LEVELS]
+
+  -- 1. Background Fill
+  canvas.color = rgba(cfg.bg_color[1], cfg.bg_color[2], cfg.bg_color[3], 255)
+  canvas.rectangle(0, 0, W, H, true)
+
+  -- 2. Playfield Grid (Void)
+  canvas.color = rgba(cfg.land_fill[1] / 3, cfg.land_fill[2] / 3, cfg.land_fill[3] / 3, 160)
+  for gx = 0, D.COLS, 8 do
+    local px = D.FIELD_X + gx * D.CELL_SIZE
+    canvas.line(px, D.FIELD_Y, px, D.FIELD_Y + D.FIELD_H)
+  end
+  for gy = 0, D.ROWS, 8 do
+    local py = D.FIELD_Y + gy * D.CELL_SIZE
+    canvas.line(D.FIELD_X, py, D.FIELD_X + D.FIELD_W, py)
+  end
+
+  -- 3. Claimed Land Blocks
+  local land_col = rgba(cfg.land_fill[1], cfg.land_fill[2], cfg.land_fill[3], 240)
+  local border_col = rgba(cfg.land_border[1], cfg.land_border[2], cfg.land_border[3], 255)
+
+  for gy = 0, D.ROWS - 1 do
+    local row = grid[gy]
+    local py = D.FIELD_Y + gy * D.CELL_SIZE
+    local span_start = -1
+    for gx = 0, D.COLS - 1 do
+      if row[gx] == D.STATE_LAND then
+        if span_start < 0 then span_start = gx end
+      else
+        if span_start >= 0 then
+          local px = D.FIELD_X + span_start * D.CELL_SIZE
+          local pw = (gx - span_start) * D.CELL_SIZE
+          canvas.color = land_col
+          canvas.rectangle(px, py, pw, D.CELL_SIZE, true)
+          span_start = -1
+        end
+      end
+    end
+    if span_start >= 0 then
+      local px = D.FIELD_X + span_start * D.CELL_SIZE
+      local pw = (D.COLS - span_start) * D.CELL_SIZE
+      canvas.color = land_col
+      canvas.rectangle(px, py, pw, D.CELL_SIZE, true)
+    end
+  end
+
+  -- Outer border neon highlight
+  canvas.color = border_col
+  canvas.rectangle(D.FIELD_X - 1, D.FIELD_Y - 1, D.FIELD_W + 2, D.FIELD_H + 2, false)
+
+  -- 4. Active Cutting Trail (laser beam)
+  if #trail > 0 then
+    local pulse_alpha = 180 + math.floor(math.sin(trail_pulse) * 60)
+    canvas.color = rgba(255, 120, 40, pulse_alpha)
+    for _, pt in ipairs(trail) do
+      local px, py = D.grid_to_pixel(pt.gx, pt.gy)
+      canvas.rectangle(px + 1, py + 1, D.CELL_SIZE - 2, D.CELL_SIZE - 2, true)
+    end
+    canvas.color = rgba(255, 240, 150, 255)
+    for _, pt in ipairs(trail) do
+      local px, py = D.grid_to_pixel(pt.gx, pt.gy)
+      canvas.rectangle(px + 3, py + 3, D.CELL_SIZE - 6, D.CELL_SIZE - 6, true)
+    end
+  end
+
+  -- 5. Floating Score Texts
+  for _, f in ipairs(floating_texts) do
+    canvas.color = f.color
+    canvas.alpha = math.floor(255 * (f.life / f.max_life))
+    canvas.text(f.x - textwidth(f.text) / 2, f.y, f.text)
+  end
+  canvas.alpha = 255
+
+  -- 6. TOP ARCADE HUD BAR
+  local y0 = 10
+  canvas.color = colors.white
+  canvas.text(D.FIELD_X, y0, "SCORE " .. string.format("%06d", score))
+  canvas.color = colors.silver
+  canvas.text(D.FIELD_X + 220, y0, "HI " .. string.format("%06d", highscore))
+  canvas.color = colors.gold
+  canvas.text(D.FIELD_X + 410, y0, "LVL " .. level .. " - " .. cfg.name)
+  canvas.color = (time_left < 15 and ((math.floor(state_timer * 4) % 2 == 0) and colors.red or colors.yellow)) or colors.white
+  canvas.text(D.FIELD_X + 760, y0, "TIME " .. string.format("%02d", math.ceil(time_left)))
+
+  -- Lives Indicators (Cutter Icons)
+  for i = 1, lives do
+    local lx = D.FIELD_X + (i - 1) * 24
+    local ly = y0 + 22
+    canvas.color = colors.cyan
+    canvas.triangle(lx + 14, ly + 6, lx + 2, ly, lx + 2, ly + 12)
+    canvas.color = colors.white
+    canvas.rectangle(lx + 4, ly + 4, 4, 4, true)
+  end
+
+  -- Territory Progress Bar
+  local bx = D.FIELD_X + 160
+  local by = y0 + 24
+  local bw = 460
+  local bh = 10
+  canvas.color = colors.darkgray
+  canvas.rectangle(bx - 1, by - 1, bw + 2, bh + 2, true)
+
+  local cur_w = math.floor(bw * math.min(1.0, claimed_pct / 100.0))
+  canvas.color = claimed_pct >= cfg.target and colors.lime or colors.cyan
+  canvas.rectangle(bx, by, cur_w, bh, true)
+
+  -- Target line marker
+  local tx = bx + math.floor(bw * (cfg.target / 100.0))
+  canvas.color = colors.red
+  canvas.line(tx, by - 2, tx, by + bh + 2)
+
+  canvas.color = colors.white
+  canvas.text(bx + bw + 12, by - 2, string.format("CLAIM %04.1f%% / %d%%", claimed_pct, cfg.target))
+
+  -- 7. OVERLAY PANELS
+  local function center_text(cy, txt, col)
+    canvas.color = col or colors.white
+    canvas.text(W / 2 - textwidth(txt) / 2, cy, txt)
+  end
+
+  if state == "title" then
+    canvas.color = colors.black
+    canvas.alpha = 200
+    canvas.rectangle(0, 0, W, H, true)
+    canvas.alpha = 255
+    center_text(H / 2 - 165, "Z O N I X", colors.cyan)
+    center_text(H / 2 - 140, "CYBER TERRITORIAL CONQUEST", colors.yellow)
+    center_text(H / 2 - 60, "Cut the grid. Enclose the void. Trap the quantum orbs.", colors.white)
+    center_text(H / 2 - 35, "Claim " .. cfg.target .. "% to breach each cyber sector.", colors.aqua)
+
+    -- Showcase Sprite Labels
+    canvas.color = colors.silver
+    canvas.text(W / 2 - 215, H / 2 + 50, "ORB")
+    canvas.text(W / 2 - 125, H / 2 + 50, "SEEKER")
+    canvas.text(W / 2 - 25,  H / 2 + 50, "PULSAR")
+    canvas.text(W / 2 + 75,  H / 2 + 50, "SPARK")
+    canvas.text(W / 2 + 180, H / 2 + 50, "POWER")
+
+    center_text(H / 2 + 90, "PRESS SPACE OR ENTER TO START", colors.lime)
+    center_text(H / 2 + 120, "ARROWS/WASD move   SPACE boost   P pause   Q/E shader", colors.silver)
+    center_text(H / 2 + 145, "HI-SCORE " .. highscore, colors.gold)
+  elseif state == "ready" then
+    canvas.color = colors.black
+    canvas.alpha = 140
+    canvas.rectangle(0, H / 2 - 50, W, 100, true)
+    canvas.alpha = 255
+    center_text(H / 2 - 35, "SECTOR " .. level .. ": " .. cfg.name, colors.gold)
+    center_text(H / 2 - 10, "Target Capture: " .. cfg.target .. "%", colors.aqua)
+    center_text(H / 2 + 15, "GET READY!", colors.yellow)
+  elseif state == "level_clear" then
+    canvas.color = colors.black
+    canvas.alpha = 160
+    canvas.rectangle(0, H / 2 - 60, W, 120, true)
+    canvas.alpha = 255
+    center_text(H / 2 - 45, "SECTOR COMPLETE!", colors.lime)
+    center_text(H / 2 - 20, string.format("Final Territory: %.1f%%", claimed_pct), colors.white)
+    center_text(H / 2 + 5, "Time Bonus +" .. (math.floor(time_left) * 100), colors.gold)
+    center_text(H / 2 + 30, "Breaching Next Sector...", colors.cyan)
+  elseif state == "over" then
+    canvas.color = colors.black
+    canvas.alpha = 175
+    canvas.rectangle(0, H / 2 - 60, W, 120, true)
+    canvas.alpha = 255
+    center_text(H / 2 - 45, "GAME OVER", colors.red)
+    center_text(H / 2 - 20, "Final Score: " .. string.format("%06d", score), colors.white)
+    if score >= highscore and score > 0 then
+      center_text(H / 2 + 5, "NEW HIGH SCORE!", colors.gold)
+    end
+    center_text(H / 2 + 30, "Press Space to Return", colors.silver)
+  elseif state == "paused" then
+    canvas.color = colors.black
+    canvas.alpha = 140
+    canvas.rectangle(0, H / 2 - 30, W, 60, true)
+    canvas.alpha = 255
+    center_text(H / 2 - 10, "PAUSED - PRESS P TO RESUME", colors.yellow)
+  end
+end

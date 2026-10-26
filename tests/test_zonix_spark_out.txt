@@ -1,0 +1,8 @@
+PASS: Corner (1, 1) is border cell
+PASS: Top edge (2, 1) is border cell
+PASS: Left edge (1, 2) is border cell
+PASS: Corner (1, 1) has border neighbors
+PASS: Spark visited at least 15 distinct border cells
+PASS: Spark advanced along X axis
+
+Completed with 0 failures.

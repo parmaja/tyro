@@ -1,0 +1,62 @@
+--======================================================================
+--  Test: Pure Zonix Data and Flood-Fill Logic
+--  Run: bin\tyro.exe tests\test_zonix_data.tyro --exit:5 --console
+--======================================================================
+
+local D = require("zonix_data")
+
+local logf, lerr = openfile("zonix_test.log", "w")
+local function log(s)
+  if logf then logf:write(s .. "\n") end
+  println(s)
+end
+
+log("Checking Zonix data constants...")
+assert(D.COLS == 88, "COLS must be 88")
+assert(D.ROWS == 46, "ROWS must be 46")
+assert(D.CELL_SIZE == 10, "CELL_SIZE must be 10")
+assert(D.TOTAL_INNER_CELLS == 3528, "TOTAL_INNER_CELLS must be 3528")
+
+local grid = D.create_grid()
+local init_pct = D.calc_percentage(grid)
+assert(init_pct == 0, "Initial claimed percentage must be 0%")
+log(string.format("Initial grid OK, inner cells=%d, pct=%.2f%%", D.count_claimed(grid), init_pct))
+
+-- Test cutting a slice across the grid:
+-- Suppose player cuts a vertical line at gx = 10 from gy = 0 to gy = 45.
+-- An enemy is at gx = 50, gy = 20 (screen coords: 40 + 50*10 = 540, 55 + 20*10 = 255).
+local trail = {}
+for y = 2, D.ROWS - 3 do
+  grid[y][10] = D.STATE_TRAIL
+  trail[#trail + 1] = {gx = 10, gy = y}
+end
+
+local enemy_x, enemy_y = D.grid_to_pixel(50, 20)
+local enemies = {{x = enemy_x, y = enemy_y}}
+
+local claimed = D.claim_territory(grid, enemies, trail)
+log(string.format("Claimed cells from cut at gx=10: %d", claimed))
+
+-- The slice between gx=2 and gx=9 has width 8, height 42 -> 8 * 42 = 336 cells.
+-- Plus the 42 trail cells at gx=10 -> total 378 cells!
+assert(grid[10][5] == D.STATE_LAND, "Left slice must be claimed as land")
+assert(grid[20][50] == D.STATE_SEA, "Right region containing enemy must remain sea")
+assert(grid[10][10] == D.STATE_LAND, "Trail must be converted to land")
+
+local new_pct = D.calc_percentage(grid)
+log(string.format("New claimed percentage: %.2f%%", new_pct))
+assert(new_pct > 0 and new_pct < 100, "Percentage must increase correctly")
+
+-- Verify all 8 levels exist and have valid settings
+for lvl = 1, 8 do
+  local cfg = D.LEVELS[lvl]
+  assert(cfg ~= nil, "Level " .. lvl .. " missing")
+  assert(cfg.target >= 75 and cfg.target <= 85, "Level target invalid")
+  assert(cfg.orbs >= 1, "Level orbs invalid")
+  assert(cfg.land_fill ~= nil and #cfg.land_fill == 4, "Palette invalid")
+  log(string.format("Level %d (%s): target=%d%%, orbs=%d, sparks=%d", lvl, cfg.name, cfg.target, cfg.orbs, cfg.sparks))
+end
+
+if logf then logf:close() end
+println("ALL ZONIX DATA TESTS PASSED!")
+exit()

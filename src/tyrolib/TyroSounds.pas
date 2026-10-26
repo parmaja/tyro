@@ -285,6 +285,10 @@ function HiHat_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Coin_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Cash_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Phaser_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Zap_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Laser_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Chime_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Sweep_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
@@ -2122,6 +2126,96 @@ begin
   else if Result < -1.0 then Result := -1.0;
 end;
 
+function Zap_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  SweepDepth = 4.0;
+  SweepTau = 0.025;
+  DecayTau = 0.08;
+var
+  t, Phase, Tone, Noise, Env: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Phase := 2 * Pi * Frequency * (t + SweepDepth * SweepTau * (1 - Exp(-t / SweepTau)));
+  Tone := Sin(Phase) * 0.6 + Sin(Phase * 3) * 0.25 + Sin(Phase * 5) * 0.15;
+  Noise := HashNoise(Index) * Exp(-t / 0.035);
+  Env := (1 - Exp(-t * 2500)) * Exp(-t / DecayTau);
+  Result := (Tone * 0.75 + Noise * 0.25) * Env;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
+function Laser_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  SweepDepth = 3.2;
+  SweepTau = 0.04;
+  DecayTau = 0.11;
+var
+  t, Phase, Tone, Env: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Phase := 2 * Pi * Frequency * (t + SweepDepth * SweepTau * (1 - Exp(-t / SweepTau)));
+  Tone := Sin(Phase) * 0.75 - Sin(Phase * 3) * 0.2 + Sin(Phase * 5) * 0.05;
+  Env := (1 - Exp(-t * 3000)) * Exp(-t / DecayTau);
+  Result := Tone * Env;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
+function Chime_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+var
+  t, Shimmer, Part1, Part2, Part3, Env1, Env2, Env3, Onset: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Onset := 1 - Exp(-t * 1200);
+  Env1 := Exp(-t / 0.35);
+  Env2 := Exp(-t / 0.20);
+  Env3 := Exp(-t / 0.12);
+  Shimmer := 1.0 + 0.15 * Sin(2 * Pi * 8.0 * t);
+  Part1 := Sin(2 * Pi * Frequency * t) * Env1;
+  Part2 := Sin(2 * Pi * Frequency * 2.756 * t) * Env2 * 0.45;
+  Part3 := Sin(2 * Pi * Frequency * 5.404 * t) * Env3 * 0.20;
+  Result := (Part1 + Part2 + Part3) * Shimmer * Onset * 0.85;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
+function Sweep_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  RiseDepth = 1.8;
+  RiseTau = 0.07;
+  DecayTau = 0.22;
+var
+  t, Phase, Tone, Env: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Phase := 2 * Pi * Frequency * ((0.6 + RiseDepth) * t - RiseDepth * RiseTau * (1 - Exp(-t / RiseTau)));
+  Tone := Sin(Phase) * 0.75 + Sin(Phase * 2) * 0.25;
+  Env := (1 - Exp(-t * 2000)) * Exp(-t / DecayTau);
+  Result := Tone * Env;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
@@ -2166,6 +2260,10 @@ initialization
   //Cash register and weapons
   Waveforms.Add('Cash', @Cash_Waveform); //cash drawer sliding open + register chime
   Waveforms.Add('Phaser', @Phaser_Waveform); //sci-fi gun phaser beam
+  Waveforms.Add('Zap', @Zap_Waveform); //electric spark discharge
+  Waveforms.Add('Laser', @Laser_Waveform); //sci-fi cutter laser
+  Waveforms.Add('Chime', @Chime_Waveform); //harmonic crystalline chime
+  Waveforms.Add('Sweep', @Sweep_Waveform); //ascending sci-fi sweep
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;

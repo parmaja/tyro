@@ -1,0 +1,73 @@
+--======================================================================
+--  Test: Verify all Zonix assets (sprites, sounds, shader, waveforms)
+--  Run: bin\tyro.exe tests\test_zonix_assets.tyro --exit:5 --console
+--======================================================================
+
+local out = openfile("test_zonix_assets_out.txt", "w")
+local failures = 0
+
+local function check(desc, ok)
+  if ok then
+    if out then out:write("PASS: " .. desc .. "\n") end
+    println("PASS: " .. desc)
+  else
+    failures = failures + 1
+    if out then out:write("FAIL: " .. desc .. "\n") end
+    println("FAIL: " .. desc)
+  end
+end
+
+println("--- Starting Zonix Asset Smoke Test ---")
+
+-- 1. Test custom shader compilation
+local s_ok, s_err = pcall(function()
+  shader.load("games/zonix/zonix.frag")
+  shader.value = 0.8
+  shader.area = {0, 0, 960, 540}
+end)
+check("Compile zonix.frag shader", s_ok)
+
+-- 2. Test Sprite Atlases
+local atlases = {
+  {name = "cutter", file = "games/zonix/img/cutter.sprite", expected_frames = 8},
+  {name = "orb", file = "games/zonix/img/orb.sprite", expected_frames = 6},
+  {name = "fast_orb", file = "games/zonix/img/fast_orb.sprite", expected_frames = 4},
+  {name = "boss_core", file = "games/zonix/img/boss_core.sprite", expected_frames = 6},
+  {name = "spark", file = "games/zonix/img/spark.sprite", expected_frames = 4},
+  {name = "fuse", file = "games/zonix/img/fuse.sprite", expected_frames = 4},
+  {name = "powerups", file = "games/zonix/img/powerups.sprite", expected_frames = 6},
+  {name = "boom", file = "games/zonix/img/boom.sprite", expected_frames = 8},
+  {name = "trail_spark", file = "games/zonix/img/trail_spark.sprite", expected_frames = 4},
+}
+
+for _, a in ipairs(atlases) do
+  local sp = Sprites.new(a.name)
+  local l_ok, l_err = pcall(function() sp.load(a.file) end)
+  check("Load atlas " .. a.name, l_ok)
+  if l_ok then
+    check("Atlas " .. a.name .. " has >= " .. a.expected_frames .. " frames", sp.frames >= a.expected_frames)
+  end
+end
+
+-- 3. Test New Procedural Wavetables added to TyroSounds
+local wfs = {"Zap", "Laser", "Chime", "Sweep"}
+for _, w in ipairs(wfs) do
+  local w_ok = pcall(function() sound.play(w, 440, 100) end)
+  check("Play procedural waveform " .. w, w_ok)
+end
+
+-- 4. Test Pre-rendered SFX WAV files
+local sfx_files = {"cut.wav", "claim.wav", "hit.wav", "boom.wav", "freeze.wav", "powerup.wav", "clear.wav"}
+for _, f in ipairs(sfx_files) do
+  local f_ok = pcall(function() sound.play("games/zonix/sfx/" .. f, 0.5) end)
+  check("Play sound file " .. f, f_ok)
+end
+
+if out then
+  out:write(string.format("\nCompleted with %d failures.\n", failures))
+  out:close()
+end
+
+println("--- Zonix Asset Smoke Test Finished ---")
+assert(failures == 0, "All asset checks must pass")
+exit()

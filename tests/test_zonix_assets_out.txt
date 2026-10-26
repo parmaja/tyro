@@ -1,0 +1,32 @@
+PASS: Compile zonix.frag shader
+PASS: Load atlas cutter
+PASS: Atlas cutter has >= 8 frames
+PASS: Load atlas orb
+PASS: Atlas orb has >= 6 frames
+PASS: Load atlas fast_orb
+PASS: Atlas fast_orb has >= 4 frames
+PASS: Load atlas boss_core
+PASS: Atlas boss_core has >= 6 frames
+PASS: Load atlas spark
+PASS: Atlas spark has >= 4 frames
+PASS: Load atlas fuse
+PASS: Atlas fuse has >= 4 frames
+PASS: Load atlas powerups
+PASS: Atlas powerups has >= 6 frames
+PASS: Load atlas boom
+PASS: Atlas boom has >= 8 frames
+PASS: Load atlas trail_spark
+PASS: Atlas trail_spark has >= 4 frames
+PASS: Play procedural waveform Zap
+PASS: Play procedural waveform Laser
+PASS: Play procedural waveform Chime
+PASS: Play procedural waveform Sweep
+PASS: Play sound file cut.wav
+PASS: Play sound file claim.wav
+PASS: Play sound file hit.wav
+PASS: Play sound file boom.wav
+PASS: Play sound file freeze.wav
+PASS: Play sound file powerup.wav
+PASS: Play sound file clear.wav
+
+Completed with 0 failures.

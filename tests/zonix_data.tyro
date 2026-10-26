@@ -1,0 +1,338 @@
+--======================================================================
+--  Zonix Data & Pure Grid Logic for Tyro Game Engine
+--======================================================================
+--  Exports level configurations, color themes, scoring tables, and
+--  pure grid algorithms (flood fill, area claiming, hit testing)
+--  so tests/test_zonix_data.tyro can verify them headlessly without
+--  booting the graphical engine.
+--======================================================================
+
+local M = {}
+
+M.COLS = 88
+M.ROWS = 46
+M.CELL_SIZE = 10
+M.FIELD_X = 40
+M.FIELD_Y = 55
+M.FIELD_W = M.COLS * M.CELL_SIZE -- 880
+M.FIELD_H = M.ROWS * M.CELL_SIZE -- 460
+
+M.STATE_SEA = 0   -- uncaptured void
+M.STATE_LAND = 1  -- claimed safe territory
+M.STATE_TRAIL = 2 -- active cutting line
+
+-- Inner playable cell count (excluding the 2-cell outer border)
+M.INNER_MIN_X = 2
+M.INNER_MAX_X = M.COLS - 3
+M.INNER_MIN_Y = 2
+M.INNER_MAX_Y = M.ROWS - 3
+M.INNER_COLS = M.INNER_MAX_X - M.INNER_MIN_X + 1 -- 84
+M.INNER_ROWS = M.INNER_MAX_Y - M.INNER_MIN_Y + 1 -- 42
+M.TOTAL_INNER_CELLS = M.INNER_COLS * M.INNER_ROWS -- 3528
+
+-- 8 Cyber Level Configurations
+M.LEVELS = {
+  [1] = {
+    name = "CYBER GRID",
+    target = 75,
+    orbs = 1,
+    fast_orbs = 0,
+    boss = 0,
+    sparks = 1,
+    orb_speed = 130,
+    spark_speed = 90,
+    bg_color = {10, 15, 28, 255},
+    land_fill = {18, 55, 95, 255},
+    land_border = {0, 200, 255, 255},
+    accent = {0, 240, 255, 255},
+  },
+  [2] = {
+    name = "NEON CORE",
+    target = 75,
+    orbs = 2,
+    fast_orbs = 0,
+    boss = 0,
+    sparks = 1,
+    orb_speed = 140,
+    spark_speed = 100,
+    bg_color = {18, 10, 25, 255},
+    land_fill = {75, 20, 65, 255},
+    land_border = {255, 50, 150, 255},
+    accent = {255, 30, 140, 255},
+  },
+  [3] = {
+    name = "QUANTUM LAB",
+    target = 78,
+    orbs = 2,
+    fast_orbs = 1,
+    boss = 0,
+    sparks = 2,
+    orb_speed = 145,
+    spark_speed = 110,
+    bg_color = {8, 20, 18, 255},
+    land_fill = {15, 65, 45, 255},
+    land_border = {40, 255, 130, 255},
+    accent = {40, 255, 120, 255},
+  },
+  [4] = {
+    name = "DIGITAL VOID",
+    target = 78,
+    orbs = 2,
+    fast_orbs = 1,
+    boss = 0,
+    sparks = 2,
+    orb_speed = 155,
+    spark_speed = 120,
+    bg_color = {22, 18, 8, 255},
+    land_fill = {80, 55, 12, 255},
+    land_border = {255, 200, 30, 255},
+    accent = {255, 230, 40, 255},
+  },
+  [5] = {
+    name = "PLASMA MATRIX",
+    target = 80,
+    orbs = 3,
+    fast_orbs = 1,
+    boss = 0,
+    sparks = 2,
+    orb_speed = 160,
+    spark_speed = 130,
+    bg_color = {25, 10, 10, 255},
+    land_fill = {85, 20, 20, 255},
+    land_border = {255, 70, 70, 255},
+    accent = {255, 50, 60, 255},
+  },
+  [6] = {
+    name = "IONIC STORM",
+    target = 80,
+    orbs = 3,
+    fast_orbs = 2,
+    boss = 0,
+    sparks = 3,
+    orb_speed = 170,
+    spark_speed = 135,
+    bg_color = {15, 10, 30, 255},
+    land_fill = {55, 25, 95, 255},
+    land_border = {190, 80, 255, 255},
+    accent = {180, 50, 240, 255},
+  },
+  [7] = {
+    name = "SUB-ATOMIC",
+    target = 82,
+    orbs = 3,
+    fast_orbs = 2,
+    boss = 1,
+    sparks = 3,
+    orb_speed = 175,
+    spark_speed = 140,
+    bg_color = {5, 25, 25, 255},
+    land_fill = {15, 75, 75, 255},
+    land_border = {0, 240, 220, 255},
+    accent = {0, 240, 220, 255},
+  },
+  [8] = {
+    name = "ZONIX NEXUS",
+    target = 85,
+    orbs = 4,
+    fast_orbs = 2,
+    boss = 1,
+    sparks = 4,
+    orb_speed = 185,
+    spark_speed = 150,
+    bg_color = {20, 12, 5, 255},
+    land_fill = {95, 45, 10, 255},
+    land_border = {255, 140, 20, 255},
+    accent = {255, 140, 20, 255},
+  },
+}
+
+-- Create and initialize an empty grid with initial borders as land
+function M.create_grid()
+  local g = {}
+  for y = 0, M.ROWS - 1 do
+    g[y] = {}
+    for x = 0, M.COLS - 1 do
+      if x < 2 or x >= M.COLS - 2 or y < 2 or y >= M.ROWS - 2 then
+        g[y][x] = M.STATE_LAND
+      else
+        g[y][x] = M.STATE_SEA
+      end
+    end
+  end
+  return g
+end
+
+-- Convert grid cell coordinates to screen pixel coordinates (top-left of cell)
+function M.grid_to_pixel(gx, gy)
+  return M.FIELD_X + gx * M.CELL_SIZE, M.FIELD_Y + gy * M.CELL_SIZE
+end
+
+-- Convert screen pixel coordinates to grid cell coordinates
+function M.pixel_to_grid(px, py)
+  local gx = math.floor((px - M.FIELD_X) / M.CELL_SIZE)
+  local gy = math.floor((py - M.FIELD_Y) / M.CELL_SIZE)
+  return gx, gy
+end
+
+-- Count how many inner cells are claimed (STATE_LAND)
+function M.count_claimed(grid)
+  local count = 0
+  for y = M.INNER_MIN_Y, M.INNER_MAX_Y do
+    local row = grid[y]
+    for x = M.INNER_MIN_X, M.INNER_MAX_X do
+      if row[x] == M.STATE_LAND then
+        count = count + 1
+      end
+    end
+  end
+  return count
+end
+
+-- Calculate percentage of claimed inner territory (0.0 .. 100.0)
+function M.calc_percentage(grid)
+  local count = M.count_claimed(grid)
+  return (count / M.TOTAL_INNER_CELLS) * 100.0
+end
+
+-- Connected-component flood fill to claim enclosed territory
+-- When the player returns to land, all trail cells become land.
+-- Then, all connected components of STATE_SEA that DO NOT contain
+-- any enemies are converted to STATE_LAND.
+-- enemies: list of tables with {x = pixel_x, y = pixel_y}
+function M.claim_territory(grid, enemies, trail_list)
+  -- 1. Convert all trail cells to land
+  if trail_list then
+    for _, pt in ipairs(trail_list) do
+      if pt.gx >= 0 and pt.gx < M.COLS and pt.gy >= 0 and pt.gy < M.ROWS then
+        grid[pt.gy][pt.gx] = M.STATE_LAND
+      end
+    end
+  end
+
+  -- Also sweep any lingering STATE_TRAIL cells
+  for y = 0, M.ROWS - 1 do
+    for x = 0, M.COLS - 1 do
+      if grid[y][x] == M.STATE_TRAIL then
+        grid[y][x] = M.STATE_LAND
+      end
+    end
+  end
+
+  -- 2. Build visited table for BFS flood fill
+  local visited = {}
+  for y = 0, M.ROWS - 1 do
+    visited[y] = {}
+  end
+
+  -- Queue for BFS
+  local qx = {}
+  local qy = {}
+  local head = 1
+  local tail = 0
+
+  local function push(x, y)
+    tail = tail + 1
+    qx[tail] = x
+    qy[tail] = y
+    visited[y][x] = true
+  end
+
+  -- 3. For every active enemy in the sea, start flood fill from its position
+  for _, e in ipairs(enemies) do
+    local egx, egy = M.pixel_to_grid(e.x, e.y)
+    egx = math.max(0, math.min(M.COLS - 1, egx))
+    egy = math.max(0, math.min(M.ROWS - 1, egy))
+
+    -- If enemy is currently inside SEA and unvisited, flood fill that entire region
+    if grid[egy][egx] == M.STATE_SEA and not visited[egy][egx] then
+      push(egx, egy)
+    else
+      -- Enemy might be at the edge of a cell; check adjacent 4 neighbors
+      for _, off in ipairs({{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+        local nx = egx + off[1]
+        local ny = egy + off[2]
+        if nx >= 0 and nx < M.COLS and ny >= 0 and ny < M.ROWS then
+          if grid[ny][nx] == M.STATE_SEA and not visited[ny][nx] then
+            push(nx, ny)
+          end
+        end
+      end
+    end
+  end
+
+  -- BFS expansion across all reachable sea cells
+  while head <= tail do
+    local cx = qx[head]
+    local cy = qy[head]
+    head = head + 1
+
+    -- 4 cardinal neighbors
+    if cx + 1 < M.COLS and grid[cy][cx + 1] == M.STATE_SEA and not visited[cy][cx + 1] then
+      push(cx + 1, cy)
+    end
+    if cx - 1 >= 0 and grid[cy][cx - 1] == M.STATE_SEA and not visited[cy][cx - 1] then
+      push(cx - 1, cy)
+    end
+    if cy + 1 < M.ROWS and grid[cy + 1][cx] == M.STATE_SEA and not visited[cy + 1][cx] then
+      push(cx, cy + 1)
+    end
+    if cy - 1 >= 0 and grid[cy - 1][cx] == M.STATE_SEA and not visited[cy - 1][cx] then
+      push(cx, cy - 1)
+    end
+  end
+
+  -- 4. Any STATE_SEA cell that was NOT reached by the flood fill contains no enemies!
+  -- Convert all unvisited sea cells to STATE_LAND.
+  local newly_claimed = 0
+  for y = 0, M.ROWS - 1 do
+    local row = grid[y]
+    local vrow = visited[y]
+    for x = 0, M.COLS - 1 do
+      if row[x] == M.STATE_SEA and not vrow[x] then
+        row[x] = M.STATE_LAND
+        newly_claimed = newly_claimed + 1
+      end
+    end
+  end
+
+  return newly_claimed
+end
+
+-- Check if a cell is on the perimeter / border between land and sea
+function M.is_border_cell(grid, gx, gy)
+  if grid[gy][gx] ~= M.STATE_LAND then
+    return false
+  end
+  -- Check 8 neighbors so corner perimeter cells connect smoothly
+  for dy = -1, 1 do
+    for dx = -1, 1 do
+      if not (dx == 0 and dy == 0) then
+        local nx = gx + dx
+        local ny = gy + dy
+        if nx >= 0 and nx < M.COLS and ny >= 0 and ny < M.ROWS then
+          if grid[ny][nx] == M.STATE_SEA then
+            return true
+          end
+        end
+      end
+    end
+  end
+  return false
+end
+
+-- Find all adjacent border land cells for spark traversal
+function M.get_border_neighbors(grid, gx, gy)
+  local res = {}
+  for _, off in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+    local nx = gx + off[1]
+    local ny = gy + off[2]
+    if nx >= 0 and nx < M.COLS and ny >= 0 and ny < M.ROWS then
+      if M.is_border_cell(grid, nx, ny) then
+        res[#res + 1] = {gx = nx, gy = ny}
+      end
+    end
+  end
+  return res
+end
+
+return M
