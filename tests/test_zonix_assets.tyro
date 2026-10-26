@@ -49,18 +49,18 @@ for _, a in ipairs(atlases) do
   end
 end
 
--- 3. Test New Procedural Wavetables added to TyroSounds
+-- 3. Test New Procedural Wavetables added to TyroSounds (direct calls, returns true)
 local wfs = {"Zap", "Laser", "Chime", "Sweep"}
 for _, w in ipairs(wfs) do
-  local w_ok = pcall(function() sound.play(w, 440, 100) end)
-  check("Play procedural waveform " .. w, w_ok)
+  local w_ok = sound.play(w, 440, 100)
+  check("Play procedural waveform " .. w, w_ok == true)
 end
 
--- 4. Test Pre-rendered SFX WAV files
+-- 4. Test Pre-rendered SFX WAV files (direct calls, returns true)
 local sfx_files = {"cut.wav", "claim.wav", "hit.wav", "boom.wav", "freeze.wav", "powerup.wav", "clear.wav"}
 for _, f in ipairs(sfx_files) do
-  local f_ok = pcall(function() sound.play("games/zonix/sfx/" .. f, 0.5) end)
-  check("Play sound file " .. f, f_ok)
+  local f_ok = sound.play("games/zonix/sfx/" .. f, 0.5)
+  check("Play sound file " .. f, f_ok == true)
 end
 
 if out then

@@ -1,0 +1,60 @@
+--======================================================================
+--  Test: Verify sound.play returns true on success, false on failure (safe, no pcall needed)
+--  Run: bin\tyro.exe tests\test_sound_play_return.tyro --exit:5 --console
+--======================================================================
+
+local out = openfile("test_sound_play_return_out.txt", "w")
+local failures = 0
+
+local function check(desc, ok)
+  if ok then
+    if out then out:write("PASS: " .. desc .. "\n") end
+    println("PASS: " .. desc)
+  else
+    failures = failures + 1
+    if out then out:write("FAIL: " .. desc .. "\n") end
+    println("FAIL: " .. desc)
+  end
+end
+
+println("--- Starting sound.play Return Value Test ---")
+
+-- 1. Test missing file returns false (and does not error)
+local res_missing = sound.play("non_existent_file_xyz_12345.wav")
+check("sound.play(missing_file) returns false", res_missing == false)
+
+-- 2. Test existing file returns true
+local res_existing = sound.play("games/zonix/sfx/cut.wav", 0.5)
+check("sound.play(existing_file) returns true", res_existing == true)
+
+-- 3. Test valid waveform returns true
+local res_wave = sound.play("Laser", 440, 100)
+check("sound.play(valid_waveform) returns true", res_wave == true)
+
+-- 4. Test invalid waveform returns false
+local res_bad_wave = sound.play("UnknownInvalidWaveformName999", 440, 100)
+check("sound.play(invalid_waveform) returns false", res_bad_wave == false)
+
+-- 5. Test numeric frequency returns true
+local res_freq = sound.play(440, 100)
+check("sound.play(freq, ms) returns true", res_freq == true)
+
+-- 6. Test invalid/negative frequency returns false
+local res_bad_freq = sound.play(-10, 100)
+check("sound.play(negative_freq) returns false", res_bad_freq == false)
+
+-- 7. Test nil or no argument safely returns false
+local res_nil = sound.play(nil)
+check("sound.play(nil) safely returns false", res_nil == false)
+
+local res_empty = sound.play()
+check("sound.play() safely returns false", res_empty == false)
+
+if out then
+  out:write(string.format("\nCompleted with %d failures.\n", failures))
+  out:close()
+end
+
+println("--- sound.play Return Value Test Finished ---")
+assert(failures == 0, "All sound.play return checks must pass")
+exit()

@@ -40,14 +40,13 @@ local shader_ok = pcall(function()
   shader.area = {0, 0, W, H}
 end)
 
--- Sound manager with mute toggle and fallback to TyroSounds wavetables
+-- Sound manager with mute toggle and safe fallback to TyroSounds wavetables (no pcall needed)
 local muted = false
 local function play_sfx(name, vol)
   if muted then return end
   vol = vol or 0.8
-  -- Try pre-rendered WAV first, fall back to procedural wavetable sound
-  local ok = pcall(function() sound.play("sfx/" .. name .. ".wav", vol) end)
-  if not ok then
+  -- sound.play returns true on success, false if file missing or failed
+  if not sound.play("sfx/" .. name .. ".wav", vol) then
     if name == "cut" then sound.play("Laser", 350, 80)
     elseif name == "claim" then sound.play("Chime", 880, 400)
     elseif name == "hit" then sound.play("Zap", 440, 150)

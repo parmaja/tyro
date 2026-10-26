@@ -2692,47 +2692,81 @@ end;
 
 function TLuaSound.Play_func(L: Plua_State): integer; cdecl;
 var
-  WaveName: string;
+  WaveName, ResolvedFile: string;
   Freq, Period: integer;
   Volume: Single;
+  Success: Boolean;
 begin
-  if L.GetType(1) = LUA_TNUMBER then
-  begin
-    WaveName := '';
-    Freq := round(L.ToNumber(1));
-    if l.ArgsCount = 2 then
-      Period := round(L.ToNumber(2))
-    else
-      Period := 500;
-    Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
-  end
-  else
-  begin
-    WaveName := L.ToString(1);
-    if SysUtils.ExtractFileExt(WaveName) <> '' then
+  Success := False;
+  try
+    if (L.ArgsCount > 0) and not L.IsNil(1) then
     begin
-      // sound.play("file.wav" [, volume]) - one-shot SFX from an audio file
-      Volume := 1;
-      if L.ArgsCount >= 2 then
-        Volume := L.ToNumber(2);
-      WaveName := Res.GuessFileName(WaveName, Res.WorkPath);
-      FScript.AddQueueObject(TPlaySoundFileObject.Create(WaveName, Volume));
-    end
-    else
-    begin
-      //music.sound(name, freq [, ms])
-      WaveName := L.ToString(1);
-      Freq := round(L.ToNumber(2));
-      if l.ArgsCount = 3 then
-        Period := round(L.ToNumber(3))
-      else
-        Period := 500;
-      if Freq = 0 then
-        Freq := 440;
-      Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
+      if lua_type(L, 1) = LUA_TNUMBER then
+      begin
+        // sound.play(freq [, ms])
+        Freq := round(L.ToNumber(1));
+        if Freq > 0 then
+        begin
+          if L.ArgsCount >= 2 then
+            Period := round(L.ToNumber(2))
+          else
+            Period := 500;
+          if Period <= 0 then
+            Period := 500;
+          Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, ''));
+          Success := True;
+        end;
+      end
+      else if lua_type(L, 1) = LUA_TSTRING then
+      begin
+        WaveName := L.ToString(1);
+        if WaveName <> '' then
+        begin
+          if SysUtils.ExtractFileExt(WaveName) <> '' then
+          begin
+            // sound.play("file.wav" [, volume]) - one-shot SFX from an audio file
+            Volume := 1;
+            if L.ArgsCount >= 2 then
+              Volume := L.ToNumber(2);
+            ResolvedFile := Res.GuessFileName(WaveName, Res.WorkPath);
+            if (ResolvedFile <> '') and SysUtils.FileExists(ResolvedFile) then
+            begin
+              FScript.AddQueueObject(TPlaySoundFileObject.Create(ResolvedFile, Volume));
+              Success := True;
+            end
+            else if (SoundCache <> nil) and (SoundCache.Find(ResolvedFile) <> nil) then
+            begin
+              FScript.AddQueueObject(TPlaySoundFileObject.Create(ResolvedFile, Volume));
+              Success := True;
+            end;
+          end
+          else
+          begin
+            // sound.play("WaveformName" [, freq [, ms]])
+            Freq := 440;
+            Period := 500;
+            if L.ArgsCount >= 2 then
+              Freq := round(L.ToNumber(2));
+            if L.ArgsCount >= 3 then
+              Period := round(L.ToNumber(3));
+            if Freq <= 0 then
+              Freq := 440;
+            if Period <= 0 then
+              Period := 500;
+            if (WaveForms = nil) or (WaveForms.Find(WaveName) <> nil) then
+            begin
+              Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
+              Success := True;
+            end;
+          end;
+        end;
+      end;
     end;
+  except
+    Success := False;
   end;
-  Result := 0;
+  L.PushBoolean(Success);
+  Result := 1;
 end;
 
 function TLuaSound.LoopPlay_func(L: Plua_State): integer; cdecl;

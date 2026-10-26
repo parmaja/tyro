@@ -1,0 +1,10 @@
+PASS: sound.play(missing_file) returns false
+PASS: sound.play(existing_file) returns true
+PASS: sound.play(valid_waveform) returns true
+PASS: sound.play(invalid_waveform) returns false
+PASS: sound.play(freq, ms) returns true
+PASS: sound.play(negative_freq) returns false
+PASS: sound.play(nil) safely returns false
+PASS: sound.play() safely returns false
+
+Completed with 0 failures.
