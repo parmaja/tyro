@@ -1441,7 +1441,9 @@ begin
     Exit;
   if AScript.LastError <> '' then
   begin
-    //The chunk raised: the error was already surfaced, just dispose the state.
+    //The chunk raised: surface the failure for the --exit CLI lifecycle, then
+    //dispose the state.
+    FScriptFailed := True;
     FPendingDispose := True;
     Exit;
   end;

@@ -1922,6 +1922,10 @@ end;
 
 procedure TLuaScript.DoError(S: string);
 begin
+  //CallHandler runtime errors never return to the main chunk, so LastError is
+  //empty for them; mark the run failed so the --exit CLI sees it too.
+  if FLastError = '' then
+    FLastError := S;
   if IsConsole then
     WriteLn(S);
 end;

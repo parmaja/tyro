@@ -842,7 +842,7 @@ var
   R: TRect;
 begin
   R := OffsetRect(ARect);
-  RayLib.DrawRectangleGradientV(R.Top, R.Left, R.Width, R.Height, StartColor, EndColor);
+  RayLib.DrawRectangleGradientV(R.Left, R.Top, R.Width, R.Height, StartColor, EndColor);
 end;
 
 procedure TTyroCanvas.FillGradientH(X: Integer; Y: Integer; AWidth: Integer; AHeight: Integer; StartColor, EndColor: TColor);

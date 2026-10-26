@@ -1,0 +1,84 @@
+-- ============================================================
+--  Test: load every Submarine asset (atlases, pngs, sfx, shader)
+--  Run from the repo root so assets resolve via the current dir:
+--    bin\tyro tests\test_submarine_assets.tyro --console --exit:10 --screenshot:7
+--  Writes tests\assets_test.log for headless checking.
+-- ============================================================
+
+window.show(960, 540)
+local W, H = canvas.width, canvas.height
+
+-- a log file so a headless run can be checked
+local logf, lerr = openfile("assets_test.log", "w")
+local function log(s)
+  if logf then logf:write(s .. "\n") end
+  println(s)
+end
+
+-- custom water shader
+shader.load("games/submarine/underwater.frag")
+shader.value = 0.7
+shader.area = {0, 0, W, H}
+log("shader loaded")
+
+-- one sprite per atlas so we can count frames
+local atlases = {"sub", "shark", "jelly", "diver", "patrol", "mine", "boom", "seaweed"}
+local parade = {}
+for _, n in ipairs(atlases) do
+  local sp = Sprites.new(n)
+  local ok, err = pcall(function() sp.load("games/submarine/img/" .. n .. ".sprite") end)
+  if not ok then
+    log("FAIL load " .. n .. ": " .. tostring(err))
+    return
+  end
+  log(n .. " frames=" .. sp.frames .. " " .. sp.width() .. "x" .. sp.height())
+  sp.show()
+  sp.layer = 5
+  parade[#parade + 1] = sp
+end
+
+local singles = {"torpedo", "rock", "coral", "star", "chest"}
+for _, n in ipairs(singles) do
+  local sp = Sprites.new(n)
+  sp.load("games/submarine/img/" .. n .. ".png")
+  log(n .. " " .. sp.width() .. "x" .. sp.height())
+  sp.show()
+  sp.layer = 5
+  parade[#parade + 1] = sp
+end
+
+-- sounds: play a few
+sound.play("games/submarine/sfx/shoot.wav", 0.8)
+sound.play("games/submarine/sfx/boom.wav", 0.8)
+sound.loopPlay("Engine", 60, 0.05)
+log("sounds started")
+
+local t = 0
+local logged = false
+function update(dt)
+  t = t + dt
+  if t > 5 and not logged then
+    logged = true
+    sound.play("games/submarine/sfx/pickup.wav", 0.9)
+    sound.loopStop()
+    screenshot("_assets_test.png")
+    log("DONE framecount=" .. #parade)
+    if logf then logf:close() end
+  end
+  if t > 9 then exit() end
+end
+
+function draw()
+  canvas.backcolor = colors.navy
+  canvas.clear()
+  canvas.gradient.rectV(0, 0, W, H, colors.aqua, colors.darkblue)
+  local x = 40
+  for _, sp in ipairs(parade) do
+    sp.scale = 1.8
+    sp.move(x, 100 + (x % 400) * 0.6)
+    sp.play(6)
+    x = x + sp.width() * 1.8 * 1.8 + 40
+  end
+  canvas.color = colors.white
+  canvas.text(10, H - 30, "asset test t=" .. string.format("%.1f", t))
+end
