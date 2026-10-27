@@ -16,7 +16,6 @@ PASS: items.sprite loads without error
 PASS: hazards.sprite loads without error
 PASS: shield.sprite loads without error
 PASS: boom.sprite loads without error
-PASS: neonrunner.frag shader loads successfully
 PASS: player_turbo.frag sprite shader assigns successfully
 PASS: sound.play('CyberBass') returns true
 PASS: sound.play('TurboRev') returns true

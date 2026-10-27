@@ -62,15 +62,13 @@ Each level features unique target thresholds, enemy compositions, speeds, and cu
 | **Boost Speed** | `Space` or `Shift` | `A Button` |
 | **Pause / Resume** | `P` | `Start` |
 | **Mute / Unmute** | `M` | - |
-| **Shader CRT Glow** | `Q` (decrease) / `E` (increase) | - |
 | **Quit** | `ESC` | - |
 
 ---
 
 ## Engine Features & Architecture
 
-- **Custom Shaders**:
-  - `zonix.frag`: Full-board post-processing fragment shader featuring 4-tap neon bloom, subtle arcade CRT scanlines, gentle edge chromatic aberration, and corner vignette. Strength can be adjusted live in-game with `Q` and `E`.
+- **Dedicated Per-Sprite GPU Shader**:
   - `orb_glow.frag`: Dedicated per-sprite neon glow shader applied directly to quantum enemies (`sprite.shader = "orb_glow.frag"` or built-in `sprite.shader = "glow"`). Features 8-tap radial aura scattering, dynamic electric energy pulse, and core intensity boost.
 - **Per-Sprite Shader Engine Support**:
   - Added `sprite.shader` and `sprite.shaderValue` properties in `TyroSprites.pas` and `TyroLua.pas` allowing any sprite to be rendered with custom fragment shaders and uniform parameters in real time.

@@ -8,8 +8,7 @@ Pilot the experimental **Vector-9** hoverbike down the high-speed cyber arteries
 
 ## Features
 
-- **Custom Raylib Fragment Shaders**:
-  - `neonrunner.frag`: Full-screen post-processing cyber arcade shader featuring 4-tap neon bloom, subtle CRT scanlines, edge chromatic aberration, and a dynamic speed-tunnel vignette. Tunable live in-game with `Q` and `E`.
+- **Dedicated GPU Sprite Shader**:
   - `player_turbo.frag`: Dedicated GPU fragment shader attached to the hoverbike quad, providing an emissive cycling rainbow speed aura and plasma afterglow when Turbo Boost or Shield is active.
 - **Animated Multi-Frame Sprite Atlases (`.sprite` & `.png`)**:
   - `player.sprite`: Vector-9 hoverbike with cruising, banking up/down, hover jump, hypersonic turbo boost, and glitch/damage frames.
@@ -47,7 +46,6 @@ Pilot the experimental **Vector-9** hoverbike down the high-speed cyber arteries
 | **X** | Trigger EMP Shockwave (destroys all on-screen obstacles) |
 | **P** | Pause / Resume |
 | **M** | Mute / Unmute audio |
-| **Q** / **E** | Adjust post-processing shader intensity |
 | **ESC** | Exit to desktop |
 | **Gamepad** | D-Pad / Left Stick: Steer; **A**: Jump; **B** / **RT**: Turbo Boost; **X**: EMP |
 

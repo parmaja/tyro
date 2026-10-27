@@ -8,7 +8,7 @@
 --
 --  Features:
 --  * Animated multi-frame .sprite atlases (Cutter, Orbs, Boss, Sparks, Powerups, Explosions)
---  * Post-processing CRT & Neon Glow fragment shader (zonix.frag)
+--  * Dynamic per-sprite fragment shader for quantum enemy orbs (orb_glow.frag)
 --  * Pure procedural wavetable synthesis SFX (Zap, Laser, Chime, Sweep, Pew, Explode)
 --  * High-performance connected component flood fill territory claiming
 --  * Fuse spark tracking player trails
@@ -21,7 +21,6 @@
 --    SPACE / SHIFT   Fast cut booster
 --    P               Pause / Resume
 --    M               Mute / Unmute sound
---    Q / E           Shader strength adjust
 --    ESC             Quit
 --======================================================================
 
@@ -31,14 +30,6 @@ window.show(960, 540)
 local W, H = canvas.width, canvas.height
 -- Note: canvas.front is FALSE so the board canvas renders the background, grid,
 -- and claimed territory, while all Sprites render ON TOP of the canvas!
-
--- Custom cyber arcade post-processing shader
-local shader_val = 0.0
-local shader_ok = pcall(function()
-  shader.load("zonix.frag")
-  shader.value = shader_val
-  shader.area = {0, 0, W, H}
-end)
 
 -- Sound manager with mute toggle and safe fallback to TyroSounds wavetables (no pcall needed)
 local muted = false
@@ -641,13 +632,6 @@ function update(dt)
   if keyboard.pressed("m") then
     muted = not muted
   end
-  if keyboard.pressed("q") then
-    shader_val = math.max(0.0, shader_val - 0.1)
-    shader.value = shader_val
-  elseif keyboard.pressed("e") then
-    shader_val = math.min(1.0, shader_val + 0.1)
-    shader.value = shader_val
-  end
 
   -- Update Floating Texts
   for i = #floating_texts, 1, -1 do
@@ -1207,7 +1191,7 @@ function draw()
     canvas.text(W / 2 + 180, H / 2 + 50, "POWER")
 
     center_text(H / 2 + 90, "PRESS SPACE OR ENTER TO START", colors.lime)
-    center_text(H / 2 + 120, "ARROWS/WASD move   SPACE boost   P pause   Q/E shader", colors.silver)
+    center_text(H / 2 + 120, "ARROWS/WASD move   SPACE boost   P pause   M mute", colors.silver)
     center_text(H / 2 + 145, "HI-SCORE " .. highscore, colors.gold)
   elseif state == "ready" then
     canvas.color = colors.black

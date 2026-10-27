@@ -76,13 +76,7 @@ local sp_boom = Sprites.new("test_boom")
 local boom_loaded = pcall(function() sp_boom.load("games/neonrunner/img/boom.sprite") end)
 check("boom.sprite loads without error", boom_loaded == true)
 
--- 5. Test Shaders Loading
-local canvas_shader_ok = pcall(function()
-  shader.load("games/neonrunner/neonrunner.frag")
-  shader.value = 0.5
-end)
-check("neonrunner.frag shader loads successfully", canvas_shader_ok == true)
-
+-- 5. Test Sprite Shader Loading
 local sprite_shader_ok = pcall(function()
   sp_player.shader = "games/neonrunner/player_turbo.frag"
   sp_player.shaderValue = 1.0

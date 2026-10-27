@@ -8,9 +8,7 @@
 --
 --  Features:
 --  * Animated multi-frame .sprite atlases (Hoverbike, Traffic, Items, Hazards, Shield, Boom)
---  * Custom Raylib fragment shaders:
---      - neonrunner.frag: Full-screen bloom, CRT scanlines, chromatic aberration, vignette
---      - player_turbo.frag: Emissive cycling aura & speed trail for player hoverbike
+--  * Dedicated GPU sprite shader: player_turbo.frag (emissive cycling aura & speed trail)
 --  * Authentic hybrid audio:
 --      - CyberBass & TurboRev procedural synthesis waveforms
 --      - Multi-voice Synthwave MML soundtrack (Lead + Bass arpeggiator)
@@ -25,7 +23,6 @@
 --    X                       Activate EMP Shockwave (destroys on-screen traffic)
 --    P                       Pause / Resume game
 --    M                       Mute / Unmute audio
---    Q / E                   Adjust shader strength
 --    ESC                     Exit to desktop
 --    Gamepad: D-Pad/Stick to steer, A to Jump, B/Right Trigger to Turbo, X for EMP
 --======================================================================
@@ -34,14 +31,6 @@ local D = require("neonrunner_data")
 
 window.show(D.W, D.H)
 local W, H = canvas.width, canvas.height
-
--- Full-screen post-processing cyber shader
-local shader_val = 0.40
-local shader_ok = pcall(function()
-  shader.load("neonrunner.frag")
-  shader.value = shader_val
-  shader.area = {0, 0, W, H}
-end)
 
 -- Audio & Mute State
 local muted = false
@@ -950,9 +939,9 @@ local function draw()
   canvas.color = colors.silver
   canvas.text(670, dash_y, string.format("DIST: %04d M", math.floor(distance)))
 
-  -- Shader & Mute controls help
+  -- Mute controls help
   canvas.color = colors.gray
-  canvas.text(820, dash_y, "Q/E SHADER  M MUTE")
+  canvas.text(850, dash_y, "M MUTE  P PAUSE")
 
   -- 8. State Screens: Title Screen / Attract Mode Overlay
   if current_state == STATE_TITLE then
@@ -1025,14 +1014,6 @@ while cycle do
   if keyboard.pressed("m") then
     muted = not muted
     if muted then sound.loopStop() else play_music_step() end
-  end
-
-  if keyboard.pressed("q") then
-    shader_val = math.max(0.0, shader_val - 0.1)
-    pcall(function() shader.value = shader_val end)
-  elseif keyboard.pressed("e") then
-    shader_val = math.min(1.0, shader_val + 0.1)
-    pcall(function() shader.value = shader_val end)
   end
 
   -- Update simulation & Draw
