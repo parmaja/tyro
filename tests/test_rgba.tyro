@@ -1,0 +1,56 @@
+--======================================================================
+--  Test: Verify global rgba and rgb functions in TyroLua
+--  Run: bin\tyro.exe tests\test_rgba.tyro --exit:5 --console
+--======================================================================
+
+local out = openfile("test_rgba_out.txt", "w")
+local failures = 0
+
+local function check(desc, ok)
+  if ok then
+    if out then out:write("PASS: " .. desc .. "\n") end
+    println("PASS: " .. desc)
+  else
+    failures = failures + 1
+    if out then out:write("FAIL: " .. desc .. "\n") end
+    println("FAIL: " .. desc)
+  end
+end
+
+println("--- Starting RGBA Global Function Test ---")
+
+-- 1. Test functions exist globally
+check("rgba is registered globally", type(rgba) == "function")
+check("rgb is registered globally", type(rgb) == "function")
+
+-- 2. Test red with full alpha
+local c_red = rgba(255, 0, 0, 255)
+local expected_red = 255 + 0 * 256 + 0 * 65536 + 255 * 16777216
+check("rgba(255, 0, 0, 255) matches expected int32", c_red == expected_red)
+
+-- 3. Test default alpha = 255
+local c_def_a = rgba(255, 0, 0)
+check("rgba(255, 0, 0) defaults alpha to 255", c_def_a == expected_red)
+
+-- 4. Test rgb alias
+local c_rgb = rgb(255, 0, 0)
+check("rgb(255, 0, 0) matches rgba", c_rgb == expected_red)
+
+-- 5. Test arbitrary color components
+local c_custom = rgba(10, 15, 28, 200)
+local expected_custom = 10 + 15 * 256 + 28 * 65536 + 200 * 16777216
+check("rgba(10, 15, 28, 200) matches expected int32", c_custom == expected_custom)
+
+-- 6. Test setting canvas color
+window.show(320, 240)
+canvas.color = rgba(0, 255, 128, 255)
+check("canvas.color accepts rgba result without error", true)
+
+if out then
+  out:write(string.format("\nCompleted with %d failures.\n", failures))
+  out:close()
+end
+
+println("--- RGBA Global Function Test Finished ---")
+assert(failures == 0, "All RGBA checks must pass")
+exit()

@@ -1,0 +1,9 @@
+PASS: rgba is registered globally
+PASS: rgb is registered globally
+PASS: rgba(255, 0, 0, 255) matches expected int32
+PASS: rgba(255, 0, 0) defaults alpha to 255
+PASS: rgb(255, 0, 0) matches rgba
+PASS: rgba(10, 15, 28, 200) matches expected int32
+PASS: canvas.color accepts rgba result without error
+
+Completed with 0 failures.

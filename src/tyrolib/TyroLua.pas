@@ -617,6 +617,7 @@ type
     //local w = textwidth('GAME OVER')
     function TextWidth_func(L: Plua_State): integer; cdecl;
     function TextHeight_func(L: Plua_State): integer; cdecl;
+    function Rgba_func(L: Plua_State): integer; cdecl;
 
     //file access
 
@@ -1743,6 +1744,8 @@ begin
   Lua.State.RegisterGlobal('time', Time_func);
   Lua.State.RegisterGlobal('textwidth', TextWidth_func);
   Lua.State.RegisterGlobal('textheight', TextHeight_func);
+  Lua.State.RegisterGlobal('rgba', Rgba_func);
+  Lua.State.RegisterGlobal('rgb', Rgba_func);
 
   //enter/leave: hold the drawing queue so the commands queued in between are
   //all drawn at one drawing cycle instead of being spread over frames
@@ -3216,6 +3219,31 @@ end;
 function TLuaScript.TextHeight_func(L: Plua_State): integer; cdecl;
 begin
   L.PushInteger(Res.Font.Height);
+  Result := 1;
+end;
+
+function TLuaScript.Rgba_func(L: Plua_State): integer; cdecl;
+var
+  r, g, b, a: Int64;
+  c: Integer;
+begin
+  c := L.ArgsCount;
+  r := 0;
+  g := 0;
+  b := 0;
+  a := 255;
+  if c >= 1 then
+    r := Round(L.ToNumber(1)) and 255;
+  if c >= 2 then
+    g := Round(L.ToNumber(2)) and 255;
+  if c >= 3 then
+    b := Round(L.ToNumber(3)) and 255;
+  if c >= 4 then
+  begin
+    if not L.IsNil(4) then
+      a := Round(L.ToNumber(4)) and 255;
+  end;
+  L.PushInteger(r + g * 256 + b * 65536 + a * 16777216);
   Result := 1;
 end;
 
@@ -6853,6 +6881,8 @@ begin
   FLua.State.RegisterGlobal('time', FScript.TotalTime_func);
   FLua.State.RegisterGlobal('rand', FScript.RandomValue_func);
   FLua.State.RegisterGlobal('println', FScript.Console.PrintLn_func);
+  FLua.State.RegisterGlobal('rgba', FScript.Rgba_func);
+  FLua.State.RegisterGlobal('rgb', FScript.Rgba_func);
 end;
 
 procedure TLuaSpriteScript.BuildColors;

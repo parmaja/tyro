@@ -1,5 +1,5 @@
-// Zonix - Quantum Orb Neon Glow Fragment Shader
-// Applied directly to enemy sprites (Orb, Seeker Drone, Boss Core) for a luminous pulsating aura in radius size x2
+// Zonix - Quantum Orb Dynamic Light & Glow Fragment Shader
+// Generates radiant light in radius size x2 directly around the enemy orb on the GPU
 
 #version 330
 
@@ -21,31 +21,46 @@ void main()
     vec4 col = tex * fragColor * colDiffuse;
 
     float strength = (value > 0.0) ? value : 1.0;
-    float pulse = 0.80 + 0.30 * sin(time * 5.0);
 
-    // 2x radius outer energy aura (inner and outer concentric rings up to 2x distance)
-    vec2 px1 = 2.2 / resolution;
-    vec2 px2 = 4.4 / resolution; // size x2 radius extended light aura
-    vec4 aura = vec4(0.0);
-    aura += texture(texture0, uv + vec2(-px1.x, -px1.y));
-    aura += texture(texture0, uv + vec2( px1.x, -px1.y));
-    aura += texture(texture0, uv + vec2(-px1.x,  px1.y));
-    aura += texture(texture0, uv + vec2( px1.x,  px1.y));
-    aura += texture(texture0, uv + vec2(-px2.x,  0.0));
-    aura += texture(texture0, uv + vec2( px2.x,  0.0));
-    aura += texture(texture0, uv + vec2(0.0, -px2.y));
-    aura += texture(texture0, uv + vec2(0.0,  px2.y));
-    aura /= 8.0;
+    // Vector and pixel distance from center of the sprite quad
+    vec2 fromCenter = (uv - vec2(0.5)) * resolution;
+    float dist = length(fromCenter);
 
-    // Glowing core illumination
-    vec3 brightCore = col.rgb * (1.0 + 0.70 * pulse * strength);
+    // Dynamic light frequency pulse
+    float pulse = 0.82 + 0.28 * sin(time * 5.0 - dist * 0.12);
 
-    // Cyan-electric aura light halo in radius size x2
-    vec3 auraColor = vec3(0.0, 0.90, 1.0);
-    float halo = aura.a * (1.0 - col.a) * 0.98 * pulse * strength;
+    // Orb physical radius is ~9.5 px; light radius extends to 2x size (~21 px)
+    float orbR = 9.5;
+    float lightR = orbR * 2.1;
 
-    vec3 rgb = brightCore + auraColor * halo;
-    float a = clamp(col.a + halo, 0.0, 1.0);
+    // Radial light falloff in radius size x2 around the orb
+    float lightFactor = clamp((lightR - dist) / (lightR - orbR * 0.75), 0.0, 1.0);
+    float lightField = pow(lightFactor, 1.5) * pulse * strength;
 
-    finalColor = vec4(rgb, a);
+    // Light tint matching enemy type
+    vec3 lightTint = vec3(0.0, 0.90, 1.0); // Default electric cyan
+
+    // Adjust light color if tinted (e.g. Red Seeker or Gold Pulsar Boss)
+    if (colDiffuse.r > colDiffuse.b * 1.3)
+    {
+        lightTint = vec3(1.0, 0.22, 0.28); // Crimson red
+    }
+    else if (colDiffuse.r > 0.7 && colDiffuse.g > 0.6)
+    {
+        lightTint = vec3(1.0, 0.82, 0.15); // Golden amber
+    }
+
+    if (col.a > 0.05)
+    {
+        // Inside the physical orb: energetic glowing core
+        vec3 coreGlow = col.rgb * (1.0 + 0.60 * pulse * strength);
+        finalColor = vec4(coreGlow, col.a);
+    }
+    else
+    {
+        // Surrounding the orb: pure GPU fragment shader light in radius size x2
+        float alpha = lightField * 0.70;
+        vec3 lightRgb = lightTint * lightField;
+        finalColor = vec4(lightRgb, alpha);
+    }
 }

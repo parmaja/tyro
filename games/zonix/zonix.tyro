@@ -58,12 +58,6 @@ local function play_sfx(name, vol)
   end
 end
 
--- Helper: RGBA to int32 color
-local function rgba(r, g, b, a)
-  a = a or 255
-  return r + g * 256 + b * 65536 + a * 16777216
-end
-
 -- Game State
 local state = "title" -- "title", "ready", "play", "captured", "dying", "level_clear", "over"
 local level = 1

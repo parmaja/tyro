@@ -119,10 +119,12 @@ def build_cutter():
 # -----------------------------------------------------------------------------
 # 2. Quantum Orb / Internal Bouncer (orb.sprite)
 # -----------------------------------------------------------------------------
+# 48x48 quad with 24x24 centered orb and transparent margin so fragment shader
+# can generate dynamic radial light in radius size x2 around the orb.
 def build_orb():
-    w, h = 24, 24
+    w, h = 48, 48
     frames = []
-    cx, cy = 12, 12
+    cx, cy = 24, 24
     n_frames = 6
     for i in range(n_frames):
         img, dr = new_img(w, h)
@@ -132,7 +134,7 @@ def build_orb():
         # Outer energy ring with rotation
         r_outer = 9
         dr.ellipse([cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer], outline=(0, 180, 240, 180), width=1)
-        
+
         # Rotating electron / energy nodes
         for node in range(3):
             na = angle + node * (2 * math.pi / 3)
@@ -145,15 +147,15 @@ def build_orb():
         dr.ellipse([cx - r_core, cy - r_core, cx + r_core, cy + r_core], fill=(20, 140, 255, 255), outline=LINE_DARK)
         dr.ellipse([cx - 2, cy - 2, cx + 2, cy + 2], fill=WHITE)
         frames.append(img)
-    sheet(frames, 24, 24, "orb", duration=90)
+    sheet(frames, 48, 48, "orb", duration=90)
 
 # -----------------------------------------------------------------------------
 # 3. Fast Red Seeker Drone (fast_orb.sprite)
 # -----------------------------------------------------------------------------
 def build_fast_orb():
-    w, h = 24, 24
+    w, h = 48, 48
     frames = []
-    cx, cy = 12, 12
+    cx, cy = 24, 24
     n_frames = 4
     for i in range(n_frames):
         img, dr = new_img(w, h)
@@ -175,15 +177,15 @@ def build_fast_orb():
         dr.ellipse([cx - 5, cy - 5, cx + 5, cy + 5], fill=NEON_ORANGE, outline=LINE_DARK)
         dr.ellipse([cx - 2, cy - 2, cx + 2, cy + 2], fill=NEON_YELLOW)
         frames.append(img)
-    sheet(frames, 24, 24, "fast_orb", duration=70)
+    sheet(frames, 48, 48, "fast_orb", duration=70)
 
 # -----------------------------------------------------------------------------
 # 4. Boss Pulsar Core (boss_core.sprite)
 # -----------------------------------------------------------------------------
 def build_boss_core():
-    w, h = 32, 32
+    w, h = 64, 64
     frames = []
-    cx, cy = 16, 16
+    cx, cy = 32, 32
     n_frames = 6
     for i in range(n_frames):
         img, dr = new_img(w, h)
@@ -210,7 +212,7 @@ def build_boss_core():
         dr.ellipse([cx - r_core, cy - r_core, cx + r_core, cy + r_core], fill=NEON_PINK, outline=WHITE)
         dr.ellipse([cx - 2, cy - 2, cx + 2, cy + 2], fill=WHITE)
         frames.append(img)
-    sheet(frames, 32, 32, "boss_core", duration=100)
+    sheet(frames, 64, 64, "boss_core", duration=100)
 
 # -----------------------------------------------------------------------------
 # 5. Border Spark / Snarler (spark.sprite)
