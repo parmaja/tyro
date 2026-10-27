@@ -950,24 +950,25 @@ begin
       '{' + #10 +
       '    vec2 uv = fragTexCoord;' + #10 +
       '    vec4 col = texture(texture0, uv) * fragColor * colDiffuse;' + #10 +
-      '    float strength = (value > 0.0) ? value : 1.0;' + #10 +
-      '    float pulse = 0.82 + 0.28 * sin(time * 5.0);' + #10 +
-      '    vec2 px = 2.0 / resolution;' + #10 +
-      '    vec4 aura = vec4(0.0);' + #10 +
-      '    aura += texture(texture0, uv + vec2(-px.x, -px.y));' + #10 +
-      '    aura += texture(texture0, uv + vec2( px.x, -px.y));' + #10 +
-      '    aura += texture(texture0, uv + vec2(-px.x,  px.y));' + #10 +
-      '    aura += texture(texture0, uv + vec2( px.x,  px.y));' + #10 +
-      '    aura += texture(texture0, uv + vec2(-px.x * 1.5, 0.0));' + #10 +
-      '    aura += texture(texture0, uv + vec2( px.x * 1.5, 0.0));' + #10 +
-      '    aura += texture(texture0, uv + vec2(0.0, -px.y * 1.5));' + #10 +
-      '    aura += texture(texture0, uv + vec2(0.0,  px.y * 1.5));' + #10 +
-      '    aura /= 8.0;' + #10 +
-      '    vec3 brightCore = col.rgb * (1.0 + 0.6 * pulse * strength);' + #10 +
-      '    vec3 glowColor = vec3(0.0, 0.9, 1.0);' + #10 +
-      '    float auraAlpha = aura.a * (1.0 - col.a) * 0.9 * pulse * strength;' + #10 +
-      '    finalColor = vec4(brightCore + glowColor * auraAlpha, clamp(col.a + auraAlpha, 0.0, 1.0));' + #10 +
-      '}';
+            '    float strength = (value > 0.0) ? value : 1.0;' + #10 +
+            '    float pulse = 0.82 + 0.28 * sin(time * 5.0);' + #10 +
+            '    vec2 px1 = 2.0 / resolution;' + #10 +
+            '    vec2 px2 = 4.0 / resolution;' + #10 +
+            '    vec4 aura = vec4(0.0);' + #10 +
+            '    aura += texture(texture0, uv + vec2(-px1.x, -px1.y));' + #10 +
+            '    aura += texture(texture0, uv + vec2( px1.x, -px1.y));' + #10 +
+            '    aura += texture(texture0, uv + vec2(-px1.x,  px1.y));' + #10 +
+            '    aura += texture(texture0, uv + vec2( px1.x,  px1.y));' + #10 +
+            '    aura += texture(texture0, uv + vec2(-px2.x, 0.0));' + #10 +
+            '    aura += texture(texture0, uv + vec2( px2.x, 0.0));' + #10 +
+            '    aura += texture(texture0, uv + vec2(0.0, -px2.y));' + #10 +
+            '    aura += texture(texture0, uv + vec2(0.0,  px2.y));' + #10 +
+            '    aura /= 8.0;' + #10 +
+            '    vec3 brightCore = col.rgb * (1.0 + 0.6 * pulse * strength);' + #10 +
+            '    vec3 glowColor = vec3(0.0, 0.9, 1.0);' + #10 +
+            '    float auraAlpha = aura.a * (1.0 - col.a) * 0.95 * pulse * strength;' + #10 +
+            '    finalColor = vec4(brightCore + glowColor * auraAlpha, clamp(col.a + auraAlpha, 0.0, 1.0));' + #10 +
+            '}';
     Sh := RayLib.LoadShaderFromMemory(nil, PUTF8Char(UTF8String(Code)));
   end
   else

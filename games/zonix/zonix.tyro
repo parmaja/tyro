@@ -1062,6 +1062,28 @@ function draw()
     canvas.line(D.FIELD_X, py, D.FIELD_X + D.FIELD_W, py)
   end
 
+  -- 2b. Dynamic Light Casting around Quantum Orbs (Radius Size x2)
+  if state == "play" or state == "ready" or state == "level_clear" then
+    for idx, e in ipairs(enemies) do
+      local pulse = 1.0 + 0.15 * math.sin(trail_pulse * 0.7 + idx)
+      local light_r = math.floor(e.radius * 2.0 * pulse)
+      local inner_col, outer_col
+
+      if e.type == "fast_orb" then
+        inner_col = rgba(255, 50, 70, 130)
+        outer_col = rgba(255, 50, 70, 0)
+      elseif e.type == "boss" then
+        inner_col = rgba(255, 200, 30, 150)
+        outer_col = rgba(255, 200, 30, 0)
+      else
+        inner_col = rgba(0, 230, 255, 130)
+        outer_col = rgba(0, 230, 255, 0)
+      end
+
+      canvas.gradient.circle(math.floor(e.x), math.floor(e.y), light_r, inner_col, outer_col)
+    end
+  end
+
   -- 3. Claimed Land Blocks
   local land_col = rgba(cfg.land_fill[1], cfg.land_fill[2], cfg.land_fill[3], 240)
   local border_col = rgba(cfg.land_border[1], cfg.land_border[2], cfg.land_border[3], 255)
@@ -1170,6 +1192,13 @@ function draw()
     canvas.alpha = 200
     canvas.rectangle(0, 0, W, H, true)
     canvas.alpha = 255
+
+    -- Title showcase 2x light pools under orbs
+    local sc_pulse = 1.0 + 0.15 * math.sin(trail_pulse * 0.7)
+    canvas.gradient.circle(W / 2 - 200, H / 2 + 25, math.floor(22 * sc_pulse), rgba(0, 230, 255, 140), rgba(0, 230, 255, 0))
+    canvas.gradient.circle(W / 2 - 100, H / 2 + 25, math.floor(20 * sc_pulse), rgba(255, 50, 70, 140), rgba(255, 50, 70, 0))
+    canvas.gradient.circle(W / 2,       H / 2 + 25, math.floor(32 * sc_pulse), rgba(255, 200, 30, 160), rgba(255, 200, 30, 0))
+
     center_text(H / 2 - 165, "Z O N I X", colors.cyan)
     center_text(H / 2 - 140, "CYBER TERRITORIAL CONQUEST", colors.yellow)
     center_text(H / 2 - 60, "Cut the grid. Enclose the void. Trap the quantum orbs.", colors.white)

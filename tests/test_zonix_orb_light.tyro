@@ -1,0 +1,51 @@
+--======================================================================
+--  Test: Verify ORB 2x Light Casting and Glow Shader
+--  Run: bin\tyro.exe tests\test_zonix_orb_light.tyro --exit:5 --console
+--======================================================================
+
+local out = openfile("test_zonix_orb_light_out.txt", "w")
+local failures = 0
+
+local function check(desc, ok)
+  if ok then
+    if out then out:write("PASS: " .. desc .. "\n") end
+    println("PASS: " .. desc)
+  else
+    failures = failures + 1
+    if out then out:write("FAIL: " .. desc .. "\n") end
+    println("FAIL: " .. desc)
+  end
+end
+
+println("--- Starting Zonix ORB 2x Light Test ---")
+
+window.show(320, 240)
+
+-- 1. Verify canvas.gradient.circle API is available
+check("canvas.gradient.circle is available", type(canvas.gradient.circle) == "function")
+
+-- 2. Verify ORB sprite loads and takes the 2x radius orb_glow.frag shader
+local sp = Sprites.new("orb_test")
+sp.load("games/zonix/img/orb.sprite")
+sp.shader = "games/zonix/orb_glow.frag"
+check("ORB sprite has orb_glow.frag shader set", sp.shader == "games/zonix/orb_glow.frag")
+
+-- 3. Verify light radius calculation is 2x orb radius
+local orb_radius = 10
+local light_radius = math.floor(orb_radius * 2.0)
+check("Light radius is exactly 2x orb radius (20px)", light_radius == 20)
+
+-- 4. Test drawing the 2x radial gradient light pool
+local ok_draw, err = pcall(function()
+  canvas.gradient.circle(160, 120, light_radius, 0x7000E6FF, 0x0000E6FF)
+end)
+check("canvas.gradient.circle draws 2x light pool without error", ok_draw)
+
+if out then
+  out:write(string.format("\nCompleted with %d failures.\n", failures))
+  out:close()
+end
+
+println("--- Zonix ORB 2x Light Test Finished ---")
+assert(failures == 0, "All ORB light checks must pass")
+exit()

@@ -1,0 +1,6 @@
+PASS: canvas.gradient.circle is available
+PASS: ORB sprite has orb_glow.frag shader set
+PASS: Light radius is exactly 2x orb radius (20px)
+PASS: canvas.gradient.circle draws 2x light pool without error
+
+Completed with 0 failures.
