@@ -1,0 +1,114 @@
+--======================================================================
+--  Test: Comprehensive Verification of Neon Cyber Runner
+--  Tests data constants, physics, sprites, shaders, wavetables, and simulation
+--  Run: bin\tyro.exe tests\test_neonrunner.tyro --exit:5 --console
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_neonrunner_out.txt", "w")
+local failures = 0
+
+local function check(desc, ok)
+  if ok then
+    if out then out:write("PASS: " .. desc .. "\n") end
+    print("PASS: " .. desc)
+  else
+    failures = failures + 1
+    if out then out:write("FAIL: " .. desc .. "\n") end
+    print("FAIL: " .. desc)
+  end
+end
+
+print("--- Starting Neon Cyber Runner Test ---")
+
+-- 1. Load Data Module
+local D = require("neonrunner_data")
+check("neonrunner_data loaded successfully", D ~= nil)
+check("Highway has 4 lanes", #D.LANES == 4)
+check("Lanes are ordered vertically", D.LANES[1] < D.LANES[2] and D.LANES[2] < D.LANES[3] and D.LANES[3] < D.LANES[4])
+check("4 Cyber Zones configured", #D.ZONES == 4)
+check("Zone 1 is NEO-DOWNTOWN", D.ZONES[1].name == "NEO-DOWNTOWN")
+check("Zone 4 is CYBER CORE", D.ZONES[4].name == "CYBER CORE")
+
+-- 2. Test Math & Physics Helpers
+local clamped = D.clamp(150, 0, 100)
+check("clamp(150, 0, 100) == 100", clamped == 100)
+
+local lerped = D.lerp(10, 20, 0.5)
+check("lerp(10, 20, 0.5) == 15", lerped == 15)
+
+local dist_val = D.dist(0, 0, 3, 4)
+check("dist(0, 0, 3, 4) == 5", dist_val == 5)
+
+local aabb_hit = D.check_aabb(10, 10, 20, 20, 25, 25, 20, 20)
+check("check_aabb overlapping returns true", aabb_hit == true)
+
+local aabb_miss = D.check_aabb(10, 10, 10, 10, 50, 50, 10, 10)
+check("check_aabb non-overlapping returns false", aabb_miss == false)
+
+-- 3. Test High Score
+local initial_hi = D.load_high_score()
+check("load_high_score() returns valid number", type(initial_hi) == "number" and initial_hi >= 0)
+
+-- 4. Test Sprite Atlases Loading
+local sp_player = Sprites.new("test_player")
+local player_loaded = pcall(function() sp_player.load("games/neonrunner/img/player.sprite") end)
+check("player.sprite loads without error", player_loaded == true)
+
+local sp_traffic = Sprites.new("test_traffic")
+local traffic_loaded = pcall(function() sp_traffic.load("games/neonrunner/img/traffic.sprite") end)
+check("traffic.sprite loads without error", traffic_loaded == true)
+
+local sp_items = Sprites.new("test_items")
+local items_loaded = pcall(function() sp_items.load("games/neonrunner/img/items.sprite") end)
+check("items.sprite loads without error", items_loaded == true)
+
+local sp_hazards = Sprites.new("test_hazards")
+local hazards_loaded = pcall(function() sp_hazards.load("games/neonrunner/img/hazards.sprite") end)
+check("hazards.sprite loads without error", hazards_loaded == true)
+
+local sp_shield = Sprites.new("test_shield")
+local shield_loaded = pcall(function() sp_shield.load("games/neonrunner/img/shield.sprite") end)
+check("shield.sprite loads without error", shield_loaded == true)
+
+local sp_boom = Sprites.new("test_boom")
+local boom_loaded = pcall(function() sp_boom.load("games/neonrunner/img/boom.sprite") end)
+check("boom.sprite loads without error", boom_loaded == true)
+
+-- 5. Test Shaders Loading
+local canvas_shader_ok = pcall(function()
+  shader.load("games/neonrunner/neonrunner.frag")
+  shader.value = 0.5
+end)
+check("neonrunner.frag shader loads successfully", canvas_shader_ok == true)
+
+local sprite_shader_ok = pcall(function()
+  sp_player.shader = "games/neonrunner/player_turbo.frag"
+  sp_player.shaderValue = 1.0
+end)
+check("player_turbo.frag sprite shader assigns successfully", sprite_shader_ok == true)
+
+-- 6. Test Procedural Wavetables & SFX
+check("sound.play('CyberBass') returns true", sound.play("CyberBass", 110, 150) == true)
+check("sound.play('TurboRev') returns true", sound.play("TurboRev", 220, 200) == true)
+check("sound.play('Laser') returns true", sound.play("Laser", 440, 100) == true)
+check("sound.play('Zap') returns true", sound.play("Zap", 330, 100) == true)
+check("sound.play('Explode') returns true", sound.play("Explode", 120, 150) == true)
+check("sound.play('Sweep') returns true", sound.play("Sweep", 500, 100) == true)
+check("sound.play('Chime') returns true", sound.play("Chime", 660, 100) == true)
+check("sound.play('Boing') returns true", sound.play("Boing", 200, 100) == true)
+
+if out then
+  out:write(string.format("\nCompleted with %d failures.\n", failures))
+  out:close()
+end
+
+print("--- Neon Cyber Runner Test Finished (" .. failures .. " failures) ---")
+local f_count = 0
+while cycle do
+  f_count = f_count + 1
+  if f_count > 15 then
+    exit()
+  end
+end

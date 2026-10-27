@@ -290,6 +290,8 @@ function Laser_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Chime_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Sweep_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Bee_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function CyberBass_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function TurboRev_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
@@ -2254,6 +2256,74 @@ begin
   else if Result < -1.0 then Result := -1.0;
 end;
 
+function CyberBass_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  DecayTau = 0.28;
+var
+  t, BasePhase, SubPhase, FilterCutoff, Harm1, Harm2, Harm3, Sub, Tone, Drive, Env: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  // Downward filter sweep giving punchy analog synth attack
+  FilterCutoff := 1.0 + 3.2 * Exp(-t / 0.065);
+  BasePhase := 2 * Pi * Frequency * t;
+  SubPhase := Pi * Frequency * t; // 1 octave below
+
+  Harm1 := Sin(BasePhase);
+  Harm2 := Sin(BasePhase * 2.0) * 0.45 * (0.3 + 0.7 * FilterCutoff / 4.2);
+  Harm3 := Sin(BasePhase * 3.0) * 0.22 * (0.1 + 0.9 * FilterCutoff / 4.2);
+  Sub := Sin(SubPhase) * 0.40;
+
+  Tone := Harm1 * 0.65 + Harm2 + Harm3 + Sub;
+  // Analog saturation warmth (soft clipping)
+  Drive := Tone * 1.35;
+  if Drive > 1.2 then Drive := 1.2
+  else if Drive < -1.2 then Drive := -1.2;
+  Tone := Drive - (Drive * Drive * Drive) * 0.12;
+
+  // Punchy envelope
+  Env := (1.0 - Exp(-t * 2200.0)) * Exp(-t / DecayTau);
+  Result := Tone * Env * 0.85;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
+function TurboRev_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  RiseTau = 0.09;
+  DecayTau = 0.35;
+var
+  t, InstFreq, Phase, ModPhase, Carrier, Sheen, Turbine, Noise, Env: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  // Upward frequency surge simulating turbine spool-up
+  InstFreq := Frequency * (1.0 + 1.8 * (1.0 - Exp(-t / RiseTau)));
+  Phase := 2 * Pi * InstFreq * t;
+  ModPhase := 2 * Pi * (InstFreq * 1.73) * t;
+
+  // FM synthesis carrier + metallic modulator for jet turbine scream
+  Carrier := Sin(Phase + 1.2 * Sin(ModPhase));
+  Sheen := Sin(Phase * 3.01) * 0.25 + Sin(Phase * 4.97) * 0.15;
+  Turbine := Carrier * 0.65 + Sheen;
+
+  // Airflow roar
+  Noise := HashNoise(Index) * (0.3 + 0.7 * (1.0 - Exp(-t / RiseTau))) * 0.18;
+
+  Env := (1.0 - Exp(-t * 1800.0)) * Exp(-t / DecayTau);
+  Result := (Turbine * 0.82 + Noise) * Env;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
@@ -2303,6 +2373,8 @@ initialization
   Waveforms.Add('Chime', @Chime_Waveform); //harmonic crystalline chime
   Waveforms.Add('Sweep', @Sweep_Waveform); //ascending sci-fi sweep
   Waveforms.Add('Bee', @Bee_Waveform); //insect wing buzz (bee/fly)
+  Waveforms.Add('CyberBass', @CyberBass_Waveform); //fat resonant cyber synth bass
+  Waveforms.Add('TurboRev', @TurboRev_Waveform); //ion turbine / boost rev-up whoosh
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;

@@ -1,0 +1,1041 @@
+--======================================================================
+--  NEON CYBER RUNNER - High-Speed Cyber Arcade Action for Tyro Game Engine
+--======================================================================
+--  Pilot the experimental "Vector-9" hoverbike down the high-speed cyber
+--  arteries of Neo-Metropolis. Dodge oncoming automated traffic, leap
+--  over EMP barricades and laser pylons, gather battery cores to sustain
+--  hypersonic Turbo Boost, and trigger EMP blast waves!
+--
+--  Features:
+--  * Animated multi-frame .sprite atlases (Hoverbike, Traffic, Items, Hazards, Shield, Boom)
+--  * Custom Raylib fragment shaders:
+--      - neonrunner.frag: Full-screen bloom, CRT scanlines, chromatic aberration, vignette
+--      - player_turbo.frag: Emissive cycling aura & speed trail for player hoverbike
+--  * Authentic hybrid audio:
+--      - CyberBass & TurboRev procedural synthesis waveforms
+--      - Multi-voice Synthwave MML soundtrack (Lead + Bass arpeggiator)
+--      - Authentic wavetable SFX (Zap, Laser, Chime, Sweep, Explode)
+--  * 4 Progressive Cyber Zones with shifting neon palettes & highway speeds
+--  * High-score saving, screen shake, arcade HUD, combo streaks, attract mode
+--
+--  Controls:
+--    UP / DOWN (or W / S)    Change lane (Lane 1 to 4)
+--    SPACE / Z               Jump hoverbike over low obstacles
+--    SHIFT / RIGHT / D       Engage Turbo Boost (consumes battery)
+--    X                       Activate EMP Shockwave (destroys on-screen traffic)
+--    P                       Pause / Resume game
+--    M                       Mute / Unmute audio
+--    Q / E                   Adjust shader strength
+--    ESC                     Exit to desktop
+--    Gamepad: D-Pad/Stick to steer, A to Jump, B/Right Trigger to Turbo, X for EMP
+--======================================================================
+
+local D = require("neonrunner_data")
+
+window.show(D.W, D.H)
+local W, H = canvas.width, canvas.height
+
+-- Full-screen post-processing cyber shader
+local shader_val = 0.40
+local shader_ok = pcall(function()
+  shader.load("neonrunner.frag")
+  shader.value = shader_val
+  shader.area = {0, 0, W, H}
+end)
+
+-- Audio & Mute State
+local muted = false
+local highscore = D.load_high_score()
+
+local function sfx(name, f, ms)
+  if muted then return end
+  pcall(function()
+    if f and ms then
+      sound.play(name, f, ms)
+    elseif f then
+      sound.play(name, f)
+    else
+      sound.play(name)
+    end
+  end)
+end
+
+-- -----------------------------------------------------------------------------
+-- Sprite Pools and Management
+-- -----------------------------------------------------------------------------
+local function make_sprite(name, file)
+  local sp = Sprites.new(name)
+  if sp then
+    sp.load(file)
+    sp.layer = 20
+    sp.hide()
+  end
+  return sp
+end
+
+-- Player Hoverbike Sprite
+local player_sp = make_sprite("player", "img/player.sprite")
+if player_sp then
+  player_sp.layer = 30
+  player_sp.x = D.PLAYER_X
+  player_sp.y = D.LANES[2]
+  player_sp.show()
+  pcall(function()
+    player_sp.shader = "player_turbo.frag"
+    player_sp.shaderValue = 0.0
+  end)
+end
+
+-- Energy Shield Sprite attached to player
+local shield_sp = make_sprite("shield", "img/shield.sprite")
+if shield_sp then
+  shield_sp.layer = 35
+  shield_sp.hide()
+end
+
+-- Pools for Traffic, Hazards, Items, and Explosions
+local MAX_TRAFFIC = 8
+local traffic_pool = {}
+for i = 1, MAX_TRAFFIC do
+  local sp = make_sprite("traffic_" .. i, "img/traffic.sprite")
+  if sp then sp.layer = 22 end
+  traffic_pool[i] = {sp = sp, active = false, x = 0, y = 0, lane = 1, speed = 0, kind = 0, w = 64, h = 28}
+end
+
+local MAX_HAZARDS = 6
+local hazard_pool = {}
+for i = 1, MAX_HAZARDS do
+  local sp = make_sprite("hazard_" .. i, "img/hazards.sprite")
+  if sp then sp.layer = 18 end
+  hazard_pool[i] = {sp = sp, active = false, x = 0, y = 0, lane = 1, kind = 0, w = 32, h = 30, jumpable = true}
+end
+
+local MAX_ITEMS = 6
+local item_pool = {}
+for i = 1, MAX_ITEMS do
+  local sp = make_sprite("item_" .. i, "img/items.sprite")
+  if sp then sp.layer = 19 end
+  item_pool[i] = {sp = sp, active = false, x = 0, y = 0, lane = 1, kind = 0, w = 28, h = 28}
+end
+
+local MAX_BOOMS = 8
+local boom_pool = {}
+for i = 1, MAX_BOOMS do
+  local sp = make_sprite("boom_" .. i, "img/boom.sprite")
+  if sp then sp.layer = 40 end
+  boom_pool[i] = {sp = sp, active = false, x = 0, y = 0, timer = 0, frame = 0}
+end
+
+local function spawn_boom(x, y)
+  for _, b in ipairs(boom_pool) do
+    if not b.active then
+      b.active = true
+      b.x = x
+      b.y = y
+      b.timer = 0
+      b.frame = 0
+      if b.sp then
+        b.sp.x = x
+        b.sp.y = y
+        b.sp.frame = 0
+        b.sp.show()
+      end
+      sfx("Explode", 160, 220)
+      break
+    end
+  end
+end
+
+-- Floating Text FX Pool
+local float_texts = {}
+local function add_float_text(x, y, txt, col)
+  float_texts[#float_texts + 1] = {
+    x = x, y = y,
+    text = txt,
+    color = col or colors.white,
+    life = 1.0,
+    max_life = 1.0,
+  }
+end
+
+-- -----------------------------------------------------------------------------
+-- Game Session State
+-- -----------------------------------------------------------------------------
+local STATE_TITLE = 1
+local STATE_PLAYING = 2
+local STATE_GAMEOVER = 3
+local current_state = STATE_TITLE
+
+local state_timer = 0.0
+local attract_mode = false
+local attract_timer = 0.0
+local score = 0
+local distance = 0.0
+local multiplier = 1
+local combo_count = 0
+local combo_timer = 0.0
+local lives = 3
+local emp_charges = 2
+local current_zone_idx = 1
+
+-- Player dynamic variables
+local player_lane = 2
+local target_lane_y = D.LANES[2]
+local current_y = D.LANES[2]
+local current_speed = D.BASE_SPEED
+local turbo_active = false
+local energy = D.MAX_ENERGY
+local is_jumping = false
+local jump_y_offset = 0.0
+local jump_velocity = 0.0
+local shield_timer = 0.0
+local invulnerable_timer = 0.0
+local shake_timer = 0.0
+local shake_power = 0.0
+local emp_shockwave_radius = 0.0
+local emp_active = false
+
+-- Spawning Timers
+local traffic_spawn_timer = 1.2
+local hazard_spawn_timer = 2.0
+local item_spawn_timer = 1.5
+local road_scroll_x = 0.0
+local city_scroll_x = 0.0
+local music_timer = 0.0
+
+-- -----------------------------------------------------------------------------
+-- Audio Music Loop Manager
+-- -----------------------------------------------------------------------------
+local function play_music_step()
+  if muted then return end
+  pcall(function()
+    music.mml(D.MML_THEME_LEAD, D.MML_THEME_BASS)
+  end)
+end
+
+-- -----------------------------------------------------------------------------
+-- Game Initialization & Reset
+-- -----------------------------------------------------------------------------
+local function reset_game(is_attract)
+  score = 0
+  distance = 0.0
+  multiplier = 1
+  combo_count = 0
+  combo_timer = 0.0
+  lives = is_attract and 99 or 3
+  emp_charges = 2
+  current_zone_idx = 1
+  current_speed = D.BASE_SPEED
+  energy = D.MAX_ENERGY
+  turbo_active = false
+  is_jumping = false
+  jump_y_offset = 0.0
+  jump_velocity = 0.0
+  shield_timer = 0.0
+  invulnerable_timer = 0.0
+  emp_active = false
+  emp_shockwave_radius = 0.0
+  player_lane = 2
+  current_y = D.LANES[2]
+  target_lane_y = D.LANES[2]
+
+  traffic_spawn_timer = 1.0
+  hazard_spawn_timer = 2.0
+  item_spawn_timer = 1.5
+
+  -- Clear entity pools
+  for _, t in ipairs(traffic_pool) do
+    t.active = false
+    if t.sp then t.sp.hide() end
+  end
+  for _, h in ipairs(hazard_pool) do
+    h.active = false
+    if h.sp then h.sp.hide() end
+  end
+  for _, it in ipairs(item_pool) do
+    it.active = false
+    if it.sp then it.sp.hide() end
+  end
+  for _, b in ipairs(boom_pool) do
+    b.active = false
+    if b.sp then b.sp.hide() end
+  end
+  float_texts = {}
+
+  if player_sp then
+    player_sp.x = D.PLAYER_X
+    player_sp.y = current_y
+    player_sp.frame = 0
+    player_sp.show()
+  end
+  if shield_sp then shield_sp.hide() end
+
+  play_music_step()
+  music_timer = 15.0
+  sfx("CyberBass", 120, 300)
+end
+
+-- -----------------------------------------------------------------------------
+-- Spawning Functions
+-- -----------------------------------------------------------------------------
+local function spawn_traffic(zone)
+  for _, t in ipairs(traffic_pool) do
+    if not t.active then
+      t.active = true
+      t.lane = math.random(1, D.NUM_LANES)
+      t.x = W + 60
+      t.y = D.LANES[t.lane]
+      t.kind = math.random(0, 3)
+      -- Speed relative to player: travels in same direction but slower (so player catches up)
+      -- or oncoming if lane 1
+      if t.kind == 0 then
+        t.speed = 180 + math.random(0, 80) -- Speeder
+      elseif t.kind == 1 then
+        t.speed = 100 + math.random(0, 50) -- Truck (slow obstacle)
+      elseif t.kind == 2 then
+        t.speed = 220 + math.random(0, 70) -- Drone (swerving)
+      else
+        t.speed = 260 + math.random(0, 90) -- Phantom Racer
+      end
+      if t.sp then
+        t.sp.frame = t.kind
+        t.sp.x = t.x
+        t.sp.y = t.y
+        t.sp.show()
+      end
+      break
+    end
+  end
+end
+
+local function spawn_hazard(zone)
+  for _, h in ipairs(hazard_pool) do
+    if not h.active then
+      h.active = true
+      h.lane = math.random(1, D.NUM_LANES)
+      h.x = W + 50
+      h.y = D.LANES[h.lane]
+      h.kind = math.random(0, 2)
+      h.jumpable = (h.kind == 0 or h.kind == 2) -- Barrier & Spikes can be jumped; Laser Pylon cannot!
+      if h.sp then
+        h.sp.frame = h.kind
+        h.sp.x = h.x
+        h.sp.y = h.y
+        h.sp.show()
+      end
+      break
+    end
+  end
+end
+
+local function spawn_item(zone)
+  for _, it in ipairs(item_pool) do
+    if not it.active then
+      it.active = true
+      it.lane = math.random(1, D.NUM_LANES)
+      it.x = W + 40
+      it.y = D.LANES[it.lane]
+      -- Item variety: 0=Battery, 1=Creds, 2=Shield, 3=EMP, 4=Boost Pad
+      local r = math.random(1, 100)
+      if r <= 38 then
+        it.kind = 0 -- Battery
+      elseif r <= 68 then
+        it.kind = 1 -- Creds
+      elseif r <= 82 then
+        it.kind = 4 -- Boost Pad
+      elseif r <= 92 then
+        it.kind = 2 -- Shield Orb
+      else
+        it.kind = 3 -- EMP Bomb
+      end
+      if it.sp then
+        it.sp.frame = it.kind
+        it.sp.x = it.x
+        it.sp.y = it.y
+        it.sp.show()
+      end
+      break
+    end
+  end
+end
+
+-- -----------------------------------------------------------------------------
+-- EMP Shockwave Activation
+-- -----------------------------------------------------------------------------
+local function trigger_emp()
+  if emp_charges <= 0 or emp_active then return end
+  emp_charges = emp_charges - 1
+  emp_active = true
+  emp_shockwave_radius = 20.0
+  sfx("Zap", 280, 450)
+  shake_timer = 0.4
+  shake_power = 12.0
+  add_float_text(D.PLAYER_X + 20, current_y - 20, "EMP BLAST!", colors.cyan)
+end
+
+-- -----------------------------------------------------------------------------
+-- Update Logic
+-- -----------------------------------------------------------------------------
+local function update(dt)
+  state_timer = state_timer + dt
+  music_timer = music_timer - dt
+  if music_timer <= 0 then
+    play_music_step()
+    music_timer = 15.0
+  end
+
+  -- Global Screen Shake decay
+  if shake_timer > 0 then
+    shake_timer = shake_timer - dt
+  end
+
+  -- Update Boom Explosions
+  for _, b in ipairs(boom_pool) do
+    if b.active then
+      b.timer = b.timer + dt
+      b.frame = math.floor(b.timer * 14)
+      if b.frame >= 6 then
+        b.active = false
+        if b.sp then b.sp.hide() end
+      else
+        if b.sp then b.sp.frame = b.frame end
+      end
+    end
+  end
+
+  -- Update Floating Texts
+  for i = #float_texts, 1, -1 do
+    local f = float_texts[i]
+    f.y = f.y - 35 * dt
+    f.life = f.life - dt
+    if f.life <= 0 then
+      table.remove(float_texts, i)
+    end
+  end
+
+  -- -------------------------------------------------------------------------
+  -- State: Title Screen / Attract Mode
+  -- -------------------------------------------------------------------------
+  if current_state == STATE_TITLE then
+    attract_timer = attract_timer + dt
+    if keyboard.pressed("space") or keyboard.pressed("enter") or gamepad.pressed("a") then
+      current_state = STATE_PLAYING
+      attract_mode = false
+      state_timer = 0
+      reset_game(false)
+      return
+    end
+    -- Auto-cycle attract demo after 8 seconds
+    if not attract_mode and attract_timer > 8.0 then
+      attract_mode = true
+      reset_game(true)
+    end
+    if attract_mode then
+      -- Simple AI driver for attract demonstration
+      if math.random(1, 100) < 3 then
+        player_lane = math.random(1, D.NUM_LANES)
+        target_lane_y = D.LANES[player_lane]
+      end
+      if math.random(1, 120) == 1 and not is_jumping then
+        is_jumping = true
+        jump_velocity = D.JUMP_SPEED
+        sfx("Sweep", 360, 200)
+      end
+    end
+  end
+
+  -- -------------------------------------------------------------------------
+  -- State: Game Over
+  -- -------------------------------------------------------------------------
+  if current_state == STATE_GAMEOVER then
+    if state_timer > 1.2 and (keyboard.pressed("space") or keyboard.pressed("enter") or gamepad.pressed("a")) then
+      current_state = STATE_TITLE
+      attract_mode = false
+      attract_timer = 0
+      state_timer = 0
+    end
+    return
+  end
+
+  -- -------------------------------------------------------------------------
+  -- State: Playing (or Attract Demo)
+  -- -------------------------------------------------------------------------
+  local zone = D.ZONES[current_zone_idx]
+
+  -- Input Handling (Human player)
+  if not attract_mode then
+    -- Lane Switching
+    if (keyboard.pressed("up") or keyboard.pressed("w") or gamepad.pressed("up")) and player_lane > 1 then
+      player_lane = player_lane - 1
+      target_lane_y = D.LANES[player_lane]
+      sfx("Chime", 520, 100)
+    elseif (keyboard.pressed("down") or keyboard.pressed("s") or gamepad.pressed("down")) and player_lane < D.NUM_LANES then
+      player_lane = player_lane + 1
+      target_lane_y = D.LANES[player_lane]
+      sfx("Chime", 440, 100)
+    end
+
+    -- Jumping
+    if (keyboard.pressed("space") or keyboard.pressed("z") or gamepad.pressed("a")) and not is_jumping then
+      is_jumping = true
+      jump_velocity = D.JUMP_SPEED
+      sfx("Sweep", 380, 220)
+    end
+
+    -- Turbo Boost
+    local boost_key = keyboard.down("shift") or keyboard.down("right") or keyboard.down("d") or gamepad.down("b") or gamepad.down("rt") or (gamepad.axis("rtrigger") > 0.3)
+    if boost_key and energy > 5.0 then
+      if not turbo_active then
+        sfx("TurboRev", 220, 350)
+      end
+      turbo_active = true
+      energy = math.max(0.0, energy - D.ENERGY_DRAIN * dt)
+    else
+      turbo_active = false
+      energy = math.min(D.MAX_ENERGY, energy + D.ENERGY_REGEN * dt)
+    end
+
+    -- EMP Shockwave
+    if keyboard.pressed("x") or gamepad.pressed("x") then
+      trigger_emp()
+    end
+  end
+
+  -- Speed & Progression
+  local target_speed = (D.BASE_SPEED + (distance * 0.045)) * zone.speed_scale
+  if turbo_active then
+    target_speed = target_speed * D.TURBO_SPEED_MULT
+  end
+  target_speed = math.min(D.MAX_SPEED * 1.3, target_speed)
+  current_speed = D.lerp(current_speed, target_speed, dt * 4.0)
+
+  local dist_inc = (current_speed * dt) * 0.1
+  distance = distance + dist_inc
+  score = score + math.floor(dist_inc * 4 * multiplier)
+
+  -- Check Zone Progression
+  for i = #D.ZONES, 1, -1 do
+    if distance >= D.ZONES[i].dist then
+      if current_zone_idx ~= i then
+        current_zone_idx = i
+        zone = D.ZONES[i]
+        add_float_text(W / 2, H / 2 - 40, "ZONE: " .. zone.name, colors.gold)
+        sfx("Sweep", 440, 300)
+      end
+      break
+    end
+  end
+
+  -- Road & City Scroll Offsets
+  road_scroll_x = (road_scroll_x + current_speed * dt) % 64
+  city_scroll_x = (city_scroll_x + current_speed * 0.15 * dt) % W
+
+  -- Jump Physics
+  if is_jumping then
+    jump_velocity = jump_velocity + D.GRAVITY * dt
+    jump_y_offset = jump_y_offset + jump_velocity * dt
+    if jump_y_offset >= 0 then
+      jump_y_offset = 0
+      jump_velocity = 0
+      is_jumping = false
+      sfx("Boing", 180, 90)
+    end
+  end
+
+  -- Smooth Lane Switching (Y position)
+  current_y = D.lerp(current_y, target_lane_y, dt * D.LANE_CHANGE_SPEED)
+
+  -- Invulnerability & Shield Timers
+  if invulnerable_timer > 0 then
+    invulnerable_timer = invulnerable_timer - dt
+  end
+  if shield_timer > 0 then
+    shield_timer = shield_timer - dt
+    if shield_timer <= 0 and shield_sp then
+      shield_sp.hide()
+    end
+  end
+
+  -- Update Player Sprite & Shader
+  if player_sp then
+    player_sp.x = D.PLAYER_X
+    player_sp.y = current_y + jump_y_offset
+    -- Choose frame: 0=cruise, 1=up, 2=down, 3=jump, 4=boost, 5=glitch
+    local p_frame = 0
+    if invulnerable_timer > 0 and (math.floor(invulnerable_timer * 12) % 2 == 0) then
+      p_frame = 5 -- Glitch frame
+    elseif is_jumping then
+      p_frame = 3
+    elseif turbo_active then
+      p_frame = 4
+    elseif target_lane_y < current_y - 8 then
+      p_frame = 1 -- Leaning up
+    elseif target_lane_y > current_y + 8 then
+      p_frame = 2 -- Leaning down
+    end
+    player_sp.frame = p_frame
+
+    pcall(function()
+      player_sp.shaderValue = turbo_active and 1.0 or (shield_timer > 0 and 0.6 or 0.0)
+    end)
+  end
+
+  -- Update Shield Sprite position
+  if shield_sp and shield_timer > 0 then
+    shield_sp.x = D.PLAYER_X + 4
+    shield_sp.y = current_y + jump_y_offset
+    shield_sp.frame = (math.floor(state_timer * 12) % 4)
+    shield_sp.show()
+  end
+
+  -- EMP Shockwave Expansion
+  if emp_active then
+    emp_shockwave_radius = emp_shockwave_radius + 900.0 * dt
+    -- Destroy traffic hit by EMP
+    for _, t in ipairs(traffic_pool) do
+      if t.active and D.dist(D.PLAYER_X, current_y, t.x, t.y) < emp_shockwave_radius then
+        t.active = false
+        if t.sp then t.sp.hide() end
+        spawn_boom(t.x, t.y)
+        score = score + 400 * multiplier
+        add_float_text(t.x, t.y - 15, "+400 EMP", colors.cyan)
+      end
+    end
+    if emp_shockwave_radius > W * 1.2 then
+      emp_active = false
+    end
+  end
+
+  -- Spawning Logic
+  traffic_spawn_timer = traffic_spawn_timer - dt
+  if traffic_spawn_timer <= 0 then
+    spawn_traffic(zone)
+    traffic_spawn_timer = (0.7 + math.random() * 1.1) / zone.speed_scale
+  end
+
+  hazard_spawn_timer = hazard_spawn_timer - dt
+  if hazard_spawn_timer <= 0 then
+    spawn_hazard(zone)
+    hazard_spawn_timer = (1.2 + math.random() * 1.6) * zone.hazard_rate
+  end
+
+  item_spawn_timer = item_spawn_timer - dt
+  if item_spawn_timer <= 0 then
+    spawn_item(zone)
+    item_spawn_timer = 1.4 + math.random() * 2.0
+  end
+
+  -- Update Traffic
+  for _, t in ipairs(traffic_pool) do
+    if t.active then
+      -- Moves relative to track scroll: player moves right at current_speed,
+      -- traffic moves at t.speed, so relative dx is (t.speed - current_speed) * dt
+      local rel_vx = t.speed - current_speed
+      t.x = t.x + rel_vx * dt
+      -- Drone swerving motion
+      if t.kind == 2 then
+        t.y = D.LANES[t.lane] + math.sin(state_timer * 4.0 + t.x * 0.02) * 12
+      end
+      if t.sp then
+        t.sp.x = t.x
+        t.sp.y = t.y
+      end
+      -- Despawn offscreen
+      if t.x < -80 or t.x > W + 120 then
+        t.active = false
+        if t.sp then t.sp.hide() end
+      else
+        -- Collision with player
+        local p_box_x = D.PLAYER_X - 22
+        local p_box_y = current_y + jump_y_offset - 12
+        local p_box_w = 44
+        local p_box_h = 24
+        if invulnerable_timer <= 0 and D.check_aabb(p_box_x, p_box_y, p_box_w, p_box_h, t.x - 26, t.y - 12, 52, 24) then
+          -- Collision hit!
+          if shield_timer > 0 then
+            shield_timer = 0
+            invulnerable_timer = 1.2
+            sfx("Zap", 320, 200)
+            spawn_boom(t.x, t.y)
+            t.active = false
+            if t.sp then t.sp.hide() end
+            add_float_text(t.x, t.y - 15, "SHIELD ABSORB", colors.cyan)
+          elseif turbo_active then
+            -- Turbo ramming smashes smaller traffic!
+            spawn_boom(t.x, t.y)
+            t.active = false
+            if t.sp then t.sp.hide() end
+            score = score + 350 * multiplier
+            add_float_text(t.x, t.y - 15, "+350 TURBO RAM", colors.gold)
+            shake_timer = 0.25
+            shake_power = 8.0
+            sfx("Explode", 200, 250)
+          else
+            -- Player hit
+            lives = lives - 1
+            invulnerable_timer = 2.0
+            shake_timer = 0.5
+            shake_power = 15.0
+            spawn_boom(D.PLAYER_X, current_y)
+            sfx("Explode", 110, 300)
+            multiplier = 1
+            combo_count = 0
+            if lives <= 0 then
+              current_state = STATE_GAMEOVER
+              state_timer = 0
+              highscore = D.save_high_score(score)
+            end
+          end
+        end
+      end
+    end
+  end
+
+  -- Update Hazards
+  for _, h in ipairs(hazard_pool) do
+    if h.active then
+      h.x = h.x - current_speed * dt
+      if h.sp then
+        h.sp.x = h.x
+        h.sp.y = h.y
+      end
+      if h.x < -60 then
+        h.active = false
+        if h.sp then h.sp.hide() end
+      else
+        -- Collision with player
+        local p_box_x = D.PLAYER_X - 20
+        local p_box_y = current_y + jump_y_offset - 10
+        local p_box_w = 40
+        local p_box_h = 20
+        -- Can we jump over it?
+        local is_airborne_over = is_jumping and jump_y_offset < -20 and h.jumpable
+        if not is_airborne_over and invulnerable_timer <= 0 and D.check_aabb(p_box_x, p_box_y, p_box_w, p_box_h, h.x - 14, h.y - 14, 28, 28) then
+          if shield_timer > 0 then
+            shield_timer = 0
+            invulnerable_timer = 1.0
+            sfx("Zap", 320, 200)
+            spawn_boom(h.x, h.y)
+            h.active = false
+            if h.sp then h.sp.hide() end
+          else
+            lives = lives - 1
+            invulnerable_timer = 2.0
+            shake_timer = 0.5
+            shake_power = 14.0
+            spawn_boom(D.PLAYER_X, current_y)
+            sfx("Explode", 100, 350)
+            multiplier = 1
+            combo_count = 0
+            if lives <= 0 then
+              current_state = STATE_GAMEOVER
+              state_timer = 0
+              highscore = D.save_high_score(score)
+            end
+          end
+        end
+      end
+    end
+  end
+
+  -- Update Items
+  for _, it in ipairs(item_pool) do
+    if it.active then
+      it.x = it.x - current_speed * dt
+      if it.sp then
+        it.sp.x = it.x
+        it.sp.y = it.y
+      end
+      if it.x < -40 then
+        it.active = false
+        if it.sp then it.sp.hide() end
+      else
+        -- Collect check
+        local p_box_x = D.PLAYER_X - 22
+        local p_box_y = current_y + jump_y_offset - 14
+        local p_box_w = 44
+        local p_box_h = 28
+        if D.check_aabb(p_box_x, p_box_y, p_box_w, p_box_h, it.x - 14, it.y - 14, 28, 28) then
+          it.active = false
+          if it.sp then it.sp.hide() end
+          -- Handle Item Effect
+          if it.kind == 0 then -- Battery
+            energy = math.min(D.MAX_ENERGY, energy + D.ITEM_BATTERY_ENERGY)
+            score = score + D.ITEM_BATTERY_SCORE * multiplier
+            add_float_text(it.x, it.y - 12, "+TURBO CELL", colors.lime)
+            sfx("Chime", 660, 150)
+          elseif it.kind == 1 then -- Creds
+            score = score + D.ITEM_CREDS_SCORE * multiplier
+            combo_count = combo_count + 1
+            if combo_count % 5 == 0 and multiplier < 4 then
+              multiplier = multiplier + 1
+              add_float_text(D.PLAYER_X, current_y - 28, "x" .. multiplier .. " MULTIPLIER!", colors.gold)
+              sfx("Laser", 550, 180)
+            else
+              add_float_text(it.x, it.y - 12, "+300 CREDS", colors.gold)
+              sfx("Chime", 770, 120)
+            end
+          elseif it.kind == 2 then -- Shield Orb
+            shield_timer = 8.0
+            add_float_text(it.x, it.y - 12, "SHIELD ON!", colors.cyan)
+            sfx("Laser", 440, 240)
+          elseif it.kind == 3 then -- EMP Bomb
+            emp_charges = math.min(4, emp_charges + 1)
+            add_float_text(it.x, it.y - 12, "+1 EMP CORE", colors.magenta)
+            sfx("Zap", 330, 200)
+          elseif it.kind == 4 then -- Boost Pad
+            energy = D.MAX_ENERGY
+            current_speed = current_speed + 220
+            score = score + D.ITEM_BOOST_PAD_SCORE * multiplier
+            add_float_text(it.x, it.y - 12, "SUPER BOOST!", colors.yellow)
+            sfx("TurboRev", 280, 400)
+          end
+        end
+      end
+    end
+  end
+end
+
+-- -----------------------------------------------------------------------------
+-- Drawing & Rendering (Canvas Layer)
+-- -----------------------------------------------------------------------------
+local function draw()
+  local zone = D.ZONES[current_zone_idx]
+
+  -- 1. Sky Gradient & Retro Sun
+  canvas.gradient.rectV(0, 0, W, D.HORIZON_Y,
+    rgba(zone.sky_top[1], zone.sky_top[2], zone.sky_top[3], 255),
+    rgba(zone.sky_bot[1], zone.sky_bot[2], zone.sky_bot[3], 255)
+  )
+
+  -- Giant Neon Sun with horizontal blind cuts
+  local sun_cx = W / 2 + 100
+  local sun_cy = D.HORIZON_Y - 30
+  local sun_r = 54
+  canvas.gradient.circle(sun_cx, sun_cy, sun_r, rgba(255, 230, 60, 255), rgba(255, 40, 110, 200))
+  canvas.color = rgba(zone.sky_bot[1], zone.sky_bot[2], zone.sky_bot[3], 255)
+  for sy = sun_cy, sun_cy + sun_r, 6 do
+    canvas.rectangle(sun_cx - sun_r, sy, sun_r * 2, 2, true)
+  end
+
+  -- 2. Parallax Cyber Skyline
+  local bldg_w = 40
+  local seed = 123
+  for bx = -60, W + 60, bldg_w do
+    local scr_bx = (bx - math.floor(city_scroll_x)) % (W + 120) - 60
+    local bh = 45 + ((bx * 7 + 13) % 75)
+    canvas.color = rgba(16, 20, 36, 255)
+    canvas.rectangle(scr_bx, D.HORIZON_Y - bh, bldg_w - 4, bh, true)
+    -- Glowing cyberpunk window dots
+    canvas.color = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 150)
+    for wy = D.HORIZON_Y - bh + 6, D.HORIZON_Y - 6, 12 do
+      canvas.rectangle(scr_bx + 6, wy, 4, 4, true)
+      canvas.rectangle(scr_bx + bldg_w - 14, wy, 4, 4, true)
+    end
+  end
+
+  -- 3. High-Speed Highway Track
+  canvas.color = rgba(zone.road_col[1], zone.road_col[2], zone.road_col[3], 255)
+  canvas.rectangle(0, D.TRACK_TOP - 10, W, H - D.TRACK_TOP + 10, true)
+
+  -- Perspective Perspective Grid / Neon Lane Markers
+  local grid_col = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 200)
+  canvas.color = grid_col
+
+  -- Top and bottom guardrails with glowing barriers
+  canvas.rectangle(0, D.TRACK_TOP - 14, W, 4, true)
+  canvas.rectangle(0, D.TRACK_BOTTOM + 24, W, 4, true)
+
+  -- Longitudinal Lane Separators
+  for i = 1, D.NUM_LANES - 1 do
+    local ly = (D.LANES[i] + D.LANES[i + 1]) / 2
+    canvas.color = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 80)
+    -- Dashed horizontal speed lines
+    for lx = -64, W + 64, 48 do
+      local slx = lx - (math.floor(road_scroll_x * 2.0) % 48)
+      canvas.rectangle(slx, ly - 1, 24, 2, true)
+    end
+  end
+
+  -- Transverse perspective speed dashes
+  canvas.color = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 45)
+  for sx = -64, W + 64, 64 do
+    local slx = sx - math.floor(road_scroll_x)
+    canvas.line(slx, D.TRACK_TOP - 10, slx, D.TRACK_BOTTOM + 24)
+  end
+
+  -- 4. Active EMP Shockwave Ring (Canvas Overlay)
+  if emp_active then
+    canvas.color = rgba(0, 240, 255, math.floor(180 * (1.0 - emp_shockwave_radius / (W * 1.2))))
+    canvas.gradient.circle(D.PLAYER_X, math.floor(current_y), math.floor(emp_shockwave_radius),
+      rgba(0, 240, 255, 0),
+      rgba(0, 240, 255, 140)
+    )
+  end
+
+  -- 5. Floating Text Combat Popups
+  for _, f in ipairs(float_texts) do
+    canvas.color = f.color
+    canvas.alpha = math.floor(255 * (f.life / f.max_life))
+    canvas.text(math.floor(f.x - textwidth(f.text) / 2), math.floor(f.y), f.text)
+  end
+  canvas.alpha = 255
+
+  -- 6. Cyberpunk Arcade HUD Header
+  local hud_y = 10
+  canvas.color = colors.black
+  canvas.alpha = 150
+  canvas.rectangle(0, 0, W, 40, true)
+  canvas.alpha = 255
+
+  -- Score & High Score
+  canvas.color = colors.white
+  canvas.text(18, hud_y, "SCORE: " .. string.format("%07d", score))
+  canvas.color = colors.silver
+  canvas.text(220, hud_y, "HI: " .. string.format("%07d", highscore))
+
+  -- Multiplier & Zone
+  canvas.color = multiplier > 1 and colors.gold or colors.cyan
+  canvas.text(400, hud_y, "MULT: x" .. multiplier)
+  canvas.color = colors.yellow
+  canvas.text(540, hud_y, "ZONE: " .. zone.name)
+
+  -- Speed (KM/H)
+  canvas.color = turbo_active and colors.lime or colors.white
+  canvas.text(760, hud_y, string.format("%03d KM/H", math.floor(current_speed)))
+
+  -- 7. Bottom Status Dashboard (Lives, Turbo Energy Bar, EMP)
+  local dash_y = H - 32
+  canvas.color = colors.black
+  canvas.alpha = 160
+  canvas.rectangle(0, dash_y - 6, W, 38, true)
+  canvas.alpha = 255
+
+  -- Lives Indicator (Mini hoverbikes)
+  canvas.color = colors.silver
+  canvas.text(18, dash_y, "LIVES:")
+  for l = 1, lives do
+    local lx = 80 + (l - 1) * 22
+    canvas.color = colors.cyan
+    canvas.triangle(lx + 14, dash_y + 8, lx + 2, dash_y + 2, lx + 2, dash_y + 14)
+    canvas.color = colors.white
+    canvas.rectangle(lx + 4, dash_y + 6, 3, 4, true)
+  end
+
+  -- Turbo Energy Gauge
+  local bar_x = 240
+  local bar_w = 200
+  local bar_h = 14
+  canvas.color = colors.silver
+  canvas.text(bar_x - 70, dash_y, "TURBO:")
+  canvas.color = colors.darkgray
+  canvas.rectangle(bar_x - 1, dash_y + 1, bar_w + 2, bar_h + 2, true)
+  local fill_w = math.floor(bar_w * (energy / D.MAX_ENERGY))
+  local bar_color = (energy > 25.0) and (turbo_active and colors.yellow or colors.cyan) or colors.red
+  canvas.color = bar_color
+  canvas.rectangle(bar_x, dash_y + 2, fill_w, bar_h, true)
+
+  -- EMP Bomb Charges
+  canvas.color = colors.silver
+  canvas.text(490, dash_y, "EMP:")
+  for e = 1, 4 do
+    local ex = 540 + (e - 1) * 20
+    canvas.color = (e <= emp_charges) and colors.magenta or colors.darkgray
+    canvas.rectangle(ex, dash_y + 2, 12, 12, true)
+    canvas.color = (e <= emp_charges) and colors.white or colors.black
+    canvas.rectangle(ex + 4, dash_y + 6, 4, 4, true)
+  end
+
+  -- Distance Traveled
+  canvas.color = colors.silver
+  canvas.text(670, dash_y, string.format("DIST: %04d M", math.floor(distance)))
+
+  -- Shader & Mute controls help
+  canvas.color = colors.gray
+  canvas.text(820, dash_y, "Q/E SHADER  M MUTE")
+
+  -- 8. State Screens: Title Screen / Attract Mode Overlay
+  if current_state == STATE_TITLE then
+    canvas.color = colors.black
+    canvas.alpha = attract_mode and 70 or 170
+    canvas.rectangle(0, 0, W, H, true)
+    canvas.alpha = 255
+
+    local title_y = H / 2 - 90
+    canvas.color = colors.cyan
+    local t1 = "NEON CYBER RUNNER"
+    canvas.text(math.floor(W / 2 - textwidth(t1) / 2), title_y, t1)
+
+    canvas.color = colors.magenta
+    local t2 = "HIGH-SPEED CYBERNETIC ARTERIAL ASSAULT"
+    canvas.text(math.floor(W / 2 - textwidth(t2) / 2), title_y + 28, t2)
+
+    local pulse = (math.floor(state_timer * 3) % 2 == 0)
+    canvas.color = pulse and colors.yellow or colors.white
+    local t3 = attract_mode and "DEMO MODE - PRESS SPACE / ENTER TO PLAY" or "PRESS SPACE / ENTER TO ENGAGE"
+    canvas.text(math.floor(W / 2 - textwidth(t3) / 2), title_y + 90, t3)
+
+    canvas.color = colors.silver
+    local t4 = "UP/DOWN: STEER   SPACE: JUMP   SHIFT/RIGHT: TURBO   X: EMP"
+    canvas.text(math.floor(W / 2 - textwidth(t4) / 2), title_y + 130, t4)
+  end
+
+  -- 9. State Screen: Game Over
+  if current_state == STATE_GAMEOVER then
+    canvas.color = colors.black
+    canvas.alpha = 190
+    canvas.rectangle(0, 0, W, H, true)
+    canvas.alpha = 255
+
+    canvas.color = colors.red
+    local g1 = "NEURAL LINK SEVERED - SYSTEM CRITICAL"
+    canvas.text(math.floor(W / 2 - textwidth(g1) / 2), H / 2 - 60, g1)
+
+    canvas.color = colors.white
+    local g2 = "FINAL SCORE: " .. string.format("%07d", score) .. "   DISTANCE: " .. string.format("%04d M", math.floor(distance))
+    canvas.text(math.floor(W / 2 - textwidth(g2) / 2), H / 2 - 15, g2)
+
+    if score >= highscore and score > 0 then
+      canvas.color = colors.gold
+      local g3 = "*** NEW RECORD HIGH SCORE ***"
+      canvas.text(math.floor(W / 2 - textwidth(g3) / 2), H / 2 + 15, g3)
+    end
+
+    if state_timer > 1.2 then
+      local pulse = (math.floor(state_timer * 4) % 2 == 0)
+      canvas.color = pulse and colors.cyan or colors.white
+      local g4 = "PRESS SPACE / ENTER TO REBOOT"
+      canvas.text(math.floor(W / 2 - textwidth(g4) / 2), H / 2 + 55, g4)
+    end
+  end
+end
+
+-- -----------------------------------------------------------------------------
+-- Main Cycle Loop
+-- -----------------------------------------------------------------------------
+local last_time = millis()
+
+while cycle do
+  local cur_time = millis()
+  local dt = (cur_time - last_time) / 1000.0
+  last_time = cur_time
+  if dt > 0.05 then dt = 0.05 end -- Clamp delta time spike
+
+  -- Global Hotkeys
+  if keyboard.pressed("m") then
+    muted = not muted
+    if muted then sound.loopStop() else play_music_step() end
+  end
+
+  if keyboard.pressed("q") then
+    shader_val = math.max(0.0, shader_val - 0.1)
+    pcall(function() shader.value = shader_val end)
+  elseif keyboard.pressed("e") then
+    shader_val = math.min(1.0, shader_val + 0.1)
+    pcall(function() shader.value = shader_val end)
+  end
+
+  -- Update simulation & Draw
+  update(dt)
+  draw()
+end

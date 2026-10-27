@@ -1,0 +1,159 @@
+--======================================================================
+--  Neon Cyber Runner - Data & Game System Configuration
+--======================================================================
+
+local M = {}
+
+M.W = 960
+M.H = 540
+
+-- Highway Track Geometry
+M.HORIZON_Y = 200
+M.TRACK_TOP = 210
+M.TRACK_BOTTOM = 490
+M.LANES = {
+  245, -- Lane 1
+  315, -- Lane 2
+  385, -- Lane 3
+  455, -- Lane 4
+}
+M.NUM_LANES = #M.LANES
+
+-- Player Physics & Attributes
+M.PLAYER_X = 140
+M.BASE_SPEED = 420.0       -- Base virtual km/h
+M.MAX_SPEED = 960.0        -- Maximum progression speed
+M.TURBO_SPEED_MULT = 1.75  -- Speed multiplier during Turbo Boost
+M.MAX_ENERGY = 100.0       -- Max Turbo Battery
+M.ENERGY_DRAIN = 22.0      -- Energy consumed per second of boost
+M.ENERGY_REGEN = 3.5       -- Passive trickle recharge per second
+M.JUMP_SPEED = -360.0      -- Initial jump impulse
+M.GRAVITY = 950.0          -- Downward gravity for jump arc
+M.LANE_CHANGE_SPEED = 14.0 -- Interpolation speed between lanes
+
+-- Item & Hazard Constants
+M.ITEM_BATTERY_ENERGY = 35.0
+M.ITEM_BATTERY_SCORE = 200
+M.ITEM_CREDS_SCORE = 300
+M.ITEM_BOOST_PAD_SCORE = 400
+M.ITEM_EMP_SCORE = 500
+
+-- Progressive Cyber Zones
+M.ZONES = {
+  {
+    name = "NEO-DOWNTOWN",
+    dist = 0,
+    sky_top = {12, 10, 28},
+    sky_bot = {40, 15, 60},
+    road_col = {18, 22, 36},
+    grid_col = {0, 240, 255},
+    hazard_rate = 1.6,
+    speed_scale = 1.0,
+  },
+  {
+    name = "MEGATOWER GRID",
+    dist = 1200,
+    sky_top = {20, 14, 34},
+    sky_bot = {80, 25, 40},
+    road_col = {28, 20, 32},
+    grid_col = {255, 220, 40},
+    hazard_rate = 1.3,
+    speed_scale = 1.15,
+  },
+  {
+    name = "ORBIT SKYWAY",
+    dist = 2800,
+    sky_top = {10, 16, 38},
+    sky_bot = {15, 65, 80},
+    road_col = {16, 26, 42},
+    grid_col = {40, 255, 140},
+    hazard_rate = 1.1,
+    speed_scale = 1.30,
+  },
+  {
+    name = "CYBER CORE",
+    dist = 4800,
+    sky_top = {28, 8, 22},
+    sky_bot = {110, 18, 45},
+    road_col = {34, 16, 26},
+    grid_col = {255, 40, 120},
+    hazard_rate = 0.9,
+    speed_scale = 1.45,
+  },
+}
+
+-- Synthwave Driving MML Soundtrack Theme
+M.MML_THEME_LEAD =
+  "t134 l16 o4 r4 " ..
+  "d f a > d f d < a f d f a > d f d < a f " ..
+  "c e g > c e c < g e c e g > c e c < g e " ..
+  "< b- > d f b- > d < b- f d < b- > d f b- > d < b- f d " ..
+  "c e g > c e c < g e < a > c e a > c < a e c " ..
+  "d f a > d f d < a f d f a > d f d < a f " ..
+  "f a > c f a f c < a f a > c f a f c < a " ..
+  "g b- > d g b- g d < b- g b- > d g b- g d < b- " ..
+  "a > c# e a > c# < a e c# < a > c# e a2"
+
+M.MML_THEME_BASS =
+  "t134 l8 o2 " ..
+  "d d d d d d d d c c c c c c c c " ..
+  "b- b- b- b- b- b- b- b- a a a a a a a a " ..
+  "d d d d d d d d f f f f f f f f " ..
+  "g g g g g g g g a a a a a4 r4"
+
+-- High Score File Management
+local HI_FILE = "neonrunner.hi"
+
+function M.load_high_score()
+  local f = openfile(HI_FILE, "r")
+  if not f then return 25000 end
+  local line = f:read("l")
+  f:close()
+  local score = tonumber(line)
+  if score and score > 0 then
+    return score
+  end
+  return 25000
+end
+
+function M.save_high_score(score)
+  local cur = M.load_high_score()
+  if score > cur then
+    local f = openfile(HI_FILE, "w")
+    if f then
+      f:write(tostring(score) .. "\n")
+      f:close()
+    end
+    return score
+  end
+  return cur
+end
+
+-- Helper: Clamp
+function M.clamp(val, min, max)
+  if val < min then return min end
+  if val > max then return max end
+  return val
+end
+
+-- Helper: Smooth Lerp
+function M.lerp(a, b, t)
+  return a + (b - a) * t
+end
+
+-- Helper: Bounding Box AABB Collision Check
+function M.check_aabb(x1, y1, w1, h1, x2, y2, w2, h2)
+  return x1 < x2 + w2 and
+         x1 + w1 > x2 and
+         y1 < y2 + h2 and
+         y1 + h1 > y2
+end
+
+-- Helper: Distance between two points
+function M.dist(x1, y1, x2, y2)
+  local dx = x2 - x1
+  local dy = y2 - y1
+  return math.sqrt(dx * dx + dy * dy)
+end
+
+return M

@@ -1,0 +1,30 @@
+PASS: neonrunner_data loaded successfully
+PASS: Highway has 4 lanes
+PASS: Lanes are ordered vertically
+PASS: 4 Cyber Zones configured
+PASS: Zone 1 is NEO-DOWNTOWN
+PASS: Zone 4 is CYBER CORE
+PASS: clamp(150, 0, 100) == 100
+PASS: lerp(10, 20, 0.5) == 15
+PASS: dist(0, 0, 3, 4) == 5
+PASS: check_aabb overlapping returns true
+PASS: check_aabb non-overlapping returns false
+PASS: load_high_score() returns valid number
+PASS: player.sprite loads without error
+PASS: traffic.sprite loads without error
+PASS: items.sprite loads without error
+PASS: hazards.sprite loads without error
+PASS: shield.sprite loads without error
+PASS: boom.sprite loads without error
+PASS: neonrunner.frag shader loads successfully
+PASS: player_turbo.frag sprite shader assigns successfully
+PASS: sound.play('CyberBass') returns true
+PASS: sound.play('TurboRev') returns true
+PASS: sound.play('Laser') returns true
+PASS: sound.play('Zap') returns true
+PASS: sound.play('Explode') returns true
+PASS: sound.play('Sweep') returns true
+PASS: sound.play('Chime') returns true
+PASS: sound.play('Boing') returns true
+
+Completed with 0 failures.

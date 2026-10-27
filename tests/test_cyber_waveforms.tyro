@@ -1,0 +1,51 @@
+--======================================================================
+--  Test: Verify "CyberBass" and "TurboRev" wavetables in TyroSounds
+--  Run: bin\tyro.exe tests\test_cyber_waveforms.tyro --exit:2
+--======================================================================
+
+window.show(320, 240)
+local out = openfile("test_cyber_waveforms_out.txt", "w")
+local failures = 0
+
+local function check(desc, ok)
+  if ok then
+    if out then out:write("PASS: " .. desc .. "\n") end
+    print("PASS: " .. desc)
+  else
+    failures = failures + 1
+    if out then out:write("FAIL: " .. desc .. "\n") end
+    print("FAIL: " .. desc)
+  end
+end
+
+print("--- Starting Cyber Waveforms Test ---")
+
+-- 1. Test CyberBass waveform existence and playback
+local res_bass = sound.play("CyberBass")
+check("sound.play('CyberBass') returns true", res_bass == true)
+
+-- 2. Test CyberBass with custom frequency and duration
+local res_bass_params = sound.play("CyberBass", 110, 250)
+check("sound.play('CyberBass', 110, 250) returns true", res_bass_params == true)
+
+-- 3. Test TurboRev waveform existence and playback
+local res_rev = sound.play("TurboRev")
+check("sound.play('TurboRev') returns true", res_rev == true)
+
+-- 4. Test TurboRev with custom frequency and duration
+local res_rev_params = sound.play("TurboRev", 220, 300)
+check("sound.play('TurboRev', 220, 300) returns true", res_rev_params == true)
+
+if out then
+  out:write(string.format("\nCompleted with %d failures.\n", failures))
+  out:close()
+end
+
+print("--- Cyber Waveforms Test Finished ---")
+local frames = 0
+while cycle do
+  frames = frames + 1
+  if frames > 10 then
+    exit()
+  end
+end

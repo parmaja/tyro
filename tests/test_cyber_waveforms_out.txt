@@ -1,0 +1,6 @@
+PASS: sound.play('CyberBass') returns true
+PASS: sound.play('CyberBass', 110, 250) returns true
+PASS: sound.play('TurboRev') returns true
+PASS: sound.play('TurboRev', 220, 300) returns true
+
+Completed with 0 failures.
