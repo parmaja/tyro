@@ -82,7 +82,24 @@ type
     AnimSpeed: Single;              // frames-per-second override; 0 = file durations
     Playing: Boolean;               // true while the animation advances each frame
     Looping: Boolean;
+    Shader: TShader;
+    ShaderName: string;
+    ShaderTimeLoc: Integer;
+    ShaderResLoc: Integer;
+    ShaderValueLoc: Integer;
+    ShaderValue: Single;
     constructor Create(AHandle: Integer; ATexture: TTexture2D; const AName: string);
+    destructor Destroy; override;
+  end;
+
+  { TSpriteShaderEntry }
+
+  TSpriteShaderEntry = class
+  public
+    Shader: TShader;
+    TimeLoc: Integer;
+    ResLoc: Integer;
+    ValueLoc: Integer;
     destructor Destroy; override;
   end;
 
@@ -92,9 +109,11 @@ type
   private
     FLock: TmnCriticalSection;
     FItems: TDictionary<Integer, TSprite>;
+    FShaders: TObjectDictionary<string, TSpriteShaderEntry>;
     FNextHandle: Integer;
     function GetCount: integer;
     function GetItems(Index: Integer): TSprite;
+    function AcquireShader(const AShaderName: string): TSpriteShaderEntry;
     // Unloads the GPU textures owned by a sprite (its animation frames and, if
     // distinct, its single frame texture) and resets the sprite to unloaded.
     procedure FreeSpriteFrames(ASprite: TSprite);
@@ -129,6 +148,10 @@ type
     procedure SetTint(Handle: integer; ATint: TColor);
     procedure SetAlpha(Handle: integer; AAlpha: Integer);
     procedure SetLayer(Handle: integer; ALayer: Integer);
+    procedure SetShader(Handle: integer; const AShaderName: string);
+    function GetShader(Handle: integer): string;
+    procedure SetShaderValue(Handle: integer; AValue: single);
+    function GetShaderValue(Handle: integer): single;
     function GetX(Handle: integer): single;
     function GetY(Handle: integer): single;
     function GetAngle(Handle: integer): single;
@@ -289,11 +312,26 @@ begin
   AnimSpeed := 0;
   Playing := False;
   Looping := True;
+  Shader := Default(TShader);
+  ShaderName := '';
+  ShaderTimeLoc := -1;
+  ShaderResLoc := -1;
+  ShaderValueLoc := -1;
+  ShaderValue := 1.0;
 end;
 
 destructor TSprite.Destroy;
 begin
   Script := nil;
+  inherited;
+end;
+
+{ TSpriteShaderEntry }
+
+destructor TSpriteShaderEntry.Destroy;
+begin
+  if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
+    RayLib.UnloadShader(Shader);
   inherited;
 end;
 
@@ -304,12 +342,14 @@ begin
   inherited Create;
   FLock := TmnCriticalSection.Create;
   FItems := TDictionary<Integer, TSprite>.Create;
+  FShaders := TObjectDictionary<string, TSpriteShaderEntry>.Create([doOwnsValues]);
   FNextHandle := 1;
 end;
 
 destructor TSprites.Destroy;
 begin
   Clear;
+  FShaders.Free;
   FItems.Free;
   FLock.Free;
   inherited;
@@ -323,6 +363,7 @@ begin
   //first: they are the sprite's own GPU textures.
   FLock.Enter;
   try
+    FShaders.Clear;
     for Sprite in FItems.Values do
     begin
       FreeSpriteFrames(Sprite);
@@ -841,6 +882,148 @@ begin
   try
     if FItems.TryGetValue(Handle, Sprite) then
       Sprite.Layer := ALayer;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetShader(Handle: integer; const AShaderName: string);
+var
+  Sprite: TSprite;
+  SName: string;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+    begin
+      SName := Trim(AShaderName);
+      if (SName = '') or SameText(SName, 'none') then
+      begin
+        Sprite.Shader := Default(TShader);
+        Sprite.ShaderName := '';
+        Sprite.ShaderTimeLoc := -1;
+        Sprite.ShaderResLoc := -1;
+        Sprite.ShaderValueLoc := -1;
+      end
+      else
+      begin
+        Sprite.ShaderName := SName;
+        // Invalidate compiled shader so DrawAll acquires it with active OpenGL context
+        Sprite.Shader := Default(TShader);
+        Sprite.ShaderTimeLoc := -1;
+        Sprite.ShaderResLoc := -1;
+        Sprite.ShaderValueLoc := -1;
+      end;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.AcquireShader(const AShaderName: string): TSpriteShaderEntry;
+var
+  SName, Code, RealFile: string;
+  Sh: TShader;
+begin
+  Result := nil;
+  SName := Trim(AShaderName);
+  if (SName = '') or SameText(SName, 'none') then
+    Exit;
+
+  if FShaders.TryGetValue(LowerCase(SName), Result) then
+    Exit;
+
+  Sh := Default(TShader);
+  if SameText(SName, 'glow') then
+  begin
+    Code :=
+      '#version 330' + #10 +
+      'in vec2 fragTexCoord;' + #10 +
+      'in vec4 fragColor;' + #10 +
+      'out vec4 finalColor;' + #10 +
+      'uniform sampler2D texture0;' + #10 +
+      'uniform vec4 colDiffuse;' + #10 +
+      'uniform float time;' + #10 +
+      'uniform vec2 resolution;' + #10 +
+      'uniform float value;' + #10 +
+      'void main()' + #10 +
+      '{' + #10 +
+      '    vec2 uv = fragTexCoord;' + #10 +
+      '    vec4 col = texture(texture0, uv) * fragColor * colDiffuse;' + #10 +
+      '    float strength = (value > 0.0) ? value : 1.0;' + #10 +
+      '    float pulse = 0.82 + 0.28 * sin(time * 5.0);' + #10 +
+      '    vec2 px = 2.0 / resolution;' + #10 +
+      '    vec4 aura = vec4(0.0);' + #10 +
+      '    aura += texture(texture0, uv + vec2(-px.x, -px.y));' + #10 +
+      '    aura += texture(texture0, uv + vec2( px.x, -px.y));' + #10 +
+      '    aura += texture(texture0, uv + vec2(-px.x,  px.y));' + #10 +
+      '    aura += texture(texture0, uv + vec2( px.x,  px.y));' + #10 +
+      '    aura += texture(texture0, uv + vec2(-px.x * 1.5, 0.0));' + #10 +
+      '    aura += texture(texture0, uv + vec2( px.x * 1.5, 0.0));' + #10 +
+      '    aura += texture(texture0, uv + vec2(0.0, -px.y * 1.5));' + #10 +
+      '    aura += texture(texture0, uv + vec2(0.0,  px.y * 1.5));' + #10 +
+      '    aura /= 8.0;' + #10 +
+      '    vec3 brightCore = col.rgb * (1.0 + 0.6 * pulse * strength);' + #10 +
+      '    vec3 glowColor = vec3(0.0, 0.9, 1.0);' + #10 +
+      '    float auraAlpha = aura.a * (1.0 - col.a) * 0.9 * pulse * strength;' + #10 +
+      '    finalColor = vec4(brightCore + glowColor * auraAlpha, clamp(col.a + auraAlpha, 0.0, 1.0));' + #10 +
+      '}';
+    Sh := RayLib.LoadShaderFromMemory(nil, PUTF8Char(UTF8String(Code)));
+  end
+  else
+  begin
+    RealFile := Res.GuessFileName(SName, Res.WorkPath);
+    if SysUtils.FileExists(RealFile) then
+      Sh := RayLib.LoadShader(nil, PUTF8Char(UTF8String(RealFile)));
+  end;
+
+  if (Sh.ID <> 0) and RayLib.IsShaderValid(Sh) then
+  begin
+    Result := TSpriteShaderEntry.Create;
+    Result.Shader := Sh;
+    Result.TimeLoc := RayLib.GetShaderLocation(Sh, 'time');
+    Result.ResLoc := RayLib.GetShaderLocation(Sh, 'resolution');
+    Result.ValueLoc := RayLib.GetShaderLocation(Sh, 'value');
+    FShaders.Add(LowerCase(SName), Result);
+  end;
+end;
+
+function TSprites.GetShader(Handle: integer): string;
+var
+  Sprite: TSprite;
+begin
+  Result := '';
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.ShaderName;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetShaderValue(Handle: integer; AValue: single);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.ShaderValue := AValue;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetShaderValue(Handle: integer): single;
+var
+  Sprite: TSprite;
+begin
+  Result := 1.0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.ShaderValue;
   finally
     FLock.Leave;
   end;
@@ -1389,6 +1572,9 @@ var
   W, H: Single;
   sx, sy, sw, sh: Single;
   Src, Dst: TRectangle;
+  vTime, vVal: Single;
+  vRes: TVector2;
+  Entry: TSpriteShaderEntry;
 begin
   FLock.Enter;
   try
@@ -1449,9 +1635,45 @@ begin
       end;
       Src := RectangleOf(sx, sy, sw, sh);
       Dst := RectangleOf(Sprite.X, Sprite.Y, W, H);
+
+      if (Sprite.ShaderName <> '') and ((Sprite.Shader.ID = 0) or not RayLib.IsShaderValid(Sprite.Shader)) then
+      begin
+        Entry := AcquireShader(Sprite.ShaderName);
+        if Entry <> nil then
+        begin
+          Sprite.Shader := Entry.Shader;
+          Sprite.ShaderTimeLoc := Entry.TimeLoc;
+          Sprite.ShaderResLoc := Entry.ResLoc;
+          Sprite.ShaderValueLoc := Entry.ValueLoc;
+        end;
+      end;
+
+      if (Sprite.Shader.ID <> 0) and RayLib.IsShaderValid(Sprite.Shader) then
+      begin
+        RayLib.BeginShaderMode(Sprite.Shader);
+        if Sprite.ShaderTimeLoc >= 0 then
+        begin
+          vTime := RayLib.GetTime();
+          RayLib.SetShaderValue(Sprite.Shader, Sprite.ShaderTimeLoc, @vTime, Ord(SHADER_UNIFORM_FLOAT));
+        end;
+        if Sprite.ShaderResLoc >= 0 then
+        begin
+          vRes := Vector2Of(Sprite.Texture.width, Sprite.Texture.height);
+          RayLib.SetShaderValue(Sprite.Shader, Sprite.ShaderResLoc, @vRes, Ord(SHADER_UNIFORM_VEC2));
+        end;
+        if Sprite.ShaderValueLoc >= 0 then
+        begin
+          vVal := Sprite.ShaderValue;
+          RayLib.SetShaderValue(Sprite.Shader, Sprite.ShaderValueLoc, @vVal, Ord(SHADER_UNIFORM_FLOAT));
+        end;
+      end;
+
       //The tint multiplies the texture; its alpha channel fades the sprite.
       RayLib.DrawTexturePro(Sprite.Texture, Src, Dst,
         Vector2Of(W / 2, H / 2), Sprite.Angle, Sprite.Tint);
+
+      if (Sprite.Shader.ID <> 0) and RayLib.IsShaderValid(Sprite.Shader) then
+        RayLib.EndShaderMode;
     end;
   finally
     FLock.Leave;
@@ -1490,7 +1712,17 @@ var
   Angle: Single;
   sx, sy, sw, sh: Single;
   Src, Dst: TRectangle;
+  AShader: TShader;
+  ShTimeLoc, ShResLoc, ShValueLoc: Integer;
+  ShVal: Single;
+  vTime, vVal: Single;
+  vRes: TVector2;
 begin
+  AShader := Default(TShader);
+  ShTimeLoc := -1;
+  ShResLoc := -1;
+  ShValueLoc := -1;
+  ShVal := 1.0;
   FLock.Enter;
   try
     if (not FItems.TryGetValue(Handle, Sprite)) then
@@ -1505,6 +1737,11 @@ begin
     if AScale >= 0 then
       Sprite.Scale := AScale;
     Texture := Sprite.Texture;
+    AShader := Sprite.Shader;
+    ShTimeLoc := Sprite.ShaderTimeLoc;
+    ShResLoc := Sprite.ShaderResLoc;
+    ShValueLoc := Sprite.ShaderValueLoc;
+    ShVal := Sprite.ShaderValue;
     // Snapshot under the lock; the DrawTexturePro call happens outside it.
     W := Texture.width * Sprite.Scale;
     H := Texture.height * Sprite.Scale;
@@ -1535,8 +1772,32 @@ begin
   finally
     FLock.Leave;
   end;
+
+  if (AShader.ID <> 0) and RayLib.IsShaderValid(AShader) then
+  begin
+    RayLib.BeginShaderMode(AShader);
+    if ShTimeLoc >= 0 then
+    begin
+      vTime := RayLib.GetTime();
+      RayLib.SetShaderValue(AShader, ShTimeLoc, @vTime, Ord(SHADER_UNIFORM_FLOAT));
+    end;
+    if ShResLoc >= 0 then
+    begin
+      vRes := Vector2Of(Texture.width, Texture.height);
+      RayLib.SetShaderValue(AShader, ShResLoc, @vRes, Ord(SHADER_UNIFORM_VEC2));
+    end;
+    if ShValueLoc >= 0 then
+    begin
+      vVal := ShVal;
+      RayLib.SetShaderValue(AShader, ShValueLoc, @vVal, Ord(SHADER_UNIFORM_FLOAT));
+    end;
+  end;
+
   RayLib.DrawTexturePro(Texture, Src, Dst,
     Vector2Of(W / 2, H / 2), Angle, ATint);
+
+  if (AShader.ID <> 0) and RayLib.IsShaderValid(AShader) then
+    RayLib.EndShaderMode;
 end;
 
 { TCreateSpriteObject }

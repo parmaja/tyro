@@ -1,0 +1,6 @@
+PASS: sprite.shader reads back 'glow'
+PASS: sprite.shaderValue reads back 1.5
+PASS: sprite.shader unsets to empty string
+PASS: sprite.shader re-enabled to 'glow'
+
+Completed with 0 failures.

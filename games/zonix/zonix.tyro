@@ -185,6 +185,8 @@ local function show_title_sprites()
     showcase_orb.x = W / 2 - 200
     showcase_orb.y = H / 2 + 25
     showcase_orb.layer = 20
+    showcase_orb.shader = "orb_glow.frag"
+    showcase_orb.shaderValue = 1.2
     showcase_orb.show()
     showcase_orb.play()
   end
@@ -192,6 +194,8 @@ local function show_title_sprites()
     showcase_fast.x = W / 2 - 100
     showcase_fast.y = H / 2 + 25
     showcase_fast.layer = 20
+    showcase_fast.shader = "orb_glow.frag"
+    showcase_fast.shaderValue = 1.3
     showcase_fast.show()
     showcase_fast.play()
   end
@@ -199,6 +203,8 @@ local function show_title_sprites()
     showcase_boss.x = W / 2
     showcase_boss.y = H / 2 + 25
     showcase_boss.layer = 20
+    showcase_boss.shader = "orb_glow.frag"
+    showcase_boss.shaderValue = 1.6
     showcase_boss.show()
     showcase_boss.play()
   end
@@ -318,11 +324,13 @@ local function reset_level_entities()
 
   local cfg = D.LEVELS[level] or D.LEVELS[#D.LEVELS]
 
-  -- Setup regular bouncing orbs
+  -- Setup regular bouncing orbs with glow shader
   for i = 1, cfg.orbs do
     local sp = make_sprite("orb" .. i, "img/orb.sprite")
     if sp then
       sp.layer = 12
+      sp.shader = "orb_glow.frag"
+      sp.shaderValue = 1.1
       sp.show()
       sp.play()
       sp_orbs[#sp_orbs + 1] = sp
@@ -342,11 +350,13 @@ local function reset_level_entities()
     }
   end
 
-  -- Setup fast hunter orbs
+  -- Setup fast hunter orbs with heightened glow shader
   for i = 1, cfg.fast_orbs do
     local sp = make_sprite("fast_orb" .. i, "img/fast_orb.sprite")
     if sp then
       sp.layer = 14
+      sp.shader = "orb_glow.frag"
+      sp.shaderValue = 1.3
       sp.show()
       sp.play()
       sp_fast_orbs[#sp_fast_orbs + 1] = sp
@@ -365,11 +375,13 @@ local function reset_level_entities()
     }
   end
 
-  -- Setup Boss Core if present
+  -- Setup Boss Core with maximum intensity glow shader
   if cfg.boss > 0 then
     local sp = make_sprite("boss_core", "img/boss_core.sprite")
     if sp then
       sp.layer = 16
+      sp.shader = "orb_glow.frag"
+      sp.shaderValue = 1.6
       sp.show()
       sp.play()
       sp_boss = sp

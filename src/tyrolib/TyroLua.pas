@@ -5853,6 +5853,16 @@ begin
       L.PushInteger(Engine.Sprites.GetLayer(handle));
       Result := 1;
     end
+    else if field = 'shader' then
+    begin
+      L.PushString(Engine.Sprites.GetShader(handle));
+      Result := 1;
+    end
+    else if (field = 'shaderValue') or (field = 'shader_value') then
+    begin
+      L.PushNumber(Engine.Sprites.GetShaderValue(handle));
+      Result := 1;
+    end
     else if field = 'width' then
     begin
       L.PushValue(2); // key
@@ -6001,6 +6011,14 @@ begin
         //draw order: lower layers are drawn first (behind)
         Engine.Sprites.SetLayer(handle, L.ToInteger(3));
     end;
+  end
+  else if field = 'shader' then
+  begin
+    Engine.Sprites.SetShader(handle, L.ToString(3));
+  end
+  else if (field = 'shaderValue') or (field = 'shader_value') then
+  begin
+    Engine.Sprites.SetShaderValue(handle, L.ToNumber(3));
   end
   {else if (field = 'width') or (field = 'height') then
   begin

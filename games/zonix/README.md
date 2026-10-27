@@ -70,7 +70,10 @@ Each level features unique target thresholds, enemy compositions, speeds, and cu
 ## Engine Features & Architecture
 
 - **Custom Shaders**:
-  - `zonix.frag`: Fragment shader featuring 4-tap neon bloom, subtle arcade CRT scanlines, gentle edge chromatic aberration, and corner vignette. Strength can be adjusted live in-game with `Q` and `E`.
+  - `zonix.frag`: Full-board post-processing fragment shader featuring 4-tap neon bloom, subtle arcade CRT scanlines, gentle edge chromatic aberration, and corner vignette. Strength can be adjusted live in-game with `Q` and `E`.
+  - `orb_glow.frag`: Dedicated per-sprite neon glow shader applied directly to quantum enemies (`sprite.shader = "orb_glow.frag"` or built-in `sprite.shader = "glow"`). Features 8-tap radial aura scattering, dynamic electric energy pulse, and core intensity boost.
+- **Per-Sprite Shader Engine Support**:
+  - Added `sprite.shader` and `sprite.shaderValue` properties in `TyroSprites.pas` and `TyroLua.pas` allowing any sprite to be rendered with custom fragment shaders and uniform parameters in real time.
 - **Wavetable Sound Synthesis**:
   - Leverages 4 new procedural sound generators added to `TyroSounds.pas`:
     - `Zap`: Electric arc discharge when sparks pop or damage occurs.
