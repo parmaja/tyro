@@ -36,7 +36,7 @@ uses
   {$endif}
   Classes, SysUtils, SyncObjs, StrUtils,
   mnLogs, mnUtils, mnClasses, mnConfigs,
-  RayLib, RayClasses, TyroScripts, TyroSounds,
+  RayLib, RayClasses, TyroInput, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
   TyroSprites, TyroTiles, TyroPhysics, TyroEditors, TyroParallax;
 
@@ -389,9 +389,10 @@ type
 
     //* TextureMode create texture with canvas
     procedure PrepareWindow(AWidth, AHeight: Integer); overload;
-    //* Load optional extra gamepad mappings from 'gamepadmappings.txt' next to
-    //* the executable (SDL/GLFW format). Generic controllers need an entry
-    //* here or every button and axis reads as released.
+    //* Load optional gamepad mappings next to the executable: the SDL
+    //* 'gamecontrollerdb.txt' database first, then 'gamepadmappings.txt' so the
+    //* user's own lines win. Generic controllers need an entry here or every
+    //* button and axis reads as released.
     procedure LoadGamepadMappings;
     procedure ShowWindow(AWidth, AHeight: Integer); overload;
     procedure ShowWindow; overload;
@@ -1627,34 +1628,36 @@ begin
 end;
 
 procedure TTyroEngine.LoadGamepadMappings;
-var
-  aFileName: string;
-  aList: TStringList;
-  s: UTF8String;
-  Count: Integer;
+
+  procedure LoadMappingsFile(const AFileName: string);
+  var
+    aList: TStringList;
+  begin
+    if not SysUtils.FileExists(AFileName) then
+      Exit;
+    aList := TStringList.Create;
+    try
+      aList.LoadFromFile(AFileName);
+      if Trim(aList.Text) = '' then
+        Exit;
+      if TyroInput.SetGamepadMappings(aList.Text) <> 0 then
+        Log.WriteLn('Gamepad: loaded mappings from ' + ExtractFileName(AFileName));
+    finally
+      aList.Free;
+    end;
+  end;
+
 begin
   //Generic controllers have no entry in the library's built-in database, so
-  //every button and axis reads as released. A 'gamepadmappings.txt' next to
-  //the executable (SDL/GLFW format, one mapping per line) fixes that without
-  //touching any script.
+  //every button and axis reads as released. Optional files next to the
+  //executable (SDL/GLFW format, one mapping per line; SDL 2.0.5+ GUIDs are
+  //converted to the form GLFW matches) fix that without touching any script.
   if not Assigned(RayLib.SetGamepadMappings) then
     Exit;
-  aFileName := Res.AppPath + 'gamepadmappings.txt';
-  if not SysUtils.FileExists(aFileName) then
-    Exit;
-  aList := TStringList.Create;
-  try
-    aList.LoadFromFile(aFileName);
-    s := UTF8String(aList.Text);
-    if s <> '' then
-    begin
-      Count := RayLib.SetGamepadMappings(PUTF8Char(PAnsiChar(s)));
-      if Count > 0 then
-        Log.WriteLn('Gamepad: added ' + IntToStr(Count) + ' custom mapping(s)');
-    end;
-  finally
-    aList.Free;
-  end;
+  //Order matters: the SDL database first, the user's own file after it, so a
+  //line in gamepadmappings.txt overrides the database entry for the same GUID.
+  LoadMappingsFile(Res.AppPath + 'gamecontrollerdb.txt');
+  LoadMappingsFile(Res.AppPath + 'gamepadmappings.txt');
 end;
 
 // Reads the icon resources of the executable and returns the biggest PNG image

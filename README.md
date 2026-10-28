@@ -175,7 +175,7 @@ while true do
 | `gamepad.pressed(button [, gamepad])` | True once when a pad button transitions to pressed | `"a"`, `"start"`, `"dpad_up"` |
 | `gamepad.down(button [, gamepad])` | True every frame while a pad button is held | `"a"`, `"lb"`, `"dpad_left"` |
 | `gamepad.axis(axis [, gamepad])` | Axis value in -1..1 (0 without a pad) | `"leftx"`, `"lefty"`, `"rightx"`, `"righty"`, `"ltrigger"`, `"rtrigger"` |
-| `gamepad.mappings(text)` | Add gamepad mappings in SDL/GLFW format; returns how many were added | — |
+| `gamepad.mappings(text)` | Add gamepad mappings in SDL/GLFW format; returns nonzero when accepted | — |
 
 Supported button names: `a`, `b`, `x`, `y`, `lb`, `rb`, `lt`, `rt`, `start`,
 `select`, `guide`, `lstick`, `rstick`, `dpad_up`, `dpad_down`, `dpad_left`,
@@ -184,9 +184,14 @@ Supported button names: `a`, `b`, `x`, `y`, `lb`, `rb`, `lt`, `rt`, `start`,
 Xbox and PlayStation pads work out of the box. Generic or no-name pads often
 have no built-in mapping, so every button and axis reads as released even
 though Windows itself sees the controller. In that case drop a
-`gamepadmappings.txt` next to `tyro.exe`. It holds SDL/GLFW mapping lines
+`gamecontrollerdb.txt` (the SDL controller database) and/or a
+`gamepadmappings.txt` next to `tyro.exe`. They hold SDL/GLFW mapping lines
 (`<GUID>,<name>,<controls>`, one per controller) that are loaded at startup for
-every script; `gamepad.mappings(text)` does the same from a script.
+every script; the database is read first, then `gamepadmappings.txt`, so your
+own lines override it for the same GUID. `gamepad.mappings(text)` does the same
+from a script. A GUID copied from an SDL 2.0.5+ controller database (the form
+that carries a `crc:` field) is converted automatically, so its line can be
+pasted unchanged.
 
 # Files
 

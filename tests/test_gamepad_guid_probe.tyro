@@ -1,0 +1,53 @@
+--======================================================================
+--  test_gamepad_guid_probe.tyro - see which slots a mapping line reaches
+--======================================================================
+--  Raylib/GLFW reports a joystick as available even when no mapping line
+--  matched it, and its trigger axes read -1 in both cases, so triggers do
+--  not tell mapped from unmapped. Sticks do: a mapped pad reports its raw
+--  axis value (a tiny drift is visible), an unmapped one reads exactly 0.
+--
+--  To test one GUID form, give the line an axis that has a distinctive
+--  resting value, e.g.  ...,PROBE,leftx:+a0  ->  a matched mapping reads
+--  -1 while an unmatched pad reads 0.
+--
+--  Run: tyro.exe <abs path>\tests\test_gamepad_guid_probe.tyro
+--  Result: tests\test_gamepad_guid_probe_out.txt
+--======================================================================
+
+window.show(320, 240)
+
+local frames = 0
+
+local function fmt(v)
+  return string.format("%+.6f", v)
+end
+
+function update(dt)
+  frames = frames + 1
+  if frames == 45 then
+    local out = openfile("test_gamepad_guid_probe_out.txt", "w")
+    if out ~= nil then
+      out:write("count => " .. gamepad.count() .. "\n")
+      for g = 0, 3 do
+        out:write("slot " .. g
+                  .. " avail=" .. tostring(gamepad.available(g))
+                  .. " axes=" .. gamepad.axes(g)
+                  .. " name='" .. gamepad.name(g) .. "'\n")
+        out:write("  leftx=" .. fmt(gamepad.axis("leftx", g))
+                  .. " lefty=" .. fmt(gamepad.axis("lefty", g))
+                  .. " rightx=" .. fmt(gamepad.axis("rightx", g))
+                  .. " righty=" .. fmt(gamepad.axis("righty", g))
+                  .. " lt=" .. fmt(gamepad.axis("ltrigger", g))
+                  .. " rt=" .. fmt(gamepad.axis("rtrigger", g)) .. "\n")
+      end
+      out:close()
+    end
+    exit()
+  end
+end
+
+function draw()
+  canvas.clear()
+  canvas.color = colors.white
+  canvas.text(12, 12, "guid probe frame " .. frames)
+end

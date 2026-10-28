@@ -7,9 +7,21 @@
 #
 # Get the GUID from the tool that prints "GLFW: ..." or from SDL's database.
 # Format: <GUID>,<name>,<controls>
+# An optional gamecontrollerdb.txt next to the executable is loaded before this
+# file, so a line here overrides the database entry for the same GUID.
+# A GUID copied from an SDL 2.0.5+ database (the ones that carry a crc: field)
+# works as is: on load its CRC bytes are zeroed to the form GLFW matches.
 
 # GAME BOX JOYSTICK (VID_20BC PID_5560), a Betop-family pad.
-# The two GUID forms below cover both ways GLFW can derive a Windows pad's id;
-# only the one that matches is used, the other line is simply ignored.
+# GLFW's own GUID for this pad is 03000000bc2000006055000000000000; this line
+# is the same device in SDL 2.0.5+ format and is converted when it is loaded.
 030041bdbc2000006055000000000000,GAME BOX JOYSTICK,platform:Windows,crc:bd41,a:b0,b:b1,x:b3,y:b4,back:b10,guide:b12,start:b11,leftstick:b13,rightstick:b14,leftshoulder:b6,rightshoulder:b7,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,rightx:a3,righty:a4,lefttrigger:b8,righttrigger:b9,
-0500000047414d4520424f58204a4f00,GAME BOX JOYSTICK,a:b0,b:b1,back:b8,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,leftshoulder:b4,leftstick:b10,lefttrigger:b6,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b11,righttrigger:b7,rightx:a2,righty:a3,start:b9,x:b2,y:b3,platform:Windows
+
+# The same mapping in GLFW's older GUID spelling (CRC bytes zero). Only one of
+# the two may be active: both end up as the same GLFW GUID and the later line
+# would override the earlier one.
+#03000000bc2000006055000000000000,GAME BOX JOYSTICK,a:b0,b:b1,x:b3,y:b4,back:b10,guide:b12,start:b11,leftstick:b13,rightstick:b14,leftshoulder:b6,rightshoulder:b7,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,rightx:a3,righty:a4,lefttrigger:b8,righttrigger:b9,platform:Windows
+
+# Name-derived fallback GUID. This pad reports a VID/PID (PIDVID) product GUID,
+# so GLFW never uses this form for it; kept here as a reference for pads that do.
+#0500000047414d4520424f58204a4f00,GAME BOX JOYSTICK,a:b0,b:b1,back:b8,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,leftshoulder:b4,leftstick:b10,lefttrigger:b6,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b11,righttrigger:b7,rightx:a2,righty:a3,start:b9,x:b2,y:b3,platform:Windows

@@ -1732,7 +1732,7 @@ begin
   //gamepad: gamepad.pressed("a" [, gamepad]) / gamepad.down / gamepad.released / gamepad.up
   //         gamepad.axis("leftx" [, gamepad]) / gamepad.available([gamepad]) / gamepad.name([gamepad])
   //         gamepad.count() / gamepad.axes([gamepad]) / gamepad.vibrate(l, r [, dur, pad])
-  //         gamepad.mappings(text) adds SDL/GLFW mappings, returns count added
+  //         gamepad.mappings(text) adds SDL/GLFW mappings, returns nonzero on success
   Lua.State.Register('gamepad', 'pressed', Gamepad, Gamepad.Pressed_func);
   Lua.State.Register('gamepad', 'down', Gamepad, Gamepad.Down_func);
   Lua.State.Register('gamepad', 'released', Gamepad, Gamepad.Released_func);
@@ -3242,7 +3242,7 @@ end;
 
 function TLuaGamepad.Mappings_func(L: Plua_State): integer; cdecl;
 begin
-  // gamepad.mappings(text) - add SDL/GLFW gamepad mappings, returns count added
+  // gamepad.mappings(text) - add SDL/GLFW gamepad mappings, nonzero on success
   L.PushNumber(TyroInput.SetGamepadMappings(L.ToString(1)));
   Result := 1;
 end;

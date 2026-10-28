@@ -88,10 +88,12 @@ function GamepadAxis(const AxisName: string; Gamepad: Integer = -1): Single;
 procedure GamepadVibrate(LeftMotor, RightMotor, Duration: Single; Gamepad: Integer = -1);
 
 { Adds gamepad mappings in the SDL/GLFW format RayLib understands, one
-  mapping per line (<GUID>,<name>,<controls>). Most controllers need no
-  mapping, but generic ones do: without an entry every button and axis
-  reads as released. Returns the number of mappings added (0 when the text
-  held no valid mapping or the library does not expose the call). }
+  mapping per line (<GUID>,<name>,<controls>). GUIDs copied from SDL 2.0.5+
+  or SDL3 databases (the form that carries a CRC of the device name) are
+  converted to the form GLFW matches, so both work. Most controllers need no
+  mapping, but generic ones do: without an entry every button and axis reads
+  as released. Returns nonzero when the library accepted the text; raylib
+  reports success, not how many lines matched a connected controller. }
 function SetGamepadMappings(const Mappings: string): Integer;
 
 { --- Frame timing --- }
@@ -483,6 +485,53 @@ begin
   end;
 end;
 
+//SDL 2.0.5+ and SDL3 put a CRC16 of the device name in bytes 2-3 of a Windows
+//GUID; GLFW leaves those bytes zero and so do the mappings it matches. Zeroing
+//the CRC lets a line copied from SDL's controller database work as it is.
+function NormalizeGamepadMappings(const Mappings: string): string;
+var
+  Lines: TStringList;
+  i: Integer;
+  Line: string;
+
+  function IsHexGuid(const S: string): Boolean;
+  var
+    j: Integer;
+  begin
+    Result := Length(S) = 32;
+    if not Result then
+      Exit;
+    for j := 1 to Length(S) do
+      case S[j] of
+        '0'..'9', 'a'..'f', 'A'..'F': ;
+      else
+        Exit(False);
+      end;
+  end;
+
+begin
+  Result := Mappings;
+  if Pos(',', Mappings) = 0 then
+    Exit;
+
+  Lines := TStringList.Create;
+  try
+    Lines.Text := Mappings;
+    for i := 0 to Lines.Count - 1 do
+    begin
+      Line := Lines[i];
+      //Only mapping lines start with a 32 digit GUID; comments and empty
+      //lines are handed to the library untouched.
+      if (Length(Line) > 32) and (Line[33] = ',') and IsHexGuid(Copy(Line, 1, 32)) then
+        if (Copy(Line, 1, 4) = '0300') and (Copy(Line, 5, 4) <> '0000') then
+          Lines[i] := Copy(Line, 1, 4) + '0000' + Copy(Line, 9, MaxInt);
+    end;
+    Result := Lines.Text;
+  finally
+    Lines.Free;
+  end;
+end;
+
 function SetGamepadMappings(const Mappings: string): Integer;
 var
   s: UTF8String;
@@ -490,7 +539,7 @@ begin
   Result := 0;
   if not Assigned(RayLib.SetGamepadMappings) then
     Exit;
-  s := UTF8String(Mappings);
+  s := UTF8String(NormalizeGamepadMappings(Mappings));
   Result := RayLib.SetGamepadMappings(PUTF8Char(PAnsiChar(s)));
 end;
 
