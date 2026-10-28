@@ -11,5 +11,5 @@
 # GAME BOX JOYSTICK (VID_20BC PID_5560), a Betop-family pad.
 # The two GUID forms below cover both ways GLFW can derive a Windows pad's id;
 # only the one that matches is used, the other line is simply ignored.
-03000000bc2000006055000000000000,GAME BOX JOYSTICK,a:b0,b:b1,back:b8,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,leftshoulder:b4,leftstick:b10,lefttrigger:b6,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b11,righttrigger:b7,rightx:a2,righty:a3,start:b9,x:b2,y:b3,platform:Windows
+030041bdbc2000006055000000000000,GAME BOX JOYSTICK,platform:Windows,crc:bd41,a:b0,b:b1,x:b3,y:b4,back:b10,guide:b12,start:b11,leftstick:b13,rightstick:b14,leftshoulder:b6,rightshoulder:b7,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,rightx:a3,righty:a4,lefttrigger:b8,righttrigger:b9,
 0500000047414d4520424f58204a4f00,GAME BOX JOYSTICK,a:b0,b:b1,back:b8,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,leftshoulder:b4,leftstick:b10,lefttrigger:b6,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b11,righttrigger:b7,rightx:a2,righty:a3,start:b9,x:b2,y:b3,platform:Windows

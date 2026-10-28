@@ -1,0 +1,69 @@
+--======================================================================
+--  test_riverraid_gamepad.tyro - tests riverraid joystick/gamepad controls
+--======================================================================
+--  Run: tyro.exe tests\test_riverraid_gamepad.tyro --exit:1
+--  Result: tests\test_riverraid_gamepad_result.txt
+
+window.show(320, 240)
+
+local out = openfile("test_riverraid_gamepad_result.txt", "w")
+local ok = true
+
+local function check(name, value)
+  out:write(name .. " => " .. tostring(value) .. "\n")
+  if not value then ok = false end
+end
+
+-- Verify joystick & gamepad API availability in Tyro engine
+check("gamepad table exists", type(gamepad) == "table")
+check("joystick table exists", type(joystick) == "table")
+check("gamepad.pressed exists", type(gamepad.pressed) == "function")
+check("gamepad.down exists", type(gamepad.down) == "function")
+check("gamepad.released exists", type(gamepad.released) == "function")
+check("gamepad.up exists", type(gamepad.up) == "function")
+check("gamepad.axis exists", type(gamepad.axis) == "function")
+check("gamepad.vibrate exists", type(gamepad.vibrate) == "function")
+check("gamepad.rumble exists", type(gamepad.rumble) == "function")
+check("gamepad.count exists", type(gamepad.count) == "function")
+check("gamepad.axes exists", type(gamepad.axes) == "function")
+
+-- Verify common button and axis names used by River Raid
+check("gamepad.pressed('start')", type(gamepad.pressed("start")) == "boolean")
+check("gamepad.pressed('fire')", type(gamepad.pressed("fire")) == "boolean")
+check("gamepad.pressed('trigger')", type(gamepad.pressed("trigger")) == "boolean")
+check("gamepad.pressed('a')", type(gamepad.pressed("a")) == "boolean")
+check("gamepad.pressed('x')", type(gamepad.pressed("x")) == "boolean")
+check("gamepad.pressed('rb')", type(gamepad.pressed("rb")) == "boolean")
+check("gamepad.pressed('rt')", type(gamepad.pressed("rt")) == "boolean")
+check("gamepad.down('dpad_left')", type(gamepad.down("dpad_left")) == "boolean")
+check("gamepad.down('dpad_right')", type(gamepad.down("dpad_right")) == "boolean")
+check("gamepad.down('left')", type(gamepad.down("left")) == "boolean")
+check("gamepad.down('right')", type(gamepad.down("right")) == "boolean")
+check("gamepad.axis('leftx')", type(gamepad.axis("leftx")) == "number")
+check("gamepad.axis('lefty')", type(gamepad.axis("lefty")) == "number")
+check("gamepad.axis('rightx')", type(gamepad.axis("rightx")) == "number")
+check("gamepad.axis('righty')", type(gamepad.axis("righty")) == "number")
+check("gamepad.axis('rtrigger')", type(gamepad.axis("rtrigger")) == "number")
+check("gamepad.axis('ltrigger')", type(gamepad.axis("ltrigger")) == "number")
+check("gamepad.axis('x')", type(gamepad.axis("x")) == "number")
+check("gamepad.axis('y')", type(gamepad.axis("y")) == "number")
+
+-- Test vibration effect calls used in River Raid
+gamepad.vibrate(0.08, 0.12, 0.06) -- fire
+gamepad.vibrate(0.3, 0.4, 0.12)   -- enemy hit
+gamepad.vibrate(0.6, 0.7, 0.25)   -- bridge destroy
+gamepad.vibrate(0.15, 0.1, 0.1)   -- depot refuel
+gamepad.vibrate(1.0, 1.0, 0.45)   -- crash
+check("vibrate effects executed", true)
+
+-- Test joystick aliases
+check("joystick.axis('x')", type(joystick.axis("x")) == "number")
+check("joystick.axis('y')", type(joystick.axis("y")) == "number")
+check("joystick.pressed('fire')", type(joystick.pressed("fire")) == "boolean")
+
+if ok then
+  out:write("VERDICT => PASS\n")
+else
+  out:write("VERDICT => FAIL\n")
+end
+out:close()

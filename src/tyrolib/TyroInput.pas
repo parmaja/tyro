@@ -37,17 +37,22 @@ function KeyNameToEnum(const Name: string): TKeyboardKey;
 function TryMouseButtonNameToEnum(const Name: string; out Button: TMouseButton): Boolean;
 
 { Maps a human-readable gamepad-button name to a RayLib TGamepadButton.
-  Supported names (Xbox layout, PS names in brackets):
-    "a" [cross] "b" [circle] "x" [square] "y" [triangle]
-    "lb" "rb" "lt" "rt"
-    "start" "select" "guide"
-    "lstick" "rstick"          (stick clicks)
-    "dpad_up" "dpad_down" "dpad_left" "dpad_right"
+  Supported names:
+    "a", "b", "x", "y" (Xbox)
+    "cross", "circle", "square", "triangle" (PlayStation)
+    "lb", "rb", "lt", "rt" / "l1", "r1", "l2", "r2"
+    "start", "select", "guide", "back", "menu", "options", "share", "home"
+    "lstick", "rstick", "l3", "r3" (stick clicks)
+    "dpad_up", "dpad_down", "dpad_left", "dpad_right" (and "up", "down", "left", "right")
+    "fire", "trigger", "button1".."button12"
   Returns False for unknown names rather than silently querying a button. }
 function TryGamepadButtonNameToEnum(const Name: string; out Button: TGamepadButton): Boolean;
 
 { Maps a human-readable gamepad-axis name to a RayLib TGamepadAxis.
-  Supported names: "leftx" "lefty" "rightx" "righty" "ltrigger" "rtrigger"
+  Supported names:
+    "leftx", "lefty", "rightx", "righty"
+    "lx", "ly", "rx", "ry", "x", "y"
+    "ltrigger", "rtrigger", "lt", "rt"
   Returns False for unknown names. }
 function TryGamepadAxisNameToEnum(const Name: string; out Axis: TGamepadAxis): Boolean;
 
@@ -59,15 +64,28 @@ function MouseX: Integer;
 function MouseY: Integer;
 function IsMouseButtonPressed(const ButtonName: string): Boolean;
 
-{ --- Gamepad queries (Gamepad is the player index, 0 by default) --- }
+{ --- Gamepad / Joystick queries (Gamepad: player index 0..3, or -1 for any connected) --- }
 
-function GamepadAvailable(Gamepad: Integer = 0): Boolean;
-{ Controller name, '' when the gamepad is not connected }
-function GamepadName(Gamepad: Integer = 0): string;
-function IsGamepadPressed(const ButtonName: string; Gamepad: Integer = 0): Boolean;
-function IsGamepadDown(const ButtonName: string; Gamepad: Integer = 0): Boolean;
-{ Axis movement -1..1 (triggers 1..-1); 0 for an unknown axis or gamepad }
-function GamepadAxis(const AxisName: string; Gamepad: Integer = 0): Single;
+{ True if specified gamepad is connected, or any gamepad when Gamepad = -1 }
+function GamepadAvailable(Gamepad: Integer = -1): Boolean;
+{ Controller name; when Gamepad = -1, returns name of first connected gamepad, '' when none }
+function GamepadName(Gamepad: Integer = -1): string;
+{ Total number of connected gamepads (0..4) }
+function GamepadCount: Integer;
+{ Number of axes on gamepad (or first connected if Gamepad = -1) }
+function GamepadAxisCount(Gamepad: Integer = -1): Integer;
+{ Button press edge. When Gamepad = -1, checks all connected gamepads }
+function IsGamepadPressed(const ButtonName: string; Gamepad: Integer = -1): Boolean;
+{ Button held down. When Gamepad = -1, checks all connected gamepads }
+function IsGamepadDown(const ButtonName: string; Gamepad: Integer = -1): Boolean;
+{ Button release edge. When Gamepad = -1, checks all connected gamepads }
+function IsGamepadReleased(const ButtonName: string; Gamepad: Integer = -1): Boolean;
+{ Button not down (up). When Gamepad = -1, returns true if not down on any connected gamepad }
+function IsGamepadUp(const ButtonName: string; Gamepad: Integer = -1): Boolean;
+{ Axis movement -1..1 (triggers 1..-1). When Gamepad = -1, checks active movement across connected gamepads }
+function GamepadAxis(const AxisName: string; Gamepad: Integer = -1): Single;
+{ Gamepad vibration (left motor: low freq, right motor: high freq; duration in seconds). Gamepad = -1 vibrates all }
+procedure GamepadVibrate(LeftMotor, RightMotor, Duration: Single; Gamepad: Integer = -1);
 
 { Adds gamepad mappings in the SDL/GLFW format RayLib understands, one
   mapping per line (<GUID>,<name>,<controls>). Most controllers need no
@@ -166,39 +184,39 @@ var
 begin
   n := LowerCase(Trim(Name));
   Result := True;
-  if n = 'a' then
+  if (n = 'a') or (n = 'cross') or (n = 'button1') or (n = 'fire') or (n = 'trigger') then
     Button := GAMEPAD_BUTTON_RIGHT_FACE_DOWN      // Xbox A / PS cross
-  else if n = 'b' then
+  else if (n = 'b') or (n = 'circle') or (n = 'button2') then
     Button := GAMEPAD_BUTTON_RIGHT_FACE_RIGHT     // Xbox B / PS circle
-  else if n = 'x' then
+  else if (n = 'x') or (n = 'square') or (n = 'button3') then
     Button := GAMEPAD_BUTTON_RIGHT_FACE_LEFT      // Xbox X / PS square
-  else if n = 'y' then
+  else if (n = 'y') or (n = 'triangle') or (n = 'button4') then
     Button := GAMEPAD_BUTTON_RIGHT_FACE_UP        // Xbox Y / PS triangle
-  else if n = 'lb' then
+  else if (n = 'lb') or (n = 'l1') or (n = 'button5') then
     Button := GAMEPAD_BUTTON_LEFT_TRIGGER_1
-  else if n = 'rb' then
+  else if (n = 'rb') or (n = 'r1') or (n = 'button6') then
     Button := GAMEPAD_BUTTON_RIGHT_TRIGGER_1
-  else if n = 'lt' then
+  else if (n = 'lt') or (n = 'l2') or (n = 'button7') then
     Button := GAMEPAD_BUTTON_LEFT_TRIGGER_2
-  else if n = 'rt' then
+  else if (n = 'rt') or (n = 'r2') or (n = 'button8') then
     Button := GAMEPAD_BUTTON_RIGHT_TRIGGER_2
-  else if n = 'select' then
+  else if (n = 'select') or (n = 'back') or (n = 'share') or (n = 'button9') then
     Button := GAMEPAD_BUTTON_MIDDLE_LEFT
-  else if n = 'guide' then
+  else if (n = 'guide') or (n = 'home') then
     Button := GAMEPAD_BUTTON_MIDDLE
-  else if n = 'start' then
+  else if (n = 'start') or (n = 'menu') or (n = 'options') or (n = 'button10') then
     Button := GAMEPAD_BUTTON_MIDDLE_RIGHT
-  else if n = 'lstick' then
+  else if (n = 'lstick') or (n = 'l3') or (n = 'lthumb') or (n = 'button11') then
     Button := GAMEPAD_BUTTON_LEFT_THUMB
-  else if n = 'rstick' then
+  else if (n = 'rstick') or (n = 'r3') or (n = 'rthumb') or (n = 'button12') then
     Button := GAMEPAD_BUTTON_RIGHT_THUMB
-  else if n = 'dpad_up' then
+  else if (n = 'dpad_up') or (n = 'dpad-up') or (n = 'up') then
     Button := GAMEPAD_BUTTON_LEFT_FACE_UP
-  else if n = 'dpad_down' then
+  else if (n = 'dpad_down') or (n = 'dpad-down') or (n = 'down') then
     Button := GAMEPAD_BUTTON_LEFT_FACE_DOWN
-  else if n = 'dpad_left' then
+  else if (n = 'dpad_left') or (n = 'dpad-left') or (n = 'left') then
     Button := GAMEPAD_BUTTON_LEFT_FACE_LEFT
-  else if n = 'dpad_right' then
+  else if (n = 'dpad_right') or (n = 'dpad-right') or (n = 'right') then
     Button := GAMEPAD_BUTTON_LEFT_FACE_RIGHT
   else
     Result := False;
@@ -210,17 +228,17 @@ var
 begin
   n := LowerCase(Trim(Name));
   Result := True;
-  if n = 'leftx' then
+  if (n = 'leftx') or (n = 'left_x') or (n = 'lx') or (n = 'x') then
     Axis := GAMEPAD_AXIS_LEFT_X
-  else if n = 'lefty' then
+  else if (n = 'lefty') or (n = 'left_y') or (n = 'ly') or (n = 'y') then
     Axis := GAMEPAD_AXIS_LEFT_Y
-  else if n = 'rightx' then
+  else if (n = 'rightx') or (n = 'right_x') or (n = 'rx') then
     Axis := GAMEPAD_AXIS_RIGHT_X
-  else if n = 'righty' then
+  else if (n = 'righty') or (n = 'right_y') or (n = 'ry') then
     Axis := GAMEPAD_AXIS_RIGHT_Y
-  else if n = 'ltrigger' then
+  else if (n = 'ltrigger') or (n = 'left_trigger') or (n = 'lt') or (n = 'l2') then
     Axis := GAMEPAD_AXIS_LEFT_TRIGGER
-  else if n = 'rtrigger' then
+  else if (n = 'rtrigger') or (n = 'right_trigger') or (n = 'rt') or (n = 'r2') then
     Axis := GAMEPAD_AXIS_RIGHT_TRIGGER
   else
     Result := False;
@@ -255,46 +273,214 @@ begin
 end;
 
 function GamepadAvailable(Gamepad: Integer): Boolean;
+var
+  i: Integer;
 begin
-  Result := RayLib.IsGamepadAvailable(Gamepad);
+  if Gamepad >= 0 then
+    Result := RayLib.IsGamepadAvailable(Gamepad)
+  else
+  begin
+    Result := False;
+    for i := 0 to 3 do
+    begin
+      if RayLib.IsGamepadAvailable(i) then
+        Exit(True);
+    end;
+  end;
 end;
 
 function GamepadName(Gamepad: Integer): string;
 var
   p: PUTF8Char;
+  i: Integer;
 begin
-  if not RayLib.IsGamepadAvailable(Gamepad) then
-    Exit('');
-  p := RayLib.GetGamepadName(Gamepad);
-  if p = nil then
-    Result := ''
+  Result := '';
+  if Gamepad >= 0 then
+  begin
+    if RayLib.IsGamepadAvailable(Gamepad) then
+    begin
+      p := RayLib.GetGamepadName(Gamepad);
+      if p <> nil then
+        Result := string(p);
+    end;
+  end
   else
-    Result := string(p);
+  begin
+    for i := 0 to 3 do
+    begin
+      if RayLib.IsGamepadAvailable(i) then
+      begin
+        p := RayLib.GetGamepadName(i);
+        if p <> nil then
+          Exit(string(p));
+      end;
+    end;
+  end;
+end;
+
+function GamepadCount: Integer;
+var
+  i: Integer;
+begin
+  Result := 0;
+  for i := 0 to 3 do
+  begin
+    if RayLib.IsGamepadAvailable(i) then
+      Inc(Result);
+  end;
+end;
+
+function GamepadAxisCount(Gamepad: Integer): Integer;
+var
+  i: Integer;
+begin
+  if Gamepad >= 0 then
+  begin
+    if RayLib.IsGamepadAvailable(Gamepad) then
+      Result := RayLib.GetGamepadAxisCount(Gamepad)
+    else
+      Result := 0;
+  end
+  else
+  begin
+    for i := 0 to 3 do
+    begin
+      if RayLib.IsGamepadAvailable(i) then
+        Exit(RayLib.GetGamepadAxisCount(i));
+    end;
+    Result := 0;
+  end;
 end;
 
 function IsGamepadPressed(const ButtonName: string; Gamepad: Integer): Boolean;
 var
   Button: TGamepadButton;
+  i: Integer;
 begin
-  Result := TryGamepadButtonNameToEnum(ButtonName, Button) and
-    RayLib.IsGamepadButtonPressed(Gamepad, Ord(Button));
+  if not TryGamepadButtonNameToEnum(ButtonName, Button) then
+    Exit(False);
+  if Gamepad >= 0 then
+    Result := RayLib.IsGamepadAvailable(Gamepad) and RayLib.IsGamepadButtonPressed(Gamepad, Ord(Button))
+  else
+  begin
+    Result := False;
+    for i := 0 to 3 do
+    begin
+      if RayLib.IsGamepadAvailable(i) and RayLib.IsGamepadButtonPressed(i, Ord(Button)) then
+        Exit(True);
+    end;
+  end;
 end;
 
 function IsGamepadDown(const ButtonName: string; Gamepad: Integer): Boolean;
 var
   Button: TGamepadButton;
+  i: Integer;
 begin
-  Result := TryGamepadButtonNameToEnum(ButtonName, Button) and
-    RayLib.IsGamepadButtonDown(Gamepad, Ord(Button));
+  if not TryGamepadButtonNameToEnum(ButtonName, Button) then
+    Exit(False);
+  if Gamepad >= 0 then
+    Result := RayLib.IsGamepadAvailable(Gamepad) and RayLib.IsGamepadButtonDown(Gamepad, Ord(Button))
+  else
+  begin
+    Result := False;
+    for i := 0 to 3 do
+    begin
+      if RayLib.IsGamepadAvailable(i) and RayLib.IsGamepadButtonDown(i, Ord(Button)) then
+        Exit(True);
+    end;
+  end;
+end;
+
+function IsGamepadReleased(const ButtonName: string; Gamepad: Integer): Boolean;
+var
+  Button: TGamepadButton;
+  i: Integer;
+begin
+  if not TryGamepadButtonNameToEnum(ButtonName, Button) then
+    Exit(False);
+  if Gamepad >= 0 then
+    Result := RayLib.IsGamepadAvailable(Gamepad) and RayLib.IsGamepadButtonReleased(Gamepad, Ord(Button))
+  else
+  begin
+    Result := False;
+    for i := 0 to 3 do
+    begin
+      if RayLib.IsGamepadAvailable(i) and RayLib.IsGamepadButtonReleased(i, Ord(Button)) then
+        Exit(True);
+    end;
+  end;
+end;
+
+function IsGamepadUp(const ButtonName: string; Gamepad: Integer): Boolean;
+var
+  Button: TGamepadButton;
+  i: Integer;
+begin
+  if not TryGamepadButtonNameToEnum(ButtonName, Button) then
+    Exit(False);
+  if Gamepad >= 0 then
+    Result := RayLib.IsGamepadAvailable(Gamepad) and RayLib.IsGamepadButtonUp(Gamepad, Ord(Button))
+  else
+  begin
+    Result := True;
+    for i := 0 to 3 do
+    begin
+      if RayLib.IsGamepadAvailable(i) and not RayLib.IsGamepadButtonUp(i, Ord(Button)) then
+        Exit(False);
+    end;
+  end;
 end;
 
 function GamepadAxis(const AxisName: string; Gamepad: Integer): Single;
 var
   Axis: TGamepadAxis;
+  i: Integer;
+  val, maxVal: Single;
 begin
   if not TryGamepadAxisNameToEnum(AxisName, Axis) then
     Exit(0);
-  Result := RayLib.GetGamepadAxisMovement(Gamepad, Ord(Axis));
+  if Gamepad >= 0 then
+  begin
+    if not RayLib.IsGamepadAvailable(Gamepad) then
+      Exit(0);
+    Result := RayLib.GetGamepadAxisMovement(Gamepad, Ord(Axis));
+  end
+  else
+  begin
+    maxVal := 0;
+    for i := 0 to 3 do
+    begin
+      if RayLib.IsGamepadAvailable(i) then
+      begin
+        val := RayLib.GetGamepadAxisMovement(i, Ord(Axis));
+        if Abs(val) > Abs(maxVal) then
+          maxVal := val;
+      end;
+    end;
+    Result := maxVal;
+  end;
+end;
+
+procedure GamepadVibrate(LeftMotor, RightMotor, Duration: Single; Gamepad: Integer);
+var
+  i: Integer;
+begin
+  if not Assigned(RayLib.SetGamepadVibration) then
+    Exit;
+  if Gamepad >= 0 then
+  begin
+    if RayLib.IsGamepadAvailable(Gamepad) then
+      RayLib.SetGamepadVibration(Gamepad, LeftMotor, RightMotor, Duration);
+  end
+  else
+  begin
+    for i := 0 to 3 do
+    begin
+      if RayLib.IsGamepadAvailable(i) then
+        RayLib.SetGamepadVibration(i, LeftMotor, RightMotor, Duration);
+    end;
+  end;
 end;
 
 function SetGamepadMappings(const Mappings: string): Integer;

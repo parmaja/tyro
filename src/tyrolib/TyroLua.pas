@@ -555,9 +555,14 @@ type
   public
     function Pressed_func(L: Plua_State): integer; cdecl;
     function Down_func(L: Plua_State): integer; cdecl;
+    function Released_func(L: Plua_State): integer; cdecl;
+    function Up_func(L: Plua_State): integer; cdecl;
     function Axis_func(L: Plua_State): integer; cdecl;
     function Available_func(L: Plua_State): integer; cdecl;
     function Name_func(L: Plua_State): integer; cdecl;
+    function Count_func(L: Plua_State): integer; cdecl;
+    function Axes_func(L: Plua_State): integer; cdecl;
+    function Vibrate_func(L: Plua_State): integer; cdecl;
     function Mappings_func(L: Plua_State): integer; cdecl;
   end;
 
@@ -1724,16 +1729,38 @@ begin
   Lua.State.Register('keyboard', 'pressed', Keyboard, Keyboard.Pressed_func);
   Lua.State.Register('keyboard', 'down', Keyboard, Keyboard.Down_func);
   Lua.State.Register('keyboard', Keyboard); //Should be last one
-  //gamepad: gamepad.pressed("a" [, gamepad=0]) / gamepad.down / gamepad.axis
-  //         gamepad.available([gamepad]) / gamepad.name([gamepad])
+  //gamepad: gamepad.pressed("a" [, gamepad]) / gamepad.down / gamepad.released / gamepad.up
+  //         gamepad.axis("leftx" [, gamepad]) / gamepad.available([gamepad]) / gamepad.name([gamepad])
+  //         gamepad.count() / gamepad.axes([gamepad]) / gamepad.vibrate(l, r [, dur, pad])
   //         gamepad.mappings(text) adds SDL/GLFW mappings, returns count added
   Lua.State.Register('gamepad', 'pressed', Gamepad, Gamepad.Pressed_func);
   Lua.State.Register('gamepad', 'down', Gamepad, Gamepad.Down_func);
+  Lua.State.Register('gamepad', 'released', Gamepad, Gamepad.Released_func);
+  Lua.State.Register('gamepad', 'up', Gamepad, Gamepad.Up_func);
   Lua.State.Register('gamepad', 'axis', Gamepad, Gamepad.Axis_func);
   Lua.State.Register('gamepad', 'available', Gamepad, Gamepad.Available_func);
   Lua.State.Register('gamepad', 'name', Gamepad, Gamepad.Name_func);
+  Lua.State.Register('gamepad', 'count', Gamepad, Gamepad.Count_func);
+  Lua.State.Register('gamepad', 'axes', Gamepad, Gamepad.Axes_func);
+  Lua.State.Register('gamepad', 'vibrate', Gamepad, Gamepad.Vibrate_func);
+  Lua.State.Register('gamepad', 'rumble', Gamepad, Gamepad.Vibrate_func);
   Lua.State.Register('gamepad', 'mappings', Gamepad, Gamepad.Mappings_func);
   Lua.State.Register('gamepad', Gamepad); //Should be last one
+
+  //joystick: alias to gamepad for joystick/flight stick/gamepad controls
+  Lua.State.Register('joystick', 'pressed', Gamepad, Gamepad.Pressed_func);
+  Lua.State.Register('joystick', 'down', Gamepad, Gamepad.Down_func);
+  Lua.State.Register('joystick', 'released', Gamepad, Gamepad.Released_func);
+  Lua.State.Register('joystick', 'up', Gamepad, Gamepad.Up_func);
+  Lua.State.Register('joystick', 'axis', Gamepad, Gamepad.Axis_func);
+  Lua.State.Register('joystick', 'available', Gamepad, Gamepad.Available_func);
+  Lua.State.Register('joystick', 'name', Gamepad, Gamepad.Name_func);
+  Lua.State.Register('joystick', 'count', Gamepad, Gamepad.Count_func);
+  Lua.State.Register('joystick', 'axes', Gamepad, Gamepad.Axes_func);
+  Lua.State.Register('joystick', 'vibrate', Gamepad, Gamepad.Vibrate_func);
+  Lua.State.Register('joystick', 'rumble', Gamepad, Gamepad.Vibrate_func);
+  Lua.State.Register('joystick', 'mappings', Gamepad, Gamepad.Mappings_func);
+  Lua.State.Register('joystick', Gamepad); //Should be last one
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
   Lua.State.RegisterGlobal('millis', Millis_func);
@@ -3083,9 +3110,9 @@ var
   s: string;
   Pad: Integer;
 begin
-  // gamepad.pressed("a" [, gamepad=0]) - true once on the press edge
+  // gamepad.pressed("a" [, gamepad]) - true once on the press edge (any pad if omitted)
   s := L.ToString(1);
-  Pad := 0;
+  Pad := -1;
   if L.ArgsCount >= 2 then
     Pad := round(L.ToNumber(2));
   L.PushBoolean(TyroInput.IsGamepadPressed(s, Pad));
@@ -3097,12 +3124,40 @@ var
   s: string;
   Pad: Integer;
 begin
-  // gamepad.down("a" [, gamepad=0]) - true every frame while held
+  // gamepad.down("a" [, gamepad]) - true every frame while held (any pad if omitted)
   s := L.ToString(1);
-  Pad := 0;
+  Pad := -1;
   if L.ArgsCount >= 2 then
     Pad := round(L.ToNumber(2));
   L.PushBoolean(TyroInput.IsGamepadDown(s, Pad));
+  Result := 1;
+end;
+
+function TLuaGamepad.Released_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+  Pad: Integer;
+begin
+  // gamepad.released("a" [, gamepad]) - true once on the release edge (any pad if omitted)
+  s := L.ToString(1);
+  Pad := -1;
+  if L.ArgsCount >= 2 then
+    Pad := round(L.ToNumber(2));
+  L.PushBoolean(TyroInput.IsGamepadReleased(s, Pad));
+  Result := 1;
+end;
+
+function TLuaGamepad.Up_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+  Pad: Integer;
+begin
+  // gamepad.up("a" [, gamepad]) - true when button is not held
+  s := L.ToString(1);
+  Pad := -1;
+  if L.ArgsCount >= 2 then
+    Pad := round(L.ToNumber(2));
+  L.PushBoolean(TyroInput.IsGamepadUp(s, Pad));
   Result := 1;
 end;
 
@@ -3111,9 +3166,9 @@ var
   s: string;
   Pad: Integer;
 begin
-  // gamepad.axis("leftx" [, gamepad=0]) - axis movement -1..1 (0 if absent)
+  // gamepad.axis("leftx" [, gamepad]) - axis movement -1..1 (0 if absent, active pad if omitted)
   s := L.ToString(1);
-  Pad := 0;
+  Pad := -1;
   if L.ArgsCount >= 2 then
     Pad := round(L.ToNumber(2));
   L.PushNumber(TyroInput.GamepadAxis(s, Pad));
@@ -3124,8 +3179,8 @@ function TLuaGamepad.Available_func(L: Plua_State): integer; cdecl;
 var
   Pad: Integer;
 begin
-  // gamepad.available([gamepad=0])
-  Pad := 0;
+  // gamepad.available([gamepad]) - true if connected (any gamepad if omitted)
+  Pad := -1;
   if L.ArgsCount >= 1 then
     Pad := round(L.ToNumber(1));
   L.PushBoolean(TyroInput.GamepadAvailable(Pad));
@@ -3136,12 +3191,53 @@ function TLuaGamepad.Name_func(L: Plua_State): integer; cdecl;
 var
   Pad: Integer;
 begin
-  // gamepad.name([gamepad=0]) - controller name, '' when not connected
-  Pad := 0;
+  // gamepad.name([gamepad]) - controller name, '' when not connected
+  Pad := -1;
   if L.ArgsCount >= 1 then
     Pad := round(L.ToNumber(1));
   L.PushString(TyroInput.GamepadName(Pad));
   Result := 1;
+end;
+
+function TLuaGamepad.Count_func(L: Plua_State): integer; cdecl;
+begin
+  // gamepad.count() - number of connected gamepads (0..4)
+  L.PushInteger(TyroInput.GamepadCount);
+  Result := 1;
+end;
+
+function TLuaGamepad.Axes_func(L: Plua_State): integer; cdecl;
+var
+  Pad: Integer;
+begin
+  // gamepad.axes([gamepad]) - number of axes
+  Pad := -1;
+  if L.ArgsCount >= 1 then
+    Pad := round(L.ToNumber(1));
+  L.PushInteger(TyroInput.GamepadAxisCount(Pad));
+  Result := 1;
+end;
+
+function TLuaGamepad.Vibrate_func(L: Plua_State): integer; cdecl;
+var
+  LeftMotor, RightMotor, Duration: Single;
+  Pad: Integer;
+begin
+  // gamepad.vibrate(leftMotor, rightMotor [, duration=0.1, gamepad=-1])
+  LeftMotor := 0;
+  RightMotor := 0;
+  Duration := 0.1;
+  Pad := -1;
+  if L.ArgsCount >= 1 then
+    LeftMotor := L.ToNumber(1);
+  if L.ArgsCount >= 2 then
+    RightMotor := L.ToNumber(2);
+  if L.ArgsCount >= 3 then
+    Duration := L.ToNumber(3);
+  if L.ArgsCount >= 4 then
+    Pad := round(L.ToNumber(4));
+  TyroInput.GamepadVibrate(LeftMotor, RightMotor, Duration, Pad);
+  Result := 0;
 end;
 
 function TLuaGamepad.Mappings_func(L: Plua_State): integer; cdecl;

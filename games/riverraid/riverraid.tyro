@@ -12,10 +12,14 @@
 --
 --  Controls:  LEFT / RIGHT  (A / D)   steer
 --             UP   / DOWN   (W / S)   speed up / slow down
---             SPACE                  fire          (start / restart)
+--             SPACE                  fire (tap or hold)
+--             P                      pause / resume
 --             ESC                    quit
---  Gamepad:   left stick / D-pad     steer and speed
---             A                      fire          (start / restart)
+--  Joystick/  Left/Right Stick/D-pad steer and speed
+--  Gamepad:   Triggers (LT / RT)     brake / accelerate
+--             A / X / RB / RT        fire (tap or hold)
+--             START                  play / pause / resume
+--             BACK / SELECT          quit (menu/pause)
 --  Run:  tyro games/riverraid/riverraid.tyro
 --======================================================================
 
@@ -29,18 +33,57 @@ local function clamp(v, lo, hi)
   if v < lo then return lo elseif v > hi then return hi else return v end
 end
 
--- ---- gamepad -----------------------------------------------------------
--- The left stick gives analog steering and throttle. A dead zone keeps
+-- ---- joystick / gamepad -----------------------------------------------
+-- The sticks give analog steering and throttle. A dead zone keeps
 -- stick drift from nudging the plane, and movement past it is rescaled so
 -- the controls still start gently. D-pad mirrors the keyboard.
-local PAD_DEAD = 0.25
+local PAD_DEAD = 0.20
 
 local function pad_axis(name)
   local v = gamepad.axis(name)
-  if v > -PAD_DEAD and v < PAD_DEAD then return 0 end
-  local sign = 1
-  if v < 0 then sign = -1 end
+  if math.abs(v) < PAD_DEAD then return 0 end
+  local sign = v < 0 and -1 or 1
   return sign * ((math.abs(v) - PAD_DEAD) / (1 - PAD_DEAD))
+end
+
+local function is_fire_pressed()
+  return keyboard.pressed("space")
+      or gamepad.pressed("a")
+      or gamepad.pressed("x")
+      or gamepad.pressed("b")
+      or gamepad.pressed("y")
+      or gamepad.pressed("rb")
+      or gamepad.pressed("rt")
+      or gamepad.pressed("fire")
+      or gamepad.pressed("trigger")
+end
+
+local function is_fire_down()
+  return keyboard.down("space")
+      or gamepad.down("a")
+      or gamepad.down("x")
+      or gamepad.down("b")
+      or gamepad.down("y")
+      or gamepad.down("rb")
+      or gamepad.down("rt")
+      or gamepad.down("fire")
+      or gamepad.down("trigger")
+end
+
+local function is_start_pressed()
+  return keyboard.pressed("space")
+      or keyboard.pressed("enter")
+      or gamepad.pressed("start")
+      or gamepad.pressed("menu")
+      or gamepad.pressed("a")
+      or gamepad.pressed("x")
+      or gamepad.pressed("fire")
+end
+
+local function is_pause_pressed()
+  return keyboard.pressed("p")
+      or gamepad.pressed("start")
+      or gamepad.pressed("menu")
 end
 
 local function explode()
@@ -117,6 +160,7 @@ local state, travel, score, lives, fuel
 local player, speed, invuln
 local pbullets, ebullets, enemies, islands, bridges, depots, blasts
 local genY, nextEnemyY, dyingTimer, msg, msgTimer, engineOn, enginePitch
+local fireCooldown, fuelWarnTimer
 
 local function screenY(wy) return H + travel - wy end
 local function playerWorldY() return travel + (H - PLAYER_PY) end
@@ -144,6 +188,7 @@ local function crash()
   beep(90, 300)
   sound.noise(400, 300)              -- white-noise burst on top of the low boom
   world.shake(600, 12)
+  gamepad.vibrate(1.0, 1.0, 0.45)
 end
 
 local function respawn()
@@ -258,6 +303,8 @@ local function stepBullets(ft)
           score = score + 500
           blasts[#blasts + 1] = { x = b.x, wy = br.wy, t = 0 }
           explode()
+          world.shake(300, 6)
+          gamepad.vibrate(0.6, 0.7, 0.25)
           hit = true
         end
         break
@@ -271,7 +318,7 @@ local function stepBullets(ft)
           score = score + (e.kind == "heli" and 60 or 30)
           blasts[#blasts + 1] = { x = e.x, wy = e.wy, t = 0 }
           beep(e.kind == "heli" and 220 or 300, 90)
-          --explode()
+          gamepad.vibrate(0.3, 0.4, 0.12)
           table.remove(enemies, j)
           hit = true
           break
@@ -359,6 +406,7 @@ local function stepDepots()
       msg = "FUEL +80"
       msgTimer = 1.2
       beep(700, 90)
+      gamepad.vibrate(0.15, 0.1, 0.1)
     end
   end
 end
@@ -378,15 +426,33 @@ local function simulate(ft)
     invuln = math.max(0, invuln - ft)
 
     local dir = 0
-    if keyboard.down("left") or keyboard.down("a") or gamepad.down("dpad_left") then dir = dir - 1 end
-    if keyboard.down("right") or keyboard.down("d") or gamepad.down("dpad_right") then dir = dir + 1 end
-    dir = clamp(dir + pad_axis("leftx"), -1, 1)
+    if keyboard.down("left") or keyboard.down("a") or gamepad.down("dpad_left") or gamepad.down("left") then dir = dir - 1 end
+    if keyboard.down("right") or keyboard.down("d") or gamepad.down("dpad_right") or gamepad.down("right") then dir = dir + 1 end
+    local stickX = pad_axis("leftx")
+    if stickX == 0 then stickX = pad_axis("rightx") end
+    dir = clamp(dir + stickX, -1, 1)
     player.x = clamp(player.x + dir * STEER * ft, 0, W)
 
     local throttle = 0
-    if keyboard.down("up") or keyboard.down("w") or gamepad.down("dpad_up") then throttle = throttle + 1 end
-    if keyboard.down("down") or keyboard.down("s") or gamepad.down("dpad_down") then throttle = throttle - 1 end
-    throttle = clamp(throttle - pad_axis("lefty"), -1, 1)
+    if keyboard.down("up") or keyboard.down("w") or gamepad.down("dpad_up") or gamepad.down("up") then throttle = throttle + 1 end
+    if keyboard.down("down") or keyboard.down("s") or gamepad.down("dpad_down") or gamepad.down("down") then throttle = throttle - 1 end
+    local stickY = -pad_axis("lefty")
+    if stickY == 0 then stickY = -pad_axis("righty") end
+    throttle = throttle + stickY
+
+    -- Analog Triggers (RT accelerate, LT brake)
+    local rt = gamepad.axis("rtrigger")
+    local lt = gamepad.axis("ltrigger")
+    if rt > -0.7 then
+      local trigAcc = (rt + 1) / 2
+      if trigAcc > 0.15 then throttle = throttle + trigAcc end
+    end
+    if lt > -0.7 then
+      local trigBrake = (lt + 1) / 2
+      if trigBrake > 0.15 then throttle = throttle - trigBrake end
+    end
+
+    throttle = clamp(throttle, -1, 1)
     if throttle ~= 0 then
       speed = clamp(speed + throttle * ACCEL * ft, SPEED_MIN, SPEED_MAX)
     end
@@ -394,16 +460,32 @@ local function simulate(ft)
     travel = travel + speed * ft
     generate()
 
-    if (keyboard.pressed("space") or gamepad.pressed("a")) and #pbullets < PBULLET_MAX then
+    -- Firing: single tap or hold fire button for auto-fire
+    fireCooldown = math.max(0, fireCooldown - ft)
+    local wantsFire = is_fire_pressed() or (is_fire_down() and fireCooldown <= 0)
+    if wantsFire and #pbullets < PBULLET_MAX then
       pbullets[#pbullets + 1] = { x = player.x, wy = playerWorldY() + 14 }
-      --beep(900, 35)
       music.sound('Pew', 220, 100)
+      gamepad.vibrate(0.08, 0.12, 0.06)
+      fireCooldown = 0.18
     end
 
     fuel = fuel - (1.4 + 1.8 * (speed / SPEED_MAX)) * ft
     if fuel <= 0 then
       fuel = 0
       crash()
+    end
+
+    -- Low fuel alert: periodic audio tone + haptic pulse
+    if fuel < 20 and fuel > 0 then
+      fuelWarnTimer = fuelWarnTimer - ft
+      if fuelWarnTimer <= 0 then
+        fuelWarnTimer = 0.55
+        beep(880, 50)
+        gamepad.vibrate(0.25, 0.25, 0.1)
+      end
+    else
+      fuelWarnTimer = 0
     end
 
     if state == "play" then
@@ -624,24 +706,42 @@ local function draw_hud()
   if msgTimer > 0 then
     center_text(msg, H / 2 - 60, colors.yellow)
   end
+
+  if fuel < 20 and fuel > 0 and (math.floor(millis() / 250) % 2 == 0) then
+    center_text("LOW FUEL!", H / 2 + 80, colors.red)
+  end
 end
 
 local function draw_overlay()
   if state == "ready" then
     canvas.color = colors.black
-    canvas.rectangle(0, 120, W, 180, true)
-    center_text("RIVER RAID", 136, colors.red)
-    center_text("RIVER RAID", 134, colors.yellow)
-    center_text("PRESS SPACE / GAMEPAD A TO START", 196, colors.white)
-    center_text("LEFT / RIGHT  steer      UP / DOWN  speed", 236, colors.silver)
-    center_text("SPACE  fire      ESC  quit", 254, colors.silver)
-    center_text("GAMEPAD  stick / D-pad, A fire", 276, colors.silver)
+    canvas.rectangle(0, 100, W, 220, true)
+    center_text("RIVER RAID", 116, colors.red)
+    center_text("RIVER RAID", 114, colors.yellow)
+    center_text("PRESS SPACE / GAMEPAD START TO PLAY", 168, colors.white)
+    center_text("STICK / D-PAD / ARROWS  steer & speed", 200, colors.silver)
+    center_text("TRIGGERS (LT / RT)  brake / accelerate", 218, colors.silver)
+    center_text("SPACE / A / X / RB / RT  fire (hold auto)", 236, colors.silver)
+    center_text("START / P  pause      ESC / BACK  quit", 254, colors.silver)
+    if gamepad.available() then
+      local padName = gamepad.name()
+      if padName == "" then padName = "Gamepad/Joystick" end
+      center_text("READY: " .. padName, 280, colors.lime)
+    else
+      center_text("KEYBOARD OR GAMEPAD / JOYSTICK", 280, colors.darkgray)
+    end
   elseif state == "over" then
     canvas.color = colors.black
     canvas.rectangle(0, 180, W, 150, true)
     center_text("GAME OVER", 196, colors.red)
     center_text("SCORE " .. score, 228, colors.white)
-    center_text("PRESS SPACE / GAMEPAD A TO PLAY AGAIN", 272, colors.silver)
+    center_text("PRESS SPACE / GAMEPAD TO PLAY AGAIN", 262, colors.silver)
+  elseif state == "pause" then
+    canvas.color = colors.black
+    canvas.rectangle(0, 200, W, 120, true)
+    center_text("GAME PAUSED", 216, colors.yellow)
+    center_text("PRESS START / P TO RESUME", 250, colors.white)
+    center_text("PRESS ESC / BACK TO QUIT", 274, colors.silver)
   end
 end
 
@@ -678,6 +778,8 @@ local function reset()
   genY = 900
   nextEnemyY = 1200
   dyingTimer = 0
+  fireCooldown = 0
+  fuelWarnTimer = 0
   engineOn = false
   enginePitch = -1
   sound.loopStop()
@@ -700,15 +802,31 @@ function update(dt)
   if dt > 0.06 then dt = 0.06 end
 
   if keyboard.pressed("escape") then exit() end
+  if (gamepad.pressed("back") or gamepad.pressed("select")) and (state == "ready" or state == "over" or state == "pause") then
+    exit()
+  end
 
   if state == "ready" or state == "over" then
-    if keyboard.pressed("space") or keyboard.pressed("enter")
-        or gamepad.pressed("a") or gamepad.pressed("start") then
+    if is_start_pressed() then
       reset()
       state = "play"
       invuln = 1.5
     end
+  elseif state == "pause" then
+    if is_pause_pressed() or is_start_pressed() then
+      state = "play"
+    end
+  elseif state == "play" then
+    if is_pause_pressed() then
+      state = "pause"
+      if engineOn then
+        sound.loopStop()
+        engineOn = false
+      end
+    end
   end
 
-  simulate(dt)
+  if state ~= "pause" then
+    simulate(dt)
+  end
 end

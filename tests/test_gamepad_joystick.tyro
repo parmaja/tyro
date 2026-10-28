@@ -1,0 +1,79 @@
+--======================================================================
+--  test_gamepad_joystick.tyro - tests gamepad and joystick API
+--======================================================================
+--  Run: tyro.exe tests\test_gamepad_joystick.tyro --exit:1
+--  Result: tests\test_gamepad_joystick_result.txt
+
+window.show(320, 240)
+
+local out = openfile("test_gamepad_joystick_result.txt", "w")
+local ok = true
+
+local function check(name, value)
+  out:write(name .. " => " .. tostring(value) .. "\n")
+  if not value then ok = false end
+end
+
+check("gamepad is table", type(gamepad) == "table")
+check("gamepad.pressed is function", type(gamepad.pressed) == "function")
+check("gamepad.down is function", type(gamepad.down) == "function")
+check("gamepad.released is function", type(gamepad.released) == "function")
+check("gamepad.up is function", type(gamepad.up) == "function")
+check("gamepad.axis is function", type(gamepad.axis) == "function")
+check("gamepad.available is function", type(gamepad.available) == "function")
+check("gamepad.name is function", type(gamepad.name) == "function")
+check("gamepad.count is function", type(gamepad.count) == "function")
+check("gamepad.axes is function", type(gamepad.axes) == "function")
+check("gamepad.vibrate is function", type(gamepad.vibrate) == "function")
+check("gamepad.rumble is function", type(gamepad.rumble) == "function")
+check("gamepad.mappings is function", type(gamepad.mappings) == "function")
+
+check("joystick is table", type(joystick) == "table")
+check("joystick.pressed is function", type(joystick.pressed) == "function")
+check("joystick.down is function", type(joystick.down) == "function")
+check("joystick.released is function", type(joystick.released) == "function")
+check("joystick.up is function", type(joystick.up) == "function")
+check("joystick.axis is function", type(joystick.axis) == "function")
+check("joystick.available is function", type(joystick.available) == "function")
+check("joystick.name is function", type(joystick.name) == "function")
+check("joystick.count is function", type(joystick.count) == "function")
+check("joystick.axes is function", type(joystick.axes) == "function")
+check("joystick.vibrate is function", type(joystick.vibrate) == "function")
+check("joystick.rumble is function", type(joystick.rumble) == "function")
+check("joystick.mappings is function", type(joystick.mappings) == "function")
+
+-- Test execution of methods
+check("gamepad.available() is boolean", type(gamepad.available()) == "boolean")
+check("gamepad.name() is string", type(gamepad.name()) == "string")
+check("gamepad.count() is number", type(gamepad.count()) == "number")
+check("gamepad.axes() is number", type(gamepad.axes()) == "number")
+check("gamepad.pressed('a') is boolean", type(gamepad.pressed("a")) == "boolean")
+check("gamepad.pressed('fire') is boolean", type(gamepad.pressed("fire")) == "boolean")
+check("gamepad.pressed('trigger') is boolean", type(gamepad.pressed("trigger")) == "boolean")
+check("gamepad.pressed('up') is boolean", type(gamepad.pressed("up")) == "boolean")
+check("gamepad.down('a') is boolean", type(gamepad.down("a")) == "boolean")
+check("gamepad.released('a') is boolean", type(gamepad.released("a")) == "boolean")
+check("gamepad.up('a') is boolean", type(gamepad.up("a")) == "boolean")
+check("gamepad.axis('leftx') is number", type(gamepad.axis("leftx")) == "number")
+check("gamepad.axis('x') is number", type(gamepad.axis("x")) == "number")
+check("gamepad.axis('y') is number", type(gamepad.axis("y")) == "number")
+
+-- Test joystick alias methods
+check("joystick.available() is boolean", type(joystick.available()) == "boolean")
+check("joystick.name() is string", type(joystick.name()) == "string")
+check("joystick.count() is number", type(joystick.count()) == "number")
+check("joystick.pressed('fire') is boolean", type(joystick.pressed("fire")) == "boolean")
+check("joystick.axis('x') is number", type(joystick.axis("x")) == "number")
+
+-- Test vibrate / rumble calls (should not crash)
+gamepad.vibrate(0.1, 0.1, 0.05)
+gamepad.rumble(0.2, 0.2, 0.05)
+joystick.vibrate(0.1, 0.1, 0.05)
+check("vibrate called successfully", true)
+
+if ok then
+  out:write("VERDICT => PASS\n")
+else
+  out:write("VERDICT => FAIL\n")
+end
+out:close()
