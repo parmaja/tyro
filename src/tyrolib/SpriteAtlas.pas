@@ -30,7 +30,7 @@ unit SpriteAtlas;
 interface
 
 uses
-  Classes, SysUtils, RayLib, Aseprites, mnDON;
+  Classes, SysUtils, Math, RayLib, Aseprites, mnDON;
 
 type
   { One archived file located in the ZIP central directory. }
@@ -69,6 +69,7 @@ type
     FHasAtlas: Boolean;
     FFrames: array of TSpriteAtlasFrame;
     FImageHint: string;
+    FDescriptor: string;      //the JSON descriptor exactly as it was stored
     FLastError: string;
     procedure Clear;
     function ReadZipDirectory: Boolean;
@@ -93,10 +94,20 @@ type
     function RenderTexture(AFrame: Integer): TTexture2D;
     property Width: Integer read GetWidth;    // atlas PNG size
     property Height: Integer read GetHeight;
+    //* The JSON descriptor of the archive. The sprite editor stores its own
+    //* animation metadata inside it (meta.tyro) and reads it back from here;
+    //* the renderer itself only uses the frames it describes.
+    property Descriptor: string read FDescriptor;
     property LastError: string read FLastError;
   end;
 
   { Convenience helpers used by the sprite loader (same flow as the PNG path) }
+
+  TSpriteAtlasWriteFrame = record
+    Name: string;
+    Image: TImage;
+    DurationMs: Integer;
+  end;
 
   function IsSpriteFile(const FileName: string): Boolean;
   // Decodes every frame of a .sprite as an individual GPU texture plus its
@@ -104,6 +115,7 @@ type
   // The caller owns the textures and should free them with SpriteFreeTextures.
   function SpriteLoadFrameTextures(const FileName: string; out ATextures: TAseTextures; out ADurations: TAseFrameDurations): Integer;
   procedure SpriteFreeTextures(var ATextures: TAseTextures);
+  function SaveSpriteAtlas(const FileName: string; const AFrames: array of TSpriteAtlasWriteFrame; const AImageName: string = 'sheet.png'; const AExtraMeta: string = ''): Boolean;
 
 implementation
 
@@ -363,6 +375,7 @@ begin
   FEntries := nil;
   FFrames := nil;
   FImageHint := '';
+  FDescriptor := '';
 end;
 
 procedure TSpriteAtlas.AppendFrame(const AFrame: TSpriteAtlasFrame);
@@ -653,10 +666,11 @@ begin
       Exit;
     end;
 
+    FDescriptor := BytesToStr(JsonData);
     Root := nil;
     try
       try
-        Root := JsonParseValueString(BytesToStr(JsonData));
+        Root := JsonParseValueString(FDescriptor);
       except
         on E: Exception do
         begin
@@ -748,6 +762,256 @@ end;
 procedure SpriteFreeTextures(var ATextures: TAseTextures);
 begin
   AsepriteFreeTextures(ATextures);
+end;
+
+function StrBytes(const S: string): TBytes;
+begin
+  SetLength(Result, Length(S));
+  if Length(S) > 0 then
+    Move(S[1], Result[0], Length(S));
+end;
+
+procedure PutU16(MS: TMemoryStream; V: Word);
+begin
+  MS.WriteBuffer(V, 2);
+end;
+
+procedure PutU32(MS: TMemoryStream; V: Cardinal);
+begin
+  MS.WriteBuffer(V, 4);
+end;
+
+function EntryCRC(const D: TBytes): Cardinal;
+begin
+  if Length(D) = 0 then
+    Result := 0
+  else
+    Result := RayLib.ComputeCRC32(@D[0], Length(D));
+end;
+
+function RawDeflate(const D: TBytes): TBytes;
+var
+  C: PByte;
+  CS: Integer;
+begin
+  Result := nil;
+  if Length(D) = 0 then
+    Exit;
+  CS := 0;
+  C := RayLib.CompressData(@D[0], Length(D), @CS);
+  if (C = nil) or (CS <= 0) then
+  begin
+    if C <> nil then
+      RayLib.MemFree(C);
+    Exit;
+  end;
+  SetLength(Result, CS);
+  Move(C[0], Result[0], CS);
+  RayLib.MemFree(C);
+end;
+
+function BuildZipArchive(const ANames: array of string; const ADatas: array of TBytes): TBytes;
+var
+  MS: TMemoryStream;
+  NameB, Payload: TBytes;
+  Offsets: array of Cardinal;
+  RealSizes: array of Cardinal;
+  Methods: array of Word;
+  I: Integer;
+  CDStart, CDSize: Cardinal;
+  Deflated: TBytes;
+begin
+  MS := TMemoryStream.Create;
+  try
+    SetLength(Offsets, Length(ANames));
+    SetLength(RealSizes, Length(ANames));
+    SetLength(Methods, Length(ANames));
+    for I := 0 to High(ANames) do
+    begin
+      NameB := StrBytes(ANames[I]);
+      Deflated := RawDeflate(ADatas[I]);
+      if (Deflated <> nil) and (Length(Deflated) < Length(ADatas[I])) then
+      begin
+        Payload := Deflated;
+        Methods[I] := 8; // Deflate
+      end
+      else
+      begin
+        Payload := ADatas[I];
+        Methods[I] := 0; // Stored
+      end;
+
+      RealSizes[I] := Length(Payload);
+      Offsets[I] := Cardinal(MS.Position);
+
+      PutU32(MS, $04034B50);          // local file header
+      PutU16(MS, 20);                 // version needed
+      PutU16(MS, 0);                  // flags
+      PutU16(MS, Methods[I]);         // method: 0 stored / 8 deflate
+      PutU16(MS, 0);                  // mod time
+      PutU16(MS, 0);                  // mod date
+      PutU32(MS, EntryCRC(ADatas[I]));
+      PutU32(MS, RealSizes[I]);
+      PutU32(MS, Length(ADatas[I]));
+      PutU16(MS, Length(NameB));
+      PutU16(MS, 0);                  // extra len
+      if Length(NameB) > 0 then
+        MS.WriteBuffer(NameB[0], Length(NameB));
+      if Length(Payload) > 0 then
+        MS.WriteBuffer(Payload[0], Length(Payload));
+    end;
+
+    CDStart := Cardinal(MS.Position);
+    for I := 0 to High(ANames) do
+    begin
+      NameB := StrBytes(ANames[I]);
+      PutU32(MS, $02014B50);          // central directory header
+      PutU16(MS, 20);                 // version made by
+      PutU16(MS, 20);                 // version needed
+      PutU16(MS, 0);                  // flags
+      PutU16(MS, Methods[I]);
+      PutU16(MS, 0);
+      PutU16(MS, 0);
+      PutU32(MS, EntryCRC(ADatas[I]));
+      PutU32(MS, RealSizes[I]);
+      PutU32(MS, Length(ADatas[I]));
+      PutU16(MS, Length(NameB));
+      PutU16(MS, 0);                  // extra len
+      PutU16(MS, 0);                  // comment len
+      PutU16(MS, 0);                  // disk number
+      PutU16(MS, 0);                  // internal attrs
+      PutU32(MS, 0);                  // external attrs
+      PutU32(MS, Offsets[I]);
+      if Length(NameB) > 0 then
+        MS.WriteBuffer(NameB[0], Length(NameB));
+    end;
+    CDSize := Cardinal(MS.Position) - CDStart;
+
+    PutU32(MS, $06054B50);            // end of central directory
+    PutU16(MS, 0);                    // disk number
+    PutU16(MS, 0);                    // disk with cd
+    PutU16(MS, Length(ANames));       // entries on disk
+    PutU16(MS, Length(ANames));       // total entries
+    PutU32(MS, CDSize);
+    PutU32(MS, CDStart);
+    PutU16(MS, 0);                    // comment len
+
+    SetLength(Result, MS.Size);
+    if MS.Size > 0 then
+    begin
+      MS.Position := 0;
+      MS.ReadBuffer(Result[0], MS.Size);
+    end;
+  finally
+    MS.Free;
+  end;
+end;
+
+function SaveSpriteAtlas(const FileName: string; const AFrames: array of TSpriteAtlasWriteFrame; const AImageName: string = 'sheet.png'; const AExtraMeta: string = ''): Boolean;
+var
+  N, I: Integer;
+  MaxW, MaxH, Cols, Rows: Integer;
+  AtlasW, AtlasH: Integer;
+  AtlasImg: TImage;
+  DstX, DstY, Col, Row: Integer;
+  Json: string;
+  PngBytes, ZipBytes: TBytes;
+  PngSize: Integer;
+  PngPtr: PByte;
+  FS: TFileStream;
+  BaseName: string;
+begin
+  Result := False;
+  N := Length(AFrames);
+  if N <= 0 then
+    Exit;
+
+  MaxW := 0;
+  MaxH := 0;
+  for I := 0 to N - 1 do
+  begin
+    if AFrames[I].Image.Width > MaxW then
+      MaxW := AFrames[I].Image.Width;
+    if AFrames[I].Image.Height > MaxH then
+      MaxH := AFrames[I].Image.Height;
+  end;
+
+  if (MaxW <= 0) or (MaxH <= 0) then
+    Exit;
+
+  Cols := Ceil(Sqrt(N));
+  if Cols < 1 then
+    Cols := 1;
+  Rows := (N + Cols - 1) div Cols;
+  AtlasW := Cols * MaxW;
+  AtlasH := Rows * MaxH;
+
+  AtlasImg := RayLib.GenImageColor(AtlasW, AtlasH, clBlank);
+  RayLib.ImageFormat(AtlasImg, Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8));
+
+  // Build JSON descriptor
+  BaseName := ChangeFileExt(ExtractFileName(AImageName), '');
+  if BaseName = '' then
+    BaseName := 'sheet';
+
+  Json := '{"frames":[';
+  for I := 0 to N - 1 do
+  begin
+    Col := I mod Cols;
+    Row := I div Cols;
+    DstX := Col * MaxW;
+    DstY := Row * MaxH;
+
+    RayLib.ImageDrawImage(@AtlasImg, AFrames[I].Image, DstX, DstY, clWhite);
+
+    if I > 0 then
+      Json := Json + ',';
+
+    Json := Json + Format(
+      '{"filename":"%s","frame":{"x":%d,"y":%d,"w":%d,"h":%d},' +
+      '"rotated":false,"trimmed":false,' +
+      '"spriteSourceSize":{"x":0,"y":0,"w":%d,"h":%d},' +
+      '"sourceSize":{"w":%d,"h":%d},"duration":%d}',
+      [AFrames[I].Name, DstX, DstY, AFrames[I].Image.Width, AFrames[I].Image.Height,
+       AFrames[I].Image.Width, AFrames[I].Image.Height,
+       AFrames[I].Image.Width, AFrames[I].Image.Height,
+       AFrames[I].DurationMs]);
+  end;
+
+  Json := Json + Format('],"meta":{"app":"TyroSpriteEditor","image":"%s","size":{"w":%d,"h":%d}',
+    [AImageName, AtlasW, AtlasH]);
+  //AExtraMeta is a ready-made JSON object member list ("key":value,...). The
+  //sprite editor uses it to keep its actions, durations and palette beside the
+  //atlas frames; every other reader ignores it.
+  if Trim(AExtraMeta) <> '' then
+    Json := Json + ',' + AExtraMeta;
+  Json := Json + '}}';
+
+  PngSize := 0;
+  PngPtr := RayLib.ExportImageToMemory(AtlasImg, '.png', PngSize);
+  RayLib.UnloadImage(AtlasImg);
+
+  if (PngPtr = nil) or (PngSize <= 0) then
+    Exit;
+
+  SetLength(PngBytes, PngSize);
+  Move(PngPtr^, PngBytes[0], PngSize);
+  RayLib.MemFree(PngPtr);
+
+  ZipBytes := BuildZipArchive([BaseName + '.json', AImageName], [StrBytes(Json), PngBytes]);
+
+  try
+    FS := TFileStream.Create(FileName, fmCreate);
+    try
+      if Length(ZipBytes) > 0 then
+        FS.WriteBuffer(ZipBytes[0], Length(ZipBytes));
+      Result := True;
+    finally
+      FS.Free;
+    end;
+  except
+    Result := False;
+  end;
 end;
 
 end.

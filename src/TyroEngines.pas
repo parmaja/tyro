@@ -38,7 +38,8 @@ uses
   mnLogs, mnUtils, mnClasses, mnConfigs,
   RayLib, RayClasses, TyroInput, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
-  TyroSprites, TyroTiles, TyroPhysics, TyroEditors, TyroParallax;
+  TyroSprites, TyroTiles, TyroPhysics, TyroEditors, TyroParallax,
+  TyroSpriteEditor;
 
 //Diagnostics (queue/frame counters and the like) are compiled only when
 //'diagnose' is defined, which tracks the debug switch. Debug builds keep them;
@@ -218,6 +219,7 @@ type
     procedure Run_Command(Params: TStrings);
     procedure Stop_Command(Params: TStrings);
     procedure Edit_Command(Params: TStrings);
+    procedure Sprite_Command(Params: TStrings);
 
     procedure EditorClosed(Sender: TObject);
     procedure EditorSave(Sender: TObject);
@@ -543,6 +545,9 @@ type
     Console: TTyroTerminal;
     Output: TTyroOutput;
     Editor: TyroEditor;
+    //* Sprite editor opened with "edit file.sprite", "edit file.png",
+    //* the "sprite" command, or F3.
+    SpriteEditor: TSpriteEditor;
 
     Sprites: TSprites;
     Tiles: TTiles;
@@ -564,6 +569,9 @@ type
     procedure ShowEditor;
     procedure HideEditor;
     procedure ToggleEditor;
+    procedure ShowSpriteEditor(const AFileName: string = '');
+    procedure HideSpriteEditor;
+    procedure ToggleSpriteEditor;
 
     procedure LogWrite(Msg: string);
 
@@ -1571,6 +1579,18 @@ begin
   Editor.Align := alClient;
   Editor.OnSave := EditorSave;
 
+  //Sprite editor shares the whole client area with the script editor; only one
+  //of them is visible at a time. It is opened from the console or with F3.
+  SpriteEditor := TSpriteEditor.Create(Main);
+  SpriteEditor.Name := 'SpriteEditor';
+  SpriteEditor.Important := True;
+  SpriteEditor.BoundsRect := Rect(0, 0, World.Width, World.Height);
+  SpriteEditor.Visible := False;
+  SpriteEditor.Border := brdThick;
+  SpriteEditor.Margin := 5;
+  SpriteEditor.Padding := 5;
+  SpriteEditor.Align := alClient;
+
   //F4 script picker; BoundsRect is recentered every time it is shown so it
   //follows window resizes. Hidden until the user presses F4.
   FFileList := TTyroFileList.Create(Main);
@@ -1982,6 +2002,9 @@ begin
   // F2 toggles the script editor
   if RayLib.IsKeyPressed(KEY_F2) then
     ToggleEditor;
+  // F3 toggles the sprite editor
+  if RayLib.IsKeyPressed(KEY_F3) then
+    ToggleSpriteEditor;
   // F7 toggles the output control
   if RayLib.IsKeyPressed(KEY_F7) then
     ToggleOutput;
@@ -2278,6 +2301,10 @@ end;
 
 procedure TTyroEngine.ShowEditor;
 begin
+  //The sprite editor and the script editor share the same client area, so only
+  //one of them is visible at a time.
+  if (SpriteEditor <> nil) and SpriteEditor.Visible then
+    HideSpriteEditor;
   //Edit the template, not the running script: the worker executes a clone, so
   //the source stays safe to change. Stop the run so it is not executing while
   //the source is being edited.
@@ -2310,6 +2337,45 @@ begin
     HideEditor
   else
     ShowEditor;
+end;
+
+procedure TTyroEngine.ShowSpriteEditor(const AFileName: string);
+var
+  LFileName: string;
+begin
+  //Only one full-screen editor is visible at a time.
+  if Editor.Visible then
+    HideEditor;
+
+  if Trim(AFileName) <> '' then
+  begin
+    LFileName := Res.GuessFileName(AFileName);
+    if not SpriteEditor.LoadFile(LFileName) then
+      LogWrite('Cannot open sprite: ' + AFileName);
+  end
+  else if not SpriteEditor.HasDocument then
+    SpriteEditor.NewDocument(32, 32,
+      IncludePathDelimiter(Res.WorkPath) + 'untitled.sprite');
+
+  SpriteEditor.BoundsRect := Rect(0, 0, World.Width, World.Height);
+  SpriteEditor.Margin := 10;
+  SpriteEditor.Show;
+  SpriteEditor.BringToFront;
+  SpriteEditor.Focused := True;
+end;
+
+procedure TTyroEngine.HideSpriteEditor;
+begin
+  if SpriteEditor.Visible then
+    SpriteEditor.Hide;
+end;
+
+procedure TTyroEngine.ToggleSpriteEditor;
+begin
+  if SpriteEditor.Visible then
+    HideSpriteEditor
+  else
+    ShowSpriteEditor('');
 end;
 
 procedure TTyroEngine.LogWrite(Msg: string);
@@ -2380,8 +2446,29 @@ begin
 end;
 
 procedure TTyroEngine.Edit_Command(Params: TStrings);
+var
+  aExt: string;
 begin
+  //"edit player.sprite" and "edit player.png" open the sprite editor on that
+  //file; everything else keeps opening the script editor as before.
+  if Params.Count > 0 then
+  begin
+    aExt := LowerCase(ExtractFileExt(Params[0]));
+    if (aExt = '.png') or (aExt = '.sprite') then
+    begin
+      ShowSpriteEditor(Params[0]);
+      Exit;
+    end;
+  end;
   ShowEditor;
+end;
+
+procedure TTyroEngine.Sprite_Command(Params: TStrings);
+begin
+  if Params.Count > 0 then
+    ShowSpriteEditor(Params[0])
+  else
+    ShowSpriteEditor('');
 end;
 
 procedure TTyroEngine.ConsoleInput(AInput: UTF8String);
@@ -2759,7 +2846,8 @@ begin
   Commands.Add('save', [], Save_Command, 'Save script name to current directory');
   Commands.Add('state', [], State_Command, 'State of current directory');
   Commands.Add('run', [], Run_Command, 'Run current loaded script');
-  Commands.Add('edit', [], Edit_Command, 'Edit the current loaded script (F2)');
+  Commands.Add('edit', [], Edit_Command, 'Edit a script, .png or .sprite (F2)');
+  Commands.Add('sprite', [], Sprite_Command, 'Open the sprite editor (F3)');
   Console.CommandNames.Clear;
   for aCommand in Commands do
   begin
