@@ -465,8 +465,10 @@ local function fire_gun()
   sfx_shoot()
   world.shake(70, 3)
 
-  -- 1. Bullet projectile
+  -- 1. Bullet projectile (rotated to match firing angle)
   local bs = acquire(P.bullet)
+  local deg = math.deg(player.aim_angle)
+  bs.angle = deg
   local bx = player.x + math.cos(player.aim_angle) * 16
   local by = player.y + math.sin(player.aim_angle) * 16
   bullets[#bullets + 1] = {
@@ -475,6 +477,7 @@ local function fire_gun()
     y = by,
     vx = math.cos(player.aim_angle) * D.GUN_SPEED,
     vy = math.sin(player.aim_angle) * D.GUN_SPEED,
+    angle = deg,
     life = 1.2,
   }
 
@@ -720,12 +723,15 @@ local function update_game(dt)
           e.fire_timer = D.ENEMIES.drone.fire_rate
           sfx_enemy_shoot()
           local bs = acquire(P.bullet_enemy)
+          local e_deg = math.deg(ang)
+          bs.angle = e_deg
           enemy_bullets[#enemy_bullets + 1] = {
             s = bs,
             x = e.x,
             y = e.y,
             vx = math.cos(ang) * D.ENEMIES.drone.bullet_speed,
             vy = math.sin(ang) * D.ENEMIES.drone.bullet_speed,
+            angle = e_deg,
             life = 2.0,
             damage = D.ENEMIES.drone.damage,
           }
@@ -900,27 +906,31 @@ local function sync_sprites()
     end
   end
 
-  -- Bullets
+  -- Bullets (rotated to trajectory)
   for _, b in ipairs(bullets) do
-    if b.s and b.s.visible then
+    if b.s and b.s.visible and b.x and b.y then
       b.s.x = b.x - cam_x
       b.s.y = b.y - cam_y
+      b.s.angle = b.angle or 0
     end
   end
 
-  -- Enemy Bullets
+  -- Enemy Bullets (rotated to trajectory)
   for _, b in ipairs(enemy_bullets) do
-    if b.s and b.s.visible then
+    if b.s and b.s.visible and b.x and b.y then
       b.s.x = b.x - cam_x
       b.s.y = b.y - cam_y
+      b.s.angle = b.angle or 0
     end
   end
 
-  -- Grenades
+  -- Grenades (tumble/rotate in air)
   for _, g in ipairs(grenades) do
-    if g.s and g.s.visible then
+    if g.s and g.s.visible and g.x and g.y then
       g.s.x = g.x - cam_x
       g.s.y = g.y - cam_y
+      g.rot = (g.rot or 0) + 360 * 0.016
+      g.s.angle = g.rot
     end
   end
 

@@ -256,18 +256,30 @@ def build_enemies():
 # 3. Weapons: Bullets, Grenade, Explosion, Muzzle Flash
 # -----------------------------------------------------------------------------
 def build_weapons():
-    # Player plasma bullet (16x16)
-    im, d = new_img(16, 16)
-    d.ellipse((2, 6, 14, 10), fill=(0, 200, 255, 150))
-    d.ellipse((4, 7, 13, 9), fill=(150, 240, 255, 255))
-    d.ellipse((6, 7, 12, 9), fill=CLR_WHITE)
+    # Player plasma bullet (directional: nose pointing RIGHT at 0 deg, 20x12)
+    im, d = new_img(20, 12)
+    # Energy tail
+    d.polygon([(1, 6), (7, 3), (7, 9)], fill=(0, 180, 255, 120))
+    d.polygon([(4, 6), (10, 4), (10, 8)], fill=(0, 220, 255, 190))
+    # Bullet projectile body (pointed nose facing right)
+    d.rectangle((7, 3, 14, 8), fill=(0, 240, 255, 255))
+    d.polygon([(14, 3), (19, 6), (14, 8)], fill=(120, 255, 255, 255))
+    # White-hot interior core
+    d.rectangle((9, 4, 15, 7), fill=CLR_WHITE)
+    d.polygon([(15, 4), (18, 6), (15, 7)], fill=CLR_WHITE)
     save_png(im, "bullet")
 
-    # Enemy plasma bolt (16x16)
-    im, d = new_img(16, 16)
-    d.ellipse((3, 5, 13, 11), fill=(255, 30, 80, 160))
-    d.ellipse((5, 6, 11, 10), fill=(255, 140, 160, 255))
-    d.ellipse((6, 7, 10, 9), fill=CLR_WHITE)
+    # Enemy plasma bolt (directional: nose pointing RIGHT at 0 deg, 18x12)
+    im, d = new_img(18, 12)
+    # Red/violet flame tail
+    d.polygon([(1, 6), (6, 3), (6, 9)], fill=(255, 20, 60, 120))
+    d.polygon([(3, 6), (9, 4), (9, 8)], fill=(255, 80, 110, 190))
+    # Dart body
+    d.rectangle((6, 3, 12, 8), fill=(255, 40, 70, 255))
+    d.polygon([(12, 3), (17, 6), (12, 8)], fill=(255, 120, 150, 255))
+    # Core
+    d.rectangle((8, 4, 13, 7), fill=CLR_WHITE)
+    d.polygon([(13, 4), (16, 6), (13, 7)], fill=CLR_WHITE)
     save_png(im, "bullet_enemy")
 
     # Muzzle flash (24x24)
