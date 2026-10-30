@@ -34,6 +34,8 @@ const
   cSpriteEditorMaxUndo = 40;
   cSpriteEditorDefaultDuration = 100;
   cSpriteEditorTopButtons = 8;
+  cSpriteEditorFpsStep = 2;
+  cSpriteEditorMaxFps = 60;
 
   cSpriteEditorToolbarH = 42;
   cSpriteEditorToolsW = 52;
@@ -53,10 +55,10 @@ const
 
 type
   TSpriteTool = (stSelect, stPixel, stPen, stFill, stPick, stCircle, stRect, stRotate);
-  TSpriteDragMode = (dmNone, dmPaint, dmShape, dmSelect, dmPan);
+  TSpriteDragMode = (dmNone, dmPaint, dmShape, dmSelect, dmPan, dmScrub);
 
   TSpriteIcon = (icNone, icSave, icUndo, icRedo, icMirrorH, icMirrorV,
-    icRotateCW, icRotateCCW, icGrid, icPlus, icMinus, icClose, icPlay,
+    icRotateCW, icRotateCCW, icGrid, icPlus, icMinus, icClose, icPlay, icPause,
     icLoop, icAction, icFrame, icProps, icPalette, icTools);
 
   { One global frame. Actions reference these by index. }
@@ -114,6 +116,11 @@ type
     FStatusTimer: Double;
     FPreviewTimer: Double;
     FPreviewFrame: Integer;
+    //* Playback of the active action in the preview panel. The frame timer
+    //* only advances while FPreviewPlaying; FPreviewFps 0 means "use the
+    //* per-frame durations stored in the document".
+    FPreviewPlaying: Boolean;
+    FPreviewFps: Integer;
     FSelRect: TRect;
     FSelValid: Boolean;
     FCopyImage: TImage;
@@ -161,6 +168,7 @@ type
     procedure SelectAction(AIndex: Integer);
     procedure SelectFrameInAction(AIndex: Integer);
     function ActionFrameCount: Integer;
+    function GetPreviewLoop: Boolean;
     function FrameAtActionIndex(AIndex: Integer): Integer;
     procedure AddAction;
     procedure DeleteAction;
@@ -208,6 +216,9 @@ type
 
     procedure HandleMouse;
     procedure HandleWheel;
+    procedure TogglePreview;
+    procedure ScrubPreview(AX: Integer);
+    function PreviewFrameDuration(A: TSpriteAction; APos: Integer): Double;
     procedure HandleLeftClick(AX, AY: Integer);
     procedure HandleRightClick(AX, AY: Integer);
     procedure HandleKeyTool(AKey: TKeyboardKey);
@@ -241,6 +252,14 @@ type
     function FrameLeftRect: TRect;
     function FrameRightRect: TRect;
     function PreviewRect: TRect;
+    function PreviewImageRect: TRect;
+    function PreviewPlayRect: TRect;
+    function PreviewLoopRect: TRect;
+    function PreviewFpsMinusRect: TRect;
+    function PreviewFpsPlusRect: TRect;
+
+    //* Advances the preview by ADeltaMs; Update calls it with the frame time.
+    procedure AdvancePreview(ADeltaMs: Double);
 
     procedure GetImageScreenRect(out R: TRect);
     procedure ScreenToPixel(SX, SY: Integer; out PX, PY: Integer);
@@ -288,6 +307,16 @@ type
     property Zoom: Single read FZoom;
     //* Active tool; selecting a tool in the rail updates it.
     property Tool: TSpriteTool read FTool;
+    //* Preview playback state: the play/pause button, the loop toggle and the
+    //* fixed frame rate (0 = use the durations stored in the document).
+    property PreviewPlaying: Boolean read FPreviewPlaying;
+    //* Looping follows the action's own flag, so the preview matches what the
+    //* engine will play in a game.
+    property PreviewLoop: Boolean read GetPreviewLoop;
+    property PreviewFps: Integer read FPreviewFps;
+    //* Frame the preview currently shows, as a position in the active action.
+    property PreviewFrame: Integer read FPreviewFrame;
+    property PreviewFrameCount: Integer read ActionFrameCount;
   end;
 
 implementation
@@ -539,6 +568,8 @@ begin
   FStatusTimer := 0;
   FPreviewTimer := 0;
   FPreviewFrame := 0;
+  FPreviewPlaying := True;
+  FPreviewFps := 0;
   FSelValid := False;
   FillChar(FCopyImage, SizeOf(FCopyImage), 0);
   FCopyValid := False;
@@ -610,6 +641,10 @@ begin
   ClearSnapshots(FRedo);
   FActiveAction := -1;
   FActiveFrame := 0;
+  FPreviewTimer := 0;
+  FPreviewFrame := 0;
+  FPreviewPlaying := True;
+  FPreviewFps := 0;
   FModified := False;
 end;
 
@@ -1108,6 +1143,14 @@ begin
     Result := A.Frames.Count
   else
     Result := 0;
+end;
+
+function TSpriteEditor.GetPreviewLoop: Boolean;
+var
+  A: TSpriteAction;
+begin
+  A := ActiveActionObject;
+  Result := (A <> nil) and A.Loop;
 end;
 
 function TSpriteEditor.FrameAtActionIndex(AIndex: Integer): Integer;
@@ -2104,7 +2147,14 @@ begin
   if RayLib.IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) then
     HandleRightClick(FMouseX, FMouseY);
 
-  if FDragMode <> dmNone then
+  if FDragMode = dmScrub then
+  begin
+    if RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT) then
+      ScrubPreview(FMouseX)
+    else
+      FDragMode := dmNone;
+  end
+  else if FDragMode <> dmNone then
   begin
     if ((FDragButton = mbRight) and RayLib.IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) or
        ((FDragButton <> mbRight) and RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT)) then
@@ -2162,7 +2212,6 @@ var
   A: TSpriteAction;
   Sel: TRect;
   PX, PY: Integer;
-  R: TRect;
   C: TColor;
 begin
   if not InsideRect(ClientRect, AX, AY) then
@@ -2318,11 +2367,51 @@ begin
     Exit;
   end;
 
+  if InsideRect(PreviewRect, AX, AY) then
+  begin
+    if InsideRect(PreviewPlayRect, AX, AY) then
+    begin
+      TogglePreview;
+      Exit;
+    end;
+    if InsideRect(PreviewLoopRect, AX, AY) then
+    begin
+      A := ActiveActionObject;
+      if A <> nil then
+      begin
+        PushUndo;
+        A.Loop := not A.Loop;
+        FModified := True;
+        SetStatus('Loop animation ' + BoolToStr(A.Loop, 'on', 'off'));
+      end;
+      Exit;
+    end;
+    if InsideRect(PreviewFpsMinusRect, AX, AY) then
+    begin
+      FPreviewFps := Max(0, FPreviewFps - cSpriteEditorFpsStep);
+      if FPreviewFps > 0 then
+        SetStatus(Format('Preview speed %d fps', [FPreviewFps]))
+      else
+        SetStatus('Preview speed: frame durations');
+      Exit;
+    end;
+    if InsideRect(PreviewFpsPlusRect, AX, AY) then
+    begin
+      FPreviewFps := Min(cSpriteEditorMaxFps, FPreviewFps + cSpriteEditorFpsStep);
+      SetStatus(Format('Preview speed %d fps', [FPreviewFps]));
+      Exit;
+    end;
+    if InsideRect(PreviewImageRect, AX, AY) then
+    begin
+      FDragMode := dmScrub;
+      FDragButton := mbLeft;
+      ScrubPreview(AX);
+    end;
+    Exit;
+  end;
+
   if InsideRect(CanvasAreaRect, AX, AY) then
   begin
-    R := PreviewRect;
-    if InsideRect(R, AX, AY) then
-      Exit;
     ScreenToPixel(AX, AY, PX, PY);
     if (PX >= 0) and (PY >= 0) and (PX < FCanvasW) and (PY < FCanvasH) then
       BeginToolAt(PX, PY, mbLeft);
@@ -2472,6 +2561,7 @@ begin
     KEY_RIGHT: SelectFrameInAction(FActiveFrame + 1);
     KEY_UP: SelectAction(FActiveAction - 1);
     KEY_DOWN: SelectAction(FActiveAction + 1);
+    KEY_SPACE: TogglePreview;
     KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN, KEY_EIGHT:
       HandleKeyTool(Key);
     KEY_G:
@@ -2725,7 +2815,47 @@ var
   R: TRect;
 begin
   R := CanvasAreaRect;
-  Result := Rect(R.Right - 112, R.Top + 10, R.Right - 10, R.Top + 112);
+  Result := Rect(R.Right - 178, R.Top + 10, R.Right - 10, R.Top + 194);
+end;
+
+function TSpriteEditor.PreviewImageRect: TRect;
+var
+  R: TRect;
+begin
+  R := PreviewRect;
+  Result := Rect(R.Left + 6, R.Top + 20, R.Right - 6, R.Bottom - 30);
+end;
+
+function TSpriteEditor.PreviewPlayRect: TRect;
+var
+  R: TRect;
+begin
+  R := PreviewRect;
+  Result := Rect(R.Left + 6, R.Bottom - 26, R.Left + 26, R.Bottom - 6);
+end;
+
+function TSpriteEditor.PreviewLoopRect: TRect;
+var
+  R: TRect;
+begin
+  R := PreviewRect;
+  Result := Rect(R.Left + 30, R.Bottom - 26, R.Left + 50, R.Bottom - 6);
+end;
+
+function TSpriteEditor.PreviewFpsMinusRect: TRect;
+var
+  R: TRect;
+begin
+  R := PreviewRect;
+  Result := Rect(R.Right - 58, R.Bottom - 26, R.Right - 40, R.Bottom - 6);
+end;
+
+function TSpriteEditor.PreviewFpsPlusRect: TRect;
+var
+  R: TRect;
+begin
+  R := PreviewRect;
+  Result := Rect(R.Right - 22, R.Bottom - 26, R.Right - 4, R.Bottom - 6);
 end;
 
 { ---------------------------------------------------------------------------
@@ -2789,7 +2919,6 @@ procedure TSpriteEditor.Update;
 var
   DT: Double;
   A: TSpriteAction;
-  Dur, Idx: Integer;
 begin
   inherited;
   if not Visible then
@@ -2807,35 +2936,119 @@ begin
   if (A <> nil) and (A.Frames.Count > 0) then
   begin
     FPreviewFrame := ClampInt(FPreviewFrame, 0, A.Frames.Count - 1);
-    FPreviewTimer := FPreviewTimer + DT * 1000;
-    Idx := A.Frames[FPreviewFrame];
-    if (Idx >= 0) and (Idx < FFrames.Count) then
-      Dur := FFrames[Idx].DurationMs
+    if FPreviewPlaying then
+      AdvancePreview(DT * 1000)
     else
-      Dur := cSpriteEditorDefaultDuration;
-    if Dur <= 0 then
-      Dur := cSpriteEditorDefaultDuration;
-    while FPreviewTimer >= Dur do
-    begin
-      FPreviewTimer := FPreviewTimer - Dur;
-      if A.Frames.Count <= 1 then
-      begin
-        FPreviewTimer := 0;
-        Break;
-      end;
-      FPreviewFrame := (FPreviewFrame + 1) mod A.Frames.Count;
-      Idx := A.Frames[FPreviewFrame];
-      if (Idx >= 0) and (Idx < FFrames.Count) then
-        Dur := FFrames[Idx].DurationMs
-      else
-        Dur := cSpriteEditorDefaultDuration;
-      if Dur <= 0 then
-        Dur := cSpriteEditorDefaultDuration;
-    end;
+      FPreviewTimer := 0;
   end;
 
   HandleMouse;
   HandleWheel;
+  Invalidate;
+end;
+
+procedure TSpriteEditor.AdvancePreview(ADeltaMs: Double);
+var
+  A: TSpriteAction;
+  Dur: Double;
+  Guard: Integer;
+begin
+  A := ActiveActionObject;
+  if (A = nil) or (A.Frames.Count <= 1) then
+  begin
+    FPreviewTimer := 0;
+    Exit;
+  end;
+  FPreviewFrame := ClampInt(FPreviewFrame, 0, A.Frames.Count - 1);
+  FPreviewTimer := FPreviewTimer + ADeltaMs;
+  Guard := 0;
+  //* Consume the elapsed time frame by frame so a slow tick advances more
+  //* than one frame instead of drifting behind. The guard keeps a tiny frame
+  //* duration or a huge delta from spinning forever.
+  while Guard < 1000 do
+  begin
+    Inc(Guard);
+    Dur := PreviewFrameDuration(A, FPreviewFrame);
+    if FPreviewTimer < Dur then
+      Break;
+    FPreviewTimer := FPreviewTimer - Dur;
+    if FPreviewFrame + 1 < A.Frames.Count then
+      Inc(FPreviewFrame)
+    else if A.Loop then
+      FPreviewFrame := 0
+    else
+    begin
+      //* One-shot playback rests on the last frame and stops.
+      FPreviewFrame := A.Frames.Count - 1;
+      FPreviewTimer := 0;
+      FPreviewPlaying := False;
+      Break;
+    end;
+  end;
+end;
+
+function TSpriteEditor.PreviewFrameDuration(A: TSpriteAction; APos: Integer): Double;
+var
+  Idx: Integer;
+begin
+  if FPreviewFps > 0 then
+    Result := 1000 / FPreviewFps
+  else if (A <> nil) and (APos >= 0) and (APos < A.Frames.Count) then
+  begin
+    Idx := A.Frames[APos];
+    if (Idx >= 0) and (Idx < FFrames.Count) and (FFrames[Idx].DurationMs > 0) then
+      Result := FFrames[Idx].DurationMs
+    else
+      Result := cSpriteEditorDefaultDuration;
+  end
+  else
+    Result := cSpriteEditorDefaultDuration;
+  if Result < 1 then
+    Result := 1;
+end;
+
+procedure TSpriteEditor.TogglePreview;
+var
+  A: TSpriteAction;
+begin
+  FPreviewPlaying := not FPreviewPlaying;
+  FPreviewTimer := 0;
+  if FPreviewPlaying then
+  begin
+    //* Pressing play on a one-shot that already reached its last frame
+    //* replays it from the start instead of stopping again immediately.
+    A := ActiveActionObject;
+    if (A <> nil) and (not A.Loop) and (A.Frames.Count > 0) and
+      (FPreviewFrame >= A.Frames.Count - 1) then
+      FPreviewFrame := 0;
+    SetStatus('Preview playing');
+  end
+  else
+    SetStatus('Preview paused');
+  Invalidate;
+end;
+
+procedure TSpriteEditor.ScrubPreview(AX: Integer);
+var
+  A: TSpriteAction;
+  Box: TRect;
+  N: Integer;
+begin
+  A := ActiveActionObject;
+  if (A = nil) or (A.Frames.Count <= 0) then
+    Exit;
+  N := A.Frames.Count;
+  if N <= 1 then
+    FPreviewFrame := 0
+  else
+  begin
+    Box := PreviewImageRect;
+    FPreviewFrame := ((AX - Box.Left) * N) div Max(1, Box.Width);
+    FPreviewFrame := ClampInt(FPreviewFrame, 0, N - 1);
+  end;
+  FPreviewTimer := 0;
+  FPreviewPlaying := False;
+  SetStatus(Format('Preview frame %d of %d', [FPreviewFrame + 1, N]));
   Invalidate;
 end;
 
@@ -2935,6 +3148,7 @@ begin
     icMinus: Result := 'minus';
     icClose: Result := 'close';
     icPlay: Result := 'play';
+    icPause: Result := 'pause';
     icLoop: Result := 'loop';
     icAction: Result := 'action';
     icFrame: Result := 'frame';
@@ -3068,6 +3282,11 @@ begin
       end;
     icPlay:
       ACanvas.FillTriangle(CX - 4, CY - 6, CX + 7, CY, CX - 4, CY + 6, AColor);
+    icPause:
+      begin
+        ACanvas.FillRect(CX - 5, CY - 6, 3, 12, AColor);
+        ACanvas.FillRect(CX + 2, CY - 6, 3, 12, AColor);
+      end;
     icLoop:
       begin
         ArcLine(CX, CY, 6, Pi * 0.2, Pi * 1.6);
@@ -3357,37 +3576,68 @@ var
   Tex: TTexture2D;
   A: TSpriteAction;
   X, Y: Integer;
+  S: string;
 begin
   ACanvas.FillRectangle(RectangleOf(R), SC($11131BFF));
   ACanvas.DrawRect(R, 1, SC(cSpriteEditorLine));
   DrawTextC(ACanvas, R.Left + 6, R.Top + 4, 'PREVIEW',
     SC(cSpriteEditorAccent));
 
-  Box := Rect(R.Left + 6, R.Top + 20, R.Right - 6, R.Bottom - 6);
-  PaintChecker(ACanvas, Box);
-
   A := ActiveActionObject;
+  if (A <> nil) and (A.Frames.Count > 0) then
+  begin
+    S := Format('%d/%d', [ClampInt(FPreviewFrame, 0, A.Frames.Count - 1) + 1,
+      A.Frames.Count]);
+    DrawTextC(ACanvas, R.Right - 6 - Round(ACanvas.MeasureText(S)), R.Top + 4,
+      S, SC(cSpriteEditorDim));
+  end;
+
+  Box := PreviewImageRect;
+  PaintChecker(ACanvas, Box);
+  ACanvas.DrawRect(Box, 1, SC(cSpriteEditorLine));
+
   if (A <> nil) and (A.Frames.Count > 0) then
     Idx := A.Frames[ClampInt(FPreviewFrame, 0, A.Frames.Count - 1)]
   else
     Idx := CurrentFrameIndex;
-  if (Idx < 0) or (Idx >= FFrames.Count) then
-    Exit;
+  if (Idx >= 0) and (Idx < FFrames.Count) then
+  begin
+    W := FFrames[Idx].Image.Width;
+    H := FFrames[Idx].Image.Height;
+    if (W > 0) and (H > 0) then
+    begin
+      Scale := Min((Box.Width - 8) div W, (Box.Height - 8) div H);
+      if Scale < 1 then
+        Scale := 1;
+      X := Box.Left + (Box.Width - W * Scale) div 2;
+      Y := Box.Top + (Box.Height - H * Scale) div 2;
+      Tex := FrameTexture(Idx);
+      if Tex.ID <> 0 then
+        RayLib.DrawTexturePro(Tex, RectangleOf(0, 0, Tex.Width, Tex.Height),
+          RectangleOf(ACanvas.Origin.X + X, ACanvas.Origin.Y + Y,
+            W * Scale, H * Scale), Vector2Of(0, 0), 0, clWhite);
+    end;
+  end;
 
-  W := FFrames[Idx].Image.Width;
-  H := FFrames[Idx].Image.Height;
-  if (W <= 0) or (H <= 0) then
-    Exit;
-  Scale := Min((Box.Width - 8) div W, (Box.Height - 8) div H);
-  if Scale < 1 then
-    Scale := 1;
-  X := Box.Left + (Box.Width - W * Scale) div 2;
-  Y := Box.Top + (Box.Height - H * Scale) div 2;
-  Tex := FrameTexture(Idx);
-  if Tex.ID <> 0 then
-    RayLib.DrawTexturePro(Tex, RectangleOf(0, 0, Tex.Width, Tex.Height),
-      RectangleOf(ACanvas.Origin.X + X, ACanvas.Origin.Y + Y,
-        W * Scale, H * Scale), Vector2Of(0, 0), 0, clWhite);
+  //* Playback controls. Dragging over the image above scrubs the action.
+  if FPreviewPlaying then
+    DrawButton(ACanvas, PreviewPlayRect, '', True, True, Ord(icPause))
+  else
+    DrawButton(ACanvas, PreviewPlayRect, '', False, True, Ord(icPlay));
+  DrawButton(ACanvas, PreviewLoopRect, '', (A <> nil) and A.Loop, True,
+    Ord(icLoop));
+
+  if FPreviewFps > 0 then
+    S := IntToStr(FPreviewFps) + 'fps'
+  else
+    S := 'file';
+  DrawTextC(ACanvas, PreviewFpsMinusRect.Left - 4 - Round(ACanvas.MeasureText(S)),
+    PreviewFpsMinusRect.Top + 2, S, SC(cSpriteEditorDim));
+
+  DrawButton(ACanvas, PreviewFpsMinusRect, '', False, FPreviewFps > 0,
+    Ord(icMinus));
+  DrawButton(ACanvas, PreviewFpsPlusRect, '', False,
+    FPreviewFps < cSpriteEditorMaxFps, Ord(icPlus));
 end;
 
 procedure TSpriteEditor.PaintCanvas(ACanvas: TTyroCanvas);

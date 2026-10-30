@@ -51,6 +51,14 @@ type
     //* Centre of a tool button / palette swatch in window coordinates.
     function ToolPoint(AIndex: Integer): TPoint;
     function SwatchPoint(AIndex: Integer): TPoint;
+    //* Centre of a preview control: 0 play/pause, 1 loop, 2 fps-, 3 fps+.
+    function PreviewPoint(APart: Integer): TPoint;
+    //* Point across the preview image box, AFraction 0 = left, 1 = right.
+    function PreviewImagePoint(AFraction: Single): TPoint;
+    //* Centre of an action row in the ACTIONS panel.
+    function ActionPoint(AIndex: Integer): TPoint;
+    //* Runs the preview clock without waiting for real frames.
+    procedure Advance(ADeltaMs: Double);
   end;
 
 procedure TTestSpriteEditor.PaintTo(ACanvas: TTyroCanvas);
@@ -88,6 +96,43 @@ var
 begin
   R := PaletteSwatchRect(AIndex);
   Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+end;
+
+function TTestSpriteEditor.PreviewPoint(APart: Integer): TPoint;
+var
+  R: TRect;
+begin
+  case APart of
+    0: R := PreviewPlayRect;
+    1: R := PreviewLoopRect;
+    2: R := PreviewFpsMinusRect;
+    3: R := PreviewFpsPlusRect;
+  else
+    R := PreviewImageRect;
+  end;
+  Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+end;
+
+function TTestSpriteEditor.PreviewImagePoint(AFraction: Single): TPoint;
+var
+  R: TRect;
+begin
+  R := PreviewImageRect;
+  Result := ToWindow(R.Left + Round((R.Right - R.Left) * AFraction),
+    (R.Top + R.Bottom) div 2);
+end;
+
+function TTestSpriteEditor.ActionPoint(AIndex: Integer): TPoint;
+var
+  R: TRect;
+begin
+  R := ActionItemRect(AIndex);
+  Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+end;
+
+procedure TTestSpriteEditor.Advance(ADeltaMs: Double);
+begin
+  AdvancePreview(ADeltaMs);
 end;
 
 var
@@ -261,6 +306,80 @@ begin
         TempPath('sprite_editor_ui_tool.png'));
       Check(SysUtils.FileExists(TempPath('sprite_editor_ui_tool.png')),
         'writes the second screenshot');
+
+      //--- preview playback controls --------------------------------------
+      Check(Editor.PreviewPlaying, 'the preview plays by default');
+      P := Editor.PreviewPoint(0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(not Editor.PreviewPlaying, 'the play button pauses the preview');
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewPlaying, 'the play button resumes the preview');
+
+      Check(Editor.PreviewLoop, 'the preview loops by default');
+      P := Editor.PreviewPoint(1);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(not Editor.PreviewLoop, 'the loop button turns looping off');
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewLoop, 'the loop button turns looping back on');
+
+      P := Editor.PreviewPoint(3);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewFps = cSpriteEditorFpsStep,
+        'fps + switches to a fixed frame rate');
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewFps = 2 * cSpriteEditorFpsStep, 'fps + steps up');
+      P := Editor.PreviewPoint(2);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewFps = 0, 'fps - goes back to the file durations');
+
+      //--- scrubbing pauses playback and picks a frame --------------------
+      P := Editor.PreviewImagePoint(0.0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check((not Editor.PreviewPlaying) and (Editor.PreviewFrame = 0),
+        'clicking the preview scrubs to the first frame and pauses');
+      Check(Editor.PreviewFrameCount = 2,
+        'the idle action has two frames in the preview');
+      P := Editor.PreviewImagePoint(0.99);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewFrame = Editor.PreviewFrameCount - 1,
+        'scrubbing to the right selects the last frame');
+      SaveScreenShot(Canvas, Editor,
+        TempPath('sprite_editor_ui_preview.png'));
+      Check(SysUtils.FileExists(TempPath('sprite_editor_ui_preview.png')),
+        'writes the preview screenshot');
+
+      //--- playback advances, loops and stops on one-shot actions ---------
+      P := Editor.PreviewImagePoint(0.0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      P := Editor.PreviewPoint(0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewPlaying, 'play resumes after scrubbing');
+      Editor.Advance(150);
+      Check(Editor.PreviewFrame = 1, 'playback advances to the next frame');
+      Editor.Advance(150);
+      Check(Editor.PreviewFrame = 0, 'a looping action wraps to its first frame');
+
+      P := Editor.ActionPoint(2);   // attack: 2 frames, loop off
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(not Editor.PreviewLoop, 'the attack action is one-shot');
+      Check(Editor.PreviewFrameCount = 2, 'the attack action has two frames');
+      Check(Editor.PreviewPlaying, 'switching actions keeps playing');
+      Editor.Advance(150);
+      Check(Editor.PreviewFrame = 1, 'one-shot playback reaches the last frame');
+      Editor.Advance(150);
+      Check((Editor.PreviewFrame = 1) and (not Editor.PreviewPlaying),
+        'one-shot playback stops on the last frame');
+      P := Editor.PreviewPoint(0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewPlaying and (Editor.PreviewFrame = 0),
+        'play restarts a finished one-shot');
+
+      //* Back to idle so the frame/paint tests below see the same document
+      //* state they did before the preview checks.
+      P := Editor.ActionPoint(0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewLoop, 'switching back to idle restores looping');
 
       //--- every tool button selects its own tool at its real position -----
       P := Editor.MapToClient(Point(Editor.InnerRect.Left, Editor.InnerRect.Top));
