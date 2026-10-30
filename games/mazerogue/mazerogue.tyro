@@ -1,0 +1,1132 @@
+--======================================================================
+--  Maze Rogue - A Sci-Fi Rogue-like Dungeon Crawler for Tyro
+--======================================================================
+--  Features:
+--  - Procedurally generated maze with rooms, corridors, and exits
+--  - Smooth camera scrolling in all 4 directions (Left/Right/Up/Down)
+--  - Dual-stick / WASD + Mouse Gunner combat:
+--    * Shoot high-velocity plasma bursts at hostile swarms
+--    * Firing creates real physical RECOIL that knocks the gunner back
+--    * Throw bouncing GRENADES with timed fuses and massive AOE explosions
+--  - Varied enemy roster:
+--    * Scuttlers (fast swarming melee bugs)
+--    * Attack Drones (ranged plasma snipers)
+--    * Kamikaze Bombers (sprinting suicide units)
+--    * Heavy Brutes (tanky armored juggernauts)
+--  - Dynamic interactive objects:
+--    * Explosive Barrels (chain-reaction detonations)
+--    * Supply Crates (health, shield, grenade ammo, gems)
+--    * Descending Stairs / Portal to deeper floors
+--  - High performance Sprite Pooling + Tilemap rendering
+--  - Audio feedback using native Tyro Waveforms (Laser, Pew, Explode, Kick, Boing)
+--  - Dynamic screen shake on heavy explosions and gunshots
+--
+--  Controls:
+--    W, A, S, D / Arrow Keys: Move Gunner (camera tracks player smoothly)
+--    Mouse Aim:               Aim weapons (crosshair tracks mouse cursor)
+--    Left Mouse / Space:      Fire Gun (plasma bullet + backward recoil kick)
+--    Right Mouse / G / E / F: Throw Grenade
+--    R:                       Quick restart / New floor
+--    ESC:                     Pause / Title menu
+--
+--  Run: tyro games/mazerogue/mazerogue.tyro
+--======================================================================
+
+local D = require("mazerogue_data")
+
+window.show(960, 540)
+world.backcolor = colors.black
+
+local W = canvas.width
+local H = canvas.height
+
+-- Keep canvas at bottom so tilemap renders under sprites
+-- canvas.front is false so Sprites.DrawAll renders ON TOP of the tilemap!
+
+-- ---- Sprite Pooling System -------------------------------------------
+local function make_pool(asset_name, scale)
+  return {
+    file = "img/" .. asset_name,
+    scale = scale or 1.0,
+    list = {},
+  }
+end
+
+local P = {
+  gunner       = make_pool("gunner.png", 1.25),
+  scuttler     = make_pool("enemy_scuttler.png", 1.15),
+  drone        = make_pool("enemy_drone.png", 1.15),
+  brute        = make_pool("enemy_brute.png", 1.2),
+  kamikaze     = make_pool("enemy_kamikaze.png", 1.15),
+  bullet       = make_pool("bullet.png", 1.0),
+  bullet_enemy = make_pool("bullet_enemy.png", 1.0),
+  grenade      = make_pool("grenade.png", 1.2),
+  explosion    = make_pool("explosion.png", 1.2),
+  gem          = make_pool("gem.png", 1.1),
+  stairs       = make_pool("stairs.png", 1.2),
+  crate        = make_pool("crate.png", 1.1),
+  barrel       = make_pool("barrel.png", 1.1),
+  pickup_hp    = make_pool("pickup_health.png", 1.1),
+  pickup_gr    = make_pool("pickup_grenade.png", 1.1),
+  pickup_sh    = make_pool("pickup_shield.png", 1.1),
+  crosshair    = make_pool("crosshair.png", 1.0),
+  muzzle       = make_pool("muzzle.png", 1.1),
+}
+
+local function acquire(pool)
+  local list = pool.list
+  for i = 1, #list do
+    local s = list[i]
+    if s.visible == false then
+      s.visible = true
+      s:show()
+      return s
+    end
+  end
+  local s = Sprites.new()
+  s.load(pool.file)
+  s.scale = pool.scale
+  s.visible = true
+  s:show()
+  list[#list + 1] = s
+  return s
+end
+
+local function release(s)
+  if s ~= nil then
+    s.visible = false
+    s:hide()
+  end
+end
+
+-- ---- Sound FX using native Tyro waveforms ----------------------------
+local function sfx_shoot()
+  music.sound("Laser", 850, 60)
+end
+
+local function sfx_enemy_shoot()
+  music.sound("Pew", 420, 80)
+end
+
+local function sfx_grenade_throw()
+  music.sound("Boing", 320, 110)
+end
+
+local function sfx_grenade_bounce()
+  music.sound("HiHat", 300, 40)
+end
+
+local function sfx_explode()
+  music.sound("Explode", 120, 450)
+end
+
+local function sfx_hit()
+  music.sound("Kick", 240, 50)
+end
+
+local function sfx_pickup()
+  music.sound("Coin", 680, 120)
+end
+
+local function sfx_stairs()
+  music.sound("Chime", 520, 350)
+end
+
+-- ---- Game State & Entities -------------------------------------------
+local state = "play" -- start directly in gameplay so player is immediately visible!
+local floor_num = 1
+local score = 0
+local kills = 0
+
+-- Camera
+local cam_x = 0
+local cam_y = 0
+
+-- Player Gunner
+local player = {
+  s = nil,
+  x = 0,
+  y = 0,
+  vx = 0,
+  vy = 0,
+  recoil_vx = 0,
+  recoil_vy = 0,
+  aim_angle = 0,
+  hp = D.PLAYER_MAX_HP,
+  max_hp = D.PLAYER_MAX_HP,
+  shield = D.PLAYER_MAX_SHIELD,
+  max_shield = D.PLAYER_MAX_SHIELD,
+  grenades = D.GRENADE_START,
+  max_grenades = D.GRENADE_MAX_AMMO,
+  fire_cooldown = 0,
+  grenade_cooldown = 0,
+  invuln_timer = 0,
+  muzzle_timer = 0,
+  muzzle_s = nil,
+}
+
+local crosshair_sprite = nil
+
+-- Maze & Level data
+local maze = nil
+local tilemap = nil
+local COLS = 31
+local ROWS = 31
+
+-- Active entity lists
+local bullets = {}
+local enemy_bullets = {}
+local grenades = {}
+local explosions = {}
+local enemies = {}
+local props = {}
+local pickups = {}
+local stairs_entity = nil
+
+-- Floaty text notifications
+local texts = {}
+local function add_text(msg, x, y, clr, life)
+  texts[#texts + 1] = {
+    msg = msg,
+    x = x,
+    y = y,
+    clr = clr or colors.white,
+    life = life or 0.8,
+    max_life = life or 0.8,
+  }
+end
+
+-- Clear and hide all pooled sprites
+local function clear_all_sprites()
+  for _, pool in pairs(P) do
+    for _, s in ipairs(pool.list) do
+      s.visible = false
+    end
+  end
+end
+
+-- ---- Procedural Level Initialization ---------------------------------
+local function init_floor(f_num)
+  floor_num = f_num
+  clear_all_sprites()
+
+  bullets = {}
+  enemy_bullets = {}
+  grenades = {}
+  explosions = {}
+  texts = {}
+
+  -- 1. Generate Maze Layout
+  local seed = math.floor(time() * 1000) % 100000 + floor_num * 123
+  maze = D.generate_maze(COLS, ROWS, seed, 8)
+
+  -- 2. Build or update native Tilemap
+  if tilemap == nil then
+    tilemap = tiles.new("dungeon_map")
+    -- tiles.png is 8 cols x 2 rows, 32x32 tiles, 0 spacing, 0 margin
+    tilemap.load("tiles.png", 32, 32, 8, 0, 0)
+    tilemap.resize(COLS, ROWS)
+    tilemap.scale = 1.0
+  end
+
+  tilemap.fill(D.T_WALL_TOP)
+  for y = 0, ROWS - 1 do
+    for x = 0, COLS - 1 do
+      local t = maze.grid[y][x]
+      if t ~= D.T_WALL_TOP then
+        tilemap.set(x, y, t)
+      end
+    end
+  end
+
+  -- 3. Position Player Gunner
+  player.x = maze.start_pos.x
+  player.y = maze.start_pos.y
+  player.vx = 0
+  player.vy = 0
+  player.recoil_vx = 0
+  player.recoil_vy = 0
+  player.invuln_timer = 0.5
+
+  -- Center camera on player initially and clamp within bounds
+  cam_x = player.x - W / 2
+  cam_y = player.y - H / 2
+  local max_cam_x = COLS * D.TILE_SIZE - W
+  local max_cam_y = ROWS * D.TILE_SIZE - H
+  cam_x = D.clamp(cam_x, 0, math.max(0, max_cam_x))
+  cam_y = D.clamp(cam_y, 0, math.max(0, max_cam_y))
+
+  if player.s == nil then
+    player.s = acquire(P.gunner)
+  end
+  player.s.layer = 10
+  player.s.visible = true
+  player.s:show()
+  player.s.x = player.x - cam_x
+  player.s.y = player.y - cam_y
+
+  if player.muzzle_s == nil then
+    player.muzzle_s = acquire(P.muzzle)
+  end
+  player.muzzle_s.visible = false
+
+  if crosshair_sprite == nil then
+    crosshair_sprite = acquire(P.crosshair)
+  end
+  crosshair_sprite.layer = 100
+  crosshair_sprite.visible = true
+  crosshair_sprite:show()
+
+  -- 4. Spawn Stairs / Portal at exit
+  stairs_entity = {
+    s = acquire(P.stairs),
+    x = maze.exit_pos.x,
+    y = maze.exit_pos.y,
+  }
+  stairs_entity.s:show()
+  stairs_entity.s.x = stairs_entity.x - cam_x
+  stairs_entity.s.y = stairs_entity.y - cam_y
+
+  -- 5. Spawn Enemies, Props & Pickups
+  local spawned = D.spawn_level_entities(maze, floor_num)
+  enemies = {}
+  for _, e in ipairs(spawned.enemies) do
+    local pool = (e.kind == "scuttler" and P.scuttler) or
+                 (e.kind == "drone" and P.drone) or
+                 (e.kind == "brute" and P.brute) or P.kamikaze
+    e.s = acquire(pool)
+    e.s:show()
+    e.s.x = e.x - cam_x
+    e.s.y = e.y - cam_y
+    e.vx = 0
+    e.vy = 0
+    e.flash_timer = 0
+    enemies[#enemies + 1] = e
+  end
+
+  props = {}
+  for _, pr in ipairs(spawned.props) do
+    local pool = (pr.kind == "barrel") and P.barrel or P.crate
+    pr.s = acquire(pool)
+    pr.s:show()
+    pr.s.x = pr.x - cam_x
+    pr.s.y = pr.y - cam_y
+    props[#props + 1] = pr
+  end
+
+  pickups = {}
+  for _, pk in ipairs(spawned.pickups) do
+    local pool = (pk.kind == "health" and P.pickup_hp) or
+                 (pk.kind == "grenade" and P.pickup_gr) or
+                 (pk.kind == "shield" and P.pickup_sh) or P.gem
+    pk.s = acquire(pool)
+    pk.s:show()
+    pk.s.x = pk.x - cam_x
+    pk.s.y = pk.y - cam_y
+    pickups[#pickups + 1] = pk
+  end
+
+  add_text("SECTOR B-" .. floor_num .. " INFILTRATED", player.x, player.y - 40, colors.yellow, 2.0)
+end
+
+local function reset_game()
+  score = 0
+  kills = 0
+  player.hp = D.PLAYER_MAX_HP
+  player.shield = D.PLAYER_MAX_SHIELD
+  player.grenades = D.GRENADE_START
+  init_floor(1)
+  state = "play"
+end
+
+-- ---- Damage & Explosion Handling -------------------------------------
+local function damage_player(dmg)
+  if player.invuln_timer > 0 or state ~= "play" then return end
+  sfx_hit()
+  world.shake(180, 8)
+  player.invuln_timer = 0.45
+
+  -- Shields absorb damage first
+  if player.shield > 0 then
+    if player.shield >= dmg then
+      player.shield = player.shield - dmg
+      dmg = 0
+    else
+      dmg = dmg - player.shield
+      player.shield = 0
+    end
+  end
+
+  player.hp = player.hp - dmg
+  add_text("-" .. dmg, player.x, player.y - 20, colors.red, 0.7)
+
+  if player.hp <= 0 then
+    player.hp = 0
+    state = "gameover"
+    sfx_explode()
+    world.shake(500, 18)
+    local s = acquire(P.explosion)
+    s.x = player.x - cam_x
+    s.y = player.y - cam_y
+    s.play(14)
+    explosions[#explosions + 1] = {s = s, timer = 0.55}
+  end
+end
+
+local function trigger_explosion(ex, ey, max_radius, max_dmg, knockback)
+  sfx_explode()
+  world.shake(280, 12)
+
+  local s = acquire(P.explosion)
+  s.play(14)
+  explosions[#explosions + 1] = {
+    s = s,
+    x = ex,
+    y = ey,
+    timer = 0.55,
+  }
+
+  -- 1. Damage Enemies within blast radius
+  for i = #enemies, 1, -1 do
+    local e = enemies[i]
+    local dist = D.distance(ex, ey, e.x, e.y)
+    if dist < max_radius + e.radius then
+      local dmg = D.calculate_aoe_damage(dist, max_radius, max_dmg)
+      if dmg > 0 then
+        e.hp = e.hp - dmg
+        e.flash_timer = 0.15
+        add_text("-" .. dmg, e.x, e.y - 15, colors.orange, 0.6)
+
+        -- Knockback impulse away from blast center
+        local angle = math.atan2(e.y - ey, e.x - ex)
+        e.vx = (e.vx or 0) + math.cos(angle) * (knockback or 250)
+        e.vy = (e.vy or 0) + math.sin(angle) * (knockback or 250)
+
+        if e.hp <= 0 then
+          score = score + e.score
+          kills = kills + 1
+          release(e.s)
+          table.remove(enemies, i)
+        end
+      end
+    end
+  end
+
+  -- 2. Damage Props (barreling chain reactions)
+  for i = #props, 1, -1 do
+    local pr = props[i]
+    local dist = D.distance(ex, ey, pr.x, pr.y)
+    if dist < max_radius + pr.radius then
+      pr.hp = pr.hp - max_dmg
+      if pr.hp <= 0 then
+        local px, py, pkind = pr.x, pr.y, pr.kind
+        release(pr.s)
+        table.remove(props, i)
+        if pkind == "barrel" then
+          -- Chain detonation!
+          trigger_explosion(px, py, D.BARREL_RADIUS, D.BARREL_DAMAGE, 300)
+        else
+          -- Crate drops pickup
+          local roll = math.random(1, 100)
+          local ptype = (roll <= 35) and "health" or ((roll <= 70) and "grenade" or "gem")
+          local ps = acquire(ptype == "health" and P.pickup_hp or (ptype == "grenade" and P.pickup_gr or P.gem))
+          if ptype == "gem" then ps.play(6) end
+          pickups[#pickups + 1] = {kind = ptype, s = ps, x = px, y = py, radius = 10}
+        end
+      end
+    end
+  end
+
+  -- 3. Damage Player if caught in blast
+  local p_dist = D.distance(ex, ey, player.x, player.y)
+  if p_dist < max_radius then
+    local p_dmg = D.calculate_aoe_damage(p_dist, max_radius, math.floor(max_dmg * 0.45))
+    if p_dmg > 0 then
+      damage_player(p_dmg)
+      local angle = math.atan2(player.y - ey, player.x - ex)
+      player.recoil_vx = player.recoil_vx + math.cos(angle) * 220
+      player.recoil_vy = player.recoil_vy + math.sin(angle) * 220
+    end
+  end
+end
+
+-- ---- Weapons Actions: Fire Gun & Throw Grenade -----------------------
+local function fire_gun()
+  if player.fire_cooldown > 0 or state ~= "play" then return end
+  player.fire_cooldown = D.GUN_COOLDOWN
+  sfx_shoot()
+  world.shake(70, 3)
+
+  -- 1. Bullet projectile
+  local bs = acquire(P.bullet)
+  local bx = player.x + math.cos(player.aim_angle) * 16
+  local by = player.y + math.sin(player.aim_angle) * 16
+  bullets[#bullets + 1] = {
+    s = bs,
+    x = bx,
+    y = by,
+    vx = math.cos(player.aim_angle) * D.GUN_SPEED,
+    vy = math.sin(player.aim_angle) * D.GUN_SPEED,
+    life = 1.2,
+  }
+
+  -- 2. Physical RECOIL: gunner gets kicked BACKWARDS opposite aim direction
+  local rvx, rvy = D.calculate_recoil(player.aim_angle, D.GUN_RECOIL)
+  player.recoil_vx = player.recoil_vx + rvx
+  player.recoil_vy = player.recoil_vy + rvy
+
+  -- 3. Muzzle Flash
+  player.muzzle_timer = 0.08
+  if player.muzzle_s then
+    player.muzzle_s.visible = true
+    player.muzzle_s.angle = math.deg(player.aim_angle)
+  end
+end
+
+local function throw_grenade()
+  if player.grenade_cooldown > 0 or player.grenades <= 0 or state ~= "play" then return end
+  player.grenades = player.grenades - 1
+  player.grenade_cooldown = D.GRENADE_COOLDOWN
+  sfx_grenade_throw()
+
+  local gs = acquire(P.grenade)
+  gs.play(10)
+  grenades[#grenades + 1] = {
+    s = gs,
+    x = player.x,
+    y = player.y,
+    vx = math.cos(player.aim_angle) * D.GRENADE_SPEED,
+    vy = math.sin(player.aim_angle) * D.GRENADE_SPEED,
+    fuse = D.GRENADE_FUSE,
+    bounces = 3,
+  }
+  add_text("GRENADE OUT!", player.x, player.y - 25, colors.lime, 0.6)
+end
+
+-- ---- Main Game Loop Updates ------------------------------------------
+local function update_game(dt)
+  -- 1. Timers & Cooldowns
+  if player.fire_cooldown > 0 then player.fire_cooldown = player.fire_cooldown - dt end
+  if player.grenade_cooldown > 0 then player.grenade_cooldown = player.grenade_cooldown - dt end
+  if player.invuln_timer > 0 then player.invuln_timer = player.invuln_timer - dt end
+  if player.muzzle_timer > 0 then
+    player.muzzle_timer = player.muzzle_timer - dt
+    if player.muzzle_timer <= 0 and player.muzzle_s then
+      player.muzzle_s.visible = false
+    end
+  end
+
+  -- 2. Aim Calculation (Gunner looks toward Crosshair / Mouse cursor)
+  local target_world_x = cam_x + mouse.x
+  local target_world_y = cam_y + mouse.y
+  player.aim_angle = math.atan2(target_world_y - player.y, target_world_x - player.x)
+
+  -- Flip sprite horizontally depending on aiming left/right
+  local aim_deg = math.deg(player.aim_angle)
+  local facing_left = (aim_deg > 90 or aim_deg < -90)
+  if player.s then
+    player.s.flipH = facing_left
+  end
+
+  -- 3. Player Movement Input (WASD / Arrows)
+  local move_x, move_y = 0, 0
+  if keyboard.down("w") or keyboard.down("up") then move_y = move_y - 1 end
+  if keyboard.down("s") or keyboard.down("down") then move_y = move_y + 1 end
+  if keyboard.down("a") or keyboard.down("left") then move_x = move_x - 1 end
+  if keyboard.down("d") or keyboard.down("right") then move_x = move_x + 1 end
+
+  if move_x ~= 0 and move_y ~= 0 then
+    local len = math.sqrt(move_x * move_x + move_y * move_y)
+    move_x = move_x / len
+    move_y = move_y / len
+  end
+
+  player.vx = move_x * D.PLAYER_SPEED
+  player.vy = move_y * D.PLAYER_SPEED
+
+  -- Decaying recoil velocity
+  local decay = math.max(0, 1.0 - D.RECOIL_FRICTION * dt)
+  player.recoil_vx = player.recoil_vx * decay
+  player.recoil_vy = player.recoil_vy * decay
+
+  -- Total velocity = Input + Recoil impulse
+  local total_vx = player.vx + player.recoil_vx
+  local total_vy = player.vy + player.recoil_vy
+
+  local new_px = player.x + total_vx * dt
+  local new_py = player.y + total_vy * dt
+
+  -- Wall collision resolution
+  player.x, player.y = D.resolve_wall_collision(new_px, new_py, D.PLAYER_RADIUS, maze.grid, COLS, ROWS, D.TILE_SIZE)
+
+  -- 4. Player Weapon Inputs
+  if mouse.pressed("left") or keyboard.pressed("space") then
+    fire_gun()
+  end
+  if mouse.pressed("right") or keyboard.pressed("g") or keyboard.pressed("e") or keyboard.pressed("f") then
+    throw_grenade()
+  end
+
+  -- 5. Update Camera (Smooth Scroll Left / Right / Up / Down)
+  local target_cam_x = player.x - W / 2
+  local target_cam_y = player.y - H / 2
+  local cam_speed = 7.5
+  cam_x = cam_x + (target_cam_x - cam_x) * math.min(1.0, cam_speed * dt)
+  cam_y = cam_y + (target_cam_y - cam_y) * math.min(1.0, cam_speed * dt)
+
+  -- Clamp camera within maze world bounds
+  local max_cam_x = COLS * D.TILE_SIZE - W
+  local max_cam_y = ROWS * D.TILE_SIZE - H
+  cam_x = D.clamp(cam_x, 0, math.max(0, max_cam_x))
+  cam_y = D.clamp(cam_y, 0, math.max(0, max_cam_y))
+
+  -- 6. Update Player Projectiles (Bullets)
+  for i = #bullets, 1, -1 do
+    local b = bullets[i]
+    b.x = b.x + b.vx * dt
+    b.y = b.y + b.vy * dt
+    b.life = b.life - dt
+
+    local tx = math.floor(b.x / D.TILE_SIZE)
+    local ty = math.floor(b.y / D.TILE_SIZE)
+    local hit = false
+
+    -- Check wall collision
+    if tx >= 0 and tx < COLS and ty >= 0 and ty < ROWS and D.is_solid_tile(maze.grid[ty][tx]) then
+      hit = true
+    end
+
+    -- Check enemy collision
+    if not hit then
+      for j = #enemies, 1, -1 do
+        local e = enemies[j]
+        if D.distance(b.x, b.y, e.x, e.y) < e.radius + 6 then
+          e.hp = e.hp - D.GUN_DAMAGE
+          e.flash_timer = 0.12
+          sfx_hit()
+          add_text("-" .. D.GUN_DAMAGE, e.x, e.y - 12, colors.yellow, 0.5)
+
+          -- Slight bullet knockback
+          e.vx = (e.vx or 0) + (b.vx / D.GUN_SPEED) * 80
+          e.vy = (e.vy or 0) + (b.vy / D.GUN_SPEED) * 80
+
+          if e.hp <= 0 then
+            score = score + e.score
+            kills = kills + 1
+            release(e.s)
+            table.remove(enemies, j)
+          end
+          hit = true
+          break
+        end
+      end
+    end
+
+    -- Check prop collision
+    if not hit then
+      for j = #props, 1, -1 do
+        local pr = props[j]
+        if D.distance(b.x, b.y, pr.x, pr.y) < pr.radius + 6 then
+          pr.hp = pr.hp - D.GUN_DAMAGE
+          hit = true
+          if pr.hp <= 0 then
+            local px, py, pkind = pr.x, pr.y, pr.kind
+            release(pr.s)
+            table.remove(props, j)
+            if pkind == "barrel" then
+              trigger_explosion(px, py, D.BARREL_RADIUS, D.BARREL_DAMAGE, 300)
+            end
+          end
+          break
+        end
+      end
+    end
+
+    if hit or b.life <= 0 then
+      release(b.s)
+      table.remove(bullets, i)
+    end
+  end
+
+  -- 7. Update Bouncing Grenades
+  for i = #grenades, 1, -1 do
+    local g = grenades[i]
+    g.fuse = g.fuse - dt
+
+    -- Motion & friction
+    local next_gx = g.x + g.vx * dt
+    local next_gy = g.y + g.vy * dt
+    g.vx = g.vx * math.max(0, 1.0 - 1.8 * dt)
+    g.vy = g.vy * math.max(0, 1.0 - 1.8 * dt)
+
+    -- Bounce off walls
+    local g_tx = math.floor(next_gx / D.TILE_SIZE)
+    local g_ty = math.floor(next_gy / D.TILE_SIZE)
+    if g_tx >= 0 and g_tx < COLS and g_ty >= 0 and g_ty < ROWS and D.is_solid_tile(maze.grid[g_ty][g_tx]) then
+      if g.bounces > 0 then
+        sfx_grenade_bounce()
+        g.bounces = g.bounces - 1
+        -- Invert velocity based on axis of impact
+        local curr_tx = math.floor(g.x / D.TILE_SIZE)
+        local curr_ty = math.floor(g.y / D.TILE_SIZE)
+        if curr_tx ~= g_tx then g.vx = -g.vx * 0.75 end
+        if curr_ty ~= g_ty then g.vy = -g.vy * 0.75 end
+      else
+        g.fuse = 0 -- Detonate immediately on final impact
+      end
+    else
+      g.x = next_gx
+      g.y = next_gy
+    end
+
+    if g.fuse <= 0 then
+      trigger_explosion(g.x, g.y, D.GRENADE_RADIUS, D.GRENADE_DAMAGE, D.GRENADE_KNOCKBACK)
+      release(g.s)
+      table.remove(grenades, i)
+    end
+  end
+
+  -- 8. Update Enemies (AI, Movement, Projectiles)
+  for i = #enemies, 1, -1 do
+    local e = enemies[i]
+    if e.flash_timer > 0 then e.flash_timer = e.flash_timer - dt end
+
+    local dist_to_player = D.distance(e.x, e.y, player.x, player.y)
+
+    -- Enemy AI logic
+    if dist_to_player < 340 then
+      local ang = math.atan2(player.y - e.y, player.x - e.x)
+
+      if e.kind == "drone" then
+        -- Ranged Drone keeps distance (~150px) and strafes
+        if dist_to_player > 160 then
+          e.x = e.x + math.cos(ang) * e.speed * dt
+          e.y = e.y + math.sin(ang) * e.speed * dt
+        elseif dist_to_player < 110 then
+          e.x = e.x - math.cos(ang) * e.speed * dt
+          e.y = e.y - math.sin(ang) * e.speed * dt
+        end
+        -- Firing timer
+        e.fire_timer = (e.fire_timer or 1.5) - dt
+        if e.fire_timer <= 0 then
+          e.fire_timer = D.ENEMIES.drone.fire_rate
+          sfx_enemy_shoot()
+          local bs = acquire(P.bullet_enemy)
+          enemy_bullets[#enemy_bullets + 1] = {
+            s = bs,
+            x = e.x,
+            y = e.y,
+            vx = math.cos(ang) * D.ENEMIES.drone.bullet_speed,
+            vy = math.sin(ang) * D.ENEMIES.drone.bullet_speed,
+            life = 2.0,
+            damage = D.ENEMIES.drone.damage,
+          }
+        end
+      else
+        -- Direct Chase for Scuttler, Kamikaze, Brute
+        local spd = e.speed
+        if e.kind == "kamikaze" and dist_to_player < 100 then
+          spd = spd * 1.4 -- Enrage sprint
+        end
+        e.x = e.x + math.cos(ang) * spd * dt
+        e.y = e.y + math.sin(ang) * spd * dt
+      end
+
+      -- Apply knockback decay
+      if e.vx and e.vy then
+        e.x = e.x + e.vx * dt
+        e.y = e.y + e.vy * dt
+        e.vx = e.vx * math.max(0, 1.0 - 6.0 * dt)
+        e.vy = e.vy * math.max(0, 1.0 - 6.0 * dt)
+      end
+
+      -- Slide along maze walls
+      e.x, e.y = D.resolve_wall_collision(e.x, e.y, e.radius, maze.grid, COLS, ROWS, D.TILE_SIZE)
+
+      -- Enemy Melee / Contact with Player
+      if dist_to_player < e.radius + D.PLAYER_RADIUS then
+        if e.kind == "kamikaze" then
+          -- Suicide blast
+          trigger_explosion(e.x, e.y, e.explode_radius or 60, e.damage, 280)
+          release(e.s)
+          table.remove(enemies, i)
+        else
+          damage_player(e.damage)
+          -- Push enemy slightly back so it doesn't instantly re-hit
+          e.x = e.x - math.cos(ang) * 18
+          e.y = e.y - math.sin(ang) * 18
+        end
+      end
+    end
+  end
+
+  -- 9. Update Enemy Bullets
+  for i = #enemy_bullets, 1, -1 do
+    local b = enemy_bullets[i]
+    b.x = b.x + b.vx * dt
+    b.y = b.y + b.vy * dt
+    b.life = b.life - dt
+
+    local tx = math.floor(b.x / D.TILE_SIZE)
+    local ty = math.floor(b.y / D.TILE_SIZE)
+    local hit = false
+
+    if tx >= 0 and tx < COLS and ty >= 0 and ty < ROWS and D.is_solid_tile(maze.grid[ty][tx]) then
+      hit = true
+    end
+
+    if not hit and D.distance(b.x, b.y, player.x, player.y) < D.PLAYER_RADIUS + 5 then
+      damage_player(b.damage)
+      hit = true
+    end
+
+    if hit or b.life <= 0 then
+      release(b.s)
+      table.remove(enemy_bullets, i)
+    end
+  end
+
+  -- 10. Update Pickups Collection
+  for i = #pickups, 1, -1 do
+    local pk = pickups[i]
+    if D.distance(pk.x, pk.y, player.x, player.y) < pk.radius + D.PLAYER_RADIUS then
+      sfx_pickup()
+      if pk.kind == "health" then
+        player.hp = math.min(player.max_hp, player.hp + 35)
+        add_text("+35 HP", player.x, player.y - 25, colors.lime, 0.8)
+      elseif pk.kind == "grenade" then
+        player.grenades = math.min(player.max_grenades, player.grenades + 2)
+        add_text("+2 GRENADES", player.x, player.y - 25, colors.orange, 0.8)
+      elseif pk.kind == "shield" then
+        player.shield = math.min(player.max_shield, player.shield + 25)
+        add_text("+25 SHIELD", player.x, player.y - 25, colors.aqua, 0.8)
+      elseif pk.kind == "gem" then
+        score = score + 250
+        add_text("+250 PTS", player.x, player.y - 25, colors.gold, 0.8)
+      end
+      release(pk.s)
+      table.remove(pickups, i)
+    end
+  end
+
+  -- 11. Descending Stairs to next floor
+  if stairs_entity and D.distance(stairs_entity.x, stairs_entity.y, player.x, player.y) < 24 then
+    sfx_stairs()
+    score = score + 1000 * floor_num
+    init_floor(floor_num + 1)
+  end
+
+  -- 12. Update Explosions & Floaty Texts
+  for i = #explosions, 1, -1 do
+    local ex = explosions[i]
+    ex.timer = ex.timer - dt
+    if ex.timer <= 0 then
+      release(ex.s)
+      table.remove(explosions, i)
+    end
+  end
+
+  for i = #texts, 1, -1 do
+    local t = texts[i]
+    t.life = t.life - dt
+    t.y = t.y - 24 * dt
+    if t.life <= 0 then
+      table.remove(texts, i)
+    end
+  end
+end
+
+-- ---- Render Sprites to Screen Space ----------------------------------
+local function sync_sprites()
+  -- Gunner
+  if player.s and player.s.visible then
+    player.s.x = player.x - cam_x
+    player.s.y = player.y - cam_y
+    -- Flash red when damaged
+    if player.invuln_timer > 0 then
+      player.s.tint = colors.red
+    else
+      player.s.tint = colors.white
+    end
+  end
+
+  -- Muzzle flash position
+  if player.muzzle_s and player.muzzle_s.visible then
+    player.muzzle_s.x = (player.x + math.cos(player.aim_angle) * 16) - cam_x
+    player.muzzle_s.y = (player.y + math.sin(player.aim_angle) * 16) - cam_y
+  end
+
+  -- Stairs
+  if stairs_entity and stairs_entity.s then
+    stairs_entity.s.x = stairs_entity.x - cam_x
+    stairs_entity.s.y = stairs_entity.y - cam_y
+  end
+
+  -- Enemies
+  for _, e in ipairs(enemies) do
+    if e.s and e.s.visible then
+      e.s.x = e.x - cam_x
+      e.s.y = e.y - cam_y
+      if e.flash_timer and e.flash_timer > 0 then
+        e.s.tint = colors.white
+      else
+        e.s.tint = (e.kind == "brute" and colors.white) or
+                   (e.kind == "kamikaze" and colors.orange) or colors.white
+      end
+    end
+  end
+
+  -- Props
+  for _, pr in ipairs(props) do
+    if pr.s and pr.s.visible then
+      pr.s.x = pr.x - cam_x
+      pr.s.y = pr.y - cam_y
+    end
+  end
+
+  -- Pickups
+  for _, pk in ipairs(pickups) do
+    if pk.s and pk.s.visible then
+      pk.s.x = pk.x - cam_x
+      pk.s.y = pk.y - cam_y
+    end
+  end
+
+  -- Bullets
+  for _, b in ipairs(bullets) do
+    if b.s and b.s.visible then
+      b.s.x = b.x - cam_x
+      b.s.y = b.y - cam_y
+    end
+  end
+
+  -- Enemy Bullets
+  for _, b in ipairs(enemy_bullets) do
+    if b.s and b.s.visible then
+      b.s.x = b.x - cam_x
+      b.s.y = b.y - cam_y
+    end
+  end
+
+  -- Grenades
+  for _, g in ipairs(grenades) do
+    if g.s and g.s.visible then
+      g.s.x = g.x - cam_x
+      g.s.y = g.y - cam_y
+    end
+  end
+
+  -- Explosions
+  for _, ex in ipairs(explosions) do
+    if ex.s and ex.s.visible then
+      ex.s.x = ex.x - cam_x
+      ex.s.y = ex.y - cam_y
+    end
+  end
+
+  -- Crosshair cursor
+  if crosshair_sprite and crosshair_sprite.visible then
+    crosshair_sprite.x = mouse.x
+    crosshair_sprite.y = mouse.y
+  end
+end
+
+-- ---- HUD & Text Overlays (canvas.front) -------------------------------
+local function draw_hud()
+  -- Flashlight / Glow around Player Gunner
+  if player.s and player.s.visible then
+    canvas.color = colors.cyan
+    canvas.alpha = 25
+    canvas.circle(player.s.x, player.s.y, 48, true)
+    canvas.alpha = 55
+    canvas.circle(player.s.x, player.s.y, 24, true)
+    canvas.alpha = 255
+
+    -- Overhead mini health bar above Gunner
+    local bar_w = 30
+    local cur_w = math.max(0, math.floor((player.hp / player.max_hp) * bar_w))
+    canvas.color = colors.black
+    canvas.rectangle(player.s.x - 15, player.s.y - 28, bar_w, 4, true)
+    canvas.color = (player.hp > 30) and colors.lime or colors.red
+    canvas.rectangle(player.s.x - 15, player.s.y - 28, cur_w, 4, true)
+  end
+
+  -- Top Tactical HUD Bar
+  canvas.color = colors.black
+  canvas.alpha = 210
+  canvas.rectangle(0, 0, W, 46, true)
+  canvas.alpha = 255
+  canvas.color = colors.cyan
+  canvas.rectangle(0, 46, W, 2, true)
+
+  -- Sector / Floor & Score
+  canvas.color = colors.yellow
+  canvas.text(18, 14, "SECTOR: B-" .. floor_num)
+  canvas.color = colors.white
+  canvas.text(180, 14, "SCORE: " .. score)
+  canvas.text(320, 14, "KILLS: " .. kills)
+
+  -- HP Bar
+  local hp_w = 120
+  canvas.color = colors.gray
+  canvas.rectangle(440, 14, hp_w, 18, true)
+  local cur_hp_w = math.floor((player.hp / player.max_hp) * hp_w)
+  canvas.color = (player.hp > 30) and colors.green or colors.red
+  canvas.rectangle(440, 14, cur_hp_w, 18, true)
+  canvas.color = colors.white
+  canvas.text(450, 15, "HP " .. player.hp .. "/" .. player.max_hp)
+
+  -- Shield Bar
+  local sh_w = 90
+  canvas.color = colors.gray
+  canvas.rectangle(580, 14, sh_w, 18, true)
+  local cur_sh_w = math.floor((player.shield / player.max_shield) * sh_w)
+  canvas.color = colors.aqua
+  canvas.rectangle(580, 14, cur_sh_w, 18, true)
+  canvas.color = colors.white
+  canvas.text(590, 15, "SHIELD " .. player.shield)
+
+  -- Grenades Ammo Counter
+  canvas.color = colors.orange
+  canvas.text(700, 14, "GRENADES: " .. player.grenades .. "/" .. player.max_grenades)
+
+  -- Controls tip
+  canvas.color = colors.lightgray
+  canvas.text(W - 130, 14, "[ESC] MENU")
+
+  -- Bottom Tactical Controls Reminder
+  canvas.color = colors.black
+  canvas.alpha = 180
+  canvas.rectangle(14, H - 36, 440, 24, true)
+  canvas.alpha = 255
+  canvas.color = colors.yellow
+  canvas.text(20, H - 30, "WASD: Move | LMB: Fire (Recoil Kick) | RMB/G: Grenade")
+
+  -- Floaty damage / score texts
+  for _, t in ipairs(texts) do
+    local sx = t.x - cam_x
+    local sy = t.y - cam_y
+    if sx > -100 and sx < W + 100 and sy > -50 and sy < H + 50 then
+      canvas.color = t.clr
+      canvas.text(math.floor(sx), math.floor(sy), t.msg)
+    end
+  end
+
+  -- Radar / Mini-map in bottom-right corner
+  local mw, mh = 110, 110
+  local mx, my = W - mw - 14, H - mh - 14
+  canvas.color = colors.black
+  canvas.alpha = 190
+  canvas.rectangle(mx, my, mw, mh, true)
+  canvas.alpha = 255
+  canvas.color = colors.cyan
+  canvas.rectangle(mx, my, mw, mh, false)
+
+  -- Draw player blip on radar
+  local blip_x = mx + math.floor((player.x / (COLS * D.TILE_SIZE)) * mw)
+  local blip_y = my + math.floor((player.y / (ROWS * D.TILE_SIZE)) * mh)
+  canvas.color = colors.lime
+  canvas.circle(blip_x, blip_y, 3, true)
+
+  -- Draw stairs blip
+  if stairs_entity then
+    local st_x = mx + math.floor((stairs_entity.x / (COLS * D.TILE_SIZE)) * mw)
+    local st_y = my + math.floor((stairs_entity.y / (ROWS * D.TILE_SIZE)) * mh)
+    canvas.color = colors.yellow
+    canvas.circle(st_x, st_y, 3, true)
+  end
+end
+
+local function draw_title_screen()
+  canvas.color = colors.black
+  canvas.alpha = 230
+  canvas.rectangle(0, 0, W, H, true)
+  canvas.alpha = 255
+
+  canvas.color = colors.cyan
+  canvas.text(W / 2 - 120, H / 2 - 120, "M A Z E   R O G U E")
+  canvas.color = colors.yellow
+  canvas.text(W / 2 - 140, H / 2 - 70, "SCI-FI GUNNER ROGUELIKE")
+
+  canvas.color = colors.white
+  canvas.text(W / 2 - 200, H / 2 - 20, "W, A, S, D / Arrows  : Move Gunner (Auto Camera Scroll)")
+  canvas.text(W / 2 - 200, H / 2 + 10, "Mouse Aim & Crosshair: Target Enemies")
+  canvas.text(W / 2 - 200, H / 2 + 40, "Left Click / Space   : Shoot Gun (Knocks Gunner Back!)")
+  canvas.text(W / 2 - 200, H / 2 + 70, "Right Click / G / E  : Throw Bouncing Grenade")
+
+  canvas.color = colors.lime
+  canvas.text(W / 2 - 110, H / 2 + 130, "[ PRESS SPACE TO START ]")
+end
+
+local function draw_game_over_screen()
+  canvas.color = colors.black
+  canvas.alpha = 220
+  canvas.rectangle(0, 0, W, H, true)
+  canvas.alpha = 255
+
+  canvas.color = colors.red
+  canvas.text(W / 2 - 80, H / 2 - 60, "M.I.A. - GUNNER DOWN")
+
+  canvas.color = colors.white
+  canvas.text(W / 2 - 70, H / 2 - 10, "FINAL SCORE: " .. score)
+  canvas.text(W / 2 - 70, H / 2 + 15, "SECTOR REACHED: B-" .. floor_num)
+  canvas.text(W / 2 - 70, H / 2 + 40, "ENEMIES PURGED: " .. kills)
+
+  canvas.color = colors.yellow
+  canvas.text(W / 2 - 120, H / 2 + 90, "[ PRESS SPACE / R TO RESTART ]")
+end
+
+-- ---- Main Cycle Loop -------------------------------------------------
+init_floor(1)
+
+local last_tick = time()
+
+while cycle do
+  local cur_tick = time()
+  local dt = cur_tick - last_tick
+  if dt > 0.05 then dt = 0.05 end
+  last_tick = cur_tick
+
+  -- Input handling for Title & Game Over
+  if state == "title" then
+    if keyboard.pressed("space") or keyboard.pressed("enter") or mouse.pressed("left") then
+      reset_game()
+    end
+  elseif state == "gameover" then
+    if keyboard.pressed("space") or keyboard.pressed("enter") or keyboard.pressed("r") then
+      reset_game()
+    end
+  elseif state == "play" then
+    if keyboard.pressed("r") then
+      reset_game()
+    elseif keyboard.pressed("escape") then
+      state = "title"
+    else
+      update_game(dt)
+    end
+  end
+
+  -- Sync sprite positions with camera coordinates
+  sync_sprites()
+
+  -- Draw Frame (Hold queue with enter/leave for atomic frame delivery)
+  enter()
+  canvas.color = colors.black
+  canvas.clear()
+
+  -- 1. Draw Native Tilemap with Camera Offset
+  if tilemap then
+    tilemap.draw(-cam_x, -cam_y, 1.0)
+  end
+
+  -- 2. Draw HUD and Overlay UI
+  if state == "play" then
+    draw_hud()
+  elseif state == "title" then
+    draw_title_screen()
+  elseif state == "gameover" then
+    draw_game_over_screen()
+  end
+
+  leave()
+end

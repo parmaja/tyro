@@ -4,8 +4,10 @@ This is a simple game engine for kids and noobs, using RayLib and Lua for enduse
 
 ## Implementation
 
-* If the task is a game, use Sprites as possible, add features that needed it in Tyro project
+### Games
 
+* If the task is a game, use Sprites as possible, add any features that needed it in Tyro project, make it smooth and perfect game
+* Use `update(dt)` and `draw()` functions callback instead of `while cycle do`
 
 ## Compile
 
