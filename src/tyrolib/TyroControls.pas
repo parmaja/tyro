@@ -208,6 +208,14 @@ type
     //ClientRect always start from (0, 0) so it is InnerRect but shifted to (0, 0)
     property ClientRect: TRect read GetClientRect;
 
+    //* Map window (screen) coordinates to this control's client coordinates,
+    //* the space DoPaint draws in: (0, 0) is the inner top-left corner, past
+    //* the margin, border and padding. MapToClient(InnerRect) is ClientRect.
+    //* The mouse handlers receive window-local points (relative to
+    //* WindowRect), so add WindowRect.TopLeft before calling this.
+    function MapToClient(APoint: TPoint): TPoint; overload;
+    function MapToClient(ARect: TRect): TRect; overload;
+
     property Width: Integer read GetWidth write SetWidth;
     property Height: Integer read GetHeight write SetHeight;
     property Visible: Boolean read FVisible write SetVisible;
@@ -781,6 +789,23 @@ function TTyroLayout.GetInnerRect: TRect;
 begin
   Result := WindowRect;
   Result.Inflate(-OuterSize, -OuterSize);
+end;
+
+function TTyroLayout.MapToClient(APoint: TPoint): TPoint;
+var
+  R: TRect;
+begin
+  R := InnerRect;
+  Result := Point(APoint.X - R.Left, APoint.Y - R.Top);
+end;
+
+function TTyroLayout.MapToClient(ARect: TRect): TRect;
+var
+  R: TRect;
+begin
+  R := InnerRect;
+  Result := Rect(ARect.Left - R.Left, ARect.Top - R.Top,
+    ARect.Right - R.Left, ARect.Bottom - R.Top);
 end;
 
 constructor TTyroLayout.Create(AParent: TTyroLayout);

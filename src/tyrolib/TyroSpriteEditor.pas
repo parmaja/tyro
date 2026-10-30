@@ -2051,7 +2051,7 @@ end;
 procedure TSpriteEditor.MouseDown(Button: TMouseButton; Shift: TShiftState;
   x, y: integer);
 var
-  CX, CY: Integer;
+  P: TPoint;
 begin
   inherited;
   if not Visible then
@@ -2059,23 +2059,22 @@ begin
   if Button <> mbLeft then
     Exit;
   Focused := True;
-  //* The engine hands us points relative to WindowRect, while DoPaint draws
-  //* from WindowRect + OuterSize (margin + border + padding). ClientRect is
-  //* always anchored at (0, 0), so OuterSize is the real offset to remove.
-  CX := x - OuterSize;
-  CY := y - OuterSize;
-  HandleLeftClick(CX, CY);
+  //* The engine hands us window-local points; MapToClient takes window
+  //* (screen) coordinates and returns the client space DoPaint draws in.
+  P := MapToClient(Point(x + WindowRect.Left, y + WindowRect.Top));
+  HandleLeftClick(P.X, P.Y);
 end;
 
 procedure TSpriteEditor.HandleMouse;
 var
   mp: TVector2;
+  P: TPoint;
   PX, PY: Integer;
 begin
   mp := RayLib.GetMousePosition;
-  //* Same mapping as MouseDown: WindowRect -> client (see OuterSize).
-  FMouseX := Round(mp.X) - WindowRect.Left - OuterSize;
-  FMouseY := Round(mp.Y) - WindowRect.Top - OuterSize;
+  P := MapToClient(Point(Round(mp.X), Round(mp.Y)));
+  FMouseX := P.X;
+  FMouseY := P.Y;
   FMouseInCanvas := InsideRect(CanvasAreaRect, FMouseX, FMouseY);
 
   if not Focused then

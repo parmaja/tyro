@@ -60,7 +60,8 @@ end;
 
 function TTestSpriteEditor.ToWindow(AX, AY: Integer): TPoint;
 begin
-  Result := Point(AX + OuterSize, AY + OuterSize);
+  //* Inverse of MapToClient: client -> window (the editor sits at 0, 0).
+  Result := Point(AX + InnerRect.Left, AY + InnerRect.Top);
 end;
 
 function TTestSpriteEditor.PixelPoint(X, Y: Integer): TPoint;
@@ -187,6 +188,7 @@ var
   I: Integer;
   K: TKeyboardKey;
   P: TPoint;
+  R: TRect;
   Meta: string;
 
 begin
@@ -261,6 +263,15 @@ begin
         'writes the second screenshot');
 
       //--- every tool button selects its own tool at its real position -----
+      P := Editor.MapToClient(Point(Editor.InnerRect.Left, Editor.InnerRect.Top));
+      Check((P.X = 0) and (P.Y = 0),
+        'MapToClient maps the inner corner to the client origin');
+      R := Editor.MapToClient(Editor.InnerRect);
+      Check((R.Left = 0) and (R.Top = 0) and
+        (R.Right = Editor.ClientRect.Width) and
+        (R.Bottom = Editor.ClientRect.Height),
+        'MapToClient maps the inner rect to the client rect');
+
       for I := 0 to Ord(High(TSpriteTool)) do
       begin
         P := Editor.ToolPoint(I);
