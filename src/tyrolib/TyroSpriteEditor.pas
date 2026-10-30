@@ -27,7 +27,7 @@ uses
   Classes, SysUtils, Types, Math, StrUtils, Generics.Collections,
   mnDON,
   RayLib, RayClasses,
-  TyroClasses, TyroControls, SpriteAtlas;
+  TyroClasses, TyroControls, TyroIcons, SpriteAtlas;
 
 const
   cSpriteEditorVersion = 1;
@@ -135,6 +135,7 @@ type
     FRenameBuffer: string;
     FTextures: array of TTexture2D;
     FTextureDirty: array of Boolean;
+    FIcons: TTyroIcons;
 
     { small JSON helpers, nil-safe like the ones in SpriteAtlas }
     function DonChild(V: TDON_Value; const Name: string): TDON_Value;
@@ -520,6 +521,7 @@ begin
   //after it has been removed, so the list must not free it on Delete.
   FUndo := TObjectList<TSpriteSnapshot>.Create(False);
   FRedo := TObjectList<TSpriteSnapshot>.Create(False);
+  FIcons := TTyroIcons.Create;
   FCanvasW := 32;
   FCanvasH := 32;
   FActiveAction := -1;
@@ -562,6 +564,7 @@ begin
   FRedo.Free;
   FActions.Free;
   FFrames.Free;
+  FIcons.Free;
   inherited Destroy;
 end;
 
@@ -2917,11 +2920,54 @@ begin
   end;
 end;
 
+function SpriteIconName(AIcon: TSpriteIcon): string;
+begin
+  case AIcon of
+    icSave: Result := 'save';
+    icUndo: Result := 'undo';
+    icRedo: Result := 'redo';
+    icMirrorH: Result := 'mirror-h';
+    icMirrorV: Result := 'mirror-v';
+    icRotateCW: Result := 'rotate-cw';
+    icRotateCCW: Result := 'rotate-ccw';
+    icGrid: Result := 'grid';
+    icPlus: Result := 'plus';
+    icMinus: Result := 'minus';
+    icClose: Result := 'close';
+    icPlay: Result := 'play';
+    icLoop: Result := 'loop';
+    icAction: Result := 'action';
+    icFrame: Result := 'frame';
+    icProps: Result := 'props';
+    icPalette: Result := 'palette';
+    icTools: Result := 'tools';
+  else
+    Result := '';
+  end;
+end;
+
+function SpriteToolIconName(ATool: TSpriteTool): string;
+begin
+  case ATool of
+    stSelect: Result := 'tool-select';
+    stPixel: Result := 'tool-pixel';
+    stPen: Result := 'tool-pen';
+    stFill: Result := 'tool-fill';
+    stPick: Result := 'tool-pick';
+    stCircle: Result := 'tool-circle';
+    stRect: Result := 'tool-rect';
+    stRotate: Result := 'tool-rotate';
+  else
+    Result := '';
+  end;
+end;
+
 procedure TSpriteEditor.DrawIcon(ACanvas: TTyroCanvas; const R: TRect;
   AIcon: Integer; AColor: TColor);
 var
   CX, CY, S, I: Integer;
   A: Single;
+  Name: string;
 
   procedure ArcLine(CXc, CYc, Rad, A1, A2: Single);
   var
@@ -2949,6 +2995,10 @@ var
 
 begin
   if (AIcon <= Ord(icNone)) or (AIcon > Ord(High(TSpriteIcon))) then
+    Exit;
+  //* assets/icons first; the vector drawings below are the fallback
+  Name := SpriteIconName(TSpriteIcon(AIcon));
+  if FIcons.Draw(ACanvas, R, Name, AColor) then
     Exit;
   CX := (R.Left + R.Right) div 2;
   CY := (R.Top + R.Bottom) div 2;
@@ -3089,6 +3139,9 @@ var
 begin
   CX := (R.Left + R.Right) div 2;
   CY := (R.Top + R.Bottom) div 2;
+  //* assets/icons first; the vector drawings below are the fallback
+  if FIcons.Draw(ACanvas, R, SpriteToolIconName(ATool), AColor) then
+    Exit;
   ACanvas.Pen := 1;
   case ATool of
     stSelect:
