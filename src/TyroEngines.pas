@@ -39,7 +39,7 @@ uses
   RayLib, RayClasses, TyroInput, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
   TyroSprites, TyroTiles, TyroPhysics, TyroEditors, TyroParallax,
-  TyroSpriteEditor;
+  TyroSpriteEditor, SpriteAtlas;
 
 //Diagnostics (queue/frame counters and the like) are compiled only when
 //'diagnose' is defined, which tracks the debug switch. Debug builds keep them;
@@ -626,6 +626,12 @@ implementation
 uses
   TyroRadio, TyroSpectrum, mnHttpClient, mnModules;
 
+const
+  //* "tyro player.sprite" opens a window with room for the editor's tool
+  //* column and side panels; the default script window is too narrow.
+  cSpriteEditorWindowWidth = 1000;
+  cSpriteEditorWindowHeight = 680;
+
 {$IFDEF MMLDEBUG}
 var
   FDebugFrameCount: Integer = 0;
@@ -706,6 +712,8 @@ begin
 end;
 
 procedure TTyroEngine.Run(AOptions: TTyroEngineOptions);
+var
+  aSpriteStart: Boolean;
 begin
   PrepareWindow(cDefaultWindowWidth, cDefaultWindowHeight);
 
@@ -714,6 +722,10 @@ begin
   Running := True;
   Load;
   Res.Load;
+  //A sprite document opens the sprite editor instead of running as a script.
+  //Remembered before LoadScriptThread clears ScriptFile, because the window
+  //is shown bigger for it a few lines below.
+  aSpriteStart := IsSpriteDocument(ScriptFile);
   LoadScriptThread;
   Log.WriteLn('WorkPath: ' + Res.WorkPath);
   Options := Options + AOptions;
@@ -723,7 +735,14 @@ begin
   FRunStart := GetTime();
   FScreenshotDone := False;
   if moMainWindow in AOptions then
-    ShowWindow;
+  begin
+    //The default script window is too narrow for the editor's tool and side
+    //panels, so a sprite document opens a roomier one.
+    if aSpriteStart then
+      ShowWindow(cSpriteEditorWindowWidth, cSpriteEditorWindowHeight)
+    else
+      ShowWindow;
+  end;
   {if Res.Config.Sections.ReadBool('show', 'console', False) then
   begin
     ShowConsole(0, 0, 0, 0);
@@ -2446,19 +2465,13 @@ begin
 end;
 
 procedure TTyroEngine.Edit_Command(Params: TStrings);
-var
-  aExt: string;
 begin
   //"edit player.sprite" and "edit player.png" open the sprite editor on that
   //file; everything else keeps opening the script editor as before.
-  if Params.Count > 0 then
+  if (Params.Count > 0) and IsSpriteDocument(Params[0]) then
   begin
-    aExt := LowerCase(ExtractFileExt(Params[0]));
-    if (aExt = '.png') or (aExt = '.sprite') then
-    begin
-      ShowSpriteEditor(Params[0]);
-      Exit;
-    end;
+    ShowSpriteEditor(Params[0]);
+    Exit;
   end;
   ShowEditor;
 end;
@@ -2522,9 +2535,20 @@ end;
 procedure TTyroEngine.LoadScriptThread;
 var
   aScriptType: TScriptType;
+  aSprite: string;
 begin
   if ScriptFile = '' then
     exit;
+
+  //"tyro player.sprite" (and "load player.png") opens the sprite editor on
+  //that document instead of trying to run it as a script.
+  if IsSpriteDocument(ScriptFile) then
+  begin
+    aSprite := ScriptFile;
+    ScriptFile := '';
+    ShowSpriteEditor(aSprite);
+    Exit;
+  end;
 
   if EndsDelimiter(ScriptFile) and SysUtils.DirectoryExists(ScriptFile) then
   begin

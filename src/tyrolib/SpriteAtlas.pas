@@ -110,6 +110,10 @@ type
   end;
 
   function IsSpriteFile(const FileName: string): Boolean;
+  // True for a file the sprite editor can open as a document: a .sprite
+  // atlas or a plain .png image. "tyro player.sprite" uses it to tell a
+  // document from a script.
+  function IsSpriteDocument(const FileName: string): Boolean;
   // Decodes every frame of a .sprite as an individual GPU texture plus its
   // duration in milliseconds; returns the number of frames (0 on failure).
   // The caller owns the textures and should free them with SpriteFreeTextures.
@@ -726,6 +730,14 @@ end;
 function IsSpriteFile(const FileName: string): Boolean;
 begin
   Result := LowerCase(ExtractFileExt(FileName)) = '.sprite';
+end;
+
+function IsSpriteDocument(const FileName: string): Boolean;
+var
+  aExt: string;
+begin
+  aExt := LowerCase(ExtractFileExt(FileName));
+  Result := (aExt = '.sprite') or (aExt = '.png');
 end;
 
 function SpriteLoadFrameTextures(const FileName: string; out ATextures: TAseTextures; out ADurations: TAseFrameDurations): Integer;

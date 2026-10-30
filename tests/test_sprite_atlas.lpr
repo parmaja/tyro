@@ -295,6 +295,12 @@ begin
   Check('IsSpriteFile is case-insensitive', IsSpriteFile('HERO.SPRITE'));
   Check('IsSpriteFile rejects .png', not IsSpriteFile('hero.png'));
 
+  Check('IsSpriteDocument accepts .sprite', IsSpriteDocument('hero.sprite'));
+  Check('IsSpriteDocument accepts .png', IsSpriteDocument('hero.png'));
+  Check('IsSpriteDocument is case-insensitive', IsSpriteDocument('HERO.PNG'));
+  Check('IsSpriteDocument rejects a script', not IsSpriteDocument('game.tyro'));
+  Check('IsSpriteDocument rejects a folder', not IsSpriteDocument('demos'));
+
   // --------------------------------------------------------------------
   // 1) array layout, stored (method 0): two 8x8 frames in a 16x8 sheet
   // --------------------------------------------------------------------

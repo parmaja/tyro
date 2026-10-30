@@ -38,7 +38,7 @@ uses
   {$endif}
   SysUtils, Classes, RayLib, mnUtils, mnConfigs, StrUtils,
   Melodies, TyroControls, TyroClasses, mnLogs, TyroEngines,
-  TyroLua, TyroFuse;
+  TyroLua, TyroFuse, SpriteAtlas;
 
 type
 
@@ -198,9 +198,11 @@ end;
 procedure PrintHelp;
 begin
   WriteLn('Tyro to run script in graphical mode with media function, using RayLib library, for learning proramming languages students and kids.');
-  WriteLn('usage: tyro [<script>] [--workpath=<workpath>] [<options>]');
+  WriteLn('usage: tyro [<script>|<sprite>] [--workpath=<workpath>] [<options>]');
   WriteLn('       tyro --fuse <path> <zip>');
   WriteLn('');
+  WriteLn('<script>               Run a script file or a folder of scripts');
+  WriteLn('<sprite>               Open player.sprite or player.png in the sprite editor');
   WriteLn('--help -h              Show this help page');
   WriteLn('--console -c           Show command prompt');
   WriteLn('--terminal -t          Show terminal');
@@ -388,6 +390,16 @@ begin
 
   if (Engine.ScriptFile = '') or SysUtils.DirectoryExists(ScriptFile) or Arguments.ReadSwitch('-window', true) or Arguments.ReadSwitch('-w', true) then
     MainOptions := MainOptions + [moMainWindow];
+
+  //"tyro player.sprite" opens the sprite editor on that document instead of
+  //running it, and the editor needs a visible window even when no script
+  //asked for one. The file name also becomes the window title.
+  if (Engine.ScriptFile <> '') and IsSpriteDocument(Engine.ScriptFile) then
+  begin
+    Engine.World.Title := ScriptFile;
+    MainOptions := MainOptions + [moMainWindow];
+  end;
+
   if Arguments.ReadSwitch('-terminal') or Arguments.ReadSwitch('-t') then
     MainOptions := MainOptions + [moShowTerminal];
 
