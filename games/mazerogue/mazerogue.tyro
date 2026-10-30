@@ -1076,16 +1076,9 @@ local function draw_game_over_screen()
   canvas.text(W / 2 - 120, H / 2 + 90, "[ PRESS SPACE / R TO RESTART ]")
 end
 
--- ---- Main Cycle Loop -------------------------------------------------
-init_floor(1)
-
-local last_tick = time()
-
-while cycle do
-  local cur_tick = time()
-  local dt = cur_tick - last_tick
+-- ---- Engine-Driven Callbacks (update & draw) ------------------------
+function update(dt)
   if dt > 0.05 then dt = 0.05 end
-  last_tick = cur_tick
 
   -- Input handling for Title & Game Over
   if state == "title" then
@@ -1108,9 +1101,9 @@ while cycle do
 
   -- Sync sprite positions with camera coordinates
   sync_sprites()
+end
 
-  -- Draw Frame (Hold queue with enter/leave for atomic frame delivery)
-  enter()
+function draw()
   canvas.color = colors.black
   canvas.clear()
 
@@ -1127,6 +1120,7 @@ while cycle do
   elseif state == "gameover" then
     draw_game_over_screen()
   end
-
-  leave()
 end
+
+-- Initialize first floor
+init_floor(1)
