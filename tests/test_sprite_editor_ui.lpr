@@ -37,22 +37,56 @@ const
   cWidth = 1000;
   cHeight = 680;
 
-  { Screen position of a frame pixel: the 32x32 frame is drawn at 8x zoom,
-    centred in the canvas area. }
-  cImageLeft = 282;
-  cImageTop = 190;
-  cZoom = 8;
-
 type
-  { PaintWindow is protected; this only makes it callable from the test. }
+  { PaintWindow and the layout queries are protected; this only makes them
+    callable from the test. }
   TTestSpriteEditor = class(TSpriteEditor)
   public
     procedure PaintTo(ACanvas: TTyroCanvas);
+    //* Client point -> window point, the same mapping the engine uses when it
+    //* routes mouse events to a control.
+    function ToWindow(AX, AY: Integer): TPoint;
+    //* Centre of frame pixel (X, Y) in window coordinates.
+    function PixelPoint(X, Y: Integer): TPoint;
+    //* Centre of a tool button / palette swatch in window coordinates.
+    function ToolPoint(AIndex: Integer): TPoint;
+    function SwatchPoint(AIndex: Integer): TPoint;
   end;
 
 procedure TTestSpriteEditor.PaintTo(ACanvas: TTyroCanvas);
 begin
   PaintWindow(ACanvas);
+end;
+
+function TTestSpriteEditor.ToWindow(AX, AY: Integer): TPoint;
+begin
+  Result := Point(AX + OuterSize, AY + OuterSize);
+end;
+
+function TTestSpriteEditor.PixelPoint(X, Y: Integer): TPoint;
+var
+  R: TRect;
+  Z: Integer;
+begin
+  GetImageScreenRect(R);
+  Z := Round(Zoom);
+  Result := ToWindow(R.Left + X * Z + Z div 2, R.Top + Y * Z + Z div 2);
+end;
+
+function TTestSpriteEditor.ToolPoint(AIndex: Integer): TPoint;
+var
+  R: TRect;
+begin
+  R := ToolRect(AIndex);
+  Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+end;
+
+function TTestSpriteEditor.SwatchPoint(AIndex: Integer): TPoint;
+var
+  R: TRect;
+begin
+  R := PaletteSwatchRect(AIndex);
+  Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
 end;
 
 var
@@ -143,17 +177,6 @@ begin
   UnloadImage(Shot);
 end;
 
-{ Screen coordinates of the centre of frame pixel (X, Y). }
-function PixelScreenX(X: Integer): Integer;
-begin
-  Result := cImageLeft + X * cZoom + cZoom div 2;
-end;
-
-function PixelScreenY(Y: Integer): Integer;
-begin
-  Result := cImageTop + Y * cZoom + cZoom div 2;
-end;
-
 var
   Canvas: TTyroTextureCanvas;
   Editor: TTestSpriteEditor;
@@ -163,6 +186,7 @@ var
   Shot: TImage;
   I: Integer;
   K: TKeyboardKey;
+  P: TPoint;
   Meta: string;
 
 begin
@@ -211,7 +235,13 @@ begin
     Editor := TTestSpriteEditor.Create(nil);
     try
       Editor.BoundsRect := Rect(0, 0, cWidth, cHeight);
-      Editor.Margin := 0;
+      //Same frame the engine gives it: margin + thick border + padding around
+      //the client area. Mouse events arrive relative to the outer rect, so the
+      //tests below would land on the wrong tool/pixel if that offset was not
+      //removed.
+      Editor.Margin := 10;
+      Editor.Border := brdThick;
+      Editor.Padding := 5;
       Editor.Show;
 
       Check(Editor.LoadFile(AtlasFile), 'loads a .sprite file');
@@ -230,12 +260,22 @@ begin
       Check(SysUtils.FileExists(TempPath('sprite_editor_ui_tool.png')),
         'writes the second screenshot');
 
+      //--- every tool button selects its own tool at its real position -----
+      for I := 0 to Ord(High(TSpriteTool)) do
+      begin
+        P := Editor.ToolPoint(I);
+        Editor.MouseDown(mbLeft, [], P.X, P.Y);
+        Check(Editor.Tool = TSpriteTool(I),
+          Format('tool button %d selects its tool', [I]));
+      end;
+
       //--- paint pixel (8, 8) with the pixel tool and save -----------------
       K := KEY_LEFT;
       Editor.KeyDown(K, []);
       K := KEY_TWO;
       Editor.KeyDown(K, []);
-      Editor.MouseDown(mbLeft, [], PixelScreenX(8), PixelScreenY(8));
+      P := Editor.PixelPoint(8, 8);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
       K := KEY_S;
       Editor.KeyDown(K, [ssCtrl]);
 
@@ -259,8 +299,10 @@ begin
       end;
 
       //--- pick the first palette color and paint pixel (10, 10) ----------
-      Editor.MouseDown(mbLeft, [], 70, 626);
-      Editor.MouseDown(mbLeft, [], PixelScreenX(10), PixelScreenY(10));
+      P := Editor.SwatchPoint(0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      P := Editor.PixelPoint(10, 10);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
       K := KEY_S;
       Editor.KeyDown(K, [ssCtrl]);
 

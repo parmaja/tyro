@@ -212,6 +212,9 @@ type
     procedure HandleKeyTool(AKey: TKeyboardKey);
     procedure CommitRename;
 
+  protected
+    //* Layout queries. They are in client coordinates, the same space DoPaint
+    //* draws in, so a subclass can add overlays or hit-testing of its own.
     function ToolRect(AIndex: Integer): TRect;
     function TopButtonRect(AIndex, ACount: Integer): TRect;
     function CanvasAreaRect: TRect;
@@ -280,6 +283,10 @@ type
     //* replacing the user's work when the editor is toggled back on.
     property HasDocument: Boolean read GetHasDocument;
     property Modified: Boolean read FModified;
+    //* Current zoom factor (screen pixels per image pixel).
+    property Zoom: Single read FZoom;
+    //* Active tool; selecting a tool in the rail updates it.
+    property Tool: TSpriteTool read FTool;
   end;
 
 implementation
@@ -2052,8 +2059,11 @@ begin
   if Button <> mbLeft then
     Exit;
   Focused := True;
-  CX := x - ClientRect.Left;
-  CY := y - ClientRect.Top;
+  //* The engine hands us points relative to WindowRect, while DoPaint draws
+  //* from WindowRect + OuterSize (margin + border + padding). ClientRect is
+  //* always anchored at (0, 0), so OuterSize is the real offset to remove.
+  CX := x - OuterSize;
+  CY := y - OuterSize;
   HandleLeftClick(CX, CY);
 end;
 
@@ -2063,8 +2073,9 @@ var
   PX, PY: Integer;
 begin
   mp := RayLib.GetMousePosition;
-  FMouseX := Round(mp.X) - WindowRect.Left - ClientRect.Left;
-  FMouseY := Round(mp.Y) - WindowRect.Top - ClientRect.Top;
+  //* Same mapping as MouseDown: WindowRect -> client (see OuterSize).
+  FMouseX := Round(mp.X) - WindowRect.Left - OuterSize;
+  FMouseY := Round(mp.Y) - WindowRect.Top - OuterSize;
   FMouseInCanvas := InsideRect(CanvasAreaRect, FMouseX, FMouseY);
 
   if not Focused then
