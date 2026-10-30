@@ -10,7 +10,7 @@ uses
   Classes, SysUtils, SyncObjs, Generics.Collections,
   mnClasses,
   RayLib, RayClasses,
-  TyroScripts, TyroClasses;
+  TyroScripts, TyroClasses, SpriteAtlas;
 
 const
   cSpriteInvalid: Integer = 0;
@@ -82,6 +82,14 @@ type
     AnimSpeed: Single;              // frames-per-second override; 0 = file durations
     Playing: Boolean;               // true while the animation advances each frame
     Looping: Boolean;
+    // Named animations from the file (meta.tyro.actions in a .sprite). Empty
+    // for plain sheets; ActionIndex is -1 while the whole frame list plays.
+    Actions: TSpriteAtlasActions;
+    ActionIndex: Integer;
+    // Play order: texture indices, either 0..FrameCount-1 or the frames of the
+    // selected action. AnimPos is the position in this list.
+    AnimSeq: array of Integer;
+    AnimPos: Integer;
     Shader: TShader;
     ShaderName: string;
     ShaderTimeLoc: Integer;
@@ -170,6 +178,19 @@ type
     // onto a sprite, replacing whatever texture/frames it had. The textures
     // become owned by the sprite; do not free them afterwards.
     function InstallFrames(Handle: integer; const AFrames: array of TTexture2D; const AFrameMs: array of Integer): boolean;
+    // Animation: named actions read from the file (meta.tyro.actions). They
+    // select a subset of the installed frames in their own play order.
+    function InstallActions(Handle: integer; const AActions: TSpriteAtlasActions): boolean;
+    // Selects an action by name and rewinds it to its first frame. Returns
+    // False (and leaves the current action alone) when the name is unknown.
+    function SetAction(Handle: integer; const AName: string): boolean;
+    function GetActionName(Handle: integer): string;
+    function GetActionCount(Handle: integer): integer;
+    // Number of frames in the current action (or the whole list when none).
+    function GetActionFrameCount(Handle: integer): integer;
+    // Rewinds the current sequence (the action, or the whole frame list) to
+    // its first frame without changing the playing state.
+    procedure RestartAnim(Handle: integer);
     procedure SetAnimFrame(Handle: integer; AFrame: integer);
     function GetAnimFrame(Handle: integer): integer;
     function GetFrameCount(Handle: integer): integer;
@@ -276,7 +297,7 @@ type
 implementation
 
 uses
-  TyroEngines, Aseprites, SpriteAtlas;
+  TyroEngines, Aseprites;
 
 { TSprite }
 
@@ -311,6 +332,10 @@ begin
   AnimTime := 0;
   AnimSpeed := 0;
   Playing := False;
+  Actions := nil;
+  ActionIndex := -1;
+  AnimSeq := nil;
+  AnimPos := 0;
   Looping := True;
   Shader := Default(TShader);
   ShaderName := '';
@@ -462,8 +487,142 @@ begin
     Sprite.AnimTime := 0;
     Sprite.Playing := False;
     Sprite.Looping := True;
+    Sprite.ActionIndex := -1;
+    Sprite.AnimPos := 0;
+    SetLength(Sprite.AnimSeq, Sprite.FrameCount);
+    for I := 0 to Sprite.FrameCount - 1 do
+      Sprite.AnimSeq[I] := I;
     Sprite.Texture := Sprite.AnimFrames[0];
     Result := True;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.InstallActions(Handle: integer; const AActions: TSpriteAtlasActions): boolean;
+var
+  Sprite: TSprite;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if not FItems.TryGetValue(Handle, Sprite) then
+      Exit;
+    Sprite.Actions := AActions;
+    Sprite.ActionIndex := -1;
+    Result := True;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.SetAction(Handle: integer; const AName: string): boolean;
+var
+  Sprite: TSprite;
+  I, Idx, aFrame: Integer;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if not FItems.TryGetValue(Handle, Sprite) then
+      Exit;
+    if Sprite.FrameCount <= 0 then
+      Exit;
+    Idx := -1;
+    for I := 0 to High(Sprite.Actions) do
+      if SameText(Sprite.Actions[I].Name, AName) then
+      begin
+        Idx := I;
+        Break;
+      end;
+    if Idx < 0 then
+      Exit;
+    SetLength(Sprite.AnimSeq, Length(Sprite.Actions[Idx].Frames));
+    for I := 0 to High(Sprite.Actions[Idx].Frames) do
+    begin
+      //A stale index (the frames were re-saved) must not read past the end.
+      aFrame := Sprite.Actions[Idx].Frames[I];
+      if aFrame < 0 then
+        aFrame := 0;
+      if aFrame >= Sprite.FrameCount then
+        aFrame := Sprite.FrameCount - 1;
+      Sprite.AnimSeq[I] := aFrame;
+    end;
+    if Length(Sprite.AnimSeq) <= 0 then
+    begin
+      Sprite.ActionIndex := -1;
+      Exit;
+    end;
+    Sprite.ActionIndex := Idx;
+    Sprite.AnimPos := 0;
+    Sprite.AnimFrame := Sprite.AnimSeq[0];
+    Sprite.AnimTime := 0;
+    Sprite.Looping := Sprite.Actions[Idx].Loop;
+    Sprite.Texture := Sprite.AnimFrames[Sprite.AnimFrame];
+    Result := True;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetActionName(Handle: integer): string;
+var
+  Sprite: TSprite;
+begin
+  Result := '';
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      if (Sprite.ActionIndex >= 0) and (Sprite.ActionIndex < Length(Sprite.Actions)) then
+        Result := Sprite.Actions[Sprite.ActionIndex].Name;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetActionCount(Handle: integer): integer;
+var
+  Sprite: TSprite;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Length(Sprite.Actions);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetActionFrameCount(Handle: integer): integer;
+var
+  Sprite: TSprite;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Length(Sprite.AnimSeq);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.RestartAnim(Handle: integer);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+    begin
+      if Length(Sprite.AnimSeq) <= 0 then
+        Exit;
+      Sprite.AnimPos := 0;
+      Sprite.AnimFrame := Sprite.AnimSeq[0];
+      Sprite.AnimTime := 0;
+      Sprite.Texture := Sprite.AnimFrames[Sprite.AnimFrame];
+    end;
   finally
     FLock.Leave;
   end;
@@ -472,6 +631,7 @@ end;
 procedure TSprites.SetAnimFrame(Handle: integer; AFrame: integer);
 var
   Sprite: TSprite;
+  I: Integer;
 begin
   FLock.Enter;
   try
@@ -483,6 +643,14 @@ begin
           AFrame := Sprite.FrameCount - 1;
         Sprite.AnimFrame := AFrame;
         Sprite.AnimTime := 0;
+        //Keep the sequence position in step so an explicit frame jump does not
+        //snap back to the old action position on the next tick.
+        for I := 0 to High(Sprite.AnimSeq) do
+          if Sprite.AnimSeq[I] = AFrame then
+          begin
+            Sprite.AnimPos := I;
+            Break;
+          end;
         Sprite.Texture := Sprite.AnimFrames[AFrame];
       end;
     end;
@@ -633,8 +801,11 @@ begin
         Continue;
       if Sprite.FrameCount <= 0 then
         Continue;
-      if Sprite.AnimFrame >= Sprite.FrameCount then
-        Sprite.AnimFrame := 0;
+      if Length(Sprite.AnimSeq) <= 0 then
+        Continue;
+      if (Sprite.AnimPos < 0) or (Sprite.AnimPos >= Length(Sprite.AnimSeq)) then
+        Sprite.AnimPos := 0;
+      Sprite.AnimFrame := Sprite.AnimSeq[Sprite.AnimPos];
       if Sprite.AnimSpeed > 0 then
         TimePer := 1 / Sprite.AnimSpeed
       else
@@ -648,15 +819,16 @@ begin
       if Sprite.AnimTime >= TimePer then
       begin
         Sprite.AnimTime := 0;
-        if Sprite.AnimFrame + 1 < Sprite.FrameCount then
-          Inc(Sprite.AnimFrame)
+        if Sprite.AnimPos + 1 < Length(Sprite.AnimSeq) then
+          Inc(Sprite.AnimPos)
         else if Sprite.Looping then
-          Sprite.AnimFrame := 0
+          Sprite.AnimPos := 0
         else
         begin
-          Sprite.AnimFrame := Sprite.FrameCount - 1;
+          Sprite.AnimPos := Length(Sprite.AnimSeq) - 1;
           Sprite.Playing := False;
         end;
+        Sprite.AnimFrame := Sprite.AnimSeq[Sprite.AnimPos];
       end;
       Sprite.Texture := Sprite.AnimFrames[Sprite.AnimFrame];
     end;
@@ -1842,12 +2014,14 @@ var
   aTexture: TTexture2D;
   aFrames: TAseTextures;
   aFrameMs: TAseFrameDurations;
+  aActions: TSpriteAtlasActions;
   aCount: Integer;
   aHandle: integer;
 begin
   aTexture := Default(TTexture2D);
   aFrames := nil;
   aFrameMs := nil;
+  aActions := nil;
   aCount := 0;
   if IsAsepriteFile(FFileName) then
   begin
@@ -1865,7 +2039,7 @@ begin
     //A .sprite archive (ZIP with a PNG atlas + JSON descriptor, as written by
     //TexturePacker / Phaser / PixiJS) yields one frame per atlas entry, so it
     //loads through the same animation path as Aseprite.
-    aCount := SpriteLoadFrameTextures(FFileName, aFrames, aFrameMs);
+    aCount := SpriteLoadFrameTextures(FFileName, aFrames, aFrameMs, aActions);
     if aCount = 1 then
     begin
       aTexture := aFrames[0];
@@ -1894,7 +2068,11 @@ begin
         FHandleResult := cSpriteInvalid;
     end;
     if FHandleResult <= cSpriteInvalid then
-      AsepriteFreeTextures(aFrames); // rollback the GPU uploads
+      AsepriteFreeTextures(aFrames) // rollback the GPU uploads
+    else if Length(aActions) > 0 then
+      //Named actions (walk/idle/...) pick a subset of these frames; a file
+      //without editor metadata simply keeps the whole list.
+      Engine.Sprites.InstallActions(FHandleResult, aActions);
   end
   else if aTexture.id > 0 then
   begin

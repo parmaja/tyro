@@ -284,6 +284,7 @@ var
   Png, Zip: TBytes;
   Json: string;
   F: TSpriteAtlasFrame;
+  A: TSpriteAtlasAction;
 
 begin
   Tests := 0;
@@ -337,6 +338,7 @@ begin
     UnloadImage(FrameImg);
 
     Check('array layout: default duration 0', Atlas.GetFrameDuration(0) = 0);
+    Check('array layout: no actions without meta.tyro', Atlas.GetActionCount = 0);
     Atlas.Free;
   end;
 
@@ -404,13 +406,55 @@ begin
   end;
 
   // --------------------------------------------------------------------
-  // 4) rejects a non-ZIP file
+  // 4) meta.tyro.actions: the named animations the sprite editor writes
+  // --------------------------------------------------------------------
+  AtlasImg := MakeImage(6, 2, RedBlue);
+  Png := ImageToPNG(AtlasImg);
+  UnloadImage(AtlasImg);
+  Json :=
+    '{"frames":[' +
+    '{"filename":"frame_000","frame":{"x":0,"y":0,"w":2,"h":2},"rotated":false,"trimmed":false,' +
+    '"spriteSourceSize":{"x":0,"y":0,"w":2,"h":2},"sourceSize":{"w":2,"h":2},"duration":100},' +
+    '{"filename":"frame_001","frame":{"x":2,"y":0,"w":2,"h":2},"rotated":false,"trimmed":false,' +
+    '"spriteSourceSize":{"x":0,"y":0,"w":2,"h":2},"sourceSize":{"w":2,"h":2},"duration":120},' +
+    '{"filename":"frame_002","frame":{"x":4,"y":0,"w":2,"h":2},"rotated":false,"trimmed":false,' +
+    '"spriteSourceSize":{"x":0,"y":0,"w":2,"h":2},"sourceSize":{"w":2,"h":2},"duration":140}' +
+    '],"meta":{"image":"sheet.png","tyro":{"version":1,"width":2,"height":2,' +
+    '"actions":[{"name":"idle","loop":true,"frames":[0,1]},' +
+    '{"name":"attack","loop":false,"frames":[2,0]},' +
+    '{"name":"broken","loop":true,"frames":[]}]}}}';
+  Zip := BuildZip(False, ['sheet.json', 'sheet.png'], [StrBytes(Json), Png]);
+
+  Atlas := LoadAtlas(Zip);
+  Check('actions: loaded', Atlas <> nil);
+  if Atlas <> nil then
+  begin
+    Check('actions: frame count = 3', Atlas.GetFrameCount = 3, IntToStr(Atlas.GetFrameCount));
+    // the empty "broken" action is dropped by the parser
+    Check('actions: empty action skipped', Atlas.GetActionCount = 2,
+      IntToStr(Atlas.GetActionCount));
+    Check('actions: find idle', Atlas.FindAction('idle') = 0);
+    Check('actions: find is case-insensitive', Atlas.FindAction('ATTACK') = 1);
+    Check('actions: unknown action = -1', Atlas.FindAction('walk') = -1);
+
+    A := Atlas.GetAction(0);
+    Check('actions: idle name/loop', (A.Name = 'idle') and A.Loop, A.Name);
+    Check('actions: idle frames', (Length(A.Frames) = 2) and (A.Frames[0] = 0) and (A.Frames[1] = 1));
+    A := Atlas.GetAction(1);
+    Check('actions: attack not looping', not A.Loop);
+    Check('actions: attack frame order', (Length(A.Frames) = 2) and (A.Frames[0] = 2) and (A.Frames[1] = 0));
+    Check('actions: GetActions returns both', Length(Atlas.GetActions) = 2);
+    Atlas.Free;
+  end;
+
+  // --------------------------------------------------------------------
+  // 5) rejects a non-ZIP file
   // --------------------------------------------------------------------
   Atlas := LoadAtlas(StrBytes('this is definitely not a zip archive'));
   Check('non-ZIP rejected', Atlas = nil);
 
   // --------------------------------------------------------------------
-  // 5) optional: a .sprite produced by an external zipper (Python zipfile)
+  // 6) optional: a .sprite produced by an external zipper (Python zipfile)
   //    passed as the first command-line argument
   // --------------------------------------------------------------------
   if ParamCount >= 1 then

@@ -283,6 +283,7 @@ type
     function Height_func(L: Plua_State): integer; cdecl;
     function Play_func(L: Plua_State): integer; cdecl;
     function Stop_func(L: Plua_State): integer; cdecl;
+    function Action_func(L: Plua_State): integer; cdecl;
     function FrameCount_func(L: Plua_State): integer; cdecl;
   end;
 
@@ -4195,6 +4196,7 @@ begin
     Lua.State.Register('play', Play_func);
     Lua.State.Register('stop', Stop_func);
     Lua.State.Register('pause', Stop_func);
+    Lua.State.Register('action', Action_func);
     Lua.State.Register('framecount', FrameCount_func);
 
     //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
@@ -5817,11 +5819,48 @@ begin
   if handle > cSpriteInvalid then
   begin
     if L.ArgsCount >= 2 then
-      Engine.Sprites.SetAnimSpeed(handle, L.ToNumber(2));
-    Engine.Sprites.SetAnimFrame(handle, 0);
+    begin
+      if L.IsString(2) then
+      begin
+        //sprite:play("walk") selects that named action and starts it;
+        //sprite:play("walk", 12) also overrides its frame rate.
+        Engine.Sprites.SetAction(handle, L.ToString(2));
+        if L.ArgsCount >= 3 then
+          Engine.Sprites.SetAnimSpeed(handle, L.ToNumber(3));
+      end
+      else
+      begin
+        //sprite:play(12) keeps the old meaning: speed for the current sequence.
+        Engine.Sprites.SetAnimSpeed(handle, L.ToNumber(2));
+        Engine.Sprites.RestartAnim(handle);
+      end;
+    end
+    else
+      Engine.Sprites.RestartAnim(handle);
     Engine.Sprites.SetPlaying(handle, True);
   end;
   Result := 0;
+end;
+
+// sprite:action() -> name of the current action ('' when none)
+// sprite:action("walk") -> select it and rewind, returns true/false
+function TLuaSprite.Action_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+begin
+  handle := GetSpriteHandle(L, 1);
+  if L.ArgsCount >= 2 then
+  begin
+    if handle > cSpriteInvalid then
+      L.PushBoolean(Engine.Sprites.SetAction(handle, L.ToString(2)))
+    else
+      L.PushBoolean(False);
+  end
+  else if handle > cSpriteInvalid then
+    L.PushString(Engine.Sprites.GetActionName(handle))
+  else
+    L.PushString('');
+  Result := 1;
 end;
 
 // sprite:stop() / sprite:pause() -> freeze the animation on the current frame
@@ -5930,6 +5969,12 @@ begin
     else if field = 'frames' then
     begin
       L.PushInteger(Engine.Sprites.GetFrameCount(handle));
+      Result := 1;
+    end
+    else if field = 'actions' then
+    begin
+      // number of named actions in the file (0 for plain sheets)
+      L.PushInteger(Engine.Sprites.GetActionCount(handle));
       Result := 1;
     end
     else if field = 'frame' then

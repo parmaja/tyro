@@ -59,6 +59,15 @@ type
     DurationMs: Integer;   // 0 when the descriptor has no timing
   end;
 
+  { One named animation written by the sprite editor into meta.tyro.actions.
+    Frames are indices into the atlas frame list, in play order. }
+  TSpriteAtlasAction = record
+    Name: string;
+    Frames: array of Integer;
+    Loop: Boolean;
+  end;
+  TSpriteAtlasActions = array of TSpriteAtlasAction;
+
   { TSpriteAtlas }
 
   TSpriteAtlas = class(TObject)
@@ -68,6 +77,7 @@ type
     FAtlas: TImage;
     FHasAtlas: Boolean;
     FFrames: array of TSpriteAtlasFrame;
+    FActions: TSpriteAtlasActions;
     FImageHint: string;
     FDescriptor: string;      //the JSON descriptor exactly as it was stored
     FLastError: string;
@@ -76,6 +86,7 @@ type
     function FindEntry(const AExt, APreferName: string; out AIndex: Integer): Boolean;
     function EntryData(AIndex: Integer; out AData: TBytes): Boolean;
     procedure ParseDescriptor(ARoot: TDON_Value);
+    procedure ParseActions(ARoot: TDON_Value);
     function BuildFrameImage(const AFrame: TSpriteAtlasFrame): TImage;
     procedure AppendFrame(const AFrame: TSpriteAtlasFrame);
     function GetWidth: Integer;
@@ -88,6 +99,14 @@ type
     function GetFrameCount: Integer;
     function GetFrame(AFrame: Integer): TSpriteAtlasFrame;
     function GetFrameDuration(AFrame: Integer): Integer;
+    //* Named animations from meta.tyro.actions (0 for plain atlas files that
+    //* have no editor metadata).
+    function GetActionCount: Integer;
+    function GetAction(AIndex: Integer): TSpriteAtlasAction;
+    //* All actions at once (a copy of the internal list).
+    function GetActions: TSpriteAtlasActions;
+    //* Index of the action called AName (case-insensitive), -1 when absent.
+    function FindAction(const AName: string): Integer;
     // Decodes one frame to a CPU RGBA8 image; caller must UnloadImage() it.
     function GetFrameImage(AFrame: Integer): TImage;
     // Decodes a frame and uploads it; caller must UnloadTexture() it.
@@ -117,7 +136,9 @@ type
   // Decodes every frame of a .sprite as an individual GPU texture plus its
   // duration in milliseconds; returns the number of frames (0 on failure).
   // The caller owns the textures and should free them with SpriteFreeTextures.
-  function SpriteLoadFrameTextures(const FileName: string; out ATextures: TAseTextures; out ADurations: TAseFrameDurations): Integer;
+  function SpriteLoadFrameTextures(const FileName: string; out ATextures: TAseTextures; out ADurations: TAseFrameDurations): Integer; overload;
+  // Same, and also hands back the named actions stored in meta.tyro.actions.
+  function SpriteLoadFrameTextures(const FileName: string; out ATextures: TAseTextures; out ADurations: TAseFrameDurations; out AActions: TSpriteAtlasActions): Integer; overload;
   procedure SpriteFreeTextures(var ATextures: TAseTextures);
   function SaveSpriteAtlas(const FileName: string; const AFrames: array of TSpriteAtlasWriteFrame; const AImageName: string = 'sheet.png'; const AExtraMeta: string = ''): Boolean;
 
@@ -378,6 +399,7 @@ begin
   FData := nil;
   FEntries := nil;
   FFrames := nil;
+  FActions := nil;
   FImageHint := '';
   FDescriptor := '';
 end;
@@ -470,6 +492,51 @@ begin
     for I := 0 to Arr.Count - 1 do
       if ParseFrameItem(Arr[I], '', F) then
         AppendFrame(F);
+  end;
+
+  ParseActions(ARoot);
+end;
+
+{ Reads meta.tyro.actions, the animation list the sprite editor writes. Atlas
+  files from other tools have no meta.tyro and keep an empty action list. }
+procedure TSpriteAtlas.ParseActions(ARoot: TDON_Value);
+var
+  ActionsNode, Item, FramesNode: TDON_Value;
+  Items, FrameItems: TDON_Array;
+  Action: TSpriteAtlasAction;
+  I, J: Integer;
+begin
+  FActions := nil;
+  if ARoot = nil then
+    Exit;
+  ActionsNode := DonChild(DonChild(ARoot, 'meta'), 'tyro');
+  if ActionsNode = nil then
+    Exit;
+  ActionsNode := DonChild(ActionsNode, 'actions');
+  if not (ActionsNode is TDON_Array) then
+    Exit;
+  Items := TDON_Array(ActionsNode);
+  for I := 0 to Items.Count - 1 do
+  begin
+    Item := Items[I];
+    if Item = nil then
+      Continue;
+    Action.Name := DonStr(Item, 'name', '');
+    Action.Loop := DonBool(Item, 'loop', True);
+    Action.Frames := nil;
+    FramesNode := DonChild(Item, 'frames');
+    if FramesNode is TDON_Array then
+    begin
+      FrameItems := TDON_Array(FramesNode);
+      SetLength(Action.Frames, FrameItems.Count);
+      for J := 0 to FrameItems.Count - 1 do
+        Action.Frames[J] := FrameItems[J].AsInteger;
+    end;
+    //An action without a name or frames would be unpickable; skip it.
+    if (Action.Name = '') or (Length(Action.Frames) = 0) then
+      Continue;
+    SetLength(FActions, Length(FActions) + 1);
+    FActions[High(FActions)] := Action;
   end;
 end;
 
@@ -588,6 +655,34 @@ end;
 function TSpriteAtlas.GetFrameDuration(AFrame: Integer): Integer;
 begin
   Result := GetFrame(AFrame).DurationMs;
+end;
+
+function TSpriteAtlas.GetActionCount: Integer;
+begin
+  Result := Length(FActions);
+end;
+
+function TSpriteAtlas.GetActions: TSpriteAtlasActions;
+begin
+  Result := FActions;
+end;
+
+function TSpriteAtlas.GetAction(AIndex: Integer): TSpriteAtlasAction;
+begin
+  if (AIndex >= 0) and (AIndex < Length(FActions)) then
+    Result := FActions[AIndex]
+  else
+    Result := Default(TSpriteAtlasAction);
+end;
+
+function TSpriteAtlas.FindAction(const AName: string): Integer;
+var
+  I: Integer;
+begin
+  Result := -1;
+  for I := 0 to High(FActions) do
+    if SameText(FActions[I].Name, AName) then
+      Exit(I);
 end;
 
 function TSpriteAtlas.GetFrameImage(AFrame: Integer): TImage;
@@ -740,7 +835,7 @@ begin
   Result := (aExt = '.sprite') or (aExt = '.png');
 end;
 
-function SpriteLoadFrameTextures(const FileName: string; out ATextures: TAseTextures; out ADurations: TAseFrameDurations): Integer;
+function SpriteLoadFrameTextures(const FileName: string; out ATextures: TAseTextures; out ADurations: TAseFrameDurations; out AActions: TSpriteAtlasActions): Integer;
 var
   Atlas: TSpriteAtlas;
   I: Integer;
@@ -748,6 +843,7 @@ begin
   Result := 0;
   ATextures := nil;
   ADurations := nil;
+  AActions := nil;
   Atlas := TSpriteAtlas.Create;
   try
     if not Atlas.LoadFromFile(FileName) then
@@ -766,9 +862,17 @@ begin
       if ATextures[I].id <= 0 then
         Exit; // partial failure: caller releases whatever was uploaded
     end;
+    AActions := Atlas.GetActions;
   finally
     Atlas.Free;
   end;
+end;
+
+function SpriteLoadFrameTextures(const FileName: string; out ATextures: TAseTextures; out ADurations: TAseFrameDurations): Integer;
+var
+  Actions: TSpriteAtlasActions;
+begin
+  Result := SpriteLoadFrameTextures(FileName, ATextures, ADurations, Actions);
 end;
 
 procedure SpriteFreeTextures(var ATextures: TAseTextures);
