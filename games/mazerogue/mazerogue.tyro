@@ -368,8 +368,16 @@ local function damage_player(dmg)
     local s = acquire(P.explosion)
     s.x = player.x - cam_x
     s.y = player.y - cam_y
-    s.play(14)
-    explosions[#explosions + 1] = {s = s, timer = 0.55}
+    explosions[#explosions + 1] = {
+      s = s,
+      x = player.x,
+      y = player.y,
+      timer = 0.55,
+    }
+    if player.s then
+      player.s.visible = false
+      player.s:hide()
+    end
   end
 end
 
@@ -918,7 +926,7 @@ local function sync_sprites()
 
   -- Explosions
   for _, ex in ipairs(explosions) do
-    if ex.s and ex.s.visible then
+    if ex.s and ex.s.visible and ex.x and ex.y then
       ex.s.x = ex.x - cam_x
       ex.s.y = ex.y - cam_y
     end
@@ -1086,6 +1094,23 @@ function update(dt)
       reset_game()
     end
   elseif state == "gameover" then
+    -- Keep updating explosions and floaty text during gameover screen
+    for i = #explosions, 1, -1 do
+      local ex = explosions[i]
+      ex.timer = ex.timer - dt
+      if ex.timer <= 0 then
+        release(ex.s)
+        table.remove(explosions, i)
+      end
+    end
+    for i = #texts, 1, -1 do
+      local t = texts[i]
+      t.life = t.life - dt
+      t.y = t.y - 24 * dt
+      if t.life <= 0 then
+        table.remove(texts, i)
+      end
+    end
     if keyboard.pressed("space") or keyboard.pressed("enter") or keyboard.pressed("r") then
       reset_game()
     end
