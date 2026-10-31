@@ -11,7 +11,7 @@ window.show(640, 480)
 
 frame = 0
 
-while cycle do
+function update(dt)
   -- commands outside the group are drawn as usual, one frame at a time
   canvas.color = colors.black
   canvas.rectangle(0, 0, canvas.width, canvas.height, true)

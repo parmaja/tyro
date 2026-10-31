@@ -61,7 +61,7 @@ local lastFrame = hero.frame
 
 println("Aseprite demo: idle=" .. idleS.frames .. "f walk=" .. walkS.frames .. "f run=" .. runS.frames .. "f")
 
-while cycle do
+function update(dt)
   -- input ---------------------------------------------------------------
   local moving = keyboard.down("left") or keyboard.down("right")
               or keyboard.down("a") or keyboard.down("d")
@@ -155,6 +155,6 @@ while cycle do
   canvas.text(510, 374, "speed: " .. hero.speed .. " fps")
 
   if keyboard.pressed("escape") then
-    break
+    exit()
   end
 end

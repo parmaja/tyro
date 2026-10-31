@@ -1,13 +1,13 @@
-# Atomic drawing (`autogroup`)
+# Atomic drawing (`enter` / `leave`)
 
-A drawing body inside `while cycle do ... end` used to flicker: an opaque black
-box appeared first and its text showed up one frame later. This document
-explains why, and how the engine now prevents it by default.
+A drawing body can flicker: an opaque black box appears first and its text shows
+up one frame later. This document explains why, and how `enter()` / `leave()`
+prevents it.
 
 ## The problem
 
-Drawing commands are queued by the script thread and drained by the main loop
-(on the main thread) once per frame, while the script is still building the
+Drawing commands are queued by the script and drained by the main loop (on the
+main thread) once per drawing frame, while the script is still building the
 body. If a frame boundary lands in the middle of a body, the engine draws only
 the commands queued so far — the black box without its text — presents that
 frame, and the text arrives a frame later.
@@ -16,47 +16,45 @@ This is a producer/consumer race, not a frame-budget problem: a body usually
 queues in well under a frame, so the natural split is rare, but it is real
 whenever a body takes a while to build (string work, a wide loop, I/O).
 
-## The fix
+## The fix: hold the queue
 
-The engine groups a body: the queue is **held** from the moment a `cycle` body
-starts until the next yield point, so the whole body is committed in a single
-drawing cycle.
-
-- The hold is released at the next yield point: the next `cycle`, `sleep()`, or
-  `console.read()`. Releasing before a blocking call is what keeps a prompt
-  drawn earlier visible while the script waits.
-- It is taken again after the yield, and when the script starts.
-- It is cleared when a script stops or errors, so a dead run can never freeze
-  the queue.
-- `enter()` / `leave()` use the same gate, so the two nest cleanly.
-
-The gate in `ProcessQueue` is `explicit hold OR automatic hold`. While either is
-open, no command is executed.
-
-## Default behavior
-
-Nothing to call — each `while cycle` body is atomic:
+`enter()` **holds** the queue: the main loop keeps receiving commands but does
+not execute them until `leave()` balances the hold. The whole group queued in
+between is then committed and drawn in a single drawing frame.
 
 ```lua
 window.show()
-while cycle do
+
+function draw()
     canvas.color = colors.black
     canvas.rectangle(0, 0, 640, 70, true)       -- the box ...
+
+    enter()                                     -- hold the queue
     canvas.color = colors.green
-    canvas.text(8, 8, "Station : " .. station)  -- ... and its text together
+    canvas.text(8, 8, "Station : " .. station)  -- ... and its text
+    leave()                                     -- draw the group now
 end
 ```
 
-Even a body that takes several frames to build lands in one drawing cycle.
+How the commit works:
 
-## `enter()` / `leave()`
+- `enter()` arms the hold and snapshots the enqueue counter (the **commit
+  watermark**). From then on the main loop drains only the commands committed
+  *before* the hold, never the body still being built.
+- `leave()` lowers the hold. When the last hold is released it arms a one-shot
+  **flush**, so the next drain pass executes the whole group in one
+  `BeginDraw`/`EndDraw` pair, ignoring the per-frame time budget.
+- Nested `enter()` calls count up and need the same number of `leave()` calls.
+  Only the outermost hold moves the watermark.
+- A script that stops or errors between `enter()` and `leave()` is released
+  automatically, so a dead run can never freeze the queue.
 
-Hold the queue by hand. Anything queued between the two calls is drawn as one
-group:
+## Using it
 
 ```lua
 window.show()
-while cycle do
+
+function draw()
     canvas.rectangle(0, 0, canvas.width, canvas.height, true)
 
     enter()                             -- hold the queue
@@ -69,28 +67,17 @@ while cycle do
 end
 ```
 
-`enter()` / `leave()` nest (they count up and down). Use them to group part of
-an iteration, or a body outside a cycle loop. A script that stops or errors
-between them is released automatically.
-
-## `autogroup(on)`
-
-Turns the automatic per-`cycle` grouping on (`true`, the default) or off:
-
-```lua
-autogroup(false)   -- raw streaming: a frame may drain part of a body again
-```
-
-Use it only when you deliberately want progressive drawing spread across frames.
-`queue.group` reports the current setting.
+Use it to group a batch inside a `draw()` callback, a menu build, or any body
+whose parts must appear together. Commands queued outside the group behave as
+usual.
 
 ## Yield points
 
-These release the hold so what is already queued is shown, then re-arm it:
+A yield draws what is already queued, even inside an open group, then the script
+continues. These calls yield:
 
-| Call | Releases the hold before |
-|------|--------------------------|
-| `cycle` | waiting for the next frame (the commit point) |
+| Call | Yields before |
+|------|---------------|
 | `sleep(ms)` | sleeping |
 | `pause(ms)` | freezing the scene (like `sleep`, but the engine stops simulating) |
 | `console.read()` | waiting for the user to press Enter |
@@ -119,8 +106,7 @@ them out and reports 0.
 | `queue.depth` | Commands waiting in the queue right now |
 | `queue.max` | Largest backlog seen at the start of a pass (high-water mark) |
 | `queue.holds` | Open `enter()` calls (the hold depth) |
-| `queue.frames` | Drawing cycles presented since the engine started |
-| `queue.group` | `true` while automatic per-`cycle` grouping is enabled |
+| `queue.frames` | Drawing frames presented since the engine started |
 | `queue.drainms` | Duration of the most recent drain pass, in milliseconds |
 | `queue.lastgap` | Milliseconds between the last two queued commands (no yield in between) |
 | `queue.maxgap` | Largest such gap of the run: the script stalled between two queue calls |
@@ -128,10 +114,10 @@ them out and reports 0.
 
 Because the script builds a body while the main loop drains the queue on another
 thread, the script cannot sample at the instant a frame falls mid-body. It can
-catch it right after the body returns, before the next `cycle`:
+catch it right after the body returns:
 
 ```lua
-while cycle do
+function draw()
     local before = queue.consumed       -- queue is empty here
     enter()                             -- or queue the body bare
     local n = draw_body()
@@ -145,7 +131,7 @@ end
 
 ### Catching a stall between two commands
 
-Grouping commits a whole body in one drawing cycle, but it cannot fix the script
+Grouping commits a whole body in one drawing frame, but it cannot fix the script
 taking a long time *between* two commands — e.g. `radio.station`/`radio.title`,
 whose getters take locks the network thread may hold, blocking the script for a
 second. The queue is held during that second, so nothing is drawn and the frame
@@ -164,9 +150,10 @@ print("stall between box and text: " .. queue.maxgap .. " ms")
 
 `queue.maxgap` is the largest gap of the run, `queue.lastgap` only the most
 recent pair; use the former to catch a stall in the middle of a body. Gaps are
-reset at every yield (`cycle`, `sleep()`, `console.read()`), so frame waits are
-never counted. A small `maxgap` with a black-only header means the metadata
-itself is empty (buffering/reconnect), not a rendering race.
+reset at every yield (`sleep()`, `pause()`, `console.read()`) and at the start of
+each engine-driven frame, so frame waits are never counted. A small `maxgap` with
+a black-only header means the metadata itself is empty (buffering/reconnect), not
+a rendering race.
 
 `tests/test_gap.tyro` exercises the counter:
 
@@ -192,7 +179,7 @@ local function gapwatch(aLimitMS)
   return g
 end
 
-while cycle do
+function draw()
     -- ...draw the body...
     gapwatch(250)   -- >250 ms stall? the console says so
 end
@@ -208,18 +195,15 @@ boundaries:
 
 | Phase | Mid-body splits / 10 |
 |-------|----------------------|
-| `auto-group` (default) | 0 |
-| `group-off` (`autogroup(false)`) | 9 |
-| `enter-leave` | 0 |
+| no grouping | 9 |
+| `enter`/`leave` | 0 |
 
 ## Notes
 
-- Grouping makes each iteration atomic; it does not raise the frame budget. A
-  body that queues a very large number of commands still lands in one frame, so
-  keep bodies reasonably sized.
-- A `cycle` read is the commit point: it draws the body queued since the
-  previous read, then starts a new group.
+- Grouping makes each body atomic; it does not raise the frame budget. A body
+  that queues a very large number of commands still lands in one frame, so keep
+  bodies reasonably sized.
+- `enter()` is optional: the price of not using it is the occasional partial
+  frame, never a lost command.
 - Scripts running on the main thread (console lines) never block and are not
   grouped.
-- `autogroup(false)` is an escape hatch; the default is safe without any extra
-  code.

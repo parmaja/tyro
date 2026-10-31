@@ -50,7 +50,7 @@ end
 local speed = 8
 println("sprite_atlas_demo: " .. walk.frames .. " frames from sprite_sheet.sprite")
 
-while cycle do
+function update(dt)
   -- input ---------------------------------------------------------------
   if keyboard.pressed("space") then
     if walk.playing then
@@ -87,6 +87,6 @@ while cycle do
   canvas.text(150, 382, "SPACE: play/pause   Up/Down: speed   ESC: exit")
 
   if keyboard.pressed("escape") then
-    break
+    exit()
   end
 end

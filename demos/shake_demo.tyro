@@ -22,7 +22,7 @@ window.show(640, 480)
 
 local hits = 0
 
-while cycle do
+function update(dt)
     canvas.color = colors.black
     canvas.rectangle(0, 0, canvas.width, canvas.height, true)
 
@@ -66,6 +66,6 @@ while cycle do
         world.shake(0) -- 0 stops it
     end
     if keyboard.pressed("q") then
-        break
+        exit()
     end
 end

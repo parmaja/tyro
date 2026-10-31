@@ -129,10 +129,10 @@ type
   { TLuaQueue }
 
   // Read-only view of the engine's queue/frame diagnostics (TQueueStats).
-  // A script in "while cycle do" can compare queue.consumed before and after a
-  // body with the number of commands it queued: when the delta is smaller the
-  // main loop drew only part of the body that frame, which is the black-box-
-  // then-text flicker. queue.deferred counts those partial frames directly.
+  // A script can compare queue.consumed before and after a body with the
+  // number of commands it queued: when the delta is smaller the main loop drew
+  // only part of the body that frame, which is the black-box-then-text flicker.
+  // queue.deferred counts those partial frames directly.
   TLuaQueue = class(TTyroLuaObject)
   protected
     function Getter(L: PLua_State): integer; override;
@@ -671,20 +671,15 @@ implementation
 function sleep_func(L: Plua_State): integer; cdecl;
 var
   n: int64;
-  Held: Boolean;
 begin
   //Round, not truncate: sleep(16.7) for a 60 FPS frame must not collapse
   //to 16 ms and drift against the display cadence.
   n := Round(L.ToNumber(1));
-  //sleep() is a yield point: commit the cycle body queued so far and let the
-  //main loop draw it (so a prompt/progress stays visible) before blocking.
-  Held := (Engine <> nil) and Engine.ReleaseAutoQueue;
-  try
-    sleep(n);
-  finally
-    if Held then
-      Engine.HoldAutoQueue;
-  end;
+  //sleep() is a yield point: drop the enqueue baseline so the wait itself is
+  //not reported as a stall between two queued commands.
+  if Engine <> nil then
+    Engine.ResetEnqueueGap;
+  sleep(n);
   Result := 0;
 end;
 
@@ -696,42 +691,32 @@ end;
 function pause_func(L: Plua_State): integer; cdecl;
 var
   n: int64;
-  Held: Boolean;
 begin
   n := Round(L.ToNumber(1));
-  //Commit whatever the body queued so far, exactly like sleep(), so the frozen
-  //frame is the one the script asked to show.
-  Held := (Engine <> nil) and Engine.ReleaseAutoQueue;
+  //The frozen frame is the one the script asked to show; drop the enqueue
+  //baseline exactly like sleep().
   if Engine <> nil then
+  begin
+    Engine.ResetEnqueueGap;
     Engine.BeginScriptPause;
+  end;
   try
     sleep(n);
   finally
     if Engine <> nil then
       Engine.EndScriptPause;
-    if Held then
-      Engine.HoldAutoQueue;
   end;
   Result := 0;
 end;
 
-// autogroup(flag): turn the automatic per-'cycle' grouping on (default) or off.
-// Off restores raw streaming, where the main loop may drain part of a body.
-function autogroup_func(L: Plua_State): integer; cdecl;
-begin
-  Result := 0;
-  if Engine = nil then
-    Exit;
-  if L.ArgsCount > 0 then
-    Engine.AutoGroup := L.ToBoolean(1);
-end;
+
 
 // queuelimit(n): cap the processing queue. While it holds n commands a script
-// that keeps queueing without yielding (autogroup off, or a body bigger than a
-// frame) waits in AddQueueObject until the main loop drains some, so memory and
-// lag stay bounded instead of growing without limit. 0 restores the default
-// unlimited behaviour. Read the current cap back with queue.limit; queue.waits
-// counts how often a producer had to wait and queue.blocked how many wait now.
+// that keeps queueing without yielding (a body bigger than a frame) waits in
+// AddQueueObject until the main loop drains some, so memory and lag stay
+// bounded instead of growing without limit. 0 restores the default unlimited
+// behaviour. Read the current cap back with queue.limit; queue.waits counts how
+// often a producer had to wait and queue.blocked how many wait now.
 function queuelimit_func(L: Plua_State): integer; cdecl;
 begin
   Result := 0;
@@ -744,7 +729,7 @@ end;
 // enter(): hold the processing queue. The drawing commands the script queues
 // after this call are NOT executed by the main loop until leave() balances it,
 // so the whole group between enter() and leave() is drawn at one drawing
-// cycle. Nested enter() calls count up and need the same number of leave()s.
+// frame. Nested enter() calls count up and need the same number of leave()s.
 function enter_func(L: Plua_State): integer; cdecl;
 begin
   if Engine <> nil then
@@ -848,17 +833,7 @@ begin
 
   aName := L.ToString(2);
 
-  //'cycle' kept for backward compatibility
-  if aName = 'cycle' then
-  begin
-    if (Thread <> nil) and (Engine <> nil) and not Engine.WaitToNextFrame(Self) then
-      L.PushBoolean(False)
-    else
-      L.PushBoolean(True);
-    Exit;
-  end;
-
-  //4) Sprites: reuse/create the sprite proxy bound to the found handle
+  //3) Sprites: reuse/create the sprite proxy bound to the found handle
   AHandle := Engine.Sprites.FindByName(aName);
   if AHandle > cSpriteInvalid then
   begin
@@ -1189,11 +1164,6 @@ begin
   else if field = 'drainms' then
   begin
     L.PushNumber(Stats.DrainMs);
-    Result := 1;
-  end
-  else if field = 'group' then
-  begin
-    L.PushBoolean(Stats.Group);
     Result := 1;
   end
   else if field = 'lastgap' then
@@ -1592,8 +1562,7 @@ begin
   Lua.State.RegisterGlobal('sleep', @sleep_func);
   //pause(ms): like sleep(), but also freezes the scene (physics/sprites/controls)
   Lua.State.RegisterGlobal('pause', @pause_func);
-  //autogroup(flag): toggle automatic per-cycle grouping (on by default)
-  Lua.State.RegisterGlobal('autogroup', @autogroup_func);
+
   //queuelimit(n): cap the queue depth (0 = unlimited); see queue.limit
   Lua.State.RegisterGlobal('queuelimit', @queuelimit_func);
 
@@ -2001,8 +1970,8 @@ begin
 end;
 
 // The engine takes over only when the returned script defines at least one of
-// the frame callbacks. A script that never returns (while cycle do) keeps its
-// worker thread and never reaches this point.
+// the frame callbacks. A script that never returns keeps its worker thread and
+// never reaches this point.
 function TLuaScript.HasEngineCallbacks: Boolean;
 begin
   Result := (Lua.State <> nil) and
@@ -2360,8 +2329,8 @@ end;
 // canvas.test(ms [, x, y, w, h]) -- diagnostic: enqueue a drawing command that
 // takes about ms milliseconds to execute on the main thread (it draws a marker
 // rectangle, then spins). Use it to emulate slow drawing: a single draw call
-// longer than a frame, to check that a 'while cycle' body is still committed as
-// one group (see docs/cycle.md). Defaults: ms = 50, a full-width 2px bar.
+// longer than a frame, to check that a queued body is still committed as one
+// group. Defaults: ms = 50, a full-width 2px bar.
 function TLuaCanvas.Test_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
@@ -3259,8 +3228,8 @@ end;
 
 // millis() - high-resolution monotonic clock in milliseconds (RayLib.GetTime,
 // the same timer the engine's frame budget uses). Unlike clock(), which is
-// quantised to the OS tick, this is fine enough to time a "while cycle do"
-// body, e.g. "local t0 = millis() ... print(millis() - t0)".
+// quantised to the OS tick, this is fine enough to time a frame body, e.g.
+// "local t0 = millis() ... print(millis() - t0)".
 function TLuaScript.Millis_func(L: Plua_State): integer; cdecl;
 begin
   L.PushNumber(RayLib.GetTime * 1000);
@@ -4117,7 +4086,6 @@ function TLuaConsole.Read_func(L: Plua_State): integer; cdecl;
 var
   s: string;
   c: integer;
-  Held: Boolean;
   Reader: TReadConsoleObject;
 begin
   s := '> ';
@@ -4127,9 +4095,10 @@ begin
 
   Reader := TReadConsoleObject.Create(s);
   try
-    // read() blocks the script thread: commit the cycle body queued so far so
-    // any prompt drawn before it is on screen while the user types.
-    Held := (Engine <> nil) and Engine.ReleaseAutoQueue;
+    // read() blocks the script thread: a prompt drawn before it is drained by
+    // the main loop while the user types, so drop the enqueue baseline.
+    if Engine <> nil then
+      Engine.ResetEnqueueGap;
     try
       // Run the DoExecute on the Engine thread via Synchronize.
       // The object is NOT freed by the engine; we free it here.
@@ -4141,8 +4110,6 @@ begin
         L.PushString(Reader.ResultString);
       Result := 1;
     finally
-      if Held then
-        Engine.HoldAutoQueue;
     end;
   finally
     Reader.Free;
@@ -4825,8 +4792,8 @@ begin
 end;
 
 //controls.new(class, name, x?, y?, w?, h?) -> handle
-//(created on the Engine thread, self-drawn by the Engine cycle; the returned
-//handle is 1-based over the controls created by this script)
+//(created on the Engine thread, self-drawn by the engine's drawing cycle; the
+//returned handle is 1-based over the controls created by this script)
 //legacy call buttons.new(caption, x?, y?, w?, h?, borderSize?) still works
 function TLuaControls.New_func(L: Plua_State): integer; cdecl;
 var

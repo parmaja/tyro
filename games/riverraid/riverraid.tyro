@@ -795,8 +795,7 @@ reset()
 -- ---- frame callbacks -------------------------------------------------
 -- The top-level chunk returns here, so the engine takes the script over and
 -- calls update(dt) then draw() once per frame on the main thread. dt is the
--- frame time in seconds, clamped to sane bounds exactly as the old
--- "while cycle do" loop did.
+-- frame time in seconds, clamped to sane bounds.
 function update(dt)
   if dt <= 0 then dt = 1 / 60 end
   if dt > 0.06 then dt = 0.06 end

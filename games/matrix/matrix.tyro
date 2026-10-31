@@ -275,8 +275,7 @@ end
 -- ======================================================================
 --  Main Loop
 -- ======================================================================
-while cycle do
-  local dt = frametime()
+function update(dt)
   if dt <= 0 or dt > 0.1 then dt = 1 / 60 end
   totalElapsed = totalElapsed + dt
 

@@ -10,7 +10,7 @@ Tyro is a small 2D game engine built on top of Raylib using Free Pascal/Lazarus.
 
 3. **Built-in interactive console/REPL** - The graphical console with persistent Lua state is excellent for experimentation. Kids can type commands line by line and variables persist across inputs. The `console.read()` function also makes it easy to create interactive text-based programs.
 
-4. **Immediate visual feedback** - The `while cycle do` loop pattern ties script execution to frame rendering. This makes it easy to see changes instantly without compilation steps - perfect for iterative learning and play.
+4. **Immediate visual feedback** - The `update(dt)` / `draw()` callback loop ties script execution to frame rendering. This makes it easy to see changes instantly without compilation steps - perfect for iterative learning and play.
 
 5. **Rich multimedia support** - Out of the box support for sprites, Aseprite animations, MIDI/MOD/XM playback, MML music generation, internet radio streaming, shaders, and screen shake effects. This gives plenty of creative freedom.
 

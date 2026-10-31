@@ -69,7 +69,7 @@ function bstate(h)
   else return "idle" end
 end
 
-while cycle do
+function update(dt)
   -- counter button: click it to change its caption
   if controls.clicked(bCounter) then
     clicks = clicks + 1

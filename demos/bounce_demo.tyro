@@ -1,9 +1,8 @@
 --======================================================================
---  cycle_demo.tyro - one drawing per frame using the cycle gate
+--  bounce_demo.tyro - a ball moving inside the window
 --======================================================================
---  Demonstrates: while cycle do ... end — the loop body runs at most once
---  per raylib drawing frame, so drawing commands cannot pile up inside a
---  single "while true do" + sleep() cycle.
+--  Demonstrates the engine-driven frame callbacks: the script returns, then
+--  the engine calls update(dt) once and draw() once per drawing frame.
 --======================================================================
 
 window.show(640, 480)
@@ -29,7 +28,7 @@ function draw()
 
   -- title
   canvas.color = colors.white
-  canvas.text(10, 10, "Cycle Demo - ball moves every frame")
+  canvas.text(10, 10, "Bounce Demo - ball moves every frame")
 
   -- draw it
   canvas.color = colors.white

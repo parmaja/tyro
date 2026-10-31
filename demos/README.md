@@ -24,8 +24,8 @@ tyro demos/pong.tyro
 | `basic_drawing.tyro` | All drawing primitives: rectangle, circle, line, point, text, colors |
 | `colors_bar.tyro` | Iterate the full color palette |
 | `animated_demo.tyro` | Animation loop with random colors and sleep() timing |
-| `cycle_demo.tyro` | Per-frame loop using `while cycle do` — one drawing per raylib frame |
-| `enter_leave_demo.tyro` | Group drawing with `enter()` / `leave()` — every command queued in between is drawn at one drawing cycle |
+| `bounce_demo.tyro` | Per-frame `update(dt)` / `draw()` callbacks — one drawing per raylib frame |
+| `enter_leave_demo.tyro` | Group drawing with `enter()` / `leave()` — every command queued in between is drawn at one drawing frame |
 | `test.tyro` | Circle animation demo with random sizes and colors |
 
 ### Animation

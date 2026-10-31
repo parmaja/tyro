@@ -148,7 +148,7 @@ type
 
     Most of the counters below are filled only when the 'diagnose' conditional
     is defined (debug builds, see the top of the unit): a release build reports
-    0 for them. Consumed, Depth, Holds, Group and Limit are always live.
+    0 for them. Consumed, Depth, Holds and Limit are always live.
   }
   TQueueStats = record
     //* Commands executed on the main thread since the engine started.
@@ -168,13 +168,11 @@ type
     Frames: Integer;
     //* Duration of the most recent drain pass, in milliseconds.
     DrainMs: Double;
-    //* True while automatic per-cycle grouping is enabled (the default).
-    Group: Boolean;
     //* Milliseconds the script spent between the last two queued commands, and
     //* the largest such gap seen. A big value is the script stalling between
     //* two queue calls (a blocking getter, file I/O, ...) without yielding, so
     //* e.g. a rectangle and the text queued right after it land in the same
-    //* group but seconds apart. Reset at every yield (cycle/sleep/read), so
+    //* group but seconds apart. Reset at every yield (sleep/read), so
     //* frame waits are not counted.
     LastGap: Integer;
     MaxGap: Integer;
@@ -200,10 +198,6 @@ type
     //* (see the Lua 'canvas.front'). The board must be cleared to a transparent
     //* colour for the sprites to show through it.
     FBoardOnTop: Boolean;
-    //* Signaled by the main loop after every drawing cycle (EndDrawing). The
-    //* Lua 'cycle' gate waits on it so "while cycle do" runs at most once per
-    //* drawn frame. Auto-reset: an unwaited signal is simply lost.
-    FFrameEvent: TEvent;
     //* The control which captured the mouse (e.g. dragging a sizable border).
     //* It keeps receiving MouseMove/MouseUp until the left button is released.
     FControlCapture: TTyroControl;
@@ -260,8 +254,7 @@ type
     //* Engine-driven mode. When the worker's top-level chunk returns normally
     //* and the script defines update()/draw(), the engine keeps the worker's
     //* script (and its Lua state) alive and calls those callbacks on the main
-    //* thread each frame (see OnScriptFinished). False while a script drives its
-    //* own loop from the worker (while cycle do), which never returns. Main thread.
+    //* thread each frame (see OnScriptFinished). Main thread.
     FEngineDriven: Boolean;
     //* A finished run exposed no frame callbacks (or errored): the main loop
     //* releases its worker, which closes the Lua state. Main thread.
@@ -314,17 +307,9 @@ type
     //* in total (FQueueConsumed), which lets a released group land in one cycle
     //* even though the script re-arms the hold before the next pass. Counters
     //* make this safe against a pass still draining when the next hold is armed.
-    //* These three are load-bearing, not diagnostics: they run in release too.
     FQueueEnqueued: LongInt;
     FQueueCommitUpTo: LongInt;
     FQueueConsumed: LongInt;
-    //* Automatic per-'cycle' grouping (see AutoGroup). FQueueAuto is the
-    //* implicit hold taken when a cycle body starts and released at the next
-    //* yield point, so the whole body is committed in one drawing cycle just
-    //* like an explicit enter()/leave(). FAutoGroup enables the behaviour.
-    //* Touched from the script thread, so access goes through TInterlocked.
-    FQueueAuto: LongInt;
-    FAutoGroup: Boolean;
     //* Count of active Lua pause() calls. While > 0 the main loop skips the
     //* scene simulation (physics, sprite animation/scripts, controls) so a
     //* paused script keeps showing a still frame; audio and input keep running.
@@ -422,7 +407,7 @@ type
 
     //* Block the calling (script) thread while the queue is at/over its
     //* admission limit, so a fast producer cannot grow it without bound.
-    //* Returns at once when the limit is 0, a group is held (enter()/cycle),
+    //* Returns at once when the limit is 0, a group is held (enter()),
     //* the window is hidden/headless, or the engine is stopping. Called by
     //* TTyroScript.AddQueueObject after a command is accepted; the caller must
     //* NOT hold the global Lock here (ProcessQueue needs it to drain).
@@ -447,12 +432,6 @@ type
     procedure LoadConfig;
     procedure Stop; //and wait
     procedure Shutdown; virtual;
-
-    //* Block the calling script (thread) until the next drawing cycle
-    //* (EndDrawing) has completed. Returns False when
-    //* AScript was stopped while waiting, termination is polled here because
-    //* the Lua debug hook cannot fire while a C function blocks the thread.
-    function WaitToNextFrame(AScript: TTyroScript): Boolean;
 
     //* Called on the main thread (queued by the worker) after a script's
     //* top-level chunk returned. Decides the run's fate: when the script exposes
@@ -493,16 +472,7 @@ type
     //* go (no per-frame time budget). Safe to call from any thread; an
     //* unbalanced leave() (more leaves than enters) is ignored.
     procedure ReleaseQueue;
-    //* Release the implicit hold (if any) taken for the current 'cycle' body
-    //* and arm the one-shot flush, so the main loop commits what the script has
-    //* queued so far. Called at every yield point (cycle, sleep, console read).
-    //* Returns True when a hold was actually released, so the caller can take it
-    //* again after the yield. Safe to call from any thread.
-    function ReleaseAutoQueue: Boolean;
-    //* Take the implicit hold that groups the commands of one 'cycle' body.
-    //* The next ReleaseAutoQueue commits them in a single drawing cycle. Safe
-    //* to call from any thread.
-    procedure HoldAutoQueue;
+
     //* Lua pause(): mark the engine as paused so the main loop freezes the
     //* scene (physics, sprite animation/on_update, controls) while it waits.
     //* The caller makes the matching EndScriptPause call in a finally. Audio
@@ -520,12 +490,8 @@ type
     //* here. Safe to call from any thread.
     procedure NoteEnqueue;
     //* Drop the enqueue baseline so the next NoteEnqueue starts a fresh
-    //* measurement. Called at every yield point (see ReleaseAutoQueue). Safe to
-    //* call from any thread.
+    //* measurement. Safe to call from any thread.
     procedure ResetEnqueueGap;
-    //* Enable/disable automatic grouping of each 'while cycle' body. On by
-    //* default; turn it off for progressive drawing that streams across frames.
-    property AutoGroup: Boolean read FAutoGroup write FAutoGroup;
     //* True while a Lua pause() has frozen the scene (see BeginScriptPause).
     property ScriptPaused: Boolean read GetScriptPaused;
     //* Draw the Board canvas above the sprites (for a canvas-based HUD) instead
@@ -770,6 +736,9 @@ begin
           FPendingDispose := True
         else if not ScriptPaused then
         begin
+          //A frame boundary is a yield: do not count the time between two
+          //callbacks as a stall between queued commands.
+          ResetEnqueueGap;
           FScriptThread.Script.EngineUpdate(RayLib.GetFrameTime());
           //update() may have called exit(); do not call into a terminated state.
           if (not FScriptThread.Script.Stopped) and (not ScriptPaused) then
@@ -837,10 +806,6 @@ begin
           {$ifdef diagnose}
           TInterlocked.Increment(FFrameCount);
           {$endif}
-          //One drawing cycle completed: wake any script thread blocked on the
-          //Lua 'cycle' gate so "while cycle do" runs at most once per frame.
-          if FFrameEvent <> nil then
-            FFrameEvent.SetEvent;
           //A screenshot requested by Lua screenshot() is captured right after
           //the frame has been presented, so it sees the finished image.
           if FQueuedScreenshot <> '' then
@@ -947,52 +912,6 @@ begin
   end;
 end;
 
-function TTyroEngine.WaitToNextFrame(AScript: TTyroScript): Boolean;
-begin
-  Result := True;
-  if AScript.Handoff then
-    Exit(False);
-  ReleaseAutoQueue;
-  if (FFrameEvent = nil) or (IsWindowHidden) or (not RayLib.IsWindowReady) then
-    Exit;
-  while True do
-  begin
-    if not AScript.Active then
-    begin
-      Result := False;
-      Exit;
-    end;
-    if FFrameEvent.WaitFor(50) = wrSignaled then
-      Break;
-  end;
-  HoldAutoQueue;
-end;
-
-function TTyroEngine.ReleaseAutoQueue: Boolean;
-begin
-  //Release unconditionally: if autogroup was just turned off with a body still
-  //held, the hold must not stay stuck.
-  Result := TInterlocked.Exchange(FQueueAuto, 0) <> 0;
-  //Only a released hold needs the flush: it lets the next ProcessQueue pass
-  //drain the whole body in one go instead of stopping at the time budget.
-  if Result then
-    TInterlocked.Exchange(FQueueFlush, 1);
-  //The script is about to block/yield: stop measuring enqueue gaps, so the
-  //wait itself is not reported as a stall and the next body starts clean.
-  ResetEnqueueGap;
-end;
-
-procedure TTyroEngine.HoldAutoQueue;
-begin
-  if FAutoGroup then
-    //0 -> 1 closes the gate for the body about to run: snapshot the commands
-    //already queued (the previous, released body) so ProcessQueue can still
-    //draw them even though this hold stays open for the new body.
-    if TInterlocked.Exchange(FQueueAuto, 1) = 0 then
-      if TInterlocked.Add(FQueueHold, 0) = 0 then
-        MarkQueueCommit;
-end;
-
 procedure TTyroEngine.BeginScriptPause;
 begin
   TInterlocked.Increment(FScriptPause);
@@ -1068,11 +987,10 @@ end;
 procedure TTyroEngine.HoldQueue;
 begin
   //Only the transition from an open gate to a closed one marks a commit
-  //boundary: nested enter() calls (e.g. one inside a 'cycle' body) must not
-  //move the watermark past the outer hold's commands.
+  //boundary: nested enter() calls must not move the watermark past the outer
+  //hold's commands.
   if TInterlocked.Increment(FQueueHold) = 1 then
-    if TInterlocked.Add(FQueueAuto, 0) = 0 then
-      MarkQueueCommit;
+    MarkQueueCommit;
 end;
 
 procedure TTyroEngine.ReleaseQueue;
@@ -1097,7 +1015,7 @@ var
   Consumed: Integer;
   Depth: Integer;
   ToDrain: Integer; //>=0: drain exactly this many (committed) commands
-  Hold0, Auto0: LongInt;
+  Hold0: LongInt;
   {$ifdef diagnose}
   BudgetHit: Boolean;
   {$endif}
@@ -1105,25 +1023,21 @@ begin
   if Board <> nil then
   begin
     //A script that called enter() holds the queue: commands keep piling up,
-    //but nothing is drawn until leave() releases the hold. Automatic per-cycle
-    //grouping uses the same gate through FQueueAuto. A holder that has already
-    //gone (a script that errored or was stopped between enter and leave) is
-    //released here so it cannot lock drawing forever; the console REPL has no
-    //worker thread, so it is not covered by that self-healing.
+    //but nothing is drawn until leave() releases the hold. A holder that has
+    //already gone (a script that errored or was stopped between enter and
+    //leave) is released here so it cannot lock drawing forever; the console
+    //REPL has no worker thread, so it is not covered by that self-healing.
     Hold0 := TInterlocked.Add(FQueueHold, 0);
-    Auto0 := TInterlocked.Add(FQueueAuto, 0);
-    if (Hold0 > 0) or (Auto0 > 0) then
+    if Hold0 > 0 then
     begin
       if (FScriptThread = nil) or (not FScriptThread.Active) then
       begin
         TInterlocked.Exchange(FQueueHold, 0);
-        TInterlocked.Exchange(FQueueAuto, 0);
         Hold0 := 0;
-        Auto0 := 0;
       end;
     end;
 
-    if (Hold0 > 0) or (Auto0 > 0) then
+    if Hold0 > 0 then
     begin
       //A body is being built: draw only the group that was committed before
       //the hold was armed. The script re-arms the hold as soon as the frame
@@ -1268,7 +1182,6 @@ begin
   Result := Default(TQueueStats);
   Result.Consumed := TInterlocked.Add(FQueueConsumed, 0);
   Result.Holds := TInterlocked.Add(FQueueHold, 0);
-  Result.Group := FAutoGroup;
   Result.Limit := TInterlocked.Add(FQueueLimit, 0);
   {$ifdef diagnose}
   Result.Passes := TInterlocked.Add(FQueuePasses, 0);
@@ -1307,7 +1220,7 @@ begin
     Format('%-8s %-6d   %-8s %-6d', ['Consumed', Stats.Consumed, 'Passes', Stats.Passes]),
     Format('%-8s %-6d   %-8s %-6d', ['Deferred', Stats.Deferred, 'Depth', Stats.Depth]),
     Format('%-8s %-6d   %-8s %-6d', ['Max', Stats.MaxDepth, 'Holds', Stats.Holds]),
-    Format('%-8s %-6d   %-8s %-6s', ['Frames', Stats.Frames, 'Group', BoolToStr(Stats.Group, True)]),
+    Format('%-8s %-6d', ['Frames', Stats.Frames]),
     Format('%-8s %-6d   %-8s %-6d', ['Limit', Stats.Limit, 'Waits', Stats.Waits]),
     Format('%-8s %-6d   %-8s %-6.2f', ['Blocked', Stats.Blocked, 'Drain ms', Stats.DrainMs]),
     Format('%-8s %-6d   %-8s %-6d', ['LastGap', Stats.LastGap, 'Maxgap', Stats.MaxGap]),
@@ -1359,15 +1272,14 @@ begin
   //behave as unlimited in that mode.
   if (FScriptThread <> nil) and (FScriptThread.Script <> nil) and FScriptThread.Script.Handoff then
     Exit;
-  //A held group (enter()/leave() or the automatic 'cycle' hold) is
-  //built before it is drawn: ProcessQueue executes nothing while a hold is
-  //open, so waiting here would deadlock the script before it could leave().
-  if (TInterlocked.Add(FQueueHold, 0) > 0) or
-     (TInterlocked.Add(FQueueAuto, 0) > 0) then
+  //A held group (enter()/leave()) is built before it is drawn: ProcessQueue
+  //executes nothing while a hold is open, so waiting here would deadlock the
+  //script before it could leave().
+  if TInterlocked.Add(FQueueHold, 0) > 0 then
     Exit;
   //No consumer: a hidden/headless window has no drawing cycle, so behave as
   //unlimited instead of hanging the script forever.
-  if (FFrameEvent = nil) or IsWindowHidden or (not RayLib.IsWindowReady) then
+  if IsWindowHidden or (not RayLib.IsWindowReady) then
     Exit;
 
   {$ifdef diagnose}
@@ -1388,8 +1300,8 @@ begin
       {$endif}
       if FQueueSpaceEvent = nil then
         Break;
-      //Poll with a short timeout, like WaitToNextFrame: a missed signal costs
-      //latency, never a hang, and Stop() ends the loop.
+      //Poll with a short timeout, like the other queue waits: a missed signal
+      //costs latency, never a hang, and Stop() ends the loop.
       FQueueSpaceEvent.WaitFor(50);
       //queuelimit() may have raised or cleared the cap while we waited.
       Limit := TInterlocked.Add(FQueueLimit, 0);
@@ -1511,13 +1423,8 @@ begin
   Res := TTyroResources.Create;
   FControlCapture := nil;
   FOptions := [];
-  //Each 'while cycle' body is drawn atomically by default (see AutoGroup).
-  FAutoGroup := True;
   World := TTyroWorld.Create;
   FCanvasLock := TmnCriticalSection.Create;
-  //Auto-reset, initially clear: the Lua 'cycle' gate waits on it, the main
-  //loop signals it after every EndDrawing.
-  FFrameEvent := TEvent.Create(nil, False, False, '');
   //Auto-reset, set after every ProcessQueue pass: a producer throttled by
   //FQueueLimit waits on it. Unlimited by default (Lua queuelimit turns it on).
   FQueueSpaceEvent := TEvent.Create(nil, False, False, '');
@@ -1649,7 +1556,6 @@ begin
     RayLib.CloseWindow;
   FreeAndNil(FCanvasLock);
   FreeAndNil(FQueueSpaceEvent);
-  FreeAndNil(FFrameEvent);
   FreeAndNil(World);
 end;
 
@@ -2118,7 +2024,6 @@ begin
   //A run stopped between enter() and leave() must not leave the hold behind:
   //the next run would find its drawing frozen.
   TInterlocked.Exchange(FQueueHold, 0);
-  TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
   //Keep the commit watermark consistent: with the queue dropped, all commands
   //ever enqueued are also considered drawn, or the leftover difference would
@@ -2594,10 +2499,6 @@ begin
     TInterlocked.Exchange(FQueueGapLast, 0);
     TInterlocked.Exchange(FQueueGapMax, 0);
     {$endif}
-    //Group the script's initial drawing too, so even a body it builds before
-    //its first cycle/sleep/read is committed atomically; the hold is released
-    //at the first yield or when the run stops.
-    HoldAutoQueue;
     FScriptThread := TTyroScriptThread.Create(aScript);
     FScriptThread.Start;
   end
@@ -2705,7 +2606,6 @@ begin
   end;
   //A rerun must not inherit a hold the stopped run never balanced with leave().
   TInterlocked.Exchange(FQueueHold, 0);
-  TInterlocked.Exchange(FQueueAuto, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
   //Keep the commit watermark consistent: with the queue dropped, all commands
   //ever enqueued are also considered drawn, or the leftover difference would

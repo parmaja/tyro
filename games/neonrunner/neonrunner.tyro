@@ -365,7 +365,13 @@ end
 -- -----------------------------------------------------------------------------
 -- Update Logic
 -- -----------------------------------------------------------------------------
-local function update(dt)
+function update(dt)
+  -- Global Hotkeys
+  if keyboard.pressed("m") then
+    muted = not muted
+    if muted then sound.loopStop() else play_music_step() end
+  end
+
   state_timer = state_timer + dt
   music_timer = music_timer - dt
   if music_timer <= 0 then
@@ -788,7 +794,7 @@ end
 -- -----------------------------------------------------------------------------
 -- Drawing & Rendering (Canvas Layer)
 -- -----------------------------------------------------------------------------
-local function draw()
+function draw()
   local zone = D.ZONES[current_zone_idx]
 
   -- 1. Sky Gradient & Retro Sun
@@ -1000,23 +1006,6 @@ local function draw()
 end
 
 -- -----------------------------------------------------------------------------
--- Main Cycle Loop
+-- The top-level chunk returns here; the engine drives update(dt) and draw()
+-- once per drawing frame on the main thread.
 -- -----------------------------------------------------------------------------
-local last_time = millis()
-
-while cycle do
-  local cur_time = millis()
-  local dt = (cur_time - last_time) / 1000.0
-  last_time = cur_time
-  if dt > 0.05 then dt = 0.05 end -- Clamp delta time spike
-
-  -- Global Hotkeys
-  if keyboard.pressed("m") then
-    muted = not muted
-    if muted then sound.loopStop() else play_music_step() end
-  end
-
-  -- Update simulation & Draw
-  update(dt)
-  draw()
-end

@@ -46,7 +46,7 @@ Deploy as a heavily armored cyberpunk commando into deep, procedurally generated
 
 ## Architecture
 
-- `mazerogue.tyro`: Main game script handling 60fps cycle loop, sprite pooling, camera damping, audio, and HUD.
+- `mazerogue.tyro`: Main game script, driven by `update(dt)` / `draw()` callbacks, with sprite pooling, camera damping, audio, and HUD.
 - `mazerogue_data.tyro`: Pure mathematical rules module containing maze generation, reachability BFS, recoil calculation, collision resolution, and enemy scaling.
 - `make_assets.py`: Standalone Python script using Pillow to generate all pixel-art sprite atlases (`.sprite` + `.png`) and the 32x32 tileset (`tiles.png`).
 - `tests/test_mazerogue_data.tyro`: Automated regression tests strictly located in `tests/`.

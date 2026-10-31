@@ -4,10 +4,9 @@
 -- A single spirit moves from the left edge to the right edge
 -- over exactly 10 seconds, at 60 FPS.
 --
--- "while cycle do" runs the body at most once per drawn frame, so the
--- motion is locked to the display cadence: no sleep() jitter, no tearing
--- aliasing. A frame index counts real frames, so the 10 s duration holds
--- whatever the window FPS is.
+-- update(dt) runs at most once per drawn frame, so the motion is locked to
+-- the display cadence: no sleep() jitter, no tearing aliasing. A frame index
+-- counts real frames, so the 10 s duration holds whatever the window FPS is.
 --======================================================================
 
 window.show(640, 480)

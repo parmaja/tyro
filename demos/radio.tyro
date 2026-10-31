@@ -39,7 +39,7 @@ local function gapwatch(aLimitMS)
   return g
 end
 
-while cycle do
+function update(dt)
   -- left/right arrow keys change the number of bars
   if keyboard.pressed("left") and spectrum.bars > 8 then
     spectrum.bars = spectrum.bars - 8

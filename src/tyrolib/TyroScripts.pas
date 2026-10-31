@@ -454,8 +454,8 @@ type
   //  Backs canvas.test(ms [, x, y, w, h]): a drawing command whose execution on
   //  the main thread spins for about ms milliseconds before drawing a marker
   //  rectangle. It emulates a single draw call slower than a frame, so a script
-  //  can check that the per-'cycle' grouping still commits the whole body in one
-  //  drawing cycle instead of splitting it. Diagnostic helper, always compiled.
+  //  can check that enter()/leave() still commits the whole body in one
+  //  drawing frame instead of splitting it. Diagnostic helper, always compiled.
   TSlowDrawObject = class(TDrawObject)
   public
     fMillis: Integer;

@@ -1,11 +1,11 @@
 # Bounded queue / back-pressure
 
-A script normally yields once per frame (`while cycle do`), so the main loop
-drains the queue as fast as the worker fills it. A script that does **not**
-yield — a tight loop, or `autogroup(false)` streaming — is an unthrottled
-producer: `Engine.Queue` grows, memory and lag grow with it, and more frames are
-drawn from a partial batch. `queuelimit(n)` caps the queue so the producer waits
-for the consumer instead.
+A script normally yields when it draws a frame, so the main loop drains the
+queue as fast as the producer fills it. A script that does **not** yield — a
+tight loop in a worker-thread script — is an unthrottled producer: `Engine.Queue`
+grows, memory and lag grow with it, and more frames are drawn from a partial
+batch. `queuelimit(n)` caps the queue so the producer waits for the consumer
+instead.
 
 Related: [atomic.md](atomic.md) (grouping), `README.md` (threading model).
 
@@ -25,8 +25,8 @@ Read back through the `queue` table (read-only):
 
 ```lua
 queuelimit(2048)          -- at most ~2048 commands buffered
-autogroup(false)          -- stream without holding
-while cycle do
+window.show()
+while true do
     for i = 1, 5000 do
         canvas.point(rand(0, canvas.width), rand(0, canvas.height))
         -- after ~2048 queued, point() blocks until the main loop drains some
@@ -69,17 +69,18 @@ A cap makes the **producer** pay when the consumer is behind.
 `ThrottleQueue` returns at once when any of these hold:
 
 1. `QueueLimit = 0` (unlimited; the default).
-2. A group is open (`FQueueHold`/`FQueueAuto`): `ProcessQueue` executes nothing
-   while held, so waiting would deadlock the script before `leave()`.
-3. The window is hidden or not ready (headless): there is no drawing cycle to
+2. The script is engine-driven (`Handoff`): its `update`/`draw` callbacks run on
+   the main thread, which is also the consumer, so waiting would deadlock.
+3. A group is open (`FQueueHold`): `ProcessQueue` executes nothing while held,
+   so waiting would deadlock the script before `leave()`.
+4. The window is hidden or not ready (headless): there is no drawing cycle to
    drain the queue.
-4. `Running` is false (engine stopping).
+5. `Running` is false (engine stopping).
 
 Otherwise `AddQueueObject` blocks after admitting the command until the backlog
 drops below the cap. It waits on an auto-reset `FQueueSpaceEvent` that
 `ProcessQueue` sets after every pass (and that `Stop`/`Clear`/`SetQueueLimit`
-set), with a 50 ms poll timeout — the same pattern as `WaitToNextFrame`, so a
-missed signal costs latency, never a hang.
+set), with a 50 ms poll timeout, so a missed signal costs latency, never a hang.
 
 The wait happens **after** the global `Lock` is released: `ProcessQueue` needs
 that same lock to extract, so waiting under it would stall the consumer.
@@ -96,10 +97,14 @@ begin
   Limit := TInterlocked.Add(FQueueLimit, 0);
   if Limit <= 0 then
     Exit;
-  if (TInterlocked.Add(FQueueHold, 0) > 0) or
-     (TInterlocked.Add(FQueueAuto, 0) > 0) then
+  //Engine-driven callbacks run on the main thread, which is also the
+  //consumer: waiting here would deadlock.
+  if (FScriptThread <> nil) and (FScriptThread.Script <> nil) and
+     FScriptThread.Script.Handoff then
     Exit;
-  if (FFrameEvent = nil) or IsWindowHidden or (not RayLib.IsWindowReady) then
+  if TInterlocked.Add(FQueueHold, 0) > 0 then
+    Exit;
+  if IsWindowHidden or (not RayLib.IsWindowReady) then
     Exit;
 
   TInterlocked.Increment(FQueueBlocked);
@@ -148,24 +153,24 @@ end;
 
 `TQueueStats` gained `Limit`, `Waits`, `Blocked`, surfaced in `TLuaQueue.Getter`
 as `queue.limit`, `queue.waits`, `queue.blocked`; `queuelimit_func` and the
-`queuelimit` global are registered next to `autogroup`.
+`queuelimit` global are registered next to `enter`/`leave`.
 
 ## Edge cases / deadlock safety
 
 | Situation | Behavior | Why |
 |-----------|----------|-----|
-| `enter()` / `leave()` / `cycle` body | **No throttle** | `ProcessQueue` executes nothing while held; blocking would deadlock before `leave()` |
-| `while cycle do` body | Rarely throttles | `cycle` is already one body per frame (natural back-pressure) |
+| `enter()` / `leave()` body | **No throttle** | `ProcessQueue` executes nothing while held; blocking would deadlock before `leave()` |
+| Engine-driven `update`/`draw` | **No throttle** | The callbacks run on the main thread, which is also the consumer |
 | Headless / hidden window | **No throttle** | No drawing cycle consumes the queue |
 | REPL / main-thread script | **No throttle** | `Thread = nil`; blocking the main thread on its own consumer deadlocks |
-| Script stopped while waiting | Wait loop exits (`Running` false) within the poll tick | Mirrors `WaitToNextFrame` polling `Active` |
+| Script stopped while waiting | Wait loop exits (`Running` false) within the poll tick | The loop re-checks `Running` after every 50 ms wait |
 | Engine shutdown | `Stop`/`Clear` set the space event; waiters wake | Same primitive, no new shutdown path |
 | A single held group bigger than the cap | Allowed (grouping wins) | Atomicity cannot be preserved under a hard cap; `queue.max` still reports it |
 
 ## Verifying it
 
-`tests/test_queue_limit.tyro` streams 4000 commands with `autogroup(false)` and
-no yield, first unlimited then capped at 128. Expected
+`tests/test_queue_limit.tyro` streams 4000 commands in a tight loop with no
+yield, first unlimited then capped at 128. Expected
 (`tests/test_queue_limit_result.txt`):
 
 | Phase | `queue.limit` | max depth seen | `queue.waits` |

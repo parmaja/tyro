@@ -407,7 +407,6 @@ end
 -- ---- main --------------------------------------------------------------
 refresh()
 
---while cycle do
 function draw()
   draw_screen()
   if keyboard.pressed("r") then refresh() end

@@ -79,8 +79,9 @@ font, and `canvas.width` / `canvas.height` report the canvas size.
 
 `canvas.test(ms)` is a **diagnostic** draw: it draws a marker rectangle and then
 spends about *ms* milliseconds on the main thread, emulating a single draw call
-slower than a frame. It exists to check that a `while cycle` body is still drawn
-as one group (see [docs/cycle.md](docs/cycle.md)); normal scripts do not need it.
+slower than a frame. It exists to check that a body grouped with `enter()` /
+`leave()` is still drawn as one group (see [docs/atomic.md](docs/atomic.md));
+normal scripts do not need it.
 
 For sound, `music.beep()`, `music.sound(freq, ms)` or `music.sound(wave, freq,
 ms)`, `music.noise(ms)` (white) / `music.noise(freq, ms)` (pitched) and
@@ -606,15 +607,17 @@ window.show(640, 480)
 -- an accident: a long, hard jolt
 shake(800, 40)
 
-while cycle do
+function update(dt)
+    if keyboard.pressed("space") then
+        window.shake(400)  -- 400ms with the default power
+    end
+end
+
+function draw()
     canvas.color = colors.black
     canvas.rectangle(0, 0, canvas.width, canvas.height, true)
     canvas.color = colors.red
     canvas.circle(300, 240, 30, true)
-
-    if keyboard.pressed("space") then
-        window.shake(400)  -- 400ms with the default power
-    end
 end
 ```
 
@@ -722,33 +725,17 @@ for a control that is not an `image`.
 |----------|---------|-------------|
 | `sleep(ms)` | — | Pause the script thread for *ms* milliseconds |
 | `pause(ms)` | — | Like `sleep(ms)`, but also **freeze the scene** while the script waits: physics, sprite animation/`on_update` and controls stop advancing, so the frame the script queued stays on screen. Audio (music/radio) and input keep running. Use it for a still hold; use `sleep()` when the scene should keep moving |
-| `cycle` | `true` | Legacy frame gate (kept for compatibility); prefer `update(dt)` and `draw()` engine callbacks |
 | `enter()` | — | **Hold** the processing queue: the drawing commands queued after this call are not executed until `leave()` balances it |
-| `leave()` | — | Release the hold taken by `enter()`: the whole group queued in between is then drawn at one drawing cycle |
-| `autogroup(on)` | — | Turn automatic per-`cycle` grouping on (`true`, default) or off (`false`) |
+| `leave()` | — | Release the hold taken by `enter()`: the whole group queued in between is then drawn at one drawing frame |
 | `frametime()` | `number` (seconds) | Time elapsed since the last frame |
 | `time()` | `number` (seconds) | Elapsed time since the window was created |
-| `millis()` | `number` (ms) | High-resolution monotonic clock in milliseconds (the same timer the frame budget uses); fine enough to time a `while cycle do` body |
+| `millis()` | `number` (ms) | High-resolution monotonic clock in milliseconds (the same timer the frame budget uses); fine enough to time a drawing body |
 | `rand(min, max)` | `integer` | Random integer in [min, max] |
 
-`cycle` is a frame gate: reading it pauses the script thread until the main
-loop has presented the next drawing frame (`EndDrawing`). It never ends on its
-own (`while cycle do` runs forever), and it only waits when a window is being
-drawn — scripts running on the main thread (e.g. console lines) never block.
+## Game loop: `update(dt)` / `draw()`
 
-```lua
-window.show()
-while cycle do                      -- one iteration per drawing frame
-    canvas.rectangle(0, 0, canvas.width, canvas.height, true)
-    canvas.circle(320, 240, 20, true)
-end                                 -- no sleep() needed for ~60 FPS pacing
-```
-
-## The other loop: `update(dt)` / `draw()`
-
-`while cycle do` is one of **two** game loops. The other is engine-driven: a
-script that defines `update` and/or `draw` as globals and lets its top-level
-chunk **return** hands the frame to the engine.
+Define `update` and/or `draw` as globals and let the top-level chunk **return**.
+The engine then drives the frame for you:
 
 ```lua
 window.show(640, 480)
@@ -771,38 +758,13 @@ end                          -- chunk returns: the engine drives from here
 Both callbacks are optional. Once the top-level chunk returns **normally**, the
 engine looks for them; if either exists it keeps the script (and its locals,
 which stay live inside the callbacks as upvalues) and calls `update(dt)` then
-`draw()` once per frame on the main thread — no `while cycle do` and no
-`sleep()` pacing needed. `exit()` inside `update` ends the run, and `cycle`
-never blocks in this mode. If the chunk never returns (it keeps a `while cycle
-do` loop) or defines neither callback, nothing changes.
+`draw()` once per frame on the main thread — no `sleep()` pacing needed.
+`exit()` inside `update` ends the run. The callbacks must be **globals**:
+`local function update(dt)` is not found by the engine.
 
-Because only these callbacks touch the state after the hand-off — the loader
-thread stops before the engine takes over — the two models are interchangeable
-and never race. See [docs/cycle.md](docs/cycle.md) for the details.
-
-## Automatic grouping (default)
-
-Each `while cycle do` iteration is drawn as one group automatically. From the
-moment a body starts until the next yield point (the next `cycle`, `sleep()`,
-`pause()`, or `console.read()`), the queue is held, so a body that takes several
-frames to build still lands in a single drawing cycle. This prevents the "black
-box, then the text" flicker with no extra code:
-
-```lua
-window.show()
-while cycle do
-    canvas.color = colors.black
-    canvas.rectangle(0, 0, 640, 70, true)   -- the box ...
-    canvas.color = colors.green
-    canvas.text(8, 8, "Station : " .. station) -- ... and its text arrive together
-end
-```
-
-The hold is released before `sleep()`/`pause()`/`console.read()` so a prompt or
-progress drawn earlier still shows while the script waits. Call
-`autogroup(false)` for progressive drawing that must stream across frames.
-
-For sleep-based pacing you can still use the classic loop:
+If the chunk never returns (for example it keeps a `while true do` loop), or
+defines neither callback, the script stays on its worker thread and can still
+draw and pace itself with `sleep()`:
 
 ```lua
 window.show()
@@ -814,6 +776,11 @@ while true do
 end
 print("uptime: " .. (time() - start))
 ```
+
+Because only the engine callbacks touch the state after the hand-off — the
+loader thread stops before the engine takes over — the two models are
+interchangeable and never race. See [docs/engine-loop.md](docs/engine-loop.md)
+for the details.
 
 Use `pause(ms)` instead of `sleep(ms)` for a still hold: it also freezes the
 scene (physics, sprites, controls) for the duration while music/radio keep
@@ -829,15 +796,15 @@ canvas.text(10, 30, "Back!")
 
 `enter()` locks the processing queue: the drawing commands the script queues
 after the call keep piling up but are not executed by the main loop. `leave()`
-releases the lock, and the whole group is then drawn at one drawing cycle —
+releases the lock, and the whole group is then drawn at one drawing frame —
 instead of a large batch being split over several frames. Commands queued
-outside the group behave as usual. This is automatic for `while cycle` bodies
-(see *Automatic grouping* above); use it explicitly to group part of an
-iteration, or a body outside a cycle loop.
+outside the group behave as usual. Use it to group a batch inside `update` /
+`draw`:
 
 ```lua
 window.show()
-while cycle do
+
+function draw()
     canvas.rectangle(0, 0, canvas.width, canvas.height, true)
 
     enter()                             -- hold the queue
@@ -852,7 +819,8 @@ end
 
 `enter()`/`leave()` nest (they count up and down), and a script that stops or
 errors between them is released automatically so the next run never inherits a
-frozen queue.
+frozen queue. See [docs/atomic.md](docs/atomic.md) for the commit-watermark
+details.
 
 ## Measuring the queue (queue.*)
 
@@ -861,8 +829,8 @@ text" flicker, where a frame is presented with only part of a drawing body.
 
 These counters are diagnostics only, and are compiled only in debug builds (the
 `diagnose` conditional tracks the debug switch). A release build reports 0 for
-the diagnostic-only ones; `queue.consumed`, `queue.depth`, `queue.holds`,
-`queue.group` and `queue.limit` always stay live.
+the diagnostic-only ones; `queue.consumed`, `queue.depth`, `queue.holds` and
+`queue.limit` always stay live.
 
 The same fields can be watched live, without a script, by pressing `CTRL`+`F10`:
 the engine draws a compact panel in the window's top-left corner, showing every
@@ -878,21 +846,19 @@ a release build.
 | `queue.depth` | Commands waiting in the queue right now |
 | `queue.max` | Largest backlog seen at the start of a pass (a high-water mark) |
 | `queue.holds` | Open `enter()` calls (the hold depth) |
-| `queue.frames` | Drawing cycles presented since the engine started |
-| `queue.group` | `true` while automatic per-`cycle` grouping is enabled |
+| `queue.frames` | Drawing frames presented since the engine started |
 | `queue.drainms` | Duration of the most recent drain pass, in milliseconds |
 | `queue.lastgap` | Milliseconds between the last two queued commands (no yield in between) |
 | `queue.maxgap` | Largest such gap of the run: the script stalled between two queue calls |
 
-Because the script thread builds a body while the main loop drains the queue on
-its own thread, a frame boundary can fall in the middle of a body. The script
-cannot sample at that instant (it is not blocked on `cycle` then), but it can
-catch it right after the body returns, before the next `cycle`:
+Because the script builds a body while the main loop drains the queue on its own
+thread, a frame boundary can fall in the middle of a body. The script can catch
+it right after the body returns:
 
 ```lua
-while cycle do
-    local before = queue.consumed      -- queue is empty here
-    enter()                            -- or queue the body bare
+function draw()
+    local before = queue.consumed       -- queue is empty here
+    enter()                             -- or queue the body bare
     n = draw_body()
     leave()
     local mid = queue.consumed - before -- drained while the body was built
@@ -908,7 +874,7 @@ n = draw_body()
 print("body queued in " .. (millis() - t0) .. " ms")
 ```
 
-Grouping makes the body land in one drawing cycle, but it cannot fix the script
+Grouping makes the body land in one drawing frame, but it cannot fix the script
 itself taking a long time between two commands (a `radio.station` getter that
 blocks on a lock the network thread holds, file I/O, ...). The engine stamps
 every queued command with its enqueue time, so `queue.maxgap` reports the
@@ -918,16 +884,16 @@ meant to cover it:
 
 ```lua
 canvas.rectangle(0, 0, 640, 70, true)   -- opaque black box
--- radio.station blocks here for a second; the box alone cannot be shown yet,
--- but it will be the whole group is held, so the frame freezes instead
+-- radio.station blocks here for a second. The queue is held, so nothing is
+-- drawn yet and the frame freezes instead of showing a partial body.
 canvas.text(8, 8, "Station : " .. radio.station)
 print("stall between box and text: " .. queue.maxgap .. " ms")
 ```
 
-Wait times that *are* yields (`cycle`, `sleep()`, `console.read()`) reset the
-baseline, so `maxgap` does not count frame waits: a small `maxgap` with a
-black-only header means the metadata itself is empty (buffering/reconnect), not
-a rendering race.
+Wait times that *are* yields (`sleep()`, `pause()`, `console.read()`) reset the
+baseline, and so does the start of each engine-driven frame, so `maxgap` does not
+count frame waits: a small `maxgap` with a black-only header means the metadata
+itself is empty (buffering/reconnect), not a rendering race.
 
 To be told when a stall happens, watch the gap from the script (used by
 `demos/radio.tyro`). The first gap that clears the limit is printed to the
@@ -946,7 +912,7 @@ local function gapwatch(aLimitMS)
   return g
 end
 
-while cycle do
+function draw()
     -- ...draw the body...
     gapwatch(250)   -- >250 ms stall? the console says so
 end
@@ -969,8 +935,8 @@ tyro demos/<name>.tyro
 | `demos/pong.tyro` | Complete Pong game — drawing, keyboard input, AI, physics, collision, sound, scoring |
 | `demos/basic_drawing.tyro` | All drawing primitives: rectangle, circle, line, point, text, colors |
 | `demos/animated_demo.tyro` | Animation loop with random colors and sleep timing |
-| `demos/cycle_demo.tyro` | Per-frame loop using `while cycle do` — one drawing per frame |
-| `demos/enter_leave_demo.tyro` | Grouped drawing with `enter()` / `leave()` — a batch of draw calls lands in one drawing cycle |
+| `demos/bounce_demo.tyro` | Engine-driven `update(dt)` / `draw()` loop — a ball moves once per frame |
+| `demos/enter_leave_demo.tyro` | Grouped drawing with `enter()` / `leave()` — a batch of draw calls lands in one drawing frame |
 | `demos/sprites_demo.tyro` | Sprites system: load, show, hide, move, rotate, scale, named access |
 | `demos/controls.tyro` | Generic buttons, labels, checkboxes, edits, and panels |
 | `demos/controls_align.tyro` | Nested controls: a left-docked panel with top- and bottom-docked buttons |
@@ -993,7 +959,7 @@ tyro demos/<name>.tyro
 Script source runs on a **worker thread**, never on the render/main thread.
 Every RayLib call and every control/console/audio mutation a script makes is
 packaged as a queue object (`TQueueObject`) and dispatched back to the main
-thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
+thread, where the main loop drains the queue (`Main.Queue`) once per frame.
 
 - **Main-thread confinement.** Window, canvas, sprites, shaders, fonts, music/
   sound (the audio device), radio, spectrum and the control tree are all
@@ -1010,7 +976,7 @@ thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
   main thread; only the main thread touches the state from then on. Otherwise —
   no callbacks, or a chunk that never returns — the worker closes the state as
   usual. A later `Stop`/new run releases a handed-off state (see
-  [docs/cycle.md](docs/cycle.md)).
+  [docs/engine-loop.md](docs/engine-loop.md)).
 - **Queue admission.** A stopped/inactive script rejects new asynchronous work
   (the request is freed immediately instead). Right after the worker exits the
   engine cancels and clears any stale queue entries so they cannot leak into a
@@ -1038,8 +1004,8 @@ thread, where the main loop drains the queue (`Main.Queue`) once per cycle.
 The worker thread reads current input/timing values (`keyboard.down`, `mouse.x`,
 `frametime`, ...) and submits drawing/mutation requests through the queue; it
 must not hold references into the control tree or RayLib objects across
-calls. Scripts blocking on `console.read()` or `while cycle do` are cancelled
-by `Stop`, so a shut-down never waits on user input.
+calls. Scripts blocking on `console.read()` or `sleep()` are cancelled by
+`Stop`, so a shut-down never waits on user input.
 
 # Issues
 

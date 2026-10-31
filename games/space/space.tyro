@@ -159,13 +159,12 @@ end
 
 -- ---- main loop -------------------------------------------------------
 local t = 0
-while cycle do
-  local dt = frametime()
+function update(dt)
   if dt <= 0 or dt > 0.1 then dt = 0.016 end
   t = t + dt
 
   -- input
-  if keyboard.pressed("escape") then break end
+  if keyboard.pressed("escape") then exit() end
   if keyboard.pressed("r") then reset_voyage() end
   if keyboard.pressed("s") then
     glowOn = not glowOn

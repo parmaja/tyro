@@ -874,7 +874,7 @@ high = 0
 reset()
 
 -- The engine drives the frame from here: update(dt) steps the world, draw()
--- draws it. (See docs/cycle.md; the old `while cycle do` loop is equivalent.)
+-- draws it. (The old `while` loop migrated to update(dt)/draw() callbacks.)
 function update(dt)
   local ft = dt
   if ft == nil or ft <= 0 then ft = 1 / 60 end
