@@ -69,6 +69,7 @@ local P = {
   pickup_hp    = make_pool("pickup_health.png", 1.1),
   pickup_gr    = make_pool("pickup_grenade.png", 1.1),
   pickup_sh    = make_pool("pickup_shield.png", 1.1),
+  pickup_key   = make_pool("pickup_key.png", 1.15),
   crosshair    = make_pool("crosshair.png", 1.0),
   muzzle       = make_pool("muzzle.png", 1.1),
 }
@@ -132,11 +133,16 @@ local function sfx_stairs()
   music.sound("Chime", 520, 350)
 end
 
+local function sfx_locked()
+  music.sound("Kick", 140, 80)
+end
+
 -- ---- Game State & Entities -------------------------------------------
 local state = "play" -- start directly in gameplay so player is immediately visible!
 local floor_num = 1
 local score = 0
 local kills = 0
+local stairs_locked_timer = 0
 
 -- Camera
 local cam_x = 0
@@ -158,6 +164,7 @@ local player = {
   max_shield = D.PLAYER_MAX_SHIELD,
   grenades = D.GRENADE_START,
   max_grenades = D.GRENADE_MAX_AMMO,
+  has_key = false,
   fire_cooldown = 0,
   grenade_cooldown = 0,
   invuln_timer = 0,
@@ -208,6 +215,8 @@ end
 -- ---- Procedural Level Initialization ---------------------------------
 local function init_floor(f_num)
   floor_num = f_num
+  player.has_key = false
+  stairs_locked_timer = 0
   clear_all_sprites()
 
   bullets = {}
@@ -433,11 +442,17 @@ local function trigger_explosion(ex, ey, max_radius, max_dmg, knockback)
           if pr.kind == "barrel" then
             chain_barrels[#chain_barrels + 1] = {x = pr.x, y = pr.y}
           else
-            -- Crate drops pickup
-            local roll = math.random(1, 100)
-            local ptype = (roll <= 35) and "health" or ((roll <= 70) and "grenade" or "gem")
-            local ps = acquire(ptype == "health" and P.pickup_hp or (ptype == "grenade" and P.pickup_gr or P.gem))
-            pickups[#pickups + 1] = {kind = ptype, s = ps, x = pr.x, y = pr.y, radius = 10}
+            -- Crate drops key if hidden inside, otherwise normal loot
+            if pr.has_key then
+              local ps = acquire(P.pickup_key)
+              pickups[#pickups + 1] = {kind = "key", s = ps, x = pr.x, y = pr.y, radius = 12}
+              add_text("KEY DROPPED!", pr.x, pr.y - 20, colors.yellow, 1.5)
+            else
+              local roll = math.random(1, 100)
+              local ptype = (roll <= 35) and "health" or ((roll <= 70) and "grenade" or "gem")
+              local ps = acquire(ptype == "health" and P.pickup_hp or (ptype == "grenade" and P.pickup_gr or P.gem))
+              pickups[#pickups + 1] = {kind = ptype, s = ps, x = pr.x, y = pr.y, radius = 10}
+            end
           end
         end
       end
@@ -644,15 +659,21 @@ local function update_game(dt)
           hit = true
           if pr.hp <= 0 then
             pr.dead = true
-            local px, py, pkind = pr.x, pr.y, pr.kind
+            local px, py, pkind, has_key = pr.x, pr.y, pr.kind, pr.has_key
             release(pr.s)
             if pkind == "barrel" then
               trigger_explosion(px, py, D.BARREL_RADIUS, D.BARREL_DAMAGE, 300)
             else
-              local roll = math.random(1, 100)
-              local ptype = (roll <= 35) and "health" or ((roll <= 70) and "grenade" or "gem")
-              local ps = acquire(ptype == "health" and P.pickup_hp or (ptype == "grenade" and P.pickup_gr or P.gem))
-              pickups[#pickups + 1] = {kind = ptype, s = ps, x = px, y = py, radius = 10}
+              if has_key then
+                local ps = acquire(P.pickup_key)
+                pickups[#pickups + 1] = {kind = "key", s = ps, x = px, y = py, radius = 12}
+                add_text("KEY DROPPED!", px, py - 20, colors.yellow, 1.5)
+              else
+                local roll = math.random(1, 100)
+                local ptype = (roll <= 35) and "health" or ((roll <= 70) and "grenade" or "gem")
+                local ps = acquire(ptype == "health" and P.pickup_hp or (ptype == "grenade" and P.pickup_gr or P.gem))
+                pickups[#pickups + 1] = {kind = ptype, s = ps, x = px, y = py, radius = 10}
+              end
             end
           end
           break
@@ -710,9 +731,13 @@ local function update_game(dt)
       if e.flash_timer and e.flash_timer > 0 then e.flash_timer = e.flash_timer - dt end
 
       local dist_to_player = D.distance(e.x, e.y, player.x, player.y)
+      local max_detect_dist = (e.kind == "brute") and 380 or 340
 
-      -- Enemy AI logic
-      if dist_to_player < 340 then
+      -- Check line of sight: enemy cannot see through walls so not move toward player or shoot
+      local can_see_player = (dist_to_player < max_detect_dist) and
+                             D.has_line_of_sight(e.x, e.y, player.x, player.y, maze.grid, COLS, ROWS, D.TILE_SIZE)
+
+      if can_see_player then
         local ang = math.atan2(player.y - e.y, player.x - e.x)
 
         if e.kind == "drone" then
@@ -724,7 +749,7 @@ local function update_game(dt)
             e.x = e.x - math.cos(ang) * e.speed * dt
             e.y = e.y - math.sin(ang) * e.speed * dt
           end
-          -- Firing timer
+          -- Firing timer (only fires if line of sight is clear!)
           e.fire_timer = (e.fire_timer or 1.5) - dt
           if e.fire_timer <= 0 then
             e.fire_timer = D.ENEMIES.drone.fire_rate
@@ -753,17 +778,6 @@ local function update_game(dt)
           e.y = e.y + math.sin(ang) * spd * dt
         end
 
-        -- Apply knockback decay
-        if e.vx and e.vy then
-          e.x = e.x + e.vx * dt
-          e.y = e.y + e.vy * dt
-          e.vx = e.vx * math.max(0, 1.0 - 6.0 * dt)
-          e.vy = e.vy * math.max(0, 1.0 - 6.0 * dt)
-        end
-
-        -- Slide along maze walls
-        e.x, e.y = D.resolve_wall_collision(e.x, e.y, e.radius, maze.grid, COLS, ROWS, D.TILE_SIZE)
-
         -- Enemy Melee / Contact with Player
         if dist_to_player < e.radius + D.PLAYER_RADIUS then
           if e.kind == "kamikaze" then
@@ -779,6 +793,24 @@ local function update_game(dt)
           end
         end
       end
+
+      -- Apply knockback decay (applies whether player is in LOS or not)
+      if e.vx and e.vy then
+        e.x = e.x + e.vx * dt
+        e.y = e.y + e.vy * dt
+        e.vx = e.vx * math.max(0, 1.0 - 6.0 * dt)
+        e.vy = e.vy * math.max(0, 1.0 - 6.0 * dt)
+      end
+    end
+  end
+
+  -- Anti-Overlap: Push overlapping active enemies apart
+  D.separate_enemies(enemies)
+
+  -- Slide along maze walls for all active enemies
+  for _, e in ipairs(enemies) do
+    if not e.dead then
+      e.x, e.y = D.resolve_wall_collision(e.x, e.y, e.radius, maze.grid, COLS, ROWS, D.TILE_SIZE)
     end
   end
 
@@ -825,17 +857,33 @@ local function update_game(dt)
       elseif pk.kind == "gem" then
         score = score + 250
         add_text("+250 PTS", player.x, player.y - 25, colors.gold, 0.8)
+      elseif pk.kind == "key" then
+        player.has_key = true
+        add_text("SECURITY KEY ACQUIRED!", player.x, player.y - 25, colors.yellow, 1.8)
       end
       release(pk.s)
       table.remove(pickups, i)
     end
   end
 
-  -- 11. Descending Stairs to next floor
-  if stairs_entity and D.distance(stairs_entity.x, stairs_entity.y, player.x, player.y) < 24 then
-    sfx_stairs()
-    score = score + 1000 * floor_num
-    init_floor(floor_num + 1)
+  -- 11. Descending Stairs to next floor (requires Security Key)
+  if stairs_locked_timer > 0 then
+    stairs_locked_timer = stairs_locked_timer - dt
+  end
+
+  if stairs_entity and D.distance(stairs_entity.x, stairs_entity.y, player.x, player.y) < 26 then
+    if player.has_key then
+      sfx_stairs()
+      score = score + 1000 * floor_num
+      player.has_key = false
+      init_floor(floor_num + 1)
+    else
+      if stairs_locked_timer <= 0 then
+        stairs_locked_timer = 1.0
+        sfx_locked()
+        add_text("LEVEL EXIT LOCKED! FIND KEY IN CRATES", stairs_entity.x, stairs_entity.y - 28, colors.red, 1.2)
+      end
+    end
   end
 
   -- 12. Update Explosions & Floaty Texts
@@ -894,6 +942,7 @@ local function sync_sprites()
   if stairs_entity and stairs_entity.s then
     stairs_entity.s.x = stairs_entity.x - cam_x
     stairs_entity.s.y = stairs_entity.y - cam_y
+    stairs_entity.s.tint = player.has_key and colors.white or colors.red
   end
 
   -- Enemies
@@ -1026,11 +1075,20 @@ local function draw_hud()
 
   -- Grenades Ammo Counter
   canvas.color = colors.orange
-  canvas.text(700, 14, "GRENADES: " .. player.grenades .. "/" .. player.max_grenades)
+  canvas.text(685, 14, "GRENADES: " .. player.grenades .. "/" .. player.max_grenades)
+
+  -- Key Status
+  if player.has_key then
+    canvas.color = colors.gold
+    canvas.text(805, 14, "KEY: [ACQUIRED]")
+  else
+    canvas.color = colors.gray
+    canvas.text(805, 14, "KEY: [LOCKED]")
+  end
 
   -- Controls tip
   canvas.color = colors.lightgray
-  canvas.text(W - 130, 14, "[ESC] MENU")
+  canvas.text(W - 75, 14, "[ESC]")
 
   -- Bottom Tactical Controls Reminder
   canvas.color = colors.black
@@ -1070,7 +1128,7 @@ local function draw_hud()
   if stairs_entity then
     local st_x = mx + math.floor((stairs_entity.x / (COLS * D.TILE_SIZE)) * mw)
     local st_y = my + math.floor((stairs_entity.y / (ROWS * D.TILE_SIZE)) * mh)
-    canvas.color = colors.yellow
+    canvas.color = player.has_key and colors.yellow or colors.red
     canvas.circle(st_x, st_y, 3, true)
   end
 end

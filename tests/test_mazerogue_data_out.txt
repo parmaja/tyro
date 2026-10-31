@@ -21,5 +21,14 @@ PASS  props (barrels/crates) spawned
 PASS  pickups spawned
 PASS  enemy has valid hp and speed
 PASS  enemy has valid position within maze
+PASS  line of sight clear within open room
+PASS  line of sight blocked through walls
+PASS  LOS blocked by intervening wall tile
+PASS  overlapping enemies separated to minimum distance
+PASS  dead enemies are ignored by separation
+PASS  at least one crate spawned
+PASS  exactly one crate hides the security key
+PASS  exit door cannot open without key
+PASS  exit door opens when player has key
 
 Failures: 0

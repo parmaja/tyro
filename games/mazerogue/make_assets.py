@@ -434,6 +434,23 @@ def build_props():
     d.line((11, 4, 11, 18), fill=(0, 120, 240, 255), width=2)
     save_png(im, "pickup_shield")
 
+    # Security Access Key pickup (22x22)
+    im, d = new_img(22, 22)
+    # Outer glow
+    d.ellipse((2, 2, 20, 20), fill=(255, 200, 30, 90))
+    # Golden key ring / head
+    d.ellipse((3, 3, 12, 12), fill=(255, 215, 0, 255))
+    d.ellipse((5, 5, 10, 10), fill=(20, 25, 35, 255))
+    # Golden key shaft
+    d.rectangle((10, 6, 19, 9), fill=(255, 215, 0, 255))
+    # Golden key teeth
+    d.rectangle((14, 9, 16, 13), fill=(255, 215, 0, 255))
+    d.rectangle((18, 9, 20, 12), fill=(255, 215, 0, 255))
+    # Cyan cyber circuit accent
+    d.point((7, 7), fill=(0, 240, 255, 255))
+    d.rectangle((11, 7, 13, 8), fill=(0, 240, 255, 255))
+    save_png(im, "pickup_key")
+
     # Spinning Gem / Credit (18x18, 4 frames)
     gem_frames = []
     for step in range(4):

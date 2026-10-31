@@ -404,6 +404,102 @@ function M.resolve_wall_collision(x, y, radius, grid, cols, rows, tile_size)
   return new_x, new_y
 end
 
+-- ---- Line of Sight (LOS) Raycasting -----------------------------------
+-- Returns true if there is an unblocked line of sight between (x1, y1) and (x2, y2).
+-- Ray stops if it passes through any solid wall tile or diagonal corner seam.
+function M.has_line_of_sight(x1, y1, x2, y2, grid, cols, rows, tile_size)
+  local ts = tile_size or M.TILE_SIZE
+  local dx = x2 - x1
+  local dy = y2 - y1
+  local dist = math.sqrt(dx * dx + dy * dy)
+  if dist < 1 then return true end
+
+  local step = ts * 0.25 -- 8 pixels per step (fine sampling across 32px tiles)
+  local num_steps = math.ceil(dist / step)
+  if num_steps < 1 then num_steps = 1 end
+
+  local last_tx = math.floor(x1 / ts)
+  local last_ty = math.floor(y1 / ts)
+
+  if last_tx < 0 or last_tx >= cols or last_ty < 0 or last_ty >= rows then
+    return false
+  end
+  if M.is_solid_tile(grid[last_ty][last_tx]) then
+    return false
+  end
+
+  for i = 1, num_steps do
+    local t = i / num_steps
+    local px = x1 + dx * t
+    local py = y1 + dy * t
+    local tx = math.floor(px / ts)
+    local ty = math.floor(py / ts)
+
+    if tx < 0 or tx >= cols or ty < 0 or ty >= rows then
+      return false
+    end
+
+    if M.is_solid_tile(grid[ty][tx]) then
+      return false
+    end
+
+    -- Prevent seeing diagonally between two diagonally touching solid tiles
+    if tx ~= last_tx and ty ~= last_ty then
+      if M.is_solid_tile(grid[last_ty][tx]) and M.is_solid_tile(grid[ty][last_tx]) then
+        return false
+      end
+    end
+
+    last_tx = tx
+    last_ty = ty
+  end
+
+  return true
+end
+
+-- ---- Enemy Separation (Anti-Overlap Physics) --------------------------
+-- Pushes overlapping active enemies apart so they maintain circle spacing
+-- and do not visually stack on top of each other.
+function M.separate_enemies(enemies)
+  local n = #enemies
+  for i = 1, n do
+    local e1 = enemies[i]
+    if not e1.dead then
+      local r1 = e1.radius or 12
+      for j = i + 1, n do
+        local e2 = enemies[j]
+        if not e2.dead then
+          local r2 = e2.radius or 12
+          local dx = e2.x - e1.x
+          local dy = e2.y - e1.y
+          local min_dist = r1 + r2
+          local dist_sq = dx * dx + dy * dy
+
+          if dist_sq < min_dist * min_dist then
+            local dist = math.sqrt(dist_sq)
+            local overlap = min_dist - dist
+            local nx, ny
+            if dist > 0.0001 then
+              nx = dx / dist
+              ny = dy / dist
+            else
+              nx = 1
+              ny = 0
+              overlap = min_dist
+            end
+
+            local half = overlap * 0.5
+            e1.x = e1.x - nx * half
+            e1.y = e1.y - ny * half
+            e2.x = e2.x + nx * half
+            e2.y = e2.y + ny * half
+          end
+        end
+      end
+    end
+  end
+end
+
 -- ---- Entity Spawner for Level / Floor ---------------------------------
 function M.spawn_level_entities(maze_data, floor_num)
   local rng = M.new_rng(floor_num * 1000 + 42)
@@ -493,6 +589,33 @@ function M.spawn_level_entities(maze_data, floor_num)
         radius = 10,
       })
     end
+  end
+
+  -- Ensure at least one crate exists, and assign the key to exactly one crate
+  local crate_indices = {}
+  for i, pr in ipairs(props) do
+    if pr.kind == "crate" then
+      table.insert(crate_indices, i)
+    end
+  end
+
+  if #crate_indices == 0 then
+    -- Guarantee a crate in an available non-start room
+    local target_room = rooms[2] or rooms[1]
+    local cx = (target_room.x + 1) * ts + ts / 2
+    local cy = (target_room.y + 1) * ts + ts / 2
+    local key_crate = {
+      kind = "crate",
+      x = cx,
+      y = cy,
+      hp = 20,
+      radius = 12,
+      has_key = true,
+    }
+    table.insert(props, key_crate)
+  else
+    local key_idx = crate_indices[rng(1, #crate_indices)]
+    props[key_idx].has_key = true
   end
 
   return {

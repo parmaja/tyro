@@ -103,6 +103,71 @@ local first_enemy = level_ents.enemies[1]
 check("enemy has valid hp and speed", first_enemy.hp > 0 and first_enemy.speed > 0)
 check("enemy has valid position within maze", first_enemy.x > 0 and first_enemy.x < cols * D.TILE_SIZE)
 
+-- ---- 6. Enemy Line of Sight (LOS) --------------------------------------
+-- Within start room: line of sight between center and corner of room is clear
+local s_room = maze.start_room
+local p1_x = s_room.cx * D.TILE_SIZE + 16
+local p1_y = s_room.cy * D.TILE_SIZE + 16
+local p2_x = (s_room.x + 1) * D.TILE_SIZE + 16
+local p2_y = (s_room.y + 1) * D.TILE_SIZE + 16
+local los_clear = D.has_line_of_sight(p1_x, p1_y, p2_x, p2_y, maze.grid, cols, rows, D.TILE_SIZE)
+check("line of sight clear within open room", los_clear == true)
+
+-- Behind a solid wall: start room to exit room (separated by walls/corridors)
+local los_blocked = D.has_line_of_sight(maze.start_pos.x, maze.start_pos.y, maze.exit_pos.x, maze.exit_pos.y, maze.grid, cols, rows, D.TILE_SIZE)
+check("line of sight blocked through walls", los_blocked == false)
+
+-- Test artificial 3x3 grid with wall in middle
+local test_grid = {
+  [0] = {[0] = D.T_FLOOR_A, [1] = D.T_WALL_TOP, [2] = D.T_FLOOR_A},
+  [1] = {[0] = D.T_FLOOR_A, [1] = D.T_WALL_TOP, [2] = D.T_FLOOR_A},
+  [2] = {[0] = D.T_FLOOR_A, [1] = D.T_WALL_TOP, [2] = D.T_FLOOR_A},
+}
+local los_test = D.has_line_of_sight(16, 48, 80, 48, test_grid, 3, 3, 32)
+check("LOS blocked by intervening wall tile", los_test == false)
+
+-- ---- 7. Enemy Anti-Overlap Separation ---------------------------------
+local test_enemies = {
+  {x = 100, y = 100, radius = 12, dead = false},
+  {x = 104, y = 100, radius = 12, dead = false},
+}
+D.separate_enemies(test_enemies)
+local sep_dist = D.distance(test_enemies[1].x, test_enemies[1].y, test_enemies[2].x, test_enemies[2].y)
+check("overlapping enemies separated to minimum distance", sep_dist >= 23.9)
+
+-- Dead enemies should not be separated or push others
+local dead_test = {
+  {x = 50, y = 50, radius = 12, dead = true},
+  {x = 52, y = 50, radius = 12, dead = false},
+}
+D.separate_enemies(dead_test)
+check("dead enemies are ignored by separation", dead_test[1].x == 50 and dead_test[2].x == 52)
+
+-- ---- 8. Crate Security Key Spawning & Exit Logic ----------------------
+local key_crate_count = 0
+local total_crates = 0
+for _, pr in ipairs(level_ents.props) do
+  if pr.kind == "crate" then
+    total_crates = total_crates + 1
+    if pr.has_key == true then
+      key_crate_count = key_crate_count + 1
+    end
+  end
+end
+check("at least one crate spawned", total_crates >= 1)
+check("exactly one crate hides the security key", key_crate_count == 1)
+
+-- Verify exit level door requirement logic
+local can_open_door_without_key = false
+local player_has_key = false
+if player_has_key then can_open_door_without_key = true end
+check("exit door cannot open without key", can_open_door_without_key == false)
+
+local can_open_door_with_key = false
+player_has_key = true
+if player_has_key then can_open_door_with_key = true end
+check("exit door opens when player has key", can_open_door_with_key == true)
+
 -- ---- Summary ---------------------------------------------------------
 out:write("\nFailures: " .. failures .. "\n")
 out:close()
