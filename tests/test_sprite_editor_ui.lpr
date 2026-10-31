@@ -64,6 +64,8 @@ type
     //* Centre of the duplicate / delete buttons of the ACTIONS panel.
     function ActionDupPoint: TPoint;
     function ActionDelPoint: TPoint;
+    //* Centre of the duplicate button of the FRAMES panel.
+    function FrameDupPoint: TPoint;
     //* Runs a full tool drag in canvas pixel coordinates; the engine normally
     //* feeds these from the real mouse, this keeps the test deterministic.
     procedure ToolDrag(AX1, AY1, AX2, AY2: Integer);
@@ -174,6 +176,14 @@ var
   R: TRect;
 begin
   R := ActionDelRect;
+  Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+end;
+
+function TTestSpriteEditor.FrameDupPoint: TPoint;
+var
+  R: TRect;
+begin
+  R := FrameDupRect;
   Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
 end;
 
@@ -489,6 +499,18 @@ begin
       Editor.MouseUp(mbLeft, [], P.X, P.Y);
       Check(Editor.ActionFrameIndex(0) = 0,
         'dragging it back restores the original order');
+
+      //--- duplicate the active frame from the FRAMES panel ---------------
+      Check(Editor.PreviewFrameCount = 2,
+        'idle has two frames before the frame copy');
+      P := Editor.FrameDupPoint;
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.PreviewFrameCount = 3,
+        'the frame duplicate button adds a copy to the action');
+      K := KEY_DELETE;
+      Editor.KeyDown(K, []);
+      Check(Editor.PreviewFrameCount = 2,
+        'deleting the copy leaves the action with its original frames');
 
       //--- every tool button selects its own tool at its real position -----
       P := Editor.MapToClient(Point(Editor.InnerRect.Left, Editor.InnerRect.Top));

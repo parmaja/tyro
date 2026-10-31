@@ -275,6 +275,7 @@ type
     function ActionDupRect: TRect;
     function ActionDelRect: TRect;
     function FrameAddRect: TRect;
+    function FrameDupRect: TRect;
     function FrameDelRect: TRect;
     function FrameLeftRect: TRect;
     function FrameRightRect: TRect;
@@ -2651,6 +2652,11 @@ begin
       AddFrameBlank;
       Exit;
     end;
+    if InsideRect(FrameDupRect, AX, AY) then
+    begin
+      AddFrameCopy;
+      Exit;
+    end;
     if InsideRect(FrameDelRect, AX, AY) then
     begin
       DeleteActiveFrame;
@@ -3168,6 +3174,14 @@ var
 begin
   R := FramesAreaRect;
   Result := Rect(R.Right - 70, R.Top + 4, R.Right - 52, R.Top + 22);
+end;
+
+function TSpriteEditor.FrameDupRect: TRect;
+var
+  R: TRect;
+begin
+  R := FramesAreaRect;
+  Result := Rect(R.Right - 92, R.Top + 4, R.Right - 74, R.Top + 22);
 end;
 
 function TSpriteEditor.FrameDelRect: TRect;
@@ -4251,6 +4265,7 @@ var
 begin
   R := FramesAreaRect;
   DrawPanel(ACanvas, R, 'FRAMES', Ord(icFrame));
+  DrawButton(ACanvas, FrameDupRect, '', False, CurrentFrameIndex >= 0, Ord(icCopy));
   DrawButton(ACanvas, FrameAddRect, '', False, True, Ord(icPlus));
   DrawButton(ACanvas, FrameDelRect, '', False, FFrames.Count > 1, Ord(icClose));
   DrawButton(ACanvas, FrameLeftRect, '<', False, ActionFrameCount > 1);
