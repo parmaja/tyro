@@ -1139,6 +1139,7 @@ begin
   FOptions := [];
   FCanvasLock := TmnCriticalSection.Create;
   World := TTyroWorld.Create(ScreenWidth, ScreenHeight);
+  World.Name := 'World';
   //Auto-reset, set after every ProcessQueue pass: a producer throttled by
   //FQueueLimit waits on it. Unlimited by default (Lua queuelimit turns it on).
 
@@ -1389,9 +1390,11 @@ begin
   //Board is a render-texture: script draw commands run inside Board.BeginDraw
   //during ProcessQueue and are composited by Board.PostDraw inside the camera.
   Board := TTyroTextureCanvas.Create(AWidth, AHeight);
+  Board.Name := 'Board';
   //Board.BackColor := Res.Theme.Window.BackColor;
   //Screen is top most texture used for HUD or Status
   Screen := TTyroTextureCanvas.Create(AWidth, AHeight);
+  Screen.Name := 'Screen';
 
   LoadGamepadMappings;
   //The window, taskbar and alt-tab icon is the application's own icon, the one

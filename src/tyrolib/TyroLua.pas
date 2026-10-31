@@ -68,7 +68,6 @@ type
     function Line_func(L: Plua_State): integer; cdecl;
     function Point_func(L: Plua_State): integer; cdecl;
     function Test_func(L: Plua_State): integer; cdecl;
-
   end;
 
   { TLuaCanvas }
@@ -138,6 +137,7 @@ type
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
   public
+    constructor Create(const AName: string; AScript: TLuaScript); override;
     procedure Init; override;
     function Shake_func(L: Plua_State): integer; cdecl;
   end;
@@ -1069,6 +1069,12 @@ begin
     inherited;
 end;
 
+constructor TLuaWorld.Create(const AName: string; AScript: TLuaScript);
+begin
+  inherited;
+  Canvas := Engine.World;
+end;
+
 procedure TLuaWorld.Init;
 begin
   Script.Lua.State.Register(Name, 'shake', Self, Self.Shake_func);
@@ -1240,39 +1246,39 @@ end;
 function TLuaCustomCanvas.Setter(L: PLua_State): integer;
 var
   i: Integer;
+  aColor: TColor;
   field: string;
 begin
   Result := 0;
   field := L.ToString(2);
-
-  if L.IsInteger(-1) then
+  if field = 'color' then
   begin
-    if field = 'color' then
-    begin
-      i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetColorObject.Create(Canvas, IntToColor(i)));
-      Result := 1;
-    end
-    else if field = 'alpha' then
-    begin
-      i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetAlphaObject.Create(Canvas, i));
-      Result := 1;
-    end
-    else if field = 'backcolor' then
-    begin
-      i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetBackColorObject.Create(Canvas, IntToColor(i)));
-      Result := 1;
-    end
-    else if (field = 'pen') then
-    begin
-      i := L.ToInteger(-1);
-      if i < 1 then
-        i := 1;
-      FScript.AddQueueObject(TDrawSetPenObject.Create(Canvas, i));
-      Result := 1;
-    end;
+    if L.IsString(-1) then
+      aColor := StrToColor(L.ToString(-1))
+    else
+      aColor := IntToColor(L.ToInteger(-1));
+    FScript.AddQueueObject(TDrawSetColorObject.Create(Canvas, aColor));
+    Result := 1;
+  end
+  else if field = 'alpha' then
+  begin
+    i := L.ToInteger(-1);
+    FScript.AddQueueObject(TDrawSetAlphaObject.Create(Canvas, i));
+    Result := 1;
+  end
+  else if field = 'backcolor' then
+  begin
+    i := L.ToInteger(-1);
+    FScript.AddQueueObject(TDrawSetBackColorObject.Create(Canvas, IntToColor(i)));
+    Result := 1;
+  end
+  else if (field = 'pen') then
+  begin
+    i := L.ToInteger(-1);
+    if i < 1 then
+      i := 1;
+    FScript.AddQueueObject(TDrawSetPenObject.Create(Canvas, i));
+    Result := 1;
   end;
 end;
 
@@ -1325,13 +1331,14 @@ begin
     State.Register(Name, 'line', Self, Self.Line_func);
     State.Register(Name, 'point', Self, Self.Point_func);
     State.Register(Name, 'test', Self, Self.Test_func);
+
     lua_getglobal(State, PUTF8Char(UTF8String(Name)));
     State.NewTable;
     State.RegisterMethod('rectH', Self.GradientH_func);
     State.RegisterMethod('rectV', Self.GradientV_func);
     State.RegisterMethod('circle', Self.GradientCircle_func);
     State.SetField(-2, 'gradient');
-    lua_pop(State, 1);
+    State.Pop;
     State.Register(Name, Self); //Should be last one
   end;
 end;

@@ -1,4 +1,5 @@
 window.show(640, 480)
+--canvas.alpha = 100
 canvas.text(10, 30, 'On Canvas')
 --canvas.text(10, 100, '110 عربي')
 screen.text(10, 60, 'On Screen')

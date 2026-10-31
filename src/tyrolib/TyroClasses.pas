@@ -223,6 +223,7 @@ type
   }
   TTyroCanvas = class(TObject)
   private
+    FName: string;
     FOrigin: TPoint;
     FCurrentPoint: TPoint;
     FColor: TColor;
@@ -326,6 +327,8 @@ type
     property BackColor: TColor read FBackColor write SetBackColor;
     property Width: Integer read FWidth write SetWidth;
     property Height: Integer read FHeight write SetHeight;
+
+    property Name: string read FName write FName;
   end;
 
   { TTyroTextureCanvas }
@@ -374,9 +377,6 @@ type
   private
     FOpaque: Boolean;
     FTitle: string;
-    FWidth: Integer;
-    FHeight: Integer;
-    FBackColor: TColor;
     // Screen shake state
     FShakeTime, FShakeDuration: Double;
     FShakePower: Integer;
@@ -399,10 +399,7 @@ type
     property Shaking: Boolean read GetShaking;
 
     property Title: string read FTitle write SetTitle;
-    property Width: Integer read FWidth write SetWidth;
-    property Height: Integer read FHeight write SetHeight;
 
-    property BackColor: TColor read FBackColor write SetBackColor;
     property Opaque: Boolean read FOpaque write FOpaque;
     property ShakeX: Integer read GetShakeX;
     property ShakeY: Integer read GetShakeY;

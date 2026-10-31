@@ -37,8 +37,8 @@ local D = require("mazerogue_data")
 window.show(960, 540)
 world.backcolor = colors.black
 
-local W = canvas.width
-local H = canvas.height
+local W = world.width
+local H = world.height
 
 -- ---- Sprite Pooling System -------------------------------------------
 local function make_pool(asset_name, scale)
@@ -1018,114 +1018,114 @@ end
 local function draw_hud()
   -- Flashlight / Glow around Player Gunner
   if player.s and player.s.visible then
-    canvas.color = colors.cyan
-    canvas.alpha = 25
-    canvas.circle(player.s.x, player.s.y, 48, true)
-    canvas.alpha = 55
-    canvas.circle(player.s.x, player.s.y, 24, true)
-    canvas.alpha = 255
+    world.color = colors.cyan
+    world.alpha = 25
+    world.circle(player.s.x, player.s.y, 48, true)
+    world.alpha = 55
+    world.circle(player.s.x, player.s.y, 24, true)
+    world.alpha = 255
 
     -- Overhead mini health bar above Gunner
     local bar_w = 30
     local cur_w = math.max(0, math.floor((player.hp / player.max_hp) * bar_w))
-    canvas.color = colors.black
-    canvas.rectangle(player.s.x - 15, player.s.y - 28, bar_w, 4, true)
-    canvas.color = (player.hp > 30) and colors.lime or colors.red
-    canvas.rectangle(player.s.x - 15, player.s.y - 28, cur_w, 4, true)
+    world.color = colors.black
+    world.rectangle(player.s.x - 15, player.s.y - 28, bar_w, 4, true)
+    world.color = (player.hp > 30) and colors.lime or colors.red
+    world.rectangle(player.s.x - 15, player.s.y - 28, cur_w, 4, true)
   end
 
   -- Top Tactical HUD Bar
-  canvas.color = colors.black
-  canvas.alpha = 210
-  canvas.rectangle(0, 0, W, 46, true)
-  canvas.alpha = 255
-  canvas.color = colors.cyan
-  canvas.rectangle(0, 46, W, 2, true)
+  world.color = colors.black
+  world.alpha = 210
+  world.rectangle(0, 0, W, 46, true)
+  world.alpha = 255
+  world.color = colors.cyan
+  world.rectangle(0, 46, W, 2, true)
 
   -- Sector / Floor & Score
-  canvas.color = colors.yellow
-  canvas.text(18, 14, "SECTOR: B-" .. floor_num)
-  canvas.color = colors.white
-  canvas.text(180, 14, "SCORE: " .. score)
-  canvas.text(320, 14, "KILLS: " .. kills)
+  world.color = colors.yellow
+  world.text(18, 14, "SECTOR: B-" .. floor_num)
+  world.color = colors.white
+  world.text(180, 14, "SCORE: " .. score)
+  world.text(320, 14, "KILLS: " .. kills)
 
   -- HP Bar
   local hp_w = 120
-  canvas.color = colors.gray
-  canvas.rectangle(440, 14, hp_w, 18, true)
+  world.color = colors.gray
+  world.rectangle(440, 14, hp_w, 18, true)
   local cur_hp_w = math.floor((player.hp / player.max_hp) * hp_w)
-  canvas.color = (player.hp > 30) and colors.green or colors.red
-  canvas.rectangle(440, 14, cur_hp_w, 18, true)
-  canvas.color = colors.white
-  canvas.text(450, 15, "HP " .. player.hp .. "/" .. player.max_hp)
+  world.color = (player.hp > 30) and colors.green or colors.red
+  world.rectangle(440, 14, cur_hp_w, 18, true)
+  world.color = colors.white
+  world.text(450, 15, "HP " .. player.hp .. "/" .. player.max_hp)
 
   -- Shield Bar
   local sh_w = 90
-  canvas.color = colors.gray
-  canvas.rectangle(580, 14, sh_w, 18, true)
+  world.color = colors.gray
+  world.rectangle(580, 14, sh_w, 18, true)
   local cur_sh_w = math.floor((player.shield / player.max_shield) * sh_w)
-  canvas.color = colors.aqua
-  canvas.rectangle(580, 14, cur_sh_w, 18, true)
-  canvas.color = colors.white
-  canvas.text(590, 15, "SHIELD " .. player.shield)
+  world.color = colors.aqua
+  world.rectangle(580, 14, cur_sh_w, 18, true)
+  world.color = colors.white
+  world.text(590, 15, "SHIELD " .. player.shield)
 
   -- Grenades Ammo Counter
-  canvas.color = colors.orange
-  canvas.text(685, 14, "GRENADES: " .. player.grenades .. "/" .. player.max_grenades)
+  world.color = colors.orange
+  world.text(685, 14, "GRENADES: " .. player.grenades .. "/" .. player.max_grenades)
 
   -- Key Status
   if player.has_key then
-    canvas.color = colors.gold
-    canvas.text(805, 14, "KEY: [ACQUIRED]")
+    world.color = colors.gold
+    world.text(805, 14, "KEY: [ACQUIRED]")
   else
-    canvas.color = colors.gray
-    canvas.text(805, 14, "KEY: [LOCKED]")
+    world.color = colors.gray
+    world.text(805, 14, "KEY: [LOCKED]")
   end
 
   -- Controls tip
-  canvas.color = colors.lightgray
-  canvas.text(W - 75, 14, "[ESC]")
+  world.color = colors.lightgray
+  world.text(W - 75, 14, "[ESC]")
 
   -- Bottom Tactical Controls Reminder
-  canvas.color = colors.black
-  canvas.alpha = 180
-  canvas.rectangle(14, H - 36, 440, 24, true)
-  canvas.alpha = 255
-  canvas.color = colors.yellow
-  canvas.text(20, H - 30, "WASD: Move | LMB: Fire (Recoil Kick) | RMB/G: Grenade")
+  world.color = colors.black
+  world.alpha = 180
+  world.rectangle(14, H - 36, 440, 24, true)
+  world.alpha = 255
+  world.color = colors.yellow
+  world.text(20, H - 30, "WASD: Move | LMB: Fire (Recoil Kick) | RMB/G: Grenade")
 
   -- Floaty damage / score texts
   for _, t in ipairs(texts) do
     local sx = t.x - cam_x
     local sy = t.y - cam_y
     if sx > -100 and sx < W + 100 and sy > -50 and sy < H + 50 then
-      canvas.color = t.clr
-      canvas.text(math.floor(sx), math.floor(sy), t.msg)
+      world.color = t.clr
+      world.text(math.floor(sx), math.floor(sy), t.msg)
     end
   end
 
   -- Radar / Mini-map in bottom-right corner
   local mw, mh = 110, 110
   local mx, my = W - mw - 14, H - mh - 14
-  canvas.color = colors.black
-  canvas.alpha = 190
-  canvas.rectangle(mx, my, mw, mh, true)
-  canvas.alpha = 255
-  canvas.color = colors.cyan
-  canvas.rectangle(mx, my, mw, mh, false)
+  world.color = colors.black
+  world.alpha = 190
+  world.rectangle(mx, my, mw, mh, true)
+  world.alpha = 255
+  world.color = colors.cyan
+  world.rectangle(mx, my, mw, mh, false)
 
   -- Draw player blip on radar
   local blip_x = mx + math.floor((player.x / (COLS * D.TILE_SIZE)) * mw)
   local blip_y = my + math.floor((player.y / (ROWS * D.TILE_SIZE)) * mh)
-  canvas.color = colors.lime
-  canvas.circle(blip_x, blip_y, 3, true)
+  world.color = colors.lime
+  world.circle(blip_x, blip_y, 3, true)
 
   -- Draw stairs blip
   if stairs_entity then
     local st_x = mx + math.floor((stairs_entity.x / (COLS * D.TILE_SIZE)) * mw)
     local st_y = my + math.floor((stairs_entity.y / (ROWS * D.TILE_SIZE)) * mh)
-    canvas.color = player.has_key and colors.yellow or colors.red
-    canvas.circle(st_x, st_y, 3, true)
+    world.color = player.has_key and colors.yellow or colors.red
+    world.circle(st_x, st_y, 3, true)
   end
 end
 
@@ -1151,21 +1151,21 @@ local function draw_title_screen()
 end
 
 local function draw_game_over_screen()
-  canvas.color = colors.black
-  canvas.alpha = 220
-  canvas.rectangle(0, 0, W, H, true)
-  canvas.alpha = 255
+  world.color = colors.black
+  world.alpha = 220
+  world.rectangle(0, 0, W, H, true)
+  world.alpha = 255
 
-  canvas.color = colors.red
-  canvas.text(W / 2 - 80, H / 2 - 60, "M.I.A. - GUNNER DOWN")
+  world.color = colors.red
+  world.text(W / 2 - 80, H / 2 - 60, "M.I.A. - GUNNER DOWN")
 
-  canvas.color = colors.white
-  canvas.text(W / 2 - 70, H / 2 - 10, "FINAL SCORE: " .. score)
-  canvas.text(W / 2 - 70, H / 2 + 15, "SECTOR REACHED: B-" .. floor_num)
-  canvas.text(W / 2 - 70, H / 2 + 40, "ENEMIES PURGED: " .. kills)
+  world.color = colors.white
+  world.text(W / 2 - 70, H / 2 - 10, "FINAL SCORE: " .. score)
+  world.text(W / 2 - 70, H / 2 + 15, "SECTOR REACHED: B-" .. floor_num)
+  world.text(W / 2 - 70, H / 2 + 40, "ENEMIES PURGED: " .. kills)
 
-  canvas.color = colors.yellow
-  canvas.text(W / 2 - 120, H / 2 + 90, "[ PRESS SPACE / R TO RESTART ]")
+  world.color = colors.yellow
+  world.text(W / 2 - 120, H / 2 + 90, "[ PRESS SPACE / R TO RESTART ]")
 end
 
 -- ---- Engine-Driven Callbacks (update & draw) ------------------------
@@ -1213,8 +1213,8 @@ function update(dt)
 end
 
 function draw()
-  canvas.color = colors.black
-  canvas.clear()
+  world.color = colors.black
+  world.clear()
 
   -- 1. Draw Native Tilemap with Camera Offset
   if tilemap then
