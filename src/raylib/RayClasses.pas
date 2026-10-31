@@ -60,10 +60,6 @@ type
     procedure Update;
   end;
 
-  { Images }
-
-  { TRayImage }
-
   { TRayTexture }
 
   TRayTexture = class(TRayObject)
@@ -90,6 +86,7 @@ type
   end;
 
   TRayPlayState = (plyStop, plyPlay, plyPause);
+
   { TRayPlay }
 
   TRayPlay = class abstract (TRayUpdate)

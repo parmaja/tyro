@@ -126,20 +126,6 @@ type
     function Shake_func(L: Plua_State): integer; cdecl;
   end;
 
-  { TLuaQueue }
-
-  // Read-only view of the engine's queue/frame diagnostics (TQueueStats).
-  // A script can compare queue.consumed before and after a body with the
-  // number of commands it queued: when the delta is smaller the main loop drew
-  // only part of the body that frame, which is the black-box-then-text flicker.
-  // queue.deferred counts those partial frames directly.
-  TLuaQueue = class(TTyroLuaObject)
-  protected
-    function Getter(L: PLua_State): integer; override;
-  public
-    constructor Create(AScript: TLuaScript); override;
-  end;
-
   { TLuaFont }
 
   TLuaFont = class(TTyroLuaObject)
@@ -578,7 +564,6 @@ type
     Console: TLuaConsole;
     Window: TLuaWindow;
     World: TLuaWorld;
-    QueueLua: TLuaQueue;
     Colors: TLuaColors;
     Font: TLuaFont;
     Music: TLuaMusic;
@@ -677,8 +662,6 @@ begin
   n := Round(L.ToNumber(1));
   //sleep() is a yield point: drop the enqueue baseline so the wait itself is
   //not reported as a stall between two queued commands.
-  if Engine <> nil then
-    Engine.ResetEnqueueGap;
   sleep(n);
   Result := 0;
 end;
@@ -693,13 +676,8 @@ var
   n: int64;
 begin
   n := Round(L.ToNumber(1));
-  //The frozen frame is the one the script asked to show; drop the enqueue
-  //baseline exactly like sleep().
   if Engine <> nil then
-  begin
-    Engine.ResetEnqueueGap;
     Engine.BeginScriptPause;
-  end;
   try
     sleep(n);
   finally
@@ -707,23 +685,6 @@ begin
       Engine.EndScriptPause;
   end;
   Result := 0;
-end;
-
-
-
-// queuelimit(n): cap the processing queue. While it holds n commands a script
-// that keeps queueing without yielding (a body bigger than a frame) waits in
-// AddQueueObject until the main loop drains some, so memory and lag stay
-// bounded instead of growing without limit. 0 restores the default unlimited
-// behaviour. Read the current cap back with queue.limit; queue.waits counts how
-// often a producer had to wait and queue.blocked how many wait now.
-function queuelimit_func(L: Plua_State): integer; cdecl;
-begin
-  Result := 0;
-  if Engine = nil then
-    Exit;
-  if L.ArgsCount > 0 then
-    Engine.QueueLimit := L.ToInteger(1);
 end;
 
 // enter(): hold the processing queue. The drawing commands the script queues
@@ -1114,96 +1075,6 @@ begin
   Result := 0;
 end;
 
-{ TLuaQueue }
-
-function TLuaQueue.Getter(L: PLua_State): integer;
-var
-  Stats: TQueueStats;
-  field: string;
-begin
-  Result := 0;
-  if Engine = nil then
-    Exit;
-  Stats := Engine.QueueStats;
-  field := L.ToString(2);
-  if field = 'consumed' then
-  begin
-    L.PushInteger(Stats.Consumed);
-    Result := 1;
-  end
-  else if field = 'passes' then
-  begin
-    L.PushInteger(Stats.Passes);
-    Result := 1;
-  end
-  else if field = 'deferred' then
-  begin
-    L.PushInteger(Stats.Deferred);
-    Result := 1;
-  end
-  else if field = 'max' then
-  begin
-    L.PushInteger(Stats.MaxDepth);
-    Result := 1;
-  end
-  else if field = 'depth' then
-  begin
-    L.PushInteger(Stats.Depth);
-    Result := 1;
-  end
-  else if field = 'holds' then
-  begin
-    L.PushInteger(Stats.Holds);
-    Result := 1;
-  end
-  else if field = 'frames' then
-  begin
-    L.PushInteger(Stats.Frames);
-    Result := 1;
-  end
-  else if field = 'drainms' then
-  begin
-    L.PushNumber(Stats.DrainMs);
-    Result := 1;
-  end
-  else if field = 'lastgap' then
-  begin
-    //ms between the last two queued commands (no yield in between).
-    L.PushInteger(Stats.LastGap);
-    Result := 1;
-  end
-  else if field = 'maxgap' then
-  begin
-    //largest ms spent between two queued commands of the run, e.g. a blocking
-    //getter between a rectangle() and the text() drawn over it.
-    L.PushInteger(Stats.MaxGap);
-    Result := 1;
-  end
-  else if field = 'limit' then
-  begin
-    //admission cap on the queue (0 = unlimited); set with queuelimit(n).
-    L.PushInteger(Stats.Limit);
-    Result := 1;
-  end
-  else if field = 'waits' then
-  begin
-    //times a producer had to wait because the queue was at the limit.
-    L.PushInteger(Stats.Waits);
-    Result := 1;
-  end
-  else if field = 'blocked' then
-  begin
-    //producers waiting for room right now.
-    L.PushInteger(Stats.Blocked);
-    Result := 1;
-  end;
-end;
-
-constructor TLuaQueue.Create(AScript: TLuaScript);
-begin
-  inherited Create(AScript);
-end;
-
 { TLuaFont }
 
 function TLuaFont.Setter(L: PLua_State): integer;
@@ -1563,13 +1434,9 @@ begin
   //pause(ms): like sleep(), but also freezes the scene (physics/sprites/controls)
   Lua.State.RegisterGlobal('pause', @pause_func);
 
-  //queuelimit(n): cap the queue depth (0 = unlimited); see queue.limit
-  Lua.State.RegisterGlobal('queuelimit', @queuelimit_func);
-
   Canvas := TLuaCanvas.Create(Self);
   Window := TLuaWindow.Create(Self);
   World := TLuaWorld.Create(Self);
-  QueueLua := TLuaQueue.Create(Self);
   Console := TLuaConsole.Create(Self);
   Colors := TLuaColors.Create(Self);
   Font := TLuaFont.Create(Self);
@@ -1601,9 +1468,6 @@ begin
   Lua.State.Register('world', 'shake', World, World.Shake_func);
   Lua.State.RegisterGlobal('shake', World.Shake_func);
   Lua.State.Register('world', World); //Should be last one for world
-
-  //queue: read-only queue/frame diagnostics (see TLuaQueue / TQueueStats)
-  Lua.State.Register('queue', QueueLua); //Should be last one
 
   //global functions
   Lua.State.RegisterGlobal('print', Console.Print_func);
@@ -1912,7 +1776,6 @@ begin
   FreeAndNil(Console);
   FreeAndNil(Window);
   FreeAndNil(World);
-  FreeAndNil(QueueLua);
   FreeAndNil(Canvas);
   inherited;
 end;
@@ -4095,10 +3958,6 @@ begin
 
   Reader := TReadConsoleObject.Create(s);
   try
-    // read() blocks the script thread: a prompt drawn before it is drained by
-    // the main loop while the user types, so drop the enqueue baseline.
-    if Engine <> nil then
-      Engine.ResetEnqueueGap;
     try
       // Run the DoExecute on the Engine thread via Synchronize.
       // The object is NOT freed by the engine; we free it here.

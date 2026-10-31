@@ -41,15 +41,6 @@ uses
   TyroSprites, TyroTiles, TyroPhysics, TyroEditors, TyroParallax,
   TyroSpriteEditor, SpriteAtlas;
 
-//Diagnostics (queue/frame counters and the like) are compiled only when
-//'diagnose' is defined, which tracks the debug switch. Debug builds keep them;
-//release builds skip the counters and their per-command/per-frame overhead.
-//They never affect drawing, and the Lua 'queue' table reports zero for those
-//compiled out. See TQueueStats and the FQueue* declarations below.
-{$ifopt d+}
-{$define diagnose}
-{$endif}
-
 const
   TyroVersion: Double = 0.1;
   TyroVersionString = '0.1';
@@ -151,15 +142,6 @@ type
     0 for them. Consumed, Depth, Holds and Limit are always live.
   }
   TQueueStats = record
-    //* Commands executed on the main thread since the engine started.
-    Consumed: Integer;
-    //* ProcessQueue passes that executed at least one command.
-    Passes: Integer;
-    //* Passes that stopped at the time budget while commands were still
-    //* queued: each one drew a partial batch, i.e. a flicker frame.
-    Deferred: Integer;
-    //* Largest Queue.Count seen at the start of a pass (backlog high-water).
-    MaxDepth: Integer;
     //* Commands waiting in the queue right now.
     Depth: Integer;
     //* Open enter() calls (the queue hold depth).
@@ -300,16 +282,6 @@ type
     //* access goes through TInterlocked.
     FQueueHold: LongInt;
     FQueueFlush: LongInt;
-    //* Commit watermark. FQueueEnqueued counts every command ever added to the
-    //* queue (monotonic); FQueueCommitUpTo snapshots it when a hold is armed,
-    //* so "commands committed before this hold" = FQueueCommitUpTo commands.
-    //* ProcessQueue drains while fewer than that many commands have been drawn
-    //* in total (FQueueConsumed), which lets a released group land in one cycle
-    //* even though the script re-arms the hold before the next pass. Counters
-    //* make this safe against a pass still draining when the next hold is armed.
-    FQueueEnqueued: LongInt;
-    FQueueCommitUpTo: LongInt;
-    FQueueConsumed: LongInt;
     //* Count of active Lua pause() calls. While > 0 the main loop skips the
     //* scene simulation (physics, sprite animation/scripts, controls) so a
     //* paused script keeps showing a still frame; audio and input keep running.
@@ -317,43 +289,6 @@ type
     //* goes through TInterlocked.
     FScriptPause: LongInt;
     FRunning: LongInt;
-    //* Admission limit on the processing queue: while FQueueLimit > 0 a
-    //* producer (AddQueueObject) blocks in ThrottleQueue until the backlog
-    //* falls below it, so a script that queues faster than the main loop
-    //* drains cannot grow the queue without bound. 0 = unlimited (default).
-    //* Set from the script thread (Lua queuelimit), so access goes through
-    //* TInterlocked.
-    FQueueLimit: Integer;
-    //* Auto-reset event set by ProcessQueue after a drain pass (and by
-    //* Stop/Clear/SetQueueLimit) so a throttled producer can wake and re-check
-    //* the depth instead of sleeping a whole frame.
-    FQueueSpaceEvent: TEvent;
-    {$ifdef diagnose}
-    //* Queue/frame diagnostics backing QueueStats (see TQueueStats). Compiled
-    //* only when 'diagnose' is defined (debug builds, see the top of the unit):
-    //* they are pure counters with no effect on drawing, so release builds skip
-    //* the per-command and per-frame interlocked work that maintains them. The
-    //* Lua 'queue' table reports zero for whichever ones are compiled out.
-    //* Written on the main thread during ProcessQueue and the drawing cycle,
-    //* read on the script thread, so reads go through TInterlocked.
-    FQueuePasses: LongInt;
-    FQueueDeferred: LongInt;
-    FQueueMaxDepth: LongInt;
-    FQueueDrainMs: Double;
-    FFrameCount: LongInt;
-    //* Time (ms) of the last queued command on the script thread, plus the
-    //* resulting gaps. A gap is how long the script spent between two
-    //* consecutive queue calls without yielding; a 0 stamp means there is no
-    //* baseline yet (run start or just after a yield). Written on the script
-    //* thread, read on the main thread, so access goes through TInterlocked.
-    FQueueGapStamp: Int64;
-    FQueueGapLast: LongInt;
-    FQueueGapMax: LongInt;
-    //* Times a producer had to wait for room at the limit, and how many are
-    //* waiting right now (reported through QueueStats only).
-    FQueueWaits: LongInt;
-    FQueueBlocked: LongInt;
-    {$endif}
     function GetRunning: Boolean;
     procedure SetRunning(AValue: Boolean);
   protected
@@ -405,19 +340,6 @@ type
     //* from any thread; backs the Lua 'queue' table.
     function QueueStats: TQueueStats;
 
-    //* Block the calling (script) thread while the queue is at/over its
-    //* admission limit, so a fast producer cannot grow it without bound.
-    //* Returns at once when the limit is 0, a group is held (enter()),
-    //* the window is hidden/headless, or the engine is stopping. Called by
-    //* TTyroScript.AddQueueObject after a command is accepted; the caller must
-    //* NOT hold the global Lock here (ProcessQueue needs it to drain).
-    procedure ThrottleQueue;
-    //* Current admission limit (0 = unlimited).
-    function GetQueueLimit: Integer;
-    //* Set the admission limit; 0 disables throttling. Raising or clearing it
-    //* releases producers already waiting. Safe to call from any thread.
-    procedure SetQueueLimit(ALimit: Integer);
-
     //* Handle files dropped onto the window (from Explorer). Processes .tyro/.lua
     //* to open and run them, and .bdf to load a custom font.
     procedure HandleDroppedFiles;
@@ -462,11 +384,6 @@ type
     //* balances the hold, so the group is drawn at one drawing cycle. Nested
     //* enter() calls count up; safe to call from any thread.
     procedure HoldQueue;
-    //* Snapshot the enqueue watermark for the hold that is opening now.
-    //* ProcessQueue draws commands queued before the hold even while it stays
-    //* open, so a released group is never stranded behind a hold the script
-    //* re-armed before the next pass. Called from the script thread.
-    procedure MarkQueueCommit;
     //* Lua leave(): release the hold taken by HoldQueue. When the last hold is
     //* released the next ProcessQueue pass drains the whole held group in one
     //* go (no per-frame time budget). Safe to call from any thread; an
@@ -482,16 +399,6 @@ type
     procedure EndScriptPause;
     //* True while at least one script pause() is active.
     function GetScriptPaused: Boolean;
-    //* Record the moment a command was queued (called by TTyroScript.
-    //* AddQueueObject on the script thread). Consecutive calls with no yield in
-    //* between measure how long the script itself took to produce the next
-    //* command, which is what TQueueStats.LastGap/MaxGap report: a blocking
-    //* getter between a rectangle() and the text() that follows it shows up
-    //* here. Safe to call from any thread.
-    procedure NoteEnqueue;
-    //* Drop the enqueue baseline so the next NoteEnqueue starts a fresh
-    //* measurement. Safe to call from any thread.
-    procedure ResetEnqueueGap;
     //* True while a Lua pause() has frozen the scene (see BeginScriptPause).
     property ScriptPaused: Boolean read GetScriptPaused;
     //* Draw the Board canvas above the sprites (for a canvas-based HUD) instead
@@ -501,11 +408,13 @@ type
     ScriptFile: string;//Full file name , that to run in ScriptThread
     ScriptSource: string; //Shout pass to Thread to run it
 
-    World: TTyroWorld;
-    //Main for UI controls
-    Main: TTyroWindow;
     //Board where Lua drawing on it
     Board: TTyroCanvas;
+
+    World: TTyroWorld;
+
+    //Main for UI controls
+    Main: TTyroWindow;
 
     Console: TTyroTerminal;
     Output: TTyroOutput;
@@ -519,7 +428,9 @@ type
     Physics: TPhysics;
     //* Scrolling parallax backgrounds the script created (see TyroParallax).
     Parallaxes: TParallaxes;
-    //property Board: TTyroImage read FBoard;
+
+    Screen: TTyroCanvas; //Top most texture
+
     property Running: Boolean read GetRunning write SetRunning;
     property Active: Boolean read GetActive;
     //* Show/hide the queue/frame statistics panel (also Ctrl+F10). See
@@ -551,8 +462,6 @@ type
     property Options: TTyroEngineOptions read FOptions write FOptions;
     property FPS: Integer read FFPS write SetFPS;
     property Queue: TQueueObjects read FQueue;
-    //* Admission limit of the queue (0 = unlimited). See ThrottleQueue.
-    property QueueLimit: Integer read GetQueueLimit write SetQueueLimit;
     //* True when the last run-and-exit script finished with a Lua error. Reset
     //* at the start of every run; only meaningful for the --exit/--execute CLI
     //* lifecycle where the main loop inspects it before releasing the worker.
@@ -736,9 +645,6 @@ begin
           FPendingDispose := True
         else if not ScriptPaused then
         begin
-          //A frame boundary is a yield: do not count the time between two
-          //callbacks as a stall between queued commands.
-          ResetEnqueueGap;
           FScriptThread.Script.EngineUpdate(RayLib.GetFrameTime());
           //update() may have called exit(); do not call into a terminated state.
           if (not FScriptThread.Script.Stopped) and (not ScriptPaused) then
@@ -927,45 +833,6 @@ begin
   Result := TInterlocked.Add(FScriptPause, 0) > 0;
 end;
 
-procedure TTyroEngine.NoteEnqueue;
-{$ifdef diagnose}
-var
-  NowMs, Prev, Diff: Int64;
-  Gap: LongInt;
-{$endif}
-begin
-  //Monotonic count of accepted commands, the basis of the commit watermark
-  //(FQueueCommitUpTo). Load-bearing, so it always runs.
-  TInterlocked.Increment(FQueueEnqueued);
-  {$ifdef diagnose}
-  //Diagnose-only: time the gap between commands so a blocking getter shows up
-  //as queue.lastgap/maxgap. Skipped entirely in release builds.
-  NowMs := Round(GetTime() * 1000);
-  //Exchange gives the previous stamp and installs the new one in one step; a
-  //0/negative previous stamp means there is no baseline yet.
-  Prev := TInterlocked.Exchange(FQueueGapStamp, NowMs);
-  if Prev <= 0 then
-    Exit;
-  Diff := NowMs - Prev;
-  if Diff < 0 then
-    Diff := 0; //clock wrap: ignore
-  if Diff > High(LongInt) then
-    Gap := High(LongInt)
-  else
-    Gap := LongInt(Diff);
-  TInterlocked.Exchange(FQueueGapLast, Gap);
-  if Gap > TInterlocked.Add(FQueueGapMax, 0) then
-    TInterlocked.Exchange(FQueueGapMax, Gap);
-  {$endif}
-end;
-
-procedure TTyroEngine.ResetEnqueueGap;
-begin
-  {$ifdef diagnose}
-  TInterlocked.Exchange(FQueueGapStamp, 0);
-  {$endif}
-end;
-
 procedure TTyroEngine.QueueScreenshot(const AFileName: String);
 begin
   Lock.Enter;
@@ -976,21 +843,14 @@ begin
   end;
 end;
 
-procedure TTyroEngine.MarkQueueCommit;
-begin
-  //Watermark = total commands enqueued so far. ProcessQueue drains while
-  //FQueueConsumed stays below it, so it draws exactly the commands that were
-  //committed before this hold and never touches the body being built.
-  TInterlocked.Exchange(FQueueCommitUpTo, TInterlocked.Add(FQueueEnqueued, 0));
-end;
-
 procedure TTyroEngine.HoldQueue;
 begin
   //Only the transition from an open gate to a closed one marks a commit
   //boundary: nested enter() calls must not move the watermark past the outer
   //hold's commands.
-  if TInterlocked.Increment(FQueueHold) = 1 then
-    MarkQueueCommit;
+  TInterlocked.Increment(FQueueHold);
+  //if TInterlocked.Increment(FQueueHold) = 1 then
+  //  MarkQueueCommit;
 end;
 
 procedure TTyroEngine.ReleaseQueue;
@@ -1014,11 +874,7 @@ var
   flush: Boolean;
   Consumed: Integer;
   Depth: Integer;
-  ToDrain: Integer; //>=0: drain exactly this many (committed) commands
   Hold0: LongInt;
-  {$ifdef diagnose}
-  BudgetHit: Boolean;
-  {$endif}
 begin
   if Board <> nil then
   begin
@@ -1035,24 +891,6 @@ begin
         TInterlocked.Exchange(FQueueHold, 0);
         Hold0 := 0;
       end;
-    end;
-
-    if Hold0 > 0 then
-    begin
-      //A body is being built: draw only the group that was committed before
-      //the hold was armed. The script re-arms the hold as soon as the frame
-      //event wakes it, which happens before this pass runs, so without the
-      //commit watermark the gate is almost always seen closed and nothing is
-      //drawn; the backlog then grows without bound and text appears seconds
-      //late. Bound the pass by (commit watermark - already drawn).
-      ToDrain := TInterlocked.Add(FQueueCommitUpTo, 0) - TInterlocked.Add(FQueueConsumed, 0);
-      if ToDrain <= 0 then
-        Exit;
-    end
-    else
-    begin
-      //Gate open: everything queued is committed, drain it normally.
-      ToDrain := -1;
     end;
 
     //leave() asked for it: this pass ignores the frame time budget, so the
@@ -1108,31 +946,22 @@ begin
         end;
         FreeAndNil(p);
         Inc(Consumed);
-        if ToDrain >= 0 then
+
+        ft2 := GetTime() - ft;
+        //Stop the pass at the frame time budget unless a flush was armed, and
+        //also as soon as a fresh enter() is seen, so a command queued after
+        //the hold began is never executed by this already-running pass.
+        if (not flush) and (ft2 >= fpd) then
         begin
-          //Committed group: drain exactly that many commands, in one drawing
-          //cycle, regardless of the frame time budget.
-          if Consumed >= ToDrain then
-            Break;
-        end
-        else
-        begin
-          ft2 := GetTime() - ft;
-          //Stop the pass at the frame time budget unless a flush was armed, and
-          //also as soon as a fresh enter() is seen, so a command queued after
-          //the hold began is never executed by this already-running pass.
-          if (not flush) and (ft2 >= fpd) then
-          begin
-            //Budget exhausted while more commands may be waiting: the frame is
-            //about to be drawn with a partial batch.
-            {$ifdef diagnose}
-            BudgetHit := True;
-            {$endif}
-            break;
-          end;
-          if TInterlocked.Add(FQueueHold, 0) > 0 then
-            break;
+          //Budget exhausted while more commands may be waiting: the frame is
+          //about to be drawn with a partial batch.
+          {$ifdef diagnose}
+          BudgetHit := True;
+          {$endif}
+          break;
         end;
+        if TInterlocked.Add(FQueueHold, 0) > 0 then
+          break;
 
         Lock.Enter;
         try
@@ -1148,29 +977,8 @@ begin
 
       end;
       Board.EndDraw;
-      //FQueueConsumed is load-bearing (the commit watermark compares against
-      //it), so it is always published. Only the main thread writes it; the Lua
-      //side reads through TInterlocked (QueueStats).
-      TInterlocked.Add(FQueueConsumed, Consumed);
-      {$ifdef diagnose}
-      if Consumed > 0 then
-        TInterlocked.Increment(FQueuePasses);
-      FQueueDrainMs := (GetTime() - ft) * 1000;
-      Lock.Enter;
-      try
-        Depth := Queue.Count;
-      finally
-        Lock.Leave;
-      end;
-      if BudgetHit and (Depth > 0) then
-        TInterlocked.Increment(FQueueDeferred);
-      {$endif}
     finally
       CanvasLock.Leave;
-      //A drain pass may have made room: wake any producer throttled by
-      //FQueueLimit so it can queue the next command without waiting a frame.
-      if FQueueSpaceEvent <> nil then
-        FQueueSpaceEvent.SetEvent;
     end;
   end;
 end;
@@ -1180,20 +988,7 @@ begin
   //Zero first: the diagnose-only counters below stay 0 when compiled out, so
   //the Lua 'queue' table keeps its shape and reports 0 for them.
   Result := Default(TQueueStats);
-  Result.Consumed := TInterlocked.Add(FQueueConsumed, 0);
   Result.Holds := TInterlocked.Add(FQueueHold, 0);
-  Result.Limit := TInterlocked.Add(FQueueLimit, 0);
-  {$ifdef diagnose}
-  Result.Passes := TInterlocked.Add(FQueuePasses, 0);
-  Result.Deferred := TInterlocked.Add(FQueueDeferred, 0);
-  Result.MaxDepth := TInterlocked.Add(FQueueMaxDepth, 0);
-  Result.Frames := TInterlocked.Add(FFrameCount, 0);
-  Result.DrainMs := FQueueDrainMs;
-  Result.LastGap := TInterlocked.Add(FQueueGapLast, 0);
-  Result.MaxGap := TInterlocked.Add(FQueueGapMax, 0);
-  Result.Waits := TInterlocked.Add(FQueueWaits, 0);
-  Result.Blocked := TInterlocked.Add(FQueueBlocked, 0);
-  {$endif}
   Lock.Enter;
   try
     Result.Depth := Queue.Count;
@@ -1217,12 +1012,6 @@ begin
   //Two label/value columns per row to keep the panel short enough for a small
   //window; the header row names the panel and its shortcut.
   Lines := [
-    Format('%-8s %-6d   %-8s %-6d', ['Consumed', Stats.Consumed, 'Passes', Stats.Passes]),
-    Format('%-8s %-6d   %-8s %-6d', ['Deferred', Stats.Deferred, 'Depth', Stats.Depth]),
-    Format('%-8s %-6d   %-8s %-6d', ['Max', Stats.MaxDepth, 'Holds', Stats.Holds]),
-    Format('%-8s %-6d', ['Frames', Stats.Frames]),
-    Format('%-8s %-6d   %-8s %-6d', ['Limit', Stats.Limit, 'Waits', Stats.Waits]),
-    Format('%-8s %-6d   %-8s %-6.2f', ['Blocked', Stats.Blocked, 'Drain ms', Stats.DrainMs]),
     Format('%-8s %-6d   %-8s %-6d', ['LastGap', Stats.LastGap, 'Maxgap', Stats.MaxGap]),
     Format('%-8s %-6d', ['FPS', RayLib.GetFPS])
   ];
@@ -1243,76 +1032,6 @@ begin
 
   for i := 0 to High(Lines) do
     RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(UTF8String(Lines[i])), Vector2Of(x, y + i * cLine), Res.Font.Height, 0, clWhite);
-end;
-
-function TTyroEngine.GetQueueLimit: Integer;
-begin
-  Result := TInterlocked.Add(FQueueLimit, 0);
-end;
-
-procedure TTyroEngine.SetQueueLimit(ALimit: Integer);
-begin
-  if ALimit < 0 then
-    ALimit := 0;
-  TInterlocked.Exchange(FQueueLimit, ALimit);
-  //Raising or clearing the limit must release any producer already waiting.
-  if FQueueSpaceEvent <> nil then
-    FQueueSpaceEvent.SetEvent;
-end;
-
-procedure TTyroEngine.ThrottleQueue;
-var
-  Limit: Integer;
-begin
-  Limit := TInterlocked.Add(FQueueLimit, 0);
-  if Limit <= 0 then
-    Exit;
-  //Engine-driven callbacks run on the main thread, which is also the consumer
-  //(ProcessQueue). Waiting for the queue to drain here would deadlock, so
-  //behave as unlimited in that mode.
-  if (FScriptThread <> nil) and (FScriptThread.Script <> nil) and FScriptThread.Script.Handoff then
-    Exit;
-  //A held group (enter()/leave()) is built before it is drawn: ProcessQueue
-  //executes nothing while a hold is open, so waiting here would deadlock the
-  //script before it could leave().
-  if TInterlocked.Add(FQueueHold, 0) > 0 then
-    Exit;
-  //No consumer: a hidden/headless window has no drawing cycle, so behave as
-  //unlimited instead of hanging the script forever.
-  if IsWindowHidden or (not RayLib.IsWindowReady) then
-    Exit;
-
-  {$ifdef diagnose}
-  TInterlocked.Increment(FQueueBlocked);
-  {$endif}
-  try
-    while Running do
-    begin
-      Lock.Enter;
-      try
-        if Queue.Count < Limit then
-          Break;
-      finally
-        Lock.Leave;
-      end;
-      {$ifdef diagnose}
-      TInterlocked.Increment(FQueueWaits);
-      {$endif}
-      if FQueueSpaceEvent = nil then
-        Break;
-      //Poll with a short timeout, like the other queue waits: a missed signal
-      //costs latency, never a hang, and Stop() ends the loop.
-      FQueueSpaceEvent.WaitFor(50);
-      //queuelimit() may have raised or cleared the cap while we waited.
-      Limit := TInterlocked.Add(FQueueLimit, 0);
-      if Limit <= 0 then
-        Break;
-    end;
-  finally
-    {$ifdef diagnose}
-    TInterlocked.Decrement(FQueueBlocked);
-    {$endif}
-  end;
 end;
 
 procedure TTyroEngine.Start;
@@ -1427,8 +1146,6 @@ begin
   FCanvasLock := TmnCriticalSection.Create;
   //Auto-reset, set after every ProcessQueue pass: a producer throttled by
   //FQueueLimit waits on it. Unlimited by default (Lua queuelimit turns it on).
-  FQueueSpaceEvent := TEvent.Create(nil, False, False, '');
-  FQueueLimit := 0;
   World.Width := ScreenWidth;
   World.Height := ScreenHeight;
   World.BackColor := clCornflowerBlue;
@@ -1551,11 +1268,11 @@ begin
   FreeAndNil(FQueue);
   FreeAndNil(Commands);
   FreeAndNil(Main);
+  FreeAndNil(Screen);
   inherited;
   if RayLib.IsWindowReady then
     RayLib.CloseWindow;
   FreeAndNil(FCanvasLock);
-  FreeAndNil(FQueueSpaceEvent);
   FreeAndNil(World);
 end;
 
@@ -1692,6 +1409,8 @@ begin
   //Board is a render-texture: script draw commands run inside Board.BeginDraw
   //during ProcessQueue and are composited by Board.PostDraw inside the camera.
   Board := TTyroTextureCanvas.Create(AWidth - World.Margin * 2, AHeight - World.Margin * 2, True);
+  //Screen is top most texture used for HUD or Status
+  Screen := TTyroTextureCanvas.Create(AWidth - World.Margin * 2, AHeight - World.Margin * 2, True);
 
   Main.Margin := World.Margin;
   Main.BoundsRect := Rect(0, 0, AWidth, AHeight);
@@ -1742,6 +1461,7 @@ begin
   Sprites.DrawScripts;
   if FBoardOnTop then
     Board.PostDraw;
+  Screen.PostDraw;
 end;
 
 procedure TTyroEngine.Update;
@@ -2002,6 +1722,7 @@ begin
     //Keep the script canvas in step with the window so a resize does not leave
     //script draw commands hitting a canvas sized for the old window.
   Board.Resize(AWidth - World.Margin * 2, AHeight - World.Margin * 2);
+  Screen.Resize(AWidth - World.Margin * 2, AHeight - World.Margin * 2);
 end;
 
 procedure TTyroEngine.Stop;
@@ -2025,16 +1746,6 @@ begin
   //the next run would find its drawing frozen.
   TInterlocked.Exchange(FQueueHold, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
-  //Keep the commit watermark consistent: with the queue dropped, all commands
-  //ever enqueued are also considered drawn, or the leftover difference would
-  //make a later hold drain its whole body before it is committed.
-  TInterlocked.Exchange(FQueueCommitUpTo, 0);
-  TInterlocked.Exchange(FQueueEnqueued, 0);
-  TInterlocked.Exchange(FQueueConsumed, 0);
-  ResetEnqueueGap;
-  //Wake a producer throttled by FQueueLimit so Stop does not wait a poll tick.
-  if FQueueSpaceEvent <> nil then
-    FQueueSpaceEvent.SetEvent;
 end;
 
 procedure TTyroEngine.Terminate;
@@ -2559,6 +2270,7 @@ begin
   CanvasLock.Enter;
   try
     ClearCanvas(Board);
+    ClearCanvas(Screen);
     ClearCanvas(Main.Canvas);
     //Drop the finished run's parallax backgrounds and their textures too.
     if Parallaxes <> nil then
@@ -2607,16 +2319,6 @@ begin
   //A rerun must not inherit a hold the stopped run never balanced with leave().
   TInterlocked.Exchange(FQueueHold, 0);
   TInterlocked.Exchange(FQueueFlush, 0);
-  //Keep the commit watermark consistent: with the queue dropped, all commands
-  //ever enqueued are also considered drawn, or the leftover difference would
-  //make a later hold drain its whole body before it is committed.
-  TInterlocked.Exchange(FQueueCommitUpTo, 0);
-  TInterlocked.Exchange(FQueueEnqueued, 0);
-  TInterlocked.Exchange(FQueueConsumed, 0);
-  ResetEnqueueGap;
-  //Wake a producer throttled by FQueueLimit so a rerun starts without a stall.
-  if FQueueSpaceEvent <> nil then
-    FQueueSpaceEvent.SetEvent;
 end;
 
 //Called from the main loop while the window is still hidden. A script file given
