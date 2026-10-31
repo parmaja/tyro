@@ -2727,7 +2727,7 @@ begin
   if (FCanvas = nil) or (FCanvas.Width <> w) or (FCanvas.Height <> h) then
   begin
     FreeAndNil(FCanvas);
-    FCanvas := TTyroTextureCanvas.Create(w, h, True);
+    FCanvas := TTyroTextureCanvas.Create(w, h);
   end;
 end;
 

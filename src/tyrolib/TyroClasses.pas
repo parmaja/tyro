@@ -221,7 +221,7 @@ type
     is stored in the same canvas coordinates, so DrawLineTo can pass it straight
     to DrawLine without applying the origin twice.
   }
-  TTyroCanvas = class abstract(TObject)
+  TTyroCanvas = class(TObject)
   private
     FOrigin: TPoint;
     FCurrentPoint: TPoint;
@@ -237,13 +237,14 @@ type
     procedure SetWidth(AValue: Integer);
     procedure SetBackColor(const Value: TColor);
   protected
+    procedure DoResized; virtual;
     function OffsetRect(const ARect: TRect): TRect; overload;
     function OffsetRectangle(const ARect: TRectangle): TRectangle; overload;
   public
-    constructor Create(AWidth, AHeight: Integer);
+    constructor Create(AWidth, AHeight: Integer); virtual;
     destructor Destroy; override;
 
-    procedure Resize(AWidth, AHeight: Integer); virtual;
+    procedure Resize(AWidth, AHeight: Integer; Force: Boolean = False);
 
     procedure SetCurrent(X, Y: Integer);
 
@@ -327,9 +328,10 @@ type
     property Height: Integer read FHeight write SetHeight;
   end;
 
+  { TTyroTextureCanvas }
+
   TTyroTextureCanvas = class(TTyroCanvas)
   private
-    FTextureMode: Boolean;
     FTexture: TRenderTexture2D;
     FEffect: TTyroEffect;
     FShader: TShader;
@@ -347,14 +349,14 @@ type
     procedure SetValueUniform;
     procedure SetAreaUniform;
   public
-    constructor Create(AWidth, AHeight: Integer; ATextureMode: Boolean = False);
+    constructor Create(AWidth, AHeight: Integer); override;
     destructor Destroy; override;
 
     procedure BeginDraw; override;
     procedure PostDraw(AX: Integer = 0; AY: Integer = 0); override;
     procedure EndDraw; override;
 
-    procedure Resize(AWidth, AHeight: Integer); override;
+    procedure DoResized; override;
     procedure SetEffect(const AEffectName: string); override;
     procedure LoadCustomEffect(const AFileName: string); override;
     function GetEffectName: string; override;
@@ -363,13 +365,12 @@ type
     procedure SetEffectArea(const AArea: TRectangle); override;
     function GetEffectArea: TRectangle; override;
 
-    property TextureMode: Boolean read FTextureMode;
     property Texture: TRenderTexture2D read FTexture;
   end;
 
   { TTyroWorld }
 
-  TTyroWorld = class(TObject)
+  TTyroWorld = class(TTyroCanvas)
   private
     FOpaque: Boolean;
     FTitle: string;
@@ -389,7 +390,7 @@ type
     function GetShakeX: Integer;
     function GetShakeY: Integer;
   public
-    constructor Create;
+    constructor Create(AWidth, AHeight: Integer); override;
     procedure Clear;
 
     // Screen shake
@@ -445,6 +446,7 @@ type
   public
     Control: TThemeControl;
     Window: TThemeControl;
+    World: TColorSet;
     Button: TThemeControl;
     Editor: TThemeEditor;
     Border: TThemeBorder;
@@ -679,6 +681,10 @@ end;
 procedure TTyroCanvas.SetBackColor(const Value: TColor);
 begin
   FBackColor := Value;
+end;
+
+procedure TTyroCanvas.DoResized;
+begin
 end;
 
 procedure TTyroCanvas.SetHeight(AValue: Integer);
@@ -941,11 +947,13 @@ procedure TTyroCanvas.PostDraw(AX: Integer = 0; AY: Integer = 0);
 begin
 end;
 
-procedure TTyroCanvas.Resize(AWidth, AHeight: Integer);
+procedure TTyroCanvas.Resize(AWidth, AHeight: Integer; Force: Boolean);
 begin
-  if (FWidth = AWidth) and (FHeight = AHeight) then Exit;
+  if not Force and (FWidth = AWidth) and (FHeight = AHeight) then
+    Exit;
   FWidth := AWidth;
   FHeight := AHeight;
+  DoResized;
 end;
 
 procedure TTyroCanvas.FillCircle(X, Y, R: Integer; Color: TColor);
@@ -1001,22 +1009,22 @@ end;
 procedure TTyroTextureCanvas.BeginDraw;
 begin
   inherited;
-  if FTextureMode then
+  //if FTextureMode then
     RayLib.BeginTextureMode(FTexture);
 end;
 
-constructor TTyroTextureCanvas.Create(AWidth, AHeight: Integer; ATextureMode: Boolean);
+constructor TTyroTextureCanvas.Create(AWidth, AHeight: Integer);
 begin
   inherited Create(AWidth, AHeight);
-  FTextureMode := ATextureMode;
-  if FTextureMode then
-    FTexture := LoadRenderTexture(Width, Height);
+//  FTextureMode := ATextureMode;
+  //if FTextureMode then
+    FTexture := RayLib.LoadRenderTexture(Width, Height);
 end;
 
 destructor TTyroTextureCanvas.Destroy;
 begin
   UnloadEffect;
-  if FTextureMode then
+  //if FTextureMode then
     UnloadRenderTexture(FTexture);
   inherited;
 end;
@@ -1086,7 +1094,7 @@ var
   vRes: TVector2;
 begin
   inherited;
-  if FTextureMode then
+  //if FTextureMode then
   begin
     Shader := FShader;
     if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
@@ -1218,30 +1226,27 @@ end;
 
 procedure TTyroTextureCanvas.EndDraw;
 begin
-  if FTextureMode then
+  //if FTextureMode then
     RayLib.EndTextureMode();
   inherited;
 end;
 
-procedure TTyroTextureCanvas.Resize(AWidth, AHeight: Integer);
+procedure TTyroTextureCanvas.DoResized;
 begin
-  if (Width = AWidth) and (Height = AHeight) then Exit;
-  if FTextureMode then
-    UnloadRenderTexture(FTexture);
-  inherited Resize(AWidth, AHeight);
-  if FTextureMode then
-    FTexture := LoadRenderTexture(Width, Height);
+  inherited;
+  UnloadRenderTexture(FTexture);
+  FTexture := LoadRenderTexture(Width, Height);
 end;
 
 { TTyroWorld }
 
 constructor TTyroWorld.Create;
 begin
-  inherited Create;
+  inherited;
   FOpaque := True;
   FWidth := cDefaultWindowWidth;
   FHeight := cDefaultWindowHeight;
-  FBackColor := Res.Theme.Window.BackColor;
+  FBackColor := Res.Theme.World.BackColor;
 end;
 
 procedure TTyroWorld.SetBackColor(AValue: TColor);
@@ -1509,6 +1514,9 @@ begin
   //FBackgroundColor := TColor.CreateRGBA($0892D0FF);
   //FBackgroundColor := TColor.CreateRGBA($B0C4DEFF); //Light Steel Blue
   //FBackColor := TColor.CreateRGBA($77B5FEFF); //French Sky Blue
+  World.BackColor := clCornflowerBlue;
+  World.TextColor := clBlack;
+
   Window.BackColor := clFrenchSkyBlue;
   Window.TextColor := clBlack;
   Window.BorderColor := clBlack;

@@ -661,7 +661,7 @@ begin
         if IsWindowHidden then
           break;
 
-        if RayLib.IsWindowResized() then
+        if RayLib.IsWindowResized then
           ResizeWindow(RayLib.GetScreenWidth(), RayLib.GetScreenHeight());
 
         RayLib.BeginDrawing;
@@ -1134,13 +1134,10 @@ begin
   Res := TTyroResources.Create;
   FControlCapture := nil;
   FOptions := [];
-  World := TTyroWorld.Create;
   FCanvasLock := TmnCriticalSection.Create;
+  World := TTyroWorld.Create(ScreenWidth, ScreenHeight);
   //Auto-reset, set after every ProcessQueue pass: a producer throttled by
   //FQueueLimit waits on it. Unlimited by default (Lua queuelimit turns it on).
-  World.Width := ScreenWidth;
-  World.Height := ScreenHeight;
-  World.BackColor := clCornflowerBlue;
 
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
@@ -1386,6 +1383,12 @@ begin
   //Do not use FLAG_VSYNC_HINT it block the other threads, or use YieldProcess, TODO
   RayLib.SetConfigFlags([FLAG_WINDOW_HIDDEN, FLAG_WINDOW_RESIZABLE]);
   RayLib.InitWindow(AWidth, AHeight, PUTF8Char(UTF8String(World.Title)));
+  //Board is a render-texture: script draw commands run inside Board.BeginDraw
+  //during ProcessQueue and are composited by Board.PostDraw inside the camera.
+  Board := TTyroTextureCanvas.Create(AWidth, AHeight);
+  //Screen is top most texture used for HUD or Status
+  Screen := TTyroTextureCanvas.Create(AWidth, AHeight);
+
   LoadGamepadMappings;
   //The window, taskbar and alt-tab icon is the application's own icon, the one
   //Explorer shows for the executable, no icon file has to ship with it.
@@ -1397,12 +1400,6 @@ begin
   end;
   World.Width := AWidth;
   World.Height := AHeight;
-  //Board is a render-texture: script draw commands run inside Board.BeginDraw
-  //during ProcessQueue and are composited by Board.PostDraw inside the camera.
-  Board := TTyroTextureCanvas.Create(AWidth, AHeight, True);
-  //Screen is top most texture used for HUD or Status
-  Screen := TTyroTextureCanvas.Create(AWidth, AHeight, True);
-
   Window.BoundsRect := Rect(0, 0, AWidth, AHeight);
   //The script draws through Engine.Window.Canvas during ProcessQueue, which runs
   //before the first Paint: make sure the canvas exists (and is sized) now.
@@ -1688,7 +1685,6 @@ begin
   if Sizable then
     SetConfigFlags([FLAG_WINDOW_RESIZABLE]);
 
-  RayLib.SetWindowSize(AWidth, AHeight);
   ResizeWindow(AWidth, AHeight);
 
   ClearWindowState([FLAG_WINDOW_HIDDEN]);
@@ -1700,14 +1696,16 @@ begin
   if (AWidth <= 0) or (AHeight <= 0) then
     Exit;
 
+  RayLib.SetWindowSize(AWidth, AHeight);
+
   World.Width := AWidth;
   World.Height := AHeight;
 
   Window.BoundsRect := Rect(0, 0, AWidth , AHeight);
     //Keep the script canvas in step with the window so a resize does not leave
     //script draw commands hitting a canvas sized for the old window.
-  Board.Resize(AWidth - Window.Margin * 2, AHeight - Window.Margin * 2);
-  Screen.Resize(AWidth - Window.Margin * 2, AHeight - Window.Margin * 2);
+  Board.Resize(AWidth, AHeight, True);
+  Screen.Resize(AWidth, AHeight, True);
 end;
 
 procedure TTyroEngine.Stop;

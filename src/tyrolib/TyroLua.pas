@@ -133,11 +133,12 @@ type
 
   { TLuaWorld }
 
-  TLuaWorld = class(TTyroLuaObject)
+  TLuaWorld = class(TLuaCanvas)
   protected
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
   public
+    procedure Init; override;
     function Shake_func(L: Plua_State): integer; cdecl;
   end;
 
@@ -573,10 +574,10 @@ type
     Lua: TLua;
 
     Canvas: TLuaCanvas; //Board
+    World: TLuaWorld;
     Screen: TLuaScreen; //Screen
     Console: TLuaConsole;
     Window: TLuaWindow;
-    World: TLuaWorld;
     Colors: TLuaColors;
     Font: TLuaFont;
     Music: TLuaMusic;
@@ -1027,10 +1028,12 @@ begin
   begin
     if field = 'title' then
       Engine.World.Title := L.ToString(-1);
-  end;
+  end
+  else
+    inherited;
 end;
 
-function TLuaWorld.Getter(L: PLua_State): Integer;
+function TLuaWorld.Getter(L: PLua_State): integer;
 var
   field: string;
 begin
@@ -1061,7 +1064,16 @@ begin
   begin
     L.PushString(Engine.World.Title);
     Result := 1;
-  end;
+  end
+  else
+    inherited;
+end;
+
+procedure TLuaWorld.Init;
+begin
+  Script.Lua.State.Register(Name, 'shake', Self, Self.Shake_func);
+  //Lua.State.Register('world', World); //Should be last one for world
+  inherited;
 end;
 
 function TLuaWorld.Shake_func(L: Plua_State): integer; cdecl;
@@ -1464,9 +1476,8 @@ begin
   Lua.State.Register('window', Window); //Should be last one for window
 
   //world
-  Lua.State.Register('world', 'shake', World, World.Shake_func);
-  Lua.State.RegisterGlobal('shake', World.Shake_func);
-  Lua.State.Register('world', World); //Should be last one for world
+  Lua.State.RegisterGlobal('shake', World.Shake_func);//deprecated
+  World.Init;
 
   //global functions
   Lua.State.RegisterGlobal('print', Console.Print_func);
@@ -1538,10 +1549,12 @@ begin
   //mouse: mouse.x / mouse.y are fields, mouse.pressed("left") is the button edge
   Lua.State.Register('mouse', 'pressed', Mouse, Mouse.Pressed_func);
   Lua.State.Register('mouse', Mouse); //Should be last one
+
   //keyboard: keyboard.pressed("space") / keyboard.down("a")
   Lua.State.Register('keyboard', 'pressed', Keyboard, Keyboard.Pressed_func);
   Lua.State.Register('keyboard', 'down', Keyboard, Keyboard.Down_func);
   Lua.State.Register('keyboard', Keyboard); //Should be last one
+
   //gamepad: gamepad.pressed("a" [, gamepad]) / gamepad.down / gamepad.released / gamepad.up
   //         gamepad.axis("leftx" [, gamepad]) / gamepad.available([gamepad]) / gamepad.name([gamepad])
   //         gamepad.count() / gamepad.axes([gamepad]) / gamepad.vibrate(l, r [, dur, pad])
@@ -1558,7 +1571,7 @@ begin
   Lua.State.Register('gamepad', 'vibrate', Gamepad, Gamepad.Vibrate_func);
   Lua.State.Register('gamepad', 'rumble', Gamepad, Gamepad.Vibrate_func);
   Lua.State.Register('gamepad', 'mappings', Gamepad, Gamepad.Mappings_func);
-  Lua.State.Register('gamepad', Gamepad); //Should be last one
+  Lua.State.Register('gamepad', Gamepad); //Should be last one //TODO Remove it
 
   //joystick: alias to gamepad for joystick/flight stick/gamepad controls
   Lua.State.Register('joystick', 'pressed', Gamepad, Gamepad.Pressed_func);
@@ -1574,6 +1587,7 @@ begin
   Lua.State.Register('joystick', 'rumble', Gamepad, Gamepad.Vibrate_func);
   Lua.State.Register('joystick', 'mappings', Gamepad, Gamepad.Mappings_func);
   Lua.State.Register('joystick', Gamepad); //Should be last one
+
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
   Lua.State.RegisterGlobal('millis', Millis_func);

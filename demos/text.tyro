@@ -1,8 +1,8 @@
-window.show(400, 200)
-canvas.text(10, 30, 'Printing text test')
-canvas.text(10, 100, '110 عربي')
+window.show(640, 480)
+canvas.text(10, 30, 'On Canvas')
+--canvas.text(10, 100, '110 عربي')
 screen.text(10, 60, 'On Screen')
 
 function draw()
-    canvas.text(10, 80, 'On Draw')
+    world.text(10, 90, 'On World')
 end

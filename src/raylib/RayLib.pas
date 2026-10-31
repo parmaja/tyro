@@ -1937,7 +1937,7 @@ var
   // Load texture for rendering (framebuffer)
   LoadRenderTexture: function(Width: Integer; Height: Integer): TRenderTexture2D; cdecl = nil;
   // Load texture for rendering (framebuffer), with specific format
-  LoadRenderTextureEx: function(Width: Integer; Height: Integer; format: Integer): TRenderTexture2D; cdecl = nil;
+  LoadRenderTextureEx: function(Width: Integer; Height: Integer; format: TPixelFormat): TRenderTexture2D; cdecl = nil;
   // Check if texture is valid (loaded in GPU)
   IsTextureValid: function(Texture: TTexture2D): Boolean; cdecl = nil;
   // Unload texture from GPU memory (VRAM)
