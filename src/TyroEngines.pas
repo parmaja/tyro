@@ -683,8 +683,11 @@ begin
           BeginMode2D(Camera2D);
           Draw;
           EndMode2D;
+
           if Window <> nil then
             Window.Paint;
+
+          Screen.PostDraw;
 
           if moShowFPS in Options then
           begin
@@ -1386,6 +1389,7 @@ begin
   //Board is a render-texture: script draw commands run inside Board.BeginDraw
   //during ProcessQueue and are composited by Board.PostDraw inside the camera.
   Board := TTyroTextureCanvas.Create(AWidth, AHeight);
+  //Board.BackColor := Res.Theme.Window.BackColor;
   //Screen is top most texture used for HUD or Status
   Screen := TTyroTextureCanvas.Create(AWidth, AHeight);
 
@@ -1433,6 +1437,7 @@ begin
   //the sprites); when BoardOnTop is set the script uses the canvas as a HUD and
   //it is composited after the sprites instead.
   Board.PostDraw;
+
   try
     Sprites.DrawAll;
   except
@@ -1444,7 +1449,6 @@ begin
     end;
   end;
   Sprites.DrawScripts;
-  Screen.PostDraw;
 end;
 
 procedure TTyroEngine.Update;

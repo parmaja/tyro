@@ -1130,24 +1130,24 @@ local function draw_hud()
 end
 
 local function draw_title_screen()
-  canvas.color = colors.black
-  canvas.alpha = 230
-  canvas.rectangle(0, 0, W, H, true)
-  canvas.alpha = 255
+  screen.color = colors.black
+  screen.alpha = 230
+  screen.rectangle(0, 0, W, H, true)
+  screen.alpha = 255
 
-  canvas.color = colors.cyan
-  canvas.text(W / 2 - 120, H / 2 - 120, "M A Z E   R O G U E")
-  canvas.color = colors.yellow
-  canvas.text(W / 2 - 140, H / 2 - 70, "SCI-FI GUNNER ROGUELIKE")
+  screen.color = colors.cyan
+  screen.text(W / 2 - 120, H / 2 - 120, "M A Z E   R O G U E")
+  screen.color = colors.yellow
+  screen.text(W / 2 - 140, H / 2 - 70, "SCI-FI GUNNER ROGUELIKE")
 
-  canvas.color = colors.white
-  canvas.text(W / 2 - 200, H / 2 - 20, "W, A, S, D / Arrows  : Move Gunner (Auto Camera Scroll)")
-  canvas.text(W / 2 - 200, H / 2 + 10, "Mouse Aim & Crosshair: Target Enemies")
-  canvas.text(W / 2 - 200, H / 2 + 40, "Left Click / Space   : Shoot Gun (Knocks Gunner Back!)")
-  canvas.text(W / 2 - 200, H / 2 + 70, "Right Click / G / E  : Throw Bouncing Grenade")
+  screen.color = colors.white
+  screen.text(W / 2 - 200, H / 2 - 20, "W, A, S, D / Arrows  : Move Gunner (Auto Camera Scroll)")
+  screen.text(W / 2 - 200, H / 2 + 10, "Mouse Aim & Crosshair: Target Enemies")
+  screen.text(W / 2 - 200, H / 2 + 40, "Left Click / Space   : Shoot Gun (Knocks Gunner Back!)")
+  screen.text(W / 2 - 200, H / 2 + 70, "Right Click / G / E  : Throw Bouncing Grenade")
 
-  canvas.color = colors.lime
-  canvas.text(W / 2 - 110, H / 2 + 130, "[ PRESS SPACE TO START ]")
+  screen.color = colors.lime
+  screen.text(W / 2 - 110, H / 2 + 130, "[ PRESS SPACE TO START ]")
 end
 
 local function draw_game_over_screen()

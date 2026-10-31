@@ -3103,6 +3103,7 @@ end;
 function TTyroWindow.CreateCanvas: TTyroCanvas;
 begin
   Result := TTyroTextureCanvas.Create(Width, Height);
+  Result.BackColor := Res.Theme.Window.BackColor;
 end;
 
 constructor TTyroWindow.Create(AParent: TTyroLayout; AWidth, AHeight: Integer);

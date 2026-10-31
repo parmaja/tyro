@@ -31,10 +31,6 @@ window.backcolor = colors.black
 local W = screen.width
 local H = screen.height
 
--- The board screen is composited ABOVE the sprites and cleared transparent,
--- so it carries the HUD/scanner/titles without hiding the world.
-screen.front = true
-
 -- ---- tuning ----------------------------------------------------------
 local WORLD      = 6144          -- wrap-around world width (multiple of the 512px tiles)
 local SCALE      = 2
@@ -700,7 +696,7 @@ local function human_blips(target)
   end
 end
 
--- ---- HUD (screen.front) ---------------------------------------------
+-- ---- HUD ---------------------------------------------
 local function center_text(s, y, col)
   screen.color = col
   screen.text((W - textwidth(s)) / 2, y, s)
@@ -743,7 +739,6 @@ local function draw_scanner()
 end
 
 local function draw_hud()
-  draw_scanner()
   screen.color = colors.yellow
   screen.text(8, 24, "SCORE " .. score)
   screen.color = colors.white
@@ -799,9 +794,11 @@ function draw()
   if state == 'title' then
     draw_title()
   elseif state == 'over' then
+    draw_scanner()
     draw_hud()
     draw_over()
   else
+    draw_scanner()
     draw_hud()
   end
   if flash > 0 then

@@ -391,7 +391,6 @@ type
     function GetShakeY: Integer;
   public
     constructor Create(AWidth, AHeight: Integer); override;
-    procedure Clear;
 
     // Screen shake
     procedure Shake(ATimeMS: Integer; APower: Integer = 0);
@@ -730,7 +729,7 @@ begin
   FHeight := AHeight;
   FPen := 1;
   FColor := clBlack;
-  FBackColor := Res.Theme.Window.BackColor;
+  FBackColor := clBlank;
 
   {BeginTextureMode(FTexture);
   ClearBackground(BackColor);
@@ -1009,23 +1008,19 @@ end;
 procedure TTyroTextureCanvas.BeginDraw;
 begin
   inherited;
-  //if FTextureMode then
-    RayLib.BeginTextureMode(FTexture);
+  RayLib.BeginTextureMode(FTexture);
 end;
 
 constructor TTyroTextureCanvas.Create(AWidth, AHeight: Integer);
 begin
   inherited Create(AWidth, AHeight);
-//  FTextureMode := ATextureMode;
-  //if FTextureMode then
-    FTexture := RayLib.LoadRenderTexture(Width, Height);
+  FTexture := RayLib.LoadRenderTexture(Width, Height);
 end;
 
 destructor TTyroTextureCanvas.Destroy;
 begin
   UnloadEffect;
-  //if FTextureMode then
-    UnloadRenderTexture(FTexture);
+  UnloadRenderTexture(FTexture);
   inherited;
 end;
 
@@ -1094,31 +1089,28 @@ var
   vRes: TVector2;
 begin
   inherited;
-  //if FTextureMode then
+  Shader := FShader;
+  if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
   begin
-    Shader := FShader;
-    if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
+    RayLib.BeginShaderMode(Shader);
+    vTime := RayLib.GetTime();
+    if FShaderTimeLoc >= 0 then
+      RayLib.SetShaderValue(Shader, FShaderTimeLoc, PUTF8Char(Pointer(@vTime)), Ord(SHADER_UNIFORM_FLOAT));
+    vRes := Vector2Of(Width, Height);
+    if FShaderResLoc >= 0 then
+      RayLib.SetShaderValue(Shader, FShaderResLoc, PUTF8Char(Pointer(@vRes)), Ord(SHADER_UNIFORM_VEC2));
+    if FShaderValueLoc >= 0 then
     begin
-      RayLib.BeginShaderMode(Shader);
-      vTime := RayLib.GetTime();
-      if FShaderTimeLoc >= 0 then
-        RayLib.SetShaderValue(Shader, FShaderTimeLoc, PUTF8Char(Pointer(@vTime)), Ord(SHADER_UNIFORM_FLOAT));
-      vRes := Vector2Of(Width, Height);
-      if FShaderResLoc >= 0 then
-        RayLib.SetShaderValue(Shader, FShaderResLoc, PUTF8Char(Pointer(@vRes)), Ord(SHADER_UNIFORM_VEC2));
-      if FShaderValueLoc >= 0 then
-      begin
-        vTime := GetEffectValue;
-        RayLib.SetShaderValue(Shader, FShaderValueLoc, PUTF8Char(Pointer(@vTime)), Ord(SHADER_UNIFORM_FLOAT));
-      end;
-      if FShaderAreaLoc >= 0 then
-        SetAreaUniform;
+      vTime := GetEffectValue;
+      RayLib.SetShaderValue(Shader, FShaderValueLoc, PUTF8Char(Pointer(@vTime)), Ord(SHADER_UNIFORM_FLOAT));
     end;
-    with FTexture do
-      RayLib.DrawTextureRec(Texture, TRectangle.Create(0, 0, Texture.Width, -Texture.Height), Vector2Of(AX, AY), clWhite);
-    if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
-      RayLib.EndShaderMode;
+    if FShaderAreaLoc >= 0 then
+      SetAreaUniform;
   end;
+  with FTexture do
+    RayLib.DrawTextureRec(Texture, TRectangle.Create(0, 0, Texture.Width, -Texture.Height), Vector2Of(AX, AY), clWhite);
+  if (Shader.ID <> 0) and RayLib.IsShaderValid(Shader) then
+    RayLib.EndShaderMode;
 end;
 
 procedure TTyroTextureCanvas.SetEffect(const AEffectName: string);
@@ -1226,8 +1218,7 @@ end;
 
 procedure TTyroTextureCanvas.EndDraw;
 begin
-  //if FTextureMode then
-    RayLib.EndTextureMode();
+  RayLib.EndTextureMode();
   inherited;
 end;
 
@@ -1266,13 +1257,8 @@ begin
   Result := FShakeTime > 0;
 end;
 
-procedure TTyroWorld.Clear;
-begin
-  RayLib.ClearBackground(BackColor);
-end;
-
 procedure TTyroWorld.Shake(ATimeMS: Integer; APower: Integer);
-begin
+ begin
   if ATimeMS <= 0 then
   begin
     StopShake;
