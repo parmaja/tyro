@@ -491,7 +491,7 @@ procedure TTyroSpectrumUpdate.EnsurePanel;
 begin
   if FPanel = nil then
   begin
-    FPanel := TTyroSpectrum.Create(Engine.Main);
+    FPanel := TTyroSpectrum.Create(Engine.Window);
     FPanel.Show;
   end;
 end;

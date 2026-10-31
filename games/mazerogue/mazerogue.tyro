@@ -40,9 +40,6 @@ world.backcolor = colors.black
 local W = canvas.width
 local H = canvas.height
 
--- Keep canvas at bottom so tilemap renders under sprites
--- canvas.front is false so Sprites.DrawAll renders ON TOP of the tilemap!
-
 -- ---- Sprite Pooling System -------------------------------------------
 local function make_pool(asset_name, scale)
   return {
@@ -1018,7 +1015,6 @@ local function sync_sprites()
   end
 end
 
--- ---- HUD & Text Overlays (canvas.front) -------------------------------
 local function draw_hud()
   -- Flashlight / Glow around Player Gunner
   if player.s and player.s.visible then

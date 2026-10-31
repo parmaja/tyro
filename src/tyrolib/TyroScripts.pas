@@ -1404,21 +1404,21 @@ begin
   NewControl := nil;
   LName := LowerCase(FClassName);
   if LName = 'button' then
-    NewControl := TTyroButton.Create(Engine.Main)
+    NewControl := TTyroButton.Create(Engine.Window)
   else if LName = 'panel' then
-    NewControl := TTyroPanel.Create(Engine.Main)
+    NewControl := TTyroPanel.Create(Engine.Window)
   else if LName = 'label' then
-    NewControl := TTyroLabel.Create(Engine.Main)
+    NewControl := TTyroLabel.Create(Engine.Window)
   else if LName = 'checkbox' then
-    NewControl := TTyroCheckBox.Create(Engine.Main)
+    NewControl := TTyroCheckBox.Create(Engine.Window)
   else if LName = 'edit' then
-    NewControl := TTyroEdit.Create(Engine.Main)
+    NewControl := TTyroEdit.Create(Engine.Window)
   else if LName = 'spectrum' then
-    NewControl := TTyroSpectrum.Create(Engine.Main)
+    NewControl := TTyroSpectrum.Create(Engine.Window)
   else if LName = 'listbox' then
-    NewControl := TTyroListBox.Create(Engine.Main)
+    NewControl := TTyroListBox.Create(Engine.Window)
   else if LName = 'image' then
-    NewControl := TTyroImage.Create(Engine.Main);
+    NewControl := TTyroImage.Create(Engine.Window);
 
   try
     if NewControl <> nil then

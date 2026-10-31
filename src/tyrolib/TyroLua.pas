@@ -35,23 +35,28 @@ type
 
   TTyroLuaObject = class abstract(TLuaObject)
   private
+    FName: string;
     FScript: TLuaScript;
   protected
     procedure Created; virtual;
   protected
   public
-    constructor Create(AScript: TLuaScript); virtual;
+    constructor Create(const AName: string; AScript: TLuaScript); virtual;
+    procedure Init; virtual;
     procedure Register(L: PLua_State); override;
     property Script: TLuaScript read FScript;
+    property Name: string read FName;
   end;
 
-  { TLuaCanvas }
+  { TLuaCustomCanvas }
 
-  TLuaCanvas = class(TTyroLuaObject)
+  TLuaCustomCanvas = class abstract(TTyroLuaObject)
   protected
+    Canvas: TTyroCanvas;
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
   public
+    procedure Init; override;
     function Clear_func(L: Plua_State): integer; cdecl;
     function Text_func(L: Plua_State): integer; cdecl;
     function Circle_func(L: Plua_State): integer; cdecl;
@@ -63,7 +68,21 @@ type
     function Line_func(L: Plua_State): integer; cdecl;
     function Point_func(L: Plua_State): integer; cdecl;
     function Test_func(L: Plua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
+
+  end;
+
+  { TLuaCanvas }
+
+  TLuaCanvas = class(TLuaCustomCanvas)
+  public
+    constructor Create(const AName: string; AScript: TLuaScript); override;
+  end;
+
+  { TLuaScreen }
+
+  TLuaScreen = class(TLuaCustomCanvas)
+  public
+    constructor Create(const AName: string; AScript: TLuaScript); override;
   end;
 
   { TLuaShader }
@@ -74,7 +93,6 @@ type
     function Getter(L: PLua_State): integer; override;
   public
     function Load_func(L: PLua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
   end;
 
   { TLuaConsole }
@@ -88,7 +106,6 @@ type
     function PrintLn_func(L: Plua_State): integer; cdecl;
     function Show_func(L: Plua_State): integer; cdecl;
     function Read_func(L: Plua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
   end;
 
   { TLuaOutput }
@@ -101,7 +118,6 @@ type
     function Show_func(L: Plua_State): integer; cdecl;
     function Hide_func(L: Plua_State): integer; cdecl;
     function Clear_func(L: Plua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
   end;
 
   { TLuaWindow }
@@ -122,7 +138,6 @@ type
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
   public
-    constructor Create(AScript: TLuaScript); override;
     function Shake_func(L: Plua_State): integer; cdecl;
   end;
 
@@ -134,7 +149,6 @@ type
     function Getter(L: PLua_State): integer; override;
   public
     function Load_func(L: Plua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
   end;
 
   { TLuaColors }
@@ -168,7 +182,6 @@ type
     function Sound_func(L: Plua_State): integer; cdecl;
     function Play_func(L: Plua_State): integer; cdecl;
     function MML_func(L: Plua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
   end;
 
 
@@ -213,7 +226,6 @@ type
   public
     function Show_func(L: Plua_State): integer; cdecl;
     function Hide_func(L: Plua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
   end;
 
   { TRadioAction }
@@ -410,7 +422,7 @@ type
     //image control: img.load("logo.png") / controls.load(handle, "logo.png"),
     //the new state answers the call and reads back through the loaded field
     function LoadImage_func(L: Plua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
+    constructor Create(const AName: string; AScript: TLuaScript); override;
     destructor Destroy; override;
   end;
 
@@ -489,14 +501,14 @@ type
     //Index of the first value the script passed; see the implementation
     function FirstArgIndex(L: PLua_State): Integer;
   public
+    destructor Destroy; override;
+
     //Opens the (already validated) path; returns False and sets Error on failure
     function Open(const AFileName, AMode: string): Boolean;
     function Read_func(L: Plua_State): integer; cdecl;
     function Write_func(L: Plua_State): integer; cdecl;
     function Close_func(L: Plua_State): integer; cdecl;
     function Lines_func(L: Plua_State): integer; cdecl;
-    constructor Create(AScript: TLuaScript); override;
-    destructor Destroy; override;
     //Iterates the lines that Lines_func has already queued, so a plain
     //"for line in f:lines()" loop works. Returns nil once the list is drained.
     function LinesNext_func(L: Plua_State): integer; cdecl;
@@ -560,7 +572,8 @@ type
   protected
     Lua: TLua;
 
-    Canvas: TLuaCanvas;
+    Canvas: TLuaCanvas; //Board
+    Screen: TLuaScreen; //Screen
     Console: TLuaConsole;
     Window: TLuaWindow;
     World: TLuaWorld;
@@ -579,7 +592,7 @@ type
     Output: TLuaOutput;
     Collision: TLuaCollision;
     Shader: TLuaShader;
-    SpectrumLua: TLuaSpectrum;
+    Spectrum: TLuaSpectrum;
     Mouse: TLuaMouse;
     Keyboard: TLuaKeyboard;
     Gamepad: TLuaGamepad;
@@ -944,11 +957,6 @@ begin
   end;
 end;
 
-constructor TLuaConsole.Create(AScript: TLuaScript);
-begin
-  inherited;
-end;
-
 { TLuaWindow }
 
 function TLuaWindow.Setter(L: PLua_State): integer;
@@ -959,7 +967,12 @@ var
 begin
   Result := 0;
   field := L.ToString(2);
-  if lua_isboolean(L, -1) then
+  if lua_isinteger(L, -1) then
+  begin
+    if field = 'margin' then
+      Engine.Window.Margin := L.ToInteger(-1);
+  end
+  else if lua_isboolean(L, -1) then
   begin
     if field = 'sizable' then
       Engine.Sizable := L.ToBoolean(-1);
@@ -975,6 +988,11 @@ begin
   if field = 'sizable' then
   begin
     L.PushBoolean(Engine.Sizable);
+    Result := 1;
+  end
+  else if field = 'margin' then
+  begin
+    L.PushInteger(Engine.Window.Margin);
     Result := 1;
   end;
 end;
@@ -992,9 +1010,7 @@ begin
   if L.IsInteger(-1) or L.IsNumber(-1) then
   begin
     i := L.ToInteger(-1);
-    if field = 'margin' then
-      Engine.World.Margin := i
-    else if field = 'width' then
+    if field = 'width' then
       Engine.World.Width := i
     else if field = 'height' then
       Engine.World.Height := i
@@ -1021,12 +1037,7 @@ begin
   Result := 0;
   field := L.ToString(2);
 
-  if field = 'margin' then
-  begin
-    L.PushInteger(Engine.World.Margin);
-    Result := 1;
-  end
-  else if field = 'width' then
+  if field = 'width' then
   begin
     L.PushInteger(Engine.World.Width);
     Result := 1;
@@ -1051,11 +1062,6 @@ begin
     L.PushString(Engine.World.Title);
     Result := 1;
   end;
-end;
-
-constructor TLuaWorld.Create(AScript: TLuaScript);
-begin
-  inherited Create(AScript);
 end;
 
 function TLuaWorld.Shake_func(L: Plua_State): integer; cdecl;
@@ -1095,11 +1101,6 @@ begin
   end;
 end;
 
-constructor TLuaFont.Create(AScript: TLuaScript);
-begin
-  inherited Create(AScript);
-end;
-
 { TLuaMusic }
 
 function TLuaMusic.Setter(L: PLua_State): integer;
@@ -1112,26 +1113,27 @@ begin
   Result := 0;
 end;
 
-constructor TLuaMusic.Create(AScript: TLuaScript);
-begin
-  inherited Create(AScript);
-end;
-
 { TTyroLuaObject }
 
 procedure TTyroLuaObject.Created;
 begin
 end;
 
-constructor TTyroLuaObject.Create(AScript: TLuaScript);
+constructor TTyroLuaObject.Create(const AName: string; AScript: TLuaScript);
 begin
   inherited Create;
   FScript := AScript;
+  FName := AName;
   Created;
+end;
+
+procedure TTyroLuaObject.Init;
+begin
 end;
 
 procedure TTyroLuaObject.Register(L: PLua_State);
 begin
+  inherited;
 end;
 
 { TLuaColors }
@@ -1221,9 +1223,9 @@ begin
   AddColor('none', clBlank);
 end;
 
-{ TLuaCanvas }
+{ TLuaCustomCanvas }
 
-function TLuaCanvas.Setter(L: PLua_State): Integer;
+function TLuaCustomCanvas.Setter(L: PLua_State): integer;
 var
   i: Integer;
   field: string;
@@ -1231,36 +1233,24 @@ begin
   Result := 0;
   field := L.ToString(2);
 
-  //canvas.front = true: composite the board ABOVE the sprites so its content
-  //(text, HUD) stays on top of the world. The board is cleared to a transparent
-  //colour for the sprites to show through it; canvas.clear() with no argument
-  //uses BackColor, which is what makes the switch take effect.
-  if field = 'front' then
-  begin
-    Engine.BoardOnTop := L.ToBoolean(-1);
-    if Engine.BoardOnTop and (Engine.Board <> nil) then
-      Engine.Board.BackColor := clBlank;
-    Exit(1);
-  end;
-
   if L.IsInteger(-1) then
   begin
     if field = 'color' then
     begin
       i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetColorObject.Create(Engine.Board, IntToColor(i)));
+      FScript.AddQueueObject(TDrawSetColorObject.Create(Canvas, IntToColor(i)));
       Result := 1;
     end
     else if field = 'alpha' then
     begin
       i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetAlphaObject.Create(Engine.Board, i));
+      FScript.AddQueueObject(TDrawSetAlphaObject.Create(Canvas, i));
       Result := 1;
     end
     else if field = 'backcolor' then
     begin
       i := L.ToInteger(-1);
-      FScript.AddQueueObject(TDrawSetBackColorObject.Create(Engine.Board, IntToColor(i)));
+      FScript.AddQueueObject(TDrawSetBackColorObject.Create(Canvas, IntToColor(i)));
       Result := 1;
     end
     else if (field = 'pen') then
@@ -1268,13 +1258,13 @@ begin
       i := L.ToInteger(-1);
       if i < 1 then
         i := 1;
-      FScript.AddQueueObject(TDrawSetPenObject.Create(Engine.Board, i));
+      FScript.AddQueueObject(TDrawSetPenObject.Create(Canvas, i));
       Result := 1;
     end;
   end;
 end;
 
-function TLuaCanvas.Getter(L: PLua_State): Integer;
+function TLuaCustomCanvas.Getter(L: PLua_State): integer;
 var
   i: Integer;
   field: string;
@@ -1284,49 +1274,57 @@ begin
 
   if field = 'color' then
   begin
-    i := ColorToInt(Engine.Board.Color);
+    i := ColorToInt(Canvas.Color);
     L.PushInteger(i);
     Result := 1;
   end
   else if field = 'backcolor' then
   begin
-    i := ColorToInt(Engine.Board.BackColor);
+    i := ColorToInt(Canvas.BackColor);
     L.PushInteger(i);
     Result := 1;
   end
   else if field = 'width' then
   begin
-    L.PushInteger(Engine.Board.Width);
+    L.PushInteger(Canvas.Width);
     Result := 1;
   end
   else if field = 'height' then
   begin
-    L.PushInteger(Engine.Board.Height);
-    Result := 1;
-  end
-  else if field = 'front' then
-  begin
-    L.PushBoolean(Engine.BoardOnTop);
+    L.PushInteger(Canvas.Height);
     Result := 1;
   end
   else if (field = 'pen') then
   begin
-    L.PushInteger(Engine.Board.Pen);
+    L.PushInteger(Canvas.Pen);
     Result := 1;
   end;
 end;
 
-constructor TLuaCanvas.Create(AScript: TLuaScript);
+procedure TLuaCustomCanvas.Init;
 begin
-  inherited;
+  with Script.Lua do
+  begin
+    State.Register(Name, 'clear', Self, Self.Clear_func);
+    State.Register(Name, 'text', Self, Self.Text_func);
+    State.Register(Name, 'circle', Self, Self.Circle_func);
+    State.Register(Name, 'triangle', Self, Self.Triangle_func);
+    State.Register(Name, 'rectangle', Self, Self.Rectangle_func);
+    State.Register(Name, 'line', Self, Self.Line_func);
+    State.Register(Name, 'point', Self, Self.Point_func);
+    State.Register(Name, 'test', Self, Self.Test_func);
+    lua_getglobal(State, PUTF8Char(UTF8String(Name)));
+    State.NewTable;
+    State.RegisterMethod('rectH', Self.GradientH_func);
+    State.RegisterMethod('rectV', Self.GradientV_func);
+    State.RegisterMethod('circle', Self.GradientCircle_func);
+    State.SetField(-2, 'gradient');
+    lua_pop(State, 1);
+    State.Register(Name, Self); //Should be last one
+  end;
 end;
 
 { TLuaShader }
-
-constructor TLuaShader.Create(AScript: TLuaScript);
-begin
-  inherited;
-end;
 
 function TLuaShader.Setter(L: PLua_State): integer;
 var
@@ -1434,29 +1432,30 @@ begin
   //pause(ms): like sleep(), but also freezes the scene (physics/sprites/controls)
   Lua.State.RegisterGlobal('pause', @pause_func);
 
-  Canvas := TLuaCanvas.Create(Self);
-  Window := TLuaWindow.Create(Self);
-  World := TLuaWorld.Create(Self);
-  Console := TLuaConsole.Create(Self);
-  Colors := TLuaColors.Create(Self);
-  Font := TLuaFont.Create(Self);
-  Music := TLuaMusic.Create(Self);
-  Sound := TLuaSound.Create(Self);
-  Radio := TLuaRadio.Create(Self);
-  SpectrumLua := TLuaSpectrum.Create(Self);
-  Sprite := TLuaSprite.Create(Self);
-  Sprites := TLuaSprites.Create(Self);
-  Tile := TLuaTile.Create(Self);
-  Tiles := TLuaTiles.Create(Self);
-  Parallax := TLuaParallax.Create(Self);
-  Parallaxes := TLuaParallaxes.Create(Self);
-  Controls := TLuaControls.Create(Self);
-  Output := TLuaOutput.Create(Self);
-  Collision := TLuaCollision.Create(Self);
-  Shader := TLuaShader.Create(Self);
-  Mouse := TLuaMouse.Create(Self);
-  Keyboard := TLuaKeyboard.Create(Self);
-  Gamepad := TLuaGamepad.Create(Self);
+  Canvas := TLuaCanvas.Create('canvas', Self);
+  Screen := TLuaScreen.Create('screen', Self);
+  Window := TLuaWindow.Create('window', Self);
+  World := TLuaWorld.Create('world', Self);
+  Console := TLuaConsole.Create('console', Self);
+  Colors := TLuaColors.Create('colors', Self);
+  Font := TLuaFont.Create('font', Self);
+  Music := TLuaMusic.Create('music', Self);
+  Sound := TLuaSound.Create('sound', Self);
+  Radio := TLuaRadio.Create('radio', Self);
+  Spectrum := TLuaSpectrum.Create('spectrum', Self);
+  Sprite := TLuaSprite.Create('sprite', Self);
+  Sprites := TLuaSprites.Create('sprites', Self);
+  Tile := TLuaTile.Create('tile', Self);
+  Tiles := TLuaTiles.Create('tiles', Self);
+  Parallax := TLuaParallax.Create('parallax', Self);
+  Parallaxes := TLuaParallaxes.Create('parallaxes', Self);
+  Controls := TLuaControls.Create('controls', Self);
+  Output := TLuaOutput.Create('output', Self);
+  Collision := TLuaCollision.Create('collision', Self);
+  Shader := TLuaShader.Create('shader', Self);
+  Mouse := TLuaMouse.Create('mouse', Self);
+  Keyboard := TLuaKeyboard.Create('keyboard', Self);
+  Gamepad := TLuaGamepad.Create('gamepad', Self);
 
   Files := TList.Create; //of TLuaFile, freed in Destroy
 
@@ -1481,25 +1480,8 @@ begin
   Lua.State.Register('console', Console); //Should be last one
 
   //canvas
-  Lua.State.Register('canvas', 'clear', Canvas, Canvas.Clear_func);
-  Lua.State.Register('canvas', 'text', Canvas, Canvas.Text_func);
-  Lua.State.Register('canvas', 'circle', Canvas, Canvas.Circle_func);
-  Lua.State.Register('canvas', 'triangle', Canvas, Canvas.Triangle_func);
-  Lua.State.Register('canvas', 'rectangle', Canvas, Canvas.Rectangle_func);
-  Lua.State.Register('canvas', 'line', Canvas, Canvas.Line_func);
-  Lua.State.Register('canvas', 'point', Canvas, Canvas.Point_func);
-  //canvas.test(ms): diagnostic slow draw (see TLuaCanvas.Test_func)
-  Lua.State.Register('canvas', 'test', Canvas, Canvas.Test_func);
-  //canvas.gradient: rectH / rectV / circle (direct field, before metatable)
-  lua_getglobal(Lua.State, PUTF8Char(UTF8String('canvas')));
-  Lua.State.NewTable;
-  Lua.State.RegisterMethod('rectH', Canvas.GradientH_func);
-  Lua.State.RegisterMethod('rectV', Canvas.GradientV_func);
-  Lua.State.RegisterMethod('circle', Canvas.GradientCircle_func);
-  Lua.State.SetField(-2, 'gradient');
-  lua_pop(Lua.State, 1);
-  Lua.State.Register('canvas', Canvas); //Should be last one
-
+  Canvas.Init;
+  Screen.Init;
 
   //shader (property-style: shader.effect, shader.value, shader.area)
   Lua.State.Register('shader', 'load', Shader, Shader.Load_func);
@@ -1548,9 +1530,9 @@ begin
 
   //spectrum (spectrum.show(x, y, w, h), spectrum.hide()
   // + getters/setters: spectrum.bars, spectrum.active, spectrum.visible)
-  Lua.State.Register('spectrum', 'show', SpectrumLua, SpectrumLua.Show_func);
-  Lua.State.Register('spectrum', 'hide', SpectrumLua, SpectrumLua.Hide_func);
-  Lua.State.Register('spectrum', SpectrumLua); //Should be last one
+  Lua.State.Register('spectrum', 'show', Spectrum, Spectrum.Show_func);
+  Lua.State.Register('spectrum', 'hide', Spectrum, Spectrum.Hide_func);
+  Lua.State.Register('spectrum', Spectrum); //Should be last one
 
   //input & timing (input tables + global functions)
   //mouse: mouse.x / mouse.y are fields, mouse.pressed("left") is the button edge
@@ -1767,7 +1749,7 @@ begin
   FreeAndNil(Parallax);
   FreeAndNil(Tiles);
   FreeAndNil(Tile);
-  FreeAndNil(SpectrumLua);
+  FreeAndNil(Spectrum);
   FreeAndNil(Radio);
   FreeAndNil(Music);
   FreeAndNil(Sound);
@@ -1944,7 +1926,7 @@ begin
   inherited;
 end;
 
-function TLuaCanvas.Clear_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.Clear_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
 begin
@@ -1952,14 +1934,14 @@ begin
   if c >= 1 then
   begin
     if L.IsNumber(1) then
-      FScript.AddQueueObject(TClearObject.Create(Engine.Board, IntToColor(round(L.ToNumber(1)))))
+      FScript.AddQueueObject(TClearObject.Create(Canvas, IntToColor(round(L.ToNumber(1)))))
     else if L.IsString(1) then
-      FScript.AddQueueObject(TClearObject.Create(Engine.Board, StrToColor(L.ToString(1))))
+      FScript.AddQueueObject(TClearObject.Create(Canvas, StrToColor(L.ToString(1))))
     else
-      FScript.AddQueueObject(TClearObject.Create(Engine.Board));
+      FScript.AddQueueObject(TClearObject.Create(Canvas));
   end
   else
-    FScript.AddQueueObject(TClearObject.Create(Engine.Board));
+    FScript.AddQueueObject(TClearObject.Create(Canvas));
   Result := 0;
 end;
 
@@ -2006,7 +1988,7 @@ begin
   Result := 0;
 end;
 
-function TLuaCanvas.Text_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.Text_func(L: Plua_State): integer; cdecl;
 var
   x, y: integer;
   s: string;
@@ -2014,11 +1996,11 @@ begin
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
   s := L.ToString(3);
-  FScript.AddQueueObject(TDrawTextObject.Create(Engine.Board, x, y, s));
+  FScript.AddQueueObject(TDrawTextObject.Create(Canvas, x, y, s));
   Result := 0;
 end;
 
-function TLuaCanvas.Circle_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.Circle_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x, y, r: integer;
@@ -2031,11 +2013,11 @@ begin
   r := round(L.ToNumber(3));
   if c >= 4 then
     f := L.ToBoolean(4);
-  FScript.AddQueueObject(TDrawCircleObject.Create(Engine.Board, x, y, r, f));
+  FScript.AddQueueObject(TDrawCircleObject.Create(Canvas, x, y, r, f));
   Result := 0;
 end;
 
-function TLuaCanvas.Triangle_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.Triangle_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x1, y1, x2, y2, x3, y3: integer;
@@ -2051,11 +2033,11 @@ begin
   y3 := round(L.ToNumber(6));
   if c >= 7 then
     f := L.ToBoolean(7);
-  FScript.AddQueueObject(TDrawTriangleObject.Create(Engine.Board, x1, y1, x2, y2, x3, y3, f));
+  FScript.AddQueueObject(TDrawTriangleObject.Create(Canvas, x1, y1, x2, y2, x3, y3, f));
   Result := 0;
 end;
 
-function TLuaCanvas.Rectangle_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.Rectangle_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x, y, w, h: integer;
@@ -2069,7 +2051,7 @@ begin
   h := round(L.ToNumber(4));
   if c >= 4 then
     f := L.ToBoolean(5);
-  FScript.AddQueueObject(TDrawRectangleObject.Create(Engine.Board, x, y, w, h, f));
+  FScript.AddQueueObject(TDrawRectangleObject.Create(Canvas, x, y, w, h, f));
   Result := 0;
 end;
 
@@ -2094,7 +2076,7 @@ begin
 end;
 
 // canvas.gradientV(x, y, w, h [, startColor, endColor]) -- top to bottom
-function TLuaCanvas.GradientV_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.GradientV_func(L: Plua_State): integer; cdecl;
 var
   x, y, w, h: integer;
   startColor, endColor: TColor;
@@ -2104,7 +2086,7 @@ begin
   y := round(L.ToNumber(2));
   w := round(L.ToNumber(3));
   h := round(L.ToNumber(4));
-  o := TDrawGradientObject.Create(Engine.Board, x, y, w, h, clBlank, clBlank, True);
+  o := TDrawGradientObject.Create(Canvas, x, y, w, h, clBlank, clBlank, True);
   o.fHasStartColor := CanvasColorArg(L, 5, startColor);
   o.fStartColor := startColor;
   o.fHasEndColor := CanvasColorArg(L, 6, endColor);
@@ -2114,7 +2096,7 @@ begin
 end;
 
 // canvas.gradientH(x, y, w, h [, startColor, endColor]) -- left to right
-function TLuaCanvas.GradientH_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.GradientH_func(L: Plua_State): integer; cdecl;
 var
   x, y, w, h: integer;
   startColor, endColor: TColor;
@@ -2124,7 +2106,7 @@ begin
   y := round(L.ToNumber(2));
   w := round(L.ToNumber(3));
   h := round(L.ToNumber(4));
-  o := TDrawGradientObject.Create(Engine.Board, x, y, w, h, clBlank, clBlank, False);
+  o := TDrawGradientObject.Create(Canvas, x, y, w, h, clBlank, clBlank, False);
   o.fHasStartColor := CanvasColorArg(L, 5, startColor);
   o.fStartColor := startColor;
   o.fHasEndColor := CanvasColorArg(L, 6, endColor);
@@ -2134,7 +2116,7 @@ begin
 end;
 
 // canvas.gradient.circle(x, y, r [, innerColor, outerColor]) -- radial gradient
-function TLuaCanvas.GradientCircle_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.GradientCircle_func(L: Plua_State): integer; cdecl;
 var
   x, y, r: integer;
   innerColor, outerColor: TColor;
@@ -2143,7 +2125,7 @@ begin
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
   r := round(L.ToNumber(3));
-  o := TDrawCircleGradientObject.Create(Engine.Board, x, y, r, clBlank, clBlank);
+  o := TDrawCircleGradientObject.Create(Canvas, x, y, r, clBlank, clBlank);
   o.fHasInnerColor := CanvasColorArg(L, 4, innerColor);
   o.fInnerColor := innerColor;
   o.fHasOuterColor := CanvasColorArg(L, 5, outerColor);
@@ -2152,7 +2134,7 @@ begin
   Result := 0;
 end;
 
-function TLuaCanvas.Line_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.Line_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   x1, y1, x2, y2, w: integer;
@@ -2170,22 +2152,22 @@ begin
     if c >= 5 then
       w := round(L.ToNumber(5));
     if w > 0 then
-      FScript.AddQueueObject(TDrawLineObject.Create(Engine.Board, x1, y1, x2, y2, w))
+      FScript.AddQueueObject(TDrawLineObject.Create(Canvas, x1, y1, x2, y2, w))
     else
-      FScript.AddQueueObject(TDrawLineObject.Create(Engine.Board, x1, y1, x2, y2));
+      FScript.AddQueueObject(TDrawLineObject.Create(Canvas, x1, y1, x2, y2));
   end
   else
-    FScript.AddQueueObject(TDrawLineToObject.Create(Engine.Board, x1, y1));
+    FScript.AddQueueObject(TDrawLineToObject.Create(Canvas, x1, y1));
   Result := 0;
 end;
 
-function TLuaCanvas.Point_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.Point_func(L: Plua_State): integer; cdecl;
 var
   x, y: integer;
 begin
   x := round(L.ToNumber(1));
   y := round(L.ToNumber(2));
-  FScript.AddQueueObject(TDrawPointObject.Create(Engine.Board, x, y));
+  FScript.AddQueueObject(TDrawPointObject.Create(Canvas, x, y));
   Result := 0;
 end;
 
@@ -2194,7 +2176,7 @@ end;
 // rectangle, then spins). Use it to emulate slow drawing: a single draw call
 // longer than a frame, to check that a queued body is still committed as one
 // group. Defaults: ms = 50, a full-width 2px bar.
-function TLuaCanvas.Test_func(L: Plua_State): integer; cdecl;
+function TLuaCustomCanvas.Test_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
   ms, x, y, w, h: integer;
@@ -2208,7 +2190,7 @@ begin
     ms := 0;
   x := 0;
   y := 0;
-  w := Engine.Board.Width;
+  w := Canvas.Width;
   h := 2;
   f := True;
   if c >= 5 then
@@ -2218,8 +2200,24 @@ begin
     w := round(L.ToNumber(4));
     h := round(L.ToNumber(5));
   end;
-  FScript.AddQueueObject(TSlowDrawObject.Create(Engine.Board, ms, x, y, w, h, f));
+  FScript.AddQueueObject(TSlowDrawObject.Create(Canvas, ms, x, y, w, h, f));
   Result := 0;
+end;
+
+{ TLuaCanvas }
+
+constructor TLuaCanvas.Create(const AName: string; AScript: TLuaScript);
+begin
+  inherited;
+  Canvas := Engine.Board;
+end;
+
+{ TLuaScreen }
+
+constructor TLuaScreen.Create(const AName: string; AScript: TLuaScript);
+begin
+  inherited;
+  Canvas := Engine.Screen;
 end;
 
 function TLuaConsole.Print_func(L: Plua_State): integer; cdecl;
@@ -2365,11 +2363,6 @@ begin
     lua_pushinteger(L, Engine.Output.Margin);
     Result := 1;
   end;
-end;
-
-constructor TLuaOutput.Create(AScript: TLuaScript);
-begin
-  inherited Create(AScript);
 end;
 
 // output.show() | output.show(x, y) | output.show(x, y, w, h) -> show and place
@@ -2787,11 +2780,6 @@ begin
 end;
 
 { TLuaSpectrum }
-
-constructor TLuaSpectrum.Create(AScript: TLuaScript);
-begin
-  inherited Create(AScript);
-end;
 
 function TLuaSpectrum.Getter(L: Plua_State): Integer;
 var
@@ -3226,12 +3214,6 @@ begin
     Result := 2;
 end;
 
-constructor TLuaFile.Create(AScript: TLuaScript);
-begin
-  inherited Create(AScript);
-  FIsOpen := False;
-end;
-
 destructor TLuaFile.Destroy;
 begin
   FreeAndNil(FLines);
@@ -3412,7 +3394,7 @@ end;
 //left, "l"/"*l" for one line, "L"/"*L" for a line keeping its newline, "n" for
 //the next number (io style) and a plain number for that many bytes. Formats
 //only apply to text streams; on a binary stream they read raw bytes.
-function TLuaFile.Read_func(L: PLua_State): integer; cdecl;
+function TLuaFile.Read_func(L: Plua_State): integer; cdecl;
 var
   aFormat: AnsiString;
   Fmt: AnsiChar;
@@ -3481,7 +3463,7 @@ end;
 //A leading number is the byte count of the string that follows it, matching
 //io.write. The values start at FirstArgIndex, so "f:write(x)" and
 //"f.write(f, x)" behave the same.
-function TLuaFile.Write_func(L: PLua_State): integer; cdecl;
+function TLuaFile.Write_func(L: Plua_State): integer; cdecl;
 var
   i, first: Integer;
   Buf, OutBuf: AnsiString;
@@ -3540,7 +3522,7 @@ begin
   Result := 1;
 end;
 
-function TLuaFile.Close_func(L: PLua_State): integer; cdecl;
+function TLuaFile.Close_func(L: Plua_State): integer; cdecl;
 begin
   if FIsOpen then
   begin
@@ -3556,7 +3538,7 @@ end;
 //file:lines() -> an iterator over the lines that are left, so "for line in
 //f:lines()" works. What remains is read once into FLines and handed out one line
 //per step; a second call replaces the pending iterator, like the io library.
-function TLuaFile.Lines_func(L: PLua_State): integer; cdecl;
+function TLuaFile.Lines_func(L: Plua_State): integer; cdecl;
 var
   Buf: AnsiString;
   LineStr: AnsiString;
@@ -3626,7 +3608,7 @@ end;
 //is only returned for the callers that drive the iterator themselves; Pluto's
 //generic for hands the previous line back instead of it, which is why the
 //position is kept in FLinesPos and not taken from an argument.
-function TLuaFile.LinesNext_func(L: PLua_State): integer; cdecl;
+function TLuaFile.LinesNext_func(L: Plua_State): integer; cdecl;
 begin
   if (FLines = nil) or (FLinesPos < 0) or (FLinesPos >= FLines.Count) then
   begin
@@ -3671,7 +3653,7 @@ begin
     Exit(2);
   end;
 
-  aFile := TLuaFile.Create(Self);
+  aFile := TLuaFile.Create('file', Self);
   if not aFile.Open(Resolved, aMode) then
   begin
     L.PushNil;
@@ -4248,9 +4230,9 @@ end;
 
 { TLuaControls }
 
-constructor TLuaControls.Create(AScript: TLuaScript);
+constructor TLuaControls.Create(const AName: string; AScript: TLuaScript);
 begin
-  inherited Create(AScript);
+  inherited;
   FItems := TList.Create;
 end;
 
@@ -4351,7 +4333,7 @@ begin
   begin
     //a nil or zero handle moves the control back to the Engine window
     if lua_isnil(L, 3) or (L.IsNumber(3) and (round(L.ToNumber(3)) <= 0)) then
-      FScript.RunQueueObject(TSetControlParentObject.Create(ctrl, Engine.Main))
+      FScript.RunQueueObject(TSetControlParentObject.Create(ctrl, Engine.Window))
     else
     begin
       if L.IsTable(3) then
@@ -5281,7 +5263,7 @@ begin
   if L.ArgsCount >= 2 then
   begin
     if lua_isnil(L, 2) or (L.IsNumber(2) and (round(L.ToNumber(2)) <= 0)) then
-      newParent := Engine.Main
+      newParent := Engine.Window
   else
   begin
     if L.IsTable(2) then
@@ -6799,7 +6781,7 @@ begin
   FScript := AScript;
   FHandle := AHandle;
   FFileName := AFileName;
-  FSprite := TLuaSprite.Create(AScript); // proxy; only its property getter/setter are used
+  FSprite := TLuaSprite.Create('sprite', AScript); // proxy; only its property getter/setter are used
   FLua.Init;
   BuildSelf;
   BuildGlobals;

@@ -28,8 +28,6 @@ local D = require("zonix_data")
 
 window.show(960, 540)
 local W, H = canvas.width, canvas.height
--- Note: canvas.front is FALSE so the board canvas renders the background, grid,
--- and claimed territory, while all Sprites render ON TOP of the canvas!
 
 -- Sound manager with mute toggle and safe fallback to TyroSounds wavetables (no pcall needed)
 local muted = false

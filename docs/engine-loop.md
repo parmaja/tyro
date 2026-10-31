@@ -102,8 +102,7 @@ end
 
 `enter()` / `leave()` nest (they count up and down). A script that stops or
 errors between them is released automatically, so a dead run never freezes the
-queue. See [atomic.md](atomic.md) for the commit-watermark details and the
-diagnostics.
+queue.
 
 ## Slow drawing
 
@@ -128,42 +127,3 @@ function draw()
     canvas.text(8, 8, "text arrives with the box")  -- not one frame later
 end
 ```
-
-`tests/test_slow_draw.tyro` runs a body of `box -> canvas.test(80) -> text` and
-counts, per body, the **drain passes** it needed (`1` = the whole body drawn in
-a single drawing cycle):
-
-| Phase | body split | drain passes per body | `queue.deferred` |
-|-------|-----------|------------------------|------------------|
-| `enter-leave` | 0 / 10 | 1 | 0 |
-| no grouping | 9 / 10 | 2 | 9 |
-
-So a slow draw does not split a grouped body; it only makes that one frame long.
-If a body still flickers, look for a **yield inside it** (`sleep()`,
-`pause()`, `console.read()`), because a yield draws the part queued before it.
-
-## Verifying it from a script
-
-`queue.consumed` reports how many commands have been executed; compare it before
-and after a grouped body:
-
-```lua
-function draw()
-    local before = queue.consumed      -- queue is empty here
-    enter()
-    local n = draw_body()
-    leave()
-    local mid = queue.consumed - before -- drained while the body was built
-    -- 0 < mid < n  ->  a frame showed only part of the body (the flicker)
-end
-```
-
-`queue.holds` reports the open `enter()` depth. See the diagnostics table in
-[atomic.md](atomic.md).
-
-## Related
-
-- [atomic.md](atomic.md) — `enter()` / `leave()`, commit watermark and
-  diagnostics.
-- [queue-backpressure.md](queue-backpressure.md) — `queuelimit()` and bounded
-  queues.

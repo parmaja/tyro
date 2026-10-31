@@ -373,7 +373,6 @@ type
   private
     FOpaque: Boolean;
     FTitle: string;
-    FMargin: Integer;
     FWidth: Integer;
     FHeight: Integer;
     FBackColor: TColor;
@@ -385,7 +384,6 @@ type
     function GetShaking: Boolean;
     // Getters/setters for Engine access
     procedure SetTitle(AValue: string);
-    procedure SetMarginValue(AValue: Integer);
     procedure SetWidth(AValue: Integer);
     procedure SetHeight(AValue: Integer);
     function GetShakeX: Integer;
@@ -405,7 +403,6 @@ type
     property Height: Integer read FHeight write SetHeight;
 
     property BackColor: TColor read FBackColor write SetBackColor;
-    property Margin: Integer read FMargin write FMargin;
     property Opaque: Boolean read FOpaque write FOpaque;
     property ShakeX: Integer read GetShakeX;
     property ShakeY: Integer read GetShakeY;
@@ -1242,7 +1239,6 @@ constructor TTyroWorld.Create;
 begin
   inherited Create;
   FOpaque := True;
-  FMargin := cMainMargin;
   FWidth := cDefaultWindowWidth;
   FHeight := cDefaultWindowHeight;
   FBackColor := Res.Theme.Window.BackColor;
@@ -1320,11 +1316,6 @@ begin
   a := Round(FShakePower * FShakeTime / FShakeDuration);
   FShakeX := Random(a * 2) - a;
   FShakeY := Random(a * 2) - a;
-end;
-
-procedure TTyroWorld.SetMarginValue(AValue: Integer);
-begin
-  FMargin := AValue;
 end;
 
 procedure TTyroWorld.SetWidth(AValue: Integer);

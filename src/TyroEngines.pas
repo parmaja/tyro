@@ -175,11 +175,6 @@ type
     FSizable: Boolean;
     FFPS: Integer;
     FOptions: TTyroEngineOptions;
-    //* When True the script's Board canvas is composited ABOVE the sprites
-    //* instead of below them, so a script can use the canvas for a HUD/overlay
-    //* (see the Lua 'canvas.front'). The board must be cleared to a transparent
-    //* colour for the sprites to show through it.
-    FBoardOnTop: Boolean;
     //* The control which captured the mouse (e.g. dragging a sizable border).
     //* It keeps receiving MouseMove/MouseUp until the left button is released.
     FControlCapture: TTyroControl;
@@ -401,9 +396,6 @@ type
     function GetScriptPaused: Boolean;
     //* True while a Lua pause() has frozen the scene (see BeginScriptPause).
     property ScriptPaused: Boolean read GetScriptPaused;
-    //* Draw the Board canvas above the sprites (for a canvas-based HUD) instead
-    //* of below them. Backs the Lua 'canvas.front'.
-    property BoardOnTop: Boolean read FBoardOnTop write FBoardOnTop;
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
     ScriptSource: string; //Shout pass to Thread to run it
@@ -413,8 +405,8 @@ type
 
     World: TTyroWorld;
 
-    //Main for UI controls
-    Main: TTyroWindow;
+    //Window for UI controls
+    Window: TTyroWindow;
 
     Console: TTyroTerminal;
     Output: TTyroOutput;
@@ -678,7 +670,7 @@ begin
 
         try
           Camera2D.Target := Vector2Of(0, 0);
-          Camera2D.Offset := Vector2Of(World.Margin, World.Margin);
+          Camera2D.Offset := Vector2Of(Window.Margin, Window.Margin);
           Camera2D.Zoom := 1;
           Camera2D.Rotation := 0;
 
@@ -686,13 +678,13 @@ begin
           //so the canvas and the sprites move together while the terminal and
           //the other controls stay glued to the window.
           if World.UpdateShake(RayLib.GetFrameTime()) then
-            Camera2D.Offset := Vector2Of(World.Margin + World.ShakeX, World.Margin + World.ShakeY);
+            Camera2D.Offset := Vector2Of(World.ShakeX, World.ShakeY);
 
           BeginMode2D(Camera2D);
           Draw;
           EndMode2D;
-          if Main <> nil then
-            Main.Paint;
+          if Window <> nil then
+            Window.Paint;
 
           if moShowFPS in Options then
           begin
@@ -1150,21 +1142,20 @@ begin
   World.Height := ScreenHeight;
   World.BackColor := clCornflowerBlue;
 
-  //Configured margin only; absent key must not clobber the default with 0.
-  World.Margin := Res.Config.Sections['window'].ReadInteger('margin', cMainMargin);
   //SetTraceLog(LOG_DEBUG or LOG_INFO or LOG_WARNING);
   SetTraceLogLevel([LOG_ERROR, LOG_FATAL]);
   FQueue := TQueueObjects.Create(True);
   {$IFDEF DARWIN}
   SetExceptionMask([exDenormalized,exInvalidOp,exOverflow,exPrecision,exUnderflow,exZeroDivide]);
   {$IFEND}
-  Main := TTyroWindow.Create(nil);
-  Main.Name := 'Main';
-  Main.Border := brdNone;
-  Main.Padding := 0;
-  Main.Margin := World.Margin;
-  Main.BoundsRect := Rect(0, 0, World.Width, World.Height);
-  Main.Show;
+  Window := TTyroWindow.Create(nil);
+  Window.Name := 'Main';
+  Window.Border := brdNone;
+  Window.Padding := 0;
+  //Configured margin only; absent key must not clobber the default with 0.
+  Window.Margin := Res.Config.Sections['window'].ReadInteger('margin', cMainMargin);
+  Window.BoundsRect := Rect(0, 0, World.Width, World.Height);
+  Window.Show;
 
   {with TTyroLabel.Create(Main) do
   begin
@@ -1177,7 +1168,7 @@ begin
     Show;
   end;}
 
-  Output := TTyroOutput.Create(Main);
+  Output := TTyroOutput.Create(Window);
   Output.Important := True;
   Output.Name := 'Output';
   Output.BoundsRect := Rect(0, 0, World.Width, World.Height);
@@ -1186,7 +1177,7 @@ begin
   Output.Align := alClient;
   Output.Show;
 
-  Console := TTyroTerminal.Create(Main);
+  Console := TTyroTerminal.Create(Window);
   Console.BoundsRect := Rect(0, 0, World.Width, World.Height div 2);
   Console.Important := True;
   Console.Border:= brdThick;
@@ -1197,7 +1188,7 @@ begin
   Console.Align := alBottom;
   Console.Name := 'Console';
 
-  Editor := TyroEditor.Create(Main);
+  Editor := TyroEditor.Create(Window);
   Editor.Name := 'Editor';
   Editor.Important := True;
   Editor.BoundsRect := Rect(0, 0, 200, 200);
@@ -1211,7 +1202,7 @@ begin
 
   //Sprite editor shares the whole client area with the script editor; only one
   //of them is visible at a time. It is opened from the console or with F3.
-  SpriteEditor := TSpriteEditor.Create(Main);
+  SpriteEditor := TSpriteEditor.Create(Window);
   SpriteEditor.Name := 'SpriteEditor';
   SpriteEditor.Important := True;
   SpriteEditor.BoundsRect := Rect(0, 0, World.Width, World.Height);
@@ -1223,7 +1214,7 @@ begin
 
   //F4 script picker; BoundsRect is recentered every time it is shown so it
   //follows window resizes. Hidden until the user presses F4.
-  FFileList := TTyroFileList.Create(Main);
+  FFileList := TTyroFileList.Create(Window);
   FFileList.Name := 'FileList';
   FFileList.Important := True;
   FFileList.PlaceHolder := 'No Files';
@@ -1267,7 +1258,7 @@ begin
   FreeAndNil(Res);
   FreeAndNil(FQueue);
   FreeAndNil(Commands);
-  FreeAndNil(Main);
+  FreeAndNil(Window);
   FreeAndNil(Screen);
   inherited;
   if RayLib.IsWindowReady then
@@ -1408,13 +1399,12 @@ begin
   World.Height := AHeight;
   //Board is a render-texture: script draw commands run inside Board.BeginDraw
   //during ProcessQueue and are composited by Board.PostDraw inside the camera.
-  Board := TTyroTextureCanvas.Create(AWidth - World.Margin * 2, AHeight - World.Margin * 2, True);
+  Board := TTyroTextureCanvas.Create(AWidth, AHeight, True);
   //Screen is top most texture used for HUD or Status
-  Screen := TTyroTextureCanvas.Create(AWidth - World.Margin * 2, AHeight - World.Margin * 2, True);
+  Screen := TTyroTextureCanvas.Create(AWidth, AHeight, True);
 
-  Main.Margin := World.Margin;
-  Main.BoundsRect := Rect(0, 0, AWidth, AHeight);
-  //The script draws through Engine.Main.Canvas during ProcessQueue, which runs
+  Window.BoundsRect := Rect(0, 0, AWidth, AHeight);
+  //The script draws through Engine.Window.Canvas during ProcessQueue, which runs
   //before the first Paint: make sure the canvas exists (and is sized) now.
   FPrepared := True;
 end;
@@ -1438,14 +1428,14 @@ begin
   //fill the whole drawable area (the same area Board covers).
   W := Board.Width;
   H := Board.Height;
+
   if Parallaxes <> nil then
     Parallaxes.Draw(W, H);
 
   //Canvas layer: normally at the bottom (its opaque background must not cover
   //the sprites); when BoardOnTop is set the script uses the canvas as a HUD and
   //it is composited after the sprites instead.
-  if not FBoardOnTop then
-    Board.PostDraw;
+  Board.PostDraw;
   try
     Sprites.DrawAll;
   except
@@ -1456,11 +1446,7 @@ begin
       raise;
     end;
   end;
-  // scripted on_draw() overlays run last so they stay above the texture
-  // and the legacy Board layer
   Sprites.DrawScripts;
-  if FBoardOnTop then
-    Board.PostDraw;
   Screen.PostDraw;
 end;
 
@@ -1535,7 +1521,7 @@ begin
 
   // Per-frame work of every control (key auto-repeat, caret blink, mouse)
   try
-    Main.UpdateControls;
+    Window.UpdateControls;
   except
     on E: Exception do
     begin
@@ -1606,11 +1592,11 @@ begin
   end
   else
   begin
-    for i := Main.Controls.Count - 1 downto 0 do
+    for i := Window.Controls.Count - 1 downto 0 do
     begin
-      if Main.Controls[i] is TTyroControl then
+      if Window.Controls[i] is TTyroControl then
       begin
-        aControl := TTyroControl(Main.Controls[i]).MouseTargetAt(mx, my);
+        aControl := TTyroControl(Window.Controls[i]).MouseTargetAt(mx, my);
         if aControl <> nil then
         begin
           x := mx - aControl.WindowRect.Left;
@@ -1651,7 +1637,7 @@ begin
   if (ssCtrl in Shift) and RayLib.IsKeyPressed(KEY_F10) then
     FShowQueueStats := not FShowQueueStats;
 
-  if Main.FocusedControl = nil then
+  if Window.FocusedControl = nil then
     Exit;
 
   // Process key codes (function keys, arrows, etc.)
@@ -1665,8 +1651,8 @@ begin
           // Shift keys themselves - skip to avoid sending as regular key
         end;
     else
-      if Assigned(Main.FocusedControl) then
-        Main.FocusedControl.KeyDown(Key, Shift);
+      if Assigned(Window.FocusedControl) then
+        Window.FocusedControl.KeyDown(Key, Shift);
     end;
     Key := RayLib.GetKeyPressed;
   end;
@@ -1680,7 +1666,7 @@ begin
       // If Ctrl is held, treat as key shortcut (e.g. Ctrl+V) not text
       if not (ssCtrl in Shift) then
       begin
-        aFocused := Main.FocusedControl;
+        aFocused := Window.FocusedControl;
         if Assigned(aFocused) then
         begin
           aChar := CodePointToUTF8(ch);
@@ -1717,12 +1703,11 @@ begin
   World.Width := AWidth;
   World.Height := AHeight;
 
-  Main.Margin := World.Margin;
-  Main.BoundsRect := Rect(0, 0, AWidth , AHeight);
+  Window.BoundsRect := Rect(0, 0, AWidth , AHeight);
     //Keep the script canvas in step with the window so a resize does not leave
     //script draw commands hitting a canvas sized for the old window.
-  Board.Resize(AWidth - World.Margin * 2, AHeight - World.Margin * 2);
-  Screen.Resize(AWidth - World.Margin * 2, AHeight - World.Margin * 2);
+  Board.Resize(AWidth - Window.Margin * 2, AHeight - Window.Margin * 2);
+  Screen.Resize(AWidth - Window.Margin * 2, AHeight - Window.Margin * 2);
 end;
 
 procedure TTyroEngine.Stop;
@@ -2229,15 +2214,15 @@ begin
   //disappear. SetFocusedControl calls FocusChanged on the control it replaces, so
   //the focus has to go while the old control is still alive. An engine control is
   //staying, and so keeps both.
-  if (Main.FocusedControl <> nil) and not Main.FocusedControl.Important then
-    Main.FocusedControl := nil;
+  if (Window.FocusedControl <> nil) and not Window.FocusedControl.Important then
+    Window.FocusedControl := nil;
   if (FControlCapture <> nil) and not FControlCapture.Important then
     FControlCapture := nil;
   //A freed control removes itself from Controls (TTyroControl.Destroy clears its
   //parent), so walking backwards keeps the remaining indexes valid.
-  for i := Main.Controls.Count - 1 downto 0 do
-    if not Main.Controls[i].Important then
-      Main.Controls[i].Free;
+  for i := Window.Controls.Count - 1 downto 0 do
+    if not Window.Controls[i].Important then
+      Window.Controls[i].Free;
 end;
 
 //Free the sprites the previous run created, so a rerun does not keep animating and
@@ -2271,7 +2256,6 @@ begin
   try
     ClearCanvas(Board);
     ClearCanvas(Screen);
-    ClearCanvas(Main.Canvas);
     //Drop the finished run's parallax backgrounds and their textures too.
     if Parallaxes <> nil then
       Parallaxes.Clear;

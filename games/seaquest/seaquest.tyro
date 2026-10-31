@@ -8,8 +8,8 @@
 --  over for the big score. The Kraken is waiting at the bottom.
 --
 --  Everything in the water is a sprite (animated .sprite atlases); the
---  background is a two-layer parallax baked per level. The board canvas is
---  a translucent overlay ABOVE the sprites (canvas.front): it carries the
+--  background is a two-layer parallax baked per level. The board screen is
+--  a translucent overlay ABOVE the sprites (screen.front): it carries the
 --  HUD and the water-light washes that seaquest.frag turns into caustics,
 --  light shafts and depth grading - so the water lights the sprites without
 --  ever hiding them. shader.area gates the whole thing to the water band,
@@ -34,12 +34,8 @@ local D = require("seaquest_data")
 window.show(960, 540)
 window.backcolor = colors.black
 
-local W = canvas.width
-local H = canvas.height
-
--- The board is composited ABOVE the sprites and cleared transparent, so it
--- carries the HUD and the water light without hiding the world.
-canvas.front = true
+local W = screen.width
+local H = screen.height
 
 -- ---- world layout ----------------------------------------------------
 local SKY_H     = 62              -- the band above the waterline
@@ -854,48 +850,48 @@ end
 
 -- ---- draw ------------------------------------------------------------
 local function center_text(s, y, col)
-  canvas.color = col
-  canvas.text((W - textwidth(s)) / 2, y, s)
+  screen.color = col
+  screen.text((W - textwidth(s)) / 2, y, s)
 end
 
 local function draw_hud()
   -- the HUD sits in the sky band, above the waterline, so the water shader
   -- (gated by shader.area) never touches it
-  canvas.color = colors.black
-  canvas.alpha = 130
-  canvas.rectangle(0, 0, W, SKY_H, true)
-  canvas.alpha = 255
+  screen.color = colors.black
+  screen.alpha = 130
+  screen.rectangle(0, 0, W, SKY_H, true)
+  screen.alpha = 255
 
-  canvas.color = colors.white
-  canvas.text(10, 6, "SCORE " .. score)
-  canvas.text(10, 22, "HIGH  " .. math.max(high, score))
-  canvas.text(W - 150, 6, D.level(levelNo).name)
-  canvas.text(W - 150, 22, "DELIVERIES " .. deliveries .. "/" .. quota)
+  screen.color = colors.white
+  screen.text(10, 6, "SCORE " .. score)
+  screen.text(10, 22, "HIGH  " .. math.max(high, score))
+  screen.text(W - 150, 6, D.level(levelNo).name)
+  screen.text(W - 150, 22, "DELIVERIES " .. deliveries .. "/" .. quota)
 
   -- the oxygen gauge: a bar that empties left to right, red when it bites
   local gw, gh = 150, 12
   local gx, gy = W / 2 - gw / 2, 8
-  canvas.color = colors.gray
-  canvas.rectangle(gx - 2, gy - 2, gw + 4, gh + 4, false)
+  screen.color = colors.gray
+  screen.rectangle(gx - 2, gy - 2, gw + 4, gh + 4, false)
   local frac = clamp(oxygen / D.OXYGEN_MAX, 0, 1)
-  if frac > 0.5 then canvas.color = colors.aqua
-  elseif frac > 0.22 then canvas.color = colors.yellow
-  else canvas.color = colors.red end
-  canvas.rectangle(gx, gy, gw * frac, gh, true)
-  canvas.color = colors.white
-  canvas.text(gx + gw / 2 - 34, gy + gh + 2, "OXYGEN")
+  if frac > 0.5 then screen.color = colors.aqua
+  elseif frac > 0.22 then screen.color = colors.yellow
+  else screen.color = colors.red end
+  screen.rectangle(gx, gy, gw * frac, gh, true)
+  screen.color = colors.white
+  screen.text(gx + gw / 2 - 34, gy + gh + 2, "OXYGEN")
 
   -- the rescued divers, as a little row of sub icons
   local n = saved_count()
   for i = 1, D.MAX_DIVERS do
-    canvas.color = (i <= n) and colors.gold or colors.darkgray
-    canvas.circle(28 + (i - 1) * 14, 46, 5, true)
+    screen.color = (i <= n) and colors.gold or colors.darkgray
+    screen.circle(28 + (i - 1) * 14, 46, 5, true)
   end
 
   -- spare subs
   for i = 1, math.max(0, lives - 1) do
-    canvas.color = colors.silver
-    canvas.rectangle(W - 30 - (i - 1) * 12, 44, 8, 5, true)
+    screen.color = colors.silver
+    screen.rectangle(W - 30 - (i - 1) * 12, 44, 8, 5, true)
   end
 end
 
@@ -905,36 +901,36 @@ local function draw_water_washes()
   local band = H - WATER_TOP
 
   -- a deep-water wash, stronger the further down you look
-  canvas.color = colors.navy
-  canvas.alpha = 60
-  canvas.rectangle(0, WATER_TOP, W, band, true)
+  screen.color = colors.navy
+  screen.alpha = 60
+  screen.rectangle(0, WATER_TOP, W, band, true)
 
   -- a bright shimmer at the surface, seen from below
-  canvas.color = colors.aqua
-  canvas.alpha = 70
-  canvas.rectangle(0, WATER_TOP, W, 10, true)
+  screen.color = colors.aqua
+  screen.alpha = 70
+  screen.rectangle(0, WATER_TOP, W, 10, true)
 
   -- the low-oxygen alarm: a red pulse over everything
   if oxygenAlarm and math.floor(clock() * 6) % 2 == 0 then
-    canvas.color = colors.red
-    canvas.alpha = 46
-    canvas.rectangle(0, WATER_TOP, W, band, true)
+    screen.color = colors.red
+    screen.alpha = 46
+    screen.rectangle(0, WATER_TOP, W, band, true)
   end
-  canvas.alpha = 255
+  screen.alpha = 255
 
   -- vignette corners, painted so the shader has something to grade
-  canvas.color = colors.black
-  canvas.alpha = 90
-  canvas.circle(0, WATER_TOP, 120, true)
-  canvas.circle(W, WATER_TOP, 120, true)
-  canvas.alpha = 255
+  screen.color = colors.black
+  screen.alpha = 90
+  screen.circle(0, WATER_TOP, 120, true)
+  screen.circle(W, WATER_TOP, 120, true)
+  screen.alpha = 255
 end
 
 local function draw_title()
-  canvas.color = colors.black
-  canvas.alpha = 170
-  canvas.rectangle(0, H / 2 - 130, W, 270, true)
-  canvas.alpha = 255
+  screen.color = colors.black
+  screen.alpha = 170
+  screen.rectangle(0, H / 2 - 130, W, 270, true)
+  screen.alpha = 255
   center_text("S E A Q U E S T", H / 2 - 104, colors.aqua)
   center_text("S E A Q U E S T", H / 2 - 106, colors.white)
   center_text("PRESS SPACE TO DIVE", H / 2 - 58, colors.yellow)
@@ -947,20 +943,20 @@ local function draw_title()
 end
 
 local function draw_card()
-  canvas.color = colors.black
-  canvas.alpha = 150
-  canvas.rectangle(0, H / 2 - 40, W, 90, true)
-  canvas.alpha = 255
+  screen.color = colors.black
+  screen.alpha = 150
+  screen.rectangle(0, H / 2 - 40, W, 90, true)
+  screen.alpha = 255
   center_text("LEVEL " .. levelNo, H / 2 - 26, colors.yellow)
   center_text(D.level(levelNo).name, H / 2 + 2, colors.white)
   center_text("RESCUE " .. quota .. " FULL BOATS", H / 2 + 26, colors.silver)
 end
 
 local function draw_over()
-  canvas.color = colors.black
-  canvas.alpha = 170
-  canvas.rectangle(0, H / 2 - 70, W, 160, true)
-  canvas.alpha = 255
+  screen.color = colors.black
+  screen.alpha = 170
+  screen.rectangle(0, H / 2 - 70, W, 160, true)
+  screen.alpha = 255
   center_text("GAME OVER", H / 2 - 46, colors.red)
   center_text("SCORE " .. score, H / 2 - 12, colors.white)
   if score >= high and score > 0 then
@@ -971,8 +967,8 @@ end
 
 function draw()
   -- Wipe last frame's board: it is a persistent render texture, so a
-  -- clear (transparent while canvas.front is on) stops the overlay smearing.
-  canvas.clear()
+  -- clear (transparent while screen.front is on) stops the overlay smearing.
+  screen.clear()
 
   bg.offset = px
 
@@ -990,10 +986,10 @@ function draw()
   if msgTimer > 0 then center_text(msg, SKY_H + 18, colors.yellow) end
 
   if flash > 0 then
-    canvas.color = colors.white
-    canvas.alpha = math.floor(flash * 150)
-    canvas.rectangle(0, 0, W, H, true)
-    canvas.alpha = 255
+    screen.color = colors.white
+    screen.alpha = math.floor(flash * 150)
+    screen.rectangle(0, 0, W, H, true)
+    screen.alpha = 255
   end
 end
 

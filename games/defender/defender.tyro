@@ -10,7 +10,7 @@
 --
 --  The world, the ship and every enemy are sprites; the background is a
 --  five layer parallax (star field, nebula, mountains, hills, ground).
---  The board canvas is used only for the HUD/scanner/titles (canvas.front).
+--  The board screen is used only for the HUD/scanner/titles (screen).
 --
 --  Controls:  LEFT / RIGHT  (A / D)   thrust
 --             UP   / DOWN   (W / S)   climb / dive
@@ -28,12 +28,12 @@ window.show(960, 540)
 -- Space is black (the engine default clear colour is a bright cornflower blue).
 window.backcolor = colors.black
 
-local W = canvas.width
-local H = canvas.height
+local W = screen.width
+local H = screen.height
 
--- The board canvas is composited ABOVE the sprites and cleared transparent,
+-- The board screen is composited ABOVE the sprites and cleared transparent,
 -- so it carries the HUD/scanner/titles without hiding the world.
-canvas.front = true
+screen.front = true
 
 -- ---- tuning ----------------------------------------------------------
 local WORLD      = 6144          -- wrap-around world width (multiple of the 512px tiles)
@@ -700,20 +700,20 @@ local function human_blips(target)
   end
 end
 
--- ---- HUD (canvas.front) ---------------------------------------------
+-- ---- HUD (screen.front) ---------------------------------------------
 local function center_text(s, y, col)
-  canvas.color = col
-  canvas.text((W - textwidth(s)) / 2, y, s)
+  screen.color = col
+  screen.text((W - textwidth(s)) / 2, y, s)
 end
 
 local function draw_scanner()
   local sy0 = 4
   local sh = 14
-  canvas.color = colors.darkgray
-  canvas.rectangle(0, sy0, W, sh, true)
-  canvas.color = colors.gray
-  canvas.rectangle(0, sy0, W, 1, false)
-  canvas.rectangle(0, sy0 + sh, W, 1, false)
+  screen.color = colors.darkgray
+  screen.rectangle(0, sy0, W, sh, true)
+  screen.color = colors.gray
+  screen.rectangle(0, sy0, W, 1, false)
+  screen.rectangle(0, sy0 + sh, W, 1, false)
 
   local function bx(wx)
     return math.floor(((wx % WORLD) / WORLD) * W)
@@ -723,51 +723,51 @@ local function draw_scanner()
   for i = 1, #humans do
     local h = humans[i]
     if h.alive then
-      canvas.color = colors.white
-      canvas.rectangle(bx(h.wx), sy0 + 2, 1, sh - 4, true)
+      screen.color = colors.white
+      screen.rectangle(bx(h.wx), sy0 + 2, 1, sh - 4, true)
     end
   end
   -- enemies: colored dots by kind
   for i = 1, #enemies do
     local e = enemies[i]
     if e.kind == 'human' then
-    elseif e.kind == 'mutant' or e.kind == 'swarmer' then canvas.color = colors.red
-    elseif e.kind == 'bomber' then canvas.color = colors.violet
-    elseif e.kind == 'pod' then canvas.color = colors.yellow
-    else canvas.color = colors.lime end
-    canvas.rectangle(bx(e.wx), sy0 + 4, 2, sh - 8, true)
+    elseif e.kind == 'mutant' or e.kind == 'swarmer' then screen.color = colors.red
+    elseif e.kind == 'bomber' then screen.color = colors.violet
+    elseif e.kind == 'pod' then screen.color = colors.yellow
+    else screen.color = colors.lime end
+    screen.rectangle(bx(e.wx), sy0 + 4, 2, sh - 8, true)
   end
   -- player: cyan marker
-  canvas.color = colors.aqua
-  canvas.rectangle(bx(px) - 1, sy0 + 1, 3, sh - 2, true)
+  screen.color = colors.aqua
+  screen.rectangle(bx(px) - 1, sy0 + 1, 3, sh - 2, true)
 end
 
 local function draw_hud()
   draw_scanner()
-  canvas.color = colors.yellow
-  canvas.text(8, 24, "SCORE " .. score)
-  canvas.color = colors.white
-  canvas.text(8, 40, "WAVE " .. wave)
-  canvas.text(W - 120, 24, "HIGH " .. high)
-  canvas.text(W - 120, 40, "HUMANS " .. alive_humans())
+  screen.color = colors.yellow
+  screen.text(8, 24, "SCORE " .. score)
+  screen.color = colors.white
+  screen.text(8, 40, "WAVE " .. wave)
+  screen.text(W - 120, 24, "HIGH " .. high)
+  screen.text(W - 120, 40, "HUMANS " .. alive_humans())
   -- lives as little ships
   for i = 1, math.min(lives, 5) do
-    canvas.color = colors.skyblue
-    canvas.rectangle(8 + (i - 1) * 12, 56, 9, 3, true)
-    canvas.color = colors.white
-    canvas.rectangle(8 + (i - 1) * 12 + 6, 55, 3, 5, true)
+    screen.color = colors.skyblue
+    screen.rectangle(8 + (i - 1) * 12, 56, 9, 3, true)
+    screen.color = colors.white
+    screen.rectangle(8 + (i - 1) * 12 + 6, 55, 3, 5, true)
   end
   -- smart bombs
   for i = 1, math.min(smart, 5) do
-    canvas.color = colors.orange
-    canvas.circle(120 + (i - 1) * 12, 58, 4, true)
+    screen.color = colors.orange
+    screen.circle(120 + (i - 1) * 12, 58, 4, true)
   end
   if msgTimer > 0 then center_text(msg, 70, colors.yellow) end
 end
 
 local function draw_title()
-  canvas.color = colors.black
-  canvas.rectangle(0, H / 2 - 110, W, 220, true)
+  screen.color = colors.black
+  screen.rectangle(0, H / 2 - 110, W, 220, true)
   center_text("D E F E N D E R", H / 2 - 86, colors.aqua)
   center_text("D E F E N D E R", H / 2 - 88, colors.white)
   center_text("PRESS SPACE TO START", H / 2 - 30, colors.yellow)
@@ -779,8 +779,8 @@ local function draw_title()
 end
 
 local function draw_over()
-  canvas.color = colors.black
-  canvas.rectangle(0, H / 2 - 70, W, 150, true)
+  screen.color = colors.black
+  screen.rectangle(0, H / 2 - 70, W, 150, true)
   center_text("GAME OVER", H / 2 - 46, colors.red)
   center_text("SCORE " .. score, H / 2 - 10, colors.white)
   if score >= high then
@@ -791,9 +791,9 @@ end
 
 function draw()
   -- Wipe last frame's HUD: the board is a persistent render texture, so a
-  -- canvas.clear() (transparent while canvas.front is on) is what keeps the
+  -- screen.clear() (transparent while screen.front is on) is what keeps the
   -- overlay from smearing. The world is drawn by the engine underneath.
-  canvas.clear()
+  screen.clear()
 
   -- HUD board first (it is composited on top by the engine)
   if state == 'title' then
@@ -805,10 +805,10 @@ function draw()
     draw_hud()
   end
   if flash > 0 then
-    canvas.color = colors.white
-    canvas.alpha = math.floor(flash * 120)
-    canvas.rectangle(0, 0, W, H, true)
-    canvas.alpha = 255
+    screen.color = colors.white
+    screen.alpha = math.floor(flash * 120)
+    screen.rectangle(0, 0, W, H, true)
+    screen.alpha = 255
   end
 
   -- world (sprites + parallax are drawn natively by the engine)
