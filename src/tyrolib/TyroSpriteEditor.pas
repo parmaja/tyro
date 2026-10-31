@@ -33,7 +33,7 @@ const
   cSpriteEditorVersion = 1;
   cSpriteEditorMaxUndo = 40;
   cSpriteEditorDefaultDuration = 100;
-  cSpriteEditorTopButtons = 8;
+  cSpriteEditorTopButtons = 9;
   cSpriteEditorFpsStep = 2;
   cSpriteEditorMaxFps = 60;
 
@@ -59,7 +59,7 @@ type
 
   TSpriteIcon = (icNone, icSave, icUndo, icRedo, icMirrorH, icMirrorV,
     icRotateCW, icRotateCCW, icGrid, icPlus, icMinus, icClose, icPlay, icPause,
-    icLoop, icAction, icFrame, icProps, icPalette, icTools);
+    icLoop, icAction, icFrame, icProps, icPalette, icTools, icOnion, icCopy);
 
   { One global frame. Actions reference these by index. }
   TSpriteFrame = class(TObject)
@@ -121,6 +121,11 @@ type
     //* per-frame durations stored in the document".
     FPreviewPlaying: Boolean;
     FPreviewFps: Integer;
+    //* Onion skin: ghost the previous/next frame of the action under the
+    //* current one while editing.
+    FOnionSkin: Boolean;
+    //* Action position of the frame thumbnail being dragged (-1 = none).
+    FFrameDragFrom: Integer;
     FSelRect: TRect;
     FSelValid: Boolean;
     FCopyImage: TImage;
@@ -176,6 +181,12 @@ type
     procedure AddFrameBlank;
     procedure DeleteActiveFrame;
     procedure MoveFrameInAction(ADelta: Integer);
+    //* Moves the frame at AFrom to position ATo inside the active action.
+    procedure MoveFrameTo(AFrom, ATo: Integer);
+    //* Action position of the frame thumbnail under a client point, or -1.
+    function FrameItemAt(AX, AY: Integer): Integer;
+    //* Copies the active action (name, frames and loop flag) right after it.
+    procedure DuplicateAction;
 
     procedure ClearTextures;
     procedure RebuildTextureArray;
@@ -246,6 +257,7 @@ type
     function LoopRect: TRect;
     function RenameRect: TRect;
     function ActionAddRect: TRect;
+    function ActionDupRect: TRect;
     function ActionDelRect: TRect;
     function FrameAddRect: TRect;
     function FrameDelRect: TRect;
@@ -283,6 +295,9 @@ type
     procedure PaintProperties(ACanvas: TTyroCanvas);
     procedure PaintPalette(ACanvas: TTyroCanvas);
     procedure PaintPreview(ACanvas: TTyroCanvas; const R: TRect);
+    //* Draws a neighbouring frame as a translucent ghost (onion skin).
+    procedure DrawOnionFrame(ACanvas: TTyroCanvas; const R: TRect;
+      AIndex: Integer; ATint: TColor);
     procedure PaintSelection(ACanvas: TTyroCanvas);
     procedure PaintChecker(ACanvas: TTyroCanvas; const R: TRect);
   public
@@ -291,6 +306,7 @@ type
     procedure DoPaint(ACanvas: TTyroCanvas); override;
     procedure Update; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; x, y: integer); override;
     procedure KeyDown(var Key: TKeyboardKey; Shift: TShiftState); override;
     procedure KeyPress(var Key: TUTF8Char); override;
     //* Starts an empty document. AFileName is only a suggested save target:
@@ -317,6 +333,12 @@ type
     //* Frame the preview currently shows, as a position in the active action.
     property PreviewFrame: Integer read FPreviewFrame;
     property PreviewFrameCount: Integer read ActionFrameCount;
+    //* Ghost the previous/next frame of the action while editing.
+    property OnionSkin: Boolean read FOnionSkin;
+    //* Read-only queries the host and the tests use to inspect a document.
+    function ActionCount: Integer;
+    function ActionName(AIndex: Integer): string;
+    function ActionFrameIndex(APos: Integer): Integer;
   end;
 
 implementation
@@ -570,6 +592,8 @@ begin
   FPreviewFrame := 0;
   FPreviewPlaying := True;
   FPreviewFps := 0;
+  FOnionSkin := False;
+  FFrameDragFrom := -1;
   FSelValid := False;
   FillChar(FCopyImage, SizeOf(FCopyImage), 0);
   FCopyValid := False;
@@ -645,6 +669,7 @@ begin
   FPreviewFrame := 0;
   FPreviewPlaying := True;
   FPreviewFps := 0;
+  FFrameDragFrom := -1;
   FModified := False;
 end;
 
@@ -1315,6 +1340,109 @@ begin
   FActiveFrame := NewIndex;
   FPreviewFrame := NewIndex;
   Invalidate;
+end;
+
+procedure TSpriteEditor.MoveFrameTo(AFrom, ATo: Integer);
+var
+  A: TSpriteAction;
+  V: Integer;
+begin
+  A := ActiveActionObject;
+  if (A = nil) or (A.Frames.Count < 2) then
+    Exit;
+  if (AFrom < 0) or (AFrom >= A.Frames.Count) then
+    Exit;
+  if (ATo < 0) or (ATo >= A.Frames.Count) then
+    Exit;
+  if AFrom = ATo then
+    Exit;
+  PushUndo;
+  V := A.Frames[AFrom];
+  A.Frames.Delete(AFrom);
+  A.Frames.Insert(ATo, V);
+  FActiveFrame := ATo;
+  FPreviewFrame := ATo;
+  FPreviewTimer := 0;
+  SetStatus(Format('Frame moved to position %d', [ATo + 1]));
+  Invalidate;
+end;
+
+function TSpriteEditor.FrameItemAt(AX, AY: Integer): Integer;
+var
+  A: TSpriteAction;
+  I: Integer;
+begin
+  Result := -1;
+  if not InsideRect(FramesAreaRect, AX, AY) then
+    Exit;
+  A := ActiveActionObject;
+  if A = nil then
+    Exit;
+  for I := 0 to A.Frames.Count - 1 do
+    if InsideRect(FrameItemRect(I), AX, AY) then
+    begin
+      Result := I;
+      Exit;
+    end;
+end;
+
+procedure TSpriteEditor.DuplicateAction;
+var
+  A, B: TSpriteAction;
+  Base: string;
+  N, I: Integer;
+  Taken: Boolean;
+begin
+  A := ActiveActionObject;
+  if A = nil then
+    Exit;
+  PushUndo;
+  //* Keep the name unique when the same action is duplicated twice.
+  Base := A.Name + ' copy';
+  N := 2;
+  repeat
+    Taken := False;
+    for I := 0 to FActions.Count - 1 do
+      if SameText(FActions[I].Name, Base) then
+      begin
+        Taken := True;
+        Break;
+      end;
+    if Taken then
+    begin
+      Base := Format('%s copy %d', [A.Name, N]);
+      Inc(N);
+    end;
+  until not Taken;
+  B := TSpriteAction.Create(Base);
+  B.Loop := A.Loop;
+  for I := 0 to A.Frames.Count - 1 do
+    B.AddFrame(A.Frames[I]);
+  FActions.Insert(FActiveAction + 1, B);
+  FActiveAction := FActiveAction + 1;
+  FActiveFrame := 0;
+  FPreviewFrame := 0;
+  FPreviewTimer := 0;
+  SetStatus('Action duplicated as ' + B.Name);
+  Invalidate;
+end;
+
+function TSpriteEditor.ActionCount: Integer;
+begin
+  Result := FActions.Count;
+end;
+
+function TSpriteEditor.ActionName(AIndex: Integer): string;
+begin
+  if (AIndex >= 0) and (AIndex < FActions.Count) then
+    Result := FActions[AIndex].Name
+  else
+    Result := '';
+end;
+
+function TSpriteEditor.ActionFrameIndex(APos: Integer): Integer;
+begin
+  Result := FrameAtActionIndex(APos);
 end;
 
 { ---------------------------------------------------------------------------
@@ -2111,6 +2239,27 @@ begin
   HandleLeftClick(P.X, P.Y);
 end;
 
+procedure TSpriteEditor.MouseUp(Button: TMouseButton; Shift: TShiftState;
+  x, y: integer);
+var
+  P: TPoint;
+  Target: Integer;
+begin
+  inherited;
+  if Button <> mbLeft then
+    Exit;
+  if FFrameDragFrom < 0 then
+    Exit;
+  //* A frame thumbnail drag ends here: drop it on the frame under the
+  //* pointer (a click without movement drops it back on itself).
+  P := MapToClient(Point(x + WindowRect.Left, y + WindowRect.Top));
+  Target := FrameItemAt(P.X, P.Y);
+  if Target >= 0 then
+    MoveFrameTo(FFrameDragFrom, Target);
+  FFrameDragFrom := -1;
+  Invalidate;
+end;
+
 procedure TSpriteEditor.HandleMouse;
 var
   mp: TVector2;
@@ -2216,6 +2365,7 @@ var
 begin
   if not InsideRect(ClientRect, AX, AY) then
     Exit;
+  FFrameDragFrom := -1;
 
   for I := 0 to cSpriteEditorTopButtons - 1 do
     if InsideRect(TopButtonRect(I, cSpriteEditorTopButtons), AX, AY) then
@@ -2232,6 +2382,11 @@ begin
           begin
             FShowGrid := not FShowGrid;
             SetStatus('Grid ' + BoolToStr(FShowGrid, 'on', 'off'));
+          end;
+        8:
+          begin
+            FOnionSkin := not FOnionSkin;
+            SetStatus('Onion skin ' + BoolToStr(FOnionSkin, 'on', 'off'));
           end;
       end;
       Exit;
@@ -2278,6 +2433,11 @@ begin
       AddAction;
       Exit;
     end;
+    if InsideRect(ActionDupRect, AX, AY) then
+    begin
+      DuplicateAction;
+      Exit;
+    end;
     if InsideRect(ActionDelRect, AX, AY) then
     begin
       DeleteAction;
@@ -2320,6 +2480,8 @@ begin
         if InsideRect(FrameItemRect(I), AX, AY) then
         begin
           SelectFrameInAction(I);
+          //* Remember the source so MouseUp can drop it on another frame.
+          FFrameDragFrom := I;
           Exit;
         end;
     Exit;
@@ -2770,6 +2932,14 @@ begin
   Result := Rect(R.Right - 46, R.Top + 4, R.Right - 28, R.Top + 22);
 end;
 
+function TSpriteEditor.ActionDupRect: TRect;
+var
+  R: TRect;
+begin
+  R := ActionsAreaRect;
+  Result := Rect(R.Right - 68, R.Top + 4, R.Right - 50, R.Top + 22);
+end;
+
 function TSpriteEditor.ActionDelRect: TRect;
 var
   R: TRect;
@@ -3155,6 +3325,8 @@ begin
     icProps: Result := 'props';
     icPalette: Result := 'palette';
     icTools: Result := 'tools';
+    icOnion: Result := 'onion';
+    icCopy: Result := 'copy';
   else
     Result := '';
   end;
@@ -3327,6 +3499,17 @@ begin
         ACanvas.DrawLine(CX - 5, CY + 5, CX + 4, CY - 4, AColor);
         ACanvas.FillTriangle(CX + 3, CY - 5, CX + 7, CY - 7, CX + 5, CY - 3, AColor);
       end;
+    icOnion:
+      begin
+        //* Two offset outlines: the frame behind the one being edited.
+        ACanvas.DrawRect(Rect(CX - 8, CY - 7, CX + 2, CY + 3), 1, AColor);
+        ACanvas.DrawRect(Rect(CX - 2, CY - 3, CX + 8, CY + 7), 1, AColor);
+      end;
+    icCopy:
+      begin
+        ACanvas.DrawRect(Rect(CX - 7, CY - 7, CX + 3, CY + 3), 1, AColor);
+        ACanvas.DrawRect(Rect(CX - 3, CY - 3, CX + 7, CY + 7), 1, AColor);
+      end;
   end;
 end;
 
@@ -3421,9 +3604,9 @@ var
   R: TRect;
   S: string;
   I: Integer;
-  Icons: array[0..7] of TSpriteIcon;
-  Active: array[0..7] of Boolean;
-  Enabled: array[0..7] of Boolean;
+  Icons: array[0..8] of TSpriteIcon;
+  Active: array[0..8] of Boolean;
+  Enabled: array[0..8] of Boolean;
 begin
   W := ClientRect.Width;
   R := Rect(0, 0, W, cSpriteEditorToolbarH);
@@ -3448,6 +3631,7 @@ begin
   Icons[5] := icRotateCW; Active[5] := False; Enabled[5] := FFrames.Count > 0;
   Icons[6] := icRotateCCW;Active[6] := False; Enabled[6] := FFrames.Count > 0;
   Icons[7] := icGrid;     Active[7] := FShowGrid; Enabled[7] := True;
+  Icons[8] := icOnion;    Active[8] := FOnionSkin; Enabled[8] := FFrames.Count > 0;
 
   for I := 0 to cSpriteEditorTopButtons - 1 do
     DrawButton(ACanvas, TopButtonRect(I, cSpriteEditorTopButtons), '',
@@ -3640,6 +3824,21 @@ begin
     FPreviewFps < cSpriteEditorMaxFps, Ord(icPlus));
 end;
 
+procedure TSpriteEditor.DrawOnionFrame(ACanvas: TTyroCanvas; const R: TRect;
+  AIndex: Integer; ATint: TColor);
+var
+  Tex: TTexture2D;
+begin
+  if (AIndex < 0) or (AIndex >= FFrames.Count) then
+    Exit;
+  Tex := FrameTexture(AIndex);
+  if Tex.ID = 0 then
+    Exit;
+  RayLib.DrawTexturePro(Tex, RectangleOf(0, 0, Tex.Width, Tex.Height),
+    RectangleOf(ACanvas.Origin.X + R.Left, ACanvas.Origin.Y + R.Top,
+      R.Right - R.Left, R.Bottom - R.Top), Vector2Of(0, 0), 0, ATint);
+end;
+
 procedure TSpriteEditor.PaintCanvas(ACanvas: TTyroCanvas);
 var
   Area, R, P: TRect;
@@ -3649,6 +3848,7 @@ var
   PX, PY: Integer;
   Status: string;
   C: TColor;
+  A: TSpriteAction;
   DX, DY, Rad: Single;
 begin
   Area := CanvasAreaRect;
@@ -3671,6 +3871,27 @@ begin
   ACanvas.DrawRect(R, 1, SC(cSpriteEditorLine));
 
   Idx := CurrentFrameIndex;
+  if FOnionSkin and (FFrames.Count > 1) then
+  begin
+    //* Ghost the neighbours of the frame being edited: the previous one warm,
+    //* the next one cool, so the direction of motion is readable.
+    A := ActiveActionObject;
+    if A <> nil then
+    begin
+      if FActiveFrame - 1 >= 0 then
+        DrawOnionFrame(ACanvas, R, A.Frames[FActiveFrame - 1], SC($FF705040));
+      if FActiveFrame + 1 < A.Frames.Count then
+        DrawOnionFrame(ACanvas, R, A.Frames[FActiveFrame + 1], SC($5070FF40));
+    end
+    else
+    begin
+      if Idx - 1 >= 0 then
+        DrawOnionFrame(ACanvas, R, Idx - 1, SC($FF705040));
+      if (Idx >= 0) and (Idx + 1 < FFrames.Count) then
+        DrawOnionFrame(ACanvas, R, Idx + 1, SC($5070FF40));
+    end;
+  end;
+
   if Idx >= 0 then
   begin
     Tex := FrameTexture(Idx);
@@ -3753,6 +3974,8 @@ begin
   R := ActionsAreaRect;
   DrawPanel(ACanvas, R, 'ACTIONS', Ord(icAction));
   DrawButton(ACanvas, ActionAddRect, '', False, True, Ord(icPlus));
+  DrawButton(ACanvas, ActionDupRect, '', False, FActiveAction >= 0,
+    Ord(icCopy));
   DrawButton(ACanvas, ActionDelRect, '', False, FActions.Count > 1, Ord(icClose));
 
   for I := 0 to FActions.Count - 1 do
@@ -3824,6 +4047,11 @@ begin
     else
       C := SC(cSpriteEditorLine);
     ACanvas.DrawRect(IR, 1, C);
+    //* Drag feedback: the source is marked, the drop target is highlighted.
+    if FFrameDragFrom = I then
+      ACanvas.DrawRect(IR, 2, SC(cSpriteEditorBad))
+    else if (FFrameDragFrom >= 0) and InsideRect(IR, FMouseX, FMouseY) then
+      ACanvas.DrawRect(IR, 2, SC(cSpriteEditorAccent2));
     ACanvas.FillRect(IR.Left + 1, IR.Bottom - 12, 18, 11,
       SC($B0000000));
     DrawTextC(ACanvas, IR.Left + 3, IR.Bottom - 11, IntToStr(I + 1),

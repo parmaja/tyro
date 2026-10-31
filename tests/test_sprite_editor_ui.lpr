@@ -57,6 +57,13 @@ type
     function PreviewImagePoint(AFraction: Single): TPoint;
     //* Centre of an action row in the ACTIONS panel.
     function ActionPoint(AIndex: Integer): TPoint;
+    //* Centre of a toolbar button: 0 save .. 8 onion skin.
+    function TopPoint(AIndex: Integer): TPoint;
+    //* Centre of a frame thumbnail in the FRAMES panel.
+    function FramePoint(AIndex: Integer): TPoint;
+    //* Centre of the duplicate / delete buttons of the ACTIONS panel.
+    function ActionDupPoint: TPoint;
+    function ActionDelPoint: TPoint;
     //* Runs the preview clock without waiting for real frames.
     procedure Advance(ADeltaMs: Double);
   end;
@@ -133,6 +140,38 @@ end;
 procedure TTestSpriteEditor.Advance(ADeltaMs: Double);
 begin
   AdvancePreview(ADeltaMs);
+end;
+
+function TTestSpriteEditor.TopPoint(AIndex: Integer): TPoint;
+var
+  R: TRect;
+begin
+  R := TopButtonRect(AIndex, cSpriteEditorTopButtons);
+  Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+end;
+
+function TTestSpriteEditor.FramePoint(AIndex: Integer): TPoint;
+var
+  R: TRect;
+begin
+  R := FrameItemRect(AIndex);
+  Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+end;
+
+function TTestSpriteEditor.ActionDupPoint: TPoint;
+var
+  R: TRect;
+begin
+  R := ActionDupRect;
+  Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+end;
+
+function TTestSpriteEditor.ActionDelPoint: TPoint;
+var
+  R: TRect;
+begin
+  R := ActionDelRect;
+  Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
 end;
 
 var
@@ -255,6 +294,9 @@ begin
       TColor.Create(255, 210 - I * 20, 90 + I * 20, 255));
     W[I].DurationMs := 120;
   end;
+  //* Frame 2 gets a marker in its transparent margin: the onion skin check
+  //* below ghosts it behind frame 1, where the opaque body cannot hide it.
+  ImageDrawRectangle(@W[2].Image, 1, 1, 4, 4, TColor.Create(255, 255, 255, 255));
   Meta := '"tyro":{"version":1,"width":32,"height":32,' +
     '"front":"FFFFFFFF","back":"00000000",' +
     '"palette":["1A1C2CFF","5D275DFF","B13E53FF","EF7D57FF","CD75FFFF",' +
@@ -380,6 +422,63 @@ begin
       P := Editor.ActionPoint(0);
       Editor.MouseDown(mbLeft, [], P.X, P.Y);
       Check(Editor.PreviewLoop, 'switching back to idle restores looping');
+
+      //--- onion skin toggle ----------------------------------------------
+      Check(not Editor.OnionSkin, 'onion skin is off by default');
+      //* Show it on the walking action with frame 1 active so the next frame
+      //* (the one with the margin marker) is ghosted behind it.
+      P := Editor.ActionPoint(1);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      P := Editor.FramePoint(1);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Editor.MouseUp(mbLeft, [], P.X, P.Y);
+      P := Editor.TopPoint(8);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.OnionSkin, 'the onion button turns onion skin on');
+      SaveScreenShot(Canvas, Editor,
+        TempPath('sprite_editor_ui_onion.png'));
+      Check(SysUtils.FileExists(TempPath('sprite_editor_ui_onion.png')),
+        'writes the onion skin screenshot');
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(not Editor.OnionSkin, 'the onion button turns onion skin off');
+      //* Back to idle and its first frame for the checks below.
+      P := Editor.ActionPoint(0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+
+      //--- duplicate and delete an action ---------------------------------
+      Check(Editor.ActionCount = 3, 'the sample has three actions');
+      P := Editor.ActionDupPoint;
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.ActionCount = 4, 'the duplicate button adds an action');
+      Check(Editor.ActionName(1) = 'idle copy',
+        'the copy is named after the source action');
+      Check(Editor.ActionFrameIndex(0) = 0,
+        'the copy keeps the first frame of the source');
+      Check(Editor.ActionFrameIndex(1) = 1,
+        'the copy keeps the second frame of the source');
+      P := Editor.ActionDelPoint;
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.ActionCount = 3, 'the delete button removes the copy');
+
+      //--- drag a frame thumbnail to reorder the action --------------------
+      P := Editor.ActionPoint(0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      Check(Editor.ActionFrameIndex(0) = 0, 'idle starts with frame 0 first');
+      P := Editor.FramePoint(0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      P := Editor.FramePoint(1);
+      Editor.MouseUp(mbLeft, [], P.X, P.Y);
+      Check(Editor.ActionFrameIndex(0) = 1,
+        'dragging the first frame right moves it to second place');
+      Check(Editor.ActionFrameIndex(1) = 0,
+        'the frame that was second moved to first place');
+      //* Put the order back so the paint checks below edit the same frames.
+      P := Editor.FramePoint(1);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      P := Editor.FramePoint(0);
+      Editor.MouseUp(mbLeft, [], P.X, P.Y);
+      Check(Editor.ActionFrameIndex(0) = 0,
+        'dragging it back restores the original order');
 
       //--- every tool button selects its own tool at its real position -----
       P := Editor.MapToClient(Point(Editor.InnerRect.Left, Editor.InnerRect.Top));
