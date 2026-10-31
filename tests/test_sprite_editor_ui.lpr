@@ -64,6 +64,9 @@ type
     //* Centre of the duplicate / delete buttons of the ACTIONS panel.
     function ActionDupPoint: TPoint;
     function ActionDelPoint: TPoint;
+    //* Runs a full tool drag in canvas pixel coordinates; the engine normally
+    //* feeds these from the real mouse, this keeps the test deterministic.
+    procedure ToolDrag(AX1, AY1, AX2, AY2: Integer);
     //* Runs the preview clock without waiting for real frames.
     procedure Advance(ADeltaMs: Double);
   end;
@@ -172,6 +175,13 @@ var
 begin
   R := ActionDelRect;
   Result := ToWindow((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+end;
+
+procedure TTestSpriteEditor.ToolDrag(AX1, AY1, AX2, AY2: Integer);
+begin
+  BeginToolAt(AX1, AY1, mbLeft);
+  ContinueToolAt(AX2, AY2);
+  EndToolAt(AX2, AY2);
 end;
 
 var
@@ -605,6 +615,101 @@ begin
       try
         Check((Shot.Width = 16) and (Shot.Height = 16),
           'the new document was saved at its own size');
+      finally
+        UnloadImage(Shot);
+      end;
+
+      //--- selection: lift, drag, nudge, commit and undo -------------------
+      K := KEY_TWO;              // pixel tool
+      Editor.KeyDown(K, []);
+      P := Editor.SwatchPoint(0);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      P := Editor.PixelPoint(2, 2);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+      P := Editor.PixelPoint(3, 2);
+      Editor.MouseDown(mbLeft, [], P.X, P.Y);
+
+      K := KEY_ONE;              // select tool
+      Editor.KeyDown(K, []);
+      Editor.ToolDrag(2, 2, 3, 2);
+      R := Editor.SelectionRect;
+      Check((R.Left = 2) and (R.Top = 2) and (R.Right = 4) and (R.Bottom = 3),
+        'dragging with the select tool selects a 2x1 area');
+      Check(not Editor.FloatingSelection, 'the selection is not floating yet');
+
+      Editor.ToolDrag(2, 2, 5, 2);
+      Check(Editor.FloatingSelection,
+        'dragging inside the selection lifts its pixels');
+      R := Editor.FloatingRect;
+      Check((R.Left = 5) and (R.Top = 2) and (R.Right = 7) and (R.Bottom = 3),
+        'the floating selection follows the drag');
+
+      K := KEY_RIGHT;
+      Editor.KeyDown(K, [ssCtrl]);
+      K := KEY_DOWN;
+      Editor.KeyDown(K, [ssCtrl]);
+      R := Editor.FloatingRect;
+      Check((R.Left = 6) and (R.Top = 3),
+        'Ctrl+arrows nudge the floating selection by one pixel');
+      SaveScreenShot(Canvas, Editor,
+        TempPath('sprite_editor_ui_selection.png'));
+      Check(SysUtils.FileExists(TempPath('sprite_editor_ui_selection.png')),
+        'writes the floating selection screenshot');
+
+      K := KEY_S;
+      Editor.KeyDown(K, [ssCtrl]);
+      Check(not Editor.FloatingSelection,
+        'saving drops the floating selection into the frame');
+
+      Shot := LoadFrameImage(UntitledFile, 0);
+      try
+        Check(PixelIs(Shot, 6, 3, 26, 28, 44, 255),
+          'the moved pixel is saved at its new position');
+        Check(PixelIs(Shot, 7, 3, 26, 28, 44, 255),
+          'the second moved pixel is saved too');
+        Check(PixelIs(Shot, 2, 2, 0, 0, 0, 0),
+          'the source pixels were cleared by the move');
+      finally
+        UnloadImage(Shot);
+      end;
+
+      K := KEY_Z;
+      Editor.KeyDown(K, [ssCtrl]);
+      K := KEY_S;
+      Editor.KeyDown(K, [ssCtrl]);
+      Shot := LoadFrameImage(UntitledFile, 0);
+      try
+        Check(PixelIs(Shot, 2, 2, 26, 28, 44, 255),
+          'one Ctrl+Z restores the pixels lifted by the move');
+      finally
+        UnloadImage(Shot);
+      end;
+
+      //--- paste lands as a floating selection -----------------------------
+      Editor.ToolDrag(2, 2, 3, 2);
+      K := KEY_C;
+      Editor.KeyDown(K, [ssCtrl]);
+      K := KEY_V;
+      Editor.KeyDown(K, [ssCtrl]);
+      Check(Editor.FloatingSelection, 'paste creates a floating selection');
+      R := Editor.FloatingRect;
+      Check((R.Left = 2) and (R.Top = 2) and (R.Right = 4) and (R.Bottom = 3),
+        'the pasted pixels start at the selection');
+      for I := 0 to 4 do
+      begin
+        K := KEY_RIGHT;
+        Editor.KeyDown(K, [ssCtrl]);
+      end;
+      R := Editor.FloatingRect;
+      Check(R.Left = 7, 'the pasted pixels can be nudged into place');
+      K := KEY_S;
+      Editor.KeyDown(K, [ssCtrl]);
+      Shot := LoadFrameImage(UntitledFile, 0);
+      try
+        Check(PixelIs(Shot, 7, 2, 26, 28, 44, 255),
+          'the pasted pixels were saved at the nudged position');
+        Check(PixelIs(Shot, 2, 2, 26, 28, 44, 255),
+          'the source pixels of the copy are untouched');
       finally
         UnloadImage(Shot);
       end;

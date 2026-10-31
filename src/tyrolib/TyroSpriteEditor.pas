@@ -55,7 +55,7 @@ const
 
 type
   TSpriteTool = (stSelect, stPixel, stPen, stFill, stPick, stCircle, stRect, stRotate);
-  TSpriteDragMode = (dmNone, dmPaint, dmShape, dmSelect, dmPan, dmScrub);
+  TSpriteDragMode = (dmNone, dmPaint, dmShape, dmSelect, dmMoveSel, dmPan, dmScrub);
 
   TSpriteIcon = (icNone, icSave, icUndo, icRedo, icMirrorH, icMirrorV,
     icRotateCW, icRotateCCW, icGrid, icPlus, icMinus, icClose, icPlay, icPause,
@@ -130,6 +130,14 @@ type
     FSelValid: Boolean;
     FCopyImage: TImage;
     FCopyValid: Boolean;
+    //* Floating selection: the pixels lifted from the current frame while the
+    //* user drags or nudges them. They stay out of the frame until committed.
+    FFloatImage: TImage;
+    FFloatTexture: TTexture2D;
+    FFloatValid: Boolean;
+    FFloatPos: TPoint;
+    FFloatFrame: Integer;
+    FFloatDragStart: TPoint;
     FUndo: TObjectList<TSpriteSnapshot>;
     FRedo: TObjectList<TSpriteSnapshot>;
     FDragMode: TSpriteDragMode;
@@ -220,10 +228,11 @@ type
     procedure DeleteSelection;
     procedure SelectAll;
     function NormalizedSelection: TRect;
-    procedure ApplyShape;
-    procedure BeginToolAt(PX, PY: Integer; AButton: TMouseButton);
-    procedure ContinueToolAt(PX, PY: Integer);
-    procedure EndToolAt(PX, PY: Integer);
+    //* Cuts the selected pixels out of the frame into FFloatImage so they can
+    //* be dragged or nudged without touching the rest of the frame.
+    procedure LiftSelection;
+    //* Frees the floating image and its texture without drawing it anywhere.
+    procedure ReleaseFloat;
 
     procedure HandleMouse;
     procedure HandleWheel;
@@ -236,6 +245,12 @@ type
     procedure CommitRename;
 
   protected
+    //* Tool interaction in canvas pixel coordinates. Protected so a host or a
+    //* test can drive the tools without going through the real mouse.
+    procedure ApplyShape;
+    procedure BeginToolAt(PX, PY: Integer; AButton: TMouseButton);
+    procedure ContinueToolAt(PX, PY: Integer);
+    procedure EndToolAt(PX, PY: Integer);
     //* Layout queries. They are in client coordinates, the same space DoPaint
     //* draws in, so a subclass can add overlays or hit-testing of its own.
     function ToolRect(AIndex: Integer): TRect;
@@ -335,6 +350,16 @@ type
     property PreviewFrameCount: Integer read ActionFrameCount;
     //* Ghost the previous/next frame of the action while editing.
     property OnionSkin: Boolean read FOnionSkin;
+    //* True while selected pixels are lifted and can be dragged or nudged.
+    property FloatingSelection: Boolean read FFloatValid;
+    //* Current selection rectangle (empty when nothing is selected).
+    function SelectionRect: TRect;
+    //* Bounds of the floating selection (empty when there is none).
+    function FloatingRect: TRect;
+    //* Moves the selection by ADX/ADY pixels, lifting it first if needed.
+    procedure NudgeSelection(ADX, ADY: Integer);
+    //* Drops the floating selection back into its frame at its position.
+    procedure CommitFloating;
     //* Read-only queries the host and the tests use to inspect a document.
     function ActionCount: Integer;
     function ActionName(AIndex: Integer): string;
@@ -595,6 +620,10 @@ begin
   FOnionSkin := False;
   FFrameDragFrom := -1;
   FSelValid := False;
+  FFloatValid := False;
+  FFloatFrame := -1;
+  FillChar(FFloatImage, SizeOf(FFloatImage), 0);
+  FillChar(FFloatTexture, SizeOf(FFloatTexture), 0);
   FillChar(FCopyImage, SizeOf(FCopyImage), 0);
   FCopyValid := False;
   FDragMode := dmNone;
@@ -609,6 +638,7 @@ end;
 
 destructor TSpriteEditor.Destroy;
 begin
+  ReleaseFloat;
   ClearTextures;
   if FCopyImage.Data <> nil then
     RayLib.UnloadImage(FCopyImage);
@@ -657,6 +687,7 @@ end;
 procedure TSpriteEditor.ClearDocument;
 begin
   FRenaming := False;
+  ReleaseFloat;
   FSelValid := False;
   ClearTextures;
   FActions.Clear;
@@ -1081,6 +1112,8 @@ begin
     SetStatus('No file name to save to');
     Exit(False);
   end;
+  //* A floating selection belongs to the document: drop it before writing.
+  CommitFloating;
   if LowerCase(ExtractFileExt(FFileName)) = '.sprite' then
     Result := SaveSprite
   else
@@ -1138,6 +1171,7 @@ procedure TSpriteEditor.SelectAction(AIndex: Integer);
 begin
   if FActions.Count = 0 then
     Exit;
+  CommitFloating;
   FActiveAction := ClampInt(AIndex, 0, FActions.Count - 1);
   FActiveFrame := 0;
   FPreviewFrame := 0;
@@ -1153,6 +1187,7 @@ begin
   A := ActiveActionObject;
   if (A = nil) or (A.Frames.Count = 0) then
     Exit;
+  CommitFloating;
   FActiveFrame := ClampInt(AIndex, 0, A.Frames.Count - 1);
   FPreviewFrame := FActiveFrame;
   FPreviewTimer := 0;
@@ -1608,6 +1643,9 @@ procedure TSpriteEditor.PushUndo;
 var
   Snap: TSpriteSnapshot;
 begin
+  //* Any edit ends a floating selection: its pixels become part of the frame
+  //* before the snapshot is taken, so one undo removes the whole move.
+  CommitFloating;
   Snap := CaptureSnapshot;
   FUndo.Add(Snap);
   while FUndo.Count > cSpriteEditorMaxUndo do
@@ -1623,6 +1661,7 @@ procedure TSpriteEditor.Undo;
 var
   Snap: TSpriteSnapshot;
 begin
+  CommitFloating;
   if FUndo.Count = 0 then
   begin
     SetStatus('Nothing to undo');
@@ -1640,6 +1679,7 @@ procedure TSpriteEditor.Redo;
 var
   Snap: TSpriteSnapshot;
 begin
+  CommitFloating;
   if FRedo.Count = 0 then
   begin
     SetStatus('Nothing to redo');
@@ -1926,6 +1966,8 @@ begin
     SetStatus('Select an area first');
     Exit;
   end;
+  //* Copy what is on screen, including a selection that is still floating.
+  CommitFloating;
   Sel := NormalizedSelection;
   if (Sel.Right <= Sel.Left) or (Sel.Bottom <= Sel.Top) then
     Exit;
@@ -1974,7 +2016,6 @@ begin
   Idx := CurrentFrameIndex;
   if Idx < 0 then
     Exit;
-  PushUndo;
   if FSelValid then
   begin
     Sel := NormalizedSelection;
@@ -1986,11 +2027,19 @@ begin
     X := 0;
     Y := 0;
   end;
-  RayLib.ImageDrawImage(@FFrames[Idx].Image, FCopyImage, X, Y, clWhite);
-  FSelRect := Rect(X, Y, X + FCopyImage.Width, Y + FCopyImage.Height);
+  //* The pasted pixels arrive as a floating selection, so they can be placed
+  //* with the mouse or the arrow keys before they are dropped into the frame.
+  PushUndo;
+  FFloatImage := RayLib.ImageCopy(FCopyImage);
+  FFloatTexture := RayLib.LoadTextureFromImage(FFloatImage);
+  RayLib.SetTextureFilter(FFloatTexture, TEXTURE_FILTER_POINT);
+  FFloatPos := Point(X, Y);
+  FFloatFrame := Idx;
+  FFloatValid := True;
+  FSelRect := FloatingRect;
   FSelValid := True;
-  MarkFrameDirty(Idx);
-  SetStatus('Pasted');
+  SetStatus(Format('Pasted %dx%d (drag or arrows to place)',
+    [FFloatImage.Width, FFloatImage.Height]));
   Invalidate;
 end;
 
@@ -2014,8 +2063,112 @@ end;
 
 procedure TSpriteEditor.SelectAll;
 begin
+  CommitFloating;
   FSelRect := Rect(0, 0, FCanvasW, FCanvasH);
   FSelValid := True;
+  Invalidate;
+end;
+
+function TSpriteEditor.SelectionRect: TRect;
+begin
+  if FSelValid then
+    Result := NormalizedSelection
+  else
+    Result := Rect(0, 0, 0, 0);
+end;
+
+function TSpriteEditor.FloatingRect: TRect;
+begin
+  if FFloatValid and (FFloatImage.Data <> nil) then
+    Result := Rect(FFloatPos.X, FFloatPos.Y,
+      FFloatPos.X + FFloatImage.Width, FFloatPos.Y + FFloatImage.Height)
+  else
+    Result := Rect(0, 0, 0, 0);
+end;
+
+procedure TSpriteEditor.LiftSelection;
+var
+  Sel: TRect;
+  Idx: Integer;
+  Tmp: TImage;
+begin
+  if FFloatValid then
+    Exit;
+  if not FSelValid then
+    Exit;
+  Sel := NormalizedSelection;
+  if (Sel.Right <= Sel.Left) or (Sel.Bottom <= Sel.Top) then
+    Exit;
+  Idx := CurrentFrameIndex;
+  if (Idx < 0) or (Idx >= FFrames.Count) then
+    Exit;
+  PushUndo;
+  Tmp := RayLib.ImageCopy(FFrames[Idx].Image);
+  RayLib.ImageCrop(Tmp, TRectangle.Create(Sel.Left, Sel.Top,
+    Sel.Right - Sel.Left, Sel.Bottom - Sel.Top));
+  FFloatImage := Tmp;
+  FFloatTexture := RayLib.LoadTextureFromImage(FFloatImage);
+  RayLib.SetTextureFilter(FFloatTexture, TEXTURE_FILTER_POINT);
+  FFloatPos := Point(Sel.Left, Sel.Top);
+  FFloatFrame := Idx;
+  FFloatValid := True;
+  ClearPixels(Idx, Sel);
+  MarkFrameDirty(Idx);
+  SetStatus(Format('Lifted %dx%d (arrows move it)',
+    [Sel.Right - Sel.Left, Sel.Bottom - Sel.Top]));
+  Invalidate;
+end;
+
+procedure TSpriteEditor.ReleaseFloat;
+begin
+  if FFloatTexture.ID <> 0 then
+    RayLib.UnloadTexture(FFloatTexture);
+  FillChar(FFloatTexture, SizeOf(FFloatTexture), 0);
+  if FFloatImage.Data <> nil then
+    RayLib.UnloadImage(FFloatImage);
+  FillChar(FFloatImage, SizeOf(FFloatImage), 0);
+  FFloatValid := False;
+  FFloatFrame := -1;
+end;
+
+procedure TSpriteEditor.CommitFloating;
+var
+  W, H: Integer;
+begin
+  if not FFloatValid then
+    Exit;
+  W := FFloatImage.Width;
+  H := FFloatImage.Height;
+  if (FFloatFrame >= 0) and (FFloatFrame < FFrames.Count) then
+  begin
+    RayLib.ImageDrawImage(@FFrames[FFloatFrame].Image, FFloatImage,
+      FFloatPos.X, FFloatPos.Y, clWhite);
+    MarkFrameDirty(FFloatFrame);
+  end;
+  ReleaseFloat;
+  FSelRect := Rect(FFloatPos.X, FFloatPos.Y, FFloatPos.X + W, FFloatPos.Y + H);
+  FSelValid := True;
+  SetStatus('Selection moved');
+  Invalidate;
+end;
+
+procedure TSpriteEditor.NudgeSelection(ADX, ADY: Integer);
+begin
+  if not FFloatValid then
+  begin
+    if not FSelValid then
+    begin
+      SetStatus('Select an area first');
+      Exit;
+    end;
+    LiftSelection;
+    if not FFloatValid then
+      Exit;
+  end;
+  FFloatPos := Point(FFloatPos.X + ADX, FFloatPos.Y + ADY);
+  FSelRect := FloatingRect;
+  FSelValid := True;
+  SetStatus(Format('Selection at %d,%d', [FFloatPos.X, FFloatPos.Y]));
   Invalidate;
 end;
 
@@ -2078,12 +2231,40 @@ begin
   FDragStart := Point(PX, PY);
   FDragEnd := FDragStart;
 
+  //* Any other tool ends a floating selection before it touches the frame.
+  if (FTool <> stSelect) and FFloatValid then
+    CommitFloating;
+
   case FTool of
     stSelect:
       begin
-        FSelValid := True;
-        FSelRect := Rect(PX, PY, PX + 1, PY + 1);
-        FDragMode := dmSelect;
+        //* Dragging inside a selection lifts its pixels and moves them; a
+        //* click outside drops any floating pixels and starts a new selection.
+        if (AButton = mbLeft) and FFloatValid and
+          InsideRect(FloatingRect, PX, PY) then
+        begin
+          FDragMode := dmMoveSel;
+          FFloatDragStart := FFloatPos;
+        end
+        else if (AButton = mbLeft) and FSelValid and
+          InsideRect(NormalizedSelection, PX, PY) then
+        begin
+          LiftSelection;
+          if FFloatValid then
+          begin
+            FDragMode := dmMoveSel;
+            FFloatDragStart := FFloatPos;
+          end
+          else
+            FDragMode := dmNone;
+        end
+        else
+        begin
+          CommitFloating;
+          FSelValid := True;
+          FSelRect := Rect(PX, PY, PX + 1, PY + 1);
+          FDragMode := dmSelect;
+        end;
       end;
     stPixel:
       begin
@@ -2160,6 +2341,13 @@ begin
         FSelRect := Rect(FDragStart.X, FDragStart.Y, PX + 1, PY + 1);
         FSelValid := True;
       end;
+    dmMoveSel:
+      begin
+        FFloatPos := Point(FFloatDragStart.X + PX - FDragStart.X,
+          FFloatDragStart.Y + PY - FDragStart.Y);
+        FSelRect := FloatingRect;
+        FSelValid := True;
+      end;
     dmShape:
       begin
         FDragEnd := Point(PX, PY);
@@ -2204,9 +2392,13 @@ begin
         Sel := NormalizedSelection;
         FSelValid := (Sel.Right > Sel.Left) and (Sel.Bottom > Sel.Top);
         if FSelValid then
-          SetStatus(Format('Selected %dx%d', [Sel.Right - Sel.Left, Sel.Bottom - Sel.Top]))
+          SetStatus(Format('Selected %dx%d (drag inside to move)', [Sel.Right - Sel.Left, Sel.Bottom - Sel.Top]))
         else
           SetStatus('Selection cleared');
+      end;
+    dmMoveSel:
+      begin
+        SetStatus(Format('Selection at %d,%d', [FFloatPos.X, FFloatPos.Y]));
       end;
     dmPaint:
       begin
@@ -2688,6 +2880,10 @@ begin
       KEY_A: SelectAll;
       KEY_D: AddFrameCopy;
       KEY_INSERT: CopySelection;
+      KEY_LEFT: NudgeSelection(-1, 0);
+      KEY_RIGHT: NudgeSelection(1, 0);
+      KEY_UP: NudgeSelection(0, -1);
+      KEY_DOWN: NudgeSelection(0, 1);
     end;
     Invalidate;
     Exit;
@@ -2714,15 +2910,33 @@ begin
         DeleteActiveFrame;
     KEY_ESCAPE:
       begin
+        CommitFloating;
         FDragMode := dmNone;
         FSelValid := False;
         FRenaming := False;
         SetStatus('Cancelled');
       end;
-    KEY_LEFT: SelectFrameInAction(FActiveFrame - 1);
-    KEY_RIGHT: SelectFrameInAction(FActiveFrame + 1);
-    KEY_UP: SelectAction(FActiveAction - 1);
-    KEY_DOWN: SelectAction(FActiveAction + 1);
+    KEY_ENTER: CommitFloating;
+    KEY_LEFT:
+      if (FTool = stSelect) and (FFloatValid or FSelValid) then
+        NudgeSelection(-1, 0)
+      else
+        SelectFrameInAction(FActiveFrame - 1);
+    KEY_RIGHT:
+      if (FTool = stSelect) and (FFloatValid or FSelValid) then
+        NudgeSelection(1, 0)
+      else
+        SelectFrameInAction(FActiveFrame + 1);
+    KEY_UP:
+      if (FTool = stSelect) and (FFloatValid or FSelValid) then
+        NudgeSelection(0, -1)
+      else
+        SelectAction(FActiveAction - 1);
+    KEY_DOWN:
+      if (FTool = stSelect) and (FFloatValid or FSelValid) then
+        NudgeSelection(0, 1)
+      else
+        SelectAction(FActiveAction + 1);
     KEY_SPACE: TogglePreview;
     KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN, KEY_EIGHT:
       HandleKeyTool(Key);
@@ -3181,6 +3395,7 @@ procedure TSpriteEditor.TogglePreview;
 var
   A: TSpriteAction;
 begin
+  CommitFloating;
   FPreviewPlaying := not FPreviewPlaying;
   FPreviewTimer := 0;
   if FPreviewPlaying then
@@ -3849,6 +4064,8 @@ var
   Status: string;
   C: TColor;
   A: TSpriteAction;
+  FR, VR: TRect;
+  SX, SY, SW, SH: Single;
   DX, DY, Rad: Single;
 begin
   Area := CanvasAreaRect;
@@ -3899,6 +4116,29 @@ begin
       RayLib.DrawTexturePro(Tex, RectangleOf(0, 0, Tex.Width, Tex.Height),
         RectangleOf(ACanvas.Origin.X + R.Left, ACanvas.Origin.Y + R.Top,
           R.Right - R.Left, R.Bottom - R.Top), Vector2Of(0, 0), 0, clWhite);
+  end;
+
+  //* The floating selection is drawn on top of the frame it was lifted from,
+  //* cropped to the canvas so dragging it past an edge cannot paint the work
+  //* area around the image.
+  if FFloatValid and (FFloatTexture.ID <> 0) then
+  begin
+    FR := Rect(R.Left + Round(FFloatPos.X * FZoom),
+      R.Top + Round(FFloatPos.Y * FZoom),
+      R.Left + Round((FFloatPos.X + FFloatTexture.Width) * FZoom),
+      R.Top + Round((FFloatPos.Y + FFloatTexture.Height) * FZoom));
+    VR := Rect(Max(FR.Left, R.Left), Max(FR.Top, R.Top),
+      Min(FR.Right, R.Right), Min(FR.Bottom, R.Bottom));
+    if (VR.Right > VR.Left) and (VR.Bottom > VR.Top) then
+    begin
+      SX := (VR.Left - FR.Left) / FZoom;
+      SY := (VR.Top - FR.Top) / FZoom;
+      SW := (VR.Right - VR.Left) / FZoom;
+      SH := (VR.Bottom - VR.Top) / FZoom;
+      RayLib.DrawTexturePro(FFloatTexture, RectangleOf(SX, SY, SW, SH),
+        RectangleOf(ACanvas.Origin.X + VR.Left, ACanvas.Origin.Y + VR.Top,
+          VR.Right - VR.Left, VR.Bottom - VR.Top), Vector2Of(0, 0), 0, clWhite);
+    end;
   end;
 
   if FShowGrid and (FZoom >= 6) then
