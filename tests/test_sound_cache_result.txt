@@ -1,0 +1,4 @@
+sound.load => function
+sound.unload => function
+cache calls accepted
+VERDICT => PASS

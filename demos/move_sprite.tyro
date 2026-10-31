@@ -35,26 +35,26 @@ local stepX = (endX - startX) / totalFrames
 --cursor.hide()
 
 local i = 0
-while cycle do
+function update(dt)
   enter()
   i = i + 1
-  if i > totalFrames then break end
-
+  if i > totalFrames then
+    exit()
+    return
+  end
   bg.x = startX + (i - 1) * stepX
+  leave()
+end
 
+function draw()
   canvas.backcolor = colors.black
   canvas.clear()
-
-  -- engine draws all visible spirits automatically
 
   canvas.color = colors.white
   canvas.text(10, 10, "Moving... frame " .. i .. "/600")
   canvas.text(10, 30, "x = " .. math.floor(bg.x))
-  leave()
+  if i > totalFrames then
+    canvas.color = colors.white
+    canvas.text(10, 240, "10 seconds elapsed - spirit reached the right edge!")
+  end
 end
-
--- Done!
-canvas.backcolor = colors.black
-canvas.clear()
-canvas.color = colors.white
-canvas.text(10, 240, "10 seconds elapsed - spirit reached the right edge!")

@@ -1,0 +1,81 @@
+-- Regression test for f:lines() on a file with LF-only line endings.
+--
+-- Lines_func used to cut every line with Copy(Buf, Start, I - Start - 1), one
+-- byte short. On a CRLF file the missing byte happened to be the #13, so the
+-- result looked right; on an LF-only file the last character of every line was
+-- dropped ("line one\n" came back as "line on"). The existing openfile test
+-- could not catch it because it writes its fixture through a text-mode handle,
+-- which emits CRLF on Windows -- so the bug was masked exactly where it was
+-- tested.
+--
+-- This test builds the fixture through a *binary* handle, so it really is
+-- LF-only, proves that by counting the CR bytes, and then checks lines().
+
+local out, outErr = openfile("test_openfile_lf_out.txt", "w")
+if not out then
+  log("test_openfile_lf_out.txt: " .. tostring(outErr))
+  running = false
+  return
+end
+local function say(s) out:write(tostring(s) .. "\n") end
+
+local function collect(name, mode)
+  local f, err = openfile(name, mode)
+  if not f then
+    say("  FAILED to open " .. name .. " (" .. mode .. "): " .. tostring(err))
+    return nil
+  end
+  local lines = {}
+  for line in f:lines() do
+    lines[#lines + 1] = line
+  end
+  f:close()
+  return lines
+end
+
+local function check(label, lines, expected)
+  if lines == nil then
+    say(label .. ": FAILED (could not collect lines)")
+    return
+  end
+  if #lines ~= #expected then
+    say(string.format("%s: FAILED (%d lines, expected %d)", label, #lines, #expected))
+    return
+  end
+  for i = 1, #expected do
+    if lines[i] ~= expected[i] then
+      say(string.format("%s: FAILED line %d = %q, expected %q", label, i, lines[i], expected[i]))
+      return
+    end
+  end
+  say(label .. ": ok")
+end
+
+-- A binary handle writes the bytes as given, so this file is LF-only.
+local f = openfile("test_openfile_lf.txt", "wb")
+f:write("line one\n")
+f:write("line two\n")
+f:write("no newline at the end")
+f:close()
+
+-- Prove the fixture is LF-only: if a CR ever creeps in, a pass below would
+-- just be the CRLF path again and prove nothing.
+f = openfile("test_openfile_lf.txt", "rb")
+local raw = f:read("a")
+f:close()
+local _, crs = string.gsub(raw, "\r", "")
+say(string.format("fixture: %d bytes, %d CR", #raw, crs))
+
+check("lf lines", collect("test_openfile_lf.txt", "r"),
+  { "line one", "line two", "no newline at the end" })
+
+-- The same content through a text-mode handle becomes CRLF on the way out and
+-- must still come back unchanged.
+f = openfile("test_openfile_crlf.txt", "w")
+f:write("line one\n")
+f:write("line two\n")
+f:close()
+check("crlf lines", collect("test_openfile_crlf.txt", "r"), { "line one", "line two" })
+
+out:close()
+running = false

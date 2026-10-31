@@ -1,0 +1,15 @@
+--======================================================================
+--  test_red_screen.tyro - smallest possible drawing check
+--======================================================================
+--  Run:  tyro.exe tests\test_red_screen.tyro --exit:4
+--  Expect a solid red 320x240 window.
+
+window.show(320, 240)
+
+function update(dt)
+end
+
+function draw()
+  canvas.color = colors.red
+  canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+end

@@ -449,8 +449,7 @@ type
     procedure Shutdown; virtual;
 
     //* Block the calling script (thread) until the next drawing cycle
-    //* (EndDrawing) has completed. Backs the Lua global 'cycle' so scripts can
-    //* write "while cycle do" instead of "while true do". Returns False when
+    //* (EndDrawing) has completed. Returns False when
     //* AScript was stopped while waiting, termination is polled here because
     //* the Lua debug hook cannot fire while a C function blocks the thread.
     function WaitToNextFrame(AScript: TTyroScript): Boolean;
@@ -951,33 +950,21 @@ end;
 function TTyroEngine.WaitToNextFrame(AScript: TTyroScript): Boolean;
 begin
   Result := True;
-  //An engine-driven script runs its update()/draw() on the main thread; 'cycle'
-  //there would wait for a frame this very thread has to present, so it must not
-  //block. Treat it as "no more cycles", ending any stray loop.
   if AScript.Handoff then
     Exit(False);
-  //Reading 'cycle' is the commit point of the previous body: release the
-  //implicit hold so the main loop draws everything queued since the last read
-  //(also when no window is up, so the hold can never stay stuck).
   ReleaseAutoQueue;
-  //No window -> no drawing cycles -> never block the script (behaves like
-  //"while true do" so headless scripts do not hang).
   if (FFrameEvent = nil) or (IsWindowHidden) or (not RayLib.IsWindowReady) then
     Exit;
   while True do
   begin
-    //While our C function blocks, the Lua count hook cannot run, so Stop()
-    //waiting for the script thread would deadlock: poll the script's Active
-    //flag (set False by Stop on the main thread) and let the loop end cleanly.
     if not AScript.Active then
     begin
-      Result := False; //script was stopped while waiting: exit the cycle loop
+      Result := False;
       Exit;
     end;
     if FFrameEvent.WaitFor(50) = wrSignaled then
-      Break; //the next drawing frame was presented: run one more iteration
+      Break;
   end;
-  //Start holding the body that is about to run, so it lands in one cycle.
   HoldAutoQueue;
 end;
 

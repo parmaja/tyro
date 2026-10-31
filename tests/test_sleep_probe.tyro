@@ -1,0 +1,46 @@
+--======================================================================
+--  test_sleep_probe.tyro - does sleep(ms) actually pause the script?
+--======================================================================
+--  Writes the elapsed wall time around each sleep() call so the effect is
+--  visible even though the script runs on a worker thread.
+--
+--    sleep(1000) right after start
+--    three sleep(200) calls in a loop
+--
+--  A working sleep() reports ~1000 ms and ~200 ms deltas. If sleep() is a
+--  no-op the deltas collapse to a few milliseconds.
+--======================================================================
+
+window.show()
+
+local out = openfile("test_sleep_probe_result.txt", "w")
+if not out then
+  exit()
+end
+
+local t0 = millis()
+out:write("start=", t0, "\n")
+
+-- queue.frames counts drawing cycles presented by the main loop. If the engine
+-- keeps rendering while the script sleeps, this climbs during the sleep.
+local f0 = queue.frames
+sleep(1000)
+local f1 = queue.frames
+local t1 = millis()
+out:write("after sleep(1000) delta=", t1 - t0,
+          " frames_drawn_during_sleep=", f1 - f0, "\n")
+
+for i = 1, 3 do
+  local a = millis()
+  sleep(200)
+  local b = millis()
+  out:write("loop ", i, " sleep(200) delta=", b - a, "\n")
+end
+
+-- Also time a busy loop of the same wall length for comparison.
+local bs = millis()
+while millis() - bs < 200 do end
+out:write("busy 200 delta=", millis() - bs, "\n")
+
+out:close()
+exit()

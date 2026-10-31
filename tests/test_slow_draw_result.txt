@@ -1,0 +1,38 @@
+phase auto-group hold= ms=80 group=true
+  body 1 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 2 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 3 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 4 n=7 mid=0 passes=1 reads=2 lastdrainms=80.0
+  body 5 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 6 n=7 mid=0 passes=1 reads=2 lastdrainms=80.0
+  body 7 n=7 mid=0 passes=1 reads=2 lastdrainms=80.0
+  body 8 n=7 mid=0 passes=1 reads=2 lastdrainms=80.0
+  body 9 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 10 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  summary splits=0 maxmid=0 maxpasses=1 avg_reads=2.00 deferred_delta=0 maxdrainms=80.1
+phase group-off hold= ms=80 group=false
+  body 1 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 2 n=7 mid=0 passes=2 reads=3 lastdrainms=0.2
+  body 3 n=7 mid=0 passes=2 reads=3 lastdrainms=0.2
+  body 4 n=7 mid=0 passes=2 reads=3 lastdrainms=0.2
+  body 5 n=7 mid=0 passes=2 reads=3 lastdrainms=0.2
+  body 6 n=7 mid=0 passes=2 reads=3 lastdrainms=0.2
+  body 7 n=7 mid=0 passes=2 reads=3 lastdrainms=0.2
+  body 8 n=7 mid=0 passes=2 reads=3 lastdrainms=0.2
+  body 9 n=7 mid=0 passes=2 reads=3 lastdrainms=0.1
+  body 10 n=7 mid=0 passes=2 reads=3 lastdrainms=0.3
+  summary splits=9 maxmid=0 maxpasses=2 avg_reads=2.90 deferred_delta=9 maxdrainms=80.1
+phase enter-leave hold= ms=80 group=true
+  body 1 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 2 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 3 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 4 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 5 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 6 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 7 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 8 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 9 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  body 10 n=7 mid=0 passes=1 reads=2 lastdrainms=80.1
+  summary splits=0 maxmid=0 maxpasses=1 avg_reads=2.00 deferred_delta=0 maxdrainms=80.1
+engine frames=69 deferred=9 maxdepth=9 group=true frametime_ms=80.4
+VERDICT split_bodies auto=0 group-off=9 enter-leave=0

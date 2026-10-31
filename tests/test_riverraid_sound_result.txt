@@ -1,0 +1,2 @@
+noise, sound and loop calls accepted
+VERDICT => PASS

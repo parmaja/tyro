@@ -848,14 +848,11 @@ begin
 
   aName := L.ToString(2);
 
-  //3) 'cycle': the drawing-cycle gate. Reading it blocks the script thread
-  //until the next raylib frame (EndDrawing) completes, so "while cycle do"
-  //runs the loop body at most once per drawn frame instead of queuing many
-  //drawing commands into the same cycle. Never cached: every read waits again.
+  //'cycle' kept for backward compatibility
   if aName = 'cycle' then
   begin
-    if (Thread <> nil) and not Engine.WaitToNextFrame(Self) then
-      L.PushBoolean(False) //script was stopped while waiting -> end the loop
+    if (Thread <> nil) and (Engine <> nil) and not Engine.WaitToNextFrame(Self) then
+      L.PushBoolean(False)
     else
       L.PushBoolean(True);
     Exit;

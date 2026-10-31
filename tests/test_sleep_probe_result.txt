@@ -1,0 +1,6 @@
+start=204.5428
+after sleep(1000) delta=1000.4016000000001 frames_drawn_during_sleep=30
+loop 1 sleep(200) delta=200.37940000000003
+loop 2 sleep(200) delta=200.51160000000004
+loop 3 sleep(200) delta=200.91509999999994
+busy 200 delta=200.00049999999987

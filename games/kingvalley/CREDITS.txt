@@ -1,0 +1,33 @@
+King Valley - asset credits
+===========================
+
+Player (Egyptian male walk frames, 24x24)
+  "Egyptian RPG" by ZomBCool - OpenGameArt.org
+  https://opengameart.org/content/egyptian-rpg
+  License: CC0 1.0 Universal
+  File: res/player-sheet.png (rows down/left/up packed into player.sprite;
+  the right-facing row is replaced at runtime by sprite.flipH of the left
+  frames, so it is not packed).
+
+Mummy (enemy walk frames, 24x32, rows N/E/S/W x 3)
+  "Mummy" v1.2 by Svetlana Kushnariova (Cabbit) & Jordan Irwin (AntumDeluge)
+  https://opengameart.org/node/101157
+  Licenses: CC-BY 3.0 / CC-BY 4.0 / OGA-BY 3.0 (attribution required)
+  File: res/mummy/PNG/24x32/mummy-01.png packed into mummy.sprite.
+  (mummy-02.png is the v1.1 recolor and is not used.)
+
+Tiles (16x16 top-down desert set, 15-column sheet)
+  "Cute Retro RPG - Grand Desert Demo" by 16Pixel
+  https://16pixel.itch.io/cute-retro-rpg-grand-desert
+  https://opengameart.org/content/16x16-desert-tilesets
+  License: CC-BY-SA 4.0
+  File: res/desert/.../Tilesets.png copied to tiles.png.
+
+Music (5 jingles)
+  Kenney Audio - https://kenney.nl/assets (Kenney Audio bundle)
+  License: CC0 1.0 Universal
+  Files: 01 Game Start.mp3 ... 05 Game Over.mp3 (kept in the game folder).
+
+Sound effects
+  sfx/pickup.wav and sfx/hit.wav synthesized with Python's stdlib wave
+  module by make_assets.py (CC0, generated).

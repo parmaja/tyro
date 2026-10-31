@@ -1,0 +1,11 @@
+--======================================================================
+--  pause_mover.tyro - helper sprite script for test_pause_probe.tyro
+--======================================================================
+--  Moves its sprite 1px right on every engine Update (per-frame on_update).
+--  The engine only calls on_update while the scene is not paused, so the
+--  sprite's x is a direct read-out of whether the scene is running.
+--======================================================================
+
+function on_update()
+  self.x = self.x + 1
+end

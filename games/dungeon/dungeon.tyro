@@ -287,7 +287,7 @@ local function stepSlimes(ft)
   end
 end
 
-local function update(ft)
+local function game_update(ft)
   if msgTimer > 0 then msgTimer = msgTimer - ft end
   if flashTimer > 0 then flashTimer = flashTimer - ft end
   if moveTimer > 0 then moveTimer = moveTimer - ft end
@@ -405,9 +405,9 @@ end
 
 reset()
 
-while cycle do
-  local ft = frametime()
-  if ft <= 0 then ft = 1 / 60 end
+function update(dt)
+  local ft = dt
+  if ft == nil or ft <= 0 then ft = 1 / 60 end
   if ft > 0.06 then ft = 0.06 end
 
   if keyboard.pressed("escape") then exit() end
@@ -419,6 +419,10 @@ while cycle do
     end
   end
 
-  update(ft)
+  game_update(ft)
+  stepSlimes(ft)
+end
+
+function draw()
   draw_screen()
 end

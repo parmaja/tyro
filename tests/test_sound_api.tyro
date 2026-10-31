@@ -1,0 +1,26 @@
+--======================================================================
+--  test_sound_api.tyro - what the 'sound' table actually exposes
+--======================================================================
+--  README and tests/test_riverraid_sound.tyro use sound.pitch/volume/stop,
+--  TyroLua registers sound.loopPitch/loopVolume/loopStop. This reports which
+--  names exist so a nil call cannot silently pass for a working API.
+--  Run:  tyro.exe tests\test_sound_api.tyro --exit:2
+--  Result: tests\test_sound_api_result.txt
+
+local names = { "loopPlay", "loopPitch", "loopVolume", "loopStop",
+                "pitch", "volume", "stop" }
+
+local out = openfile("test_sound_api_result.txt", "w")
+for _, n in ipairs(names) do
+  out:write(n .. " => " .. type(sound[n]) .. "\n")
+end
+
+local ok = true
+for _, n in ipairs({ "loopPlay", "loopPitch", "loopVolume", "loopStop" }) do
+  if type(sound[n]) ~= "function" then ok = false end
+end
+for _, n in ipairs({ "pitch", "volume", "stop" }) do
+  if type(sound[n]) == "function" then ok = false end
+end
+out:write("VERDICT => " .. (ok and "PASS" or "FAIL") .. "\n")
+out:close()

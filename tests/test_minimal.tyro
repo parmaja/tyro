@@ -1,0 +1,7 @@
+window.show(100, 100)
+local out = openfile("test_minimal_result.txt", "w")
+out:write("PASS\n")
+out:close()
+while cycle do
+  canvas.clear()
+end

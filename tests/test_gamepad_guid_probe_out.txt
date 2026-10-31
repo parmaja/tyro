@@ -1,0 +1,9 @@
+count => 2
+slot 0 avail=true axes=6 name='GAME BOX JOYSTICK'
+  leftx=-0.999969 lefty=+0.000000 rightx=+0.000000 righty=+0.000000 lt=+0.000000 rt=+0.000000
+slot 1 avail=true axes=6 name='GAME BOX JOYSTICK'
+  leftx=-0.999969 lefty=+0.000000 rightx=+0.000000 righty=+0.000000 lt=+0.000000 rt=+0.000000
+slot 2 avail=false axes=0 name=''
+  leftx=+0.000000 lefty=+0.000000 rightx=+0.000000 righty=+0.000000 lt=+0.000000 rt=+0.000000
+slot 3 avail=false axes=0 name=''
+  leftx=+0.000000 lefty=+0.000000 rightx=+0.000000 righty=+0.000000 lt=+0.000000 rt=+0.000000

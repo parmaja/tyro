@@ -1,0 +1,56 @@
+--======================================================================
+--  test_pause_probe.tyro - pause(ms) freezes the scene, sleep(ms) does not
+--======================================================================
+--  A sprite script (pause_mover.tyro) advances the sprite's x by 1 on every
+--  engine Update. When pause() is active the main loop skips Update, so x must
+--  NOT change across the pause; across sleep() it must change.
+--
+--  Expected (roughly, depends on the frame rate):
+--    pause: moved=0
+--    sleep: moved>0
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_pause_probe_result.txt", "w")
+if not out then
+  exit()
+end
+
+local s = Sprites.new("mover")
+s.loadscript("pause_mover.tyro")
+s.x = 10
+s.show()
+
+-- Let the scene run so the sprite is moving before the measurement.
+sleep(200)
+
+local before = s.x
+pause(600)
+local after = s.x
+out:write("pause: x before=", before, " after=", after,
+          " moved=", after - before, "\n")
+
+before = s.x
+sleep(300)
+after = s.x
+out:write("sleep: x before=", before, " after=", after,
+          " moved=", after - before, "\n")
+
+local spread = after - before
+
+-- Re-run the pause check to make sure the freeze ends cleanly.
+before = s.x
+pause(300)
+after = s.x
+out:write("pause again: moved=", after - before, "\n")
+
+-- Verdict: pause must freeze (0 px), sleep must let the scene run (>0 px).
+if (after - before) == 0 and spread > 0 then
+  out:write("VERDICT PASS\n")
+else
+  out:write("VERDICT FAIL\n")
+end
+
+out:close()
+exit()

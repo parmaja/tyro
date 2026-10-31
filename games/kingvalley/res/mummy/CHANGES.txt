@@ -1,0 +1,8 @@
+1.2
+- Scaled down to 24x32.
+
+1.1
+- Added re-color of mummy.
+
+1.0
+- Created mummy sprite.

@@ -156,11 +156,9 @@ end
 buildLevel()
 pigs_alive = #pigs
 
--- ---- main loop -------------------------------------------------------
-while cycle do
+function update(dt)
   collision.pump()
 
-  -- fade pop effects
   for i = #pops, 1, -1 do
     pops[i].t = pops[i].t + 1
     if pops[i].t > 18 then table.remove(pops, i) end
@@ -243,38 +241,32 @@ while cycle do
         loadBird()
       end
     end
-
-  elseif state == "won" or state == "lost" then
-    -- waiting for R
   end
+end
 
-  -- ---- draw ----------------------------------------------------------
+function draw()
   canvas.color = colors.skyblue
   canvas.rectangle(0, 0, canvas.width, canvas.height, true)
 
-  -- clouds
   canvas.color = colors.white
   canvas.circle(110, 80, 26, true)
   canvas.circle(148, 94, 20, true)
   canvas.circle(620, 66, 30, true)
   canvas.circle(660, 82, 22, true)
 
-  -- slingshot
   canvas.color = colors.darkbrown
   canvas.rectangle(ANCHOR_X - 5, ANCHOR_Y, 10, GROUND_TOP - ANCHOR_Y, true)
   canvas.line(ANCHOR_X, ANCHOR_Y + 24, ANCHOR_X - 14, ANCHOR_Y - 8)
   canvas.line(ANCHOR_X, ANCHOR_Y + 24, ANCHOR_X + 14, ANCHOR_Y - 8)
 
-  -- trajectory preview
   if state == "aiming" then
     local tx, ty = bird.x, bird.y
     local vx, vy = launchVX, launchVY
-    local dt = 1 / 30
+    local dtp = 1 / 30
     for i = 1, 70 do
-      -- semi-implicit Euler, matching the engine's integrator
-      vy = vy + GRAVITY * dt
-      tx = tx + vx * dt
-      ty = ty + vy * dt
+      vy = vy + GRAVITY * dtp
+      tx = tx + vx * dtp
+      ty = ty + vy * dtp
       if ty > GROUND_TOP or tx > canvas.width then break end
       if i % 2 == 0 then
         canvas.color = colors.white
@@ -283,26 +275,22 @@ while cycle do
     end
   end
 
-  -- sling band
   if state == "aiming" then
     canvas.color = colors.darkbrown
     canvas.line(ANCHOR_X - 14, ANCHOR_Y - 8, bird.x, bird.y)
     canvas.line(ANCHOR_X + 14, ANCHOR_Y - 8, bird.x, bird.y)
   end
 
-  -- pop rings
   for _, pp in ipairs(pops) do
     canvas.color = colors.white
     canvas.circle(pp.x, pp.y, 8 + pp.t, false)
   end
 
-  -- HUD
   canvas.color = colors.black
   canvas.rectangle(0, 0, 320, 26, true)
   canvas.color = colors.yellow
   canvas.text(8, 6, "Score " .. score .. "    Birds " .. birds_left .. "    Pigs " .. pigs_alive)
 
-  -- power meter
   if state == "aiming" then
     local pull = speed2(bird.x - ANCHOR_X, bird.y - ANCHOR_Y)
     canvas.color = colors.black
@@ -313,13 +301,199 @@ while cycle do
     canvas.text(8, 50, "Move mouse back-left to pull, click / SPACE to fire")
   end
 
-  -- waiting birds lined up by the sling (drawn under the sprites)
   for i = 1, birds_left do
     canvas.color = colors.red
     canvas.circle(ANCHOR_X - 78 + (i - 1) * 15, GROUND_TOP - 8, 6, true)
   end
 
-  -- end messages
+  if state == "won" or state == "lost" then
+    canvas.color = colors.black
+    canvas.rectangle(210, 180, 380, 96, true)
+    canvas.color = colors.yellow
+    if state == "won" then
+      canvas.text(300, 196, "LEVEL CLEARED!")
+    else
+      canvas.text(310, 196, "OUT OF BIRDS")
+    end
+    canvas.color = colors.white
+    canvas.text(285, 232, "Score " .. score .. "   -   press R to play again")
+  end
+end
+
+function update(dt)
+  collision.pump()
+
+  for i = #pops, 1, -1 do
+    pops[i].t = pops[i].t + 1
+    if pops[i].t > 18 then table.remove(pops, i) end
+  end
+
+  if keyboard.pressed("r") and state ~= "resetting" then
+    startReset()
+
+  elseif state == "resetting" then
+    if resetStage == 0 then
+      for _, b in ipairs(boxes) do b.s.collide = false end
+      for _, p in ipairs(pigs)  do p.s.collide = false p.s.visible = false end
+      bird.collide = false
+      resetStage = 1
+    else
+      for _, b in ipairs(boxes) do
+        b.s.x = b.x  b.s.y = b.y  b.s.angle = 0
+        b.s.vx = 0   b.s.vy = 0
+        b.s.av  = 0
+        b.s.collide = true
+      end
+      for _, p in ipairs(pigs) do
+        p.s.visible = true
+        p.s.x = p.x  p.s.y = p.y  p.s.angle = 0
+        p.s.vx = 0   p.s.vy = 0
+        p.s.av  = 0
+        p.s.collide = true
+      end
+      pigs_alive = #pigs
+      birds_left = 3
+      score = 0
+      loadBird()
+      state = "aiming"
+    end
+
+  elseif state == "aiming" then
+    if mouse.pressed(0) then
+      local mx, my = mouse.x, mouse.y
+      local dx, dy = mx - ANCHOR_X, my - ANCHOR_Y
+      local pull = speed2(dx, dy)
+      if pull > MAX_PULL then
+        local s = MAX_PULL / pull
+        dx, dy = dx * s, dy * s
+        pull   = MAX_PULL
+      end
+      if pull > 10 then
+        bird.x = ANCHOR_X + dx
+        bird.y = ANCHOR_Y + dy
+        launchVX = (ANCHOR_X - bird.x) * LAUNCH_SCALE
+        launchVY = (ANCHOR_Y - bird.y) * LAUNCH_SCALE
+      else
+        bird.x, bird.y = ANCHOR_X, ANCHOR_Y
+        launchVX, launchVY = 0, 0
+      end
+    else
+      if math.abs(launchVX) > 5 or math.abs(launchVY) > 5 then
+        bird.vx = launchVX
+        bird.vy = launchVY
+        bird.collide = true
+        birds_left = birds_left - 1
+        flyFrames  = 0
+        restFrames = 0
+        state      = "flying"
+        music.sound(320, 60)
+      else
+        bird.x, bird.y = ANCHOR_X, ANCHOR_Y
+      end
+    end
+    if keyboard.pressed("space") and birds_left > 0 and state == "aiming" then
+      local pull = speed2(bird.x - ANCHOR_X, bird.y - ANCHOR_Y)
+      if pull > 10 then
+        bird.vx = launchVX
+        bird.vy = launchVY
+        bird.collide = true
+        birds_left = birds_left - 1
+        flyFrames  = 0
+        restFrames = 0
+        state      = "flying"
+        music.sound(320, 60)
+      end
+    end
+
+  elseif state == "flying" then
+    flyFrames = flyFrames + 1
+    if flyFrames > 20 and speed2(bird.vx, bird.vy) < 22 then
+      restFrames = restFrames + 1
+    else
+      restFrames = 0
+    end
+    if restFrames > 25 or flyFrames > 360 or bird.x > 830 or bird.y > 560 then
+      state = "watching"
+      watchFrames = 0
+    end
+
+  elseif state == "watching" then
+    watchFrames = watchFrames + 1
+    if watchFrames > 80 then
+      if pigs_alive <= 0 then
+        score = score + birds_left * 250
+        state = "won"
+      elseif birds_left <= 0 then
+        state = "lost"
+      else
+        loadBird()
+      end
+    end
+  end
+end
+
+function draw()
+  canvas.color = colors.skyblue
+  canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+
+  canvas.color = colors.white
+  canvas.circle(110, 80, 26, true)
+  canvas.circle(148, 94, 20, true)
+  canvas.circle(620, 66, 30, true)
+  canvas.circle(660, 82, 22, true)
+
+  canvas.color = colors.darkbrown
+  canvas.rectangle(ANCHOR_X - 5, ANCHOR_Y, 10, GROUND_TOP - ANCHOR_Y, true)
+  canvas.line(ANCHOR_X, ANCHOR_Y + 24, ANCHOR_X - 14, ANCHOR_Y - 8)
+  canvas.line(ANCHOR_X, ANCHOR_Y + 24, ANCHOR_X + 14, ANCHOR_Y - 8)
+
+  if state == "aiming" then
+    local tx, ty = bird.x, bird.y
+    local vx, vy = launchVX, launchVY
+    local dtp = 1 / 30
+    for i = 1, 70 do
+      vy = vy + GRAVITY * dtp
+      tx = tx + vx * dtp
+      ty = ty + vy * dtp
+      if ty > GROUND_TOP or tx > canvas.width then break end
+      if i % 2 == 0 then
+        canvas.color = colors.white
+        canvas.circle(tx, ty, 2, true)
+      end
+    end
+  end
+
+  if state == "aiming" then
+    canvas.color = colors.darkbrown
+    canvas.line(ANCHOR_X - 14, ANCHOR_Y - 8, bird.x, bird.y)
+    canvas.line(ANCHOR_X + 14, ANCHOR_Y - 8, bird.x, bird.y)
+  end
+
+  for _, pp in ipairs(pops) do
+    canvas.color = colors.white
+    canvas.circle(pp.x, pp.y, 8 + pp.t, false)
+  end
+
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 320, 26, true)
+  canvas.color = colors.yellow
+  canvas.text(8, 6, "Score " .. score .. "    Birds " .. birds_left .. "    Pigs " .. pigs_alive)
+
+  if state == "aiming" then
+    local pull = speed2(bird.x - ANCHOR_X, bird.y - ANCHOR_Y)
+    canvas.color = colors.black
+    canvas.rectangle(8, 34, 104, 10, true)
+    canvas.color = colors.red
+    canvas.rectangle(10, 36, math.floor(100 * pull / MAX_PULL), 6, true)
+    canvas.color = colors.darkblue
+    canvas.text(8, 50, "Move mouse back-left to pull, click / SPACE to fire")
+  end
+
+  for i = 1, birds_left do
+    canvas.color = colors.red
+    canvas.circle(ANCHOR_X - 78 + (i - 1) * 15, GROUND_TOP - 8, 6, true)
+  end
+
   if state == "won" or state == "lost" then
     canvas.color = colors.black
     canvas.rectangle(210, 180, 380, 96, true)

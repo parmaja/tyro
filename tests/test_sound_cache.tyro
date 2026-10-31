@@ -1,0 +1,42 @@
+--======================================================================
+--  test_sound_cache.tyro - the sound.load / sound.unload preload cache
+--======================================================================
+--  sound.load("file.wav") decodes a file once and keeps it cached so later
+--  sound.play calls are instant; sound.unload("file.wav") drops it again.
+--  The file is resolved like every other script asset (next to the script,
+--  workspace assets/, app folder) and a missing file is ignored, not an
+--  error - the same forgiving contract as sound.play.
+--  A bad call aborts the script before the result file is written.
+--  Run:  tyro.exe tests\test_sound_cache.tyro --exit
+--  Result: tests\test_sound_cache_result.txt
+
+window.show(320, 240)
+
+local out = openfile("test_sound_cache_result.txt", "w")
+
+local ok = true
+if type(sound.load) ~= "function" then ok = false end
+if type(sound.unload) ~= "function" then ok = false end
+out:write("sound.load => " .. type(sound.load) .. "\n")
+out:write("sound.unload => " .. type(sound.unload) .. "\n")
+
+-- preload the existing file next to the script, play from the cache a few
+-- times (the cached sound must survive being played), then drop it
+sound.load("sfx_test.wav")
+sound.play("sfx_test.wav")
+sound.play("sfx_test.wav", 0.5)
+sound.unload("sfx_test.wav")
+-- unloading something that was never loaded, and loading a missing file,
+-- must both be ignored rather than raise
+sound.unload("no_such_file_xyz.wav")
+sound.load("no_such_file_xyz.wav")
+
+out:write("cache calls accepted\n")
+out:write("VERDICT => " .. (ok and "PASS" or "FAIL") .. "\n")
+out:close()
+
+-- let the queued sound commands run on the main thread before exiting
+local t0 = millis()
+while millis() - t0 < 300 do
+  if not cycle then break end
+end

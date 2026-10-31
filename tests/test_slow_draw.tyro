@@ -1,0 +1,106 @@
+--======================================================================
+--  test_slow_draw.tyro - does a slow DRAW command break 'cycle' grouping?
+--======================================================================
+--  test_queue_lag.tyro makes the script *build* a body slowly (a Lua busy
+--  wait between two queued commands). This test slows the other side: a
+--  single queued command whose execution on the main thread takes longer
+--  than a frame. That is what canvas.test(ms) is for - it draws a marker
+--  rectangle and then spins for ~ms on the main thread, the same place every
+--  scripted draw command runs.
+--
+--  Body: black box  ->  canvas.test(ms)  ->  text lines.
+--  If the whole body is committed as one group (the default), the slow
+--  command only makes that one frame long; the box, the marker and the text
+--  still land together. If the body is split, the frame budget stops the
+--  drain pass *after* the slow command, so the text arrives a frame later:
+--  the black-box-then-text flicker.
+--
+--  Signals:
+--    mid          commands drained while the body was being built (0 with
+--                 grouping; >0 and < n means a mid-body split)
+--    passes       drain passes the body needed (1 = the whole body drawn in a
+--                 single drawing cycle; >1 = split across frames)
+--    deferred     passes stopped at the frame budget with more waiting
+--                 (0 with grouping+flush; grows with autogroup(false))
+--    maxdrainms   longest drain pass: with a slow draw it runs past one frame
+--    reads        'cycle' reads until the queue emptied (has an extra read
+--                 because a release can be woken by the previous frame event)
+--
+--  Phases: auto-group (default) / group-off (autogroup(false)) / enter-leave.
+--======================================================================
+
+window.show(320, 240)
+
+local out = openfile("test_slow_draw_result.txt", "w")
+
+local SLOW_MS = 80        -- well above one frame at fps=30 (~33 ms)
+
+-- One body: opaque box, the slow draw command, then text. Returns n commands.
+local function slow_body(aMs)
+  local n = 0
+  canvas.color = colors.black
+  canvas.rectangle(0, 0, 320, 60, true); n = n + 1
+  canvas.color = colors.green
+  canvas.test(aMs); n = n + 1
+  for i = 1, 5 do
+    canvas.text(8, 8 + (i - 1) * 9, "slow body line " .. i)
+    n = n + 1
+  end
+  return n
+end
+
+local function run_phase(aName, aHold, aMs, aBodies)
+  out:write("phase ", aName, " hold=", aHold, " ms=", aMs,
+            " group=", tostring(queue.group), "\n")
+  local splits, maxmid, frames, deferred0, maxpass, maxdrain = 0, 0, 0, queue.deferred, 0, 0
+  for b = 1, aBodies do
+    while queue.depth > 0 do                 -- start from an empty queue
+      if not cycle then break end
+    end
+    local before = queue.consumed
+    if aHold then enter() end
+    local n = slow_body(aMs)
+    if aHold then leave() end
+    local mid = queue.consumed - before      -- drained while building?
+    if mid > maxmid then maxmid = mid end
+    local passes0 = queue.passes
+    local reads = 0                          -- 'cycle' reads until fully drained
+    while queue.depth > 0 do
+      reads = reads + 1
+      if not cycle then break end
+    end
+    local passes = queue.passes - passes0    -- drain passes the body needed
+    if passes > maxpass then maxpass = passes end
+    if passes > 1 then splits = splits + 1 end
+    frames = frames + reads
+    if queue.drainms > maxdrain then maxdrain = queue.drainms end
+    out:write("  body ", b, " n=", n, " mid=", mid, " passes=", passes,
+              " reads=", reads, " lastdrainms=",
+              string.format("%.1f", queue.drainms), "\n")
+  end
+  out:write("  summary splits=", splits, " maxmid=", maxmid,
+            " maxpasses=", maxpass,
+            " avg_reads=", string.format("%.2f", frames / aBodies),
+            " deferred_delta=", queue.deferred - deferred0,
+            " maxdrainms=", string.format("%.1f", maxdrain), "\n")
+  return splits
+end
+
+local auto = run_phase("auto-group", false, SLOW_MS, 10)
+
+autogroup(false)
+local raw = run_phase("group-off", false, SLOW_MS, 10)
+autogroup(true)
+
+local held = run_phase("enter-leave", true, SLOW_MS, 10)
+
+out:write("engine frames=", queue.frames,
+          " deferred=", queue.deferred,
+          " maxdepth=", queue.max,
+          " group=", tostring(queue.group),
+          " frametime_ms=", string.format("%.1f", frametime() * 1000), "\n")
+out:write("VERDICT split_bodies auto=", auto,
+          " group-off=", raw,
+          " enter-leave=", held, "\n")
+out:close()
+exit()

@@ -14,22 +14,24 @@ dx = 3
 dy = 2
 r = 12
 
-while cycle do
+function update(dt)
+  -- move the ball
+  x = x + dx
+  y = y + dy
+  if x < r or x > canvas.width - r then dx = -dx end
+  if y < r or y > canvas.height - r then dy = -dy end
+end
+
+function draw()
   -- clear the previous frame
   canvas.color = colors.black
   canvas.rectangle(0, 0, canvas.width, canvas.height, true)
 
   -- title
   canvas.color = colors.white
-  canvas.text(10, 10, "Cycle Demo - the ball is drawn once per frame")
+  canvas.text(10, 10, "Cycle Demo - ball moves every frame")
 
-  -- move the ball
-  x = x + dx
-  y = y + dy
-  if x < r or x > canvas.width - r then dx = -dx end
-  if y < r or y > canvas.height - r then dy = -dy end
-
-  -- draw it (flushed at the next drawing cycle)
+  -- draw it
   canvas.color = colors.white
   canvas.circle(x, y, r, true)
 end
