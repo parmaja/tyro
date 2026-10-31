@@ -1,9 +1,0 @@
-PASS  require("require_mod") finds require_mod.tyro
-PASS  require("require_mod.tyro") shares the cached entry
-PASS  unknown module is refused
-      message: require: 'no_such_module_here' is not a .tyro or .lua file inside the workspace or the app folder
-PASS  require("require_mod_lua") finds require_mod_lua.lua
-      message: nil
-PASS  require("require_mod_lua.lua") reaches the same file
-      message: nil
-failures: 0

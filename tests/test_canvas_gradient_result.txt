@@ -1,5 +1,0 @@
-explicit colors queued
-string colors queued
-default colors queued
-circle gradient queued
-VERDICT => PASS

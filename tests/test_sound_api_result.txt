@@ -1,8 +1,0 @@
-loopPlay => function
-loopPitch => function
-loopVolume => function
-loopStop => function
-pitch => nil
-volume => nil
-stop => nil
-VERDICT => PASS

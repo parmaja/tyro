@@ -1,6 +1,0 @@
-PASS shoot right: angle is 0
-PASS shoot down: angle is 90
-PASS shoot left: angle is 180
-PASS shoot up: angle is -90
-PASS sprite reports assigned angle
-ALL TESTS PASSED

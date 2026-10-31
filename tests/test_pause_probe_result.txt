@@ -1,4 +1,0 @@
-pause: x before=16.0 after=16.0 moved=0.0
-sleep: x before=16.0 after=25.0 moved=9.0
-pause again: moved=0.0
-VERDICT PASS

@@ -1416,11 +1416,11 @@ begin
         exit(s);
     end;
 
-    s := IncludePathDelimiter(Res.WorkPath) + 'assets' + PathDelim + FileName;
+    s := IncludePathDelimiter(Res.WorkPath) + IncludePathDelimiter('assets') + FileName;
     if SysUtils.FileExists(s) then
       Exit(s);
 
-    s := IncludePathDelimiter(Res.AppPath) + FileName;
+    s := IncludePathDelimiter(Res.AppPath) + IncludePathDelimiter('assets') + FileName;
     if SysUtils.FileExists(s) then
       Exit(s);
 
