@@ -4076,7 +4076,7 @@ var
   X, Y: Integer;
   PX, PY: Integer;
   Status: string;
-  C: TColor;
+  C, CMinor, CMajor: TColor;
   A: TSpriteAction;
   FR, VR: TRect;
   SX, SY, SW, SH: Single;
@@ -4157,11 +4157,26 @@ begin
 
   if FShowGrid and (FZoom >= 6) then
   begin
-    C := SC($24FFFFFF);
+    //* Minor lines tint the sprite lightly; every 8th line gets a stronger
+    //* accent tint so tiles are easy to count without hiding the pixels.
+    CMinor := SC($38FFFFFF);
+    CMajor := SC($66CD75FF);
     for X := 1 to FCanvasW - 1 do
+    begin
+      if (X mod 8) = 0 then
+        C := CMajor
+      else
+        C := CMinor;
       ACanvas.FillRect(R.Left + Round(X * FZoom), R.Top, 1, R.Bottom - R.Top, C);
+    end;
     for Y := 1 to FCanvasH - 1 do
+    begin
+      if (Y mod 8) = 0 then
+        C := CMajor
+      else
+        C := CMinor;
       ACanvas.FillRect(R.Left, R.Top + Round(Y * FZoom), R.Right - R.Left, 1, C);
+    end;
   end;
 
   PaintSelection(ACanvas);
