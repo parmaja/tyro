@@ -40,7 +40,7 @@ const
   cSpriteEditorToolbarH = 42;
   cSpriteEditorToolsW = 52;
   cSpriteEditorRightW = 232;
-  cSpriteEditorPaletteH = 86;
+  cSpriteEditorPaletteH = 104;
 
   cSpriteEditorBg: Cardinal = $15171FFF;
   cSpriteEditorPanel: Cardinal = $1E2130FF;
@@ -55,7 +55,7 @@ const
 
 type
   TSpriteTool = (stSelect, stPixel, stPen, stFill, stPick, stCircle, stRect, stRotate);
-  TSpriteDragMode = (dmNone, dmPaint, dmShape, dmSelect, dmMoveSel, dmPan, dmScrub);
+  TSpriteDragMode = (dmNone, dmPaint, dmShape, dmSelect, dmMoveSel, dmPan, dmScrub, dmAlpha);
 
   TSpriteIcon = (icNone, icSave, icUndo, icRedo, icMirrorH, icMirrorV,
     icRotateCW, icRotateCCW, icGrid, icPlus, icMinus, icClose, icPlay, icPause,
@@ -108,6 +108,9 @@ type
     FTool: TSpriteTool;
     FFrontColor, FBackColor: TColor;
     FPalette: array of TColor;
+    //* Alpha (0..100) applied to the color picked from the palette. The front
+    //* color carries the real 0..255 alpha; this keeps the slider position.
+    FAlpha: Integer;
     FZoom: Single;
     FPanX, FPanY: Single;
     FShowGrid: Boolean;
@@ -174,6 +177,12 @@ type
     function SavePng: Boolean;
     function SaveSprite: Boolean;
     procedure SetStatus(const S: string);
+    //* Sets the front color and syncs the alpha slider with its alpha.
+    procedure SetFrontColor(const C: TColor);
+    //* Changes the front color alpha (0..100%) without touching its RGB.
+    procedure SetFrontAlpha(AValue: Integer);
+    //* Maps a client X inside the alpha slider to a 0..100% alpha.
+    procedure SetAlphaFromX(AX: Integer);
 
     function ActiveActionObject: TSpriteAction;
     function CurrentFrameIndex: Integer;
@@ -267,6 +276,7 @@ type
     function PaletteSwatchRect(AIndex: Integer): TRect;
     function FGColorRect: TRect;
     function BGColorRect: TRect;
+    function AlphaSliderRect: TRect;
     function DurationMinusRect: TRect;
     function DurationPlusRect: TRect;
     function LoopRect: TRect;
@@ -339,6 +349,8 @@ type
     property Zoom: Single read FZoom;
     //* Active tool; selecting a tool in the rail updates it.
     property Tool: TSpriteTool read FTool;
+    //* Alpha percentage (0..100) used by the color palette slider.
+    property FrontAlpha: Integer read FAlpha;
     //* Preview playback state: the play/pause button, the loop toggle and the
     //* fixed frame rate (0 = use the durations stored in the document).
     property PreviewPlaying: Boolean read FPreviewPlaying;
@@ -456,6 +468,14 @@ function ColorToHex(const C: TColor): string;
 begin
   Result := '#' + IntToHex(C.RGBA.Red, 2) + IntToHex(C.RGBA.Green, 2) +
     IntToHex(C.RGBA.Blue, 2) + IntToHex(C.RGBA.Alpha, 2);
+end;
+
+//Compares the visible color of two entries; the palette slider changes the
+//front color alpha, but the matching swatch should still be highlighted.
+function SameRGB(const A, B: TColor): Boolean; inline;
+begin
+  Result := (A.RGBA.Red = B.RGBA.Red) and (A.RGBA.Green = B.RGBA.Green) and
+    (A.RGBA.Blue = B.RGBA.Blue);
 end;
 
 function HexToColor(const S: string; const ADef: TColor): TColor;
@@ -606,6 +626,7 @@ begin
   FTool := stPixel;
   FFrontColor := clWhite;
   FBackColor := clBlank;
+  FAlpha := 100;
   BuildDefaultPalette;
   FZoom := 8;
   FPanX := 0;
@@ -956,6 +977,7 @@ begin
       FCanvasH := 32;
 
     FFrontColor := HexToColor(DonStr(Meta, 'front', ''), FFrontColor);
+    SetFrontColor(FFrontColor);
     FBackColor := HexToColor(DonStr(Meta, 'back', ''), FBackColor);
 
     PaletteNode := DonChild(Meta, 'palette');
@@ -1128,6 +1150,31 @@ procedure TSpriteEditor.SetStatus(const S: string);
 begin
   FStatus := S;
   FStatusTimer := 4.5;
+end;
+
+procedure TSpriteEditor.SetFrontColor(const C: TColor);
+begin
+  FFrontColor := C;
+  FAlpha := ClampInt(Round(C.RGBA.Alpha * 100 / 255), 0, 100);
+end;
+
+procedure TSpriteEditor.SetFrontAlpha(AValue: Integer);
+begin
+  FAlpha := ClampInt(AValue, 0, 100);
+  FFrontColor := FFrontColor.SetAlpha(Byte(Round(FAlpha * 255 / 100)));
+end;
+
+procedure TSpriteEditor.SetAlphaFromX(AX: Integer);
+var
+  R: TRect;
+  L, W: Integer;
+begin
+  R := AlphaSliderRect;
+  L := R.Left + 3;
+  W := Max(1, (R.Right - 3) - L);
+  SetFrontAlpha(Round((AX - L) * 100 / W));
+  SetStatus(Format('Color alpha %d%%', [FAlpha]));
+  Invalidate;
 end;
 
 { ---------------------------------------------------------------------------
@@ -2305,7 +2352,7 @@ begin
         if AButton = mbRight then
           FBackColor := C
         else
-          FFrontColor := C;
+          SetFrontColor(C);
         SetStatus('Picked ' + ColorToHex(C));
         FDragMode := dmNone;
       end;
@@ -2492,7 +2539,14 @@ begin
   if RayLib.IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) then
     HandleRightClick(FMouseX, FMouseY);
 
-  if FDragMode = dmScrub then
+  if FDragMode = dmAlpha then
+  begin
+    if RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT) then
+      SetAlphaFromX(FMouseX)
+    else
+      FDragMode := dmNone;
+  end
+  else if FDragMode = dmScrub then
   begin
     if RayLib.IsMouseButtonDown(MOUSE_BUTTON_LEFT) then
       ScrubPreview(FMouseX)
@@ -2598,10 +2652,19 @@ begin
 
   if InsideRect(PaletteAreaRect, AX, AY) then
   begin
+    if InsideRect(Rect(AlphaSliderRect.Left, AlphaSliderRect.Top - 6,
+      AlphaSliderRect.Right, AlphaSliderRect.Bottom + 6), AX, AY) then
+    begin
+      FDragMode := dmAlpha;
+      FDragButton := mbLeft;
+      SetAlphaFromX(AX);
+      Exit;
+    end;
     for I := 0 to High(FPalette) do
       if InsideRect(PaletteSwatchRect(I), AX, AY) then
       begin
-        FFrontColor := FPalette[I];
+        //* The slider value is the alpha added to the chosen palette color.
+        FFrontColor := FPalette[I].SetAlpha(Byte(Round(FAlpha * 255 / 100)));
         SetStatus('Front color ' + ColorToHex(FFrontColor));
         Exit;
       end;
@@ -2610,6 +2673,7 @@ begin
       C := FFrontColor;
       FFrontColor := FBackColor;
       FBackColor := C;
+      FAlpha := ClampInt(Round(FFrontColor.RGBA.Alpha * 100 / 255), 0, 100);
       SetStatus('Front/back colors swapped');
       Exit;
     end;
@@ -2795,7 +2859,7 @@ begin
     for I := 0 to High(FPalette) do
       if InsideRect(PaletteSwatchRect(I), AX, AY) then
       begin
-        FBackColor := FPalette[I];
+        FBackColor := FPalette[I].SetAlpha(Byte(Round(FAlpha * 255 / 100)));
         SetStatus('Back color ' + ColorToHex(FBackColor));
         Exit;
       end;
@@ -3086,7 +3150,7 @@ begin
   SwW := 18;
   SwH := 18;
   Gap := 3;
-  Cols := (R.Width - 128) div (SwW + Gap);
+  Cols := (R.Width - 272) div (SwW + Gap);
   if Cols < 1 then
     Cols := 1;
   if Cols > 16 then
@@ -3113,6 +3177,14 @@ var
 begin
   R := PaletteAreaRect;
   Result := Rect(R.Right - 68, R.Top + 22, R.Right - 28, R.Top + 62);
+end;
+
+function TSpriteEditor.AlphaSliderRect: TRect;
+var
+  R: TRect;
+begin
+  R := PaletteAreaRect;
+  Result := Rect(R.Right - 256, R.Top + 48, R.Right - 128, R.Top + 60);
 end;
 
 function TSpriteEditor.RenameRect: TRect;
@@ -4404,8 +4476,8 @@ end;
 
 procedure TSpriteEditor.PaintPalette(ACanvas: TTyroCanvas);
 var
-  R, SR, FR, BR: TRect;
-  I: Integer;
+  R, SR, FR, BR, AR: TRect;
+  I, HX: Integer;
   C: TColor;
   S: string;
 begin
@@ -4415,7 +4487,7 @@ begin
     SC(cSpriteEditorLine));
   DrawTextC(ACanvas, R.Left + 12, R.Top + 5, 'PALETTE',
     SC(cSpriteEditorAccent));
-  DrawTextC(ACanvas, R.Left + 104, R.Top + 5, 'Left click = front   Right click = back',
+  DrawTextC(ACanvas, R.Left + 104, R.Top + 5, 'Left = front   Right = back   Slider = alpha',
     SC(cSpriteEditorDim));
 
   for I := 0 to High(FPalette) do
@@ -4432,9 +4504,9 @@ begin
     end
     else
       ACanvas.FillRect(SR, C);
-    if C = FFrontColor then
+    if SameRGB(C, FFrontColor) then
       ACanvas.DrawRect(SR, 2, clWhite)
-    else if C = FBackColor then
+    else if SameRGB(C, FBackColor) then
       ACanvas.DrawRect(SR, 2, SC(cSpriteEditorAccent2))
     else
       ACanvas.DrawRect(SR, 1, SC($0B0D13FF));
@@ -4455,6 +4527,19 @@ begin
   ACanvas.DrawRect(BR, 2, SC(cSpriteEditorAccent2));
   DrawTextC(ACanvas, BR.Left + 4, BR.Bottom + 3, 'BG',
     SC(cSpriteEditorText));
+
+  //* Horizontal alpha slider for the color picked from the palette. The
+  //* checkerboard behind it makes a translucent color readable.
+  AR := AlphaSliderRect;
+  HX := AR.Left + 3 + Round(((AR.Right - 3) - (AR.Left + 3)) * FAlpha / 100);
+  PaintChecker(ACanvas, AR);
+  if HX > AR.Left then
+    ACanvas.FillRect(AR.Left, AR.Top, HX - AR.Left, AR.Bottom - AR.Top,
+      FFrontColor);
+  ACanvas.DrawRect(AR, 1, SC(cSpriteEditorLine));
+  ACanvas.FillRect(HX - 1, AR.Top - 2, 3, (AR.Bottom - AR.Top) + 4, clWhite);
+  DrawTextC(ACanvas, AR.Left, AR.Top - 14, Format('ALPHA %d%%', [FAlpha]),
+    SC(cSpriteEditorDim));
 
   S := ColorToHex(FFrontColor) + ' / ' + ColorToHex(FBackColor);
   DrawTextC(ACanvas, R.Right - 8 - Round(ACanvas.MeasureText(S)), R.Top + 5, S,
