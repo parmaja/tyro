@@ -676,10 +676,13 @@ end;
 procedure TSpriteEditor.AddDefaultAction;
 var
   A: TSpriteAction;
+  I: Integer;
 begin
   A := TSpriteAction.Create('idle');
-  if FFrames.Count > 0 then
-    A.AddFrame(0);
+  //* A sprite loaded without editor metadata has no actions yet: make the
+  //* default action play every frame instead of only the first one.
+  for I := 0 to FFrames.Count - 1 do
+    A.AddFrame(I);
   FActions.Add(A);
   FActiveAction := 0;
   FActiveFrame := 0;
