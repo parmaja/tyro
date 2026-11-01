@@ -4257,8 +4257,8 @@ begin
   begin
     //* Minor lines tint the sprite lightly; every 8th line gets a stronger
     //* accent tint so tiles are easy to count without hiding the pixels.
-    CMinor := SC($38FFFFFF);
-    CMajor := SC($66CD75FF);
+    CMinor := SC($295d5dff);
+    CMajor := SC($316f6fff);
     for X := 1 to FCanvasW - 1 do
     begin
       if (X mod 8) = 0 then
