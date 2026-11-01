@@ -54,7 +54,7 @@ const
   cSpriteEditorBad: Cardinal = $EF7D57FF;
 
 type
-  TSpriteTool = (stSelect, stPixel, stPen, stFill, stPick, stCircle, stRect, stRotate);
+  TSpriteTool = (stSelect, stPixel, stPen, stFill, stPick, stCircle, stRect, stRotate, stBlend);
   TSpriteDragMode = (dmNone, dmPaint, dmShape, dmSelect, dmMoveSel, dmPan, dmScrub, dmAlpha);
 
   TSpriteIcon = (icNone, icSave, icUndo, icRedo, icMirrorH, icMirrorV,
@@ -530,6 +530,7 @@ begin
     stCircle: Result := 'Circle';
     stRect: Result := 'Rectangle';
     stRotate: Result := 'Rotate';
+    stBlend: Result := 'Blend';
   else
     Result := '';
   end;
@@ -2327,6 +2328,18 @@ begin
         FDragMode := dmPaint;
         MarkFrameDirty(Idx);
       end;
+    stBlend:
+      begin
+        //* One pixel, but the chosen color is alpha blended with what is
+        //* already there instead of replacing it.
+        PushUndo;
+        if AButton = mbRight then C := FBackColor else C := FFrontColor;
+        PutPixel(Idx, PX, PY, C, True);
+        FLastPixel := Point(PX, PY);
+        FLastPixelValid := True;
+        FDragMode := dmPaint;
+        MarkFrameDirty(Idx);
+      end;
     stPen:
       begin
         PushUndo;
@@ -2418,7 +2431,8 @@ begin
               FY + (TY - FY) * I / Steps, C);
         end
         else
-          DrawPixelLine(Idx, FLastPixel.X, FLastPixel.Y, PX, PY, C, False);
+          DrawPixelLine(Idx, FLastPixel.X, FLastPixel.Y, PX, PY, C,
+            FTool = stBlend);
         FLastPixel := Point(PX, PY);
         FLastPixelValid := True;
         MarkFrameDirty(Idx);
@@ -2912,6 +2926,7 @@ begin
     KEY_SIX: FTool := stCircle;
     KEY_SEVEN: FTool := stRect;
     KEY_EIGHT: FTool := stRotate;
+    KEY_NINE: FTool := stBlend;
   end;
   SetStatus(ToolName(FTool));
 end;
@@ -3011,7 +3026,7 @@ begin
       else
         SelectAction(FActiveAction + 1);
     KEY_SPACE: TogglePreview;
-    KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN, KEY_EIGHT:
+    KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN, KEY_EIGHT, KEY_NINE:
       HandleKeyTool(Key);
     KEY_G:
       begin
@@ -3647,6 +3662,7 @@ begin
     stCircle: Result := 'tool-circle';
     stRect: Result := 'tool-rect';
     stRotate: Result := 'tool-rotate';
+    stBlend: Result := 'tool-blend';
   else
     Result := '';
   end;
@@ -3894,6 +3910,13 @@ begin
         ArcLine(CX, CY, 6, Pi * 0.9, Pi * 2.1);
         ACanvas.DrawLineF(CX + 5, CY + 5, CX + 7, CY + 2, AColor);
         ACanvas.DrawLineF(CX + 5, CY + 5, CX + 2, CY + 5, AColor);
+      end;
+    stBlend:
+      begin
+        //* A pixel with one solid half and one soft dot: alpha blending.
+        ACanvas.DrawRect(Rect(CX - 7, CY - 7, CX + 7, CY + 7), 1, AColor);
+        ACanvas.FillRect(CX - 5, CY - 5, 5, 10, AColor);
+        ACanvas.FillCircle(CX + 3, CY + 3, 2, AColor);
       end;
   end;
 end;
