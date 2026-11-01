@@ -42,6 +42,7 @@ type
   protected
   public
     constructor Create(const AName: string; AScript: TLuaScript); virtual;
+    procedure AfterConstruction; override;
     procedure Init; virtual;
     procedure Register(L: PLua_State); override;
     property Script: TLuaScript read FScript;
@@ -132,7 +133,7 @@ type
 
   { TLuaWorld }
 
-  TLuaWorld = class(TLuaCanvas)
+  TLuaWorld = class(TLuaCustomCanvas)
   protected
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
@@ -1002,35 +1003,21 @@ end;
 
 function TLuaWorld.Setter(L: PLua_State): integer;
 var
-  i: integer;
   field: string;
-  color: string;
 begin
   Result := 0;
   field := L.ToString(2);
-  if L.IsInteger(-1) or L.IsNumber(-1) then
+  if field = 'title' then
   begin
-    i := L.ToInteger(-1);
-    if field = 'width' then
-      Engine.World.Width := i
-    else if field = 'height' then
-      Engine.World.Height := i
-    else if field = 'backcolor' then
-      Engine.World.BackColor := IntToColor(i);
-  end
-  else if L.IsString(-1) then
-  begin
-    color := L.ToString(-1);
-    if field = 'backcolor' then
-      Engine.World.BackColor := StrToColor(color);
-  end
-  else if lua_isboolean(L, -1) then
-  begin
-    if field = 'title' then
+    if lua_isstring(L, -1) then
+    begin
       Engine.World.Title := L.ToString(-1);
-  end
-  else
-    inherited;
+      Result := 1;
+      exit;
+    end
+  end;
+  if Result = 0 then
+    Result := inherited;
 end;
 
 function TLuaWorld.Getter(L: PLua_State): integer;
@@ -1040,22 +1027,7 @@ begin
   Result := 0;
   field := L.ToString(2);
 
-  if field = 'width' then
-  begin
-    L.PushInteger(Engine.World.Width);
-    Result := 1;
-  end
-  else if field = 'height' then
-  begin
-    L.PushInteger(Engine.World.Height);
-    Result := 1;
-  end
-  else if field = 'backcolor' then
-  begin
-    L.PushInteger(ColorToInt(Engine.World.BackColor));
-    Result := 1;
-  end
-  else if field = 'shaking' then
+  if field = 'shaking' then
   begin
     L.PushBoolean(Engine.World.Shaking);
     Result := 1;
@@ -1064,9 +1036,9 @@ begin
   begin
     L.PushString(Engine.World.Title);
     Result := 1;
-  end
-  else
-    inherited;
+  end;
+  if Result = 0 then
+    Result := inherited;
 end;
 
 constructor TLuaWorld.Create(const AName: string; AScript: TLuaScript);
@@ -1142,6 +1114,11 @@ begin
   inherited Create;
   FScript := AScript;
   FName := AName;
+end;
+
+procedure TTyroLuaObject.AfterConstruction;
+begin
+  inherited;
   Created;
 end;
 
@@ -1205,10 +1182,10 @@ begin
   AddColor('white', clWhite);
   AddColor('silver', clLightgray);
   AddColor('gray', clGray);
-  AddColor('grey', clGray);
   AddColor('lightgray', clLightgray);
   AddColor('darkgray', clDarkGray);
   AddColor('black', clBlack);
+
   AddColor('red', clRed);
   AddColor('maroon', clMaroon);
   AddColor('yellow', clYellow);
@@ -1280,6 +1257,8 @@ begin
     FScript.AddQueueObject(TDrawSetPenObject.Create(Canvas, i));
     Result := 1;
   end;
+  if Result = 0 then
+    Result := inherited;
 end;
 
 function TLuaCustomCanvas.Getter(L: PLua_State): integer;
@@ -1317,6 +1296,8 @@ begin
     L.PushInteger(Canvas.Pen);
     Result := 1;
   end;
+  if Result = 0 then
+    Result := inherited;
 end;
 
 procedure TLuaCustomCanvas.Init;
@@ -3159,8 +3140,9 @@ end;
 
 function TLuaScript.Rgba_func(L: Plua_State): integer; cdecl;
 var
-  r, g, b, a: Int64;
+  r, g, b, a: Integer;
   c: Integer;
+  i: Integer;
 begin
   c := L.ArgsCount;
   r := 0;
@@ -3168,17 +3150,18 @@ begin
   b := 0;
   a := 255;
   if c >= 1 then
-    r := Round(L.ToNumber(1)) and 255;
+    r := Round(L.ToInteger(1)) and 255;
   if c >= 2 then
-    g := Round(L.ToNumber(2)) and 255;
+    g := Round(L.ToInteger(2)) and 255;
   if c >= 3 then
-    b := Round(L.ToNumber(3)) and 255;
+    b := Round(L.ToInteger(3)) and 255;
   if c >= 4 then
   begin
     if not L.IsNil(4) then
-      a := Round(L.ToNumber(4)) and 255;
+      a := Round(L.ToInteger(4)) and 255;
   end;
-  L.PushInteger(r + g * 256 + b * 65536 + a * 16777216);
+  i := Integer(r + g * 256 + b * 65536 + a * 16777216);
+  L.PushInteger(i);
   Result := 1;
 end;
 

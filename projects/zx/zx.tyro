@@ -28,7 +28,6 @@
 --======================================================================
 
 window.show(800, 600)
-
 -- ---- ZX Spectrum Color Palette (Normal + Bright) ---------------------
 local PALETTE = {
   [0] = rgb(0, 0, 0),         -- 0: Black
@@ -508,8 +507,8 @@ end
 -- ---- Frame Draw () --------------------------------------------------
 function draw()
   -- Canvas background clear
-  canvas.color = colors.black
-  canvas.rectangle(0, 0, canvas.width, canvas.height, true)
+  canvas.clear(colors.black)
+  canvas.color = colors.white
 
   -- Border bounds
   local bx = 0

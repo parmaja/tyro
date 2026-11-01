@@ -1,9 +1,20 @@
-window.show(640, 480)
---canvas.alpha = 100
+window.show(800, 600)
+
+world.alpha = 100
 canvas.text(10, 30, 'On Canvas')
 --canvas.text(10, 100, '110 عربي')
 screen.text(10, 60, 'On Screen')
 
+function update(dt)
+end
+
 function draw()
-    world.text(10, 90, 'On World')
+  --canvas.clear(colors.white)
+  c = rgb(0, 0, 0, 255)
+  println(c)
+  c = colors.black
+  println(c)
+  canvas.color = c
+  --canvas.color = colors.black
+  canvas.text(16, 568, "[SPACE] Play/Pause  [R] Rewind  [F] Turbo 4x  [M] Mute  [UP/DN] Volume  [B] Border  [1-4] Tape  [Q] Quit")
 end
