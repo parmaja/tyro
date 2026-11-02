@@ -1,0 +1,1073 @@
+--======================================================================
+--  Space Fighter 3D: Deep Space Combat for Tyro Game Engine
+--======================================================================
+--  An arcade 3D perspective space shooter.
+--  Twinkling diamond starfield, drifting nebulae, enemy squadrons,
+--  tumbling asteroids, and intense flagship boss battle.
+--
+--  Controls:
+--    W / S (Up / Down)     - Pitch Down / Up
+--    A / D (Left / Right)  - Roll / Strafe Left / Right
+--    SPACE / Z             - Fire Twin Plasma Cannons
+--    SHIFT                 - Boost Afterburners
+--    R                     - Restart Mission
+--    ESC                   - Exit
+--======================================================================
+
+window.show(960, 540)
+window.backcolor = colors.black
+
+local W = screen.width
+local H = screen.height
+local CX = W * 0.5
+local CY = H * 0.5
+local FOV = 420.0
+local MAX_Z = 2200.0
+
+-- ---- Math & Helpers --------------------------------------------------
+local function clamp(v, lo, hi)
+  if v < lo then return lo elseif v > hi then return hi else return v end
+end
+
+local function rgba(r, g, b, a)
+  a = a or 255
+  return r + g * 256 + b * 65536 + a * 16777216
+end
+
+local function dist3d(x1, y1, z1, x2, y2, z2)
+  local dx = x1 - x2
+  local dy = y1 - y2
+  local dz = z1 - z2
+  return math.sqrt(dx*dx + dy*dy + dz*dz)
+end
+
+-- 3D Perspective Projection: (x, y, z) -> screen (sx, sy, scale, visible)
+local function project(x, y, z)
+  if z <= 20.0 then
+    return 0, 0, 0, false
+  end
+  local sc = FOV / z
+  local sx = CX + x * sc
+  local sy = CY + y * sc
+  local vis = (sx >= -120 and sx <= W + 120 and sy >= -120 and sy <= H + 120)
+  return sx, sy, sc, vis
+end
+
+-- ---- Sound System ----------------------------------------------------
+local hasSound = (sound ~= nil)
+if hasSound then
+  pcall(function()
+    sound.loopPlay("Engine", 60, 0.25)
+  end)
+end
+
+local function sfx(name, f, ms)
+  if not hasSound then return end
+  pcall(function()
+    if name == "laser" then
+      sound.play("Pew", 880, 100)
+    elseif name == "boom" then
+      sound.play("Explode", 160, 450)
+    elseif name == "hit" then
+      sound.play("Noise", 320, 80)
+    elseif name == "alarm" then
+      sound.play("Siren", 720, 250)
+    elseif name == "boss" then
+      sound.play("Explode", 90, 800)
+    else
+      sound.play(name, f or 440, ms or 150)
+    end
+  end)
+end
+
+-- ---- Sprite Pool System ----------------------------------------------
+local function make_pool(filename, baseScale)
+  baseScale = baseScale or 1.0
+  local list = {}
+  return {
+    tex = filename,
+    scale = baseScale,
+    items = list,
+    get = function(self)
+      for i = 1, #self.items do
+        local sp = self.items[i]
+        if sp.visible == false then
+          sp.visible = true
+          sp.scale = self.scale
+          sp.angle = 0
+          return sp
+        end
+      end
+      local sp = Sprites.new()
+      sp.load(self.tex)
+      sp.scale = self.scale
+      sp.visible = true
+      self.items[#self.items + 1] = sp
+      return sp
+    end,
+    hide_all = function(self)
+      for i = 1, #self.items do
+        self.items[i].visible = false
+      end
+    end
+  }
+end
+
+local P = {
+  ship_level = make_pool("ship_level.png", 1.8),
+  ship_left  = make_pool("ship_left.png", 1.8),
+  ship_right = make_pool("ship_right.png", 1.8),
+  scout      = make_pool("enemy_scout.png", 1.0),
+  interceptor= make_pool("enemy_interceptor.png", 1.0),
+  cruiser    = make_pool("enemy_cruiser.png", 1.2),
+  boss       = make_pool("boss.png", 1.8),
+  asteroid1  = make_pool("asteroid1.png", 1.0),
+  asteroid2  = make_pool("asteroid2.png", 1.2),
+  laser_p    = make_pool("laser_player.png", 1.0),
+  laser_e    = make_pool("laser_enemy.png", 1.0),
+  spark      = make_pool("spark.png", 1.0),
+  shield     = make_pool("shield.png", 2.2),
+  boom0      = make_pool("boom0.png", 1.0),
+  boom1      = make_pool("boom1.png", 1.2),
+  boom2      = make_pool("boom2.png", 1.4),
+}
+
+-- ---- Deep Space Environment (Starfield & Drifting Nebulae) -----------
+local STAR_COUNT = 380
+local stars = {}
+
+local function init_star(s, randomizeZ)
+  s.x = (math.random() * 2 - 1) * 1600
+  s.y = (math.random() * 2 - 1) * 1100
+  s.z = randomizeZ and (math.random() * MAX_Z) or MAX_Z
+  s.baseSize = 0.8 + math.random() * 1.8
+  s.twinkle = math.random() * 6.28
+  s.twinkleSpeed = 2.0 + math.random() * 5.0
+  s.shiny = (math.random() < 0.12) -- 12% bright diamond glints
+  s.colType = math.random(5)
+end
+
+for i = 1, STAR_COUNT do
+  stars[i] = {}
+  init_star(stars[i], true)
+end
+
+-- 6 Drifting Nebula Dust Clouds
+local nebulae = {}
+for i = 1, 6 do
+  nebulae[i] = {
+    x = math.random() * W,
+    y = math.random() * H,
+    r = 100 + math.random() * 160,
+    vx = (math.random() - 0.5) * 8,
+    vy = (math.random() - 0.5) * 6,
+    col = (i % 2 == 0) and rgba(50, 20, 90, 45) or rgba(20, 50, 100, 40)
+  }
+end
+
+-- ---- Game Entities State ---------------------------------------------
+local state = "title" -- "title", "playing", "gameover", "victory"
+local score = 0
+local wave = 1
+local waveTimer = 0
+local waveMessage = ""
+local waveMessageTimer = 0
+
+-- Player Ship Physics & State
+local player = {
+  x = 0,
+  y = 120,
+  z = 180,
+  vx = 0,
+  vy = 0,
+  bank = 0,         -- -1 to 1 (left to right tilt)
+  shield = 100,
+  maxShield = 100,
+  fireCd = 0,
+  boost = false,
+  speed = 420.0,
+  sprite = nil,
+  shieldHit = 0,
+}
+
+-- Collections of dynamic 3D entities
+local enemies = {}
+local asteroids = {}
+local playerLasers = {}
+local enemyLasers = {}
+local explosions = {}
+local thrusterParticles = {}
+
+-- ---- Entity Spawners -------------------------------------------------
+local function spawn_scout(x, y, z)
+  enemies[#enemies + 1] = {
+    kind = "scout",
+    x = x or (math.random() * 2 - 1) * 800,
+    y = y or (math.random() * 2 - 1) * 500,
+    z = z or (MAX_Z + math.random() * 400),
+    vx = (math.random() - 0.5) * 120,
+    vy = (math.random() - 0.5) * 80,
+    vz = -(280 + math.random() * 160),
+    hp = 25,
+    maxHp = 25,
+    radius = 32,
+    scoreVal = 100,
+    timer = math.random() * 4,
+    fireTimer = 1.0 + math.random() * 2.0,
+    angle = 0,
+  }
+end
+
+local function spawn_interceptor(x, y, z)
+  enemies[#enemies + 1] = {
+    kind = "interceptor",
+    x = x or (math.random() * 2 - 1) * 700,
+    y = y or (math.random() * 2 - 1) * 450,
+    z = z or (MAX_Z + 200),
+    vx = 0,
+    vy = 0,
+    vz = -240,
+    hp = 55,
+    maxHp = 55,
+    radius = 38,
+    scoreVal = 250,
+    timer = math.random() * 6.28,
+    fireTimer = 0.8 + math.random() * 1.5,
+    angle = 0,
+  }
+end
+
+local function spawn_cruiser(x, y, z)
+  enemies[#enemies + 1] = {
+    kind = "cruiser",
+    x = x or (math.random() * 2 - 1) * 500,
+    y = y or (math.random() * 2 - 1) * 350,
+    z = z or (MAX_Z + 400),
+    vx = (math.random() - 0.5) * 60,
+    vy = (math.random() - 0.5) * 40,
+    vz = -150,
+    hp = 180,
+    maxHp = 180,
+    radius = 56,
+    scoreVal = 600,
+    timer = 0,
+    fireTimer = 1.2,
+    angle = 0,
+  }
+end
+
+local function spawn_boss()
+  enemies[#enemies + 1] = {
+    kind = "boss",
+    x = 0,
+    y = -80,
+    z = MAX_Z + 300,
+    vx = 80,
+    vy = 40,
+    vz = -100,
+    targetZ = 650,
+    hp = 1200,
+    maxHp = 1200,
+    radius = 85,
+    scoreVal = 5000,
+    timer = 0,
+    fireTimer = 0.8,
+    angle = 0,
+  }
+  sfx("boss")
+end
+
+local function spawn_asteroid(x, y, z, sizeType)
+  asteroids[#asteroids + 1] = {
+    x = x or (math.random() * 2 - 1) * 900,
+    y = y or (math.random() * 2 - 1) * 600,
+    z = z or (MAX_Z + math.random() * 300),
+    vx = (math.random() - 0.5) * 90,
+    vy = (math.random() - 0.5) * 90,
+    vz = -(200 + math.random() * 140),
+    rot = math.random() * 360,
+    rotSpeed = (math.random() - 0.5) * 120,
+    hp = (sizeType == 2) and 60 or 30,
+    sizeType = sizeType or 1,
+    radius = (sizeType == 2) and 44 or 34,
+  }
+end
+
+local function spawn_explosion(x, y, z, scale)
+  explosions[#explosions + 1] = {
+    x = x, y = y, z = z,
+    life = 0.55,
+    maxLife = 0.55,
+    scale = scale or 1.0,
+  }
+  sfx("boom")
+end
+
+local function spawn_player_laser()
+  -- Twin lasers from left and right hardpoints
+  local spread = 28
+  local pz = player.z + 20
+  playerLasers[#playerLasers + 1] = {
+    x = player.x - spread,
+    y = player.y + 4,
+    z = pz,
+    vx = (player.bank * -80),
+    vy = player.vy * 0.2,
+    vz = 1600.0,
+    life = 1.4,
+  }
+  playerLasers[#playerLasers + 1] = {
+    x = player.x + spread,
+    y = player.y + 4,
+    z = pz,
+    vx = (player.bank * -80),
+    vy = player.vy * 0.2,
+    vz = 1600.0,
+    life = 1.4,
+  }
+  sfx("laser")
+end
+
+local function spawn_enemy_laser(x, y, z, tx, ty, tz)
+  local dx = tx - x
+  local dy = ty - y
+  local dz = tz - z
+  local d = math.sqrt(dx*dx + dy*dy + dz*dz)
+  if d < 1 then d = 1 end
+  local speed = 650.0
+  enemyLasers[#enemyLasers + 1] = {
+    x = x, y = y, z = z,
+    vx = (dx / d) * speed,
+    vy = (dy / d) * speed,
+    vz = (dz / d) * speed,
+    life = 3.5,
+  }
+end
+
+-- ---- Wave Flow / Director --------------------------------------------
+local function start_wave(w)
+  wave = w
+  waveTimer = 0
+  if wave == 1 then
+    waveMessage = "WAVE 1: RECON PATROL SQUADRON"
+    for i = 1, 6 do
+      spawn_scout((i - 3.5) * 160, -100 + (i % 2) * 80, MAX_Z + i * 180)
+    end
+    for i = 1, 4 do spawn_asteroid(nil, nil, nil, 1) end
+  elseif wave == 2 then
+    waveMessage = "WAVE 2: ASTEROID DENSE FIELD & INTERCEPTORS"
+    for i = 1, 8 do
+      spawn_asteroid(nil, nil, MAX_Z + i * 200, (i % 2 == 0) and 2 or 1)
+    end
+    for i = 1, 5 do
+      spawn_interceptor((i - 3) * 180, (math.random() - 0.5) * 300, MAX_Z + 300 + i * 220)
+    end
+  elseif wave == 3 then
+    waveMessage = "WAVE 3: HEAVY ASSAULT CRUISERS"
+    for i = 1, 3 do
+      spawn_cruiser((i - 2) * 320, -120 + i * 60, MAX_Z + i * 350)
+    end
+    for i = 1, 6 do spawn_scout(nil, nil, MAX_Z + 150 + i * 200) end
+    for i = 1, 4 do spawn_interceptor(nil, nil, MAX_Z + 400 + i * 200) end
+  elseif wave == 4 then
+    waveMessage = "WARNING! CAPITAL DREADNOUGHT DETECTED!"
+    spawn_boss()
+    for i = 1, 4 do spawn_interceptor(nil, nil, MAX_Z + 400 + i * 250) end
+  end
+  waveMessageTimer = 3.5
+  sfx("alarm")
+end
+
+local function reset_game()
+  score = 0
+  player.x = 0
+  player.y = 100
+  player.z = 180
+  player.vx = 0
+  player.vy = 0
+  player.bank = 0
+  player.shield = 100
+  player.shieldHit = 0
+  enemies = {}
+  asteroids = {}
+  playerLasers = {}
+  enemyLasers = {}
+  explosions = {}
+  thrusterParticles = {}
+  start_wave(1)
+  state = "playing"
+end
+
+-- ======================================================================
+--  UPDATE CALLBACK: 60 FPS Engine-driven simulation
+-- ======================================================================
+function update(dt)
+  if dt > 0.05 then dt = 0.05 end
+
+  -- Ambient starfield animation
+  local worldSpeed = player.speed * (player.boost and 2.2 or 1.0)
+  for i = 1, STAR_COUNT do
+    local s = stars[i]
+    s.z = s.z - worldSpeed * dt
+    -- Steer starfield drift based on player banking
+    s.x = s.x - player.vx * dt * 0.45
+    s.y = s.y - player.vy * dt * 0.45
+    s.twinkle = s.twinkle + s.twinkleSpeed * dt
+    if s.z <= 25 then
+      init_star(s, false)
+    end
+  end
+
+  -- Drifting Nebulae
+  for i = 1, #nebulae do
+    local n = nebulae[i]
+    n.x = n.x + n.vx * dt
+    n.y = n.y + n.vy * dt
+    if n.x < -n.r then n.x = W + n.r end
+    if n.x > W + n.r then n.x = -n.r end
+    if n.y < -n.r then n.y = H + n.r end
+    if n.y > H + n.r then n.y = -n.r end
+  end
+
+  -- State machine handlers
+  if state == "title" then
+    if keyboard.pressed("space") or keyboard.pressed("enter") then
+      reset_game()
+    end
+    return
+  elseif state == "gameover" or state == "victory" then
+    if keyboard.pressed("r") or keyboard.pressed("space") or keyboard.pressed("enter") then
+      reset_game()
+    end
+    return
+  end
+
+  -- ---- IN-GAME PLAYING STATE -----------------------------------------
+  if waveMessageTimer > 0 then
+    waveMessageTimer = waveMessageTimer - dt
+  end
+
+  -- Check wave completion
+  waveTimer = waveTimer + dt
+  if #enemies == 0 then
+    if wave < 4 then
+      start_wave(wave + 1)
+    else
+      state = "victory"
+      sfx("boss")
+      return
+    end
+  end
+
+  -- Input Handling & Player Flight Mechanics
+  local accel = 920.0
+  local maxSpeed = 380.0
+  local targetBank = 0
+
+  player.boost = keyboard.down("shift")
+
+  if keyboard.down("a") or keyboard.down("left") then
+    player.vx = player.vx - accel * dt
+    targetBank = -1
+  elseif keyboard.down("d") or keyboard.down("right") then
+    player.vx = player.vx + accel * dt
+    targetBank = 1
+  else
+    player.vx = player.vx * (1.0 - dt * 4.5)
+  end
+
+  if keyboard.down("w") or keyboard.down("up") then
+    player.vy = player.vy - accel * dt
+  elseif keyboard.down("s") or keyboard.down("down") then
+    player.vy = player.vy + accel * dt
+  else
+    player.vy = player.vy * (1.0 - dt * 4.5)
+  end
+
+  player.vx = clamp(player.vx, -maxSpeed, maxSpeed)
+  player.vy = clamp(player.vy, -maxSpeed, maxSpeed)
+
+  -- Banking interpolation
+  player.bank = player.bank + (targetBank - player.bank) * dt * 8.0
+
+  -- Position integration & flight clamping
+  player.x = clamp(player.x + player.vx * dt, -440, 440)
+  player.y = clamp(player.y + player.vy * dt, -260, 260)
+
+  -- Thruster exhaust particles
+  local pRate = player.boost and 4 or 2
+  for _ = 1, pRate do
+    local offset = (math.random() < 0.5) and -18 or 18
+    thrusterParticles[#thrusterParticles + 1] = {
+      x = player.x + offset + (math.random() - 0.5) * 4,
+      y = player.y + 12 + (math.random() - 0.5) * 4,
+      z = player.z - 10,
+      vx = (math.random() - 0.5) * 20,
+      vy = 20 + math.random() * 40,
+      vz = -(worldSpeed * 0.8 + math.random() * 200),
+      life = 0.35,
+      maxLife = 0.35,
+    }
+  end
+
+  -- Update Thruster Particles
+  for i = #thrusterParticles, 1, -1 do
+    local tp = thrusterParticles[i]
+    tp.life = tp.life - dt
+    tp.x = tp.x + tp.vx * dt
+    tp.y = tp.y + tp.vy * dt
+    tp.z = tp.z + tp.vz * dt
+    if tp.life <= 0 or tp.z <= 20 then
+      table.remove(thrusterParticles, i)
+    end
+  end
+
+  -- Laser Firing
+  if player.fireCd > 0 then
+    player.fireCd = player.fireCd - dt
+  end
+  if keyboard.down("space") or keyboard.down("z") then
+    if player.fireCd <= 0 then
+      spawn_player_laser()
+      player.fireCd = 0.16
+    end
+  end
+
+  -- Shield hit flash recovery
+  if player.shieldHit > 0 then
+    player.shieldHit = player.shieldHit - dt * 3.0
+    if player.shieldHit < 0 then player.shieldHit = 0 end
+  end
+
+  -- Update Player Lasers
+  for i = #playerLasers, 1, -1 do
+    local pl = playerLasers[i]
+    pl.life = pl.life - dt
+    pl.x = pl.x + pl.vx * dt
+    pl.y = pl.y + pl.vy * dt
+    pl.z = pl.z + pl.vz * dt
+
+    local hit = false
+
+    -- Check collision against asteroids
+    for j = #asteroids, 1, -1 do
+      local ast = asteroids[j]
+      if dist3d(pl.x, pl.y, pl.z, ast.x, ast.y, ast.z) < (ast.radius + 15) then
+        hit = true
+        ast.hp = ast.hp - 20
+        spawn_explosion(pl.x, pl.y, pl.z, 0.7)
+        if ast.hp <= 0 then
+          spawn_explosion(ast.x, ast.y, ast.z, 1.5)
+          score = score + 50
+          table.remove(asteroids, j)
+        end
+        break
+      end
+    end
+
+    -- Check collision against enemies
+    if not hit then
+      for j = #enemies, 1, -1 do
+        local e = enemies[j]
+        if dist3d(pl.x, pl.y, pl.z, e.x, e.y, e.z) < (e.radius + 18) then
+          hit = true
+          e.hp = e.hp - 25
+          spawn_explosion(pl.x, pl.y, pl.z, 0.8)
+          if e.hp <= 0 then
+            spawn_explosion(e.x, e.y, e.z, (e.kind == "boss") and 3.5 or 1.8)
+            score = score + e.scoreVal
+            table.remove(enemies, j)
+          end
+          break
+        end
+      end
+    end
+
+    if hit or pl.life <= 0 or pl.z > MAX_Z + 600 then
+      table.remove(playerLasers, i)
+    end
+  end
+
+  -- Update Asteroids
+  for i = #asteroids, 1, -1 do
+    local ast = asteroids[i]
+    ast.x = ast.x + ast.vx * dt
+    ast.y = ast.y + ast.vy * dt
+    ast.z = ast.z + ast.vz * dt
+    ast.rot = ast.rot + ast.rotSpeed * dt
+
+    -- Check collision with player
+    if dist3d(ast.x, ast.y, ast.z, player.x, player.y, player.z) < (ast.radius + 24) then
+      player.shield = player.shield - 25
+      player.shieldHit = 1.0
+      spawn_explosion(player.x, player.y, player.z, 1.2)
+      sfx("hit")
+      table.remove(asteroids, i)
+      if player.shield <= 0 then
+        state = "gameover"
+        sfx("boom")
+        return
+      end
+    elseif ast.z <= 20 then
+      -- Loop back into deep space
+      ast.z = MAX_Z + math.random() * 300
+      ast.x = (math.random() * 2 - 1) * 900
+      ast.y = (math.random() * 2 - 1) * 600
+    end
+  end
+
+  -- Update Enemies
+  for i = #enemies, 1, -1 do
+    local e = enemies[i]
+    e.timer = e.timer + dt
+    e.fireTimer = e.fireTimer - dt
+
+    if e.kind == "scout" then
+      -- Fast strafing fly-by
+      e.x = e.x + math.sin(e.timer * 3.0) * 180 * dt
+      e.y = e.y + math.cos(e.timer * 2.0) * 120 * dt
+      e.z = e.z + e.vz * dt
+      if e.fireTimer <= 0 and e.z > 350 and e.z < 1600 then
+        spawn_enemy_laser(e.x, e.y, e.z, player.x, player.y, player.z)
+        e.fireTimer = 1.6 + math.random() * 1.2
+      end
+      if e.z <= 30 then
+        -- Reposition to deep space for another pass
+        e.z = MAX_Z + 200
+        e.x = (math.random() * 2 - 1) * 700
+      end
+
+    elseif e.kind == "interceptor" then
+      -- Weaves and dives aggressively towards player
+      local dx = player.x - e.x
+      local dy = player.y - e.y
+      e.x = e.x + dx * dt * 0.8 + math.sin(e.timer * 4.0) * 120 * dt
+      e.y = e.y + dy * dt * 0.8
+      e.z = e.z + e.vz * dt
+      if e.fireTimer <= 0 and e.z > 300 and e.z < 1700 then
+        spawn_enemy_laser(e.x - 20, e.y, e.z, player.x, player.y, player.z)
+        spawn_enemy_laser(e.x + 20, e.y, e.z, player.x, player.y, player.z)
+        e.fireTimer = 1.3 + math.random() * 0.8
+      end
+      if e.z <= 30 then
+        e.z = MAX_Z + 300
+        e.x = (math.random() * 2 - 1) * 600
+      end
+
+    elseif e.kind == "cruiser" then
+      -- Heavy slow bombardment
+      e.x = e.x + e.vx * dt
+      if math.abs(e.x) > 420 then e.vx = -e.vx end
+      e.y = e.y + math.sin(e.timer * 1.5) * 40 * dt
+      e.z = e.z + e.vz * dt
+      if e.fireTimer <= 0 and e.z > 400 and e.z < 1800 then
+        spawn_enemy_laser(e.x - 30, e.y, e.z, player.x, player.y, player.z)
+        spawn_enemy_laser(e.x + 30, e.y, e.z, player.x, player.y, player.z)
+        spawn_enemy_laser(e.x, e.y + 20, e.z, player.x, player.y, player.z)
+        e.fireTimer = 1.5
+      end
+      if e.z <= 60 then
+        e.z = MAX_Z + 400
+      end
+
+    elseif e.kind == "boss" then
+      -- Sovereign Dreadnought: approaches target depth, circles, fires spreads
+      if e.z > e.targetZ then
+        e.z = e.z + e.vz * dt
+      else
+        e.z = e.targetZ + math.sin(e.timer * 1.2) * 80
+      end
+      e.x = math.sin(e.timer * 1.4) * 360
+      e.y = -60 + math.cos(e.timer * 1.0) * 100
+
+      if e.fireTimer <= 0 then
+        -- 5-way energy barrage
+        for ang = -2, 2 do
+          local spreadX = player.x + ang * 100
+          spawn_enemy_laser(e.x + ang * 25, e.y + 15, e.z, spreadX, player.y, player.z)
+        end
+        e.fireTimer = 1.0
+      end
+    end
+
+    -- Check direct collision with player
+    if dist3d(e.x, e.y, e.z, player.x, player.y, player.z) < (e.radius + 28) then
+      player.shield = player.shield - 35
+      player.shieldHit = 1.0
+      spawn_explosion(e.x, e.y, e.z, 1.5)
+      sfx("hit")
+      if e.kind ~= "boss" then
+        table.remove(enemies, i)
+      end
+      if player.shield <= 0 then
+        state = "gameover"
+        sfx("boom")
+        return
+      end
+    end
+  end
+
+  -- Update Enemy Lasers
+  for i = #enemyLasers, 1, -1 do
+    local el = enemyLasers[i]
+    el.life = el.life - dt
+    el.x = el.x + el.vx * dt
+    el.y = el.y + el.vy * dt
+    el.z = el.z + el.vz * dt
+
+    -- Hit player check
+    if dist3d(el.x, el.y, el.z, player.x, player.y, player.z) < 32 then
+      player.shield = player.shield - 12
+      player.shieldHit = 1.0
+      spawn_explosion(player.x, player.y, player.z, 0.7)
+      sfx("hit")
+      table.remove(enemyLasers, i)
+      if player.shield <= 0 then
+        state = "gameover"
+        sfx("boom")
+        return
+      end
+    elseif el.life <= 0 or el.z <= 10 or el.z > MAX_Z + 400 then
+      table.remove(enemyLasers, i)
+    end
+  end
+
+  -- Update Explosions
+  for i = #explosions, 1, -1 do
+    local ex = explosions[i]
+    ex.life = ex.life - dt
+    if ex.life <= 0 then
+      table.remove(explosions, i)
+    end
+  end
+end
+
+-- ======================================================================
+--  DRAW CALLBACK: 3D Sorted Rendering & HUD Overlays
+-- ======================================================================
+function draw()
+  -- Clear screen & release pooled sprites from prior frame
+  screen.clear()
+  for _, pool in pairs(P) do
+    if type(pool) == "table" and pool.hide_all then
+      pool:hide_all()
+    end
+  end
+
+  -- 1. Draw Deep Space Background & Drifting Nebulae
+  for i = 1, #nebulae do
+    local n = nebulae[i]
+    screen.color = n.col
+    screen.circle(math.floor(n.x), math.floor(n.y), math.floor(n.r), true)
+  end
+
+  -- 2. Draw 3D Starfield with Shinning Diamond Glints
+  for i = 1, STAR_COUNT do
+    local s = stars[i]
+    local sx, sy, sc, vis = project(s.x, s.y, s.z)
+    if vis then
+      local b = (1.0 - (s.z / MAX_Z))
+      if b < 0.15 then b = 0.15 end
+      local tw = 0.75 + 0.25 * math.sin(s.twinkle)
+      local bright = math.floor(b * tw * 255)
+
+      local r, g, bb = bright, bright, bright
+      if s.colType == 1 then
+        r = math.floor(bright * 0.75); bb = 255 -- blue star
+      elseif s.colType == 2 then
+        bb = math.floor(bright * 0.75); r = 255 -- red dwarf
+      elseif s.colType == 3 then
+        bb = math.floor(bright * 0.6); r = 255; g = math.floor(bright * 0.9) -- gold
+      end
+
+      local rad = s.baseSize * sc * 3.2
+      if rad < 1.0 then rad = 1.0 end
+
+      screen.color = rgba(r, g, bb, 255)
+      screen.circle(math.floor(sx), math.floor(sy), math.floor(rad), true)
+
+      -- Shiny Specular Diamond Cross-Flare for nearest bright stars
+      if s.shiny and sc > 0.45 then
+        local sp = P.spark:get()
+        sp.x = sx
+        sp.y = sy
+        sp.scale = sc * 1.5 * tw
+        sp.angle = (s.twinkle * 20) % 360
+      end
+    end
+  end
+
+  -- 3. Draw Engine Thruster Particles in 3D
+  for i = 1, #thrusterParticles do
+    local tp = thrusterParticles[i]
+    local sx, sy, sc, vis = project(tp.x, tp.y, tp.z)
+    if vis then
+      local alpha = math.floor((tp.life / tp.maxLife) * 230)
+      screen.color = rgba(0, 220, 255, alpha)
+      screen.circle(math.floor(sx), math.floor(sy), math.floor(4.5 * sc + 1), true)
+    end
+  end
+
+  -- 4. Build 3D Render List for Z-Sorting (Far to Near)
+  local renderList = {}
+
+  -- Collect Asteroids
+  for i = 1, #asteroids do
+    local a = asteroids[i]
+    renderList[#renderList + 1] = {
+      kind = "asteroid",
+      obj = a,
+      z = a.z,
+    }
+  end
+
+  -- Collect Enemies
+  for i = 1, #enemies do
+    local e = enemies[i]
+    renderList[#renderList + 1] = {
+      kind = "enemy",
+      obj = e,
+      z = e.z,
+    }
+  end
+
+  -- Collect Player Lasers
+  for i = 1, #playerLasers do
+    local pl = playerLasers[i]
+    renderList[#renderList + 1] = {
+      kind = "laser_p",
+      obj = pl,
+      z = pl.z,
+    }
+  end
+
+  -- Collect Enemy Lasers
+  for i = 1, #enemyLasers do
+    local el = enemyLasers[i]
+    renderList[#renderList + 1] = {
+      kind = "laser_e",
+      obj = el,
+      z = el.z,
+    }
+  end
+
+  -- Collect Explosions
+  for i = 1, #explosions do
+    local ex = explosions[i]
+    renderList[#renderList + 1] = {
+      kind = "boom",
+      obj = ex,
+      z = ex.z,
+    }
+  end
+
+  -- Collect Player Ship
+  renderList[#renderList + 1] = {
+    kind = "player",
+    obj = player,
+    z = player.z,
+  }
+
+  -- Sort by Depth: largest Z (farthest away) first
+  table.sort(renderList, function(a, b) return a.z > b.z end)
+
+  -- 5. Render Z-Sorted Entities
+  for i = 1, #renderList do
+    local item = renderList[i]
+    local k = item.kind
+    local o = item.obj
+
+    if k == "asteroid" then
+      local sx, sy, sc, vis = project(o.x, o.y, o.z)
+      if vis then
+        local sp = (o.sizeType == 2) and P.asteroid2:get() or P.asteroid1:get()
+        sp.x = sx
+        sp.y = sy
+        sp.scale = sc * 2.4
+        sp.angle = o.rot
+      end
+
+    elseif k == "enemy" then
+      local sx, sy, sc, vis = project(o.x, o.y, o.z)
+      if vis then
+        local sp
+        if o.kind == "scout" then
+          sp = P.scout:get()
+          sp.scale = sc * 2.2
+        elseif o.kind == "interceptor" then
+          sp = P.interceptor:get()
+          sp.scale = sc * 2.4
+        elseif o.kind == "cruiser" then
+          sp = P.cruiser:get()
+          sp.scale = sc * 3.0
+        elseif o.kind == "boss" then
+          sp = P.boss:get()
+          sp.scale = sc * 4.2
+        end
+        if sp then
+          sp.x = sx
+          sp.y = sy
+        end
+      end
+
+    elseif k == "laser_p" then
+      local sx, sy, sc, vis = project(o.x, o.y, o.z)
+      if vis then
+        local sp = P.laser_p:get()
+        sp.x = sx
+        sp.y = sy
+        sp.scale = sc * 1.8
+      end
+
+    elseif k == "laser_e" then
+      local sx, sy, sc, vis = project(o.x, o.y, o.z)
+      if vis then
+        local sp = P.laser_e:get()
+        sp.x = sx
+        sp.y = sy
+        sp.scale = sc * 2.0
+      end
+
+    elseif k == "boom" then
+      local sx, sy, sc, vis = project(o.x, o.y, o.z)
+      if vis then
+        local progress = 1.0 - (o.life / o.maxLife)
+        local sp
+        if progress < 0.33 then
+          sp = P.boom0:get()
+        elseif progress < 0.66 then
+          sp = P.boom1:get()
+        else
+          sp = P.boom2:get()
+        end
+        sp.x = sx
+        sp.y = sy
+        sp.scale = sc * 3.0 * o.scale
+      end
+
+    elseif k == "player" then
+      local sx, sy, sc, vis = project(o.x, o.y, o.z)
+      if vis and state == "playing" then
+        local sp
+        if o.bank < -0.3 then
+          sp = P.ship_left:get()
+        elseif o.bank > 0.3 then
+          sp = P.ship_right:get()
+        else
+          sp = P.ship_level:get()
+        end
+        sp.x = sx
+        sp.y = sy
+        sp.scale = sc * 2.5
+
+        -- Shield hit hexagonal flare
+        if o.shieldHit > 0.05 then
+          local ssp = P.shield:get()
+          ssp.x = sx
+          ssp.y = sy
+          ssp.scale = sc * 2.8
+        end
+      end
+    end
+  end
+
+  -- 6. Render 3D Targeting Reticle & Cockpit HUD
+  if state == "playing" then
+    -- 3D Target Convergence Crosshair projected at Z = 750
+    local retX, retY = project(player.x, player.y, 750)
+    screen.color = rgba(0, 240, 255, 180)
+    screen.circle(math.floor(retX), math.floor(retY), 14, false)
+    screen.line(math.floor(retX - 20), math.floor(retY), math.floor(retX - 6), math.floor(retY))
+    screen.line(math.floor(retX + 6), math.floor(retY), math.floor(retX + 20), math.floor(retY))
+    screen.line(math.floor(retX), math.floor(retY - 20), math.floor(retX), math.floor(retY - 6))
+    screen.line(math.floor(retX), math.floor(retY + 6), math.floor(retX), math.floor(retY + 20))
+
+    -- Cockpit Top HUD Bar
+    screen.color = colors.darkblue
+    screen.rectangle(0, 0, W, 36, true)
+    screen.color = colors.cyan
+    screen.rectangle(0, 36, W, 2, true)
+
+    -- Shield Gauge
+    screen.color = colors.white
+    screen.text(18, 10, "SHIELD:")
+    screen.color = colors.darkgray
+    screen.rectangle(85, 10, 160, 16, true)
+    local sCol = (player.shield > 50) and colors.lime or ((player.shield > 25) and colors.yellow or colors.red)
+    screen.color = sCol
+    local sW = math.floor((math.max(player.shield, 0) / player.maxShield) * 156)
+    if sW > 0 then screen.rectangle(87, 12, sW, 12, true) end
+
+    -- Wave & Score Tracker
+    screen.color = colors.yellow
+    screen.text(CX - 60, 10, "WAVE: " .. wave .. " / 4")
+    screen.color = colors.white
+    screen.text(W - 190, 10, "SCORE: " .. score)
+
+    -- Boss Health Bar (if active)
+    for _, e in ipairs(enemies) do
+      if e.kind == "boss" then
+        screen.color = colors.darkgray
+        screen.rectangle(CX - 150, 48, 300, 16, true)
+        screen.color = colors.red
+        local bW = math.floor((math.max(e.hp, 0) / e.maxHp) * 296)
+        if bW > 0 then screen.rectangle(CX - 148, 50, bW, 12, true) end
+        screen.color = colors.white
+        screen.text(CX - 110, 50, "FLAGSHIP DREADNOUGHT")
+        break
+      end
+    end
+
+    -- Wave Banner Announcement
+    if waveMessageTimer > 0 then
+      screen.color = rgba(10, 15, 30, 200)
+      screen.rectangle(0, CY - 40, W, 50, true)
+      screen.color = colors.yellow
+      screen.text(CX - 160, CY - 24, waveMessage)
+    end
+  end
+
+  -- 7. Screen Overlays (Title, Game Over, Victory)
+  if state == "title" then
+    screen.color = rgba(5, 10, 25, 210)
+    screen.rectangle(0, 0, W, H, true)
+
+    screen.color = colors.cyan
+    screen.text(CX - 150, CY - 110, "SPACE FIGHTER 3D")
+    screen.color = colors.white
+    screen.text(CX - 110, CY - 75, "DEEP SPACE ASSAULT")
+
+    screen.color = colors.yellow
+    screen.text(CX - 145, CY - 10, "PRESS [SPACE] OR [ENTER] TO START")
+
+    screen.color = colors.skyblue
+    screen.text(CX - 180, CY + 50, "W / S (Up/Down)  - Pitch")
+    screen.text(CX - 180, CY + 75, "A / D (Left/Right) - Roll / Strafe")
+    screen.text(CX - 180, CY + 100, "SPACE / Z         - Fire Twin Plasma")
+    screen.text(CX - 180, CY + 125, "SHIFT             - Boost Afterburners")
+
+  elseif state == "gameover" then
+    screen.color = rgba(40, 5, 5, 215)
+    screen.rectangle(0, 0, W, H, true)
+
+    screen.color = colors.red
+    screen.text(CX - 100, CY - 60, "MISSION FAILED")
+    screen.color = colors.white
+    screen.text(CX - 85, CY - 25, "FINAL SCORE: " .. score)
+
+    screen.color = colors.yellow
+    screen.text(CX - 130, CY + 30, "PRESS [R] OR [SPACE] TO RETRY")
+
+  elseif state == "victory" then
+    screen.color = rgba(5, 30, 15, 215)
+    screen.rectangle(0, 0, W, H, true)
+
+    screen.color = colors.lime
+    screen.text(CX - 130, CY - 60, "VICTORY! SECTOR CLEARED!")
+    screen.color = colors.white
+    screen.text(CX - 85, CY - 25, "FINAL SCORE: " .. score)
+
+    screen.color = colors.yellow
+    screen.text(CX - 140, CY + 30, "PRESS [R] OR [SPACE] TO PLAY AGAIN")
+  end
+end
