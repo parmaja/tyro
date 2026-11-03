@@ -7,7 +7,7 @@
         <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">tyro</ProjectName>
-        <TargetedPlatforms>3</TargetedPlatforms>
+        <TargetedPlatforms>2</TargetedPlatforms>
         <AppType>Console</AppType>
         <MainSource>tyro.dpr</MainSource>
     </PropertyGroup>
@@ -115,7 +115,7 @@
         <VerInfo_Locale>1033</VerInfo_Locale>
         <Debugger_DebugSourcePath>D:\lab\pascal\tyro\src\tyrolib\;$(Debugger_DebugSourcePath)</Debugger_DebugSourcePath>
         <DCC_DUPLICATE_CTOR_DTOR>false</DCC_DUPLICATE_CTOR_DTOR>
-        <Debugger_RunParams>D:\lab\pascal\tyro\games\matrix\matrix.tyro</Debugger_RunParams>
+        <Debugger_RunParams>D:\lab\pascal\tyro\games\mazerogue\img\enemy_kamikaze.sprite</Debugger_RunParams>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -177,7 +177,7 @@
             <Deployment Version="5"/>
             <Platforms>
                 <Platform value="Linux64">False</Platform>
-                <Platform value="Win32">True</Platform>
+                <Platform value="Win32">False</Platform>
                 <Platform value="Win64">True</Platform>
             </Platforms>
         </BorlandProject>

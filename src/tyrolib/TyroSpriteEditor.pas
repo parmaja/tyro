@@ -25,7 +25,7 @@ interface
 
 uses
   Classes, SysUtils, Types, Math, StrUtils, Generics.Collections,
-  mnDON,
+  mnDON, mnUtils,
   RayLib, RayClasses,
   TyroClasses, TyroControls, TyroIcons, SpriteAtlas;
 
@@ -146,7 +146,6 @@ type
     FDragMode: TSpriteDragMode;
     FDragButton: TMouseButton;
     FDragStart: TPoint;
-    FDragLast: TPoint;
     FDragEnd: TPoint;
     FLastPixel: TPoint;
     FLastPixelValid: Boolean;
@@ -1066,7 +1065,7 @@ begin
       Result := Result + ',';
     A := FActions[I];
     Result := Result + '{"name":"' + JsonEscape(A.Name) + '","loop":' +
-      BoolToStr(A.Loop, 'true', 'false') + ',"frames":[';
+      BooleanToStr(A.Loop, 'true', 'false') + ',"frames":[';
     S := '';
     for J := 0 to A.Frames.Count - 1 do
     begin
@@ -2645,12 +2644,12 @@ begin
         7:
           begin
             FShowGrid := not FShowGrid;
-            SetStatus('Grid ' + BoolToStr(FShowGrid, 'on', 'off'));
+            SetStatus('Grid ' + BooleanToStr(FShowGrid, 'on', 'off'));
           end;
         8:
           begin
             FOnionSkin := not FOnionSkin;
-            SetStatus('Onion skin ' + BoolToStr(FOnionSkin, 'on', 'off'));
+            SetStatus('Onion skin ' + BooleanToStr(FOnionSkin, 'on', 'off'));
           end;
       end;
       Exit;
@@ -2786,7 +2785,7 @@ begin
       begin
         PushUndo;
         A.Loop := not A.Loop;
-        SetStatus('Loop ' + BoolToStr(A.Loop, 'on', 'off'));
+        SetStatus('Loop ' + BooleanToStr(A.Loop, 'on', 'off'));
       end;
       Exit;
     end;
@@ -2823,7 +2822,7 @@ begin
         PushUndo;
         A.Loop := not A.Loop;
         FModified := True;
-        SetStatus('Loop animation ' + BoolToStr(A.Loop, 'on', 'off'));
+        SetStatus('Loop animation ' + BooleanToStr(A.Loop, 'on', 'off'));
       end;
       Exit;
     end;
@@ -3031,7 +3030,7 @@ begin
     KEY_G:
       begin
         FShowGrid := not FShowGrid;
-        SetStatus('Grid ' + BoolToStr(FShowGrid, 'on', 'off'));
+        SetStatus('Grid ' + BooleanToStr(FShowGrid, 'on', 'off'));
       end;
   end;
   Invalidate;
