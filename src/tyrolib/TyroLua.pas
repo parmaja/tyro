@@ -3160,7 +3160,9 @@ begin
     if not L.IsNil(4) then
       a := Round(L.ToInteger(4)) and 255;
   end;
-  i := Integer(r + g * 256 + b * 65536 + a * 16777216);
+  // Pack as AARRGGBB with shifts: a * 16777216 would raise EIntOverflow
+  // in range-checked builds whenever alpha > 127.
+  i := Integer(Cardinal(r) or (Cardinal(g) shl 8) or (Cardinal(b) shl 16) or (Cardinal(a) shl 24));
   L.PushInteger(i);
   Result := 1;
 end;

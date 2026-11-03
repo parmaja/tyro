@@ -1,0 +1,252 @@
+--======================================================================
+--  bomberman_data.tyro - Pure Rules, Board & Mechanics Engine
+--======================================================================
+--  Contains classic Bomberman board generation, bomb blast geometry,
+--  crate/hidden-item rolls and movement collision helpers.
+--  Kept pure (no RayLib / engine calls) so it can run inside Tyro tests
+--  and be verified in tests/test_bomberman_data.tyro.
+--======================================================================
+
+local M = {}
+
+-- ---- Grid & tile definitions -----------------------------------------
+M.COLS = 15
+M.ROWS = 13
+M.TILE = 32
+
+M.T_FLOOR = 0   -- walkable grass
+M.T_WALL  = 1   -- indestructible stone block
+M.T_CRATE = 2   -- destructible wooden crate
+M.T_VOID  = 3   -- background outside the board
+
+-- ---- Tuning ------------------------------------------------------------
+M.PLAYER_SPEED      = 150   -- pixels per second at speed level 0
+M.SPEED_STEP        = 26    -- extra pixels per second per SPEEDUP pickup
+M.MAX_SPEED_LEVEL   = 3
+M.BOMB_FUSE         = 2.4   -- seconds until detonation
+M.MAX_BOMB_LEVEL    = 4
+M.BLAST_LEVEL0      = 1     -- flame reach per side at flame level 0
+M.MAX_BLAST_LEVEL   = 4
+M.START_LIVES       = 3
+M.INVULN_TIME       = 2.0   -- spawn protection seconds
+
+-- Hidden item odds under a crate (percent, classic style)
+M.HIDDEN_CHANCES = {
+  flame  = 10,
+  bomb   = 12,
+  speed  = 8,
+  shield = 4,
+  points = 20,
+} -- the rest stay plain crates
+
+-- Power-up frames inside powerup.sprite: F, B, speed, shield
+M.PU_FRAME = { flame = 0, bomb = 1, speed = 2, shield = 3 }
+
+-- ---- Deterministic RNG (LCG, reproducible for tests) -----------------
+function M.new_rng(seed)
+  local state = (seed or 12345) % 2147483647
+  if state <= 0 then state = state + 2147483646 end
+  return function()
+    state = (state * 16807) % 2147483647
+    return (state - 1) / 2147483646
+  end
+end
+
+-- ---- Board helpers -----------------------------------------------------
+function M.in_bounds(gx, gy)
+  return gx >= 0 and gx < M.COLS and gy >= 0 and gy < M.ROWS
+end
+
+function M.is_solid(t)
+  return t == M.T_WALL or t == M.T_CRATE or t == M.T_VOID
+end
+
+-- Cell center in world pixels
+function M.cell_cx(gx) return gx * M.TILE + M.TILE / 2 end
+function M.cell_cy(gy) return gy * M.TILE + M.TILE / 2 end
+
+-- World pixel -> grid cell
+function M.px_to_gx(px) return math.floor(px / M.TILE) end
+function M.px_to_gy(py) return math.floor(py / M.TILE) end
+
+-- Convert world pixel to board grid index (clamped)
+function M.gx_clamp(px)
+  local g = math.floor(px / M.TILE)
+  if g < 0 then g = 0 end
+  if g >= M.COLS then g = M.COLS - 1 end
+  return g
+end
+function M.gy_clamp(py)
+  local g = math.floor(py / M.TILE)
+  if g < 0 then g = 0 end
+  if g >= M.ROWS then g = M.ROWS - 1 end
+  return g
+end
+
+-- ---- Board generation ----------------------------------------------------
+-- Classic layout: solid block on every even/even intersection, player spawn
+-- nook at the top-left (cells 1,1 / 1,2 / 2,1 kept clear), crates scattered
+-- on the remaining open cells. Returns grid[y][x] and hidden[gx][gy] items.
+function M.create_board(seed)
+  local rng = M.new_rng(seed)
+  local grid = {}
+  for y = 1, M.ROWS do
+    grid[y] = {}
+    for x = 1, M.COLS do
+      local gx, gy = x - 1, y - 1
+      if gx % 2 == 0 and gy % 2 == 0 then
+        grid[y][x] = M.T_WALL
+      else
+        grid[y][x] = M.T_FLOOR
+      end
+    end
+  end
+
+  -- Keep the spawn nook clear: cells (1,1), (2,1), (1,2) in grid coords
+  grid[2][2] = M.T_FLOOR  -- (1,1)
+  grid[2][3] = M.T_FLOOR  -- (2,1)
+  grid[3][2] = M.T_FLOOR  -- (1,2)
+
+  -- Scatter crates, keeping a little breathing room around spawn
+  local hidden = {}
+  for y = 1, M.ROWS do hidden[y] = {} end
+  for y = 1, M.ROWS do
+    for x = 1, M.COLS do
+      local gx, gy = x - 1, y - 1
+      local near_spawn = (gx <= 2 and gy <= 2)
+      if grid[y][x] == M.T_FLOOR and not near_spawn then
+        if rng() < 0.70 then
+          grid[y][x] = M.T_CRATE
+          local roll = rng() * 100
+          local acc, item = 0, nil
+          for name, pct in pairs(M.HIDDEN_CHANCES) do
+            acc = acc + pct
+            if roll < acc then item = name; break end
+          end
+          hidden[y][x] = item -- nil = plain crate
+        end
+      end
+    end
+  end
+
+  return grid, hidden
+end
+
+-- ---- Blast geometry ----------------------------------------------------
+-- Compute the flame cells for a bomb at (bx, by) with reach. Flames travel
+-- along the four axes up to `reach` cells, stopping before walls. A crate
+-- stops the flame beyond it (the crate cell itself burns). Bombs in the
+-- path are reported for chain detonation.
+-- Returns: cells = { {gx, gy, kind} ... } with kind center|arm|tip,
+--          crates = { {gx, gy} ... }, chains = { {gx, gy} ... }
+function M.blast_cells(grid, bombs_lookup, bx, by, reach)
+  local cells = { { gx = bx, gy = by, kind = "center" } }
+  local crates, chains = {}, {}
+
+  local function cell_at(gx, gy)
+    if not M.in_bounds(gx, gy) then return M.T_VOID end
+    return grid[gy + 1][gx + 1]
+  end
+
+  local dirs = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+  for _, dir in ipairs(dirs) do
+    for i = 1, reach do
+      local gx, gy = bx + dir[1] * i, by + dir[2] * i
+      if not M.in_bounds(gx, gy) then break end
+      local t = cell_at(gx, gy)
+      local last = (i == reach)
+      if t == M.T_WALL or t == M.T_VOID then
+        break
+      elseif bombs_lookup and bombs_lookup[gy * M.COLS + gx] then
+        chains[#chains + 1] = { gx = gx, gy = gy }
+        cells[#cells + 1] = { gx = gx, gy = gy, kind = last and "tip" or "arm" }
+      elseif t == M.T_CRATE then
+        crates[#crates + 1] = { gx = gx, gy = gy }
+        cells[#cells + 1] = { gx = gx, gy = gy, kind = "tip" }
+        break
+      else
+        cells[#cells + 1] = { gx = gx, gy = gy, kind = last and "tip" or "arm" }
+      end
+    end
+  end
+  return cells, crates, chains
+end
+
+-- ---- Enemy movement -----------------------------------------------------
+-- Classic Balom movement: pick a direction, walk exactly `steps` cells,
+-- then choose a new direction (biasing toward the player). Deterministic
+-- thanks to the passed rng so replays/tests can reproduce it.
+-- Returns the next direction index into DIRS, or nil if boxed in.
+M.DIRS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+
+function M.pick_dir(grid, gx, gy, rng, prev_dir)
+  local options = {}
+  for i, dir in ipairs(M.DIRS) do
+    local nx, ny = gx + dir[1], gy + dir[2]
+    if M.in_bounds(nx, ny) and not M.is_solid(grid[ny + 1][nx + 1]) then
+      -- Never simply reverse unless it is the only way
+      if not (prev_dir and i == prev_dir) then
+        options[#options + 1] = i
+      end
+    end
+  end
+  if #options == 0 then
+    -- Dead end: allow reversing back the way it came
+    if prev_dir then return prev_dir end
+    return nil
+  end
+  return options[math.floor(rng() * #options) + 1]
+end
+
+-- Bresenham-ish greedy step toward target used by the smarter enemy brain.
+function M.chase_dir(grid, gx, gy, tx, ty)
+  local dx = math.sign and math.sign(tx - gx) or (tx > gx and 1 or (tx < gx and -1 or 0))
+  local dy = math.sign and math.sign(ty - gy) or (ty > gy and 1 or (ty < gy and -1 or 0))
+  local tries = {}
+  if math.abs(tx - gx) >= math.abs(ty - gy) then
+    if dx ~= 0 then tries[#tries + 1] = { dx, 0 } end
+    if dy ~= 0 then tries[#tries + 1] = { 0, dy } end
+  else
+    if dy ~= 0 then tries[#tries + 1] = { 0, dy } end
+    if dx ~= 0 then tries[#tries + 1] = { dx, 0 } end
+  end
+  for _, v in ipairs(tries) do
+    local nx, ny = gx + v[1], gy + v[2]
+    if M.in_bounds(nx, ny) and not M.is_solid(grid[ny + 1][nx + 1]) then
+      return v[1], v[2]
+    end
+  end
+  return 0, 0
+end
+
+-- Player feet collider half-extents (pixels), narrower than one tile so
+-- corners feel forgiving.
+M.PLAYER_HW = 9
+M.PLAYER_HH = 7
+
+-- Test a player-sized box (center px,py) against the grid.
+-- Returns true when the box fits entirely on non-solid cells.
+-- Anything off the board edge is solid too, so the player can never
+-- walk out of the stage.
+function M.box_free(grid, px, py)
+  local hw, hh = M.PLAYER_HW, M.PLAYER_HH
+  local x0 = math.floor((px - hw) / M.TILE)
+  local x1 = math.floor((px + hw) / M.TILE)
+  local y0 = math.floor((py - hh) / M.TILE)
+  local y1 = math.floor((py + hh) / M.TILE)
+  if x0 < 0 or y0 < 0 or x1 >= M.COLS or y1 >= M.ROWS then return false end
+  for gy = y0, y1 do
+    for gx = x0, x1 do
+      if M.is_solid(grid[gy + 1][gx + 1]) then return false end
+    end
+  end
+  return true
+end
+
+function M.clamp(v, lo, hi)
+  if v < lo then return lo end
+  if v > hi then return hi end
+  return v
+end
+
+return M
