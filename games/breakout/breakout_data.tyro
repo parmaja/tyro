@@ -43,12 +43,29 @@ M.START_LIVES = 3
 M.RESPAWN_DELAY = 1.2     -- seconds the "ball lost" pause lasts
 M.CLEAR_DELAY = 2.2       -- seconds the "board clear" fanfare lasts
 
--- Row tokens '1'..'6' map to a bricks.sprite frame and a point value.
+-- Row tokens '1'..'6' map to a bricks.png tile and a point value.
 -- The top rows are worth more, like the classic arcade board.
 M.ROW_SCORE = { 70, 60, 50, 40, 30, 20 }
+M.STEEL_SCORE = 50        -- 'H' bricks: two hits, steel tile 7, cracked tile 8
+M.FRAMES = 8              -- tiles 1..8 in bricks.png
+
+-- Power-up capsule kinds (frame order of img/powerups.sprite) and rules.
+M.PU = { WIDE = 1, STICKY = 2, MULTI = 3, LASER = 4 }
+M.PU_NAMES = { "WIDE PADDLE!", "STICKY PADDLE!", "MULTI BALL!", "LASER PADDLE!" }
+M.PU_DROP_CHANCE = 12     -- percent chance a broken brick drops one
+M.PU_FALL_SPEED = 95      -- px/s capsule descent
+M.PU_MAX_ACTIVE = 3       -- capsules on screen at once
+M.WIDE_TIME = 15
+M.STICKY_TIME = 12
+M.LASER_TIME = 12
+M.WIDE_PADDLE_W = 144
+M.LASER_INTERVAL = 0.45   -- auto-fire period while lasers are active
+M.LASER_SPEED = 520       -- bolt climb in px/s
+M.MAX_BALLS = 3           -- Multi Ball tops up to this many balls
 
 -- Levels: rows read top to bottom, one string per row, one token per column.
---   '.' empty   '1'..'6' a brick in that row colour (all single-hit for now)
+--   '.' empty    '1'..'6' a brick in that row colour (one hit)
+--   'H' steel brick (two hits, cracks after the first)
 M.LEVELS = {
   {
     name = "CLASSIC WALL",
@@ -59,6 +76,39 @@ M.LEVELS = {
       "44444444444444",
       "55555555555555",
       "66666666666666",
+    },
+  },
+  {
+    name = "GOLD PYRAMID",
+    rows = {
+      "......55......",
+      ".....4444.....",
+      "....433334....",
+      "...32222223...",
+      "..2111111112..",
+      ".HHHHHHHHHHHH.",
+    },
+  },
+  {
+    name = "NEON CHECKERS",
+    rows = {
+      "6.5.4.3.2.1.H.",
+      ".H.2.3.4.5.6.5",
+      "5.6.3.2.1.4.H.",
+      ".4.1.2.5.3.6.2",
+      "H.3.6.1.4.2.5.",
+      ".2.5.1.6.H.3.4",
+    },
+  },
+  {
+    name = "STEEL FORTRESS",
+    rows = {
+      "HHHHHHHHHHHHHH",
+      "H555555555555H",
+      "H5.44444444.5H",
+      "H5.43333334.5H",
+      "H555555555555H",
+      "HHHHHHHHHHHHHH",
     },
   },
 }
@@ -77,7 +127,7 @@ function M.brick_rect(col, row)
 end
 
 -- Builds the brick list for a level number (wraps around M.LEVELS).
--- Returns bricks with x, y, w, h, frame, score, hp and an alive flag.
+-- Returns bricks with x, y, w, h, frame, score, hp, maxhp and an alive flag.
 function M.build_level(level)
   local cfg = M.LEVELS[((level - 1) % #M.LEVELS) + 1]
   local bricks = {}
@@ -86,20 +136,36 @@ function M.build_level(level)
     for col = 0, math.min(M.COLS, #line) - 1 do
       local tok = string.sub(line, col + 1, col + 1)
       local digit = tonumber(tok)
+      local frame, hp, score
       if digit and digit >= 1 and digit <= 6 then
+        frame, hp, score = digit - 1, 1, M.ROW_SCORE[digit]
+      elseif tok == "H" then
+        frame, hp, score = 6, 2, M.STEEL_SCORE
+      end
+      if frame then
         local x, y = M.brick_rect(col, row - 1)
         bricks[#bricks + 1] = {
           col = col, row = row - 1,
           x = x, y = y, w = M.BRICK_W, h = M.BRICK_H,
-          frame = digit - 1,
-          score = M.ROW_SCORE[digit],
-          hp = 1,
+          frame = frame,
+          score = score,
+          hp = hp, maxhp = hp,
           alive = true,
         }
       end
     end
   end
   return bricks
+end
+
+-- Current wall tile (1-based) for a brick: colour tiles 1..6, steel tile 7,
+-- cracked steel tile 8.
+function M.brick_tile(b)
+  if b.frame == 6 then
+    if b.hp >= b.maxhp then return 7 end
+    return 8
+  end
+  return b.frame + 1
 end
 
 -- Circle vs axis-aligned rect. Returns hit, and on a hit the unit normal

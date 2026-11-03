@@ -29,7 +29,7 @@ LINE_DARK = (10, 14, 28, 255)
 CYAN = (0, 230, 255, 255)
 WHITE = (255, 255, 255, 255)
 
-# The six classic brick rows, top row first.
+# The six classic brick rows, top row first, plus steel and cracked steel.
 ROW_COLORS = [
     (255, 70, 85, 255),   # 1 red
     (255, 140, 40, 255),  # 2 orange
@@ -37,7 +37,9 @@ ROW_COLORS = [
     (60, 220, 110, 255),  # 4 green
     (60, 170, 255, 255),  # 5 blue
     (185, 90, 255, 255),  # 6 purple
+    (150, 160, 175, 255), # 7 steel
 ]
+STEEL_CRACK = (90, 100, 115, 255)
 
 
 def new_img(w, h):
@@ -95,11 +97,59 @@ def build_bricks():
         dr.rectangle([4, h // 2 - 1, 5, h // 2], fill=LINE_DARK)
         dr.rectangle([w - 6, h // 2 - 1, w - 5, h // 2], fill=LINE_DARK)
         frames.append(img)
+    # Cracked steel: takes two hits, fissures after the first
+    img, dr = new_img(w, h)
+    col = ROW_COLORS[6]
+    dr.rounded_rectangle([2, 2, w - 3, h - 3], radius=4, fill=STEEL_CRACK, outline=LINE_DARK)
+    dr.line([(7, 4), (w - 8, 4)], fill=shade(col, 1.1), width=1)
+    dr.rounded_rectangle([6, 6, w - 7, 10], radius=2, fill=shade(col, 1.2)[:3] + (60,))
+    dr.line([(14, 4), (20, 10), (16, 13), (24, 18)], fill=LINE_DARK, width=1)
+    dr.line([(34, 5), (30, 11), (36, 14), (32, 18)], fill=LINE_DARK, width=1)
+    dr.rectangle([4, h // 2 - 1, 5, h // 2], fill=LINE_DARK)
+    dr.rectangle([w - 6, h // 2 - 1, w - 5, h // 2], fill=LINE_DARK)
+    frames.append(img)
     sheet(frames, w, h, "bricks", duration=400)
 
 
 # -----------------------------------------------------------------------------
-# 2. Paddle (paddle.png, 96x16 = D.PADDLE_W / D.PADDLE_H)
+# 4. Power-up badges (powerups.sprite, 4 frames 22x22)
+#    0 WIDE, 1 STICKY, 2 MULTI, 3 LASER  - order matches D.PU
+# -----------------------------------------------------------------------------
+PU_BADGES = [CYAN, (255, 230, 60, 255), (60, 255, 150, 255), (255, 140, 40, 255)]
+
+
+def build_powerups():
+    w, h = 22, 22
+    frames = []
+    cx, cy = 11, 11
+    for idx, col in enumerate(PU_BADGES):
+        img, dr = new_img(w, h)
+        # Hexagon badge
+        r = 10
+        pts = [(cx + math.cos(a) * r, cy + math.sin(a) * r)
+               for a in [i * math.pi / 3 for i in range(6)]]
+        dr.polygon(pts, fill=(15, 20, 35, 245), outline=col)
+        if idx == 0:      # WIDE: wide bar with arrows
+            dr.rounded_rectangle([3, cy - 2, w - 4, cy + 2], radius=2, fill=col)
+            dr.polygon([(3, cy), (6, cy - 3), (6, cy + 3)], fill=WHITE)
+            dr.polygon([(w - 4, cy), (w - 7, cy - 3), (w - 7, cy + 3)], fill=WHITE)
+        elif idx == 1:    # STICKY: caught ball with ring
+            dr.ellipse([cx - 3, cy - 3, cx + 3, cy + 3], fill=col)
+            dr.arc([cx - 6, cy - 6, cx + 6, cy + 6], 30, 300, fill=WHITE)
+        elif idx == 2:    # MULTI: three little balls
+            for bx, by in [(cx - 4, cy + 2), (cx + 4, cy + 2), (cx, cy - 4)]:
+                dr.ellipse([bx - 2, by - 2, bx + 2, by + 2], fill=col, outline=WHITE)
+        else:             # LASER: twin bolts
+            dr.polygon([(cx - 4, cy - 6), (cx - 1, cy - 6), (cx - 3, cy),
+                        (cx, cy), (cx - 3, cy + 6)], fill=col)
+            dr.polygon([(cx + 4, cy - 6), (cx + 1, cy - 6), (cx + 3, cy),
+                        (cx, cy), (cx + 3, cy + 6)], fill=WHITE)
+        frames.append(img)
+    sheet(frames, w, h, "powerups", duration=600)
+
+
+# -----------------------------------------------------------------------------
+# 5. Paddle (paddle.png, 96x16 = D.PADDLE_W / D.PADDLE_H)
 # -----------------------------------------------------------------------------
 def build_paddle():
     w, h = 96, 16
@@ -195,6 +245,7 @@ def make_sounds():
 def main():
     print("Building Neon Breaker sprites...")
     build_bricks()
+    build_powerups()
     build_paddle()
     build_ball()
 

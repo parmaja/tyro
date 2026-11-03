@@ -3,15 +3,16 @@
 --======================================================================
 --  Bounce the plasma ball off your energy paddle and shatter every
 --  neon brick above. Top rows are worth more points - keep the ball
---  alive, clear the board and face it again a little faster!
+--  alive, clear the board and face four arcade walls, ever faster!
 --
 --  Features:
 --  * Pixel-art brick/paddle/ball sprites (make_assets.py)
+--  * 4 levels: Classic Wall, Gold Pyramid, Neon Checkers, Steel Fortress
+--  * Steel bricks take two hits and crack after the first
+--  * Power-ups: Wide / Sticky / Laser paddle, Multi Ball capsules
 --  * Angle control: where the ball hits the paddle decides the bounce
---  * Speed ramps up with every cleared board, hi-score saving
---  * Mouse, keyboard and gamepad paddle control
---  * Juice: brick debris bursts, ball trail, combo call-outs, shake
---  * Two-voice MML chiptune loop with jingles (Sweep/Chime/Explode Zaps)
+--  * Juice: debris bursts, ball trail, combo call-outs, screen shake
+--  * Two-voice MML chiptune loop with jingles
 --
 --  Controls:
 --    MOUSE              Move the paddle
@@ -66,12 +67,26 @@ local paddle_sp = Sprites.new("brk_paddle")
 paddle_sp.load("img/paddle.png")
 paddle_sp.layer = 30
 
-local ball_sp = Sprites.new("brk_ball")
-ball_sp.load("img/ball.png")
-ball_sp.layer = 31
+local ball_sp = {}
+for i = 1, D.MAX_BALLS do
+  local sp = Sprites.new("brk_ball_" .. i)
+  sp.load("img/ball.png")
+  sp.layer = 31
+  ball_sp[i] = sp
+end
+
+-- Capsule badges: one pooled atlas sprite per possible capsule on screen.
+local pu_pool = {}
+for i = 1, D.PU_MAX_ACTIVE do
+  local sp = Sprites.new("brk_pu_" .. i)
+  sp.load("img/powerups.sprite")
+  sp.layer = 28
+  sp.hide()
+  pu_pool[i] = sp
+end
 
 -- Brick wall: one tilemap is one cheap draw command per frame, so the whole
--- 84-brick board appears instantly (per-sprite loads cost a queue round trip).
+-- board appears instantly (per-sprite loads cost a queue round trip).
 local wall = tiles.new("brkwall")
 wall.load("img/bricks.png", D.BRICK_W + D.BRICK_GAP, D.BRICK_H + D.BRICK_GAP)
 local WALL_X = D.GRID_LEFT - 1
@@ -87,7 +102,8 @@ local level = 1
 local hi_score = D.load_high_score()
 
 local paddle = { cx = W / 2, w = D.PADDLE_W }
-local ball = { x = W / 2, y = H / 2, vx = 0, vy = 0, speed = D.BALL_SPEED, stuck = true }
+local balls = {}                  -- each {x, y, vx, vy, speed, stuck, sp}
+local ball_speed = D.BALL_SPEED   -- shared flight speed of every live ball
 local bricks = {}
 local bricks_left = 0
 local state_timer = 0
@@ -97,15 +113,24 @@ local particles = {}
 local trail = {}
 local floats = {}
 local combo = 0
-local music_timer = 0
+music_timer = 0
 local best_beat = false
 local MAX_PARTICLES = 180
 
--- Canvas colours matching the six brick rows (frame order of bricks.png)
+-- Power-up capsules and paddle bolts
+local drops = {}                  -- falling capsules {kind, x, y, sp}
+local bolts = {}                  -- laser bolts {x, y}
+local wide_t, sticky_t, laser_t = 0, 0, 0
+local laser_cd = 0
+local drop_seq = 0                -- round-robin for capsule sprite frames
+
+-- Canvas colours matching the eight brick tiles (frame order of bricks.png)
 local BRICK_COLORS = {
   colors.red, colors.orange, colors.yellow,
   colors.lime, colors.aqua, colors.purple,
+  colors.silver, colors.gray,
 }
+local PU_COLORS = { colors.aqua, colors.yellow, colors.lime, colors.orange }
 
 -- Attract-mode decorations: a slow star field behind the playfield
 local stars = {}
@@ -172,7 +197,7 @@ local function update_fx(dt)
 end
 
 local function draw_fx()
-  -- Ball trail: fading afterglow circles under the sprite
+  -- Ball trail: fading afterglow circles under the sprites
   canvas.color = colors.aqua
   for _, p in ipairs(trail) do
     local k = 1 - p.t / 0.28
@@ -208,36 +233,50 @@ local function rebuild_bricks()
   wall.resize(D.COLS, rows)
   wall.fill(0)
   for _, b in ipairs(bricks) do
-    wall.set(b.col, b.row, b.frame + 1)
+    wall.set(b.col, b.row, D.brick_tile(b))
   end
 end
 
 local function respawn_ball()
-  ball.stuck = true
-  ball.vx, ball.vy = 0, 0
-  ball.x = paddle.cx
-  ball.y = D.PADDLE_Y - D.BALL_R - 2
+  balls = {}
   trail = {}
   combo = 0
-  ball_sp.show()
+  balls[1] = {
+    x = paddle.cx, y = D.PADDLE_Y - D.BALL_R - 2,
+    vx = 0, vy = 0, speed = ball_speed, stuck = true, sp = ball_sp[1],
+  }
+  for i = 2, D.MAX_BALLS do
+    ball_sp[i].visible = false
+  end
+  ball_sp[1].show()
 end
 
 -- Sprites draw over the canvas, so the pause / game-over screens hide the field
 local function set_field_visible(on)
   paddle_sp.visible = on
-  ball_sp.visible = on
   wall.visible = on
+  for i = 1, D.MAX_BALLS do
+    ball_sp[i].visible = on and balls[i] ~= nil
+  end
+  for i = 1, D.PU_MAX_ACTIVE do
+    pu_pool[i].visible = on and drops[i] ~= nil
+  end
 end
 
 local function start_game()
-  set_field_visible(true)
+  paddle.w = D.PADDLE_W
+  paddle_sp.scale = 1.0
+  wide_t, sticky_t, laser_t, laser_cd = 0, 0, 0, 0
+  drops = {}
+  bolts = {}
+  particles = {}
+  floats = {}
+  best_beat = false
+  ball_speed = D.BALL_SPEED
   score = 0
   lives = D.START_LIVES
   level = 1
-  ball.speed = D.BALL_SPEED
-  best_beat = false
-  particles = {}
-  floats = {}
+  set_field_visible(true)
   rebuild_bricks()
   respawn_ball()
   state = "playing"
@@ -246,11 +285,12 @@ local function start_game()
 end
 
 rebuild_bricks()
+respawn_ball()
 
 -- Attract demo: the ball already ricochets around the board behind the title
-ball.stuck = false
-ball.vx = D.BALL_SPEED * 0.6
-ball.vy = -D.BALL_SPEED * 0.8
+balls[1].stuck = false
+balls[1].vx = D.BALL_SPEED * 0.6
+balls[1].vy = -D.BALL_SPEED * 0.8
 
 -- -----------------------------------------------------------------------------
 -- Paddle input
@@ -299,15 +339,123 @@ end
 -- -----------------------------------------------------------------------------
 -- Ball physics
 -- -----------------------------------------------------------------------------
-local function lose_ball()
+local lose_ball          -- forward declaration (defined after drop helpers)
+
+local function spawn_extra_ball(x, y, angle_deg)
+  if #balls >= D.MAX_BALLS then return end
+  local idx = #balls + 1
+  local sp = ball_sp[idx]
+  if not sp then return end
+  local rad = math.rad(angle_deg)
+  balls[idx] = {
+    x = x, y = y,
+    vx = ball_speed * math.sin(rad), vy = -ball_speed * math.cos(rad),
+    speed = ball_speed, stuck = false, sp = sp,
+  }
+  sp.show()
+end
+
+local function apply_power(kind, x, y)
+  if kind == D.PU.WIDE then
+    paddle.w = D.WIDE_PADDLE_W
+    paddle_sp.scale = paddle.w / D.PADDLE_W
+    wide_t = D.WIDE_TIME
+  elseif kind == D.PU.STICKY then
+    sticky_t = D.STICKY_TIME
+  elseif kind == D.PU.MULTI then
+    local add = math.min(2, D.MAX_BALLS - #balls)
+    for i = 1, add do
+      spawn_extra_ball(x, y, (i == 1) and -35 or 35)
+    end
+    sfx("Sweep", 520, 220)
+  elseif kind == D.PU.LASER then
+    laser_t = D.LASER_TIME
+    laser_cd = 0
+  end
+  add_float(x - 40, y - 24, D.PU_NAMES[kind], PU_COLORS[kind])
+  sfx("Chime", 990, 320)
+end
+
+local function drop_powerup(bx, by)
+  if state ~= "playing" or #drops >= D.PU_MAX_ACTIVE then return end
+  if math.random(100) > D.PU_DROP_CHANCE then return end
+  drop_seq = drop_seq + 1
+  local kind = drop_seq % D.PU.WIDE == 0 and D.PU.MULTI
+      or (drop_seq % 7 == 0 and D.PU.LASER
+      or (drop_seq % 2 == 0 and D.PU.STICKY or D.PU.WIDE))
+  -- Claim the first capsule sprite nobody is using (pool size == max drops)
+  local sp
+  for _, pool_sp in ipairs(pu_pool) do
+    local busy = false
+    for _, p in ipairs(drops) do
+      if p.sp == pool_sp then busy = true break end
+    end
+    if not busy then sp = pool_sp break end
+  end
+  if not sp then return end
+  sp.frame = kind - 1        -- atlas frames are 0-based, D.PU values are 1-based
+  sp.x = bx
+  sp.y = by
+  sp.show()
+  drops[#drops + 1] = { kind = kind, x = bx, y = by, sp = sp }
+end
+
+-- Common brick damage for ball and laser hits.
+local function damage_brick(b, hit_x, hit_y, ball_hit)
+  b.hp = b.hp - 1
+  local dead = b.hp <= 0
+  if dead then
+    b.alive = false
+    wall.set(b.col, b.row, 0)
+    bricks_left = bricks_left - 1
+    burst(b.x + b.w / 2, b.y + b.h / 2, BRICK_COLORS[b.frame + 1], 12, 190)
+    if state == "playing" then
+      if ball_hit then
+        combo = combo + 1
+      end
+      score = score + b.score
+      if not best_beat and score > hi_score then
+        best_beat = true
+        add_float(W / 2 - 44, H / 2 - 100, "NEW BEST!", colors.gold)
+        sfx("Chime", 1320, 420)
+      end
+      drop_powerup(b.x + b.w / 2, b.y)
+    end
+    play_wav("sfx/break.wav", 0.8)
+    sfx("Zap", 220 + (6 - b.frame) * 90 + (combo - 1) * 45, 60)
+    if ball_hit and combo >= 4 and combo % 4 == 0 then
+      shake(90, 5)
+      add_float(hit_x - 22, hit_y - 26, "x" .. combo .. " COMBO", colors.gold)
+    end
+    if bricks_left <= 0 then
+      if state == "attract" then
+        rebuild_bricks() -- demo ball keeps bouncing on a fresh wall
+      else
+        ball_speed = math.min(D.BALL_MAX_SPEED, ball_speed * D.BALL_SPEED_STEP)
+        hi_score = D.save_high_score(score)
+        state = "clear"
+        state_timer = D.CLEAR_DELAY
+        for _, bl in ipairs(balls) do bl.sp.hide() end
+        sfx("Chime", 880, 400)
+        pcall(function() music.mml("t150 l16 o5 c e g > c2") end)
+      end
+    end
+  else
+    wall.set(b.col, b.row, D.brick_tile(b))
+    burst(hit_x, hit_y, BRICK_COLORS[b.frame + 1], 5, 130)
+    play_wav("sfx/brick.wav", 0.9)
+  end
+end
+
+lose_ball = function()
   lives = lives - 1
-  burst(ball.x, ball.y, colors.white, 18, 240)
-  burst(ball.x, ball.y, colors.orange, 10, 160)
-  trail = {}
   play_wav("sfx/break.wav", 1.0)
   sfx("Explode", 200, 500)
   shake(500, 14)
-  ball_sp.hide()
+  wide_t, sticky_t, laser_t = 0, 0, 0
+  paddle.w = D.PADDLE_W
+  paddle_sp.scale = 1.0
+  for _, bl in ipairs(balls) do bl.sp.hide() end
   if lives <= 0 then
     hi_score = D.save_high_score(score)
     state = "gameover"
@@ -319,12 +467,24 @@ local function lose_ball()
   end
 end
 
--- One substep via the tested pure physics in breakout_data; only the
--- game-side reactions (sounds, wall tile, score, state) live here.
-local function step_ball(sdt)
+-- One substep for one ball; reacts to the events from the pure physics step.
+local function step_ball(ball, sdt)
   local ev, b, broke = D.ball_step(ball, paddle, bricks, sdt, state == "attract")
   if ev == "lose" then
-    lose_ball()
+    burst(ball.x, H - 6, colors.white, 14, 200)
+    ball.dead = true
+    if #balls <= 1 then
+      lose_ball()
+    else
+      for i, bl in ipairs(balls) do
+        if bl == ball then
+          table.remove(balls, i)
+          bl.sp.hide()
+          break
+        end
+      end
+      sfx("Explode", 240, 240)
+    end
   elseif ev == "wall" then
     sfx("Tri", 190, 35)
   elseif ev == "top" then
@@ -335,76 +495,111 @@ local function step_ball(sdt)
     play_wav("sfx/bounce.wav", 0.9)
     burst(ball.x, D.PADDLE_Y, colors.aqua, 5, 130)
     combo = 0 -- new rally
+    if sticky_t > 0 and state == "playing" then
+      ball.stuck = true
+      ball.vx, ball.vy = 0, 0
+      ball.y = D.PADDLE_Y - D.BALL_R - 2
+      sfx("Boing", 260, 120)
+    end
   elseif ev == "paddle_side" then
     play_wav("sfx/bounce.wav", 0.7)
     burst(ball.x, ball.y, colors.silver, 3, 110)
   elseif ev == "brick" then
-    if broke then
-      wall.set(b.col, b.row, 0)
-      bricks_left = bricks_left - 1
-      burst(b.x + b.w / 2, b.y + b.h / 2, BRICK_COLORS[b.frame + 1], 12, 190)
-      if state == "playing" then
-        combo = combo + 1
-        score = score + b.score
-        if not best_beat and score > hi_score then
-          best_beat = true
-          add_float(W / 2 - 44, H / 2 - 100, "NEW BEST!", colors.gold)
-          sfx("Chime", 1320, 420)
-        end
-      end
-      play_wav("sfx/break.wav", 0.8)
-      sfx("Zap", 220 + (6 - b.frame) * 90 + (combo - 1) * 45, 60)
-      if combo >= 4 and combo % 4 == 0 then
-        shake(90, 5)
-        add_float(ball.x - 22, ball.y - 26, "x" .. combo .. " COMBO", colors.gold)
-      end
-      if bricks_left <= 0 then
-        if state == "attract" then
-          rebuild_bricks() -- demo ball keeps bouncing on a fresh wall
-        else
-          ball.speed = math.min(D.BALL_MAX_SPEED, ball.speed * D.BALL_SPEED_STEP)
-          hi_score = D.save_high_score(score)
-          state = "clear"
-          state_timer = D.CLEAR_DELAY
-          ball_sp.hide()
-          sfx("Chime", 880, 400)
-          pcall(function() music.mml("t150 l16 o5 c e g > c2") end)
-        end
-      end
-    else
-      play_wav("sfx/brick.wav", 0.9)
-    end
+    damage_brick(b, ball.x, ball.y, true)
   end
 end
 
 local function update_ball(dt)
-  if ball.stuck then
-    ball.x = paddle.cx
-    ball.y = D.PADDLE_Y - D.BALL_R - 2
-    if launch_pressed() then
-      local ang = math.rad(math.random(-20, 20))
-      ball.vx = ball.speed * math.sin(ang)
-      ball.vy = -ball.speed * math.cos(ang)
-      ball.stuck = false
-      sfx("Sweep", 420, 160)
-    end
-  else
-    trail[#trail + 1] = { x = ball.x, y = ball.y, t = 0 }
-    if #trail > 14 then table.remove(trail, 1) end
-    local steps = D.clamp(math.ceil(ball.speed * dt / (D.BALL_R * 0.8)), 1, 8)
-    local sdt = dt / steps
-    for s = 1, steps do
-      if state == "playing" or state == "attract" then
-        ball.vx, ball.vy = D.fix_slope(ball.vx, ball.vy, ball.speed)
-        step_ball(sdt)
-      else
-        break
+  local steps = D.clamp(math.ceil(ball_speed * dt / (D.BALL_R * 0.8)), 1, 8)
+  local sdt = dt / steps
+  for i = #balls, 1, -1 do
+    local ball = balls[i]
+    if ball.stuck then
+      ball.x = paddle.cx
+      ball.y = D.PADDLE_Y - D.BALL_R - 2
+      if launch_pressed() then
+        local ang = math.rad(math.random(-20, 20))
+        ball.vx = ball.speed * math.sin(ang)
+        ball.vy = -ball.speed * math.cos(ang)
+        ball.stuck = false
+        sfx("Sweep", 420, 160)
+      end
+    else
+      trail[#trail + 1] = { x = ball.x, y = ball.y, t = 0 }
+      if #trail > 14 then table.remove(trail, 1) end
+      for s = 1, steps do
+        if state == "playing" or state == "attract" then
+          ball.vx, ball.vy = D.fix_slope(ball.vx, ball.vy, ball.speed)
+          step_ball(ball, sdt)
+        else
+          break
+        end
       end
     end
+    if ball ~= nil then
+      ball.sp.x = ball.x
+      ball.sp.y = ball.y
+    end
   end
-  -- the ball.png art is centred, so the sprite centre is the collision point
-  ball_sp.x = ball.x
-  ball_sp.y = ball.y
+end
+
+-- -----------------------------------------------------------------------------
+-- Power-up capsules and laser bolts
+-- -----------------------------------------------------------------------------
+local function update_drops(dt)
+  for i = #drops, 1, -1 do
+    local p = drops[i]
+    p.y = p.y + D.PU_FALL_SPEED * dt
+    p.sp.y = p.y
+    local half = paddle.w / 2
+    if D.circle_rect_hit(p.x, p.y, 10, paddle.cx - half, D.PADDLE_Y, paddle.w, D.PADDLE_H) then
+      p.sp.hide()
+      apply_power(p.kind, p.x, p.y)
+      table.remove(drops, i)
+    elseif p.y > H + 12 then
+      p.sp.hide()
+      table.remove(drops, i)
+    end
+  end
+end
+
+local function update_bolts(dt)
+  if laser_t > 0 then
+    laser_cd = laser_cd - dt
+    if laser_cd <= 0 then
+      laser_cd = D.LASER_INTERVAL
+      bolts[#bolts + 1] = { x = paddle.cx - paddle.w / 2 + 8, y = D.PADDLE_Y - 6 }
+      bolts[#bolts + 1] = { x = paddle.cx + paddle.w / 2 - 8, y = D.PADDLE_Y - 6 }
+      sfx("Zap", 700, 45)
+    end
+  end
+  for i = #bolts, 1, -1 do
+    local bo = bolts[i]
+    bo.y = bo.y - D.LASER_SPEED * dt
+    local gone = bo.y < TOP
+    if not gone then
+      for _, b in ipairs(bricks) do
+        if b.alive and D.circle_rect_hit(bo.x, bo.y, 2, b.x, b.y, b.w, b.h) then
+          damage_brick(b, bo.x, bo.y, false)
+          gone = true
+          break
+        end
+      end
+    end
+    if gone then table.remove(bolts, i) end
+  end
+end
+
+local function update_powers(dt)
+  if wide_t > 0 then
+    wide_t = wide_t - dt
+    if wide_t <= 0 then
+      paddle.w = D.PADDLE_W
+      paddle_sp.scale = 1.0
+    end
+  end
+  if sticky_t > 0 then sticky_t = sticky_t - dt end
+  if laser_t > 0 then laser_t = laser_t - dt end
 end
 
 -- -----------------------------------------------------------------------------
@@ -433,11 +628,14 @@ function update(dt)
 
     update_paddle(dt)
     update_ball(dt)
+    if state == "playing" then
+      update_powers(dt)
+      update_drops(dt)
+      update_bolts(dt)
+    end
 
     if state == "attract" and launch_pressed() then
       start_game()
-    elseif state == "playing" then
-      if ball.stuck then ball_sp.show() end
     end
 
   elseif state == "paused" then
@@ -497,6 +695,15 @@ local function draw_hud()
     canvas.color = colors.aqua
     canvas.circle(W - 26 - i * 20, 20, 6, true)
   end
+  -- Active power-up timers
+  local fx = ""
+  if wide_t > 0 then fx = fx .. "WIDE " .. math.ceil(wide_t) .. " " end
+  if sticky_t > 0 then fx = fx .. "STICKY " .. math.ceil(sticky_t) .. " " end
+  if laser_t > 0 then fx = fx .. "LASER " .. math.ceil(laser_t) end
+  if fx ~= "" then
+    canvas.color = colors.lime
+    canvas.text(10, D.HUD_H + 6, fx)
+  end
 end
 
 local function draw_field()
@@ -534,6 +741,14 @@ function draw()
   draw_field()
   draw_fx()
 
+  -- Laser bolts
+  for _, bo in ipairs(bolts) do
+    canvas.color = colors.white
+    canvas.rectangle(bo.x - 1, bo.y - 6, 3, 10, true)
+    canvas.color = colors.orange
+    canvas.rectangle(bo.x - 1, bo.y + 4, 3, 3, true)
+  end
+
   if state == "attract" then
     text_center(250, "N E O N   B R E A K E R", colors.aqua)
     text_center(288, "Smash every neon brick!", colors.silver)
@@ -549,8 +764,9 @@ function draw()
     text_center(H / 2 - 60, "BALL LOST!", colors.red)
     text_center(H / 2 - 20, "Balls left: " .. lives, colors.silver)
   elseif state == "clear" then
+    local nxt = D.LEVELS[(level % #D.LEVELS) + 1]
     text_center(H / 2 - 60, "BOARD CLEAR!", colors.lime)
-    text_center(H / 2 - 20, "GET READY - LEVEL " .. (level + 1), colors.yellow)
+    text_center(H / 2 - 20, "GET READY - " .. nxt.name, colors.yellow)
   elseif state == "paused" then
     canvas.color = colors.black
     canvas.rectangle(0, 0, W, H, true)
