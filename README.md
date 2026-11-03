@@ -351,8 +351,8 @@ positioned with `move` or by setting `x`/`y` properties.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `sprite.x` | `number` | X position (read/write). |
-| `sprite.y` | `number` | Y position (read/write). |
+| `sprite.x` | `number` | X position of the sprite's centre (the engine draws and rotates around the centre, like the physics body) (read/write). |
+| `sprite.y` | `number` | Y position of the sprite's centre (read/write). |
 | `sprite.angle` | `number` | Rotation in degrees (read/write). |
 | `sprite.scale` | `number` | Scale factor, 1.0 = original size (read/write). |
 | `sprite.visible` | `boolean` | Whether the sprite is drawn (read/write). |
