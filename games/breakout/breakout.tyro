@@ -12,6 +12,7 @@
 --  * Power-ups: Wide / Sticky / Laser paddle, Multi Ball capsules
 --  * Angle control: where the ball hits the paddle decides the bounce
 --  * Juice: debris bursts, ball trail, combo call-outs, screen shake
+--  * CRT filter (scanlines + vignette) with an on-screen G toggle
 --  * Two-voice MML chiptune loop with jingles
 --
 --  Controls:
@@ -20,6 +21,7 @@
 --    SPACE / UP / CLICK Launch the ball, start the game
 --    P                  Pause / Resume
 --    M                  Mute / Unmute audio
+--    G                  CRT filter on / off (scanlines and vignette)
 --    ESC                Exit to desktop
 --    Gamepad: Left-Stick/D-Pad to steer, A to launch or start
 --======================================================================
@@ -59,6 +61,12 @@ local function play_theme()
   if muted then return end
   pcall(function() music.mml(D.MML_LEAD, D.MML_BASS) end)
 end
+
+-- CRT filter (crt.frag): scanlines, slow scan bar and a soft vignette.
+-- If the shader fails to compile the game simply runs without it.
+local crt_on = true
+pcall(function() shader.load("crt.frag") end)
+shader.value = crt_on and 0.55 or 0.0
 
 -- -----------------------------------------------------------------------------
 -- Sprites
@@ -609,6 +617,16 @@ function update(dt)
   if dt > MAX_DT then dt = MAX_DT end   -- physics never skips on a hiccup frame
   if keyboard.pressed("escape") then exit() end
   if keyboard.pressed("m") then muted = not muted end
+  if keyboard.pressed("g") then
+    crt_on = not crt_on
+    if crt_on then
+      pcall(function() shader.load("crt.frag") end)
+      shader.value = 0.55
+    else
+      shader.effect = "none"
+    end
+    sfx("Tri", crt_on and 620 or 320, 45)
+  end
 
   update_fx(dt)
   if (state == "playing" or state == "clear" or state == "dead") then
@@ -754,9 +772,16 @@ function draw()
     text_center(288, "Smash every neon brick!", colors.silver)
     if math.floor(t * 2) % 2 == 0 then
       text_center(350, "PRESS SPACE OR CLICK TO PLAY", colors.yellow)
+    -- Marquee teasing the four walls; it crawls while the demo ball plays
+    local marq = math.floor(t / 3) % (#D.LEVELS * 2)
+    if marq < #D.LEVELS then
+      text_center(382, "THE WALLS: " .. D.LEVELS[marq + 1].name, colors.gray)
+    else
+      text_center(382, "CATCH CAPSULES: WIDE * STICKY * MULTI * LASER", colors.gray)
+    end
     end
     text_center(420, "MOUSE / KEYS / GAMEPAD - paddle   SPACE - launch", colors.gray)
-    text_center(448, "P - pause    M - mute    ESC - exit", colors.gray)
+    text_center(448, "P - pause    M - mute    G - CRT filter    ESC - exit", colors.gray)
     text_center(505, "BEST " .. math.max(hi_score, score), colors.lime)
   end
 
