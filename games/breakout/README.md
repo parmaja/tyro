@@ -8,6 +8,9 @@ Where the ball hits the paddle decides the bounce angle - the edges throw it wid
 the middle sends it straight up. Top rows are worth more points. Clear the whole
 board and it rebuilds itself a little faster!
 
+Brick debris bursts, a glowing ball trail, floating combo call-outs and a
+two-voice chiptune loop keep the arcade feel alive.
+
 ---
 
 ## Gameplay & Rules
@@ -16,11 +19,14 @@ board and it rebuilds itself a little faster!
    - Points by row: 70 / 60 / 50 / 40 / 30 / 20 from top to bottom.
 2. **The Paddle**: mouse, keyboard or gamepad. The bounce angle follows the hit
    position (up to 60 degrees off vertical), so aim with the edges!
-3. **Lives**: you start with 3 balls. Drop one below the paddle and the count
+3. **Combos**: bricks broken in one rally (without touching the paddle) pitch the
+   break sound higher; every 4th streak shows a combo call-out and a screen jolt.
+4. **Lives**: you start with 3 balls. Drop one below the paddle and the count
    goes down; at zero it is game over.
-4. **Board clear**: the ball speeds up ~7% per cleared board (up to 560 px/s)
+5. **Board clear**: the ball speeds up ~7% per cleared board (up to 560 px/s)
    and the wall is rebuilt.
-5. **Hi-Score**: the best score is kept in `breakout.hi` next to the script.
+6. **Hi-Score**: the best score is kept in `breakout.hi` next to the script,
+   and a NEW BEST! call-out appears the moment you pass it.
 
 ## Controls
 

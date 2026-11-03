@@ -10,6 +10,8 @@
 --  * Angle control: where the ball hits the paddle decides the bounce
 --  * Speed ramps up with every cleared board, hi-score saving
 --  * Mouse, keyboard and gamepad paddle control
+--  * Juice: brick debris bursts, ball trail, combo call-outs, shake
+--  * Two-voice MML chiptune loop with jingles (Sweep/Chime/Explode Zaps)
 --
 --  Controls:
 --    MOUSE              Move the paddle
@@ -49,6 +51,14 @@ local function play_wav(file, vol)
   pcall(function() sound.play(file, vol or 0.85) end)
 end
 
+-- Chiptune theme: music.mml has no stop, so the loop is re-armed by timer
+-- only while the game is playing (same pattern as neonrunner).
+local function play_theme()
+  music_timer = D.MUSIC_LOOP
+  if muted then return end
+  pcall(function() music.mml(D.MML_LEAD, D.MML_BASS) end)
+end
+
 -- -----------------------------------------------------------------------------
 -- Sprites
 -- -----------------------------------------------------------------------------
@@ -82,6 +92,21 @@ local bricks = {}
 local bricks_left = 0
 local state_timer = 0
 
+-- Juice: particles, ball trail, floating texts, rally combo and the music loop
+local particles = {}
+local trail = {}
+local floats = {}
+local combo = 0
+local music_timer = 0
+local best_beat = false
+local MAX_PARTICLES = 180
+
+-- Canvas colours matching the six brick rows (frame order of bricks.png)
+local BRICK_COLORS = {
+  colors.red, colors.orange, colors.yellow,
+  colors.lime, colors.aqua, colors.purple,
+}
+
 -- Attract-mode decorations: a slow star field behind the playfield
 local stars = {}
 math.randomseed(20261103)
@@ -92,6 +117,82 @@ for i = 1, 70 do
     r = math.random(1, 2),
     tw = math.random() * 6.283,
   }
+end
+
+-- -----------------------------------------------------------------------------
+-- Juice effects: debris bursts, floating texts, ball trail
+-- -----------------------------------------------------------------------------
+local function burst(x, y, col, count, speed)
+  for _ = 1, count do
+    if #particles >= MAX_PARTICLES then return end
+    local ang = math.rad(math.random(0, 359))
+    local sp = speed * (0.35 + math.random() * 0.65)
+    particles[#particles + 1] = {
+      x = x, y = y,
+      vx = math.cos(ang) * sp,
+      vy = math.sin(ang) * sp - 50,
+      size = math.random(2, 4),
+      col = col,
+      life = 0.45 + math.random() * 0.35,
+      t = 0,
+    }
+  end
+end
+
+local function add_float(x, y, text, col)
+  if #floats >= 12 then table.remove(floats, 1) end
+  floats[#floats + 1] = { x = x, y = y, text = text, col = col, t = 0 }
+end
+
+local function update_fx(dt)
+  for i = #particles, 1, -1 do
+    local p = particles[i]
+    p.t = p.t + dt
+    if p.t >= p.life then
+      table.remove(particles, i)
+    else
+      p.x = p.x + p.vx * dt
+      p.y = p.y + p.vy * dt
+      p.vy = p.vy + 520 * dt
+    end
+  end
+  for i = #floats, 1, -1 do
+    local f = floats[i]
+    f.t = f.t + dt
+    if f.t >= 1.0 then
+      table.remove(floats, i)
+    else
+      f.y = f.y - 42 * dt
+    end
+  end
+  for i = #trail, 1, -1 do
+    trail[i].t = trail[i].t + dt
+    if trail[i].t > 0.28 then table.remove(trail, i) end
+  end
+end
+
+local function draw_fx()
+  -- Ball trail: fading afterglow circles under the sprite
+  canvas.color = colors.aqua
+  for _, p in ipairs(trail) do
+    local k = 1 - p.t / 0.28
+    canvas.alpha = math.floor(k * 110)
+    canvas.circle(p.x, p.y, 2 + 5 * k, true)
+  end
+  -- Brick debris
+  for _, p in ipairs(particles) do
+    canvas.alpha = math.floor((1 - p.t / p.life) * 230)
+    canvas.color = p.col
+    canvas.rectangle(p.x, p.y, p.size, p.size, true)
+  end
+  canvas.alpha = 255
+  -- Floating texts
+  for _, f in ipairs(floats) do
+    canvas.alpha = math.floor((1 - f.t) * 255)
+    canvas.color = f.col
+    canvas.text(f.x - 14, f.y, f.text)
+  end
+  canvas.alpha = 255
 end
 
 -- -----------------------------------------------------------------------------
@@ -116,6 +217,8 @@ local function respawn_ball()
   ball.vx, ball.vy = 0, 0
   ball.x = paddle.cx
   ball.y = D.PADDLE_Y - D.BALL_R - 2
+  trail = {}
+  combo = 0
   ball_sp.show()
 end
 
@@ -132,10 +235,14 @@ local function start_game()
   lives = D.START_LIVES
   level = 1
   ball.speed = D.BALL_SPEED
+  best_beat = false
+  particles = {}
+  floats = {}
   rebuild_bricks()
   respawn_ball()
   state = "playing"
   sfx("Sweep", 300, 260)
+  play_theme()
 end
 
 rebuild_bricks()
@@ -194,6 +301,9 @@ end
 -- -----------------------------------------------------------------------------
 local function lose_ball()
   lives = lives - 1
+  burst(ball.x, ball.y, colors.white, 18, 240)
+  burst(ball.x, ball.y, colors.orange, 10, 160)
+  trail = {}
   play_wav("sfx/break.wav", 1.0)
   sfx("Explode", 200, 500)
   shake(500, 14)
@@ -223,17 +333,31 @@ local function step_ball(sdt)
     sfx("Tri", 170, 35)
   elseif ev == "paddle" then
     play_wav("sfx/bounce.wav", 0.9)
+    burst(ball.x, D.PADDLE_Y, colors.aqua, 5, 130)
+    combo = 0 -- new rally
   elseif ev == "paddle_side" then
     play_wav("sfx/bounce.wav", 0.7)
+    burst(ball.x, ball.y, colors.silver, 3, 110)
   elseif ev == "brick" then
     if broke then
       wall.set(b.col, b.row, 0)
       bricks_left = bricks_left - 1
+      burst(b.x + b.w / 2, b.y + b.h / 2, BRICK_COLORS[b.frame + 1], 12, 190)
       if state == "playing" then
+        combo = combo + 1
         score = score + b.score
+        if not best_beat and score > hi_score then
+          best_beat = true
+          add_float(W / 2 - 44, H / 2 - 100, "NEW BEST!", colors.gold)
+          sfx("Chime", 1320, 420)
+        end
       end
       play_wav("sfx/break.wav", 0.8)
-      sfx("Zap", 220 + (6 - b.frame) * 90, 60)
+      sfx("Zap", 220 + (6 - b.frame) * 90 + (combo - 1) * 45, 60)
+      if combo >= 4 and combo % 4 == 0 then
+        shake(90, 5)
+        add_float(ball.x - 22, ball.y - 26, "x" .. combo .. " COMBO", colors.gold)
+      end
       if bricks_left <= 0 then
         if state == "attract" then
           rebuild_bricks() -- demo ball keeps bouncing on a fresh wall
@@ -265,6 +389,8 @@ local function update_ball(dt)
       sfx("Sweep", 420, 160)
     end
   else
+    trail[#trail + 1] = { x = ball.x, y = ball.y, t = 0 }
+    if #trail > 14 then table.remove(trail, 1) end
     local steps = D.clamp(math.ceil(ball.speed * dt / (D.BALL_R * 0.8)), 1, 8)
     local sdt = dt / steps
     for s = 1, steps do
@@ -288,6 +414,15 @@ function update(dt)
   if dt > MAX_DT then dt = MAX_DT end   -- physics never skips on a hiccup frame
   if keyboard.pressed("escape") then exit() end
   if keyboard.pressed("m") then muted = not muted end
+
+  update_fx(dt)
+  if (state == "playing" or state == "clear" or state == "dead") then
+    if muted then music_timer = D.MUSIC_LOOP
+    else
+      music_timer = music_timer - dt
+      if music_timer <= 0 then play_theme() end
+    end
+  end
 
   if state == "playing" or state == "attract" then
     if keyboard.pressed("p") and state == "playing" then
@@ -397,6 +532,7 @@ function draw()
   draw_stars(t)
 
   draw_field()
+  draw_fx()
 
   if state == "attract" then
     text_center(250, "N E O N   B R E A K E R", colors.aqua)

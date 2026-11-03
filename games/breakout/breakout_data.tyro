@@ -235,6 +235,22 @@ function M.ball_step(ball, paddle, bricks, sdt, floor_bounce)
   end
 end
 
+-- Chiptune loop: 4 bars at t140 (~6.9 s), retried by MUSIC_LOOP timer.
+-- A minor arcade riff (Am - G - F - E) over an eighth-note bass.
+M.MUSIC_LOOP = 6.9
+M.MML_LEAD =
+  "t140 l16 o5 ms " ..
+  "a c e a a c e a a c e a a c e a " ..
+  "g b d g g b d g g b d g g b d g " ..
+  "f a c f f a c f f a c f f a c f " ..
+  "e g# b e e g# b e e g# b e e g# b e"
+M.MML_BASS =
+  "t140 l8 o2 " ..
+  "a a a a a a a a " ..
+  "g g g g g g g g " ..
+  "f f f f f f f f " ..
+  "e e e e e e e e"
+
 -- High score file ------------------------------------------------------
 
 local HI_FILE = "breakout.hi"
