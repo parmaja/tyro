@@ -223,6 +223,13 @@ var
 
 procedure PlayMML(const Song: TmmlSong);
 
+//Volume multiplier for MML melodies only - music.volume(). It does not touch
+//one-shot sounds (music.sound/sound.play) or loop sounds; each melody note is
+//generated with this fraction of its full amplitude, so the level applies to
+//the very next note. The setter clamps to 0..1 and the getter reports it back.
+procedure SetMusicVolume(Volume: Single);
+function GetMusicVolume: Single;
+
 procedure PlayWaveform(Proc: TWaveformProc; Freq, Duration: Single); overload;
 procedure PlayWaveform(WaveformName: string; Freq, Duration: Single); overload;
 //One-shot SFX from an audio file (raylib LoadSound: .wav) - sound.play().
@@ -299,6 +306,8 @@ var
   PlayingMelodies: TList = nil;
   PlayingWaveforms: TList = nil;
   LoopSound: TTyroLoopSound = nil;
+  //The music.volume() multiplier, applied when a melody note is generated.
+  MusicVolume: Single = 1.0;
 
 { TTyroRayAudio }
 
@@ -681,7 +690,9 @@ begin
   //first so its wave is never freed while the audio thread is reading it.
   if PendingSound.IsPlaying then
     PendingSound.Stop;
-  PendingSound.Generate(Waveform.Proc, Frequency, Duration, Amplitude, SampleRate, BitRate);
+  //MusicVolume (music.volume) fades the whole tune without touching SFX
+  PendingSound.Generate(Waveform.Proc, Frequency, Duration,
+    Amplitude * MusicVolume, SampleRate, BitRate);
 end;
 
 function TRayMelodyChannel.PlaySound: Boolean;
@@ -781,6 +792,20 @@ end;
 function TRayMelody.CreateChannel: TMelodyChannel;
 begin
   Result := TRayMelodyChannel.Create(Self);
+end;
+
+procedure SetMusicVolume(Volume: Single);
+begin
+  if Volume < 0.0 then
+    Volume := 0.0
+  else if Volume > 1.0 then
+    Volume := 1.0;
+  MusicVolume := Volume;
+end;
+
+function GetMusicVolume: Single;
+begin
+  Result := MusicVolume;
 end;
 
 procedure PlayMML(const Song: TmmlSong);

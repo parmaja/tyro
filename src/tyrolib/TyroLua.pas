@@ -1094,13 +1094,30 @@ end;
 { TLuaMusic }
 
 function TLuaMusic.Setter(L: PLua_State): integer;
+var
+  field: string;
 begin
   Result := 0;
+  field := L.ToString(2);
+  if field = 'volume' then
+  begin
+    //music.volume = 0.7 - melody-only level, clamped by SetMusicVolume
+    if L.IsNumber(-1) then
+      SetMusicVolume(L.ToNumber(-1));
+  end;
 end;
 
 function TLuaMusic.Getter(L: PLua_State): integer;
+var
+  field: string;
 begin
   Result := 0;
+  field := L.ToString(2);
+  if field = 'volume' then
+  begin
+    L.PushNumber(GetMusicVolume);
+    Result := 1;
+  end;
 end;
 
 { TTyroLuaObject }

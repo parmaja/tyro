@@ -47,6 +47,7 @@ two-voice chiptune loop keep the arcade feel alive.
 | SPACE, UP, W, left-click or pad A | Launch the ball / start / restart |
 | P | Pause / resume |
 | M | Mute / unmute |
+| + / - | Music volume up / down (keypad too), stored in `breakout.vol` |
 | G | CRT filter on / off |
 | ESC | Exit |
 

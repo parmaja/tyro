@@ -348,4 +348,31 @@ function M.save_high_score(score)
   return cur
 end
 
+-- Music volume file ----------------------------------------------------
+-- The music.volume melody level (0..1) kept between runs.
+
+local VOL_FILE = "breakout.vol"
+local VOL_DEFAULT = 1.0
+
+function M.load_music_volume()
+  local f = openfile(VOL_FILE, "r")
+  if not f then return VOL_DEFAULT end
+  local line = f:read("l")
+  f:close()
+  local v = tonumber(line)
+  if v and v >= 0 and v <= 1 then
+    return v
+  end
+  return VOL_DEFAULT
+end
+
+function M.save_music_volume(v)
+  local f = openfile(VOL_FILE, "w")
+  if f then
+    f:write(tostring(v) .. "\n")
+    f:close()
+  end
+  return v
+end
+
 return M

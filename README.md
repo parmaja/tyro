@@ -85,7 +85,10 @@ normal scripts do not need it.
 
 For sound, `music.beep()`, `music.sound(freq, ms)` or `music.sound(wave, freq,
 ms)`, `music.noise(ms)` (white) / `music.noise(freq, ms)` (pitched) and
-`music.mml(...)` play one-shot effects and tunes. For a sound that has to run
+`music.mml(...)` play one-shot effects and tunes. The `music.volume` property
+(0..1) sets the level of the `music.mml` **melodies only** - one-shot sounds
+and loops keep their own volume - and reading it returns the current level.
+For a sound that has to run
 without gaps—an engine drone, a siren, a wind loop—use `sound.loopPlay(freq
 [, volume])` or `sound.loopPlay(wave, freq [, volume])`. It keeps looping until
 `sound.loopStop()`, and `sound.loopPitch(freq)` / `sound.loopVolume(0..1)` retune
@@ -118,7 +121,8 @@ they work identically in Lua and PascalScript.
 
 Supported key names: letters `a`-`z`, digits `0`-`9`, `space`, `enter`, `tab`,
 `escape`, `backspace`, `delete`, `insert`, `up`, `down`, `left`, `right`,
-`f1`-`f12`, `shift`, `ctrl`, `alt`.
+`f1`-`f12`, `shift`, `ctrl`, `alt`, `minus`, `equals` (the `+` key is the
+shifted `=`, so ask for `plus` to catch it), `kp_plus`, `kp_minus`.
 
 ### Engine shortcuts
 

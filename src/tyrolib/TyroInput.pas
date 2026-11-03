@@ -29,6 +29,8 @@ uses
     "up" "down" "left" "right"
     "f1".."f12"
     "shift" "ctrl" "alt"  (left variants)
+    "minus" "equals" "plus"  (main row; "plus" is the shifted "=" key)
+    "kp_plus" "kp_minus"     (keypad + and -)
   Returns KEY_NULL when the name is unrecognised. }
 function KeyNameToEnum(const Name: string): TKeyboardKey;
 
@@ -159,6 +161,14 @@ begin
     Result := KEY_LEFT_CONTROL
   else if s = 'alt' then
     Result := KEY_LEFT_ALT
+  else if s = 'minus' then
+    Result := KEY_MINUS
+  else if (s = 'equals') or (s = 'equal') or (s = 'plus') then
+    Result := KEY_EQUAL    // "+" is the shifted "=" key on every common layout
+  else if s = 'kp_plus' then
+    Result := KEY_KP_ADD
+  else if s = 'kp_minus' then
+    Result := KEY_KP_SUBTRACT
   else if (s[1] = 'f') and (Length(s) > 1) and
           TryStrToInt(Copy(s, 2, MaxInt), num) and (num >= 1) and (num <= 12) then
     Result := TKeyboardKey(Ord(KEY_F1) + (num - 1));

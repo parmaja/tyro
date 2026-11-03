@@ -21,6 +21,7 @@
 --    SPACE / UP / CLICK Launch the ball, start the game
 --    P                  Pause / Resume
 --    M                  Mute / Unmute audio
+--    + / -              Music volume up / down (also keypad)
 --    G                  CRT filter on / off (scanlines and vignette)
 --    ESC                Exit to desktop
 --    Gamepad: Left-Stick/D-Pad to steer, A to launch or start
@@ -61,6 +62,11 @@ local function play_theme()
   if muted then return end
   pcall(function() music.mml(D.MML_LEAD, D.MML_BASS) end)
 end
+
+-- Music volume: PLUS / MINUS adjust the tune only (music.volume), the sound
+-- effects keep their own level. The value survives in breakout.vol.
+local music_vol = D.load_music_volume()
+music.volume = music_vol
 
 -- CRT filter (crt.frag): scanlines, slow scan bar and a soft vignette.
 -- If the shader fails to compile the game simply runs without it.
@@ -610,6 +616,15 @@ local function update_powers(dt)
   if laser_t > 0 then laser_t = laser_t - dt end
 end
 
+-- Ten-percent music volume steps; stored so the next run keeps the level.
+local function change_music_vol(delta)
+  music_vol = D.clamp(math.floor((music_vol + delta) * 100 + 0.5) / 100, 0, 1)
+  music.volume = music_vol
+  D.save_music_volume(music_vol)
+  add_float(W / 2 - 40, H - 90, "MUSIC " .. math.floor(music_vol * 100 + 0.5) .. "%", colors.gray)
+  sfx("Tri", 520, 50)
+end
+
 -- -----------------------------------------------------------------------------
 -- Frame callbacks
 -- -----------------------------------------------------------------------------
@@ -617,6 +632,11 @@ function update(dt)
   if dt > MAX_DT then dt = MAX_DT end   -- physics never skips on a hiccup frame
   if keyboard.pressed("escape") then exit() end
   if keyboard.pressed("m") then muted = not muted end
+  if keyboard.pressed("plus") or keyboard.pressed("kp_plus") then
+    change_music_vol(0.1)
+  elseif keyboard.pressed("minus") or keyboard.pressed("kp_minus") then
+    change_music_vol(-0.1)
+  end
   if keyboard.pressed("g") then
     crt_on = not crt_on
     if crt_on then
@@ -722,6 +742,10 @@ local function draw_hud()
     canvas.color = colors.lime
     canvas.text(10, D.HUD_H + 6, fx)
   end
+  -- Music volume read-out, right under the HUD bar
+  local vt = "MUSIC " .. math.floor(music_vol * 100 + 0.5) .. "%"
+  canvas.color = colors.gray
+  canvas.text(W - 12 - textwidth(vt), D.HUD_H + 6, vt)
 end
 
 local function draw_field()
@@ -781,7 +805,7 @@ function draw()
     end
     end
     text_center(420, "MOUSE / KEYS / GAMEPAD - paddle   SPACE - launch", colors.gray)
-    text_center(448, "P - pause    M - mute    G - CRT filter    ESC - exit", colors.gray)
+    text_center(448, "P - pause    M - mute    +/- - music    G - CRT    ESC - exit", colors.gray)
     text_center(505, "BEST " .. math.max(hi_score, score), colors.lime)
   end
 
