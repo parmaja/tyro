@@ -104,6 +104,10 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
+        <Filename Value="tyrolib\TyroModels.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
         <Filename Value="tyrolib\Aseprites.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>

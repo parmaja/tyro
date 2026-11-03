@@ -503,6 +503,84 @@ end
 See `games/dungeon/dungeon.tyro` for a small game built on this API (a static
 terrain map plus a second map used as an entity overlay).
 
+# 3D Models
+
+The `models` system holds 3D meshes that the engine draws every frame, in a
+top-down orthographic pass that is pixel-aligned with the 2D canvas — a model
+at `x, y` sits on exactly the same pixel as a sprite or a `canvas.rectangle`.
+It is the easy way to put a real 3D object inside a 2D game. The recommended
+file format is **GLB** (binary glTF 2.0), a single self-contained file with
+mesh, texture and material.
+
+## Creating & Loading
+
+| Function | Description |
+|----------|-------------|
+| `models.new("name"?)` | Create a new model object. Optional name registers it for lookup. |
+| `models("name")` | Look up a model by name (returns the model object or `nil`). |
+| `models.find("name")` | Same as above. |
+
+A named model is also exposed as a global, so after `models.new("jet")` you
+can write `jet.load(...)` directly. Model files are searched in the script
+directory and the workspace, like sprites.
+
+## Model Methods
+
+| Method | Description |
+|--------|-------------|
+| `model:load("jet.glb")` | Load (or replace) the mesh. Loading happens on the engine's queue, like sprite textures; `model.loaded` tells when it is ready. |
+| `model:show()` | Make the model visible (shown by default). |
+| `model:hide()` | Hide the model from rendering. |
+| `model:move(x, y[, z])` | Set the screen position (pixels) and optional depth in one call. |
+
+## Model Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `model.x` | `number` | Screen X of the model's centre, in canvas pixels (read/write). |
+| `model.y` | `number` | Screen Y of the model's centre, in canvas pixels (read/write). |
+| `model.z` | `number` | Depth: bigger draws in front of smaller (read/write). |
+| `model.angle` | `number` | Spin in degrees around the view axis, clockwise (read/write). |
+| `model.tilt` | `number` | Bank in degrees around the screen's horizontal axis — foreshortens the model as it leans (read/write). |
+| `model.scale` | `number` | Uniform scale in model units; combine with the bounding box below to size in pixels (read/write). |
+| `model.visible` | `boolean` | Whether the model is drawn (read/write). |
+| `model.tint` | `number` | Colour multiplied over the mesh, the same integer format as `canvas.color` / `colors.*`; white is the default (read/write). |
+| `model.name` | `string` | The model's name (read/write). |
+| `model.width` | `number` | Bounding-box X size of the loaded mesh (read-only). |
+| `model.height` | `number` | Bounding-box Y size (read-only). |
+| `model.depth` | `number` | Bounding-box Z size (read-only). |
+| `model.loaded` | `boolean` | Whether the mesh is ready (read-only). |
+
+Models draw above the 2D canvas and sprites, below the controls, and they
+shake with the screen like everything else. Both the spin (`angle`) and the
+bank (`tilt`) turn the model about its own bounding-box centre, and the
+model always faces the viewer with its own +Z pointing up the screen — so a
+nose-up jet model needs no rotation for a player flying up the screen, and
+`angle = 180` for the enemies flying down it.
+
+```lua
+window.show(320, 240)
+
+local jet = models.new("player")
+jet:load("jet.glb")
+
+-- size it by pixels: widest horizontal extent becomes 46 px
+local size = math.max(jet.width, jet.depth)
+jet.scale = 46 / size
+jet.tint = colors.white
+
+local t = 0
+function update(dt)
+  t = t + dt
+  jet:move(160 + 90 * math.sin(t), 150, 0)
+  jet.angle = 20 * math.sin(t * 2)     -- bank into the turn
+end
+```
+
+`games/jet2026/jet2026.tyro` is a 1942-style scrolling shooter built this
+way: one GLB jet reused through a pool for the player and every enemy,
+tinted and rotated per role.
+
 # Shader Effects
 
 Post-processing screen shaders are controlled with the `shader` table. They are
@@ -1048,3 +1126,5 @@ https://pixelfonts.org/#116
 https://github.com/IT-Studio-Rech/bdf-fonts
 
 https://forums.adafruit.com/viewtopic.php?t=203655
+
+Jet Plan https://sketchfab.com/3d-models/jet-88a540bdacd940648223f517b9af9452

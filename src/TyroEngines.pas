@@ -38,7 +38,7 @@ uses
   mnLogs, mnUtils, mnClasses, mnConfigs,
   RayLib, RayClasses, TyroInput, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
-  TyroSprites, TyroTiles, TyroPhysics, TyroEditors, TyroParallax,
+  TyroSprites, TyroTiles, TyroModels, TyroPhysics, TyroEditors, TyroParallax,
   TyroSpriteEditor, SpriteAtlas;
 
 const
@@ -204,6 +204,7 @@ type
     procedure ClearCanvas(ACanvas: TTyroCanvas);
     procedure ClearScriptSprites;
     procedure ClearScriptTiles;
+    procedure ClearScriptModels;
     procedure ShowWindowAfterScript;
     //* Service the command line lifecycle (--exit / --screenshot) once per
     //* frame. Returns True when this call terminated the session, so the main
@@ -417,6 +418,9 @@ type
 
     Sprites: TSprites;
     Tiles: TTiles;
+    //* 3D models the script created (see TyroModels); drawn by the engine in a
+    //* top-down pixel pass between the 2D scene and the controls.
+    Models: TModels3D;
     Physics: TPhysics;
     //* Scrolling parallax backgrounds the script created (see TyroParallax).
     Parallaxes: TParallaxes;
@@ -683,6 +687,14 @@ begin
           BeginMode2D(Camera2D);
           Draw;
           EndMode2D;
+
+          //The 3D models ride above the 2D scene but below the controls, so the
+          //pass sits between EndMode2D and the control tree. Camera2D.Offset is
+          //the same margin/shake offset the board and sprites got, so everything
+          //shakes together; the camera inside DrawAll maps it onto the models.
+          if (Models <> nil) and Models.HasVisible then
+            Models.DrawAll(Camera2D.Offset.X, Camera2D.Offset.Y,
+              RayLib.GetScreenWidth, RayLib.GetScreenHeight);
 
           if Window <> nil then
             Window.Paint;
@@ -1226,6 +1238,7 @@ begin
 
   Sprites := TSprites.Create;
   Tiles := TTiles.Create;
+  Models := TModels3D.Create;
   Physics := TPhysics.Create(Sprites);
   Parallaxes := TParallaxes.Create;
   Commands := TConsoleCommands.Create();
@@ -1253,6 +1266,8 @@ begin
   FreeAndNil(Physics);
   FreeAndNil(Sprites);
   FreeAndNil(Tiles);
+  //Models own GPU meshes: unload them while the GL context is alive.
+  FreeAndNil(Models);
   //Parallaxes own layer textures: unload them while the GL context is alive.
   FreeAndNil(Parallaxes);
   FreeAndNil(Board);
@@ -2188,6 +2203,7 @@ begin
   ClearScriptControls;
   ClearScriptSprites;
   ClearScriptTiles;
+  ClearScriptModels;
   Clear;
   //A song the finished run left playing belongs to that run, not to the next one.
   aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
@@ -2248,6 +2264,14 @@ procedure TTyroEngine.ClearScriptTiles;
 begin
   if Tiles <> nil then
     Tiles.Clear;
+end;
+
+//Free the 3D models the previous run created and unload their meshes. The store
+//hands out fresh handles, so the new run starts from an empty one.
+procedure TTyroEngine.ClearScriptModels;
+begin
+  if Models <> nil then
+    Models.Clear;
 end;
 
 //Wipe the pixels the previous run left on the two canvases it draws through:

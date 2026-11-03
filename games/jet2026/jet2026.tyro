@@ -1,0 +1,839 @@
+--======================================================================
+--  Jet 2026 - a 1942-style vertical scrolling jet fighter for Tyro
+--======================================================================
+--  Fly your jet (a real 3D model) up the screen over the open sea and
+--  blast the enemy squadron that streams in from the top. It is a classic
+--  top-down arcade shooter in the spirit of 1942: the world scrolls
+--  downward while you climb, you weave through formations, and a bigger
+--  bomber shows up every few waves.
+--
+--  The player, the enemy fighters and the bomber are all the SAME 3D mesh
+--  (jet.glb) drawn by the engine's 3D pass - the enemies are simply tinted
+--  red and flown nose-down. Waves, bullets, clouds, explosions and the HUD
+--  are drawn with canvas primitives.
+--
+--  Controls:  ARROWS / WASD        fly (8 directions)
+--             SPACE                fire (tap or hold for auto-fire)
+--             P                    pause / resume
+--             ESC                  quit
+--  Gamepad:   Left stick / D-pad   fly
+--             A / X / RB / RT      fire (tap or hold)
+--             START                play / pause / resume
+--             BACK / SELECT        quit (menu/pause)
+--  Run:  tyro games/jet2026/jet2026.tyro
+--======================================================================
+
+window.show(480, 640)
+
+local W = canvas.width
+local H = canvas.height
+
+-- ---- helpers ---------------------------------------------------------
+local function clamp(v, lo, hi)
+  if v < lo then return lo elseif v > hi then return hi else return v end
+end
+
+local function randf(a, b)
+  return a + rand(0, 1000) / 1000 * (b - a)
+end
+
+-- ---- joystick / gamepad ----------------------------------------------
+local PAD_DEAD = 0.20
+
+local function pad_axis(name)
+  local v = gamepad.axis(name)
+  if math.abs(v) < PAD_DEAD then return 0 end
+  local sign = v < 0 and -1 or 1
+  return sign * ((math.abs(v) - PAD_DEAD) / (1 - PAD_DEAD))
+end
+
+local function is_fire_pressed()
+  return keyboard.pressed("space")
+      or gamepad.pressed("a") or gamepad.pressed("x")
+      or gamepad.pressed("b") or gamepad.pressed("y")
+      or gamepad.pressed("rb") or gamepad.pressed("rt")
+      or gamepad.pressed("fire") or gamepad.pressed("trigger")
+end
+
+local function is_fire_down()
+  return keyboard.down("space")
+      or gamepad.down("a") or gamepad.down("x")
+      or gamepad.down("b") or gamepad.down("y")
+      or gamepad.down("rb") or gamepad.down("rt")
+      or gamepad.down("fire") or gamepad.down("trigger")
+end
+
+local function is_start_pressed()
+  return keyboard.pressed("space") or keyboard.pressed("enter")
+      or gamepad.pressed("start") or gamepad.pressed("menu")
+      or gamepad.pressed("a") or gamepad.pressed("x")
+      or gamepad.pressed("fire")
+end
+
+local function is_pause_pressed()
+  return keyboard.pressed("p")
+      or gamepad.pressed("start") or gamepad.pressed("menu")
+end
+
+-- ---- sound helpers ---------------------------------------------------
+local function beep(freq, ms)   music.sound(freq, ms) end
+local function shoot_sfx()      music.sound('Pew', 240, 90) end
+local function boom_sfx()       music.sound('Explode', 50, 240); sound.noise(360, 300) end
+
+local function center_text(s, y, col)
+  canvas.color = col
+  canvas.text((W - textwidth(s)) / 2, y, s)
+end
+
+-- ---- tuning ----------------------------------------------------------
+local SCROLL      = 95           -- downward world scroll speed (px/s)
+local PLAYER_SPEED = 250
+local PLAYER_Y_MIN = 120         -- how far up the player may climb
+local PBULLET_SPEED = 620
+local PBULLET_MAX   = 12
+local EBULLET_SPEED = 260
+local ENEMY_POOL    = 18
+
+-- ---- 3D models -------------------------------------------------------
+-- One mesh reused for every jet. Scale is derived from the loaded
+-- bounding box so it looks right however big the model actually is.
+local playerJet
+local enemyPool = {}
+local poolFree = {}
+local P_TARGET = 46
+local E_TARGET = 40
+local B_TARGET = 96
+local p_scale, e_scale, b_scale = 1, 1, 1
+
+local function size_of(m)
+  return math.max(m.width, m.depth)
+end
+
+local function init_models()
+  playerJet = models.new("player_jet")
+  playerJet:load("jet.glb")
+  p_scale = P_TARGET / size_of(playerJet)
+  playerJet.scale = p_scale
+  playerJet.z = 20               -- ride in front of the enemies
+
+  for i = 1, ENEMY_POOL do
+    local m = models.new("enemy_jet_" .. i)
+    m:load("jet.glb")
+    m:hide()
+    enemyPool[i] = m
+  end
+  e_scale = E_TARGET / size_of(enemyPool[1])
+  b_scale = B_TARGET / size_of(enemyPool[1])
+end
+
+-- Take a free enemy model out of the pool, or return nil when full.
+local function acquire_model()
+  for i = 1, ENEMY_POOL do
+    if poolFree[i] then
+      poolFree[i] = false
+      return enemyPool[i]
+    end
+  end
+  return nil
+end
+
+local function release_model(m)
+  for i = 1, ENEMY_POOL do
+    if enemyPool[i] == m then
+      poolFree[i] = true
+      m:hide()
+      return
+    end
+  end
+end
+
+-- ---- state -----------------------------------------------------------
+local state
+local travel                -- total distance flown (drives the scroll)
+local score, hi, lives, wave
+local player                -- { x, y, cool, weapon }
+local invuln, dyingTimer
+local pbullets, ebullets, enemies, blasts, clouds, islands, powerups
+local spawnTimer, waveTimer, bossWave, msg, msgTimer, engineOn, enginePitch
+
+-- Load the saved high score at boot (best-effort; a missing file is fine).
+local function load_hi()
+  local f = openfile("jet2026.hi", "r")
+  if f then
+    local s = f:read("*a")
+    f:close()
+    return tonumber(s) or 0
+  end
+  return 0
+end
+
+local function save_hi(v)
+  local f = openfile("jet2026.hi", "w")
+  if f then f:write(tostring(v)); f:close() end
+end
+
+-- ---- world scroll ----------------------------------------------------
+local function screenY(wy) return H + travel - wy end   -- world y -> screen y
+local function worldFromScreen(sy) return H + travel - sy end
+
+-- ---- spawning --------------------------------------------------------
+local function difficulty() return clamp((wave - 1) / 12, 0, 1) end
+
+local function new_enemy(kind, x, sy)
+  local m = acquire_model()
+  if not m then return nil end
+  local e = { kind = kind, x = x, sy = sy, model = m, fire = randf(0.8, 1.8) }
+  if kind == "grunt" then
+    e.hw, e.hh = 15, 13; e.hp = 1; e.vy = randf(60, 95)
+    e.amp = randf(20, 60); e.freq = randf(1.2, 2.4); e.base = x; e.t = 0
+    e.tint = colors.red; e.scale = e_scale; e.score = 100
+  elseif kind == "diver" then
+    e.hw, e.hh = 15, 13; e.hp = 1; e.vy = randf(40, 60)
+    e.amp = 0; e.freq = 0; e.base = x; e.t = 0; e.dive = false
+    e.tint = colors.orange; e.scale = e_scale; e.score = 200
+  elseif kind == "gunner" then
+    e.hw, e.hh = 16, 14; e.hp = 2; e.vy = randf(45, 65)
+    e.amp = randf(50, 90); e.freq = randf(0.8, 1.4); e.base = x; e.t = 0
+    e.hold = randf(90, 150)  -- stops at this screen y and strafes
+    e.tint = colors.maroon; e.scale = e_scale; e.score = 300
+  else -- bomber
+    e.hw, e.hh = 34, 26; e.hp = 22 + math.floor(6 * difficulty())
+    e.vy = 40; e.amp = 40; e.freq = 0.6; e.base = x; e.t = 0
+    e.hold = 120
+    e.tint = colors.darkblue; e.scale = b_scale; e.score = 1500
+  end
+  m.scale = e.scale
+  m.tint = e.tint
+  m.angle = 180            -- fly nose-down
+  m:show()
+  enemies[#enemies + 1] = e
+  return e
+end
+
+local function spawn_formation()
+  local roll = rand(1, 100)
+  if wave > 0 and wave % 6 == 0 and not bossWave then
+    bossWave = new_enemy("bomber", W / 2, -60)
+    return
+  end
+  if roll <= 40 then
+    -- V formation of grunts descending in the middle
+    local n = rand(4, 5)
+    local cx = rand(80, W - 80)
+    for i = 1, n do
+      local ox = (i - (n + 1) / 2) * 42
+      new_enemy("grunt", clamp(cx + ox, 30, W - 30), -30 - math.abs(ox) * 0.7)
+    end
+  elseif roll <= 72 then
+    -- a line of divers near the top that will swoop
+    local n = rand(3, 4)
+    for i = 1, n do
+      new_enemy("diver", rand(40, W - 40), -30 - i * 30)
+    end
+  else
+    -- a couple of gunners to hold the top line
+    new_enemy("gunner", rand(60, W - 60), -40)
+    if rand(1, 100) <= 50 then new_enemy("gunner", rand(60, W - 60), -90) end
+  end
+end
+
+-- ---- explosion / damage ----------------------------------------------
+local function add_blast(x, sy, big)
+  blasts[#blasts + 1] = { x = x, sy = sy, t = 0, big = big }
+end
+
+local function kill_enemy(i)
+  local e = enemies[i]
+  add_blast(e.x, e.sy, e.kind == "bomber")
+  score = score + e.score
+  release_model(e.model)
+  table.remove(enemies, i)
+  boom_sfx()
+  if e.kind == "bomber" then
+    bossWave = nil
+    world.shake(500, 14)
+    gamepad.vibrate(0.9, 0.9, 0.4)
+    msg = "BOMBER DOWN +" .. e.score
+    msgTimer = 1.6
+    if rand(1, 100) <= 70 then
+      powerups[#powerups + 1] = { x = e.x, sy = e.sy, vy = 70 }
+    end
+  else
+    gamepad.vibrate(0.3, 0.4, 0.12)
+    if rand(1, 100) <= 8 then
+      powerups[#powerups + 1] = { x = e.x, sy = e.sy, vy = 70 }
+    end
+  end
+end
+
+local function player_hit()
+  if state ~= "play" or invuln > 0 then return end
+  lives = lives - 1
+  player.weapon = 1
+  add_blast(player.x, player.y, true)
+  boom_sfx()
+  world.shake(600, 12)
+  gamepad.vibrate(1.0, 1.0, 0.5)
+  if lives <= 0 then
+    state = "over"
+    if score > hi then hi = score; save_hi(hi) end
+    if engineOn then sound.loopStop(); engineOn = false end
+    playerJet:hide()
+  else
+    state = "dying"
+    dyingTimer = 1.1
+    playerJet:hide()
+  end
+end
+
+-- ---- reset -----------------------------------------------------------
+local function reset()
+  state = "play"
+  travel = 0
+  score = 0
+  lives = 3
+  wave = 1
+  invuln = 2.0
+  dyingTimer = 0
+  player = { x = W / 2, y = H - 110, cool = 0, weapon = 1 }
+  pbullets = {}
+  ebullets = {}
+  enemies = {}
+  blasts = {}
+  powerups = {}
+  spawnTimer = 1.2
+  waveTimer = 22
+  bossWave = nil
+  msg = ""
+  msgTimer = 0
+  engineOn = false
+  enginePitch = -1
+  sound.loopStop()
+  for i = 1, ENEMY_POOL do poolFree[i] = true; enemyPool[i]:hide() end
+  playerJet:show()
+  playerJet.scale = p_scale
+  playerJet.angle = 0
+  playerJet.tilt = 0
+  playerJet:move(player.x, player.y, 20)
+end
+
+-- ---- simulation ------------------------------------------------------
+local function step_bullets(ft)
+  for i = #pbullets, 1, -1 do
+    local b = pbullets[i]
+    b.sy = b.sy - PBULLET_SPEED * ft
+    local hit = false
+    if b.sy < -12 then
+      hit = true
+    else
+      for j = #enemies, 1, -1 do
+        local e = enemies[j]
+        if math.abs(e.x - b.x) < e.hw + 3 and math.abs(e.sy - b.sy) < e.hh + 6 then
+          e.hp = e.hp - 1
+          if e.hp <= 0 then
+            kill_enemy(j)
+          else
+            add_blast(b.x, b.sy, false)
+            beep(500, 40)
+          end
+          hit = true
+          break
+        end
+      end
+    end
+    if hit then table.remove(pbullets, i) end
+  end
+
+  for i = #ebullets, 1, -1 do
+    local b = ebullets[i]
+    b.sy = b.sy + b.vy * ft
+    b.sx = b.sx + b.vx * ft
+    if b.sy > H + 12 or b.sx < -12 or b.sx > W + 12 then
+      table.remove(ebullets, i)
+    elseif invuln <= 0
+        and math.abs(b.sx - player.x) < 12 and math.abs(b.sy - player.y) < 12 then
+      table.remove(ebullets, i)
+      player_hit()
+    end
+  end
+end
+
+local function step_enemies(ft)
+  for i = #enemies, 1, -1 do
+    local e = enemies[i]
+    e.t = e.t + ft
+
+    if e.kind == "diver" then
+      if not e.dive and e.sy > 120 and rand(1, 100) <= 2 then e.dive = true end
+      if e.dive then
+        local dx = player.x - e.x
+        e.x = e.x + clamp(dx, -180, 180) * ft * 1.4
+        e.sy = e.sy + (e.vy + 240) * ft
+      else
+        e.sy = e.sy + e.vy * ft
+      end
+    elseif e.hold then
+      -- hold a line near the top and strafe
+      if e.sy < e.hold then
+        e.sy = e.sy + e.vy * ft
+      else
+        e.x = e.base + e.amp * math.sin(e.t * e.freq)
+      end
+      e.fire = e.fire - ft
+      if e.fire <= 0 and e.sy > 20 then
+        e.fire = (e.kind == "bomber") and 1.1 or 1.6
+        if e.kind == "bomber" then
+          for k = -1, 1 do
+            ebullets[#ebullets + 1] = { sx = e.x, sy = e.sy + 20,
+              vx = k * 90, vy = EBULLET_SPEED }
+          end
+        else
+          local ang = math.atan2(player.x - e.x, player.y - e.sy)
+          ebullets[#ebullets + 1] = { sx = e.x, sy = e.sy + 14,
+            vx = math.sin(ang) * EBULLET_SPEED, vy = math.cos(ang) * EBULLET_SPEED }
+        end
+        beep(180, 60)
+      end
+    else
+      e.sy = e.sy + e.vy * ft
+      e.x = e.base + e.amp * math.sin(e.t * e.freq)
+    end
+
+    -- keep on screen horizontally
+    e.x = clamp(e.x, e.hw, W - e.hw)
+    -- drive the 3D model
+    e.model:move(e.x, e.sy, 0)
+
+    -- collide with the player
+    if invuln <= 0 and state == "play"
+        and math.abs(e.x - player.x) < e.hw + 10 and math.abs(e.sy - player.y) < e.hh + 8 then
+      if e.kind == "bomber" then
+        player_hit()
+      else
+        kill_enemy(i)
+        player_hit()
+        goto continue
+      end
+    end
+
+    if e.sy > H + e.hh + 20 then
+      release_model(e.model)
+      if e == bossWave then bossWave = nil end
+      table.remove(enemies, i)
+    end
+    ::continue::
+  end
+end
+
+local function step_powerups(ft)
+  for i = #powerups, 1, -1 do
+    local p = powerups[i]
+    p.sy = p.sy + (p.vy + SCROLL) * ft
+    if p.sy > H + 16 then
+      table.remove(powerups, i)
+    elseif state == "play"
+        and math.abs(p.x - player.x) < 20 and math.abs(p.sy - player.y) < 20 then
+      if player.weapon < 3 then
+        player.weapon = player.weapon + 1
+        msg = "POWER UP!"
+      else
+        score = score + 500
+        msg = "+500"
+      end
+      msgTimer = 1.2
+      beep(880, 90)
+      gamepad.vibrate(0.2, 0.2, 0.1)
+      table.remove(powerups, i)
+    end
+  end
+end
+
+local function step_clouds(ft)
+  local drift = SCROLL * 0.55
+  for i = 1, #clouds do
+    local c = clouds[i]
+    c.sy = c.sy + (c.vy + drift) * ft
+    if c.sy - c.r > H then
+      c.sy = -c.r - rand(10, 200)
+      c.x = rand(0, W)
+      c.r = rand(26, 60)
+    end
+  end
+end
+
+local function step_islands(ft)
+  for i = #islands, 1, -1 do
+    local s = islands[i]
+    s.sy = s.sy + SCROLL * ft
+    if s.sy - s.r > H then
+      s.sy = -s.r - rand(120, 480)
+      s.x = rand(20, W - 20)
+      s.r = rand(16, 40)
+    end
+  end
+end
+
+local function fire()
+  local px, py = player.x, player.y
+  if player.weapon == 1 then
+    pbullets[#pbullets + 1] = { x = px, sy = py - 18 }
+  elseif player.weapon == 2 then
+    pbullets[#pbullets + 1] = { x = px - 9, sy = py - 12 }
+    pbullets[#pbullets + 1] = { x = px + 9, sy = py - 12 }
+  else
+    pbullets[#pbullets + 1] = { x = px, sy = py - 18 }
+    pbullets[#pbullets + 1] = { x = px - 13, sy = py - 8 }
+    pbullets[#pbullets + 1] = { x = px + 13, sy = py - 8 }
+  end
+  shoot_sfx()
+  gamepad.vibrate(0.06, 0.1, 0.05)
+end
+
+local function simulate(ft)
+  travel = travel + SCROLL * ft
+  step_clouds(ft)
+  step_islands(ft)
+
+  for i = #blasts, 1, -1 do
+    local bl = blasts[i]
+    bl.t = bl.t + ft
+    if bl.t > 0.55 then table.remove(blasts, i) end
+  end
+  if msgTimer > 0 then msgTimer = msgTimer - ft end
+
+  if state == "play" then
+    invuln = math.max(0, invuln - ft)
+
+    -- steering: keys + D-pad + stick -> 8 directions
+    local dx, dy = 0, 0
+    if keyboard.down("left") or keyboard.down("a")
+        or gamepad.down("dpad_left") or gamepad.down("left") then dx = dx - 1 end
+    if keyboard.down("right") or keyboard.down("d")
+        or gamepad.down("dpad_right") or gamepad.down("right") then dx = dx + 1 end
+    if keyboard.down("up") or keyboard.down("w")
+        or gamepad.down("dpad_up") or gamepad.down("up") then dy = dy - 1 end
+    if keyboard.down("down") or keyboard.down("s")
+        or gamepad.down("dpad_down") or gamepad.down("down") then dy = dy + 1 end
+    local sx = pad_axis("leftx"); if sx == 0 then sx = pad_axis("rightx") end
+    local sy = pad_axis("lefty"); if sy == 0 then sy = pad_axis("righty") end
+    if dx == 0 then dx = sx end
+    if dy == 0 then dy = sy end
+    dx = clamp(dx, -1, 1); dy = clamp(dy, -1, 1)
+
+    local nx = player.x + dx * PLAYER_SPEED * ft
+    local ny = player.y + dy * PLAYER_SPEED * ft
+    player.x = clamp(nx, 22, W - 22)
+    player.y = clamp(ny, PLAYER_Y_MIN, H - 30)
+
+    -- bank the jet into the turn (yaw), with a touch of pitch on climb
+    playerJet:move(player.x, player.y, 20)
+    playerJet.angle = 18 * dx
+    playerJet.tilt = -8 * dy
+
+    -- firing
+    player.cool = math.max(0, player.cool - ft)
+    if (is_fire_pressed() or (is_fire_down() and player.cool <= 0)) and #pbullets < PBULLET_MAX then
+      fire()
+      player.cool = 0.15
+    end
+
+    -- wave / spawn scheduling
+    spawnTimer = spawnTimer - ft
+    if spawnTimer <= 0 and #enemies < ENEMY_POOL - 4 then
+      spawn_formation()
+      spawnTimer = math.max(1.6, 3.4 - 1.6 * difficulty())
+    end
+    waveTimer = waveTimer - ft
+    if waveTimer <= 0 then
+      wave = wave + 1
+      waveTimer = 20
+      msg = "WAVE " .. wave
+      msgTimer = 1.6
+    end
+
+    step_bullets(ft)
+    step_enemies(ft)
+    step_powerups(ft)
+
+    -- invulnerability blink
+    playerJet.visible = (invuln <= 0) or (math.floor(millis() / 100) % 2 == 0)
+
+    -- engine drone retuned with nothing to do but fly: a steady hum
+    if not engineOn then
+      engineOn = true
+      enginePitch = 320
+      sound.loopPlay("Engine", 320, 0.25)
+    end
+  elseif state == "dying" then
+    dyingTimer = dyingTimer - ft
+    if dyingTimer <= 0 then
+      player.x = W / 2
+      player.y = H - 110
+      invuln = 2.0
+      state = "play"
+      playerJet:show()
+      playerJet.angle = 0
+      playerJet.tilt = 0
+      playerJet:move(player.x, player.y, 20)
+    end
+  end
+
+  -- engine hum on/off by state
+  if state ~= "play" and engineOn then
+    engineOn = false
+    sound.loopStop()
+  end
+end
+
+-- ---- rendering (2D layers; the jets are drawn by the 3D pass) --------
+local function draw_sea()
+  canvas.color = colors.blue
+  canvas.rectangle(0, 0, W, H, true)
+  -- scrolling wave crests
+  local gap = 46
+  local k0 = math.floor(travel / gap) - 1
+  for k = k0, k0 + math.ceil(H / gap) + 2 do
+    local sy = screenY(k * gap)
+    if sy > -6 and sy < H + 6 then
+      local off = (k * 83) % W
+      canvas.color = colors.skyblue
+      canvas.line(off - 40, sy, off - 12, sy, 2)
+      canvas.line(off + 30, sy + 8, off + 66, sy + 8, 2)
+    end
+  end
+  -- distant islands drifting down
+  for i = 1, #islands do
+    local s = islands[i]
+    canvas.color = colors.darkgreen
+    canvas.circle(s.x, s.sy, s.r, true)
+    canvas.color = colors.green
+    canvas.circle(s.x - s.r * 0.25, s.sy - s.r * 0.25, s.r * 0.6, true)
+    canvas.color = colors.beige
+    canvas.circle(s.x, s.sy + s.r * 0.7, s.r * 0.35, false)
+  end
+end
+
+local function draw_clouds()
+  canvas.color = colors.white
+  for i = 1, #clouds do
+    local c = clouds[i]
+    canvas.circle(c.x, c.sy, c.r, true)
+    canvas.circle(c.x + c.r * 0.8, c.sy + 4, c.r * 0.7, true)
+    canvas.circle(c.x - c.r * 0.8, c.sy + 6, c.r * 0.6, true)
+  end
+end
+
+local function draw_bullets()
+  canvas.color = colors.yellow
+  for i = 1, #pbullets do
+    local b = pbullets[i]
+    canvas.line(b.x, b.sy - 7, b.x, b.sy + 5, 3)
+  end
+  canvas.color = colors.orange
+  for i = 1, #ebullets do
+    local b = ebullets[i]
+    canvas.circle(b.sx, b.sy, 4, true)
+  end
+end
+
+local function draw_powerups()
+  for i = 1, #powerups do
+    local p = powerups[i]
+    canvas.color = colors.lime
+    canvas.rectangle(p.x - 9, p.sy - 9, 18, 18, true)
+    canvas.color = colors.black
+    canvas.text(p.x - 5, p.sy - 8, "P")
+  end
+end
+
+local function draw_blasts()
+  for i = 1, #blasts do
+    local bl = blasts[i]
+    local p = bl.t / 0.55
+    local rad = 6 + (bl.big and 40 or 24) * p
+    canvas.color = colors.yellow
+    canvas.circle(bl.x, bl.sy, math.max(1, math.floor(rad * 0.35)), true)
+    canvas.color = colors.orange
+    canvas.circle(bl.x, bl.sy, math.floor(rad * 0.7), false)
+    canvas.color = colors.red
+    canvas.circle(bl.x, bl.sy, math.floor(rad), false)
+  end
+end
+
+local function draw_hud()
+  canvas.color = colors.white
+  canvas.text(10, 8, "SCORE " .. score)
+  canvas.text(10, 26, "HI " .. math.max(hi, score))
+  canvas.text(W - 92, 8, "WAVE " .. wave)
+
+  -- lives as little jets
+  for i = 1, math.min(lives, 5) do
+    local lx = W - 24 - (i - 1) * 20
+    canvas.color = colors.lightgray
+    canvas.triangle(lx, 24, lx - 7, 40, lx + 7, 40, true)
+  end
+
+  -- weapon level pips
+  canvas.color = colors.silver
+  canvas.text(10, H - 22, "GUN")
+  for i = 1, 3 do
+    canvas.color = i <= player.weapon and colors.lime or colors.darkgray
+    canvas.rectangle(48 + (i - 1) * 16, H - 20, 12, 12, true)
+  end
+
+  if msgTimer > 0 then
+    center_text(msg, 110, colors.yellow)
+  end
+end
+
+local function draw_overlay()
+  if state == "ready" then
+    canvas.color = colors.black
+    canvas.rectangle(0, 150, W, 250, true)
+    center_text("JET 2026", 168, colors.red)
+    center_text("JET 2026", 166, colors.yellow)
+    center_text("PRESS SPACE / START TO FLY", 224, colors.white)
+    center_text("ARROWS / WASD / STICK   fly", 258, colors.silver)
+    center_text("SPACE / A / X / RT      fire (hold auto)", 278, colors.silver)
+    center_text("P / START  pause    ESC / BACK  quit", 298, colors.silver)
+    center_text("Blast the squadron. Grab P to power up.", 330, colors.skyblue)
+    if gamepad.available() then
+      local padName = gamepad.name(); if padName == "" then padName = "Gamepad" end
+      center_text("READY: " .. padName, 372, colors.lime)
+    end
+  elseif state == "over" then
+    canvas.color = colors.black
+    canvas.rectangle(0, 220, W, 170, true)
+    center_text("GAME OVER", 240, colors.red)
+    center_text("SCORE " .. score, 276, colors.white)
+    center_text("HI " .. hi, 300, colors.silver)
+    center_text("PRESS SPACE / START TO FLY AGAIN", 336, colors.silver)
+  elseif state == "pause" then
+    canvas.color = colors.black
+    canvas.rectangle(0, 250, W, 120, true)
+    center_text("PAUSED", 268, colors.yellow)
+    center_text("P / START  resume", 300, colors.white)
+    center_text("ESC / BACK  quit", 324, colors.silver)
+  end
+end
+
+-- Frame callback (canvas layers; jets are drawn by the engine 3D pass).
+function draw()
+  draw_sea()
+  draw_clouds()
+  draw_powerups()
+  draw_bullets()
+  draw_blasts()
+  draw_hud()
+  draw_overlay()
+end
+
+-- ---- boot ------------------------------------------------------------
+local function boot()
+  init_models()
+  hi = load_hi()
+  state = "ready"
+  travel = 0
+  score = 0
+  lives = 3
+  wave = 1
+  player = { x = W / 2, y = H - 110, cool = 0, weapon = 1 }
+  pbullets = {}
+  ebullets = {}
+  enemies = {}
+  blasts = {}
+  powerups = {}
+  clouds = {}
+  islands = {}
+  for i = 1, 7 do
+    clouds[i] = { x = rand(0, W), sy = rand(0, H), vy = rand(8, 30), r = rand(26, 60) }
+  end
+  for i = 1, 4 do
+    islands[i] = { x = rand(20, W - 20), sy = rand(0, H), r = rand(16, 40) }
+  end
+  poolFree = {}
+  for i = 1, ENEMY_POOL do poolFree[i] = true end
+  msg = ""
+  msgTimer = 0
+  invuln = 0
+  engineOn = false
+  playerJet:hide()
+end
+
+boot()
+
+-- Test hook: when the global JET2026_TEST is set, this file was pulled in via
+-- require() from a test harness instead of run as the game. Export a small API
+-- so the harness can drive the simulation frame by frame; the update/draw
+-- engine callbacks are then left to the harness itself.
+if JET2026_TEST then
+  return {
+    start        = reset,
+    frame        = simulate,
+    state        = function() return state end,
+    player       = function() return player end,
+    enemies      = function() return enemies end,
+    pbullets     = function() return pbullets end,
+    ebullets     = function() return ebullets end,
+    powerups     = function() return powerups end,
+    fire         = fire,
+    -- capture the game's draw() now (it is defined above as a global); the
+    -- harness may replace the global afterwards, so keep our own reference
+    render       = draw,
+    hit_player   = player_hit,
+    spawn        = new_enemy,
+    remove_enemy = kill_enemy,
+    -- test-only assists: park the run in a clean, damage-receiving state so
+    -- the hit/respawn/game-over checks are deterministic.
+    clear_enemies = function()
+      for i = #enemies, 1, -1 do
+        release_model(enemies[i].model)
+        table.remove(enemies, i)
+      end
+      ebullets = {}
+      bossWave = nil
+    end,
+    set_invuln = function(v) invuln = v end,
+    set_lives  = function(v) lives = v end,
+    score        = function() return score end,
+    set_score    = function(v) score = v end,
+    wave         = function() return wave end,
+    lives        = function() return lives end,
+    invuln       = function() return invuln end,
+    player_model = function() return playerJet end,
+    pool         = function() return enemyPool end,
+    free_count   = function()
+      local n = 0
+      for i = 1, ENEMY_POOL do if poolFree[i] then n = n + 1 end end
+      return n
+    end,
+    size_of      = size_of,
+  }
+end
+
+-- ---- frame callbacks -------------------------------------------------
+function update(dt)
+  if dt <= 0 then dt = 1 / 60 end
+  if dt > 0.06 then dt = 0.06 end
+
+  if keyboard.pressed("escape") then exit() end
+  if (gamepad.pressed("back") or gamepad.pressed("select"))
+      and (state == "ready" or state == "over" or state == "pause") then
+    exit()
+  end
+
+  if state == "ready" or state == "over" then
+    if is_start_pressed() then reset() end
+  elseif state == "pause" then
+    if is_pause_pressed() or is_start_pressed() then state = "play" end
+  elseif state == "play" then
+    if is_pause_pressed() then
+      state = "pause"
+      if engineOn then sound.loopStop(); engineOn = false end
+    end
+  end
+
+  if state ~= "pause" then
+    simulate(dt)
+  end
+end

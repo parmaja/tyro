@@ -2231,6 +2231,14 @@ var
   DrawModelWires: procedure(model: TModel; position: TVector3; scale: Single; tint: TColor); cdecl = nil;
   // Draw a model wires with custom transform
   DrawModelWiresEx: procedure(model: TModel; position: TVector3; rotationAxis: TVector3; rotationAngle: Single; scale: TVector3; tint: TColor); cdecl = nil;
+  // -- rlgl matrix stack (float-only args) for rotating models in a 2D pass --
+  // These multiply the current modelview matrix; used to rotate/pivot a model
+  // without DrawModelEx's by-value records (see TyroModels).
+  rlPushMatrix: procedure; cdecl = nil;
+  rlPopMatrix: procedure; cdecl = nil;
+  rlTranslatef: procedure(x, y, z: Single); cdecl = nil;
+  rlRotatef: procedure(angleDegrees, x, y, z: Single); cdecl = nil;
+  rlScalef: procedure(x, y, z: Single); cdecl = nil;
   // Draw bounding box (wires)
   DrawBoundingBox: procedure(box: TBoundingBox; color: TColor); cdecl = nil;
   // Draw a billboard texture
@@ -3200,6 +3208,11 @@ begin
   GetAddress(@DrawModelEx, 'DrawModelEx');
   GetAddress(@DrawModelWires, 'DrawModelWires');
   GetAddress(@DrawModelWiresEx, 'DrawModelWiresEx');
+  GetAddress(@rlPushMatrix, 'rlPushMatrix');
+  GetAddress(@rlPopMatrix, 'rlPopMatrix');
+  GetAddress(@rlTranslatef, 'rlTranslatef');
+  GetAddress(@rlRotatef, 'rlRotatef');
+  GetAddress(@rlScalef, 'rlScalef');
   GetAddress(@DrawBoundingBox, 'DrawBoundingBox');
   GetAddress(@DrawBillboard, 'DrawBillboard');
   GetAddress(@DrawBillboardRec, 'DrawBillboardRec');

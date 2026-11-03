@@ -24,7 +24,7 @@ uses
   LuaAPI, LuaClasses,
   RayLib, RayClasses, //remove it
   mnUtils, mnLogs, mnClasses, mnDON,
-  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroTiles, TyroPhysics, TyroParallax,
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroTiles, TyroModels, TyroPhysics, TyroParallax,
   TyroControls, TyroEngines, TyroInput,
   TyroRadio, TyroSpectrum;
 
@@ -339,6 +339,42 @@ type
     function Find_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaModel }
+
+  { One 3D model object handed to the script by models.new(). Mirrors TLuaTile:
+    methods are table fields that receive the model table as argument 1,
+    properties resolve through the metatable getter/setter (model.x, model.angle,
+    ...). The engine draws every visible model itself in the per-frame 3D pass,
+    so there is no draw() here - like a sprite, not like a tilemap. }
+  TLuaModel = class(TTyroLuaObject)
+  private
+  protected
+    function Getter(L: Plua_State): integer; override;
+    function Setter(L: Plua_State): integer; override;
+  public
+    function RegisterModel(AHandle: Integer): Integer;
+    //model:load(file) -> load (or replace) the mesh from a GLB/glTF/OBJ file
+    function Load_func(L: Plua_State): integer; cdecl;
+    //model:move(x, y [, z])
+    function Move_func(L: Plua_State): integer; cdecl;
+    //model:show() / model:hide()
+    function Show_func(L: Plua_State): integer; cdecl;
+    function Hide_func(L: Plua_State): integer; cdecl;
+  end;
+
+  { TLuaModels }
+
+  TLuaModels = class(TTyroLuaObject)
+  protected
+  public
+    //models.new([name]) -> a new model object
+    function New_func(L: Plua_State): integer; cdecl;
+    //models.find(name) -> the named model object, or nil
+    function Find_func(L: Plua_State): integer; cdecl;
+    //models(name) -> __call metamethod, same as models.find
+    function Call_func(L: Plua_State): integer; cdecl;
+  end;
+
   { TLuaParallax }
 
   { One scrolling parallax background handed to the script by parallax.new().
@@ -588,6 +624,8 @@ type
     Sprites: TLuaSprites;
     Tile: TLuaTile;
     Tiles: TLuaTiles;
+    Model: TLuaModel;
+    Models: TLuaModels;
     Parallax: TLuaParallax;
     Parallaxes: TLuaParallaxes;
     Controls: TLuaControls;
@@ -662,6 +700,8 @@ const
   cTileRegistryBase = $00900000;
   // Integer key base in the Lua registry for "parallax handle -> parallax table"
   cParallaxRegistryBase = $00A00000;
+  // Integer key base in the Lua registry for "model handle -> model table"
+  cModelRegistryBase = $00B00000;
   // Key in the Lua registry for the table that caches what require already ran
   cRequireCache = 'tyro.require.cache';
 
@@ -854,6 +894,23 @@ begin
     begin
       L.Pop(1);
       Tile.RegisterTile(AHandle);
+    end;
+    L.PushValue(-1);
+    L.PushValue(2);
+    lua_rawset(L, 1);
+    L.Remove(1); L.Remove(1);
+    Exit;
+  end;
+
+  //5c) Named 3D models resolve by name, like sprites, controls and tilemaps.
+  AHandle := Engine.Models.FindByName(aName);
+  if AHandle > cModel3DInvalid then
+  begin
+    lua_rawgeti(L, LUA_REGISTRYINDEX, cModelRegistryBase + AHandle);
+    if not lua_istable(L, -1) then
+    begin
+      L.Pop(1);
+      Model.RegisterModel(AHandle);
     end;
     L.PushValue(-1);
     L.PushValue(2);
@@ -1464,6 +1521,8 @@ begin
   Sprites := TLuaSprites.Create('sprites', Self);
   Tile := TLuaTile.Create('tile', Self);
   Tiles := TLuaTiles.Create('tiles', Self);
+  Model := TLuaModel.Create('model', Self);
+  Models := TLuaModels.Create('models', Self);
   Parallax := TLuaParallax.Create('parallax', Self);
   Parallaxes := TLuaParallaxes.Create('parallaxes', Self);
   Controls := TLuaControls.Create('controls', Self);
@@ -1646,6 +1705,15 @@ begin
   Lua.State.RegisterTable('tiles');
   Lua.State.Register('tiles', 'new', Self, Tiles.New_func);
   Lua.State.Register('tiles', 'find', Self, Tiles.Find_func);
+
+  // 3D models: models.new([name]) creates a model, models.find(name) /
+  // models("name") find one. A model object carries load/move/show/hide plus the
+  // property fields (model.x, model.y, model.angle, ...). The engine draws every
+  // visible model once per frame; no draw call is needed from the script.
+  Lua.State.RegisterTable('models');
+  Lua.State.Register('models', 'new', Self, Models.New_func);
+  Lua.State.Register('models', 'find', Self, Models.Find_func);
+  Lua.State.Register('models', '__call', Self, Models.Call_func, True);
 
   // Parallax backgrounds: parallax.new([name]) creates one, parallax.find(name)
   // finds a named one. A parallax object carries add/addground/clear/reset plus
@@ -6474,6 +6542,356 @@ begin
     L.PushValue(3);
     lua_rawset(L, 1);
   end;
+end;
+
+{ TLuaModel }
+
+//Read the model table's __handle raw, without re-entering the metatable getter
+//(see GetSpriteHandle for why). 0 means "not a model table".
+function GetModelHandle(L: Plua_State; idx: integer): integer;
+begin
+  L.PushString('__handle');
+  lua_rawget(L, idx);
+  Result := L.PopInteger;
+end;
+
+//First script argument of a model method. The same rule as TileArgBase: a dot
+//call injects the model table as argument 1, a colon call passes the receiver
+//again as argument 2. Model methods take numbers and strings only, so a table
+//in slot 2 can only be the receiver of a colon call.
+function ModelArgBase(L: Plua_State): Integer;
+begin
+  if L.IsTable(2) then
+    Result := 3
+  else
+    Result := 2;
+end;
+
+// Build a model table bound to AHandle and leave it on the Lua stack. Mirrors
+// TLuaTile.RegisterTile: the methods are plain table fields receiving the table
+// as argument 1, the properties resolve through the metatable getter/setter.
+function TLuaModel.RegisterModel(AHandle: integer): integer;
+var
+  base: integer;
+begin
+  with Script do
+  begin
+    Lua.State.BeginTable; //[model]
+    base := Lua.State.ArgsCount; //index of the model table
+
+    //keep a duplicate, the -3 addressing in Register() hits the model table
+    Lua.State.PushValue(-1); //[model, model]
+
+    Lua.State.PushInteger(AHandle);
+    Lua.State.SetField(-2, '__handle'); //model.__handle = AHandle
+
+    //methods receive the model table injected as argument 1
+    Lua.State.Register('load', Load_func);
+    Lua.State.Register('move', Move_func);
+    Lua.State.Register('show', Show_func);
+    Lua.State.Register('hide', Hide_func);
+
+    //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
+    Lua.State.NewTable; //[model, model, meta]
+    Lua.State.RegisterMeta('__index', __getter);
+    Lua.State.RegisterMeta('__newindex', __setter);
+    Lua.State.SetMetaTable(-2); //model.metatable = meta
+
+    // remember this model table so it can be found by handle
+    if AHandle > cModel3DInvalid then
+    begin
+      Lua.State.PushValue(-1); // duplicate the model table
+      lua_rawseti(Lua.State, LUA_REGISTRYINDEX, cModelRegistryBase + AHandle);
+    end;
+
+    Lua.State.Remove(base); //drop the first reference, keep one on the stack
+    Result := 1;
+  end;
+end;
+
+// model.load(file) -> load (or replace) the mesh from a GLB/glTF/OBJ file.
+// LoadModel uploads to the GPU, so it runs on the main thread through the
+// engine queue.
+function TLuaModel.Load_func(L: Plua_State): integer; cdecl;
+var
+  b: integer;
+  aFile: string;
+  handle: integer;
+  LoadObj: TLoadModelObject;
+begin
+  b := ModelArgBase(L);
+  aFile := Res.GuessFileName(L.ToString(b));
+
+  handle := GetModelHandle(L, 1);
+  if handle <= cModel3DInvalid then
+    handle := Engine.Models.AddEmpty('');
+  LoadObj := TLoadModelObject.Create(handle, aFile);
+  try
+    LoadObj.Run(Script.Thread);
+    if LoadObj.HandleResult then
+    begin
+      L.PushInteger(handle);
+      L.SetField(1, '__handle');
+      // re-index the model table under its real handle
+      L.PushValue(1);
+      lua_rawseti(L, LUA_REGISTRYINDEX, cModelRegistryBase + handle);
+    end
+    else
+      Script.DoError('Model not loaded: ' + aFile);
+  finally
+    LoadObj.Free;
+  end;
+  Result := 0;
+end;
+
+// model:move(x, y [, z]) -> x/y are screen pixels; z is depth toward the
+// viewer (bigger draws in front) and keeps its current value when omitted.
+function TLuaModel.Move_func(L: Plua_State): integer; cdecl;
+var
+  b, handle: integer;
+  z: single;
+begin
+  b := ModelArgBase(L);
+  handle := GetModelHandle(L, 1);
+  if handle > cModel3DInvalid then
+  begin
+    if L.ArgsCount >= b + 2 then
+      z := L.ToNumber(b + 2)
+    else
+      z := Engine.Models.GetZ(handle);
+    Engine.Models.SetPosition(handle, L.ToNumber(b), L.ToNumber(b + 1), z);
+  end;
+  Result := 0;
+end;
+
+function TLuaModel.Show_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+begin
+  handle := GetModelHandle(L, 1);
+  if handle > cModel3DInvalid then
+    Engine.Models.SetVisible(handle, True);
+  Result := 0;
+end;
+
+function TLuaModel.Hide_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+begin
+  handle := GetModelHandle(L, 1);
+  if handle > cModel3DInvalid then
+    Engine.Models.SetVisible(handle, False);
+  Result := 0;
+end;
+
+function TLuaModel.Getter(L: Plua_State): integer;
+var
+  handle: integer;
+  field: string;
+begin
+  // arg 1 is the table, arg 2 is the key
+  handle := GetModelHandle(L, 1);
+  field := L.ToString(2);
+  Result := 0;
+  if handle > cModel3DInvalid then
+  begin
+    if field = 'x' then
+    begin
+      L.PushNumber(Engine.Models.GetX(handle));
+      Result := 1;
+    end
+    else if field = 'y' then
+    begin
+      L.PushNumber(Engine.Models.GetY(handle));
+      Result := 1;
+    end
+    else if field = 'z' then
+    begin
+      L.PushNumber(Engine.Models.GetZ(handle));
+      Result := 1;
+    end
+    else if field = 'angle' then
+    begin
+      L.PushNumber(Engine.Models.GetAngle(handle));
+      Result := 1;
+    end
+    else if field = 'tilt' then
+    begin
+      L.PushNumber(Engine.Models.GetTilt(handle));
+      Result := 1;
+    end
+    else if field = 'scale' then
+    begin
+      L.PushNumber(Engine.Models.GetScale(handle));
+      Result := 1;
+    end
+    else if field = 'visible' then
+    begin
+      L.PushBoolean(Engine.Models.GetVisible(handle));
+      Result := 1;
+    end
+    else if field = 'tint' then
+    begin
+      L.PushInteger(ColorToInt(Engine.Models.GetTint(handle)));
+      Result := 1;
+    end
+    else if field = 'name' then
+    begin
+      L.PushString(Engine.Models.GetName(handle));
+      Result := 1;
+    end
+    //read-only: the loaded mesh's bounding box, so a script can scale to a
+    //pixel size: m.scale = 40 / math.max(m.width, m.depth)
+    else if field = 'width' then
+    begin
+      L.PushNumber(Engine.Models.GetWidth(handle));
+      Result := 1;
+    end
+    else if field = 'height' then
+    begin
+      L.PushNumber(Engine.Models.GetHeight(handle));
+      Result := 1;
+    end
+    else if field = 'depth' then
+    begin
+      L.PushNumber(Engine.Models.GetDepth(handle));
+      Result := 1;
+    end
+    else if field = 'loaded' then
+    begin
+      L.PushBoolean(Engine.Models.IsLoaded(handle));
+      Result := 1;
+    end;
+  end;
+  if Result = 0 then
+  begin
+    // unknown key or unloaded model: read raw from the model table
+    L.PushValue(2);
+    lua_rawget(L, 1);
+    Result := 1;
+  end;
+end;
+
+// model.__newindex: write properties x, y, z, angle, tilt, scale, visible,
+// tint, name; unknown keys raw-stored in the model table.
+function TLuaModel.Setter(L: Plua_State): integer;
+var
+  handle: integer;
+  field: string;
+begin
+  // arg 1 is the table, arg 2 is the key, arg 3 is the value
+  handle := GetModelHandle(L, 1);
+  field := L.ToString(2);
+  Result := 0;
+  if handle <= cModel3DInvalid then
+  begin
+    L.PushValue(2);
+    L.PushValue(3);
+    lua_rawset(L, 1);
+    Exit;
+  end;
+  if field = 'x' then
+  begin
+    Engine.Models.SetPositionComponent(handle, True, L.ToNumber(3));
+  end
+  else if field = 'y' then
+  begin
+    Engine.Models.SetPositionComponent(handle, False, L.ToNumber(3));
+  end
+  else if field = 'z' then
+  begin
+    Engine.Models.SetZ(handle, L.ToNumber(3));
+  end
+  else if field = 'angle' then
+  begin
+    Engine.Models.SetAngle(handle, L.ToNumber(3));
+  end
+  else if field = 'tilt' then
+  begin
+    Engine.Models.SetTilt(handle, L.ToNumber(3));
+  end
+  else if field = 'scale' then
+  begin
+    Engine.Models.SetScale(handle, L.ToNumber(3));
+  end
+  else if field = 'visible' then
+  begin
+    Engine.Models.SetVisible(handle, L.ToBoolean(3));
+  end
+  else if field = 'tint' then
+  begin
+    Engine.Models.SetTint(handle, IntToColor(L.ToInteger(3)));
+  end
+  else if field = 'name' then
+  begin
+    Engine.Models.SetName(handle, L.ToString(3));
+  end
+  else
+  begin
+    // unknown key: store it raw in the model table
+    L.PushValue(2);
+    L.PushValue(3);
+    lua_rawset(L, 1);
+  end;
+end;
+
+{ TLuaModels }
+
+// models.new("name"?) -> creates a new model object, returns it on the Lua stack
+function TLuaModels.New_func(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  handle: integer;
+begin
+  if L.ArgsCount >= 1 then
+    aName := L.ToString(1)
+  else
+    aName := '';
+  //AddEmpty only touches the store's dictionary under its lock, so it is safe
+  //to call straight from the script thread; only the mesh upload needs the
+  //main thread, and load() routes that through the engine queue.
+  handle := Engine.Models.AddEmpty(aName);
+  if handle > cModel3DInvalid then
+    Script.Model.RegisterModel(handle)
+  else
+    Script.Model.RegisterModel(cModel3DInvalid);
+  // Store optional name
+  if aName <> '' then
+  begin
+    L.PushString(aName);
+    L.SetField(-2, '__name');
+  end;
+  Result := 1;
+end;
+
+// models.find("name") -> returns the named model object, or nil
+function TLuaModels.Find_func(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  handle: integer;
+begin
+  aName := L.ToString(1);
+  handle := Engine.Models.FindByName(aName);
+  if handle > cModel3DInvalid then
+    Script.Model.RegisterModel(handle)
+  else
+    L.PushNil;
+  Result := 1;
+end;
+
+// models("name") -> __call metamethod, same as models.find
+function TLuaModels.Call_func(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  handle: integer;
+begin
+  aName := L.ToString(2); // first arg after table self
+  handle := Engine.Models.FindByName(aName);
+  if handle > cModel3DInvalid then
+    Script.Model.RegisterModel(handle)
+  else
+    L.PushNil;
+  Result := 1;
 end;
 
 { TLuaParallax }
