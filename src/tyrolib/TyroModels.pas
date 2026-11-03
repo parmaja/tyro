@@ -19,10 +19,16 @@ unit TyroModels;
  *  The 3D pass uses a top-down ORTHOGRAPHIC camera mapped pixel for pixel onto
  *  the window, so model x/y are screen pixels: x grows to the right, y grows
  *  down, and the model's own +z lands on screen "up". The remaining world axis
- *  (y, into the screen) is the model's depth: raise z to draw a model in front
- *  of the ones behind it. Angle spins the model around the view axis (clockwise
- *  on screen, the sprite convention); Tilt tips it around the screen's
- *  horizontal axis, which foreshortens it for a cheap banking pose.
+ *  (y, into the screen) is the model's depth: lower z (nearer the eye) draws a
+ *  model in front of the ones behind it. Angle spins the model around the view
+ *  axis (clockwise on screen, the sprite convention); Tilt tips it around the
+ *  screen's horizontal axis, which foreshortens it for a cheap banking pose.
+ *
+ *  A model with Shadow on casts a real shadow: its mesh is drawn a second time
+ *  through a plane-projection matrix that flattens it along the light ray onto
+ *  the world's ground plane (world.light / world.ambient / world.ground in
+ *  Lua), so the silhouette keeps the mesh's shape and banking, and a cloud
+ *  that floats between the viewer and the sea covers the shadows below it.
  *
  *  LoadModel uploads to the GPU, so load runs on the main thread through the
  *  queue (TLoadModelObject). The bounding box is captured at load time for two
@@ -64,9 +70,12 @@ type
     Visible: Boolean;
     X: Single;              // screen pixel position (like a sprite)
     Y: Single;
-    Z: Single;              // depth toward the viewer: bigger draws in front
+    Z: Single;              // depth (bigger = farther from the eye, behind)
     Angle: Single;          // rotation around the view axis, degrees, clockwise on screen
     Tilt: Single;           // rotation around the screen's horizontal axis, degrees
+    Roll: Single;           // rotation around the model's own axis (the nose-tail
+                            // line of a jet), degrees - the classic bank-into-turn
+    Shadow: Boolean;        // cast a shadow onto the world's ground plane
     Scale: Single;
     Tint: TColor;
     constructor Create(AHandle: Integer; const AName: string);
@@ -85,6 +94,14 @@ type
     FLock: TmnCriticalSection;
     FItems: TDictionary<Integer, TModel3D>;
     FNextHandle: Integer;
+    //Cast-shadow light (see DrawAll). LightDir is the direction the light
+    //travels, Ambient (0..1) fills the shadow with sky light, and GroundY is
+    //the world-depth plane the shadows fall on (the "sea floor" behind the
+    //models). They live on the store (not a single model) because every model
+    //shares one sun, exactly like a real top-down scene.
+    FLightDir: TVector3;
+    FAmbient: Single;
+    FGroundY: Single;
     function GetCount: integer;
     function GetItems(Index: Integer): TModel3D;
     //Frees the GPU model a slot owns and resets it to unloaded.
@@ -96,12 +113,25 @@ type
     procedure Clear;
     // Add a mesh-less model, returns a handle
     function AddEmpty(const AName: string = ''): integer;
+    // Generate a UV sphere mesh into an existing handle (main thread, like
+    // Load). The script scales/positions it like any other model; it is the
+    // primitive a top-down "cloud puff" or a placeholder is built from, so a
+    // game needs no mesh file to put a real 3D shape on screen.
+    function BuildSphere(Handle: integer; ARadius: Single): boolean;
     function FindByName(const AName: string): integer;
     function Exists(Handle: integer): boolean;
 
     // Load (or replace) one model's mesh from a file. Must run on the main
     // thread: LoadModel uploads buffers/textures. Returns success.
     function Load(Handle: integer; const AFileName: string): boolean;
+
+    // -- cast-shadow light (mirrored on the Lua 'world' table) --
+    procedure SetLight(X, Y, Z: single);
+    procedure GetLight(out X, Y, Z: single);
+    procedure SetAmbient(AValue: single);
+    function GetAmbient: single;
+    procedure SetGroundY(AValue: single);
+    function GetGroundY: single;
 
     function GetName(Handle: integer): string;
     procedure SetName(Handle: integer; const AName: string);
@@ -122,6 +152,10 @@ type
     function GetAngle(Handle: integer): single;
     procedure SetTilt(Handle: integer; ATilt: single);
     function GetTilt(Handle: integer): single;
+    procedure SetRoll(Handle: integer; ARoll: single);
+    function GetRoll(Handle: integer): single;
+    procedure SetShadow(Handle: integer; AShadow: boolean);
+    function GetShadow(Handle: integer): boolean;
     procedure SetScale(Handle: integer; AScale: single);
     function GetScale(Handle: integer): single;
     procedure SetTint(Handle: integer; ATint: TColor);
@@ -155,6 +189,21 @@ type
     property HandleResult: boolean read FResult;
   end;
 
+  { TSphereModelObject }
+
+  { Builds the builtin sphere mesh into a model on the main thread (the upload
+    needs the GL context) and returns whether it succeeded. }
+  TSphereModelObject = class(TQueueObject)
+  private
+    FRadius: Single;
+    FHandle: integer;
+    FResult: boolean;
+  public
+    constructor Create(AHandle: integer; ARadius: Single);
+    procedure DoExecute; override;
+    property HandleResult: boolean read FResult;
+  end;
+
 implementation
 
 uses
@@ -178,6 +227,8 @@ begin
   Z := 0;
   Angle := 0;
   Tilt := 0;
+  Roll := 0;
+  Shadow := True;
   Scale := 1;
   Tint := clWhite;
 end;
@@ -205,6 +256,13 @@ begin
   FLock := TmnCriticalSection.Create;
   FItems := TDictionary<Integer, TModel3D>.Create;
   FNextHandle := 1;
+  //A high sun a little behind and above the viewer: light travels toward the
+  //far end of the depth axis (+y), tilted slightly so shadows slide a bit away
+  //from the model instead of hiding under it - the classic flying-shadow look,
+  //now as the mesh's real projected silhouette.
+  FLightDir := Vector3Of(0.06, 1, -0.035);
+  FAmbient := 0.45;
+  FGroundY := 300;
 end;
 
 destructor TModels3D.Destroy;
@@ -233,6 +291,11 @@ begin
     for Item in FItems.Values do
       Item.Free;
     FItems.Clear;
+    //A rerun starts under its own sky: restore the default sun until the new
+    //script calls world.light/world.ambient/world.ground again.
+    FLightDir := Vector3Of(0.06, 1, -0.035);
+    FAmbient := 0.45;
+    FGroundY := 300;
   finally
     FLock.Leave;
   end;
@@ -255,6 +318,58 @@ begin
     FItems.Add(FNextHandle, TModel3D.Create(FNextHandle, AName));
     Result := FNextHandle;
     Inc(FNextHandle);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+//Generate a UV sphere and upload it into an existing slot, mirroring Load:
+//GenMeshSphere/LoadModelFromMesh are by-value record calls, but the same
+//hazard hit only DrawModelEx (whose binding signature did not match this
+//build); DrawModel and LoadModel pass and return full records every frame
+//without trouble, so the sphere is safe here. Must run on the main thread.
+function TModels3D.BuildSphere(Handle: integer; ARadius: Single): boolean;
+var
+  Item: TModel3D;
+  NewModel: TModel;
+  Mesh: TMesh;
+  Box: TBoundingBox;
+begin
+  Result := False;
+  if ARadius <= 0 then
+    ARadius := 1;
+  //12 rings / 16 slices: smooth enough for a puff seen from above, cheap for
+  //dozens of clouds.
+  Mesh := RayLib.GenMeshSphere(ARadius, 12, 16);
+  NewModel := RayLib.LoadModelFromMesh(Mesh);
+  if NewModel.MeshCount <= 0 then
+  begin
+    if IsConsole then
+      WriteLn('Sphere model not built: radius ' + FloatToStr(ARadius));
+    Exit;
+  end;
+
+  FLock.Enter;
+  try
+    if not FItems.TryGetValue(Handle, Item) then
+    begin
+      RayLib.UnloadModel(NewModel); //store did not take ownership
+      Exit;
+    end;
+    FreeModelData(Item);
+    Item.Model := NewModel;
+
+    //Same bookkeeping as Load: the box feeds the script-side sizes and the
+    //pivot, so the sphere stays centred on its x/y/z however it is moved.
+    Box := RayLib.GetModelBoundingBox(NewModel);
+    Item.Center := Vector3Of(
+      (Box.Min.X + Box.Max.X) * 0.5,
+      (Box.Min.Y + Box.Max.Y) * 0.5,
+      (Box.Min.Z + Box.Max.Z) * 0.5);
+    Item.SizeX := Abs(Box.Max.X - Box.Min.X);
+    Item.SizeY := Abs(Box.Max.Y - Box.Min.Y);
+    Item.SizeZ := Abs(Box.Max.Z - Box.Min.Z);
+    Result := True;
   finally
     FLock.Leave;
   end;
@@ -588,6 +703,60 @@ begin
   end;
 end;
 
+procedure TModels3D.SetRoll(Handle: integer; ARoll: single);
+var
+  Item: TModel3D;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Item.Roll := ARoll;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetRoll(Handle: integer): single;
+var
+  Item: TModel3D;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Roll;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetShadow(Handle: integer; AShadow: boolean);
+var
+  Item: TModel3D;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Item.Shadow := AShadow;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetShadow(Handle: integer): boolean;
+var
+  Item: TModel3D;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Shadow;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 procedure TModels3D.SetScale(Handle: integer; AScale: single);
 var
   Item: TModel3D;
@@ -642,6 +811,74 @@ begin
   end;
 end;
 
+//The light is one shared sun (the store's), read by every cast shadow; the
+//script reaches it through world.light/world.ambient/world.ground.
+procedure TModels3D.SetLight(X, Y, Z: single);
+begin
+  FLock.Enter;
+  try
+    //A light with no depth component never reaches the ground plane; keep the
+    //last direction instead of producing a division by zero at draw time.
+    if Y = 0 then
+      Exit;
+    FLightDir := Vector3Of(X, Y, Z);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.GetLight(out X, Y, Z: single);
+begin
+  FLock.Enter;
+  try
+    X := FLightDir.X;
+    Y := FLightDir.Y;
+    Z := FLightDir.Z;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetAmbient(AValue: single);
+begin
+  FLock.Enter;
+  try
+    FAmbient := Min(1, Max(0, AValue));
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetAmbient: single;
+begin
+  FLock.Enter;
+  try
+    Result := FAmbient;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetGroundY(AValue: single);
+begin
+  FLock.Enter;
+  try
+    FGroundY := AValue;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetGroundY: single;
+begin
+  FLock.Enter;
+  try
+    Result := FGroundY;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 function TModels3D.HasVisible: boolean;
 var
   Item: TModel3D;
@@ -662,11 +899,20 @@ const
   //Distance of the eye above the pixel plane. The ortho frustum clips at
   //0.01..1000, so this leaves the models room for a +/-399 depth range.
   cModel3DDistance = 400.0;
+  //Cast-shadow look: the mesh's real silhouette projected onto the ground
+  //plane along the light ray. Ambient light fills the shadow, so at full
+  //ambient the alpha drops to 0 and the whole pass switches itself off.
+  cModel3DShadowMaxAlpha = 150;
+  cModel3DShadowInk: TColor = (RGBA: (Red: 8; Green: 8; Blue: 20; Alpha: 0));
 var
   Cam: TCamera3D;
   Item: TModel3D;
   S: Single;
   Pos: TVector3;
+  ShadowM: TMatrix;
+  ShadowTint: TColor;
+  KX, KZ, G, LY: Single;
+  Alpha: Integer;
   AnyVisible: Boolean;
 begin
   AnyVisible := False;
@@ -685,6 +931,28 @@ begin
     if AHeight <= 0 then
       AHeight := 1;
 
+    //The projection maps P onto the plane y=G along L: x'=x-kx*(y-G),
+    //y'=G, z'=z-kz*(y-G) with kx=L.x/L.y, kz=L.z/L.y. One matrix does it for
+    //the whole mesh, so the shadow is the mesh's true silhouette - wing, bank
+    //and all. Note the field filling: rlMultMatrixf receives the raw float
+    //array and raylib reads it as an OpenGL column-major matrix (element at
+    //row+col*4), so with raylib's field naming the translation lands in
+    //m3,m7,m11,m15 - filling m12..m14 instead transposes the shear and the
+    //w row turns the flat shadow into fanned perspective streaks.
+    LY := FLightDir.Y;
+    if LY = 0 then
+      LY := 1; //SetLight keeps it non-zero; belt and braces for the division.
+    KX := FLightDir.X / LY;
+    KZ := FLightDir.Z / LY;
+    G := FGroundY;
+    ShadowM.m0 := 1;  ShadowM.m1 := -KX; ShadowM.m2 := 0;  ShadowM.m3 := KX * G;
+    ShadowM.m4 := 0;  ShadowM.m5 := 0;   ShadowM.m6 := 0;  ShadowM.m7 := G;
+    ShadowM.m8 := 0;  ShadowM.m9 := -KZ; ShadowM.m10 := 1; ShadowM.m11 := KZ * G;
+    ShadowM.m12 := 0; ShadowM.m13 := 0;  ShadowM.m14 := 0; ShadowM.m15 := 1;
+    Alpha := Round((1 - FAmbient) * cModel3DShadowMaxAlpha);
+    ShadowTint := cModel3DShadowInk;
+    ShadowTint.RGBA.Alpha := Byte(Alpha);
+
     //Top-down orthographic camera: world +x is screen right, world -z is screen
     //down (so a model's own +z points "up" like a sprite's), and world +y runs
     //away from the viewer as the depth axis. For an ortho camera raylib uses
@@ -698,6 +966,42 @@ begin
     Cam.Projection := Ord(CAMERA_ORTHOGRAPHIC); //the field is a plain Integer
     RayLib.BeginMode3D(Cam);
     try
+      //Pass 1 - the shadows, cast onto the world's ground plane before any
+      //model touches the depth buffer. They write no depth themselves
+      //(rlDisableDepthMask), so overlapping shadows blend together into a
+      //denser shade instead of clipping each other, and any model drawn in
+      //pass 2 simply paints over the shadow beneath it: a cloud between the
+      //viewer and the sea hides the shadow under it, as it should.
+      if Alpha > 0 then
+      begin
+        RayLib.rlDisableDepthMask;
+        for Item in FItems.Values do
+        begin
+          if (not Item.Visible) or (not Item.Loaded) or (not Item.Shadow) then
+            Continue;
+          S := Item.Scale;
+          if S <= 0 then
+            S := 1;
+          Pos.X := Item.X + AX - AWidth * 0.5;
+          Pos.Y := Item.Z;
+          Pos.Z := AHeight * 0.5 - (Item.Y + AY);
+          RayLib.rlPushMatrix;
+          //The projection first (outermost), then the model's own transform:
+          //the mesh rides into the world, and the sun flattens it onto the sea.
+          RayLib.rlMultMatrixf(@ShadowM);
+          RayLib.rlTranslatef(Pos.X, Pos.Y, Pos.Z);
+          RayLib.rlRotatef(Item.Angle, 0, 1, 0);
+          RayLib.rlRotatef(Item.Roll, 0, 0, 1);
+          RayLib.rlRotatef(Item.Tilt, 1, 0, 0);
+          RayLib.rlScalef(S, S, S);
+          RayLib.rlTranslatef(-Item.Center.X, -Item.Center.Y, -Item.Center.Z);
+          RayLib.DrawModel(Item.Model, Vector3Of(0, 0, 0), 1.0, ShadowTint);
+          RayLib.rlPopMatrix;
+        end;
+        RayLib.rlEnableDepthMask;
+      end;
+
+      //Pass 2 - the models themselves.
       for Item in FItems.Values do
       begin
         if (not Item.Visible) or (not Item.Loaded) then
@@ -707,9 +1011,9 @@ begin
           S := 1;
 
         //Screen-pixel anchor: x runs right, y runs down (so it becomes -z), and
-        //the model's Z depth rides along the world y axis toward the viewer.
+        //the model's Z depth rides along the world y axis into the screen.
         Pos.X := Item.X + AX - AWidth * 0.5;
-        Pos.Y := Item.Z;                              //depth toward the viewer
+        Pos.Y := Item.Z;                              //depth (bigger = farther)
         Pos.Z := AHeight * 0.5 - (Item.Y + AY);       //pixel y, screen down
 
         //Build the transform on rlgl's matrix stack rather than DrawModelEx:
@@ -718,10 +1022,12 @@ begin
         //compose the exact same position + spin + bank + pivot transform.
         RayLib.rlPushMatrix;
         RayLib.rlTranslatef(Pos.X, Pos.Y, Pos.Z);
-        //Spin around the view axis (world y), then bank around the screen's
-        //horizontal axis (world x). Applied after the pivot translate below, so
-        //the bank is around the model's own centre, not the world origin.
+        //Spin around the view axis (world y), then roll around the model's own
+        //axis, then pitch around the screen's horizontal axis (world x).
+        //Applied after the pivot translate below, so all of them turn the
+        //model about its own centre, not the world origin.
         RayLib.rlRotatef(Item.Angle, 0, 1, 0);
+        RayLib.rlRotatef(Item.Roll, 0, 0, 1);
         RayLib.rlRotatef(Item.Tilt, 1, 0, 0);
         RayLib.rlScalef(S, S, S);
         //Shift the (still unrotated) box centre onto the origin so the model
@@ -752,6 +1058,22 @@ procedure TLoadModelObject.DoExecute;
 begin
   if Engine.Models <> nil then
     FResult := Engine.Models.Load(FHandle, FFileName);
+end;
+
+{ TSphereModelObject }
+
+constructor TSphereModelObject.Create(AHandle: integer; ARadius: Single);
+begin
+  inherited Create;
+  FHandle := AHandle;
+  FRadius := ARadius;
+  FResult := False;
+end;
+
+procedure TSphereModelObject.DoExecute;
+begin
+  if Engine.Models <> nil then
+    FResult := Engine.Models.BuildSphere(FHandle, FRadius);
 end;
 
 end.

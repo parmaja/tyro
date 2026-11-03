@@ -517,6 +517,7 @@ mesh, texture and material.
 | Function | Description |
 |----------|-------------|
 | `models.new("name"?)` | Create a new model object. Optional name registers it for lookup. |
+| `models.sphere("name"?)` | An engine-built unit sphere (2 wide, centred) — ready-made puffs, bubbles and planets with no file at all. |
 | `models("name")` | Look up a model by name (returns the model object or `nil`). |
 | `models.find("name")` | Same as above. |
 
@@ -539,11 +540,13 @@ directory and the workspace, like sprites.
 |----------|------|-------------|
 | `model.x` | `number` | Screen X of the model's centre, in canvas pixels (read/write). |
 | `model.y` | `number` | Screen Y of the model's centre, in canvas pixels (read/write). |
-| `model.z` | `number` | Depth: bigger draws in front of smaller (read/write). |
+| `model.z` | `number` | Depth: smaller draws in front of bigger (read/write). |
 | `model.angle` | `number` | Spin in degrees around the view axis, clockwise (read/write). |
+| `model.roll` | `number` | Bank in degrees around the model's own axis — the nose-tail line of a jet — so it leans into a turn like the classic 1942 sprite effect (read/write). |
 | `model.tilt` | `number` | Bank in degrees around the screen's horizontal axis — foreshortens the model as it leans (read/write). |
 | `model.scale` | `number` | Uniform scale in model units; combine with the bounding box below to size in pixels (read/write). |
 | `model.visible` | `boolean` | Whether the model is drawn (read/write). |
+| `model.shadow` | `boolean` | Cast a real shadow: the mesh's true silhouette projected along the sun onto the ground plane — see Light & Shadows below (read/write, default `true`). |
 | `model.tint` | `number` | Colour multiplied over the mesh, the same integer format as `canvas.color` / `colors.*`; white is the default (read/write). |
 | `model.name` | `string` | The model's name (read/write). |
 | `model.width` | `number` | Bounding-box X size of the loaded mesh (read-only). |
@@ -552,11 +555,13 @@ directory and the workspace, like sprites.
 | `model.loaded` | `boolean` | Whether the mesh is ready (read-only). |
 
 Models draw above the 2D canvas and sprites, below the controls, and they
-shake with the screen like everything else. Both the spin (`angle`) and the
-bank (`tilt`) turn the model about its own bounding-box centre, and the
+shake with the screen like everything else. All three rotations (`angle`,
+`roll`, `tilt`) turn the model about its own bounding-box centre, and the
 model always faces the viewer with its own +Z pointing up the screen — so a
 nose-up jet model needs no rotation for a player flying up the screen, and
-`angle = 180` for the enemies flying down it.
+`angle = 180` for the enemies flying down it. With `shadow` on (the default)
+every model drops its true silhouette on the ground plane below — see
+Light & Shadows.
 
 ```lua
 window.show(320, 240)
@@ -573,13 +578,40 @@ local t = 0
 function update(dt)
   t = t + dt
   jet:move(160 + 90 * math.sin(t), 150, 0)
-  jet.angle = 20 * math.sin(t * 2)     -- bank into the turn
+  jet.roll = 30 * math.sin(t * 2)     -- bank left/right into the turn
 end
 ```
 
 `games/jet2026/jet2026.tyro` is a 1942-style scrolling shooter built this
 way: one GLB jet reused through a pool for the player and every enemy,
-tinted and rotated per role.
+tinted and rotated per role. Its clouds are clusters of `models.sphere`
+puffs floating at a depth between the jets and the sea, so every shadow
+lands on the water below the clouds.
+
+## Light & Shadows
+
+Cast shadows share one sun, and it lives on the `world` table. Every
+function below reads when called with no arguments and sets (then returns)
+when called with them.
+
+| Function | Description |
+|----------|-------------|
+| `world.light([dx, dy, dz])` | The direction the sunlight travels (`dy` may not be 0). The default `(0.06, 1, -0.035)` sits the sun high behind the viewer, so shadows slide a little right and down. |
+| `world.ambient([v])` | How much sky light fills the shadows, `0..1` (clamped). `0` is a hard sun with the darkest shadows, `1` is all ambient light so nothing stays dark. Default `0.45`. |
+| `world.ground([z])` | The `model.z` plane shadows fall on — the "floor" (the sea, say), which must sit farther from the eye than the models flying over it. Default `300`. |
+
+A shadow is the mesh projected along the light ray onto that plane, so it
+is the model's true silhouette — wings, bank and all — and it slides
+farther away the closer the model sits to the viewer. Models nearer the
+eye than the ground plane paint over the shadows behind them, so a 3D
+cloud between the viewer and the sea covers the shadow under it and never
+catches one on top.
+
+```lua
+world.light(0.10, 1, -0.05)   -- shadows land to the right and below
+world.ambient(0.45)           -- soft darkness, sky light fills the rest
+world.ground(300)             -- the sea plane, far behind the jets
+```
 
 # Shader Effects
 

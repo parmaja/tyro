@@ -141,6 +141,13 @@ type
     constructor Create(const AName: string; AScript: TLuaScript); override;
     procedure Init; override;
     function Shake_func(L: Plua_State): integer; cdecl;
+    //world.light([dx,dy,dz]) -> the sun ray the model shadows are projected
+    //along (x right, y into the screen, z up); the y part must be non-zero.
+    function Light_func(L: Plua_State): integer; cdecl;
+    //world.ambient([v]) -> how much sky light fills the shadows (0..1).
+    function Ambient_func(L: Plua_State): integer; cdecl;
+    //world.ground([depth]) -> the model.z plane the shadows land on.
+    function Ground_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaFont }
@@ -369,6 +376,8 @@ type
   public
     //models.new([name]) -> a new model object
     function New_func(L: Plua_State): integer; cdecl;
+    //models.sphere([name]) -> a model built from the builtin unit sphere mesh
+    function Sphere_func(L: Plua_State): integer; cdecl;
     //models.find(name) -> the named model object, or nil
     function Find_func(L: Plua_State): integer; cdecl;
     //models(name) -> __call metamethod, same as models.find
@@ -1107,6 +1116,9 @@ end;
 procedure TLuaWorld.Init;
 begin
   Script.Lua.State.Register(Name, 'shake', Self, Self.Shake_func);
+  Script.Lua.State.Register(Name, 'light', Self, Self.Light_func);
+  Script.Lua.State.Register(Name, 'ambient', Self, Self.Ambient_func);
+  Script.Lua.State.Register(Name, 'ground', Self, Self.Ground_func);
   //Lua.State.Register('world', World); //Should be last one for world
   inherited;
 end;
@@ -1126,6 +1138,58 @@ begin
     //jitters the world camera on the next frames.
     Engine.World.Shake(ms, power);
   Result := 0;
+end;
+
+// world.light() -> dx, dy, dz   |   world.light(dx, dy, dz)
+// The sun ray the 3D shadows are cast along, in the model pass's world space:
+// x slides the shadow right, y (non-zero) travels into the screen toward the
+// ground, z slides it up. One shared sun for every model; the store keeps it
+// behind its lock, so the script thread can set it while the draw thread reads.
+function TLuaWorld.Light_func(L: Plua_State): integer; cdecl;
+var
+  x, y, z: Single;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  if L.ArgsCount >= 3 then
+    Engine.Models.SetLight(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3))
+  else if L.ArgsCount > 0 then
+    Script.DoError('light() takes no arguments (read) or three numbers (set)');
+  Engine.Models.GetLight(x, y, z);
+  L.PushNumber(x);
+  L.PushNumber(y);
+  L.PushNumber(z);
+  Result := 3;
+end;
+
+// world.ambient() -> v   |   world.ambient(v)
+// How much sky light fills the shadows: 0 is a hard sun (darkest shadows),
+// 1 is all ambient light, so nothing stays dark.
+function TLuaWorld.Ambient_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  if L.ArgsCount >= 1 then
+    Engine.Models.SetAmbient(L.ToNumber(1));
+  L.PushNumber(Engine.Models.GetAmbient);
+  Result := 1;
+end;
+
+// world.ground() -> depth   |   world.ground(depth)
+// The model.z plane the shadows fall on - the sea floor a world below the
+// flying models. It must sit behind them (a bigger z than the models wear,
+// farther from the eye, so every shadow lands on it).
+function TLuaWorld.Ground_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  if L.ArgsCount >= 1 then
+    Engine.Models.SetGroundY(L.ToNumber(1));
+  L.PushNumber(Engine.Models.GetGroundY);
+  Result := 1;
 end;
 
 { TLuaFont }
@@ -1712,6 +1776,7 @@ begin
   // visible model once per frame; no draw call is needed from the script.
   Lua.State.RegisterTable('models');
   Lua.State.Register('models', 'new', Self, Models.New_func);
+  Lua.State.Register('models', 'sphere', Self, Models.Sphere_func);
   Lua.State.Register('models', 'find', Self, Models.Find_func);
   Lua.State.Register('models', '__call', Self, Models.Call_func, True);
 
@@ -6720,6 +6785,16 @@ begin
       L.PushNumber(Engine.Models.GetTilt(handle));
       Result := 1;
     end
+    else if field = 'roll' then
+    begin
+      L.PushNumber(Engine.Models.GetRoll(handle));
+      Result := 1;
+    end
+    else if field = 'shadow' then
+    begin
+      L.PushBoolean(Engine.Models.GetShadow(handle));
+      Result := 1;
+    end
     else if field = 'scale' then
     begin
       L.PushNumber(Engine.Models.GetScale(handle));
@@ -6772,8 +6847,8 @@ begin
   end;
 end;
 
-// model.__newindex: write properties x, y, z, angle, tilt, scale, visible,
-// tint, name; unknown keys raw-stored in the model table.
+// model.__newindex: write properties x, y, z, angle, tilt, roll, shadow,
+// scale, visible, tint, name; unknown keys raw-stored in the model table.
 function TLuaModel.Setter(L: Plua_State): integer;
 var
   handle: integer;
@@ -6809,6 +6884,14 @@ begin
   else if field = 'tilt' then
   begin
     Engine.Models.SetTilt(handle, L.ToNumber(3));
+  end
+  else if field = 'roll' then
+  begin
+    Engine.Models.SetRoll(handle, L.ToNumber(3));
+  end
+  else if field = 'shadow' then
+  begin
+    Engine.Models.SetShadow(handle, L.ToBoolean(3));
   end
   else if field = 'scale' then
   begin
@@ -6853,6 +6936,43 @@ begin
   handle := Engine.Models.AddEmpty(aName);
   if handle > cModel3DInvalid then
     Script.Model.RegisterModel(handle)
+  else
+    Script.Model.RegisterModel(cModel3DInvalid);
+  // Store optional name
+  if aName <> '' then
+  begin
+    L.PushString(aName);
+    L.SetField(-2, '__name');
+  end;
+  Result := 1;
+end;
+
+// models.sphere("name"?) -> a model whose mesh is the builtin unit sphere
+// (radius 1, scaled like any model). The mesh upload needs the GL context, so
+// - like load() - it runs on the main thread through the engine queue.
+function TLuaModels.Sphere_func(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  handle: integer;
+  BuildObj: TSphereModelObject;
+begin
+  if L.ArgsCount >= 1 then
+    aName := L.ToString(1)
+  else
+    aName := '';
+  handle := Engine.Models.AddEmpty(aName);
+  if handle > cModel3DInvalid then
+  begin
+    BuildObj := TSphereModelObject.Create(handle, 1);
+    try
+      BuildObj.Run(Script.Thread);
+      if not BuildObj.HandleResult then
+        Script.DoError('Sphere model not built');
+    finally
+      BuildObj.Free;
+    end;
+    Script.Model.RegisterModel(handle);
+  end
   else
     Script.Model.RegisterModel(cModel3DInvalid);
   // Store optional name

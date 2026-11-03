@@ -2239,6 +2239,14 @@ var
   rlTranslatef: procedure(x, y, z: Single); cdecl = nil;
   rlRotatef: procedure(angleDegrees, x, y, z: Single); cdecl = nil;
   rlScalef: procedure(x, y, z: Single); cdecl = nil;
+  //Multiply the current matrix by a full 4x4 (raylib layout, float array).
+  //Used to apply the shadow's plane-projection shear - translate/rotate/scale
+  //alone cannot express a projection.
+  rlMultMatrixf: procedure(m: PSingle); cdecl = nil;
+  //Depth-buffer writes on/off: shadows are flat coplanar geometry and must
+  //not write depth, or they would clip each other where they overlap.
+  rlEnableDepthMask: procedure; cdecl = nil;
+  rlDisableDepthMask: procedure; cdecl = nil;
   // Draw bounding box (wires)
   DrawBoundingBox: procedure(box: TBoundingBox; color: TColor); cdecl = nil;
   // Draw a billboard texture
@@ -3213,6 +3221,9 @@ begin
   GetAddress(@rlTranslatef, 'rlTranslatef');
   GetAddress(@rlRotatef, 'rlRotatef');
   GetAddress(@rlScalef, 'rlScalef');
+  GetAddress(@rlMultMatrixf, 'rlMultMatrixf');
+  GetAddress(@rlEnableDepthMask, 'rlEnableDepthMask');
+  GetAddress(@rlDisableDepthMask, 'rlDisableDepthMask');
   GetAddress(@DrawBoundingBox, 'DrawBoundingBox');
   GetAddress(@DrawBillboard, 'DrawBillboard');
   GetAddress(@DrawBillboardRec, 'DrawBillboardRec');

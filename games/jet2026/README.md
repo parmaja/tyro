@@ -1,7 +1,7 @@
 # Jet 2026 (Tyro Game Engine)
 
 A 1942-style vertical scrolling jet fighter for kids, built for Tyro using
-RayLib, a real 3D model for every jet, canvas-drawn waves and Lua.
+RayLib, a real 3D model for every jet, world-painted waves and Lua.
 
 ## Overview
 
@@ -13,8 +13,11 @@ the 1984 Capcom classic — but the stars of the show are real 3D models
 
 This is the showcase game for the `models` API: the player and every enemy
 are the SAME mesh — enemies are simply tinted red/orange/maroon and flown
-nose-down, the bomber is the same mesh at big scale. Waves, bullets, clouds,
-islands, explosions and the HUD are canvas primitives.
+nose-down, the bomber is the same mesh at big scale. The clouds are clusters
+of engine-built 3D spheres (`models.sphere`) at a depth between the jets and
+the sea, so every jet and cloud drops its true silhouette on the water BELOW
+the clouds. Waves, bullets, islands, explosions and the HUD are painted
+straight onto the frame buffer with `world` primitives.
 
 ## Key Features
 
@@ -30,8 +33,13 @@ islands, explosions and the HUD are canvas primitives.
 - **Power-ups**: grab the `P` crate to go from single to double to triple
   shot; maxed-out crates score instead.
 - **Juice**: screen shake, gamepad vibration, engine hum loop
-  (`sound.loopPlay`), bank-into-the-turn and pitch-on-climb jet animation,
-  hi-score persistence (`jet2026.hi`).
+  (`sound.loopPlay`), roll-into-the-turn jet banking (the model's `roll`
+  property), cast shadows — every jet and cloud projects its real silhouette
+  onto the sea along the sun ray (`model.shadow` + `world.light/ambient/
+  ground`) — hi-score persistence (`jet2026.hi`).
+- **3D clouds**: each cloud is a cluster of `models.sphere` puffs parked at
+  `CLOUD_Z`, a depth nearer the eye than the shadow plane, so shadows always
+  land on the sea behind them and a cloud never wears one on top.
 
 ## Controls
 
@@ -45,7 +53,7 @@ islands, explosions and the HUD are canvas primitives.
 ## Architecture
 
 - `jet2026.tyro`: The whole game — state machine (ready/play/pause/dying/
-  over), wave scheduler, enemy AI, bullets, power-ups, canvas renderer, and
+  over), wave scheduler, enemy AI, bullets, power-ups, world renderer, and
   a `JET2026_TEST` hook that exports its internals when the file is pulled
   in via `require()` from a test harness.
 - `jet.glb`: The single 3D mesh (binary glTF) shared by all jets.
