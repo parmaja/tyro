@@ -164,12 +164,23 @@ begin
 end;
 
 function BytesToStr(const B: TBytes): string;
+var
+  R: RawByteString;
 begin
   Result := '';
   if Length(B) = 0 then
     Exit;
-  SetLength(Result, Length(B));
-  Move(B[0], Result[1], Length(B));
+  SetLength(R, Length(B));
+  Move(B[0], R[1], Length(B));
+  //Zip names and the JSON descriptor are UTF-8. FPC's default string is an
+  //AnsiString, so the bytes can be kept as they are; Delphi's string is
+  //UnicodeString, so copying the bytes directly would fold two chars into
+  //one (and made every .sprite look like it had no JSON descriptor).
+  {$IFDEF FPC}
+  Result := R;
+  {$ELSE}
+  Result := UTF8ToString(R);
+  {$ENDIF}
 end;
 
 { Locate the End Of Central Directory record, scanning back over up to the
@@ -881,10 +892,19 @@ begin
 end;
 
 function StrBytes(const S: string): TBytes;
+var
+  R: RawByteString;
 begin
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
+  //The inverse of BytesToStr: keep FPC's raw AnsiString bytes, but encode
+  //Delphi's UnicodeString as UTF-8 before writing it into the zip.
+  {$IFDEF FPC}
+  R := S;
+  {$ELSE}
+  R := UTF8Encode(S);
+  {$ENDIF}
+  SetLength(Result, Length(R));
+  if Length(R) > 0 then
+    Move(R[1], Result[0], Length(R));
 end;
 
 procedure PutU16(MS: TMemoryStream; V: Word);
