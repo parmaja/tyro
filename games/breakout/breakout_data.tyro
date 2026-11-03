@@ -1,0 +1,269 @@
+--======================================================================
+--  Neon Breaker - Data & Physics Configuration
+--======================================================================
+--  Pure configuration and math for the game: playfield geometry, the
+--  brick grid, circle/rectangle collision, paddle bounce angles and the
+--  high-score file. No engine calls here, so tests/test_breakout_data.tyro
+--  can require() it directly.
+
+local M = {}
+
+-- Playfield
+M.W = 800
+M.H = 600
+M.HUD_H = 40              -- top bar holding score / level / balls left
+M.WALL = 6                -- side rail thickness for the ball bounds
+M.TOP = M.HUD_H + 2       -- the ball bounces under the HUD bar
+
+-- Brick grid: COLS columns centered in the playfield
+M.COLS = 14
+M.BRICK_W = 48
+M.BRICK_H = 20
+M.BRICK_GAP = 2
+M.GRID_W = M.COLS * (M.BRICK_W + M.BRICK_GAP) - M.BRICK_GAP
+M.GRID_LEFT = math.floor((M.W - M.GRID_W) / 2)
+M.GRID_TOP = 90
+
+-- Paddle
+M.PADDLE_W = 96
+M.PADDLE_H = 16
+M.PADDLE_Y = M.H - 56     -- top edge of the paddle
+M.PADDLE_SPEED = 580.0    -- keyboard/gamepad speed in px/s
+
+-- Ball
+M.BALL_R = 7              -- collision radius (ball.png is 16x16 with glow margin)
+M.BALL_SPEED = 340.0      -- starting flight speed in px/s
+M.BALL_SPEED_STEP = 1.07  -- speed multiplier after each cleared board
+M.BALL_MAX_SPEED = 560.0
+M.MAX_BOUNCE_ANGLE = 60.0 -- paddle bounce never flatter than this off vertical
+M.MIN_BALL_SLOPE = 0.28   -- keep |vy| alive so the ball never travels flat
+
+-- Rules
+M.START_LIVES = 3
+M.RESPAWN_DELAY = 1.2     -- seconds the "ball lost" pause lasts
+M.CLEAR_DELAY = 2.2       -- seconds the "board clear" fanfare lasts
+
+-- Row tokens '1'..'6' map to a bricks.sprite frame and a point value.
+-- The top rows are worth more, like the classic arcade board.
+M.ROW_SCORE = { 70, 60, 50, 40, 30, 20 }
+
+-- Levels: rows read top to bottom, one string per row, one token per column.
+--   '.' empty   '1'..'6' a brick in that row colour (all single-hit for now)
+M.LEVELS = {
+  {
+    name = "CLASSIC WALL",
+    rows = {
+      "11111111111111",
+      "22222222222222",
+      "33333333333333",
+      "44444444444444",
+      "55555555555555",
+      "66666666666666",
+    },
+  },
+}
+
+-- Helper: clamp
+function M.clamp(val, lo, hi)
+  if val < lo then return lo end
+  if val > hi then return hi end
+  return val
+end
+
+-- Pixel rect of grid cell (col, row), 0-based.
+function M.brick_rect(col, row)
+  return M.GRID_LEFT + col * (M.BRICK_W + M.BRICK_GAP),
+         M.GRID_TOP + row * (M.BRICK_H + M.BRICK_GAP)
+end
+
+-- Builds the brick list for a level number (wraps around M.LEVELS).
+-- Returns bricks with x, y, w, h, frame, score, hp and an alive flag.
+function M.build_level(level)
+  local cfg = M.LEVELS[((level - 1) % #M.LEVELS) + 1]
+  local bricks = {}
+  for row = 1, #cfg.rows do
+    local line = cfg.rows[row]
+    for col = 0, math.min(M.COLS, #line) - 1 do
+      local tok = string.sub(line, col + 1, col + 1)
+      local digit = tonumber(tok)
+      if digit and digit >= 1 and digit <= 6 then
+        local x, y = M.brick_rect(col, row - 1)
+        bricks[#bricks + 1] = {
+          col = col, row = row - 1,
+          x = x, y = y, w = M.BRICK_W, h = M.BRICK_H,
+          frame = digit - 1,
+          score = M.ROW_SCORE[digit],
+          hp = 1,
+          alive = true,
+        }
+      end
+    end
+  end
+  return bricks
+end
+
+-- Circle vs axis-aligned rect. Returns hit, and on a hit the unit normal
+-- (nx, ny) pointing from the rect towards the circle centre, the distance the
+-- circle must travel along that normal to clear the rect, so the caller can
+-- push the circle out and reflect the velocity with M.reflect().
+function M.circle_rect_hit(cx, cy, r, rx, ry, rw, rh)
+  local px = M.clamp(cx, rx, rx + rw)
+  local py = M.clamp(cy, ry, ry + rh)
+  local dx, dy = cx - px, cy - py
+  local d2 = dx * dx + dy * dy
+  if d2 > r * r then
+    return false
+  end
+  if d2 > 0 then
+    local d = math.sqrt(d2)
+    return true, dx / d, dy / d, r - d
+  end
+  -- Centre inside the rect (deep overlap): push out along the flattest axis.
+  local left, right = cx - rx, rx + rw - cx
+  local up, down = cy - ry, ry + rh - cy
+  local m = math.min(left, right, up, down)
+  if m == up then return true, 0, -1, r + up end
+  if m == down then return true, 0, 1, r + down end
+  if m == left then return true, -1, 0, r + left end
+  return true, 1, 0, r + right
+end
+
+-- Reflect velocity (vx, vy) off a unit normal (nx, ny).
+function M.reflect(vx, vy, nx, ny)
+  local dot = vx * nx + vy * ny
+  return vx - 2 * dot * nx, vy - 2 * dot * ny
+end
+
+-- Bounce off the paddle: offset is the ball centre relative to the paddle
+-- centre, normalized to -1..1 at the paddle ends. Returns a velocity of the
+-- given speed, straight up in the middle, up to MAX_BOUNCE_ANGLE off vertical
+-- at the edges.
+function M.paddle_bounce(offset, speed)
+  local t = M.clamp(offset, -1, 1)
+  local rad = math.rad(t * M.MAX_BOUNCE_ANGLE)
+  return speed * math.sin(rad), -speed * math.cos(rad)
+end
+
+-- Keeps a flight speed from ever going vertical-flat or upside-down slow.
+function M.fix_slope(vx, vy, speed)
+  local min_v = speed * M.MIN_BALL_SLOPE
+  if vy > -min_v and vy < min_v then
+    vy = (vy < 0) and -min_v or min_v
+    local max_vx = math.sqrt(math.max(0, speed * speed - vy * vy))
+    if vx < 0 then vx = -max_vx else vx = max_vx end
+  end
+  return vx, vy
+end
+
+-- One physics substep of the ball. Mutates ball (x, y, vx, vy, speed),
+-- reads the paddle (cx, w) and damages live bricks (hp, alive). When
+-- floor_bounce is true the bottom edge is a wall (attract demo) instead
+-- of losing the ball.
+-- Returns an event: "wall", "top", "floor", "lose", "paddle", "paddle_side",
+-- or "brick" plus the brick and whether it broke; nil for plain flight.
+function M.ball_step(ball, paddle, bricks, sdt, floor_bounce)
+  ball.x = ball.x + ball.vx * sdt
+  ball.y = ball.y + ball.vy * sdt
+
+  -- Side rails
+  if ball.x - M.BALL_R < M.WALL then
+    ball.x = M.WALL + M.BALL_R
+    ball.vx = math.abs(ball.vx)
+    return "wall"
+  elseif ball.x + M.BALL_R > M.W - M.WALL then
+    ball.x = M.W - M.WALL - M.BALL_R
+    ball.vx = -math.abs(ball.vx)
+    return "wall"
+  end
+
+  -- Ceiling under the HUD
+  if ball.y - M.BALL_R < M.TOP then
+    ball.y = M.TOP + M.BALL_R
+    ball.vy = math.abs(ball.vy)
+    return "top"
+  end
+
+  -- Floor: a wall in the attract demo, otherwise the ball is lost
+  if ball.y + M.BALL_R > M.H - 2 then
+    if floor_bounce then
+      ball.y = M.H - 2 - M.BALL_R
+      ball.vy = -math.abs(ball.vy)
+      return "floor"
+    end
+    return "lose"
+  end
+
+  -- Paddle: a falling ball whose centre is in the paddle's upper half is a
+  -- catch (classic Breakout generosity, and it covers the case where the
+  -- paddle slid under the ball near an edge). Only contacts below the
+  -- midline act as walls, so the ball is never teleported over the paddle.
+  if ball.vy > 0 then
+    local hit, nx, ny, pen = M.circle_rect_hit(ball.x, ball.y, M.BALL_R,
+        paddle.cx - paddle.w / 2, M.PADDLE_Y, paddle.w, M.PADDLE_H)
+    if hit then
+      if ball.y <= M.PADDLE_Y + M.PADDLE_H / 2 then
+        local off = (ball.x - paddle.cx) / (paddle.w / 2)
+        ball.vx, ball.vy = M.paddle_bounce(off, ball.speed)
+        ball.y = M.PADDLE_Y - M.BALL_R - 0.5
+        return "paddle"
+      else
+        ball.vx, ball.vy = M.reflect(ball.vx, ball.vy, nx, ny)
+        ball.x = ball.x + nx * (pen + 0.5)
+        ball.y = ball.y + ny * (pen + 0.5)
+        return "paddle_side"
+      end
+    end
+  end
+
+  -- Bricks: one hit per substep keeps reflections clean
+  for i = 1, #bricks do
+    local b = bricks[i]
+    if b and b.alive then
+      local hit, nx, ny, pen = M.circle_rect_hit(ball.x, ball.y, M.BALL_R,
+          b.x, b.y, b.w, b.h)
+      if hit then
+        ball.vx, ball.vy = M.reflect(ball.vx, ball.vy, nx, ny)
+        -- Leave the face so the next substep cannot catch the same brick
+        ball.x = ball.x + nx * (pen + 0.5)
+        ball.y = ball.y + ny * (pen + 0.5)
+        b.hp = b.hp - 1
+        local dead = b.hp <= 0
+        if dead then b.alive = false end
+        return "brick", b, dead
+      end
+    end
+  end
+end
+
+-- High score file ------------------------------------------------------
+
+local HI_FILE = "breakout.hi"
+local HI_DEFAULT = 5000
+
+function M.load_high_score()
+  local f = openfile(HI_FILE, "r")
+  if not f then return HI_DEFAULT end
+  local line = f:read("l")
+  f:close()
+  local score = tonumber(line)
+  if score and score > 0 then
+    return math.floor(score)
+  end
+  return HI_DEFAULT
+end
+
+-- Writes the new best when score beats the stored one; returns the best.
+function M.save_high_score(score)
+  local cur = M.load_high_score()
+  if score > cur then
+    local f = openfile(HI_FILE, "w")
+    if f then
+      f:write(tostring(score) .. "\n")
+      f:close()
+    end
+    return score
+  end
+  return cur
+end
+
+return M
