@@ -1,5 +1,6 @@
 // jet2026 open ocean: a board post-shader that turns the flat blue into a
-// living sea - rolling swells, sun glitter and long drifting crests.
+// living sea - sun glitter, long drifting crests and slow depth shading on
+// the water's colors. Pixels never move; only their colors breathe.
 //
 // The sea IS the whole board here, but land (islands, palms), bullets,
 // blasts and white text also live on it. They keep their exact pixels:
@@ -40,13 +41,10 @@ void main()
     vec2 uv = fragTexCoord;
     vec2 q = uv * resolution;                 // pixels: keeps wave sizes stable
 
-    // ---- swell wobble: water pixels lean around, land stays put ----
-    vec4 base = texture(texture0, uv);
-    float sea = seaness(base.rgb) * strength;
-    float wobX = sin(q.y * 0.030 + t * 1.3) * 1.6
-               + sin(q.y * 0.011 - t * 0.7 + sin(q.x * 0.006 + t * 0.25) * 2.0) * 1.1;
-    float wobY = sin(q.x * 0.020 - t * 0.9) * 0.8;
-    vec4 color = texture(texture0, uv + vec2(wobX, wobY) * sea / resolution.x);
+    // No position wobble: every pixel keeps its exact spot, only the
+    // colors of water pixels breathe (glitter, crests, depth shading).
+    vec4 color = texture(texture0, uv);
+    float sea = seaness(color.rgb) * strength;
 
     // ---- depth mottle: slow low-frequency shading, no flat fill ----
     float mott = 0.5 + 0.5 * sin(q.x * 0.008 + t * 0.3) * sin(q.y * 0.006 - t * 0.22);
@@ -57,11 +55,6 @@ void main()
             + sin(q.x * 0.050 - t * 0.9 + 1.7) * sin(q.y * 0.130 + t * 1.4 + 0.8);
     float glint = pow(clamp(0.5 + g * 0.35, 0.0, 1.0), 8.0);
     color.rgb += vec3(0.45, 0.75, 1.00) * glint * 0.50 * sea;
-
-    // ---- long crests: pale lines drifting down, bent by a slow cross-swell ----
-    float crest = sin(q.y * 0.055 - t * 1.2 + sin(q.x * 0.012 + t * 0.4) * 2.3);
-    crest = pow(clamp(crest, 0.0, 1.0), 9.0);
-    color.rgb += vec3(0.72, 0.88, 1.00) * crest * 0.30 * sea;
 
     finalColor = color;
 }
