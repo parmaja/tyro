@@ -397,7 +397,7 @@ type
       VaoID: Cardinal;     // OpenGL Vertex Array Object id
       VboID: PCardinal;    // OpenGL Vertex Buffer Objects id (default vertex data)
   end;
-  PMesh = TMesh;
+  PMesh = ^TMesh;
 
   // Shader
   TShader = record
@@ -2247,6 +2247,11 @@ var
   //not write depth, or they would clip each other where they overlap.
   rlEnableDepthMask: procedure; cdecl = nil;
   rlDisableDepthMask: procedure; cdecl = nil;
+  //Backface culling on/off: the shadow pass wants it ON, or a solid mesh lays
+  //its ink twice - once for the skin the light hits, once for the one behind
+  //it - and the doubled shade draws the model's own relief inside its shadow.
+  rlEnableBackfaceCulling: procedure; cdecl = nil;
+  rlDisableBackfaceCulling: procedure; cdecl = nil;
   //Depth-test on/off: the 3D pass needs it to hide a model's far faces, but
   //it must be OFF again when the frame continues into 2D land - otherwise
   //the depth the models wrote would punch holes in everything painted after
@@ -3232,6 +3237,8 @@ begin
   GetAddress(@rlDisableDepthMask, 'rlDisableDepthMask');
   GetAddress(@rlEnableDepthTest, 'rlEnableDepthTest');
   GetAddress(@rlDisableDepthTest, 'rlDisableDepthTest');
+  GetAddress(@rlEnableBackfaceCulling, 'rlEnableBackfaceCulling');
+  GetAddress(@rlDisableBackfaceCulling, 'rlDisableBackfaceCulling');
   GetAddress(@DrawBoundingBox, 'DrawBoundingBox');
   GetAddress(@DrawBillboard, 'DrawBillboard');
   GetAddress(@DrawBillboardRec, 'DrawBillboardRec');

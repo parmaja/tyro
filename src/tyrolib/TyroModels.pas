@@ -29,6 +29,12 @@ unit TyroModels;
  *  the world's ground plane (world.light / world.ambient / world.ground in
  *  Lua), so the silhouette keeps the mesh's shape and banking, and a cloud
  *  that floats between the viewer and the sea covers the shadows below it.
+ *  The shadow is painted through a flat ink material rather than the model's
+ *  own: a shadow is only the outline a body leaves, so the mesh's texture and
+ *  shading stay out of it and the silhouette reads as one solid shade. The
+ *  silhouettes are inked onto a screen-sized sheet first and that sheet is laid
+ *  over the world in one stroke, so no part of a body can ink one spot twice
+ *  and the shade cannot turn into a map of the model inside it.
  *
  *  LoadModel uploads to the GPU, so load runs on the main thread through the
  *  queue (TLoadModelObject). The bounding box is captured at load time for two
@@ -102,10 +108,53 @@ type
     FLightDir: TVector3;
     FAmbient: Single;
     FGroundY: Single;
+    //The shadow ink: raylib's default material, which is the plain unlit shader
+    //and a 1x1 white pixel, so whatever color is written into its albedo comes
+    //out at the other end unchanged - a solid silhouette with no texture and no
+    //shading in it. Built on the first frame that casts a shadow (the build
+    //needs the GL context) and freed with the store.
+    FShadowMat: TMaterial;
+    FShadowReady: Boolean;
+    //The shadow sheet: a screen-sized cover the silhouettes are inked onto
+    //before any of it reaches the world. On the sheet the ink is opaque, so a
+    //spot is either covered or not and a part of a body crossing another part
+    //of itself cannot lay a second, darker coat. Laid over the world in one
+    //stroke with the ink's own alpha. Built on the first frame that casts a
+    //shadow (it needs the GL context), rebuilt when the window changes size and
+    //freed with the store.
+    FShadowSheet: TRenderTexture2D;
     function GetCount: integer;
     function GetItems(Index: Integer): TModel3D;
     //Frees the GPU model a slot owns and resets it to unloaded.
     procedure FreeModelData(AItem: TModel3D);
+    //Releases the shared shadow ink (main thread, GL context alive).
+    procedure FreeShadowMaterial;
+    //The store's one shadow ink, built on demand (see FShadowMat). Its Maps is
+    //nil when it could not be built, and the caller then casts no shade.
+    function ShadowMaterial: TMaterial;
+    //One model's meshes, all painted with the shadow ink. The model's pose is
+    //already on the rlgl matrix stack, so the meshes go down with the identity.
+    procedure DrawShadowMeshes(AModel: TModel; AInk: TColor);
+    //Releases the shadow sheet (main thread, GL context alive).
+    procedure FreeShadowSheet;
+    //The store's shadow sheet, built on demand and rebuilt when the window
+    //changes size (see FShadowSheet). False when it could not be made, and the
+    //world then stays without a shade.
+    function ShadowSheet(AWidth, AHeight: Integer): Boolean;
+    //One body's shadow pose, pushed onto the rlgl matrix stack: the sun's
+    //projection outermost, then the body's own transform, so the mesh rides
+    //into the world and the light flattens it onto the sea. The caller closes
+    //the matrix it opened here.
+    procedure PushShadowPose(AItem: TModel3D; const AProjection: TMatrix;
+      AX, AY: Single; AWidth, AHeight: Integer);
+    //Wipes the sheet and inks it with the silhouette of every body whose own
+    //alpha is ATintAlpha (255 = the ordinary, solid bodies, inked all together;
+    //a see-through body is inked on its own so its thinness stays its own).
+    //True when it inked anything, which is when the sheet is worth laying.
+    function InkShadowSheet(const ACam: TCamera3D; const AProjection: TMatrix;
+      AX, AY: Single; AWidth, AHeight: Integer; ATintAlpha: Byte): Boolean;
+    //Lays the inked sheet over the world: one coat of ink, under every model.
+    procedure LayShadowSheet(AAlpha: Integer);
   public
     constructor Create;
     destructor Destroy; override;
@@ -214,6 +263,30 @@ implementation
 uses
   TyroEngines;
 
+type
+  //raylib hands a model's meshes out as a plain C array. This is the Pascal
+  //handle to walk it: the element count is only a range-check cover, nothing
+  //is ever allocated through it.
+  TMeshArray = array[0..MaxInt div SizeOf(TMesh) - 1] of TMesh;
+  PMeshArray = ^TMeshArray;
+
+const
+  //Cast-shadow look: the ink the silhouette is laid in, and how dark it can
+  //get. Ambient light fills a shadow, so at full ambient the alpha drops to 0
+  //and the whole shade switches itself off. Here rather than in DrawAll
+  //because the sheet, the ink and the coat that lays it are three hands on the
+  //same colour.
+  cModel3DShadowMaxAlpha = 150;
+  cModel3DShadowInk: TColor = (RGBA: (Red: 8; Green: 8; Blue: 20; Alpha: 0));
+  //The shadow meshes are posed on the rlgl matrix stack, exactly like the
+  //models themselves, so the matrix DrawMesh is handed is the identity: the
+  //mesh transform is composed with the current stack matrix inside DrawMesh.
+  cModel3DIdentity: TMatrix =
+    (m0: 1;  m4: 0;  m8: 0;  m12: 0;
+     m1: 0;  m5: 1;  m9: 0;  m13: 0;
+     m2: 0;  m6: 0;  m10: 1; m14: 0;
+     m3: 0;  m7: 0;  m11: 0; m15: 1);
+
 { TModel3D }
 
 constructor TModel3D.Create(AHandle: Integer; const AName: string);
@@ -287,6 +360,183 @@ begin
   AItem.Model := Default(TModel);
 end;
 
+//raylib's default material is the flat, unlit shader and its 1x1 white pixel:
+//write a color into its albedo and that exact color - its alpha included -
+//comes out over the background. That is all a shadow should be, so neither the
+//mesh's texture nor its lighting shows up inside it. Built here rather than in
+//Create because the material wants the GL context, which only exists once the
+//engine has a window.
+function TModels3D.ShadowMaterial: TMaterial;
+begin
+  if not FShadowReady then
+  begin
+    FShadowMat := RayLib.LoadMaterialDefault;
+    FShadowReady := (FShadowMat.Shader.ID > 0) and (FShadowMat.Maps <> nil);
+  end;
+  Result := FShadowMat;
+end;
+
+procedure TModels3D.FreeShadowMaterial;
+begin
+  if FShadowReady then
+  begin
+    //raylib keeps the default shader and its white pixel itself, so this only
+    //hands back the maps array LoadMaterialDefault allocated for our copy.
+    RayLib.UnloadMaterial(FShadowMat);
+    FShadowMat := Default(TMaterial);
+    FShadowReady := False;
+  end;
+end;
+
+//The ink goes onto the material's albedo (map 0), and the flat shader has
+//nothing else to add, so every mesh of the model comes out in that one color.
+//The meshes ride the rlgl matrix stack the caller set up, hence the identity.
+procedure TModels3D.DrawShadowMeshes(AModel: TModel; AInk: TColor);
+var
+  I: Integer;
+  InkMat: TMaterial;
+begin
+  if AModel.Meshes = nil then
+    Exit;
+  InkMat := FShadowMat;
+  InkMat.Maps^.Color := AInk;
+  for I := 0 to AModel.MeshCount - 1 do
+    RayLib.DrawMesh(PMeshArray(AModel.Meshes)^[I], InkMat, cModel3DIdentity);
+end;
+
+procedure TModels3D.FreeShadowSheet;
+begin
+  if FShadowSheet.ID <> 0 then
+  begin
+    RayLib.UnloadRenderTexture(FShadowSheet);
+    FShadowSheet := Default(TRenderTexture2D);
+  end;
+end;
+
+//The sheet is a piece of the window's size, so a resized window simply gets a
+//new one. Made here rather than in Create because it wants the GL context,
+//which only exists once the engine has a window.
+function TModels3D.ShadowSheet(AWidth, AHeight: Integer): Boolean;
+begin
+  if (FShadowSheet.ID <> 0)
+    and ((FShadowSheet.Texture.Width <> AWidth) or
+         (FShadowSheet.Texture.Height <> AHeight)) then
+    FreeShadowSheet;
+  if FShadowSheet.ID = 0 then
+  begin
+    FShadowSheet := RayLib.LoadRenderTexture(AWidth, AHeight);
+    if not RayLib.IsRenderTextureValid(FShadowSheet) then
+    begin
+      //UnloadRenderTexture on a sheet that was never made would hand back a
+      //buffer that does not exist, so it is dropped instead.
+      FShadowSheet := Default(TRenderTexture2D);
+      Exit(False);
+    end;
+    //The sheet is read back one texel to one pixel, so it must never be
+    //smeared: a smoothed sheet would soften the silhouette's edge.
+    RayLib.SetTextureFilter(FShadowSheet.Texture, TEXTURE_FILTER_POINT);
+  end;
+  Result := True;
+end;
+
+//The projection is pushed first so it ends up the outermost matrix: the whole
+//mesh is flattened along the light ray onto the sea, and the body's own
+//transform under it decides which part of the mesh that is.
+procedure TModels3D.PushShadowPose(AItem: TModel3D; const AProjection: TMatrix;
+  AX, AY: Single; AWidth, AHeight: Integer);
+var
+  S: Single;
+begin
+  S := AItem.Scale;
+  if S <= 0 then
+    S := 1;
+  RayLib.rlPushMatrix;
+  RayLib.rlMultMatrixf(@AProjection);
+  //The same screen-pixel anchor the models get, so the shade belongs to the
+  //body that casts it: x runs right, y runs down (so it becomes -z), and the
+  //body's own Z depth rides along the world y axis.
+  RayLib.rlTranslatef(AItem.X + AX - AWidth * 0.5, AItem.Z,
+    AHeight * 0.5 - (AItem.Y + AY));
+  RayLib.rlRotatef(AItem.Angle, 0, 1, 0);
+  RayLib.rlRotatef(AItem.Roll, 0, 0, 1);
+  RayLib.rlRotatef(AItem.Tilt, 1, 0, 0);
+  RayLib.rlScalef(S, S, S);
+  RayLib.rlTranslatef(-AItem.Center.X, -AItem.Center.Y, -AItem.Center.Z);
+end;
+
+//Wiping the sheet and inking it from scratch is cheaper than keeping it tidy
+//between frames, and it is the only way to be sure an old silhouette cannot
+//leak into today's shade. On the sheet the ink goes down opaque: what the sheet
+//records is whether a spot is covered at all, so a part of a body crossing
+//another part of itself - or another body entirely - leaves a spot that is
+//already inked exactly as it was. The whole shade is therefore one flat
+//colour, and only the stroke that lays it brings the alpha.
+function TModels3D.InkShadowSheet(const ACam: TCamera3D;
+  const AProjection: TMatrix; AX, AY: Single; AWidth, AHeight: Integer;
+  ATintAlpha: Byte): Boolean;
+var
+  Item: TModel3D;
+  Ink: TColor;
+begin
+  Result := False;
+  RayLib.BeginTextureMode(FShadowSheet);
+  try
+    RayLib.ClearBackground(clBlank);
+    RayLib.BeginMode3D(ACam);
+    try
+      //The sheet's own depth buffer hides the far skins of a body, and that is
+      //all it does: an already inked spot stays exactly as inked when another
+      //part of the same body - or another body - lands on it, so nothing here
+      //needs to be culled. Culling stays off on purpose: the mesh is looked at
+      //mirrored (see below), which turns its windings around, and a skin is
+      //only ever wanted here as ink.
+      RayLib.rlEnableDepthTest;
+      RayLib.rlEnableDepthMask;
+      RayLib.rlDisableBackfaceCulling;
+      Ink := cModel3DShadowInk;
+      Ink.RGBA.Alpha := 255;
+      //The stroke that lays the sheet reads it bottom up, so the ink goes on
+      //the other way: the world is mirrored across the middle line of the
+      //screen - and only that way, because the stroke turns just the one over.
+      //World z is the screen's up, and the screen's middle sits at z zero (the
+      //anchor of every model is the screen centre less its offset), so a
+      //negative scale on z is the mirror.
+      RayLib.rlPushMatrix;
+      RayLib.rlScalef(1, 1, -1);
+      try
+        for Item in FItems.Values do
+        begin
+          if (not Item.Visible) or (not Item.Loaded) or (not Item.Shadow) then
+            Continue;
+          if Item.Tint.RGBA.Alpha <> ATintAlpha then
+            Continue;
+          PushShadowPose(Item, AProjection, AX, AY, AWidth, AHeight);
+          DrawShadowMeshes(Item.Model, Ink);
+          RayLib.rlPopMatrix;
+          Result := True;
+        end;
+      finally
+        RayLib.rlPopMatrix;
+      end;
+    finally
+      RayLib.EndMode3D;
+    end;
+  finally
+    RayLib.EndTextureMode;
+  end;
+end;
+
+//One stroke of ink over the world. The sheet already carries the ink's own
+//color, so the tint only brings the alpha: wherever a body covers, the world
+//shows the ink at that strength, and everywhere else it shows through whole.
+//This is a plain 2D coat of paint, so the depth test - left on by the sheet -
+//goes back off; the model pass switches it on again for real solids.
+procedure TModels3D.LayShadowSheet(AAlpha: Integer);
+begin
+  RayLib.rlDisableDepthTest;
+  RayLib.DrawTexture(FShadowSheet.Texture, 0, 0, clWhite.ReplaceAlpha(Byte(AAlpha)));
+end;
+
 procedure TModels3D.Clear;
 var
   Item: TModel3D;
@@ -301,6 +551,10 @@ begin
     FLightDir := Vector3Of(0.06, 1, -0.035);
     FAmbient := 0.45;
     FGroundY := 300;
+    //...and the shadow ink goes with it: it belongs to this run's GL context
+    //and is rebuilt on the next frame that casts a shadow.
+    FreeShadowMaterial;
+    FreeShadowSheet;
   finally
     FLock.Leave;
   end;
@@ -935,19 +1189,13 @@ const
   //Distance of the eye above the pixel plane. The ortho frustum clips at
   //0.01..1000, so this leaves the models room for a +/-399 depth range.
   cModel3DDistance = 400.0;
-  //Cast-shadow look: the mesh's real silhouette projected onto the ground
-  //plane along the light ray. Ambient light fills the shadow, so at full
-  //ambient the alpha drops to 0 and the whole pass switches itself off.
-  cModel3DShadowMaxAlpha = 150;
-  cModel3DShadowInk: TColor = (RGBA: (Red: 8; Green: 8; Blue: 20; Alpha: 0));
 var
   Cam: TCamera3D;
   Item: TModel3D;
   S: Single;
   Pos: TVector3;
   ShadowM: TMatrix;
-  ShadowTint: TColor;
-  ItemShadowTint: TColor;
+  ItemAlpha: Integer;
   KX, KZ, G, LY: Single;
   Alpha: Integer;
   AnyVisible: Boolean;
@@ -987,20 +1235,54 @@ begin
     ShadowM.m8 := 0;  ShadowM.m9 := -KZ; ShadowM.m10 := 1; ShadowM.m11 := KZ * G;
     ShadowM.m12 := 0; ShadowM.m13 := 0;  ShadowM.m14 := 0; ShadowM.m15 := 1;
     Alpha := Round((1 - FAmbient) * cModel3DShadowMaxAlpha);
-    ShadowTint := cModel3DShadowInk;
-    ShadowTint.RGBA.Alpha := Byte(Alpha);
 
     //Top-down orthographic camera: world +x is screen right, world -z is screen
     //down (so a model's own +z points "up" like a sprite's), and world +y runs
     //away from the viewer as the depth axis. For an ortho camera raylib uses
     //Fovy as the visible height in world units, so Fovy = pixels maps one world
     //unit to one screen pixel; the ortho box is centred on the camera axis, so
-    //pixel coordinates are shifted by half the screen below.
+    //pixel coordinates are shifted by half the screen below. The sheet is inked
+    //through this same camera, which is why the stroke that lays it needs no
+    //placing of its own: it lands where the world already is.
     Cam.Position := Vector3Of(0, -cModel3DDistance, 0);
     Cam.Target := Vector3Of(0, 0, 0);
     Cam.Up := Vector3Of(0, 0, 1);
     Cam.Fovy := AHeight;
     Cam.Projection := Ord(CAMERA_ORTHOGRAPHIC); //the field is a plain Integer
+
+    //The shade the bodies drop on the world, laid before a single model is
+    //drawn: the sea under it, every model over it, so a cloud that floats
+    //between the viewer and the water hides the shade under it, as it should.
+    //The silhouettes are inked onto the sheet first and the sheet goes down in
+    //one stroke, so the shade is one flat colour wherever anything covers: a
+    //canopy over a wing, or one body over another, cannot make it deeper, any
+    //more than a spot can be out of one sun twice. Without the ink or without
+    //the sheet there is no shade at all (a store that could not build them
+    //leaves the sea bare).
+    if (Alpha > 0) and (ShadowMaterial.Maps <> nil)
+      and ShadowSheet(AWidth, AHeight) then
+    begin
+      //The solid bodies share one sheet: their shade is the same shade, so one
+      //stroke of it covers all of them.
+      if InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight, 255) then
+        LayShadowSheet(Alpha);
+      //A see-through body (a misty cloud puff) is inked on the sheet on its own
+      //and laid over the rest, so its thinness stays its own and the puffs
+      //stack into a denser shade exactly like the puffs themselves do.
+      for Item in FItems.Values do
+      begin
+        if (not Item.Visible) or (not Item.Loaded) or (not Item.Shadow) then
+          Continue;
+        if Item.Tint.RGBA.Alpha >= 255 then
+          Continue;
+        ItemAlpha := Round(Alpha * Item.Tint.RGBA.Alpha / 255);
+        if (ItemAlpha > 0)
+          and InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight,
+            Item.Tint.RGBA.Alpha) then
+          LayShadowSheet(ItemAlpha);
+      end;
+    end;
+
     RayLib.BeginMode3D(Cam);
     try
       //The models are real solids: the depth test hides their far faces. It
@@ -1009,48 +1291,7 @@ begin
       //depth, and the depth left in the buffer would otherwise punch the
       //models' silhouettes into those layers (a cloud hiding the HUD text).
       RayLib.rlEnableDepthTest;
-      //Pass 1 - the shadows, cast onto the world's ground plane before any
-      //model touches the depth buffer. They write no depth themselves
-      //(rlDisableDepthMask), so overlapping shadows blend together into a
-      //denser shade instead of clipping each other, and any model drawn in
-      //pass 2 simply paints over the shadow beneath it: a cloud between the
-      //viewer and the sea hides the shadow under it, as it should.
-      if Alpha > 0 then
-      begin
-        RayLib.rlDisableDepthMask;
-        for Item in FItems.Values do
-        begin
-          if (not Item.Visible) or (not Item.Loaded) or (not Item.Shadow) then
-            Continue;
-          //A see-through model (a misty cloud puff) casts a see-through
-          //shadow; the pass writes no depth, so overlapping puff shadows
-          //stack into a denser shade exactly like the puffs themselves.
-          ItemShadowTint := ShadowTint;
-          if Item.Tint.RGBA.Alpha < 255 then
-            ItemShadowTint.RGBA.Alpha := Byte(Round(Alpha * Item.Tint.RGBA.Alpha / 255));
-          S := Item.Scale;
-          if S <= 0 then
-            S := 1;
-          Pos.X := Item.X + AX - AWidth * 0.5;
-          Pos.Y := Item.Z;
-          Pos.Z := AHeight * 0.5 - (Item.Y + AY);
-          RayLib.rlPushMatrix;
-          //The projection first (outermost), then the model's own transform:
-          //the mesh rides into the world, and the sun flattens it onto the sea.
-          RayLib.rlMultMatrixf(@ShadowM);
-          RayLib.rlTranslatef(Pos.X, Pos.Y, Pos.Z);
-          RayLib.rlRotatef(Item.Angle, 0, 1, 0);
-          RayLib.rlRotatef(Item.Roll, 0, 0, 1);
-          RayLib.rlRotatef(Item.Tilt, 1, 0, 0);
-          RayLib.rlScalef(S, S, S);
-          RayLib.rlTranslatef(-Item.Center.X, -Item.Center.Y, -Item.Center.Z);
-          RayLib.DrawModel(Item.Model, Vector3Of(0, 0, 0), 1.0, ItemShadowTint);
-          RayLib.rlPopMatrix;
-        end;
-        RayLib.rlEnableDepthMask;
-      end;
-
-      //Pass 2 - the models themselves.
+      //The models themselves, painted over the shade.
       for Item in FItems.Values do
       begin
         if (not Item.Visible) or (not Item.Loaded) then
