@@ -2247,6 +2247,12 @@ var
   //not write depth, or they would clip each other where they overlap.
   rlEnableDepthMask: procedure; cdecl = nil;
   rlDisableDepthMask: procedure; cdecl = nil;
+  //Depth-test on/off: the 3D pass needs it to hide a model's far faces, but
+  //it must be OFF again when the frame continues into 2D land - otherwise
+  //the depth the models wrote would punch holes in everything painted after
+  //them (controls, the screen buffer), hiding a HUD behind a passing cloud.
+  rlEnableDepthTest: procedure; cdecl = nil;
+  rlDisableDepthTest: procedure; cdecl = nil;
   // Draw bounding box (wires)
   DrawBoundingBox: procedure(box: TBoundingBox; color: TColor); cdecl = nil;
   // Draw a billboard texture
@@ -3224,6 +3230,8 @@ begin
   GetAddress(@rlMultMatrixf, 'rlMultMatrixf');
   GetAddress(@rlEnableDepthMask, 'rlEnableDepthMask');
   GetAddress(@rlDisableDepthMask, 'rlDisableDepthMask');
+  GetAddress(@rlEnableDepthTest, 'rlEnableDepthTest');
+  GetAddress(@rlDisableDepthTest, 'rlDisableDepthTest');
   GetAddress(@DrawBoundingBox, 'DrawBoundingBox');
   GetAddress(@DrawBillboard, 'DrawBillboard');
   GetAddress(@DrawBillboardRec, 'DrawBillboardRec');

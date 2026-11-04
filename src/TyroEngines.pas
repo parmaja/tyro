@@ -893,7 +893,12 @@ var
   Consumed: Integer;
   Depth: Integer;
   Hold0: LongInt;
+  //The render target actually bound right now, and the one the next object
+  //wants. Raylib paints on whatever texture is bound, not on the Canvas a
+  //draw object carries, so the pass has to re-bind between buffers.
+  Bound, Target: TTyroCanvas;
 begin
+  Bound := Board;
   if Board <> nil then
   begin
     //A script that called enter() holds the queue: commands keep piling up,
@@ -947,9 +952,31 @@ begin
       {$ifdef diagnose}
       BudgetHit := False;
       {$endif}
+      //The queue mixes draw commands for different buffers: world and canvas
+      //commands paint on Board's texture, screen commands own their texture.
+      //Raylib draws on the bound render texture - whatever a TDrawObject's
+      //Canvas points at is meaningless unless it is bound - so the pass starts
+      //on Board and re-binds every time an object asks for another canvas.
+      //Without this the whole HUD lands on Board, below the sprites, models
+      //and controls, and screen.clear() wipes the game scene instead.
+      Bound := Board;
       Board.BeginDraw;
       while True do
       begin
+        if p is TDrawObject then
+        begin
+          Target := TDrawObject(p).Canvas;
+          if not (Target is TTyroTextureCanvas) then
+            //The World canvas has no texture of its own: it paints on Board,
+            //on top of whatever the screen commands left in the queue.
+            Target := Board;
+          if Target <> Bound then
+          begin
+            Bound.EndDraw;
+            Target.BeginDraw;
+            Bound := Target;
+          end;
+        end;
         try
           p.Execute;
         except
@@ -994,7 +1021,8 @@ begin
           Break;
 
       end;
-      Board.EndDraw;
+      //Close whichever buffer the pass ended on, not necessarily Board.
+      Bound.EndDraw;
     finally
       CanvasLock.Leave;
     end;

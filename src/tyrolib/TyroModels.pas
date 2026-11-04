@@ -966,6 +966,12 @@ begin
     Cam.Projection := Ord(CAMERA_ORTHOGRAPHIC); //the field is a plain Integer
     RayLib.BeginMode3D(Cam);
     try
+      //The models are real solids: the depth test hides their far faces. It
+      //is switched back off at the end of the pass - every layer above the
+      //3D scene (sparks, controls, the screen buffer) is 2D at one fixed
+      //depth, and the depth left in the buffer would otherwise punch the
+      //models' silhouettes into those layers (a cloud hiding the HUD text).
+      RayLib.rlEnableDepthTest;
       //Pass 1 - the shadows, cast onto the world's ground plane before any
       //model touches the depth buffer. They write no depth themselves
       //(rlDisableDepthMask), so overlapping shadows blend together into a
@@ -1038,6 +1044,8 @@ begin
       end;
     finally
       RayLib.EndMode3D;
+      //Leave the depth test off for the 2D layers painted after this pass.
+      RayLib.rlDisableDepthTest;
     end;
   finally
     FLock.Leave;
