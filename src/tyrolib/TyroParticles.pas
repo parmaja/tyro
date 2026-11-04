@@ -82,6 +82,12 @@ type
     FLock: TmnCriticalSection;
     FItems: array of TParticle;
     FCount: Integer;
+    //* The sparks' own xorshift state, seeded from the clock at Create. A
+    //dedicated stream (not System.Random) on purpose: the game scripts' rand()
+    //reads that global stream, and an engine singleton must not shuffle it -
+    //the same run should spawn the same squadron every time.
+    FRand: Cardinal;
+    function NextRand: single;
     function GetCount: integer;
   public
     constructor Create;
@@ -117,8 +123,19 @@ begin
   SetLength(FItems, cParticleMax);
   FCount := 0;
   //Sparks are decoration, but two runs that explode the same jet should not
-  //spray the identical pattern; seed the jitter from the clock.
-  Randomize;
+  //spray the identical pattern; seed the jitter from the clock. Zero would
+  //lock a xorshift at zero, so nudge it into play.
+  FRand := Cardinal(GetTickCount64 and $7FFFFFFF) or $5F3759DF;
+end;
+
+//xorshift32: a handful of bit ops, good enough for a spark's jitter, and it
+//never touches the global Random the scripts use (see FRand).
+function TParticles.NextRand: single;
+begin
+  FRand := FRand xor (FRand shl 13);
+  FRand := FRand xor (FRand shr 17);
+  FRand := FRand xor (FRand shl 5);
+  Result := FRand / Cardinal($FFFFFFFF);
 end;
 
 destructor TParticles.Destroy;
@@ -173,14 +190,14 @@ begin
     for I := 0 to N - 1 do
     begin
       Ang := (Burst.Direction - Burst.Spread * 0.5 + StepAng * (I + 0.5)
-        + (Random - 0.5) * StepAng) * Pi / 180;
-      P.X := Burst.X + (Random - 0.5) * 4;
-      P.Y := Burst.Y + (Random - 0.5) * 4;
-      P.VX := Cos(Ang) * Burst.Speed * (0.5 + Random * 0.65);
-      P.VY := Sin(Ang) * Burst.Speed * (0.5 + Random * 0.65);
-      P.TTL := Burst.Life * (0.7 + Random * 0.3);
+        + (NextRand - 0.5) * StepAng) * Pi / 180;
+      P.X := Burst.X + (NextRand - 0.5) * 4;
+      P.Y := Burst.Y + (NextRand - 0.5) * 4;
+      P.VX := Cos(Ang) * Burst.Speed * (0.5 + NextRand * 0.65);
+      P.VY := Sin(Ang) * Burst.Speed * (0.5 + NextRand * 0.65);
+      P.TTL := Burst.Life * (0.7 + NextRand * 0.3);
       P.Life := P.TTL;
-      P.Size := Burst.Size * (0.6 + Random * 0.8);
+      P.Size := Burst.Size * (0.6 + NextRand * 0.8);
       P.Gravity := Burst.Gravity;
       P.Drag := Burst.Drag;
       P.Color := Burst.Color;

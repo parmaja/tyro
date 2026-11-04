@@ -14,9 +14,11 @@
 --  the sea as the depth changes. The clouds are clusters of engine-built 3D
 --  spheres at a depth between the jets and the sea, so every jet and cloud
 --  casts a real shadow on the water BELOW the clouds (a shadow rides under a
---  cloud, never on top of one). Waves, bullets, explosions and the HUD are
---  painted with world primitives straight onto the frame buffer, and every
---  blast throws engine-owned particle sparks over the whole scene.
+--  cloud, never on top of one). Waves, bullets and explosions are painted
+--  with world primitives straight onto the frame buffer, every blast throws
+--  engine-owned particle sparks over the whole scene, and the HUD, the wave
+--  messages and the ready/pause/over panels ride the fixed screen buffer -
+--  above all drawing, immune to the shake of a hit.
 --
 --  Controls:  ARROWS / WASD        fly - left/right strafe, up/down climb/dive
 --             SPACE                fire (tap or hold for auto-fire)
@@ -88,9 +90,10 @@ local function beep(freq, ms)   music.sound(freq, ms) end
 local function shoot_sfx()      music.sound('Pew', 240, 90) end
 local function boom_sfx()       music.sound('Explode', 50, 240); sound.noise(360, 300) end
 
+-- HUD/overlay text is centered on the fixed screen buffer (see draw()).
 local function center_text(s, y, col)
-  world.color = col
-  world.text((W - textwidth(s)) / 2, y, s)
+  screen.color = col
+  screen.text((W - textwidth(s)) / 2, y, s)
 end
 
 -- ---- tuning ----------------------------------------------------------
@@ -731,25 +734,28 @@ local function draw_blasts()
   end
 end
 
+-- The readouts ride the fixed screen buffer (draw() wipes it with 'blank'
+-- first): it sits above ALL drawing and never shakes, so the info stays
+-- perfectly readable while the sea, the jets and the blasts jolt below it.
 local function draw_hud()
-  world.color = colors.white
-  world.text(10, 8, "SCORE " .. score)
-  world.text(10, 26, "HI " .. math.max(hi, score))
-  world.text(W - 92, 8, "WAVE " .. wave)
+  screen.color = colors.white
+  screen.text(10, 8, "SCORE " .. score)
+  screen.text(10, 26, "HI " .. math.max(hi, score))
+  screen.text(W - 92, 8, "WAVE " .. wave)
 
   -- lives as little jets
   for i = 1, math.min(lives, 5) do
     local lx = W - 24 - (i - 1) * 20
-    world.color = colors.lightgray
-    world.triangle(lx, 24, lx - 7, 40, lx + 7, 40, true)
+    screen.color = colors.lightgray
+    screen.triangle(lx, 24, lx - 7, 40, lx + 7, 40, true)
   end
 
   -- weapon level pips
-  world.color = colors.silver
-  world.text(10, H - 22, "GUN")
+  screen.color = colors.silver
+  screen.text(10, H - 22, "GUN")
   for i = 1, 3 do
-    world.color = i <= player.weapon and colors.lime or colors.darkgray
-    world.rectangle(48 + (i - 1) * 16, H - 20, 12, 12, true)
+    screen.color = i <= player.weapon and colors.lime or colors.darkgray
+    screen.rectangle(48 + (i - 1) * 16, H - 20, 12, 12, true)
   end
 
   if msgTimer > 0 then
@@ -757,10 +763,12 @@ local function draw_hud()
   end
 end
 
+-- The ready/pause/over panels: same fixed glass as the readouts, so the
+-- instructions never wobble under a hit's shake.
 local function draw_overlay()
   if state == "ready" then
-    world.color = colors.black
-    world.rectangle(0, 150, W, 250, true)
+    screen.color = colors.black
+    screen.rectangle(0, 150, W, 250, true)
     center_text("JET 2026", 168, colors.red)
     center_text("JET 2026", 166, colors.yellow)
     center_text("PRESS SPACE / START TO FLY", 224, colors.white)
@@ -773,27 +781,32 @@ local function draw_overlay()
       center_text("READY: " .. padName, 372, colors.lime)
     end
   elseif state == "over" then
-    world.color = colors.black
-    world.rectangle(0, 220, W, 170, true)
+    screen.color = colors.black
+    screen.rectangle(0, 220, W, 170, true)
     center_text("GAME OVER", 240, colors.red)
     center_text("SCORE " .. score, 276, colors.white)
     center_text("HI " .. hi, 300, colors.silver)
     center_text("PRESS SPACE / START TO FLY AGAIN", 336, colors.silver)
   elseif state == "pause" then
-    world.color = colors.black
-    world.rectangle(0, 250, W, 120, true)
+    screen.color = colors.black
+    screen.rectangle(0, 250, W, 120, true)
     center_text("PAUSED", 268, colors.yellow)
     center_text("P / START  resume", 300, colors.white)
     center_text("ESC / BACK  quit", 324, colors.silver)
   end
 end
 
--- Frame callback (world layers; jets and clouds are drawn by the 3D pass).
+-- Frame callback. The world layers hold the scene (sea, bullets, blasts);
+-- the jets and clouds are drawn by the 3D pass, the sparks by the particle
+-- pass. The HUD and overlays then go onto the fixed screen buffer, which the
+-- engine composites above everything - wipe it first, it remembers the
+-- previous frame.
 function draw()
   draw_sea()
   draw_powerups()
   draw_bullets()
   draw_blasts()
+  screen.clear('blank')
   draw_hud()
   draw_overlay()
 end
