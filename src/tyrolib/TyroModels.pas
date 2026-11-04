@@ -160,6 +160,11 @@ type
     function GetScale(Handle: integer): single;
     procedure SetTint(Handle: integer; ATint: TColor);
     function GetTint(Handle: integer): TColor;
+    // 0..255 opacity, folded into the tint's alpha channel: a see-through
+    // jet shows what is behind it, and a stack of soft spheres reads as one
+    // misty volume instead of hard white balls.
+    procedure SetAlpha(Handle: integer; AAlpha: integer);
+    function GetAlpha(Handle: integer): integer;
 
     // True when at least one visible model holds a mesh, so the caller can skip
     // the whole BeginMode3D/EndMode3D pass on a models-free frame.
@@ -811,6 +816,37 @@ begin
   end;
 end;
 
+procedure TModels3D.SetAlpha(Handle: integer; AAlpha: integer);
+var
+  Item: TModel3D;
+begin
+  if AAlpha < 0 then
+    AAlpha := 0
+  else if AAlpha > 255 then
+    AAlpha := 255;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Item.Tint := Item.Tint.RGBA.ReplaceAlpha(Byte(AAlpha));
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetAlpha(Handle: integer): integer;
+var
+  Item: TModel3D;
+begin
+  Result := 255;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Tint.RGBA.Alpha;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 //The light is one shared sun (the store's), read by every cast shadow; the
 //script reaches it through world.light/world.ambient/world.ground.
 procedure TModels3D.SetLight(X, Y, Z: single);
@@ -911,6 +947,7 @@ var
   Pos: TVector3;
   ShadowM: TMatrix;
   ShadowTint: TColor;
+  ItemShadowTint: TColor;
   KX, KZ, G, LY: Single;
   Alpha: Integer;
   AnyVisible: Boolean;
@@ -985,6 +1022,12 @@ begin
         begin
           if (not Item.Visible) or (not Item.Loaded) or (not Item.Shadow) then
             Continue;
+          //A see-through model (a misty cloud puff) casts a see-through
+          //shadow; the pass writes no depth, so overlapping puff shadows
+          //stack into a denser shade exactly like the puffs themselves.
+          ItemShadowTint := ShadowTint;
+          if Item.Tint.RGBA.Alpha < 255 then
+            ItemShadowTint.RGBA.Alpha := Byte(Round(Alpha * Item.Tint.RGBA.Alpha / 255));
           S := Item.Scale;
           if S <= 0 then
             S := 1;
@@ -1001,7 +1044,7 @@ begin
           RayLib.rlRotatef(Item.Tilt, 1, 0, 0);
           RayLib.rlScalef(S, S, S);
           RayLib.rlTranslatef(-Item.Center.X, -Item.Center.Y, -Item.Center.Z);
-          RayLib.DrawModel(Item.Model, Vector3Of(0, 0, 0), 1.0, ShadowTint);
+          RayLib.DrawModel(Item.Model, Vector3Of(0, 0, 0), 1.0, ItemShadowTint);
           RayLib.rlPopMatrix;
         end;
         RayLib.rlEnableDepthMask;

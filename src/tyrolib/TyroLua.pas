@@ -299,6 +299,7 @@ type
   public
     //sprites
     function New_func(L: Plua_State): integer; cdecl;
+    function Puff_func(L: Plua_State): integer; cdecl;
     function Find_func(L: Plua_State): integer; cdecl;
     function Call_func(L: Plua_State): integer; cdecl;
   end;
@@ -1788,6 +1789,7 @@ begin
   // Sprite system: Sprites.new creates a sprite, Sprites("name") finds by name
   Lua.State.RegisterTable('Sprites');
   Lua.State.Register('Sprites', 'new', Self, Sprites.New_func);
+  Lua.State.Register('Sprites', 'puff', Self, Sprites.Puff_func);
   Lua.State.Register('Sprites', 'find', Self, Sprites.Find_func);
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
   Lua.State.Register('Sprites', '__call', Self, Sprites.Call_func, True);
@@ -4248,6 +4250,81 @@ begin
     L.SetField(-2, '__name');
   end;
   Result := 1;
+end;
+
+// Sprites.puff("name" [, size] [, count]) -> a sprite carrying an engine-generated
+// soft puff texture: a solid core with a feathered, lumpy rim. The arcade cloud
+// and smoke trick: stack a few of these with jittered position/scale/alpha and
+// the soft edges fuse into one fluffy mass. Size is the texture in px (default
+// 128). A count above 1 builds that many puffs in ONE hop and returns a table
+// of them - a whole sky of clouds should not stall on one round-trip per puff.
+function TLuaSprites.Puff_func(L: Plua_State): integer; cdecl;
+var
+  aName, aOne: string;
+  aSize, aCount, I, handle: integer;
+  PuffObj: TPuffSpriteObject;
+
+  procedure PushNamed(const AName: string);
+  begin
+    if AName <> '' then
+    begin
+      L.PushString(AName);
+      L.SetField(-2, '__name');
+    end;
+  end;
+
+begin
+  if L.ArgsCount >= 1 then
+    aName := L.ToString(1)
+  else
+    aName := '';
+  if L.ArgsCount >= 2 then
+    aSize := Round(L.ToNumber(2))
+  else
+    aSize := 128;
+  if L.ArgsCount >= 3 then
+    aCount := Round(L.ToNumber(3))
+  else
+    aCount := 1;
+  PuffObj := TPuffSpriteObject.Create(aName, aSize, aCount);
+  try
+    PuffObj.Run(Script.Thread); //Will run in Synchronize
+    if Length(PuffObj.Handles) <= 1 then
+    begin
+      if Length(PuffObj.Handles) > 0 then
+        handle := PuffObj.Handles[0]
+      else
+        handle := cSpriteInvalid;
+      if handle > cSpriteInvalid then
+        Script.Sprite.RegisterSprite(handle)
+      else
+        Script.Sprite.RegisterSprite(-1);
+      PushNamed(aName);
+      Result := 1;
+    end
+    else
+    begin
+      // the batch form: puffs = Sprites.puff("cloud", 128, 40)
+      lua_createtable(L, Length(PuffObj.Handles), 0);
+      for I := 0 to High(PuffObj.Handles) do
+      begin
+        handle := PuffObj.Handles[I];
+        if handle > cSpriteInvalid then
+          Script.Sprite.RegisterSprite(handle)
+        else
+          Script.Sprite.RegisterSprite(-1);
+        if aName <> '' then
+        begin
+          aOne := aName + IntToStr(I + 1);
+          PushNamed(aOne);
+        end;
+        lua_rawseti(L, -2, I + 1);
+      end;
+      Result := 1;
+    end;
+  finally
+    PuffObj.Free;
+  end;
 end;
 
 // Sprites.find("name") -> returns a sprite object for the named sprite, or nil
@@ -6849,6 +6926,11 @@ begin
       L.PushInteger(ColorToInt(Engine.Models.GetTint(handle)));
       Result := 1;
     end
+    else if field = 'alpha' then
+    begin
+      L.PushInteger(Engine.Models.GetAlpha(handle));
+      Result := 1;
+    end
     else if field = 'name' then
     begin
       L.PushString(Engine.Models.GetName(handle));
@@ -6887,7 +6969,7 @@ begin
 end;
 
 // model.__newindex: write properties x, y, z, angle, tilt, roll, shadow,
-// scale, visible, tint, name; unknown keys raw-stored in the model table.
+// scale, visible, tint, alpha, name; unknown keys raw-stored in the model table.
 function TLuaModel.Setter(L: Plua_State): integer;
 var
   handle: integer;
@@ -6943,6 +7025,11 @@ begin
   else if field = 'tint' then
   begin
     Engine.Models.SetTint(handle, IntToColor(L.ToInteger(3)));
+  end
+  else if field = 'alpha' then
+  begin
+    //0..255 opacity, folded into the tint's alpha channel (like sprites)
+    Engine.Models.SetAlpha(handle, Integer(Round(L.ToNumber(3))));
   end
   else if field = 'name' then
   begin

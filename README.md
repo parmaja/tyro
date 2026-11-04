@@ -334,6 +334,7 @@ positioned with `move` or by setting `x`/`y` properties.
 | Function | Description |
 |----------|-------------|
 | `Sprites.new("name"?)` | Create a new sprite. Optional name registers it for lookup. |
+| `Sprites.puff("name"? [, size] [, count])` | Create a sprite carrying an **engine-built soft puff texture** (no file, like `models.sphere`): a solid core with a feathered, lumpy rim — the arcade building block for clouds and smoke. `size` is the texture in pixels (default 128). `count` above 1 builds that many puffs in one hop and returns a table of them, named `name1..nameN`. Stack a few with jittered position/scale/alpha and their soft edges fuse into one fluffy mass. |
 | `Sprites("name")` | Look up a sprite by name (returns the sprite object or `nil`). |
 | `Sprites.find("name")` | Same as above. |
 
@@ -548,6 +549,7 @@ directory and the workspace, like sprites.
 | `model.visible` | `boolean` | Whether the model is drawn (read/write). |
 | `model.shadow` | `boolean` | Cast a real shadow: the mesh's true silhouette projected along the sun onto the ground plane — see Light & Shadows below (read/write, default `true`). |
 | `model.tint` | `number` | Colour multiplied over the mesh, the same integer format as `canvas.color` / `colors.*`; white is the default (read/write). |
+| `model.alpha` | `number` | Opacity 0..255, folded into the tint's alpha like a sprite; a see-through model also casts a proportionally softer shadow (read/write). |
 | `model.name` | `string` | The model's name (read/write). |
 | `model.width` | `number` | Bounding-box X size of the loaded mesh (read-only). |
 | `model.height` | `number` | Bounding-box Y size (read-only). |
@@ -584,9 +586,11 @@ end
 
 `games/jet2026/jet2026.tyro` is a 1942-style scrolling shooter built this
 way: one GLB jet reused through a pool for the player and every enemy,
-tinted and rotated per role. Its clouds are clusters of `models.sphere`
-puffs floating at a depth between the jets and the sea, so every shadow
-lands on the water below the clouds.
+tinted and rotated per role. Its clouds are stacks of `Sprites.puff`
+sprites (one batch per cloud), their soft edges fusing into fluff, and the
+sea is a live one: `sea.frag` rolls swells, sun glitter and drifting crests
+over the board's blue pixels, masked so islands and bullets keep their
+sharp shapes.
 
 ## Light & Shadows
 

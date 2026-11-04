@@ -261,6 +261,27 @@ type
     property HandleResult: integer read FHandleResult;
   end;
 
+  { TPuffSpriteObject }
+
+  { Builds engine-generated soft puff sprites on the main thread: solid core
+    with a feathered, lumpy rim, the classic arcade trick for clouds and
+    smoke. Stacking a few of these soft quads fuses them into a fluffy mass
+    with no hard silhouette anywhere. A COUNT of puffs is built in ONE
+    round-trip: a sky full of clouds otherwise stalls the script thread on a
+    frame wait for every single sprite. }
+  TPuffSpriteObject = class(TQueueObject)
+  private
+    FName: string;
+    FSize: integer;
+    FCount: integer;
+    FHandles: array of integer;
+  protected
+    procedure DoExecute; override;
+  public
+    constructor Create(const AName: string; ASize, ACount: integer);
+    property Handles: TArray<integer> read FHandles;
+  end;
+
   { TLoadSpriteObject }
 
   TLoadSpriteObject = class(TQueueObject)
@@ -1991,6 +2012,81 @@ end;
 procedure TCreateSpriteObject.DoExecute;
 begin
   FHandleResult := Engine.Sprites.AddEmpty(FName);
+end;
+
+{ TPuffSpriteObject }
+
+constructor TPuffSpriteObject.Create(const AName: string; ASize, ACount: integer);
+begin
+  inherited Create;
+  FName := AName;
+  FSize := ASize;
+  if ACount < 1 then
+    ACount := 1
+  else if ACount > 512 then
+    ACount := 512;
+  FCount := ACount;
+end;
+
+procedure TPuffSpriteObject.DoExecute;
+var
+  Img: TImage;
+  Tex: TTexture2D;
+  Px: PColor;
+  X, Y, I: integer;
+  NX, NY, D, W, A: single;
+  aName: string;
+begin
+  if FSize < 32 then
+    FSize := 32
+  else if FSize > 512 then
+    FSize := 512;
+  // GenImageColor lets raylib own the RGBA buffer; we only repaint it once,
+  // then upload the same pixels once per sprite and free the image.
+  Img := RayLib.GenImageColor(FSize, FSize, clBlank);
+  if (Img.data = nil) or (Img.width <> FSize) then
+    Exit;
+  Px := PColor(Img.data);
+  for Y := 0 to FSize - 1 do
+  begin
+    for X := 0 to FSize - 1 do
+    begin
+      NX := (X + 0.5) / FSize * 2 - 1;
+      NY := (Y + 0.5) / FSize * 2 - 1;
+      D := Sqrt(NX * NX + NY * NY);
+      // Folded sine octaves wobble the rim in and out: cauliflower lumps,
+      // not a ball. The core stays solid because the wobble only shifts D.
+      W := Sin(NX * 3.1 + Sin(NY * 2.3) * 1.4) * 0.6 +
+           Sin(NY * 3.7 + Sin(NX * 2.9) * 1.2) * 0.4;
+      D := D - W * 0.10;
+      A := 1 - D;
+      if A <= 0 then
+        A := 0
+      else if A >= 1 then
+        A := 1;
+      A := A * A * (3 - 2 * A); // smoothstep falloff: this is where fluff lives
+      // TColor packs as r | g<<8 | b<<16 | a<<24 (little endian): white with
+      // the falloff as alpha.
+      Px.Value := $00FFFFFF or (Cardinal(Round(A * 255)) shl 24);
+      Inc(Px);
+    end;
+  end;
+  SetLength(FHandles, FCount);
+  for I := 0 to FCount - 1 do
+  begin
+    Tex := RayLib.LoadTextureFromImage(Img);
+    if (FName <> '') and (FCount > 1) then
+      aName := FName + IntToStr(I + 1)
+    else
+      aName := FName;
+    // The store owns every uploaded texture; one texture per sprite keeps
+    // unloading simple even when dozens of identical puffs share the sky.
+    if Tex.id > 0 then
+      FHandles[I] := Engine.Sprites.Add(Tex, aName)
+    else
+      FHandles[I] := cSpriteInvalid;
+  end;
+  RayLib.UnloadImage(Img);
 end;
 
 { TLoadSpriteObject }

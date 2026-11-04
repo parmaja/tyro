@@ -113,8 +113,13 @@ local Z_NEAR        = -170       -- top of the climb: nearest the eye
 local Z_FAR         = 30         -- bottom of the dive: farthest from the eye
 local Z_HOME        = -20        -- cruising depth: in front of the enemies
 local DEPTH_SIZE    = 0.0013     -- ortho camera: a nearer jet draws ITSELF bigger
-local CLOUD_Z       = 40         -- cloud depth: behind the jets, above the sea
+local CLOUD_Z       = 40         -- the clouds' nominal height: climb past it for the haze
 local SLOWMO        = 0.4        -- slow-motion length (scaled seconds) for a bomber down
+
+-- The sea is a live one: sea.frag rolls swells, sun glitter and drifting
+-- crests over the board's blue pixels. If the file is missing the game falls
+-- back to hand-drawn wave lines (draw_sea), so it never shows a dead flat sea.
+local seaShader = false
 
 -- The camera is an orthographic top-down one, so nothing scales itself with
 -- distance - the jet does that by hand: nearer the eye means bigger, and the
@@ -176,23 +181,94 @@ local function release_model(m)
   end
 end
 
--- ---- 3D clouds -------------------------------------------------------
--- Each cloud is a cluster of three engine-built spheres (models.sphere)
--- parked at CLOUD_Z, a depth between the jets and the shadow plane set by
--- world.ground. That puts every shadow on the sea BELOW the clouds, and a
--- cloud always floats over the shadows behind it, never under them. The
--- unit sphere is 2 wide, so a scale of r draws a puff of radius r pixels.
-local function new_puff(name)
-  local m = models.sphere(name)
-  m.tint = colors.white
-  return m
+-- ---- clouds ----------------------------------------------------------
+-- Clouds are not geometry. Each cloud is a stack of engine-built soft puff
+-- sprites (Sprites.puff): solid core, lumpy feathered rim. Overlapping a few
+-- with jittered position, size and alpha fuses the soft edges into one fluffy
+-- mass - the classic arcade weather trick. Sprites live on the 2D layer, so
+-- clouds always sit over the sea and hide what's below them, while the 3D
+-- jets fly over the clouds. Each cloud gets its own lobe layout once
+-- (cloud_shape) and the puffs breathe slowly (place_cloud), so no two clouds
+-- are alike and none of them ever looks like a static logo.
+-- A dark twin of every puff lies on the sea as the cloud's shadow, offset
+-- the way the sun leans (world.light tips to the right and toward us).
+local PUFF_TEX  = 128            -- px size of the Sprites.puff texture
+local SHADOW_DX = 0.45           -- shadow slides right...
+local SHADOW_DY = 0.30           -- ...and down, along the light
+
+-- One puff sits dead centre as the core; the rest form the drifting skirt.
+local function cloud_shape()
+  local shape = { { dx = 0.00, dy = 0.00, r = 0.90, a = 150 } }
+  for i = 1, rand(6, 8) do
+    shape[#shape + 1] = {
+      dx = randf(-0.75, 0.75), dy = randf(-0.35, 0.35),
+      r = randf(0.45, 0.80), a = rand(60, 110) }
+  end
+  return shape
+end
+
+-- Made once at boot: every shadow sprite first (so all shadows draw under
+-- all puffs, even when two clouds cross), then the puffs themselves. Both
+-- batches are built in a single engine hop - a sky of puffs one-per-call
+-- would stall a frame per puff.
+local function make_cloud(c, tag)
+  local k = #c.shape
+  local shadows = Sprites.puff(tag .. "_s", PUFF_TEX, k)
+  for i = 1, k do
+    shadows[i].tint = colors.darkblue
+    shadows[i].alpha = math.floor(c.shape[i].a * 0.55)
+    c.shape[i].shadow = shadows[i]
+  end
+  local puffs = Sprites.puff(tag .. "_p", PUFF_TEX, k)
+  for i = 1, k do
+    puffs[i].tint = colors.white
+    puffs[i].alpha = c.shape[i].a
+    c.shape[i].puff = puffs[i]
+  end
 end
 
 local function place_cloud(c)
-  local p = c.puffs
-  p[1]:move(c.x, c.sy, CLOUD_Z)             ; p[1].scale = c.r
-  p[2]:move(c.x + c.r * 0.8, c.sy + 4, CLOUD_Z); p[2].scale = c.r * 0.7
-  p[3]:move(c.x - c.r * 0.8, c.sy + 6, CLOUD_Z); p[3].scale = c.r * 0.6
+  -- slow breathing: every puff swells and shrinks on its own beat
+  local t = millis() / 900
+  for k = 1, #c.shape do
+    local s = c.shape[k]
+    local wob = 1 + 0.10 * math.sin(t + c.phase + k * 1.7)
+    local x = c.x + s.dx * c.r
+    local y = c.sy + s.dy * c.r
+    local sc = s.r * c.r * wob * 2 / PUFF_TEX
+    s.puff.x = x
+    s.puff.y = y
+    s.puff.scale = sc
+    s.shadow.x = x + SHADOW_DX * c.r
+    s.shadow.y = y + SHADOW_DY * c.r
+    s.shadow.scale = sc
+  end
+end
+
+-- ---- islands ---------------------------------------------------------
+-- Islands are not circles: each gets a little archipelago of lobes, a sand
+-- rim on the south side, jungle on the sun side and a palm or two. The lobes
+-- are generated once (and again when an island recycles) as offsets around
+-- the centre, so one shape seed drives every layer and the coast stays
+-- coherent between the surf, the sand and the jungle.
+local function island_shape(s)
+  local lobes = {}
+  local n = rand(4, 6)
+  for i = 1, n do
+    local ang = (i - 1) / n * 6.283 + randf(-0.4, 0.4)
+    local dist = randf(0.15, 0.65)
+    lobes[i] = { dx = math.cos(ang) * dist, dy = math.sin(ang) * dist * 0.8,
+                 r = randf(0.55, 1) }
+  end
+  s.lobes = lobes
+  local palms = {}
+  local pn = rand(1, 3)
+  for i = 1, pn do
+    local ang = randf(0, 6.283)
+    local dist = randf(0, 0.45)
+    palms[i] = { dx = math.cos(ang) * dist, dy = math.sin(ang) * dist * 0.8 }
+  end
+  s.palms = palms
 end
 
 -- ---- state -----------------------------------------------------------
@@ -545,6 +621,7 @@ local function step_islands(ft)
       s.sy = -s.r - rand(120, 480)
       s.x = rand(20, W - 20)
       s.r = rand(16, 40)
+      island_shape(s)
     end
   end
 end
@@ -749,27 +826,62 @@ end
 local function draw_sea()
   world.color = colors.blue
   world.rectangle(0, 0, W, H, true)
-  -- scrolling wave crests
-  local gap = 46
-  local k0 = math.floor(travel / gap) - 1
-  for k = k0, k0 + math.ceil(H / gap) + 2 do
-    local sy = screenY(k * gap)
-    if sy > -6 and sy < H + 6 then
-      local off = (k * 83) % W
-      world.color = colors.skyblue
-      world.line(off - 40, sy, off - 12, sy, 2)
-      world.line(off + 30, sy + 8, off + 66, sy + 8, 2)
+  if not seaShader then
+    -- fallback: scrolling wave crests, only when the sea shader is absent
+    local gap = 46
+    local k0 = math.floor(travel / gap) - 1
+    for k = k0, k0 + math.ceil(H / gap) + 2 do
+      local sy = screenY(k * gap)
+      if sy > -6 and sy < H + 6 then
+        local off = (k * 83) % W
+        world.color = colors.skyblue
+        world.line(off - 40, sy, off - 12, sy, 2)
+        world.line(off + 30, sy + 8, off + 66, sy + 8, 2)
+      end
     end
   end
-  -- distant islands drifting down
+  -- distant islands drifting down: a lobe-built rock with surf, a sand rim
+  -- on the near side, jungle shading away from the sun and a palm or two
   for i = 1, #islands do
     local s = islands[i]
-    world.color = colors.darkgreen
-    world.circle(s.x, s.sy, s.r, true)
-    world.color = colors.green
-    world.circle(s.x - s.r * 0.25, s.sy - s.r * 0.25, s.r * 0.6, true)
+    -- surf: the whole lobe shape again, a little larger and pale
+    world.color = colors.skyblue
+    world.alpha = 90
+    for k = 1, #s.lobes do
+      local lb = s.lobes[k]
+      world.circle(s.x + lb.dx * s.r, s.sy + lb.dy * s.r, s.r * lb.r + 4, true)
+    end
+    -- sand: same shape, mid size, pulled toward the viewer
     world.color = colors.beige
-    world.circle(s.x, s.sy + s.r * 0.7, s.r * 0.35, false)
+    for k = 1, #s.lobes do
+      local lb = s.lobes[k]
+      world.circle(s.x + lb.dx * s.r, s.sy + lb.dy * s.r + 3, s.r * lb.r + 2, true)
+    end
+    -- jungle: the full shape at its own size, then the sunlit patch
+    world.color = colors.darkgreen
+    for k = 1, #s.lobes do
+      local lb = s.lobes[k]
+      world.circle(s.x + lb.dx * s.r, s.sy + lb.dy * s.r, s.r * lb.r, true)
+    end
+    world.color = colors.green
+    for k = 1, #s.lobes do
+      local lb = s.lobes[k]
+      world.circle(s.x + lb.dx * s.r - s.r * 0.18, s.sy + lb.dy * s.r - s.r * 0.18,
+                   s.r * lb.r * 0.62, true)
+    end
+    -- palms: a brown trunk dot and a frond star
+    for k = 1, #s.palms do
+      local pm = s.palms[k]
+      local px = s.x + pm.dx * s.r
+      local py = s.sy + pm.dy * s.r
+      world.color = colors.brown
+      world.circle(px, py, 2, true)
+      world.color = colors.green
+      world.line(px, py, px - 5, py - 4, 2)
+      world.line(px, py, px + 5, py - 4, 2)
+      world.line(px, py, px - 4, py + 4, 2)
+      world.line(px, py, px + 4, py + 4, 2)
+    end
   end
 end
 
@@ -921,6 +1033,10 @@ local function boot()
   world.light(0.10, 1, -0.05)
   world.ambient(0.45)
   world.ground(300)
+  -- the living sea: a board effect that ripples every blue pixel; if the
+  -- shader file is missing, draw_sea's hand-drawn crests cover for it
+  seaShader = pcall(function() shader.load("sea.frag") end)
+  if seaShader then shader.value = 1.0 end
   hi = load_hi()
   state = "ready"
   travel = 0
@@ -937,14 +1053,14 @@ local function boot()
   clouds = {}
   islands = {}
   for i = 1, 7 do
-    clouds[i] = { x = rand(0, W), sy = rand(0, H), vy = rand(8, 30), r = rand(26, 60) }
-    clouds[i].puffs = { new_puff("cloud_" .. i .. "_a"),
-                        new_puff("cloud_" .. i .. "_b"),
-                        new_puff("cloud_" .. i .. "_c") }
+    clouds[i] = { x = rand(0, W), sy = rand(0, H), vy = rand(8, 30), r = rand(26, 60),
+                  phase = randf(0, 6.28), shape = cloud_shape() }
+    make_cloud(clouds[i], "cloud_" .. i)
     place_cloud(clouds[i])
   end
   for i = 1, 4 do
     islands[i] = { x = rand(20, W - 20), sy = rand(0, H), r = rand(16, 40) }
+    island_shape(islands[i])
   end
   poolFree = {}
   for i = 1, ENEMY_POOL do poolFree[i] = true end
