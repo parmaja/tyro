@@ -1,0 +1,397 @@
+--======================================================================
+--  Waddle
+--======================================================================
+--  A little crowd of waddles shuffles out of the spawn and only your skills
+--  can get them home to the door. Built from three pieces:
+--
+--    games/waddle/terrain.tyro  the 32px cell terrain (dig, bash, build)
+--    games/waddle/crowd.tyro    the crowd state machine, pure Lua
+--    games/waddle/img/          the pixel art from make_assets.py
+--
+--  Keys:
+--    SPACE / ENTER       let the crowd out
+--    1 dig  2 build  3 block  4 bash  5 floater  0 walker
+--                       choose the skill you want to hand out
+--    LEFT MOUSE          give that skill to the waddle under the cursor
+--    RIGHT MOUSE         take the waddle's skill back
+--    R                   reset the level
+--    ESC                 exit
+--
+--  Every level has a small bag of skills (BAG below): three diggers, two
+--  builders and so on. A skill is busy while a waddle wears it and comes back
+--  when that waddle walks off, drowns or gets home, so spending them well is
+--  the whole puzzle. crowd.tyro holds the rules the crowd plays by and
+--  tests/test_waddle_crowd.tyro proves them.
+--
+--  Note: the engine's sprite and tile handles want the dot form of their
+--  methods (sp.load("f.png")); the colon form currently reports the file as
+--  not loaded, so every call below is spelled with a dot.
+--======================================================================
+
+local Terrain = require("terrain")
+local Crowd = require("crowd")
+
+local W, H = 640, 480
+local SKY = Terrain.SKY_H
+local BAR_H = 40
+window.show(W, H)
+world.title = "Waddle"
+
+-- ---- The level ---------------------------------------------------------
+-- '#' dirt  'R' rock  'S' sandstone  '~' water surface  'P' spawn  'E' exit
+-- Task 6 turns this into a real level file. For now it gives the crowd three
+-- problems: a two cell wall, a water pit and a sandstone pillar.
+local LAYOUT = {
+  "....................",
+  "....................",
+  "....................",
+  "....................",
+  "....................",
+  "...............RR...",
+  "....##.........SS...",
+  "P...##.........SS.E.",
+  "#########~~~########",
+  "#########~~~########",
+  "#########~~~########",
+  "#########~~~########",
+}
+local CROWD_SIZE = 8
+local AIM_RADIUS = 46
+
+local terrain = Terrain.new(20, 12)
+local spawn_c, exit_c = terrain:load_layout(LAYOUT)
+terrain:attach("terrain", "img/tiles.png")
+
+local crowd = Crowd.new(terrain, { spawn_c = spawn_c, exit_c = exit_c, max = 12 })
+
+-- ---- Skills and the bag -------------------------------------------------
+local BAG = { dig = 3, build = 2, block = 2, bash = 2, floater = 1 }
+local ORDER = { "dig", "build", "block", "bash", "floater" }
+local KEY_OF_SKILL = { dig = "1", build = "2", block = "3", bash = "4", floater = "5" }
+local NAME_OF_SKILL = {
+  walker = "walker", dig = "digger", build = "builder", block = "blocker",
+  bash = "basher", bomb = "bomber", floater = "floater",
+}
+local SHORT_OF_SKILL = { dig = "dig", build = "build", block = "block", bash = "bash", floater = "float" }
+local SKILL_OF_KEY = {
+  ["1"] = "dig", ["2"] = "build", ["3"] = "block",
+  ["4"] = "bash", ["5"] = "floater", ["0"] = "walker",
+}
+
+-- img/badge.sprite: none dig build block bash bomb floater
+local BADGE = { walker = 0, dig = 1, build = 2, block = 3, bash = 4, bomb = 5, floater = 6 }
+local SKIN = {
+  walker = colors.white,
+  dig = rgb(255, 208, 156),
+  build = rgb(206, 255, 196),
+  block = rgb(255, 240, 158),
+  bash = rgb(255, 178, 172),
+  bomb = rgb(224, 196, 255),
+  floater = rgb(184, 218, 255),
+}
+
+-- How many of a skill are free: busy skills are the ones waddles are wearing.
+local function skill_left(skill)
+  local busy = 0
+  for _, w in ipairs(crowd.waddles) do
+    if w.skill == skill then busy = busy + 1 end
+  end
+  return (BAG[skill] or 0) - busy
+end
+
+-- ---- Art from make_assets.py -----------------------------------------
+local door = Sprites.new("door")
+door.load("img/door.sprite")
+door.layer = 1
+
+local ring = Sprites.new("ring")
+ring.load("img/cursor.png")
+ring.layer = 5
+
+-- One sprite pair (body + badge) per waddle, reused from a pool.
+local MAX_WADDLES = 12
+local pool = {}
+for i = 1, MAX_WADDLES do
+  local body = Sprites.new("waddle" .. i)
+  body.load("img/waddle.sprite")
+  body.playing = false
+  body.layer = 3
+  body.visible = false
+
+  local badge = Sprites.new("badge" .. i)
+  badge.load("img/badge.sprite")
+  badge.layer = 4
+  badge.visible = false
+
+  pool[i] = { body = body, badge = badge }
+end
+
+-- Puffs and sparkles: short three frame loops, also pooled.
+local function make_pool(prefix, file, layer, span, count)
+  local list = {}
+  for i = 1, count do
+    local s = Sprites.new(prefix .. i)
+    s.load(file)
+    s.playing = false
+    s.layer = layer
+    s.visible = false
+    list[i] = { s = s, life = 0, span = span }
+  end
+  return list
+end
+
+local puffs = make_pool("puff", "img/dust.sprite", 6, 0.27, 10)
+local sparks = make_pool("spark", "img/sparkle.sprite", 7, 0.24, 8)
+
+local function fire(list, x, y)
+  for _, f in ipairs(list) do
+    if f.life <= 0 then
+      f.life = f.span
+      f.s.move(x, y)
+      f.s.visible = true
+      f.s.frame = 0
+      return
+    end
+  end
+end
+
+local function tick_pools(dt)
+  for _, list in ipairs({ puffs, sparks }) do
+    for _, f in ipairs(list) do
+      if f.life > 0 then
+        f.life = f.life - dt
+        local stage = math.floor((f.span - f.life) / (f.span / 3))
+        if stage > 2 then stage = 2 end
+        if stage < 0 then stage = 0 end
+        f.s.frame = stage
+        if f.life <= 0 then f.s.visible = false end
+      end
+    end
+  end
+end
+
+-- ---- Game state -------------------------------------------------------
+local picked = "dig"
+local released = false
+local notice = "SPACE lets the crowd out"
+local aim = { x = W / 2, y = H / 2 }
+
+local function open_door(open)
+  door.frame = open and 1 or 0
+  door.move(terrain:cx(exit_c), terrain:y_of(terrain:top(exit_c)) - 16)
+end
+
+local function reset_level()
+  terrain:load_layout(LAYOUT)
+  crowd = Crowd.new(terrain, { spawn_c = spawn_c, exit_c = exit_c, max = MAX_WADDLES })
+  released = false
+  notice = "SPACE lets the crowd out"
+  for _, p in ipairs(pool) do
+    p.body.visible = false
+    p.badge.visible = false
+  end
+  for _, f in ipairs(puffs) do f.life, f.s.visible = 0, false end
+  for _, f in ipairs(sparks) do f.life, f.s.visible = 0, false end
+  open_door(true)
+end
+
+open_door(true)
+
+-- The waddle the cursor is pointing at, inside AIM_RADIUS
+local function aiming_at(x, y)
+  local best, best_d = nil, AIM_RADIUS * AIM_RADIUS
+  for _, w in ipairs(crowd.waddles) do
+    if not w.counted then
+      local dx, dy = w.x - x, w.y - y
+      local d = dx * dx + dy * dy
+      if d <= best_d then best, best_d = w, d end
+    end
+  end
+  return best
+end
+
+-- Turn the crowd's event log into dust, sparkles and messages
+local function spend_events()
+  for _, e in ipairs(crowd:take_events()) do
+    if e.kind == "chew" or e.kind == "build" then
+      fire(puffs, e.x, e.y + 8)
+    elseif e.kind == "land" and (e.extra or 0) > Terrain.CELL then
+      fire(puffs, e.x, e.y + 10)
+    elseif e.kind == "drown" then
+      fire(puffs, e.x, e.y + 6)
+      fire(sparks, e.x, e.y)
+    elseif e.kind == "splat" or e.kind == "buried" or e.kind == "stuck" then
+      fire(puffs, e.x, e.y + 6)
+      fire(sparks, e.x, e.y)
+    elseif e.kind == "win" then
+      fire(sparks, terrain:cx(exit_c), terrain:y_of(terrain:top(exit_c)) - 24)
+    elseif e.kind == "release" then
+      notice = "1-5 pick a skill, click a waddle"
+    end
+  end
+end
+
+function update(dt)
+  if keyboard.pressed("escape") then exit() end
+  if keyboard.pressed("r") then reset_level() end
+
+  if (keyboard.pressed("space") or keyboard.pressed("enter")) and not released then
+    released = true
+    crowd:release(CROWD_SIZE)
+  end
+
+  for key, skill in pairs(SKILL_OF_KEY) do
+    if keyboard.pressed(key) then
+      picked = skill
+      notice = KEY_OF_SKILL[skill] and ("Ready: " .. SHORT_OF_SKILL[skill]
+          .. " (" .. skill_left(skill) .. " left)") or "Ready: walk"
+    end
+  end
+
+  aim.x, aim.y = mouse.x, mouse.y
+  local target = aiming_at(aim.x, aim.y)
+
+  if mouse.pressed("left") then
+    if picked == "walker" then
+      notice = "Pick a skill with 1-5 first"
+    elseif (skill_left(picked) <= 0) and not (target and target.skill == picked) then
+      notice = "No " .. SHORT_OF_SKILL[picked] .. " left in the bag"
+    else
+      local got = crowd:assign(aim.x, aim.y, picked, AIM_RADIUS)
+      if got then
+        notice = NAME_OF_SKILL[picked] .. " away!"
+        fire(sparks, got.x, got.y - 14)
+      else
+        notice = "Nobody there to give it to"
+      end
+    end
+  end
+  if mouse.pressed("right") then
+    if crowd:assign(aim.x, aim.y, "walker", AIM_RADIUS) then
+      notice = "Back to walking"
+    end
+  end
+
+  crowd:step(dt)
+  spend_events()
+
+  if crowd:is_done() then
+    notice = "R plays it again"
+    open_door(false)
+  end
+
+  -- the crowd sprites follow the simulation
+  for i = 1, MAX_WADDLES do
+    local p, w = pool[i], crowd.waddles[i]
+    if w then
+      p.body.visible = true
+      p.body.move(w.x, w.y)
+      p.body.frame = w.frame
+      p.body.flipH = w.flip and true or false
+      p.body.tint = SKIN[w.skill] or colors.white
+      if BADGE[w.skill] > 0 then
+        p.badge.visible = true
+        p.badge.move(w.x - 14, w.y - 14)
+        p.badge.frame = BADGE[w.skill]
+      else
+        p.badge.visible = false
+      end
+    else
+      p.body.visible = false
+      p.badge.visible = false
+    end
+  end
+
+  -- the cursor ring snaps onto the waddle it is pointing at
+  if target then
+    ring.move(target.x, target.y)
+  else
+    ring.move(aim.x, aim.y)
+  end
+
+  tick_pools(dt)
+end
+
+local function draw_water()
+  local wr = terrain.water_row
+  if not wr then return end
+  for c = 0, terrain.cols - 1 do
+    local r = wr
+    local top = true
+    while r < terrain.rows and terrain:get(c, r) == Terrain.EMPTY do
+      world.color = top and rgb(150, 206, 255, 150) or rgb(56, 118, 196, 130)
+      world.rectangle(terrain:x_of(c), terrain:y_of(r), Terrain.CELL, Terrain.CELL, true)
+      top = false
+      r = r + 1
+    end
+  end
+end
+
+local function draw_top_bar()
+  screen.color = colors.navy
+  screen.rectangle(0, 0, W, SKY, true)
+  screen.color = colors.white
+  screen.text(8, 4, "WADDLE   out " .. crowd.released ..
+      "   home " .. crowd.saved .. "   lost " .. crowd.lost)
+  screen.color = SKIN[picked] or colors.white
+  screen.text(W - 152, 4, NAME_OF_SKILL[picked])
+  screen.color = rgb(186, 214, 255)
+  screen.text(8, 26, notice)
+  screen.color = rgb(122, 146, 186)
+  screen.text(W - 118, 26, "ESC exit")
+end
+
+-- The skill panel along the bottom: one row per skill with what is left.
+local function draw_skill_bar()
+  local y = H - BAR_H
+  screen.color = colors.navy
+  screen.rectangle(0, y, W, BAR_H, true)
+  screen.color = rgb(84, 104, 146)
+  screen.rectangle(0, y, W, 2, true)
+
+  local slot, x0 = 86, 10
+  for i, skill in ipairs(ORDER) do
+    local x = x0 + (i - 1) * slot
+    if skill == picked then
+      screen.color = rgb(52, 70, 104)
+      screen.rectangle(x, y + 6, slot - 8, BAR_H - 12, true)
+      screen.color = SKIN[skill]
+    else
+      screen.color = rgb(150, 168, 200)
+    end
+    local free = skill_left(skill)
+    if free <= 0 then screen.color = rgb(96, 106, 128) end
+    screen.text(x + 6, y + 10, KEY_OF_SKILL[skill] .. " " .. SHORT_OF_SKILL[skill])
+    screen.text(x + 6, y + 24, "x" .. free)
+  end
+
+  screen.color = rgb(150, 168, 200)
+  screen.text(W - 104, y + 10, "SPACE out")
+  screen.text(W - 104, y + 24, "R reset")
+end
+
+function draw()
+  -- sky: the world layer is repainted every frame, so this belongs in draw()
+  world.color = colors.skyblue
+  world.rectangle(0, SKY, W, H - SKY, true)
+  world.color = colors.white
+  world.circle(560, 84, 24, true)
+
+  terrain:draw()
+  draw_water()
+
+  -- the HUD sits on the screen buffer: shake and shaders never touch it
+  screen.clear("blank")
+  draw_top_bar()
+  draw_skill_bar()
+
+  if crowd:is_done() then
+    local line = "Home " .. crowd.saved .. " of " .. crowd.released
+    screen.color = rgb(20, 32, 56)
+    screen.rectangle(W / 2 - 130, 150, 260, 64, true)
+    screen.color = colors.white
+    screen.text(W / 2 - 8 * #line, 166, line)
+    screen.color = rgb(186, 214, 255)
+    screen.text(W / 2 - 8 * 13, 190, "press R to play again")
+  end
+end

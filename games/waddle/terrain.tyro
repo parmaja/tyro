@@ -1,0 +1,358 @@
+--======================================================================
+--  Waddle - Terrain Module
+--======================================================================
+--  The diggable world: a grid of 32px cells, each holding one material.
+--  Walking, digging, bashing and building all end up as cell writes here,
+--  so the whole terrain rule set lives in one file with no engine calls -
+--  tests/test_waddle_terrain.tyro requires it directly.
+--
+--  Cell coords are 0-based (col, row), row 0 at the top, matching the
+--  tiles.* tilemap. Cell (c, r) covers pixels
+--  [c*CELL .. c*CELL+CELL-1] x [r*CELL .. r*CELL+CELL-1].
+--
+--  Material ids double as the tile id of img/tiles.png (id 0 = empty), so
+--  a cell value can be stamped straight into the tilemap.
+
+local M = {}
+
+M.CELL = 32
+M.SKY_H = 48                  -- HUD bar height; the world is drawn below it
+
+-- Materials (same numbers as the tile ids in img/tiles.png)
+M.EMPTY = 0
+M.DIRT = 1                    -- grass-topped dirt: digger and basher eat it
+M.ROCK = 2                    -- hard: nothing digs through it
+M.SAND = 3                    -- sandstone: only a basher breaks it
+M.NAMES = { "empty", "dirt", "rock", "sand" }
+
+-- A waddle falls through these and drowns in the last one. Every table lists
+-- all four materials, so a skill can ask them straight without nil checks.
+M.IS_SOLID = { [M.EMPTY] = false, [M.DIRT] = true,
+               [M.ROCK] = true, [M.SAND] = true }
+M.CAN_DIG = { [M.EMPTY] = false, [M.DIRT] = true,
+              [M.ROCK] = false, [M.SAND] = false }
+M.CAN_BASH = { [M.EMPTY] = false, [M.DIRT] = true,
+               [M.ROCK] = false, [M.SAND] = true }
+
+-- -----------------------------------------------------------------------------
+-- Grid plumbing
+-- -----------------------------------------------------------------------------
+local Terrain = {}
+Terrain.__index = Terrain
+M.Terrain = Terrain
+
+function M.new(cols, rows)
+  local t = setmetatable({}, Terrain)
+  t.cols = cols or 20
+  t.rows = rows or 13
+  t.origin_x = 0
+  t.origin_y = M.SKY_H
+  t.water_row = nil                 -- nil: no water on this level
+  t.protect = {}                    -- cell key -> true, nothing carves it
+  t.dirty = true
+  t._cells = {}
+  for i = 1, t.cols * t.rows do
+    t._cells[i] = M.EMPTY
+  end
+  return t
+end
+
+-- Cell keys are plain "r * cols + c" indices; the helper stays a method so
+-- out-of-range cells get a key that simply never matches a stored cell.
+function Terrain:key(c, r)
+  if c < 0 or r < 0 or c >= self.cols or r >= self.rows then return -1 end
+  return r * self.cols + c + 1
+end
+
+function Terrain:in_bounds(c, r)
+  return c >= 0 and r >= 0 and c < self.cols and r < self.rows
+end
+
+function Terrain:get(c, r)
+  local k = self:key(c, r)
+  if k < 0 then return M.ROCK end     -- outside the map is a wall
+  return self._cells[k]
+end
+
+function Terrain:set(c, r, mat)
+  local k = self:key(c, r)
+  if k < 0 then return false end
+  if self._cells[k] == mat then return false end
+  self._cells[k] = mat
+  self.dirty = true
+  return true
+end
+
+function Terrain:fill(mat)
+  for i = 1, self.cols * self.rows do
+    self._cells[i] = mat or M.EMPTY
+  end
+  self.dirty = true
+end
+
+function Terrain:clear()
+  self:fill(M.EMPTY)
+end
+
+function Terrain:is_solid(c, r)
+  if not self:in_bounds(c, r) then return true end
+  if self.protect[self:key(c, r)] then return true end
+  return M.IS_SOLID[self:get(c, r)] == true
+end
+
+-- Out-of-bounds counts as solid, so a waddle never walks off the level
+function Terrain:blocked(c, r)
+  return self:is_solid(c, r)
+end
+
+-- -----------------------------------------------------------------------------
+-- Pixels <-> cells
+-- -----------------------------------------------------------------------------
+function Terrain:c_of(x)
+  return math.floor((x - self.origin_x) / M.CELL)
+end
+
+function Terrain:r_of(y)
+  return math.floor((y - self.origin_y) / M.CELL)
+end
+
+function Terrain:x_of(c)
+  return self.origin_x + c * M.CELL
+end
+
+function Terrain:y_of(r)
+  return self.origin_y + r * M.CELL
+end
+
+-- Centre of a cell, handy for particles and effect sprites
+function Terrain:cx(c)
+  return self.origin_x + c * M.CELL + M.CELL // 2
+end
+
+function Terrain:cy(r)
+  return self.origin_y + r * M.CELL + M.CELL // 2
+end
+
+-- -----------------------------------------------------------------------------
+-- Protecting cells (an exit corridor must survive every dig)
+-- -----------------------------------------------------------------------------
+function Terrain:protect_cell(c, r, on)
+  local k = self:key(c, r)
+  if k < 0 then return end
+  self.protect[k] = on and true or nil
+end
+
+function Terrain:is_protected(c, r)
+  return self.protect[self:key(c, r)] == true
+end
+
+-- A cell only gives way when it is diggable material and not protected
+function Terrain:carvable(c, r, table_ok)
+  if not self:in_bounds(c, r) then return false end
+  if self.protect[self:key(c, r)] then return false end
+  local mat = self._cells[self:key(c, r)]
+  if table_ok[mat] then return true end
+  return false
+end
+
+-- -----------------------------------------------------------------------------
+-- Carving and filling
+-- -----------------------------------------------------------------------------
+-- Removes every cell whose centre lies within rad cells of (cc, cr) - the
+-- round hole a basher or a bomb leaves. Returns the number of cells removed.
+function Terrain:carve_disc(cc, cr, rad, table_ok)
+  local ok = table_ok or M.CAN_BASH
+  local removed = 0
+  local span = math.floor(rad + 0.5)
+  for r = cr - span, cr + span do
+    for c = cc - span, cc + span do
+      if self:carvable(c, r, ok) then
+        local dc = c - cc
+        local dr = r - cr
+        if dc * dc + dr * dr <= rad * rad + 0.25 then
+          self:set(c, r, M.EMPTY)
+          removed = removed + 1
+        end
+      end
+    end
+  end
+  return removed
+end
+
+-- A vertical slot, used by the digger: from (c, r0) down through the diggable
+-- material until it hits something solid or the bottom of the map.
+function Terrain:dig_column(c, r0, depth, table_ok)
+  local ok = table_ok or M.CAN_DIG
+  local removed = 0
+  local r = r0
+  while removed < (depth or 1) and r < self.rows do
+    if not self:carvable(c, r, ok) then
+      break
+    end
+    self:set(c, r, M.EMPTY)
+    removed = removed + 1
+    r = r + 1
+  end
+  return removed
+end
+
+-- One cell wide hole straight down for the basher (it also eats sandstone)
+function Terrain:bash_column(c, r0, depth)
+  return self:dig_column(c, r0, depth or 2, M.CAN_BASH)
+end
+
+-- Rectangular paint, used by the level layout and the build skill's base
+function Terrain:fill_rect(c0, r0, c1, r1, mat)
+  local changed = 0
+  for r = r0, r1 do
+    for c = c0, c1 do
+      if self:set(c, r, mat or M.DIRT) then changed = changed + 1 end
+    end
+  end
+  return changed
+end
+
+-- The build skill: a builder drops a step at (c, r) and everything resting on
+-- that column is lifted one cell. The stack can only rise as long as there is
+-- empty room above, so a builder pressed against the ceiling fails.
+function Terrain:push_row(c, r, rise)
+  local lift = rise or 1
+  if not self:in_bounds(c, r) then return false end
+  if self:is_solid(c, r) then return false end
+
+  -- How tall the stack on the target cell is, and where it starts
+  local height = 0
+  local rr = r - 1
+  while rr >= 0 and self:is_solid(c, rr) do
+    height = height + 1
+    rr = rr - 1
+  end
+  if rr - lift < 0 then return false end      -- no room for the stack to rise
+
+  -- Read the whole stack first, then write it back one cell higher: shifting
+  -- in either order would overwrite a cell that has not been read yet.
+  local stack = {}
+  for from = rr + 1, r - 1 do
+    stack[#stack + 1] = self:get(c, from)
+  end
+  for i, mat in ipairs(stack) do
+    self:set(c, rr + 1 - lift + i - 1, mat)
+    self:set(c, rr + i, M.EMPTY)
+  end
+  self.dirty = true
+  self:set(c, r, M.DIRT)
+  return true
+end
+
+-- -----------------------------------------------------------------------------
+-- Queries the crowd needs
+-- -----------------------------------------------------------------------------
+-- Row of the first solid cell in a column, or -1 when the column is empty
+function Terrain:top(c)
+  for r = 0, self.rows - 1 do
+    if self:is_solid(c, r) then return r end
+  end
+  return -1
+end
+
+-- Row of the last solid cell in a column, or -1
+function Terrain:bottom(c)
+  for r = self.rows - 1, 0, -1 do
+    if self:is_solid(c, r) then return r end
+  end
+  return -1
+end
+
+-- y of the surface in a column: a waddle's feet rest here
+function Terrain:surface_y(c)
+  local r = self:top(c)
+  if r < 0 then return self.origin_y + self.rows * M.CELL end
+  return self:y_of(r)
+end
+
+-- True when the cell sits under the water line (no water: always false)
+function Terrain:in_water(c, r)
+  if not self.water_row then return false end
+  return self:in_bounds(c, r) and r >= self.water_row
+end
+
+-- Material counts, for the level stats and the debug line
+function Terrain:stats()
+  local s = { [M.EMPTY] = 0, [M.DIRT] = 0, [M.ROCK] = 0, [M.SAND] = 0 }
+  for i = 1, self.cols * self.rows do
+    local mat = self._cells[i]
+    s[mat] = (s[mat] or 0) + 1
+  end
+  return s
+end
+
+-- -----------------------------------------------------------------------------
+-- Level layout: an ASCII map from waddle_data.tyro
+--   '.' sky  '#' dirt  'R' rock  'S' sandstone  '~' water surface row
+--   'P' player spawn column  'E' exit column
+-- -----------------------------------------------------------------------------
+function Terrain:load_layout(rows)
+  self:clear()
+  self.water_row = nil
+  local spawn_c, exit_c = 0, self.cols - 1
+  for r = 1, #rows do
+    local line = rows[r]
+    for c = 1, self.cols do
+      local ch = string.sub(line, c, c)
+      local mat = M.EMPTY
+      if ch == "#" then
+        mat = M.DIRT
+      elseif ch == "R" then
+        mat = M.ROCK
+      elseif ch == "S" then
+        mat = M.SAND
+      elseif ch == "P" then
+        spawn_c = c - 1
+      elseif ch == "E" then
+        exit_c = c - 1
+      elseif ch == "~" then
+        if not self.water_row or r - 1 < self.water_row then
+          self.water_row = r - 1
+        end
+      end
+      self:set(c - 1, r - 1, mat)
+      if ch == "~" then
+        -- the marker row itself is the water surface: a waddle there is wet
+        if not self.water_row or r - 1 < self.water_row then
+          self.water_row = r - 1
+        end
+      end
+    end
+  end
+  return spawn_c, exit_c
+end
+
+-- -----------------------------------------------------------------------------
+-- Tilemap view (the only place this module touches the engine)
+-- -----------------------------------------------------------------------------
+function Terrain:attach(name, image)
+  local map = tiles.new(name or "terrain")
+  map.load(image or "img/tiles.png", M.CELL, M.CELL, 0, 0, 0)
+  map.resize(self.cols, self.rows)
+  self.map = map
+  self.dirty = true
+  return map
+end
+
+-- Stamps the grid into the tilemap and draws it. Cheap when nothing changed:
+-- the engine only needs one native draw per frame for the whole terrain.
+-- The engine's tile and sprite handles want the dot form of their methods.
+function Terrain:draw()
+  if not self.map then return end
+  if self.dirty then
+    for r = 0, self.rows - 1 do
+      for c = 0, self.cols - 1 do
+        self.map.set(c, r, self._cells[self:key(c, r)])
+      end
+    end
+    self.dirty = false
+  end
+  self.map.draw(self.origin_x, self.origin_y, 1)
+end
+
+return M

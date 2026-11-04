@@ -1,0 +1,532 @@
+--======================================================================
+--  Waddle - Crowd Module
+--======================================================================
+--  The little crowd: a pool of waddles, each running a small state machine
+--  over the terrain grid (games/waddle/terrain.tyro). Pure Lua with no
+--  engine calls, so tests/test_waddle_crowd.tyro can march the crowd in a
+--  headless run. The game reads x/y/state/frame each frame and moves one
+--  sprite per waddle, and drains take_events() for dust, sound and scoring.
+--
+--  States:
+--    walk   march the surface, step up one cell, turn at a higher wall
+--    fall   accelerate until the cell below holds; a long drop hurts
+--    dig    chew one cell of dirt below, drop into the slot, repeat
+--    build  walk on while dropping steps under itself: a staircase up and
+--           forward, which is also how the crowd bridges a gap or a pit
+--    bash   smash one cell of dirt or sandstone below, drop, repeat
+--    block  stand still until a walker bumps into it
+--    float  fall, but slowly and without hurt
+--    drown  under the water line: a short struggle, then gone
+--    splat  fell too far: gone
+--    win    reached the exit door: counted home
+--
+--  Skills are separate from states: a skill says what a waddle does next
+--  time it can (skill = "dig"), the state says what it is doing now. So a
+--  digger still walks and falls, and a walker never digs by accident.
+
+local Terrain = require("terrain")
+
+local M = {}
+
+M.CELL = Terrain.CELL
+M.HALF_W = 7                 -- the collision box is 14 x 22 px
+M.HALF_H = 11
+
+-- Movement, in pixels and seconds
+M.WALK_SPEED = 46
+M.GRAVITY = 900
+M.FALL_MAX = 430
+M.FLOAT_MAX = 90
+M.FATAL_FALL = 5.5 * M.CELL  -- a drop over five cells bursts the waddle
+M.OUT_OF_WORLD = 4 * M.CELL  -- this far under the floor it is simply gone
+
+-- Skill timings
+M.DIG_TIME = 0.45
+M.BASH_TIME = 0.55
+M.BUILD_TIME = 0.32
+M.BUILD_STEPS = 10           -- then the builder has earned a rest
+M.RELEASE_TIME = 0.55        -- gap between two waddles leaving the spawn
+M.STUCK_TIME = 1.5           -- a waddle boxed in walks off as lost
+M.BURY_TIME = 0.6            -- how long a waddle survives being covered up
+
+-- Endings and effects
+M.WATER_TIME = 1.2
+M.SPLAT_TIME = 1.0
+M.WIN_TIME = 0.8
+
+-- Frame numbers inside img/waddle.sprite: 0-3 walk, 4 fall, 5 block
+M.FRAME = { walk = 0, fall = 4, block = 5 }
+
+M.SKILLS = { "walker", "dig", "build", "block", "bash", "floater" }
+
+-- -----------------------------------------------------------------------------
+-- Crowd
+-- -----------------------------------------------------------------------------
+local Crowd = {}
+Crowd.__index = Crowd
+M.Crowd = Crowd
+
+function M.new(terrain, opts)
+  local o = opts or {}
+  local c = setmetatable({}, Crowd)
+  c.terrain = terrain
+  c.cols = terrain.cols
+  c.rows = terrain.rows
+  c.spawn_c = o.spawn_c or 0
+  c.exit_c = o.exit_c or (terrain.cols - 1)
+  c.max = o.max or 32
+  c.origin_x = terrain.origin_x
+  c.origin_y = terrain.origin_y
+  c.waddles = {}
+  c.events = {}
+  c.released, c.saved, c.lost = 0, 0, 0
+  c.want, c.release_timer, c.next_id = 0, 0, 1
+  c.won, c.done = false, false
+  return c
+end
+
+function Crowd:set_exit(c)
+  self.exit_c = c
+end
+
+-- ---- event log (the game turns these into dust, sound and score) -----
+function Crowd:emit(kind, w, extra)
+  self.events[#self.events + 1] = {
+    kind = kind, x = w.x, y = w.y, state = w.state, extra = extra,
+  }
+end
+
+function Crowd:take_events()
+  local e = self.events
+  self.events = {}
+  return e
+end
+
+-- ---- spawning --------------------------------------------------------
+function Crowd:release(count, first_delay)
+  self.want = self.want + (count or 1)
+  if first_delay ~= nil then self.release_timer = first_delay end
+end
+
+function Crowd:spawn(skill)
+  if #self.waddles >= self.max then return nil end
+  local t = self.terrain
+  local w = {
+    id = self.next_id,
+    x = t:cx(self.spawn_c),
+    y = t:surface_y(self.spawn_c) - M.HALF_H,
+    vx = 0, vy = 0,
+    dir = 1,
+    state = "walk",
+    skill = skill or "walker",
+    timer = 0,
+    fallen = 0,
+    steps = 0,
+    buried = 0,
+    travel = 0,
+    travel_timer = 0,
+    last_x = 0,
+    anim = 0,
+    frame = 0,
+    gone = false,
+    counted = false,
+  }
+  self.next_id = self.next_id + 1
+  self.waddles[#self.waddles + 1] = w
+  self.released = self.released + 1
+  self:emit("release", w)
+  return w
+end
+
+-- -----------------------------------------------------------------------------
+-- Geometry helpers
+-- -----------------------------------------------------------------------------
+local function solid(t, x, y)
+  return t:is_solid(t:c_of(x), t:r_of(y))
+end
+
+function M.feet(w)
+  return w.y + M.HALF_H
+end
+
+-- True when something holds the waddle up under either foot. Below the
+-- bottom of the level there is no floor at all: the waddle drops out.
+local function grounded(t, w)
+  local fy = M.feet(w) + 1
+  if t:r_of(fy) >= t.rows then return false end
+  return solid(t, w.x - M.HALF_W + 2, fy) or solid(t, w.x + M.HALF_W - 2, fy)
+end
+
+-- Settle the feet on top of the solid cell they are standing in
+local function settle(t, w)
+  local r = t:r_of(M.feet(w))
+  w.y = t:y_of(r) - M.HALF_H
+  w.vy = 0
+end
+
+local function cell_of_x(t, x)
+  return t:c_of(x)
+end
+
+-- The cell a waddle stands on, i.e. the one under its feet
+local function under_cell(t, w)
+  return t:r_of(M.feet(w) + 1), cell_of_x(t, w.x)
+end
+
+-- -----------------------------------------------------------------------------
+-- Endings
+-- -----------------------------------------------------------------------------
+local function finish(c, w, state, saved)
+  w.state = state
+  w.timer = state == "win" and M.WIN_TIME or (state == "drown" and M.WATER_TIME or M.SPLAT_TIME)
+  w.vx, w.vy = 0, 0
+  if not w.counted then
+    w.counted = true
+    if saved then
+      c.saved = c.saved + 1
+    else
+      c.lost = c.lost + 1
+    end
+    c:emit(state, w)
+  end
+end
+
+-- -----------------------------------------------------------------------------
+-- One waddle: walking and stepping
+-- -----------------------------------------------------------------------------
+local function try_walk(c, t, w, dt)
+  local c_lead = cell_of_x(t, w.x + w.dir * (M.HALF_W + 1))
+  local r_low = t:r_of(M.feet(w) - 4)
+
+  if t:is_solid(c_lead, r_low) then
+    -- One cell high: climb it in place, then keep walking onto it. Higher, or
+    -- no headroom above: turn around.
+    if not t:is_solid(c_lead, r_low - 1) then
+      w.y = t:y_of(r_low) - M.HALF_H
+      w.vy = 0
+      c:emit("step", w)
+    else
+      w.dir = -w.dir
+      c:emit("turn", w)
+      return
+    end
+  end
+
+  w.x = w.x + w.dir * M.WALK_SPEED * dt
+  if w.x < c.origin_x then w.x = c.origin_x end
+  if w.x > c.origin_x + c.cols * M.CELL then w.x = c.origin_x + c.cols * M.CELL end
+
+  if not grounded(t, w) then
+    w.state = "fall"
+    w.fallen = 0
+    c:emit("offedge", w)
+  end
+end
+
+-- -----------------------------------------------------------------------------
+-- One waddle: falling
+-- -----------------------------------------------------------------------------
+local function try_fall(c, t, w, dt)
+  -- A builder never falls: it drops a step under its own feet and stands on
+  -- that. It is how a builder climbs, and also how the crowd bridges a gap -
+  -- hand the skill to a waddle over the water and it walks across on its own
+  -- stairs until its ten steps run out.
+  if w.skill == "build" and w.steps < M.BUILD_STEPS then
+    local col = cell_of_x(t, w.x)
+    local r = t:r_of(M.feet(w) + 1)
+    if t:in_bounds(col, r) and t:get(col, r) == Terrain.EMPTY then
+      t:set(col, r, Terrain.DIRT)
+      w.y = t:y_of(r) - M.HALF_H
+      w.vy = 0
+      w.fallen = 0
+      w.state = "walk"
+      w.steps = w.steps + 1
+      c:emit("build", w, w.steps)
+      if w.steps >= M.BUILD_STEPS then
+        w.skill = "walker"
+      end
+      return
+    end
+  end
+
+  local cap = w.skill == "floater" and M.FLOAT_MAX or M.FALL_MAX
+  w.vy = w.vy + M.GRAVITY * dt
+  if w.vy > cap then w.vy = cap end
+  local dy = w.vy * dt
+  w.y = w.y + dy
+  w.fallen = w.fallen + dy
+
+  -- water catches a waddle before the ground does
+  if t.water_row and t:r_of(M.feet(w)) > t.water_row then
+    finish(c, w, "drown")
+    return
+  end
+
+  if grounded(t, w) then
+    settle(t, w)
+    if w.fallen > M.FATAL_FALL and w.skill ~= "floater" then
+      finish(c, w, "splat")
+      return
+    end
+    c:emit("land", w, w.fallen)
+    w.fallen = 0
+    w.state = "walk"
+  elseif w.y > c.origin_y + (c.rows + 4) * M.CELL then
+    -- it slipped out of the level through a hole
+    finish(c, w, "splat")
+  end
+end
+
+-- -----------------------------------------------------------------------------
+-- Skills: the state each skill turns into when it can act
+-- -----------------------------------------------------------------------------
+local function start_skill(c, t, w)
+  if w.skill == "dig" then
+    local r_below, col = under_cell(t, w)
+    if t:carvable(col, r_below, Terrain.CAN_DIG) then
+      w.state, w.timer = "dig", M.DIG_TIME
+    end
+  elseif w.skill == "bash" then
+    local r_below, col = under_cell(t, w)
+    if t:carvable(col, r_below, Terrain.CAN_BASH) then
+      w.state, w.timer = "bash", M.BASH_TIME
+    end
+  elseif w.skill == "build" then
+    if w.steps < M.BUILD_STEPS then
+      w.state, w.timer = "build", M.BUILD_TIME
+    else
+      w.skill = "walker"
+    end
+  elseif w.skill == "block" then
+    w.state, w.timer = "block", 0
+    w.dir = -w.dir
+    c:emit("block", w)
+  elseif w.skill == "floater" and not grounded(t, w) then
+    w.state = "fall"
+  end
+end
+
+-- -----------------------------------------------------------------------------
+-- One waddle: the digger and the basher chew the cell under their feet
+-- -----------------------------------------------------------------------------
+local function try_chew(c, t, w, dt, table_ok)
+  local r_below, col = under_cell(t, w)
+  if not t:carvable(col, r_below, table_ok) then
+    w.state = "walk"
+    return
+  end
+  w.timer = w.timer - dt
+  if w.timer > 0 then return end
+  w.timer = (w.state == "dig") and M.DIG_TIME or M.BASH_TIME
+  t:set(col, r_below, Terrain.EMPTY)
+  c:emit("chew", w, w.state)
+  w.state = "fall"
+  w.fallen = 0
+end
+
+-- -----------------------------------------------------------------------------
+-- One waddle: the builder walks and drops a step under itself every so often,
+-- so it climbs the way a real builder does: up and forward at the same time.
+-- -----------------------------------------------------------------------------
+local function try_build(c, t, w, dt)
+  try_walk(c, t, w, dt)                    -- the builder never stops marching
+  if w.state ~= "build" then return end     -- it walked into the air: try_fall bridges
+  w.timer = w.timer - dt
+  if w.timer > 0 then return end
+  w.timer = M.BUILD_TIME
+  local r_body = t:r_of(M.feet(w) - M.HALF_H)
+  if t:push_row(cell_of_x(t, w.x), r_body) then
+    w.y = t:y_of(r_body) - M.HALF_H
+    w.vy = 0
+    w.steps = w.steps + 1
+    c:emit("build", w, w.steps)
+  else
+    w.skill = "walker"
+    w.state = "walk"
+  end
+  if w.steps >= M.BUILD_STEPS then
+    w.skill = "walker"
+    w.state = "walk"
+  end
+end
+
+-- -----------------------------------------------------------------------------
+-- One waddle per frame
+-- -----------------------------------------------------------------------------
+local function step_one(c, t, w, dt)
+  if w.state ~= "win" and w.state ~= "splat" and w.state ~= "drown" then
+    -- fully under the water line: the crowd cannot swim
+    if t.water_row and t:r_of(M.feet(w)) > t.water_row then
+      finish(c, w, "drown")
+    elseif cell_of_x(t, w.x) == c.exit_c then
+      -- the exit door collects anyone standing on its column
+      finish(c, w, "win", true)
+    end
+  end
+
+  if w.state == "walk" or w.state == "build" then
+    -- a blocker ahead steps aside for the crowd (builders walk too)
+    local ahead = w.x + w.dir * (M.HALF_W + 8)
+    for _, o in ipairs(c.waddles) do
+      if o ~= w and o.state == "block" and not o.counted then
+        if math.abs(o.x - ahead) < 10 and math.abs(o.y - w.y) < M.CELL then
+          o.state, o.timer = "walk", 0
+          o.dir = -o.dir
+          c:emit("unblock", o)
+        end
+      end
+    end
+    if w.state == "walk" then
+      try_walk(c, t, w, dt)
+    else
+      try_build(c, t, w, dt)
+    end
+  elseif w.state == "fall" then
+    try_fall(c, t, w, dt)
+  elseif w.state == "dig" then
+    try_chew(c, t, w, dt, Terrain.CAN_DIG)
+  elseif w.state == "bash" then
+    try_chew(c, t, w, dt, Terrain.CAN_BASH)
+  elseif w.state == "block" then
+    w.vx, w.vy = 0, 0
+    if not grounded(t, w) then w.state = "fall" end
+  elseif w.state == "win" or w.state == "splat" or w.state == "drown" then
+    w.timer = w.timer - dt
+    if w.timer <= 0 then w.gone = true end
+  end
+
+  -- buried (a builder's stack closed over its head): a short struggle, then gone
+  if w.state == "walk" or w.state == "build" or w.state == "block" then
+    if solid(t, w.x, M.feet(w) - M.HALF_H) then
+      w.buried = (w.buried or 0) + dt
+      if w.buried > M.BURY_TIME then
+        finish(c, w, "splat")
+        c:emit("buried", w)
+      end
+    else
+      w.buried = 0
+    end
+  end
+
+  -- A waddle that cannot go anywhere - boxed in rock, or buried by a builder's
+  -- stack - leaves as lost instead of vibrating in place forever. Walking a
+  -- short distance back and forth between two walls is normal pacing and stays.
+  if w.state == "walk" and grounded(t, w) then
+    w.travel = (w.travel or 0) + math.abs(w.x - (w.last_x or w.x))
+    w.travel_timer = (w.travel_timer or 0) + dt
+    w.last_x = w.x
+    if w.travel_timer >= M.STUCK_TIME then
+      if w.travel < 12 then
+        finish(c, w, "splat")
+        c:emit("stuck", w)
+      else
+        w.travel, w.travel_timer = 0, 0
+      end
+    end
+  else
+    w.travel, w.travel_timer, w.last_x = 0, 0, w.x
+  end
+
+  -- a waddle that can act again picks up its skill
+  if w.state == "walk" and w.skill ~= "walker" and not w.counted then
+    start_skill(c, t, w)
+  end
+  if w.state == "fall" and w.skill == "block" then
+    -- a blocker never drifts off a ledge: it walks again instead
+    w.skill = "walker"
+  end
+
+  -- animation frame for the sprite: a builder walks while it builds, so it
+  -- keeps the walk cycle; only a blocker or a waddle at the door poses.
+  if w.state == "fall" or w.state == "drown" then
+    w.frame = M.FRAME.fall
+  elseif w.state == "block" or w.state == "win" then
+    w.frame = M.FRAME.block
+  else
+    w.anim = w.anim + dt * 7
+    w.frame = M.FRAME.walk + (math.floor(w.anim) % 4)
+  end
+  w.flip = w.dir < 0
+end
+
+-- -----------------------------------------------------------------------------
+-- The crowd: one frame
+-- -----------------------------------------------------------------------------
+function Crowd:step(dt)
+  -- let the crowd out of the spawn, one at a time
+  if self.want > 0 then
+    self.release_timer = self.release_timer - dt
+    if self.release_timer <= 0 then
+      self.release_timer = M.RELEASE_TIME
+      if self:spawn() then
+        self.want = self.want - 1
+      else
+        self.want = 0
+      end
+    end
+  end
+
+  for i = 1, #self.waddles do
+    local w = self.waddles[i]
+    if not w.gone then step_one(self, self.terrain, w, dt) end
+  end
+
+  -- drop the waddles that have been counted
+  local keep = 0
+  for i = 1, #self.waddles do
+    local w = self.waddles[i]
+    if w.gone then
+      self:emit("gone", w)
+    else
+      keep = keep + 1
+      self.waddles[keep] = w
+    end
+  end
+  for i = keep + 1, #self.waddles do self.waddles[i] = nil end
+
+  -- the level is over when everybody is home or gone and nothing is incoming
+  if self.released > 0 and self.want == 0 and #self.waddles == 0 then
+    self.done = true
+  end
+end
+
+-- Waddles still on the field, or still to come
+function Crowd:alive()
+  return #self.waddles + self.want
+end
+
+-- True once every released waddle is home or gone
+function Crowd:is_done()
+  return self.done
+end
+
+-- -----------------------------------------------------------------------------
+-- Assigning a skill: the nearest waddle to a point, inside a radius
+-- -----------------------------------------------------------------------------
+function Crowd:assign(x, y, skill, radius)
+  local best, best_d = nil, (radius or 48) * (radius or 48)
+  for _, w in ipairs(self.waddles) do
+    if not w.counted then
+      local dx, dy = w.x - x, w.y - y
+      local d = dx * dx + dy * dy
+      if d <= best_d then
+        best, best_d = w, d
+      end
+    end
+  end
+  if not best then return nil end
+  best.skill = skill
+  if skill == "dig" or skill == "bash" or skill == "build" or skill == "floater" then
+    if best.state == "walk" then start_skill(self, self.terrain, best) end
+  elseif skill == "block" then
+    best.state, best.timer = "block", 0
+    self:emit("block", best)
+  elseif skill == "walker" then
+    best.skill = "walker"
+    if best.state ~= "fall" then best.state = "walk" end
+  end
+  self:emit("skill", best, skill)
+  return best
+end
+
+return M
