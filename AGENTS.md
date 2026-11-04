@@ -5,6 +5,7 @@ This is a simple game engine for kids and noobs, using RayLib and Lua for enduse
 ## Implementation
 
 * Big task split it to subtasks, for not lose the whole quota on one big task, and can continue with next task next day if runout of quota
+* Read documents in `help` folder
 
 ### Games
 
