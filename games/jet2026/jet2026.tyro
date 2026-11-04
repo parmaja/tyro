@@ -105,7 +105,6 @@ local PBULLET_MAX   = 12
 local EBULLET_SPEED = 260
 local ENEMY_POOL    = 18
 local BANK_DEG      = 48         -- roll angle held into a strafe (degrees)
-local BANK_YAW      = 22         -- nose pointed into the turn (screen spin)
 local BANK_RATE     = 9          -- how fast the bank eases toward its target
 local CLIMB_SPEED   = 200        -- climb/dive speed toward/away from the eye
 local CLIMB_DRIFT   = 80         -- screen drift while climbing/diving (px/s)
@@ -275,7 +274,7 @@ end
 local state
 local travel                -- total distance flown (drives the scroll)
 local score, hi, lives, wave
-local player                -- { x, y, z, cool, weapon, roll, yaw, pitch }
+local player                -- { x, y, z, cool, weapon, roll, pitch }
 local invuln, dyingTimer
 local pbullets, ebullets, enemies, blasts, clouds, islands, powerups
 local spawnTimer, waveTimer, bossWave, msg, msgTimer, engineOn, enginePitch
@@ -442,7 +441,7 @@ local function reset()
   invuln = 2.0
   dyingTimer = 0
   player = { x = W / 2, y = H - 110, z = Z_HOME, cool = 0, weapon = 1,
-             roll = 0, yaw = 0, pitch = 0 }
+             roll = 0, pitch = 0 }
   pbullets = {}
   ebullets = {}
   enemies = {}
@@ -695,17 +694,15 @@ local function simulate(ft)
     player.y = clamp(player.y + dy * CLIMB_DRIFT * ft, PLAYER_Y_MIN, H - 30)
     player.z = clamp(player.z - dy * CLIMB_SPEED * ft, Z_NEAR, Z_FAR)
 
-    -- Bank into the turn: a hard roll, the nose pointed into the turn and a
-    -- touch of pitch on the climb. All three ease toward their target, so the
-    -- jet leans over smoothly instead of snapping to the angle.
+    -- Bank into the turn: a hard roll and a touch of pitch on the climb -
+    -- no yaw, the nose always stays pointed up the screen. Both ease toward
+    -- their target, so the jet leans over smoothly instead of snapping.
     local ease = clamp(BANK_RATE * ft, 0, 1)
     player.roll  = player.roll  + (BANK_DEG * dx - player.roll) * ease
-    player.yaw   = player.yaw   + (BANK_YAW * dx - player.yaw) * ease
     player.pitch = player.pitch + (-10 * dy - player.pitch) * ease
 
     playerJet:move(player.x, player.y, player.z)
     playerJet.roll  = player.roll
-    playerJet.angle = player.yaw
     playerJet.tilt  = player.pitch
     playerJet.scale = p_scale * depth_size(player.z)
 
@@ -725,18 +722,17 @@ local function simulate(ft)
     end
 
     -- Wingtip smoke: leaned over hard, the jet tears two ribbons off its
-    -- wingtips - they come away along the turned wing line, one per side.
+    -- wingtips - they come away along the wing line, which shortens on
+    -- screen as the wings bank, one ribbon per side.
     smokeT = smokeT - ft
     if (math.abs(player.roll) > 26) and (smokeT <= 0) then
       smokeT = 0.07
       local s = depth_size(player.z)
-      local a = math.rad(player.yaw)
-      local wx = 20 * s * math.cos(a)
-      local wy = 20 * s * math.sin(a)
-      particles.emit(player.x + wx, player.y + wy, 1,
+      local wx = 20 * s * math.cos(math.rad(player.roll))
+      particles.emit(player.x + wx, player.y, 1,
         { color = colors.gray, speed = 14, life = 0.5, size = 2.5,
           gravity = 0, drag = 2.6 })
-      particles.emit(player.x - wx, player.y - wy, 1,
+      particles.emit(player.x - wx, player.y, 1,
         { color = colors.gray, speed = 14, life = 0.5, size = 2.5,
           gravity = 0, drag = 2.6 })
     end
@@ -803,7 +799,7 @@ local function simulate(ft)
       player.x = W / 2
       player.y = H - 110
       player.z = Z_HOME
-      player.roll, player.yaw, player.pitch = 0, 0, 0
+      player.roll, player.pitch = 0, 0
       invuln = 2.0
       state = "play"
       playerJet:show()
@@ -1044,7 +1040,7 @@ local function boot()
   lives = 3
   wave = 1
   player = { x = W / 2, y = H - 110, z = Z_HOME, cool = 0, weapon = 1,
-             roll = 0, yaw = 0, pitch = 0 }
+             roll = 0, pitch = 0 }
   pbullets = {}
   ebullets = {}
   enemies = {}
@@ -1114,7 +1110,6 @@ if JET2026_TEST then
     -- banking exactly like a held key would
     set_bank = function(dx, dy)
       playerJet.roll  = BANK_DEG * dx
-      playerJet.angle = BANK_YAW * dx
       playerJet.tilt  = -10 * dy
     end,
     score        = function() return score end,
