@@ -9,13 +9,16 @@
 --
 --  The player, the enemy fighters and the bomber are all the SAME 3D mesh
 --  (jet.glb) drawn by the engine's 3D pass - the enemies are simply tinted
---  red and flown nose-down. The clouds are clusters of engine-built 3D
+--  red and flown nose-down. Up/down is a real climb/dive: the jet closes on
+--  the camera (and grows) or drops back (and shrinks), its shadow sliding over
+--  the sea as the depth changes. The clouds are clusters of engine-built 3D
 --  spheres at a depth between the jets and the sea, so every jet and cloud
 --  casts a real shadow on the water BELOW the clouds (a shadow rides under a
 --  cloud, never on top of one). Waves, bullets, explosions and the HUD are
---  painted with world primitives straight onto the frame buffer.
+--  painted with world primitives straight onto the frame buffer, and every
+--  blast throws engine-owned particle sparks over the whole scene.
 --
---  Controls:  ARROWS / WASD        fly (8 directions)
+--  Controls:  ARROWS / WASD        fly - left/right strafe, up/down climb/dive
 --             SPACE                fire (tap or hold for auto-fire)
 --             P                    pause / resume
 --             ESC                  quit
@@ -92,14 +95,29 @@ end
 
 -- ---- tuning ----------------------------------------------------------
 local SCROLL      = 95           -- downward world scroll speed (px/s)
-local PLAYER_SPEED = 250
-local PLAYER_Y_MIN = 120         -- how far up the player may climb
+local PLAYER_SPEED = 250         -- strafe speed across the sea (px/s)
+local PLAYER_Y_MIN = 120         -- how far up the player may drift on screen
 local PBULLET_SPEED = 620
 local PBULLET_MAX   = 12
 local EBULLET_SPEED = 260
 local ENEMY_POOL    = 18
-local BANK_DEG      = 30         -- roll angle held into a strafe (degrees)
+local BANK_DEG      = 48         -- roll angle held into a strafe (degrees)
+local BANK_YAW      = 22         -- nose pointed into the turn (screen spin)
+local BANK_RATE     = 9          -- how fast the bank eases toward its target
+local CLIMB_SPEED   = 200        -- climb/dive speed toward/away from the eye
+local CLIMB_DRIFT   = 80         -- screen drift while climbing/diving (px/s)
+local Z_NEAR        = -170       -- top of the climb: nearest the eye
+local Z_FAR         = 30         -- bottom of the dive: farthest from the eye
+local Z_HOME        = -20        -- cruising depth: in front of the enemies
+local DEPTH_SIZE    = 0.0013     -- ortho camera: a nearer jet draws ITSELF bigger
 local CLOUD_Z       = 40         -- cloud depth: behind the jets, above the sea
+
+-- The camera is an orthographic top-down one, so nothing scales itself with
+-- distance - the jet does that by hand: nearer the eye means bigger, and the
+-- engine's shadow pass inherits the same scale (a big jet, a big shadow).
+local function depth_size(z)
+  return 1 + (-z) * DEPTH_SIZE
+end
 
 -- ---- 3D models -------------------------------------------------------
 -- One mesh reused for every jet. Scale is derived from the loaded
@@ -177,7 +195,7 @@ end
 local state
 local travel                -- total distance flown (drives the scroll)
 local score, hi, lives, wave
-local player                -- { x, y, cool, weapon }
+local player                -- { x, y, z, cool, weapon, roll, yaw, pitch }
 local invuln, dyingTimer
 local pbullets, ebullets, enemies, blasts, clouds, islands, powerups
 local spawnTimer, waveTimer, bossWave, msg, msgTimer, engineOn, enginePitch
@@ -268,9 +286,25 @@ local function add_blast(x, sy, big)
   blasts[#blasts + 1] = { x = x, sy = sy, t = 0, big = big }
 end
 
+-- Engine-owned sparks (particles.emit): throw the burst and forget it - the
+-- engine steps the sparks every frame and draws them above the 3D pass, so
+-- debris always rains over the jets that made it. The 2D blast rings below
+-- stay as the flash; these are the shrapnel on top.
+local function spark_burst(x, sy, big)
+  if big then
+    particles.emit(x, sy, 26, { color = colors.orange, speed = 200, life = 0.7, size = 4, gravity = 160, drag = 1.2 })
+    particles.emit(x, sy, 14, { color = colors.yellow, speed = 130, life = 0.45, size = 3, gravity = 120 })
+    particles.emit(x, sy, 8,  { color = colors.white,  speed = 90,  life = 0.25, size = 2 })
+  else
+    particles.emit(x, sy, 12, { color = colors.orange, speed = 150, life = 0.5, size = 3, gravity = 140 })
+    particles.emit(x, sy, 6,  { color = colors.yellow, speed = 100, life = 0.3, size = 2 })
+  end
+end
+
 local function kill_enemy(i)
   local e = enemies[i]
   add_blast(e.x, e.sy, e.kind == "bomber")
+  spark_burst(e.x, e.sy, e.kind == "bomber")
   score = score + e.score
   release_model(e.model)
   table.remove(enemies, i)
@@ -297,6 +331,7 @@ local function player_hit()
   lives = lives - 1
   player.weapon = 1
   add_blast(player.x, player.y, true)
+  spark_burst(player.x, player.y, true)
   boom_sfx()
   world.shake(600, 12)
   gamepad.vibrate(1.0, 1.0, 0.5)
@@ -321,7 +356,8 @@ local function reset()
   wave = 1
   invuln = 2.0
   dyingTimer = 0
-  player = { x = W / 2, y = H - 110, cool = 0, weapon = 1 }
+  player = { x = W / 2, y = H - 110, z = Z_HOME, cool = 0, weapon = 1,
+             roll = 0, yaw = 0, pitch = 0 }
   pbullets = {}
   ebullets = {}
   enemies = {}
@@ -337,11 +373,11 @@ local function reset()
   sound.loopStop()
   for i = 1, ENEMY_POOL do poolFree[i] = true; enemyPool[i]:hide() end
   playerJet:show()
-  playerJet.scale = p_scale
   playerJet.angle = 0
   playerJet.tilt = 0
   playerJet.roll = 0
-  playerJet:move(player.x, player.y, -20)
+  playerJet:move(player.x, player.y, player.z)
+  playerJet.scale = p_scale * depth_size(player.z)
 end
 
 -- ---- simulation ------------------------------------------------------
@@ -361,6 +397,7 @@ local function step_bullets(ft)
             kill_enemy(j)
           else
             add_blast(b.x, b.sy, false)
+            particles.emit(b.x, b.sy, 4, { color = colors.yellow, speed = 80, life = 0.2, size = 2 })
             beep(500, 40)
           end
           hit = true
@@ -548,16 +585,27 @@ local function simulate(ft)
     if dy == 0 then dy = sy end
     dx = clamp(dx, -1, 1); dy = clamp(dy, -1, 1)
 
-    local nx = player.x + dx * PLAYER_SPEED * ft
-    local ny = player.y + dy * PLAYER_SPEED * ft
-    player.x = clamp(nx, 22, W - 22)
-    player.y = clamp(ny, PLAYER_Y_MIN, H - 30)
+    -- Left/right strafes across the sea; up/down is a real climb and dive:
+    -- the jet closes on the camera (grows, its shadow slides) or drops back
+    -- (shrinks), while its screen position only drifts a little - enough for
+    -- the eye, small enough to keep dodging by.
+    player.x = clamp(player.x + dx * PLAYER_SPEED * ft, 22, W - 22)
+    player.y = clamp(player.y + dy * CLIMB_DRIFT * ft, PLAYER_Y_MIN, H - 30)
+    player.z = clamp(player.z - dy * CLIMB_SPEED * ft, Z_NEAR, Z_FAR)
 
-    -- bank the jet into the turn (roll about the nose-tail axis), with a
-    -- touch of pitch on climb
-    playerJet:move(player.x, player.y, -20)
-    playerJet.roll = BANK_DEG * dx
-    playerJet.tilt = -8 * dy
+    -- Bank into the turn: a hard roll, the nose pointed into the turn and a
+    -- touch of pitch on the climb. All three ease toward their target, so the
+    -- jet leans over smoothly instead of snapping to the angle.
+    local ease = clamp(BANK_RATE * ft, 0, 1)
+    player.roll  = player.roll  + (BANK_DEG * dx - player.roll) * ease
+    player.yaw   = player.yaw   + (BANK_YAW * dx - player.yaw) * ease
+    player.pitch = player.pitch + (-10 * dy - player.pitch) * ease
+
+    playerJet:move(player.x, player.y, player.z)
+    playerJet.roll  = player.roll
+    playerJet.angle = player.yaw
+    playerJet.tilt  = player.pitch
+    playerJet.scale = p_scale * depth_size(player.z)
 
     -- firing
     player.cool = math.max(0, player.cool - ft)
@@ -598,13 +646,16 @@ local function simulate(ft)
     if dyingTimer <= 0 then
       player.x = W / 2
       player.y = H - 110
+      player.z = Z_HOME
+      player.roll, player.yaw, player.pitch = 0, 0, 0
       invuln = 2.0
       state = "play"
       playerJet:show()
       playerJet.angle = 0
       playerJet.tilt = 0
       playerJet.roll = 0
-      playerJet:move(player.x, player.y, -20)
+      playerJet:move(player.x, player.y, player.z)
+      playerJet.scale = p_scale * depth_size(player.z)
     end
   end
 
@@ -762,7 +813,8 @@ local function boot()
   score = 0
   lives = 3
   wave = 1
-  player = { x = W / 2, y = H - 110, cool = 0, weapon = 1 }
+  player = { x = W / 2, y = H - 110, z = Z_HOME, cool = 0, weapon = 1,
+             roll = 0, yaw = 0, pitch = 0 }
   pbullets = {}
   ebullets = {}
   enemies = {}
@@ -827,8 +879,9 @@ if JET2026_TEST then
     -- pretend the player holds a direction, so a headless frame shows the
     -- banking exactly like a held key would
     set_bank = function(dx, dy)
-      playerJet.roll = 18 * dx
-      playerJet.tilt = -8 * dy
+      playerJet.roll  = BANK_DEG * dx
+      playerJet.angle = BANK_YAW * dx
+      playerJet.tilt  = -10 * dy
     end,
     score        = function() return score end,
     set_score    = function(v) score = v end,

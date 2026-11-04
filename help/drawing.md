@@ -13,6 +13,7 @@ Think of the window like a sandwich:
   screen   ← the glass in front of the window (always on top, never moves)
   controls ← buttons, terminal, output...
   models   ← 3D models (if you use any)
+  particles← engine sparks on top of the models (see help/particles.md)
   sprites  ← your sprites and tiles
 ```
 
@@ -32,8 +33,10 @@ Every frame Tyro paints the window in this order:
 2. **canvas** - the sheet is composited (with its shader effect, if set)
 3. **sprites** - all your sprites and tile maps
 4. **3D models** - if any
-5. **controls** - the terminal, output panel, buttons
-6. **screen** - the top buffer, drawn **last**
+5. **particles** - the engine's live `particles.emit()` sparks, if any
+   (see `help/particles.md`)
+6. **controls** - the terminal, output panel, buttons
+7. **screen** - the top buffer, drawn **last**
 
 So something you draw with `screen.text()` is always on top of sprites,
 controls and everything else.

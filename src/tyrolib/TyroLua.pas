@@ -24,7 +24,7 @@ uses
   LuaAPI, LuaClasses,
   RayLib, RayClasses, //remove it
   mnUtils, mnLogs, mnClasses, mnDON,
-  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroTiles, TyroModels, TyroPhysics, TyroParallax,
+  TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroTiles, TyroModels, TyroParticles, TyroPhysics, TyroParallax,
   TyroControls, TyroEngines, TyroInput,
   TyroRadio, TyroSpectrum;
 
@@ -384,6 +384,20 @@ type
     function Call_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaParticles }
+
+  { The global 'particles' table: throw a burst of sparks and let the engine
+    step and draw it (see TyroParticles). }
+  TLuaParticles = class(TTyroLuaObject)
+  protected
+    function Getter(L: PLua_State): integer; override;
+  public
+    //particles.emit(x, y [, count] [, options]) - throws a burst of sparks
+    function Emit_func(L: Plua_State): integer; cdecl;
+    //particles.clear() - drops every live spark
+    function Clear_func(L: Plua_State): integer; cdecl;
+  end;
+
   { TLuaParallax }
 
   { One scrolling parallax background handed to the script by parallax.new().
@@ -635,6 +649,7 @@ type
     Tiles: TLuaTiles;
     Model: TLuaModel;
     Models: TLuaModels;
+    Particles: TLuaParticles;
     Parallax: TLuaParallax;
     Parallaxes: TLuaParallaxes;
     Controls: TLuaControls;
@@ -1587,6 +1602,7 @@ begin
   Tiles := TLuaTiles.Create('tiles', Self);
   Model := TLuaModel.Create('model', Self);
   Models := TLuaModels.Create('models', Self);
+  Particles := TLuaParticles.Create('particles', Self);
   Parallax := TLuaParallax.Create('parallax', Self);
   Parallaxes := TLuaParallaxes.Create('parallaxes', Self);
   Controls := TLuaControls.Create('controls', Self);
@@ -1779,6 +1795,16 @@ begin
   Lua.State.Register('models', 'sphere', Self, Models.Sphere_func);
   Lua.State.Register('models', 'find', Self, Models.Find_func);
   Lua.State.Register('models', '__call', Self, Models.Call_func, True);
+
+  // Particle sparks: particles.emit(x, y [, count] [, options]) throws a burst
+  // of sparks at a screen pixel and the engine steps and draws it (on top of
+  // the 3D models) until the last spark fades - no per-frame call needed.
+  // options is a table with any of: color, speed, life, size, gravity, drag,
+  // spread, direction. particles.count reads how many sparks are alive.
+  Lua.State.RegisterTable('particles');
+  Lua.State.Register('particles', 'emit', Particles, Particles.Emit_func);
+  Lua.State.Register('particles', 'clear', Particles, Particles.Clear_func);
+  Lua.State.Register('particles', Particles); //Should be last one for particles
 
   // Parallax backgrounds: parallax.new([name]) creates one, parallax.find(name)
   // finds a named one. A parallax object carries add/addground/clear/reset plus
@@ -7012,6 +7038,107 @@ begin
   else
     L.PushNil;
   Result := 1;
+end;
+
+{ TLuaParticles }
+
+//particles.count -> how many sparks are alive right now. Everything else
+//falls through to the base getter.
+function TLuaParticles.Getter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'count' then
+  begin
+    if (Engine <> nil) and (Engine.Particles <> nil) then
+      L.PushInteger(Engine.Particles.Count)
+    else
+      L.PushInteger(0);
+    Result := 1;
+  end
+  else
+    Result := inherited;
+end;
+
+// particles.emit(x, y [, count] [, options])
+// Throws one burst of sparks at the screen pixel (x, y). The engine owns them
+// from here: it steps them every frame (a paused scene freezes them with the
+// world) and draws them on top of the 3D models until they fade. Options,
+// all optional:
+//   color     ink name or value            (default 'orange')
+//   speed     launch speed px/s            (default 140)
+//   life      seconds per spark            (default 0.5)
+//   size      spark radius px              (default 3)
+//   gravity   px/s^2 toward the bottom     (default 240)
+//   drag      speed shed per second        (default 1.5)
+//   spread    degrees of the burst         (default 360, a full ring)
+//   direction middle of the spread, deg    (default 0, right; -90 is up)
+function TLuaParticles.Emit_func(L: Plua_State): integer; cdecl;
+var
+  Burst: TParticleBurst;
+
+  //Raw-read one number from the options table; a missing field simply keeps
+  //the default already sitting in Burst.
+  procedure NumField(const AField: string; var AValue: single);
+  begin
+    lua_getfield(L, 4, PUTF8Char(UTF8String(AField)));
+    if not lua_isnil(L, -1) then
+      AValue := L.ToNumber(-1);
+    lua_pop(L, 1);
+  end;
+
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Particles = nil) then
+    Exit;
+  if L.ArgsCount < 2 then
+  begin
+    Script.DoError('particles.emit(x, y [, count] [, options]) needs at least x and y');
+    Exit;
+  end;
+  Burst.X := L.ToNumber(1);
+  Burst.Y := L.ToNumber(2);
+  Burst.Count := 12;
+  if L.ArgsCount >= 3 then
+    Burst.Count := L.ToInteger(3);
+  Burst.Color := clOrange;
+  Burst.Speed := 140;
+  Burst.Life := 0.5;
+  Burst.Size := 3;
+  Burst.Gravity := 240;
+  Burst.Drag := 1.5;
+  Burst.Spread := 360;
+  Burst.Direction := 0;
+  if (L.ArgsCount >= 4) and L.IsTable(4) then
+  begin
+    lua_getfield(L, 4, PUTF8Char(UTF8String('color')));
+    if L.IsString(-1) then
+      Burst.Color := StrToColor(L.ToString(-1))
+    else if not lua_isnil(L, -1) then
+      Burst.Color := IntToColor(L.ToInteger(-1));
+    lua_pop(L, 1);
+    NumField('speed', Burst.Speed);
+    NumField('life', Burst.Life);
+    NumField('size', Burst.Size);
+    NumField('gravity', Burst.Gravity);
+    NumField('drag', Burst.Drag);
+    NumField('spread', Burst.Spread);
+    NumField('direction', Burst.Direction);
+  end;
+  if Burst.Life <= 0 then
+    Burst.Life := 0.1;
+  L.PushInteger(Engine.Particles.Emit(Burst));
+  Result := 1;
+end;
+
+//particles.clear() - drop every live spark (e.g. when a round ends).
+function TLuaParticles.Clear_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if (Engine <> nil) and (Engine.Particles <> nil) then
+    Engine.Particles.Clear;
 end;
 
 { TLuaParallax }

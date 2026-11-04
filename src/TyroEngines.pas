@@ -38,7 +38,7 @@ uses
   mnLogs, mnUtils, mnClasses, mnConfigs,
   RayLib, RayClasses, TyroInput, TyroScripts, TyroSounds,
   TyroClasses, TyroControls, TyroTerminal,
-  TyroSprites, TyroTiles, TyroModels, TyroPhysics, TyroEditors, TyroParallax,
+  TyroSprites, TyroTiles, TyroModels, TyroParticles, TyroPhysics, TyroEditors, TyroParallax,
   TyroSpriteEditor, SpriteAtlas;
 
 const
@@ -205,6 +205,7 @@ type
     procedure ClearScriptSprites;
     procedure ClearScriptTiles;
     procedure ClearScriptModels;
+    procedure ClearScriptParticles;
     procedure ShowWindowAfterScript;
     //* Service the command line lifecycle (--exit / --screenshot) once per
     //* frame. Returns True when this call terminated the session, so the main
@@ -421,6 +422,10 @@ type
     //* 3D models the script created (see TyroModels); drawn by the engine in a
     //* top-down pixel pass between the 2D scene and the controls.
     Models: TModels3D;
+    //* Engine-owned particle sparks (see TyroParticles); the script throws a
+    //* burst with particles.emit() and the engine steps and draws it, on top
+    //* of the 3D models, until the last spark fades.
+    Particles: TParticles;
     Physics: TPhysics;
     //* Scrolling parallax backgrounds the script created (see TyroParallax).
     Parallaxes: TParallaxes;
@@ -695,6 +700,12 @@ begin
           if (Models <> nil) and Models.HasVisible then
             Models.DrawAll(Camera2D.Offset.X, Camera2D.Offset.Y,
               RayLib.GetScreenWidth, RayLib.GetScreenHeight);
+
+          //The sparks ride on top of the 3D models, so an explosion always
+          //reads over the jets and sprites that made it; they take the same
+          //margin/shake offset the models got and shake together with them.
+          if (Particles <> nil) and Particles.HasAny then
+            Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y);
 
           if Window <> nil then
             Window.Paint;
@@ -1239,6 +1250,7 @@ begin
   Sprites := TSprites.Create;
   Tiles := TTiles.Create;
   Models := TModels3D.Create;
+  Particles := TParticles.Create;
   Physics := TPhysics.Create(Sprites);
   Parallaxes := TParallaxes.Create;
   Commands := TConsoleCommands.Create();
@@ -1268,6 +1280,7 @@ begin
   FreeAndNil(Tiles);
   //Models own GPU meshes: unload them while the GL context is alive.
   FreeAndNil(Models);
+  FreeAndNil(Particles);
   //Parallaxes own layer textures: unload them while the GL context is alive.
   FreeAndNil(Parallaxes);
   FreeAndNil(Board);
@@ -1499,6 +1512,10 @@ begin
     // Advance every playing sprite animation (frame textures swap here)
     if Sprites <> nil then
       Sprites.UpdateAnims(RayLib.GetFrameTime());
+    // Live particle sparks ride the same step, so a paused scene freezes them
+    // with the rest of the world (the early Exit above skips this).
+    if Particles <> nil then
+      Particles.Step(RayLib.GetFrameTime());
   except
     on E: Exception do
     begin
@@ -2204,6 +2221,7 @@ begin
   ClearScriptSprites;
   ClearScriptTiles;
   ClearScriptModels;
+  ClearScriptParticles;
   Clear;
   //A song the finished run left playing belongs to that run, not to the next one.
   aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
@@ -2272,6 +2290,15 @@ procedure TTyroEngine.ClearScriptModels;
 begin
   if Models <> nil then
     Models.Clear;
+end;
+
+//Drop the sparks the previous run threw. They belong to that run's scene, and
+//a burst still fading when the user hits rerun would otherwise rain on the
+//new script for its first second.
+procedure TTyroEngine.ClearScriptParticles;
+begin
+  if Particles <> nil then
+    Particles.Clear;
 end;
 
 //Wipe the pixels the previous run left on the two canvases it draws through:
