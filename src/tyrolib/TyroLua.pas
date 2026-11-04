@@ -1097,6 +1097,14 @@ begin
       exit;
     end
   end;
+  if field = 'timescale' then
+  begin
+    //Slow motion for the whole scene: the engine multiplies every scene
+    //step's frame time by this factor (the store clamps it away from 0).
+    Engine.World.Timescale := L.ToNumber(-1);
+    Result := 1;
+    exit;
+  end;
   if Result = 0 then
     Result := inherited;
 end;
@@ -1116,6 +1124,11 @@ begin
   else if field = 'title' then
   begin
     L.PushString(Engine.World.Title);
+    Result := 1;
+  end
+  else if field = 'timescale' then
+  begin
+    L.PushNumber(Engine.World.Timescale);
     Result := 1;
   end;
   if Result = 0 then

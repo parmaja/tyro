@@ -377,6 +377,7 @@ type
   private
     FOpaque: Boolean;
     FTitle: string;
+    FTimescale: Single;
     // Screen shake state
     FShakeTime, FShakeDuration: Double;
     FShakePower: Integer;
@@ -387,6 +388,7 @@ type
     procedure SetTitle(AValue: string);
     procedure SetWidth(AValue: Integer);
     procedure SetHeight(AValue: Integer);
+    procedure SetTimescale(AValue: Single);
     function GetShakeX: Integer;
     function GetShakeY: Integer;
   public
@@ -399,6 +401,12 @@ type
     property Shaking: Boolean read GetShaking;
 
     property Title: string read FTitle write SetTitle;
+
+    // Slow motion: the factor every scene step multiplies its frame time by
+    // - the script's update(), sprite animations, physics and the particle
+    // sparks all crawl (or sprint) together, so the world stays consistent.
+    // Audio and presentation keep running at full speed.
+    property Timescale: Single read FTimescale write SetTimescale;
 
     property Opaque: Boolean read FOpaque write FOpaque;
     property ShakeX: Integer read GetShakeX;
@@ -1232,9 +1240,21 @@ constructor TTyroWorld.Create;
 begin
   inherited;
   FOpaque := True;
+  FTimescale := 1;
   FWidth := cDefaultWindowWidth;
   FHeight := cDefaultWindowHeight;
   FBackColor := Res.Theme.World.BackColor;
+end;
+
+procedure TTyroWorld.SetTimescale(AValue: Single);
+begin
+  //A scene can crawl for effect, never stand still (0 would freeze the
+  //frame clock and every timer in it) and never run away to absurd speed.
+  if AValue < 0.05 then
+    AValue := 0.05
+  else if AValue > 4 then
+    AValue := 4;
+  FTimescale := AValue;
 end;
 
 procedure TTyroWorld.SetBackColor(AValue: TColor);

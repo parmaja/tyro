@@ -109,6 +109,7 @@ World extras (things only the camera owns):
 | `world.light(x, y, z)` | the sun ray the 3D shadows fall along |
 | `world.ambient(v)` | how much sky light fills the shadows (`0`..`1`) |
 | `world.ground(z)` | the depth plane the 3D shadows land on |
+| `world.timescale` | slow motion: `0.35` runs the whole scene at a third speed (default `1`) |
 
 ### `world` drawing only works inside `draw()` ⚠️
 
@@ -207,6 +208,13 @@ you learn on one works on the others:
 | `x.gradient.rectH(...)`, `x.gradient.rectV(...)`, `x.gradient.circle(...)` | gradient fills |
 
 *(replace `x` with `canvas`, `world` or `screen`)*
+
+> Gotcha: the alpha lives inside the pen color. Setting `x.color` replaces the
+> whole color including its transparency, so to draw semi-transparent set the
+> **color first, then the alpha** - `x.color = colors.red` after `x.alpha = 100`
+> would snap the transparency back to full.
+> (`screen` is a buffer first filled and then blended onto the window, so a
+> wash there is blended twice: pick a higher alpha than the final look suggests.)
 
 ---
 

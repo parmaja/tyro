@@ -114,6 +114,7 @@ local Z_FAR         = 30         -- bottom of the dive: farthest from the eye
 local Z_HOME        = -20        -- cruising depth: in front of the enemies
 local DEPTH_SIZE    = 0.0013     -- ortho camera: a nearer jet draws ITSELF bigger
 local CLOUD_Z       = 40         -- cloud depth: behind the jets, above the sea
+local SLOWMO        = 0.4        -- slow-motion length (scaled seconds) for a bomber down
 
 -- The camera is an orthographic top-down one, so nothing scales itself with
 -- distance - the jet does that by hand: nearer the eye means bigger, and the
@@ -202,6 +203,9 @@ local player                -- { x, y, z, cool, weapon, roll, yaw, pitch }
 local invuln, dyingTimer
 local pbullets, ebullets, enemies, blasts, clouds, islands, powerups
 local spawnTimer, waveTimer, bossWave, msg, msgTimer, engineOn, enginePitch
+-- juice timers: exhaust/smoke pacing, the cloud fly-through haze (0..1),
+-- the red hit flash and the slow-motion countdown for a bomber down
+local trailT, smokeT, haze, hitT, slowT
 
 -- Load the saved high score at boot (best-effort; a missing file is fine).
 local function load_hi()
@@ -315,6 +319,7 @@ local function kill_enemy(i)
   if e.kind == "bomber" then
     bossWave = nil
     world.shake(500, 14)
+    slowT = SLOWMO                 -- the world crawls for a heartbeat
     gamepad.vibrate(0.9, 0.9, 0.4)
     msg = "BOMBER DOWN +" .. e.score
     msgTimer = 1.6
@@ -337,6 +342,7 @@ local function player_hit()
   spark_burst(player.x, player.y, true)
   boom_sfx()
   world.shake(600, 12)
+  hitT = 0.3                       -- red flash on the screen buffer
   gamepad.vibrate(1.0, 1.0, 0.5)
   if lives <= 0 then
     state = "over"
@@ -374,6 +380,8 @@ local function reset()
   engineOn = false
   enginePitch = -1
   sound.loopStop()
+  trailT, smokeT, haze, hitT, slowT = 0, 0, 0, 0, 0
+  world.timescale = 1
   for i = 1, ENEMY_POOL do poolFree[i] = true; enemyPool[i]:hide() end
   playerJet:show()
   playerJet.angle = 0
@@ -553,6 +561,10 @@ local function fire()
     pbullets[#pbullets + 1] = { x = px - 13, sy = py - 8 }
     pbullets[#pbullets + 1] = { x = px + 13, sy = py - 8 }
   end
+  -- a pinch of muzzle flash at the nose, so every shot leaves a spark
+  particles.emit(px, py - 14, 3,
+    { color = colors.yellow, speed = 90, life = 0.12, size = 2,
+      gravity = 0, spread = 34, direction = -90 })
   shoot_sfx()
   gamepad.vibrate(0.06, 0.1, 0.05)
 end
@@ -568,6 +580,16 @@ local function simulate(ft)
     if bl.t > 0.55 then table.remove(blasts, i) end
   end
   if msgTimer > 0 then msgTimer = msgTimer - ft end
+
+  -- The boss moment: a bomber down slows the whole world (the engine runs
+  -- update, the sprites and the sparks at world.timescale) and eases back
+  -- to full speed. ft itself already arrives scaled, so the real moment
+  -- lasts a good half second more than these numbers suggest.
+  if slowT > 0 then
+    slowT = math.max(0, slowT - ft)
+    world.timescale = 0.35 + 0.65 * (1 - slowT / SLOWMO)
+  end
+  if hitT > 0 then hitT = hitT - ft end
 
   if state == "play" then
     invuln = math.max(0, invuln - ft)
@@ -609,6 +631,60 @@ local function simulate(ft)
     playerJet.angle = player.yaw
     playerJet.tilt  = player.pitch
     playerJet.scale = p_scale * depth_size(player.z)
+
+    -- Afterburner trail: the air stands still while the sea scrolls under
+    -- it, so the exhaust is thrown in behind the jet and rides down with
+    -- the waves. The flame burns in the power level's colors.
+    trailT = trailT - ft
+    if trailT <= 0 then
+      trailT = 0.03
+      local s = depth_size(player.z)
+      local flame = colors.orange
+      if player.weapon == 2 then flame = colors.gold
+      elseif player.weapon >= 3 then flame = colors.skyblue end
+      particles.emit(player.x, player.y + 15 * s, 2,
+        { color = flame, speed = 70, life = 0.3, size = 2.5 * s,
+          gravity = 90, drag = 1.6, spread = 26, direction = 90 })
+    end
+
+    -- Wingtip smoke: leaned over hard, the jet tears two ribbons off its
+    -- wingtips - they come away along the turned wing line, one per side.
+    smokeT = smokeT - ft
+    if (math.abs(player.roll) > 26) and (smokeT <= 0) then
+      smokeT = 0.07
+      local s = depth_size(player.z)
+      local a = math.rad(player.yaw)
+      local wx = 20 * s * math.cos(a)
+      local wy = 20 * s * math.sin(a)
+      particles.emit(player.x + wx, player.y + wy, 1,
+        { color = colors.gray, speed = 14, life = 0.5, size = 2.5,
+          gravity = 0, drag = 2.6 })
+      particles.emit(player.x - wx, player.y - wy, 1,
+        { color = colors.gray, speed = 14, life = 0.5, size = 2.5,
+          gravity = 0, drag = 2.6 })
+    end
+
+    -- Fly-through haze: at cloud height with a puff around the jet the
+    -- whole scene whites out for a heartbeat (draw_fx paints it). Climbing
+    -- into a cloud to dodge hides what waits on the other side, so using
+    -- the clouds as cover costs something.
+    local want = 0
+    if player.z > CLOUD_Z - 55 then
+      for i = 1, #clouds do
+        local c = clouds[i]
+        local dx = player.x - c.x
+        local dy = player.y - c.sy
+        if dx * dx + dy * dy < (c.r + 16) * (c.r + 16) then
+          want = 1
+          break
+        end
+      end
+    end
+    if want == 1 then
+      haze = math.min(1, haze + ft * 7)
+    else
+      haze = math.max(0, haze - ft * 2.2)
+    end
 
     -- firing
     player.cool = math.max(0, player.cool - ft)
@@ -734,6 +810,30 @@ local function draw_blasts()
   end
 end
 
+-- Full-screen flashes ride the fixed screen buffer too: the red flash of a
+-- hit and the white haze of a cloud fly-through sit above every layer - but
+-- under the readouts, which are drawn into the same buffer right after.
+local function draw_fx()
+  -- the alpha rides INSIDE the pen color, so the color must be set first:
+  -- screen.color after screen.alpha would reset the alpha to full.
+  if hitT > 0 then
+    screen.color = colors.red
+    -- the buffer is alpha-blended twice (into the buffer, then the buffer
+    -- onto the window), so these numbers are stronger than they look
+    screen.alpha = math.floor(200 * hitT / 0.3)
+    screen.rectangle(0, 0, W, H, true)
+    screen.alpha = 255
+  end
+  if haze > 0.01 then
+    -- thick mist that still lets the sea read through; the readouts above
+    -- are drawn after it into the same buffer, so they stay clear
+    screen.color = colors.white
+    screen.alpha = math.floor(220 * haze)
+    screen.rectangle(0, 0, W, H, true)
+    screen.alpha = 255
+  end
+end
+
 -- The readouts ride the fixed screen buffer (draw() wipes it with 'blank'
 -- first): it sits above ALL drawing and never shakes, so the info stays
 -- perfectly readable while the sea, the jets and the blasts jolt below it.
@@ -807,6 +907,7 @@ function draw()
   draw_bullets()
   draw_blasts()
   screen.clear('blank')
+  draw_fx()
   draw_hud()
   draw_overlay()
 end
@@ -851,6 +952,8 @@ local function boot()
   msgTimer = 0
   invuln = 0
   engineOn = false
+  trailT, smokeT, haze, hitT, slowT = 0, 0, 0, 0, 0
+  world.timescale = 1
   playerJet:hide()
 end
 
@@ -870,6 +973,8 @@ if JET2026_TEST then
     pbullets     = function() return pbullets end,
     ebullets     = function() return ebullets end,
     powerups     = function() return powerups end,
+    clouds       = function() return clouds end,
+    fx           = function() return haze, hitT, slowT end,
     fire         = fire,
     -- capture the game's draw() now (it is defined above as a global); the
     -- harness may replace the global afterwards, so keep our own reference

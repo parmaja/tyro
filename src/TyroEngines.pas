@@ -332,6 +332,9 @@ type
 
     //When application exit, unload your resources
     procedure ProcessQueue;
+    //The scene's shared slow-motion factor (world.timescale), 1 when there
+    //is no world yet. Every scene step multiplies its frame time by it.
+    function TimeScale: Single;
 
     //* Snapshot of the queue/frame diagnostics (see TQueueStats). Safe to call
     //* from any thread; backs the Lua 'queue' table.
@@ -646,7 +649,10 @@ begin
           FPendingDispose := True
         else if not ScriptPaused then
         begin
-          FScriptThread.Script.EngineUpdate(RayLib.GetFrameTime());
+          //world.timescale (slow motion) stretches the frame time the script
+          //sees, so update() and every timer inside it crawl together with
+          //the physics, sprite animations and sparks stepped below.
+          FScriptThread.Script.EngineUpdate(RayLib.GetFrameTime() * TimeScale);
           //update() may have called exit(); do not call into a terminated state.
           if (not FScriptThread.Script.Stopped) and (not ScriptPaused) then
             FScriptThread.Script.EngineDraw;
@@ -1510,6 +1516,13 @@ begin
   Sprites.DrawScripts;
 end;
 
+function TTyroEngine.TimeScale: Single;
+begin
+  Result := 1;
+  if World <> nil then
+    Result := World.Timescale;
+end;
+
 procedure TTyroEngine.Update;
 var
   Scripted: array[0..1023] of TCollisionEvent;
@@ -1517,6 +1530,7 @@ var
   I: Integer;
   ev: TCollisionEvent;
   AState: string;
+  DT: Single;
 begin
   {$IFDEF MMLDEBUG}
   Inc(FDebugFrameCount);
@@ -1535,15 +1549,19 @@ begin
     //changing; the window keeps presenting frames and audio keeps streaming.
     if ScriptPaused then
       Exit;
+    //One shared slow-motion factor for the whole scene step: the script's
+    //update() got the same stretched frame time in the run loop above, so
+    //everything below stays in step with it.
+    DT := RayLib.GetFrameTime() * TimeScale;
     if Physics <> nil then
-      Physics.Step(RayLib.GetFrameTime());
+      Physics.Step(DT);
     // Advance every playing sprite animation (frame textures swap here)
     if Sprites <> nil then
-      Sprites.UpdateAnims(RayLib.GetFrameTime());
+      Sprites.UpdateAnims(DT);
     // Live particle sparks ride the same step, so a paused scene freezes them
     // with the rest of the world (the early Exit above skips this).
     if Particles <> nil then
-      Particles.Step(RayLib.GetFrameTime());
+      Particles.Step(DT);
   except
     on E: Exception do
     begin
