@@ -17,11 +17,13 @@
 --  sliding over the sea as the depth changes. The clouds are clusters of
 --  engine-built 3D spheres at a depth between the jets and the sea, so every
 --  jet and cloud casts a real shadow on the water BELOW the clouds (a shadow
---  rides under a cloud, never on top of one). Waves, bullets and explosions
---  are painted with world primitives straight onto the frame buffer, every
+--  rides under a cloud, never on top of one). Waves and explosions are
+--  painted with world primitives straight onto the frame buffer, every
 --  blast throws engine-owned particle sparks over the whole scene, and the
---  HUD, the wave messages and the ready/pause/over panels ride the fixed
---  screen buffer - above all drawing, immune to the shake of a hit.
+--  flying ordnance - the jet's pulses, the enemy shots and the warships'
+--  missiles - along with the HUD, the wave messages and the ready/pause/over
+--  panels ride the fixed screen buffer - above all drawing, so no island
+--  can swallow a bullet, and immune to the shake of a hit.
 --
 --  Controls:  ARROWS / WASD        fly - left/right strafe, up/down climb/dive
 --             SPACE / X            fire (tap or hold for auto-fire)
@@ -1337,16 +1339,21 @@ local function draw_sea()
   -- - and draw themselves on the sprite layer, behind the clouds)
 end
 
+-- All the flying ordnance rides the fixed screen glass on purpose: world
+-- drawing sits under ALL sprites, so a bullet crossing the sea would vanish
+-- behind an island (or a ship) otherwise - the same reason the warships'
+-- missiles live up here. The HUD, painted into the buffer after it, still
+-- reads on top.
 local function draw_bullets()
-  world.color = colors.yellow
+  screen.color = colors.yellow
   for i = 1, #pbullets do
     local b = pbullets[i]
-    world.line(b.x, b.sy - 7, b.x, b.sy + 5, 3)
+    screen.line(b.x, b.sy - 7, b.x, b.sy + 5, 3)
   end
-  world.color = colors.orange
+  screen.color = colors.orange
   for i = 1, #ebullets do
     local b = ebullets[i]
-    world.circle(b.sx, b.sy, 4, true)
+    screen.circle(b.sx, b.sy, 4, true)
   end
 end
 
@@ -1532,18 +1539,19 @@ local function draw_overlay()
   end
 end
 
--- Frame callback. The world layers hold the scene (sea, bullets, blasts);
--- the jets and clouds are drawn by the 3D pass, the sparks by the particle
--- pass. The HUD and overlays then go onto the fixed screen buffer, which the
--- engine composites above everything - wipe it first, it remembers the
--- previous frame.
+-- Frame callback. The world layers hold the scene (sea, power crates, the
+-- falling bombs, blasts); the jets and clouds are drawn by the 3D pass, the
+-- sparks by the particle pass. The bullets and missiles, the HUD and the
+-- overlays then go onto the fixed screen buffer, which the engine
+-- composites above everything - wipe it first, it remembers the previous
+-- frame.
 function draw()
   draw_sea()
   draw_powerups()
-  draw_bullets()
   draw_bombs()
   draw_blasts()
   screen.clear('blank')
+  draw_bullets()
   draw_missiles()
   draw_fx()
   draw_hud()

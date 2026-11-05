@@ -19,8 +19,10 @@ and the whole squadron flies `enemy.glb` in its own paint, flown nose-down,
 with the bomber the same enemy mesh at big scale. The
 clouds are clusters of engine-built 3D spheres (`models.sphere`) at a depth
 between the jets and the sea, so every jet and cloud drops its true silhouette
-on the water BELOW the clouds. Waves, bullets, islands, explosions and the HUD
-are painted straight onto the frame buffer with `world` primitives.
+on the water BELOW the clouds. Waves, blasts and the HUD are painted straight
+onto the frame buffer with `world` primitives, while every flying shell —
+the jet's pulses, the enemy shots and the warships' missiles — rides the
+fixed screen glass, so no island (or hull) can ever swallow one.
 
 ## Key Features
 
