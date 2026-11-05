@@ -281,6 +281,17 @@ local function island_shape(s)
   s.twinkles = tw
 end
 
+-- Matte palette for the atolls ($AABBGGRR tints): the stock greens and
+-- skyblue are candy-vivid and make the islands glow like neon - these are
+-- greyed-down sea colours so the islands sit quietly against the water.
+local ISL_GLOW   = 0xFFCDC99A  -- pale seafoam
+local ISL_FOAM   = 0xFFF0F0EB  -- pearl
+local ISL_RIM    = 0xFF74654A  -- slate
+local ISL_SAND   = 0xFFACC8D5  -- dry sand
+local ISL_GRASS  = 0xFF6E9A7A  -- sage
+local ISL_SUN    = 0xFF84BA9C -- sunlit sage
+local ISL_LAGOON = 0xFFCBCD98 -- lagoon teal
+
 -- Built once at boot, one batched hop per role: glow under foam under rim
 -- under sand under meadow - so even when two islands cross, the water stays
 -- under the beach and the beach under the grass. The blobs share the puff's
@@ -304,13 +315,13 @@ local function make_islands(list)
       t[i].visible = false
     end
   end
-  setrole(glow, colors.skyblue, 90)
-  setrole(foam, colors.white, 170)
-  setrole(rim, colors.darkblue, 170)
-  setrole(sand, colors.beige, 255)
-  setrole(turf, colors.green, 255)
-  setrole(sun, colors.lime, 255)
-  setrole(lagoon, colors.skyblue, 255)
+  setrole(glow, ISL_GLOW, 80)
+  setrole(foam, ISL_FOAM, 150)
+  setrole(rim, ISL_RIM, 150)
+  setrole(sand, ISL_SAND, 255)
+  setrole(turf, ISL_GRASS, 255)
+  setrole(sun, ISL_SUN, 255)
+  setrole(lagoon, ISL_LAGOON, 255)
   setrole(tw, colors.white, 255)
   for i = 1, #list do
     local s = list[i]
@@ -376,7 +387,7 @@ local function place_island(s)
     sp.x = s.x + off.dx * s.r
     sp.y = s.sy + off.dy * s.r
     sp.scale = s.r * 0.09 * 2 / PUFF_TEX
-    sp.alpha = math.floor(20 + 150 * tw)
+    sp.alpha = math.floor(15 + 110 * tw)
   end
 end
 
