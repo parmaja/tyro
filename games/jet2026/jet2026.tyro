@@ -1204,6 +1204,10 @@ local function boot()
   world.light(0.10, 1, -0.05)
   world.ambient(0.45)
   world.ground(300)
+  -- and the sun is no point: a three-pixel penumbra smears every shadow's
+  -- rim, so the jets' silhouettes land on the water as soft shades and not
+  -- as hard-cut stickers
+  world.shadowsoft(3)
   -- the living sea: a board effect that ripples every blue pixel; if the
   -- shader file is missing, draw_sea's hand-drawn crests cover for it
   seaShader = pcall(function() shader.load("sea.frag") end)

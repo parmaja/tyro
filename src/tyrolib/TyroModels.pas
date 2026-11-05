@@ -108,6 +108,12 @@ type
     FLightDir: TVector3;
     FAmbient: Single;
     FGroundY: Single;
+    //The shadow's penumbra in screen pixels: the sun is no point source, so a
+    //shadow edge is never a knife. The inked sheet is Gaussian-blurred by this
+    //radius before it is laid, which turns every silhouette's rim into a soft
+    //band (0 keeps the old hard ink). One sun, one softness for the scene,
+    //exactly like the light itself.
+    FSoftness: Single;
     //The shadow ink: raylib's default material, which is the plain unlit shader
     //and a 1x1 white pixel, so whatever color is written into its albedo comes
     //out at the other end unchanged - a solid silhouette with no texture and no
@@ -123,6 +129,13 @@ type
     //shadow (it needs the GL context), rebuilt when the window changes size and
     //freed with the store.
     FShadowSheet: TRenderTexture2D;
+    //The blur pass: a second sheet of the same size the ink travels through
+    //for the vertical leg of the separable Gaussian, and the small blur shader
+    //that smears it. Built on the first frame that casts a soft shadow (they
+    //need the GL context), rebuilt on a window resize, freed with the store.
+    FBlurSheet: TRenderTexture2D;
+    FBlurShader: TShader;
+    FBlurReady: Boolean;
     function GetCount: integer;
     function GetItems(Index: Integer): TModel3D;
     //Frees the GPU model a slot owns and resets it to unloaded.
@@ -155,6 +168,17 @@ type
       AX, AY: Single; AWidth, AHeight: Integer; ATintAlpha: Byte): Boolean;
     //Lays the inked sheet over the world: one coat of ink, under every model.
     procedure LayShadowSheet(AAlpha: Integer);
+    //True when the blur shader and its second sheet stand ready at the
+    //window's size (built on demand, like the shadow sheet). False only means
+    //the shade goes down hard instead of not going down at all.
+    function BlurPassReady: Boolean;
+    //Smears the inked sheet: one horizontal Gaussian leg into the blur sheet
+    //and one vertical leg back, so the sheet itself ends up soft and the lay
+    //step never learns a blur happened. Needs the GL context; call it between
+    //InkShadowSheet and LayShadowSheet, when BlurPassReady said yes.
+    procedure BlurShadowSheet;
+    //Releases the blur sheet and shader (main thread, GL context alive).
+    procedure FreeBlurPass;
   public
     constructor Create;
     destructor Destroy; override;
@@ -181,6 +205,9 @@ type
     function GetAmbient: single;
     procedure SetGroundY(AValue: single);
     function GetGroundY: single;
+    //The penumbra radius in screen pixels (see FSoftness): 0..6, clamped.
+    procedure SetSoftness(AValue: single);
+    function GetSoftness: single;
 
     function GetName(Handle: integer): string;
     procedure SetName(Handle: integer; const AName: string);
@@ -341,6 +368,10 @@ begin
   FLightDir := Vector3Of(0.06, 1, -0.035);
   FAmbient := 0.45;
   FGroundY := 300;
+  //Hard ink until a script asks for a penumbra (world.shadowsoft), so every
+  //game but the ones that opt in keep the old crisp silhouette.
+  FSoftness := 0;
+  FBlurReady := False;
 end;
 
 destructor TModels3D.Destroy;
@@ -537,6 +568,132 @@ begin
   RayLib.DrawTexture(FShadowSheet.Texture, 0, 0, clWhite.ReplaceAlpha(Byte(AAlpha)));
 end;
 
+//The blur's fragment shader: a nine-tap Gaussian along one direction, the
+//direction and step given in texels through the `blur` uniform - one shader
+//serves both legs, which is the point of a separable blur. The weights are
+//raylib's own blur sample (a normalised sigma-2 kernel), so the ink keeps its
+//total strength and only its edges smear. The default vertex shader does the
+//quad, so nothing here needs to agree with rlgl about attributes.
+const
+  cShadowBlurFs: UTF8String = '''
+#version 330
+
+in vec2 fragTexCoord;
+in vec4 fragColor;
+
+uniform sampler2D texture0;
+uniform vec4 colDiffuse;
+uniform vec2 blur;
+
+out vec4 finalColor;
+
+void main()
+{
+    vec4 sum = vec4(0.0);
+    sum += 0.000012686 * texture(texture0, fragTexCoord - 4.0 * blur);
+    sum += 0.0004992833 * texture(texture0, fragTexCoord - 3.0 * blur);
+    sum += 0.01970073 * texture(texture0, fragTexCoord - 2.0 * blur);
+    sum += 0.1559384 * texture(texture0, fragTexCoord - 1.0 * blur);
+    sum += 0.6368684 * texture(texture0, fragTexCoord);
+    sum += 0.1559384 * texture(texture0, fragTexCoord + 1.0 * blur);
+    sum += 0.01970073 * texture(texture0, fragTexCoord + 2.0 * blur);
+    sum += 0.0004992833 * texture(texture0, fragTexCoord + 3.0 * blur);
+    sum += 0.000012686 * texture(texture0, fragTexCoord + 4.0 * blur);
+    finalColor = sum * colDiffuse * fragColor;
+}
+''';
+
+procedure TModels3D.FreeBlurPass;
+begin
+  if FBlurSheet.ID <> 0 then
+  begin
+    RayLib.UnloadRenderTexture(FBlurSheet);
+    FBlurSheet := Default(TRenderTexture2D);
+  end;
+  if FBlurReady then
+  begin
+    RayLib.UnloadShader(FBlurShader);
+    FBlurShader := Default(TShader);
+    FBlurReady := False;
+  end;
+end;
+
+//Like the shadow sheet, the parts are built lazily - they want the GL context
+//the engine only owns once there is a window - and the sheet is a piece of the
+//window's size, so a resize just costs a new one.
+function TModels3D.BlurPassReady: Boolean;
+begin
+  Result := False;
+  if not FBlurReady then
+  begin
+    FBlurShader := RayLib.LoadShaderFromMemory(nil, PUTF8Char(cShadowBlurFs));
+    FBlurReady := RayLib.IsShaderValid(FBlurShader);
+  end;
+  if not FBlurReady then
+    Exit;
+  if (FBlurSheet.ID <> 0)
+    and ((FBlurSheet.Texture.Width <> FShadowSheet.Texture.Width)
+      or (FBlurSheet.Texture.Height <> FShadowSheet.Texture.Height)) then
+  begin
+    RayLib.UnloadRenderTexture(FBlurSheet);
+    FBlurSheet := Default(TRenderTexture2D);
+  end;
+  if FBlurSheet.ID = 0 then
+  begin
+    FBlurSheet := RayLib.LoadRenderTexture(FShadowSheet.Texture.Width,
+      FShadowSheet.Texture.Height);
+    if not RayLib.IsRenderTextureValid(FBlurSheet) then
+    begin
+      //Dropped, not unloaded: a sheet that was never made has no buffer to
+      //hand back.
+      FBlurSheet := Default(TRenderTexture2D);
+      Exit(False);
+    end;
+  end;
+  //The ink sheet is normally read texel-for-texel (a hard silhouette); the
+  //blur's taps sample between texels, so from the first soft frame on the
+  //Gaussian reads it bilinear.
+  RayLib.SetTextureFilter(FShadowSheet.Texture, TEXTURE_FILTER_BILINEAR);
+  Result := True;
+end;
+
+//Two legs of the same kernel: horizontal into the blur sheet, vertical back.
+//The legs write full screens at one fixed depth, so the depth test the inking
+//left switched on must go - and LayShadowSheet's own DisableDepthTest keeps
+//the world side of the deal exactly as it was.
+procedure TModels3D.BlurShadowSheet;
+var
+  Blur: TVector2;
+  BlurLoc: Integer;
+  W, H: Integer;
+begin
+  W := FShadowSheet.Texture.Width;
+  H := FShadowSheet.Texture.Height;
+  BlurLoc := RayLib.GetShaderLocation(FBlurShader, 'blur');
+
+  Blur := Vector2Of(FSoftness / W, 0);
+  RayLib.BeginTextureMode(FBlurSheet);
+  RayLib.rlDisableDepthTest;
+  RayLib.ClearBackground(clBlank);
+  RayLib.BeginShaderMode(FBlurShader);
+  if BlurLoc >= 0 then
+    RayLib.SetShaderValue(FBlurShader, BlurLoc, @Blur, Ord(SHADER_UNIFORM_VEC2));
+  RayLib.DrawTexture(FShadowSheet.Texture, 0, 0, clWhite);
+  RayLib.EndShaderMode;
+  RayLib.EndTextureMode;
+
+  Blur := Vector2Of(0, FSoftness / H);
+  RayLib.BeginTextureMode(FShadowSheet);
+  RayLib.rlDisableDepthTest;
+  RayLib.ClearBackground(clBlank);
+  RayLib.BeginShaderMode(FBlurShader);
+  if BlurLoc >= 0 then
+    RayLib.SetShaderValue(FBlurShader, BlurLoc, @Blur, Ord(SHADER_UNIFORM_VEC2));
+  RayLib.DrawTexture(FBlurSheet.Texture, 0, 0, clWhite);
+  RayLib.EndShaderMode;
+  RayLib.EndTextureMode;
+end;
+
 procedure TModels3D.Clear;
 var
   Item: TModel3D;
@@ -551,10 +708,12 @@ begin
     FLightDir := Vector3Of(0.06, 1, -0.035);
     FAmbient := 0.45;
     FGroundY := 300;
+    FSoftness := 0;
     //...and the shadow ink goes with it: it belongs to this run's GL context
     //and is rebuilt on the next frame that casts a shadow.
     FreeShadowMaterial;
     FreeShadowSheet;
+    FreeBlurPass;
   finally
     FLock.Leave;
   end;
@@ -1139,6 +1298,28 @@ begin
   end;
 end;
 
+procedure TModels3D.SetSoftness(AValue: single);
+begin
+  FLock.Enter;
+  try
+    //0 is the old hard ink; past six pixels a jet's shade is mostly haze, so
+    //the dial stops where it stops being information.
+    FSoftness := Min(6, Max(0, AValue));
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetSoftness: single;
+begin
+  FLock.Enter;
+  try
+    Result := FSoftness;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 function TModels3D.GetAmbient: single;
 begin
   FLock.Enter;
@@ -1265,7 +1446,11 @@ begin
       //The solid bodies share one sheet: their shade is the same shade, so one
       //stroke of it covers all of them.
       if InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight, 255) then
+      begin
+        if (FSoftness > 0) and BlurPassReady then
+          BlurShadowSheet;
         LayShadowSheet(Alpha);
+      end;
       //A see-through body (a misty cloud puff) is inked on the sheet on its own
       //and laid over the rest, so its thinness stays its own and the puffs
       //stack into a denser shade exactly like the puffs themselves do.
@@ -1279,7 +1464,11 @@ begin
         if (ItemAlpha > 0)
           and InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight,
             Item.Tint.RGBA.Alpha) then
+        begin
+          if (FSoftness > 0) and BlurPassReady then
+            BlurShadowSheet;
           LayShadowSheet(ItemAlpha);
+        end;
       end;
     end;
 

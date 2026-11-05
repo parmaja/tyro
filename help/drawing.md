@@ -109,6 +109,7 @@ World extras (things only the camera owns):
 | `world.light(x, y, z)` | the sun ray the 3D shadows fall along |
 | `world.ambient(v)` | how much sky light fills the shadows (`0`..`1`) |
 | `world.ground(z)` | the depth plane the 3D shadows land on |
+| `world.shadowsoft(px)` | how far the shadows' edges blur — a penumbra (`0`..`6`; `0` is a hard edge, default) |
 | `world.timescale` | slow motion: `0.35` runs the whole scene at a third speed (default `1`) |
 
 ### `world` drawing only works inside `draw()` ⚠️

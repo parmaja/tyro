@@ -148,6 +148,9 @@ type
     function Ambient_func(L: Plua_State): integer; cdecl;
     //world.ground([depth]) -> the model.z plane the shadows land on.
     function Ground_func(L: Plua_State): integer; cdecl;
+    //world.shadowsoft([px]) -> the penumbra radius the shadows are blurred by
+    //(screen pixels, 0..6); 0 keeps their edge hard.
+    function ShadowSoft_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaFont }
@@ -1150,6 +1153,7 @@ begin
   Script.Lua.State.Register(Name, 'light', Self, Self.Light_func);
   Script.Lua.State.Register(Name, 'ambient', Self, Self.Ambient_func);
   Script.Lua.State.Register(Name, 'ground', Self, Self.Ground_func);
+  Script.Lua.State.Register(Name, 'shadowsoft', Self, Self.ShadowSoft_func);
   //Lua.State.Register('world', World); //Should be last one for world
   inherited;
 end;
@@ -1220,6 +1224,21 @@ begin
   if L.ArgsCount >= 1 then
     Engine.Models.SetGroundY(L.ToNumber(1));
   L.PushNumber(Engine.Models.GetGroundY);
+  Result := 1;
+end;
+
+// world.shadowsoft() -> px   |   world.shadowsoft(px)
+// How far the cast shadows' edges smear, in screen pixels: the sun is no point,
+// so a real shadow has a soft rim, and this blurs the silhouette by that radius
+// before it lands. 0 (the default) keeps the crisp silhouette; 6 is mostly haze.
+function TLuaWorld.ShadowSoft_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  if L.ArgsCount >= 1 then
+    Engine.Models.SetSoftness(L.ToNumber(1));
+  L.PushNumber(Engine.Models.GetSoftness);
   Result := 1;
 end;
 
