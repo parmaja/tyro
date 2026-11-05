@@ -1,12 +1,17 @@
 // ocean_1942.glsl — top-down ocean post-shader for raylib 6.2
 //
-// Pixel positions never move. Only water pixels change color:
+// Only water pixels change color, and the water RIDES with the world:
 //   - slow depth mottling (large, gentle patches)
-//   - long drifting wave crests (elongated in screen Y for a top-down feel)
+//   - long wave crests (elongated in screen Y for a top-down feel)
 //   - SUBTLE sun glitter on crest ridges (toned down — no blown-out highlights)
 //   - gentle horizon-free gradient so the sea reads as deep at top, shallower below
 //
 // Non-blue pixels (islands, palms, bullets, HUD text) are masked out via "seaness".
+//
+// The game passes its world scroll distance (pixels, positive = the scene
+// moving down the screen) through shader.area.x. Adding that to the sample
+// position slides the whole water field DOWN under the islands at the same
+// speed, instead of leaving it pinned to the viewport.
 
 #version 330
 
@@ -63,7 +68,10 @@ void main()
     float t = time;
 
     vec2 uv = fragTexCoord;
-    vec2 q  = uv * resolution;
+    // area.x is the game's world scroll. fragTexCoord.y grows upward, so
+    // adding the scroll to q.y moves every pattern DOWN the screen with the
+    // islands (which also travel down as the jet climbs).
+    vec2 q  = uv * resolution + vec2(0.0, area.x);
 
     vec4 color = texture(texture0, uv);
 
@@ -88,10 +96,13 @@ void main()
     color.rgb *= 1.0 + sea * mott * 0.22;
 
     // ---- 3. Long drifting crests, stretched in Y for a top-down read.
+    // The scroll in q.y carries the crests down WITH the islands; time only
+    // bends the shapes and adds a tiny swell of its own, so the water never
+    // appears pinned to the screen.
     float crest = 0.0;
-    crest += sin(q.y * 0.014 - t * 0.55 + fbm(q * 0.006) * 3.0);
-    crest += 0.7 * sin(q.y * 0.028 + q.x * 0.010 - t * 0.95 + 1.7);
-    crest += 0.4 * sin(q.y * 0.060 - q.x * 0.020 + t * 1.6 + 0.8);
+    crest += sin(q.y * 0.014 + fbm(q * 0.006 + vec2(t * 0.02, 0.0)) * 3.0);
+    crest += 0.7 * sin(q.y * 0.028 + q.x * 0.010 + t * 0.12 + 1.7);
+    crest += 0.4 * sin(q.y * 0.060 - q.x * 0.020 - t * 0.30 + 0.8);
     crest *= 0.55;
 
     // Sharpened ridge mask: only the bright tops of crests get extra light.

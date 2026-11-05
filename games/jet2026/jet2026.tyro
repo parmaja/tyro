@@ -944,7 +944,11 @@ end
 local function draw_sea()
   world.color = colors.blue
   world.rectangle(0, 0, W, H, true)
-  if not seaShader then
+  if seaShader then
+    -- sea.frag treats area.x as the world scroll distance, so its crests
+    -- ride down with the scene at exactly the islands' speed.
+    shader.area = { travel, 0, W, H }
+  else
     -- fallback: scrolling wave crests, only when the sea shader is absent
     local gap = 46
     local k0 = math.floor(travel / gap) - 1
