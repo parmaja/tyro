@@ -102,11 +102,11 @@ end
 -- Throttle: Shift+UP opens it, Shift+DOWN pulls it back. SCROLL is the speed
 -- the world rides past at, so the sea, the clouds, the islands, the blasts
 -- and the smoke all ride the throttle together, and the engine hum retunes
--- with it. The HUD shows the setting as five throttle pips.
+-- with it. The HUD shows the setting as a six-segment bar.
 local SCROLL_BASE = 95         -- cruise scroll speed (px/s)
 local SPEED_MIN   = 45         -- throttle idle
-local SPEED_MAX   = 165        -- throttle full (afterburner)
-local SPEED_RATE  = 55         -- px/s gained or shed per second held
+local SPEED_MAX   = 165 * 3    -- throttle full (afterburner): 495 px/s
+local SPEED_RATE  = 160        -- px/s gained or shed per second held
 local SCROLL      = SCROLL_BASE -- the sea's downward speed right now (px/s)
 local PLAYER_SPEED = 250         -- strafe speed across the sea (px/s)
 local PLAYER_Y_MIN = 120         -- how far up the player may drift on screen
@@ -134,8 +134,10 @@ local TRAIL_BEHIND  = 3          -- px: the exhaust flame starts behind the tail
 
 -- The engine hum's pitch: the 320 Hz drone at cruise, rising and falling with
 -- the throttle so the sound tells you the speed without a glance at the HUD.
+-- The sqrt keeps the whole 45..495 band audible: idle sits near 220 Hz and
+-- full throttle near 730 Hz instead of pinning the top after a third of it.
 local function engine_pitch()
-  return clamp(320 * SCROLL / SCROLL_BASE, 150, 640)
+  return clamp(320 * math.sqrt(SCROLL / SCROLL_BASE), 150, 900)
 end
 
 -- The sea is a live one: sea.frag rolls swells, sun glitter and drifting
