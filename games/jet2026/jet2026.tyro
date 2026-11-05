@@ -523,23 +523,25 @@ end
 
 -- Engine-owned sparks (particles.emit): throw the burst and forget it - the
 -- engine steps the sparks every frame and draws them above the 3D pass, so
--- debris always rains over the jets that made it. The 2D blast rings below
--- stay as the flash; these are the shrapnel on top.
+-- debris always rains over the jets that made it. The 2D flash below is only
+-- the hot core for its first frames; these are the shrapnel that carries the
+-- blast from there on.
 local function spark_burst(x, sy, big)
   -- A column of grey smoke goes up first: thrown down at the sea's own pace
   -- it rides the water instead of hanging in the air, and it burns on the
   -- UNDER layer so the bright shrapnel stays the top of the blast.
   if big then
-    particles.emit(x, sy, 12, { color = colors.gray, speed = SCROLL, life = 0.9,
-      size = 7, gravity = 0, drag = 0.7, spread = 60, direction = 90, under = true })
-    particles.emit(x, sy, 26, { color = colors.orange, speed = 200, life = 0.7, size = 4, gravity = 160, drag = 1.2 })
-    particles.emit(x, sy, 14, { color = colors.yellow, speed = 130, life = 0.45, size = 3, gravity = 120 })
-    particles.emit(x, sy, 8,  { color = colors.white,  speed = 90,  life = 0.25, size = 2 })
+    particles.emit(x, sy, 16, { color = colors.gray, speed = SCROLL, life = 1.0,
+      size = 8, gravity = 0, drag = 0.7, spread = 60, direction = 90, under = true })
+    particles.emit(x, sy, 34, { color = colors.orange, speed = 220, life = 0.8, size = 4, gravity = 150, drag = 1.1 })
+    particles.emit(x, sy, 18, { color = colors.yellow, speed = 140, life = 0.5, size = 3, gravity = 110 })
+    particles.emit(x, sy, 12, { color = colors.white,  speed = 100, life = 0.3, size = 3 })
   else
-    particles.emit(x, sy, 7, { color = colors.gray, speed = SCROLL, life = 0.7,
-      size = 5, gravity = 0, drag = 0.7, spread = 60, direction = 90, under = true })
-    particles.emit(x, sy, 12, { color = colors.orange, speed = 150, life = 0.5, size = 3, gravity = 140 })
-    particles.emit(x, sy, 6,  { color = colors.yellow, speed = 100, life = 0.3, size = 2 })
+    particles.emit(x, sy, 9, { color = colors.gray, speed = SCROLL, life = 0.8,
+      size = 6, gravity = 0, drag = 0.7, spread = 60, direction = 90, under = true })
+    particles.emit(x, sy, 18, { color = colors.orange, speed = 170, life = 0.6, size = 3.5, gravity = 130, drag = 1.2 })
+    particles.emit(x, sy, 10, { color = colors.yellow, speed = 110, life = 0.4, size = 3, gravity = 100 })
+    particles.emit(x, sy, 7,  { color = colors.white,  speed = 90,  life = 0.28, size = 2.5 })
   end
 end
 
@@ -1056,16 +1058,24 @@ local function draw_powerups()
 end
 
 local function draw_blasts()
+  -- No rings, no expanding circles: just the hot core of the detonation -
+  -- a white flash for a few frames, a shrinking spark for a few more - and
+  -- the particle pass carries everything after that. The blast still rides
+  -- down with the sea while its smoke sinks, so the record outlives the
+  -- flash it draws.
   for i = 1, #blasts do
     local bl = blasts[i]
-    local p = bl.t / 0.55
-    local rad = 6 + (bl.big and 40 or 24) * p
-    world.color = colors.yellow
-    world.circle(bl.x, bl.sy, math.max(1, math.floor(rad * 0.35)), true)
-    world.color = colors.orange
-    world.circle(bl.x, bl.sy, math.floor(rad * 0.7), false)
-    world.color = colors.red
-    world.circle(bl.x, bl.sy, math.floor(rad), false)
+    if bl.t < 0.06 then
+      local p = bl.t / 0.06
+      local rad = (bl.big and 13 or 8) * (1 - p) + 2
+      world.color = colors.white
+      world.circle(bl.x, bl.sy, math.floor(rad), true)
+    elseif bl.t < 0.16 then
+      local p = (bl.t - 0.06) / 0.10
+      local rad = math.max(1, math.floor((bl.big and 5 or 3) * (1 - p)))
+      world.color = p < 0.5 and colors.yellow or colors.orange
+      world.circle(bl.x, bl.sy, rad, true)
+    end
   end
 end
 
