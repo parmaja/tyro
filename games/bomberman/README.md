@@ -1,6 +1,6 @@
 # Bomber-Man (Tyro Game Engine)
 
-A classic grid blast-'em-up for kids, built for Tyro using RayLib, Sprites, a native Tilemap, and Lua.
+A classic grid blast-'em-up for kids, built for Tyro using RayLib, sprites, a native Tilemap, and Lua.
 
 ![Bomber-Man Screenshot](screenshot.png)
 

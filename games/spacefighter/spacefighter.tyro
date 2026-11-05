@@ -98,7 +98,7 @@ local function make_pool(filename, baseScale)
           return sp
         end
       end
-      local sp = Sprites.new()
+      local sp = sprites.new()
       sp.load(self.tex)
       sp.scale = self.scale
       sp.visible = true

@@ -75,15 +75,15 @@ pcall(function() shader.load("crt.frag") end)
 shader.value = crt_on and 0.55 or 0.0
 
 -- -----------------------------------------------------------------------------
--- Sprites
+-- sprites
 -- -----------------------------------------------------------------------------
-local paddle_sp = Sprites.new("brk_paddle")
+local paddle_sp = sprites.new("brk_paddle")
 paddle_sp.load("img/paddle.png")
 paddle_sp.layer = 30
 
 local ball_sp = {}
 for i = 1, D.MAX_BALLS do
-  local sp = Sprites.new("brk_ball_" .. i)
+  local sp = sprites.new("brk_ball_" .. i)
   sp.load("img/ball.png")
   sp.layer = 31
   ball_sp[i] = sp
@@ -92,7 +92,7 @@ end
 -- Capsule badges: one pooled atlas sprite per possible capsule on screen.
 local pu_pool = {}
 for i = 1, D.PU_MAX_ACTIVE do
-  local sp = Sprites.new("brk_pu_" .. i)
+  local sp = sprites.new("brk_pu_" .. i)
   sp.load("img/powerups.sprite")
   sp.layer = 28
   sp.hide()
@@ -265,7 +265,7 @@ local function respawn_ball()
   ball_sp[1].show()
 end
 
--- Sprites draw over the canvas, so the pause / game-over screens hide the field
+-- sprites draw over the canvas, so the pause / game-over screens hide the field
 local function set_field_visible(on)
   paddle_sp.visible = on
   wall.visible = on

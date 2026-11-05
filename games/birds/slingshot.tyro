@@ -69,7 +69,7 @@ local function onPigHit(rec, other, st)
 end
 
 local function addBox(tex, x, y, mass)
-  local s = Sprites.new()
+  local s = sprites.new()
   s.load(tex)
   s.kind     = "dynamic"
   s.collide  = true
@@ -82,7 +82,7 @@ local function addBox(tex, x, y, mass)
 end
 
 local function addPig(x, y)
-  local s = Sprites.new("pig" .. (#pigs + 1))
+  local s = sprites.new("pig" .. (#pigs + 1))
   s.load("ab_pig.png")
   s.kind     = "dynamic"
   s.collide  = true
@@ -98,7 +98,7 @@ local function addPig(x, y)
 end
 
 local function buildLevel()
-  ground = Sprites.new("ground")
+  ground = sprites.new("ground")
   ground.load("ab_ground.png")
   ground.kind    = "static"
   ground.collide = true
@@ -121,7 +121,7 @@ local function buildLevel()
   addPig(515, 422)   -- sheltered on the ground
   addPig(700, 278)   -- on the long beam
 
-  bird = Sprites.new("bird")
+  bird = sprites.new("bird")
   bird.load("ab_bird.png")
   bird.kind     = "dynamic"
   bird.radius   = BIRD_R

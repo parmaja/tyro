@@ -1789,13 +1789,13 @@ begin
   lua_setfield(Lua.State, LUA_REGISTRYINDEX, PUTF8Char(cRequireCache));
 
   // Sprite system: Sprites.new creates a sprite, Sprites("name") finds by name
-  Lua.State.RegisterTable('Sprites');
-  Lua.State.Register('Sprites', 'new', Self, Sprites.New_func);
-  Lua.State.Register('Sprites', 'puff', Self, Sprites.Puff_func);
-  Lua.State.Register('Sprites', 'blob', Self, Sprites.Blob_func);
-  Lua.State.Register('Sprites', 'find', Self, Sprites.Find_func);
+  Lua.State.RegisterTable('sprites');
+  Lua.State.Register('sprites', 'new', Self, Sprites.New_func);
+  Lua.State.Register('sprites', 'puff', Self, Sprites.Puff_func);
+  Lua.State.Register('sprites', 'blob', Self, Sprites.Blob_func);
+  Lua.State.Register('sprites', 'find', Self, Sprites.Find_func);
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
-  Lua.State.Register('Sprites', '__call', Self, Sprites.Call_func, True);
+  Lua.State.Register('sprites', '__call', Self, Sprites.Call_func, True);
 
   // Tilemap system: tiles.new(...) creates a map, tiles.find(name) finds one.
   // A map table (returned by tiles.new) carries map:load/resize/set/get/data/

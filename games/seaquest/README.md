@@ -92,7 +92,7 @@ delivery quota *and* sink it to move on.
 
 ## Engine Features Used
 
-- **Sprites** — every creature is an animated `.sprite` atlas (a ZIP holding a
+- **sprites** — every creature is an animated `.sprite` atlas (a ZIP holding a
   PNG strip plus a TexturePacker JSON with per-frame `duration`), loaded into
   reusable pools and driven with `sprite:play(fps)` / `flipH`.
 - **`sprite.tint`, `sprite.alpha`, `sprite.layer`** — new sprite properties

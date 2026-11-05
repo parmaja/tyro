@@ -73,7 +73,7 @@ local glowOn = true
 local resetFlag = false
 
 -- ship sprite
-local shipSprite = Sprites.new("ship")
+local shipSprite = sprites.new("ship")
 shipSprite.load("ship.png")
 shipSprite.show()
 shipSprite.scale = 1.0

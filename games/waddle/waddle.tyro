@@ -100,11 +100,11 @@ local function skill_left(skill)
 end
 
 -- ---- Art from make_assets.py -----------------------------------------
-local door = Sprites.new("door")
+local door = sprites.new("door")
 door.load("img/door.sprite")
 door.layer = 1
 
-local ring = Sprites.new("ring")
+local ring = sprites.new("ring")
 ring.load("img/cursor.png")
 ring.layer = 5
 
@@ -112,13 +112,13 @@ ring.layer = 5
 local MAX_WADDLES = 12
 local pool = {}
 for i = 1, MAX_WADDLES do
-  local body = Sprites.new("waddle" .. i)
+  local body = sprites.new("waddle" .. i)
   body.load("img/waddle.sprite")
   body.playing = false
   body.layer = 3
   body.visible = false
 
-  local badge = Sprites.new("badge" .. i)
+  local badge = sprites.new("badge" .. i)
   badge.load("img/badge.sprite")
   badge.layer = 4
   badge.visible = false
@@ -130,7 +130,7 @@ end
 local function make_pool(prefix, file, layer, span, count)
   local list = {}
   for i = 1, count do
-    local s = Sprites.new(prefix .. i)
+    local s = sprites.new(prefix .. i)
     s.load(file)
     s.playing = false
     s.layer = layer

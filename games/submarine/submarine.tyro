@@ -141,7 +141,7 @@ for i = 1, 30 do
 end
 
 -- ---- sprite pools -------------------------------------------------------
--- Sprites are engine objects the engine draws every frame. Nothing is
+-- sprites are engine objects the engine draws every frame. Nothing is
 -- created or destroyed mid-game: every entity draws from a fixed pool,
 -- hidden while idle.
 
@@ -150,7 +150,7 @@ local torps, sharks, jellies, patrols, mines, divers, booms, weeds, rocks
 local chest
 
 -- player -----------------------------------------------------------------
-subSpr = Sprites.new("sub0")
+subSpr = sprites.new("sub0")
 subSpr.load("img/sub.sprite")
 subSpr.layer = 5
 subSpr.play(10)
@@ -160,7 +160,7 @@ place(subSpr, W / 2, SURF + 40)
 -- torpedo pool
 torps = {}
 for i = 1, 3 do
-  local sp = Sprites.new("torp" .. i)
+  local sp = sprites.new("torp" .. i)
   sp.load("img/torpedo.png")
   sp.hide()
   sp.layer = 6
@@ -170,7 +170,7 @@ end
 -- sharks -------------------------------------------------------------------
 sharks = {}
 for i = 1, 6 do
-  local sp = Sprites.new("shark" .. i)
+  local sp = sprites.new("shark" .. i)
   sp.load("img/shark.sprite")
   sp.layer = 2
   sp.hide()
@@ -180,7 +180,7 @@ end
 -- jellyfish -----------------------------------------------------------------
 jellies = {}
 for i = 1, 4 do
-  local sp = Sprites.new("jelly" .. i)
+  local sp = sprites.new("jelly" .. i)
   sp.load("img/jelly.sprite")
   sp.layer = 2
   sp.hide()
@@ -190,7 +190,7 @@ end
 -- patrol subs ----------------------------------------------------------------
 patrols = {}
 for i = 1, 2 do
-  local sp = Sprites.new("patrol" .. i)
+  local sp = sprites.new("patrol" .. i)
   sp.load("img/patrol.sprite")
   sp.layer = 2
   sp.hide()
@@ -200,7 +200,7 @@ end
 -- mines -----------------------------------------------------------------------
 mines = {}
 for i = 1, 8 do
-  local sp = Sprites.new("mine" .. i)
+  local sp = sprites.new("mine" .. i)
   sp.load("img/mine.sprite")
   sp.layer = 3
   sp.hide()
@@ -210,7 +210,7 @@ end
 -- divers -----------------------------------------------------------------------
 divers = {}
 for i = 1, 3 do
-  local sp = Sprites.new("diver" .. i)
+  local sp = sprites.new("diver" .. i)
   sp.load("img/diver.sprite")
   sp.layer = 1
   sp.hide()
@@ -218,7 +218,7 @@ for i = 1, 3 do
 end
 
 -- treasure chest ----------------------------------------------------------------
-chest = { sp = Sprites.new("chest"), live = false }
+chest = { sp = sprites.new("chest"), live = false }
 chest.sp.load("img/chest.png")
 chest.sp.layer = 1
 chest.sp.hide()
@@ -226,7 +226,7 @@ chest.sp.hide()
 -- explosions ----------------------------------------------------------------------
 booms = {}
 for i = 1, 6 do
-  local sp = Sprites.new("boom" .. i)
+  local sp = sprites.new("boom" .. i)
   sp.load("img/boom.sprite")
   sp.layer = 10
   sp.hide()
@@ -236,7 +236,7 @@ end
 -- decor: kelp, corals, rocks, stars -------------------------------------------------
 weeds = {}
 for i = 1, 10 do
-  local sp = Sprites.new("weed" .. i)
+  local sp = sprites.new("weed" .. i)
   sp.load("img/seaweed.sprite")
   sp.layer = -5
   sp.hide()
@@ -244,7 +244,7 @@ for i = 1, 10 do
 end
 rocks = {}
 for i = 1, 6 do
-  local sp = Sprites.new("decor" .. i)
+  local sp = sprites.new("decor" .. i)
   sp.layer = -4
   sp.hide()
   local eccentric = i % 4

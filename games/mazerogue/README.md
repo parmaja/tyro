@@ -1,6 +1,6 @@
 # Maze Rogue (Tyro Game Engine)
 
-A top-down action maze roguelike built for Tyro using RayLib, Sprites, and Lua.
+A top-down action maze roguelike built for Tyro using RayLib, sprites, and Lua.
 
 ![Maze Rogue Screenshot](screenshot.png)
 

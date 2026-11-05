@@ -81,7 +81,7 @@ local function acquire(pool)
       return s
     end
   end
-  local s = Sprites.new()
+  local s = sprites.new()
   s.load(pool.file)
   s.scale = pool.scale
   s.visible = true
@@ -915,7 +915,7 @@ local function update_game(dt)
   end
 end
 
--- ---- Render Sprites to Screen Space ----------------------------------
+-- ---- Render sprites to Screen Space ----------------------------------
 local function sync_sprites()
   -- Gunner
   if player.s and player.s.visible then

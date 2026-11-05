@@ -76,7 +76,7 @@ local function acquire(pool)
     local s = list[i]
     if s.visible == false then return s end
   end
-  local s = Sprites.new()
+  local s = sprites.new()
   s.load(pool.tex)
   s.scale = pool.scale
   s.visible = false

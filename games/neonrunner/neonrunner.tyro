@@ -53,7 +53,7 @@ end
 -- Sprite Pools and Management
 -- -----------------------------------------------------------------------------
 local function make_sprite(name, file)
-  local sp = Sprites.new(name)
+  local sp = sprites.new(name)
   if sp then
     sp.load(file)
     sp.layer = 20

@@ -213,16 +213,16 @@ end
 
 -- ---- clouds ----------------------------------------------------------
 -- Clouds are not geometry. Each cloud is a stack of engine-built soft puff
--- sprites (Sprites.puff): solid core, lumpy feathered rim. Overlapping a few
+-- sprites (sprites.puff): solid core, lumpy feathered rim. Overlapping a few
 -- with jittered position, size and alpha fuses the soft edges into one fluffy
--- mass - the classic arcade weather trick. Sprites live on the 2D layer, so
+-- mass - the classic arcade weather trick. sprites live on the 2D layer, so
 -- clouds always sit over the sea and hide what's below them, while the 3D
 -- jets fly over the clouds. Each cloud gets its own lobe layout once
 -- (cloud_shape) and the puffs breathe slowly (place_cloud), so no two clouds
 -- are alike and none of them ever looks like a static logo.
 -- A dark twin of every puff lies on the sea as the cloud's shadow, offset
 -- the way the sun leans (world.light tips to the right and toward us).
-local PUFF_TEX  = 128            -- px size of the Sprites.puff texture
+local PUFF_TEX  = 128            -- px size of the sprites.puff texture
 local SHADOW_DX = 0.45           -- shadow slides right...
 local SHADOW_DY = 0.30           -- ...and down, along the light
 
@@ -243,13 +243,13 @@ end
 -- would stall a frame per puff.
 local function make_cloud(c, tag)
   local k = #c.shape
-  local shadows = Sprites.puff(tag .. "_s", PUFF_TEX, k)
+  local shadows = sprites.puff(tag .. "_s", PUFF_TEX, k)
   for i = 1, k do
     shadows[i].tint = colors.darkblue
     shadows[i].alpha = math.floor(c.shape[i].a * 0.55)
     c.shape[i].shadow = shadows[i]
   end
-  local puffs = Sprites.puff(tag .. "_p", PUFF_TEX, k)
+  local puffs = sprites.puff(tag .. "_p", PUFF_TEX, k)
   for i = 1, k do
     puffs[i].tint = colors.white
     puffs[i].alpha = c.shape[i].a
@@ -276,7 +276,7 @@ local function place_cloud(c)
 end
 
 -- ---- islands ---------------------------------------------------------
--- Cute little atolls, built from the engine's Sprites.blob sprites: the same
+-- Cute little atolls, built from the engine's sprites.blob sprites: the same
 -- lumpy organic rim as the cloud puffs but with a CRISP edge, so the islands
 -- never look fluffy. One shape seed per island drives every layer, and each
 -- lobe stacks: a pale shallow glow of beach water (soft puff), a white foam
@@ -330,14 +330,14 @@ local ISL_LAGOON = 0xFFCBCD98 -- lagoon teal
 -- scale of r * 2 / PUFF_TEX draws it with radius r.
 local function make_islands(list)
   local k = #list * ISLAND_LOBES
-  local glow = Sprites.puff("isl_glow", PUFF_TEX, k)
-  local foam = Sprites.blob("isl_foam", PUFF_TEX, k)
-  local rim = Sprites.blob("isl_rim", PUFF_TEX, k)
-  local sand = Sprites.blob("isl_sand", PUFF_TEX, k)
-  local turf = Sprites.blob("isl_turf", PUFF_TEX, k)
-  local sun = Sprites.blob("isl_sun", PUFF_TEX, k)
-  local lagoon = Sprites.blob("isl_lagoon", PUFF_TEX, k)
-  local tw = Sprites.puff("isl_twinkle", PUFF_TEX, #list * ISLAND_SPARKS)
+  local glow = sprites.puff("isl_glow", PUFF_TEX, k)
+  local foam = sprites.blob("isl_foam", PUFF_TEX, k)
+  local rim = sprites.blob("isl_rim", PUFF_TEX, k)
+  local sand = sprites.blob("isl_sand", PUFF_TEX, k)
+  local turf = sprites.blob("isl_turf", PUFF_TEX, k)
+  local sun = sprites.blob("isl_sun", PUFF_TEX, k)
+  local lagoon = sprites.blob("isl_lagoon", PUFF_TEX, k)
+  local tw = sprites.puff("isl_twinkle", PUFF_TEX, #list * ISLAND_SPARKS)
   local function setrole(t, tint, a)
     for i = 1, #t do
       t[i].tint = tint
@@ -1028,7 +1028,7 @@ local function draw_sea()
       end
     end
   end
-  -- (the cute little islands are Sprites.blob/puff sprites - see make_islands
+  -- (the cute little islands are sprites.blob/puff sprites - see make_islands
   -- - and draw themselves on the sprite layer, behind the clouds)
 end
 

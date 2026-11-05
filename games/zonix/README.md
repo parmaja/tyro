@@ -71,7 +71,7 @@ Each level features unique target thresholds, enemy compositions, speeds, and cu
 - **Dedicated Per-Sprite GPU Shader**:
   - `orb_glow.frag`: Dedicated per-sprite neon glow shader applied directly to quantum enemies (`sprite.shader = "orb_glow.frag"` or built-in `sprite.shader = "glow"`). Features 8-tap radial aura scattering, dynamic electric energy pulse, and core intensity boost.
 - **Per-Sprite Shader Engine Support**:
-  - Added `sprite.shader` and `sprite.shaderValue` properties in `TyroSprites.pas` and `TyroLua.pas` allowing any sprite to be rendered with custom fragment shaders and uniform parameters in real time.
+  - Added `sprite.shader` and `sprite.shaderValue` properties in `Tyrosprites.pas` and `TyroLua.pas` allowing any sprite to be rendered with custom fragment shaders and uniform parameters in real time.
 - **Wavetable Sound Synthesis**:
   - Leverages 4 new procedural sound generators added to `TyroSounds.pas`:
     - `Zap`: Electric arc discharge when sparks pop or damage occurs.

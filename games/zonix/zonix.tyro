@@ -102,7 +102,7 @@ local sp_powerup = nil
 local boom_pool = {}
 local floating_texts = {}
 
--- Title Showcase Sprites
+-- Title Showcase sprites
 local showcase_cutter = nil
 local showcase_orb = nil
 local showcase_fast = nil
@@ -112,7 +112,7 @@ local showcase_powerup = nil
 
 -- Create Sprite Helper with safe error handling
 local function make_sprite(name, file)
-  local sp = Sprites.new(name)
+  local sp = sprites.new(name)
   if sp then
     sp.load(file)
     sp.layer = 10
@@ -121,7 +121,7 @@ local function make_sprite(name, file)
   return sp
 end
 
--- Initialize Engine Sprites
+-- Initialize Engine sprites
 player = make_sprite("player", "img/cutter.sprite")
 if player then
   player.layer = 25
@@ -148,7 +148,7 @@ for i = 1, 8 do
   end
 end
 
--- Initialize Title Showcase Sprites
+-- Initialize Title Showcase sprites
 showcase_cutter = make_sprite("sc_cutter", "img/cutter.sprite")
 showcase_orb = make_sprite("sc_orb", "img/orb.sprite")
 showcase_fast = make_sprite("sc_fast", "img/fast_orb.sprite")

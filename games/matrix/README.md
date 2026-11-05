@@ -42,7 +42,7 @@ bin\tyro.exe games\matrix\matrix.tyro
   - *White Rabbit* TrueType font by Matthew Welch (Square Gear, http://www.squaregear.net/fonts/).
   - Free for personal and commercial use.
 
-- **Sprites (`make_matrix_assets.py`)**:
+- **sprites (`make_matrix_assets.py`)**:
   - All sprites (`rabbit.png`, `sentinel.png`, `agent.png`, `pill_red.png`, `pill_blue.png`, `crosshair.png`, `phone.png`) were procedurally generated at native pixel resolution using Python and Pillow via `make_matrix_assets.py`.
 
 - **Shader (`matrix.frag`)**:

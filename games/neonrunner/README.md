@@ -86,6 +86,6 @@ python games\neonrunner\make_assets.py
 
 - **Engine**: Tyro Game Engine (built with FreePascal/Delphi and Raylib).
 - **Game Design & Code**: Built with Lua for the Tyro Game Engine.
-- **Sprites & Artwork**: Procedurally synthesized pixel-art cyber assets generated via Pillow (`make_assets.py`). Zero third-party proprietary binary bloat.
+- **sprites & Artwork**: Procedurally synthesized pixel-art cyber assets generated via Pillow (`make_assets.py`). Zero third-party proprietary binary bloat.
 - **Audio & SFX**: Procedural sound synthesis using Tyro's wavetable synthesizer (`CyberBass`, `TurboRev`, `Laser`, `Zap`, `Sweep`, `Explode`, `Chime`, `Boing`). MML synthwave soundtrack.
 - **License**: MIT License (same as Tyro).

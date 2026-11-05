@@ -90,9 +90,9 @@ local float_texts = {}   -- { msg, wx, wy, life, clr }
 local player = { wx = 48, wy = 48, speed_level = 0, blast_level = 0,
                  bomb_level = 0, shield = 0, invuln = 0, walk_t = 0 }
 
--- ---- Sprites ------------------------------------------------------------
+-- ---- sprites ------------------------------------------------------------
 local function make_sprite(name, file, layer)
-  local sp = Sprites.new(name)
+  local sp = sprites.new(name)
   if sp then
     sp.load(file)
     sp.layer = layer

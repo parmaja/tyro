@@ -67,7 +67,7 @@ shader.area = {0, 0, W, H}
 
 -- ---- fish -------------------------------------------------------------
 local function make_fish(file, index, count)
-  local sprite = Sprites.new()
+  local sprite = sprites.new()
   sprite.load("fish/" .. file)
 
   local scale = rnd(0.58, 1.18)

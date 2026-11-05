@@ -98,7 +98,7 @@ local function acquire(p)
     local s = p.list[i]
     if s.visible == false then return s end
   end
-  local s = Sprites.new()
+  local s = sprites.new()
   s.load(p.tex)
   s.scale = p.opts.scale or SCALE
   if p.opts.fps then
