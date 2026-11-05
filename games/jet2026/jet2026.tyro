@@ -7,21 +7,23 @@
 --  downward while you climb, you weave through formations, and a bigger
 --  bomber shows up every few waves.
 --
---  The player, the enemy fighters and the bomber are all the SAME 3D mesh
---  (jet.glb) drawn by the engine's 3D pass - the enemies are simply tinted
---  red and flown nose-down. Up/down is a real climb/dive: the jet closes on
---  the camera (and grows) or drops back (and shrinks), its shadow sliding over
---  the sea as the depth changes. The clouds are clusters of engine-built 3D
---  spheres at a depth between the jets and the sea, so every jet and cloud
---  casts a real shadow on the water BELOW the clouds (a shadow rides under a
---  cloud, never on top of one). Waves, bullets and explosions are painted
---  with world primitives straight onto the frame buffer, every blast throws
---  engine-owned particle sparks over the whole scene, and the HUD, the wave
---  messages and the ready/pause/over panels ride the fixed screen buffer -
---  above all drawing, immune to the shake of a hit.
+--  The player flies its own 3D mesh (jet.glb) and the whole enemy squadron -
+--  fighters and bomber alike - flies theirs (enemy.glb), both drawn by the
+--  engine's 3D pass. The squadron keeps its own paint and flies nose-down,
+--  rolled so the canopy faces the eye. Up/down is a real climb/dive: the jet
+--  closes on the camera (and grows) or drops back (and shrinks), its shadow
+--  sliding over the sea as the depth changes. The clouds are clusters of
+--  engine-built 3D spheres at a depth between the jets and the sea, so every
+--  jet and cloud casts a real shadow on the water BELOW the clouds (a shadow
+--  rides under a cloud, never on top of one). Waves, bullets and explosions
+--  are painted with world primitives straight onto the frame buffer, every
+--  blast throws engine-owned particle sparks over the whole scene, and the
+--  HUD, the wave messages and the ready/pause/over panels ride the fixed
+--  screen buffer - above all drawing, immune to the shake of a hit.
 --
 --  Controls:  ARROWS / WASD        fly - left/right strafe, up/down climb/dive
 --             SPACE                fire (tap or hold for auto-fire)
+--             SHIFT + UP / DOWN    throttle up / down (world speed)
 --             P                    pause / resume
 --             ESC                  quit
 --  Gamepad:   Left stick / D-pad   fly
@@ -32,7 +34,7 @@
 --======================================================================
 
 window.show(480, 640)
-
+--font.load("spleen-8x16.bdf")
 -- The game repaints the whole screen every frame, so it paints straight
 -- onto the world (the frame buffer) instead of the canvas render texture.
 local W = world.width
@@ -97,7 +99,15 @@ local function center_text(s, y, col)
 end
 
 -- ---- tuning ----------------------------------------------------------
-local SCROLL      = 95           -- downward world scroll speed (px/s)
+-- Throttle: Shift+UP opens it, Shift+DOWN pulls it back. SCROLL is the speed
+-- the world rides past at, so the sea, the clouds, the islands, the blasts
+-- and the smoke all ride the throttle together, and the engine hum retunes
+-- with it. The HUD shows the setting as five throttle pips.
+local SCROLL_BASE = 95         -- cruise scroll speed (px/s)
+local SPEED_MIN   = 45         -- throttle idle
+local SPEED_MAX   = 165        -- throttle full (afterburner)
+local SPEED_RATE  = 55         -- px/s gained or shed per second held
+local SCROLL      = SCROLL_BASE -- the sea's downward speed right now (px/s)
 local PLAYER_SPEED = 250         -- strafe speed across the sea (px/s)
 local PLAYER_Y_MIN = 120         -- how far up the player may drift on screen
 local PBULLET_SPEED = 620
@@ -113,7 +123,20 @@ local Z_FAR         = 30         -- bottom of the dive: farthest from the eye
 local Z_HOME        = -20        -- cruising depth: in front of the enemies
 local DEPTH_SIZE    = 0.0013     -- ortho camera: a nearer jet draws ITSELF bigger
 local CLOUD_Z       = 40         -- the clouds' nominal height: climb past it for the haze
+-- Parallax: the cloud deck hangs between the eye and the sea, so it has to
+-- cross the screen FASTER than the water and the islands below it (the ortho
+-- 3D pass cannot do this by itself, and with the clouds drifting slower the
+-- deck reads as painted on the far horizon instead of floating past). The
+-- sea rides at SCROLL, so the clouds ride a multiplier over it.
+local CLOUD_DRIFT   = 1.2        -- cloud deck speed, as a multiple of SCROLL
 local SLOWMO        = 0.4        -- slow-motion length (scaled seconds) for a bomber down
+local TRAIL_BEHIND  = 3          -- px: the exhaust flame starts behind the tail
+
+-- The engine hum's pitch: the 320 Hz drone at cruise, rising and falling with
+-- the throttle so the sound tells you the speed without a glance at the HUD.
+local function engine_pitch()
+  return clamp(320 * SCROLL / SCROLL_BASE, 150, 640)
+end
 
 -- The sea is a live one: sea.frag rolls swells, sun glitter and drifting
 -- crests over the board's blue pixels. If the file is missing the game falls
@@ -128,8 +151,9 @@ local function depth_size(z)
 end
 
 -- ---- 3D models -------------------------------------------------------
--- One mesh reused for every jet. Scale is derived from the loaded
--- bounding box so it looks right however big the model actually is.
+-- The player and the enemy squadron have their own meshes. Each scale is
+-- derived from the loaded bounding box so it looks right however big the
+-- model actually is.
 local playerJet
 local enemyPool = {}
 local poolFree = {}
@@ -137,6 +161,13 @@ local P_TARGET = 46
 local E_TARGET = 40
 local B_TARGET = 96
 local p_scale, e_scale, b_scale = 1, 1, 1
+local ENEMY_MESH = "enemy.glb"  -- the squadron's own plane (the bomber is it, scaled up)
+-- The 3D pass looks straight down the model's +Y (the depth axis), and this
+-- mesh was authored with its canopy up that +Y, so as it stands the eye only
+-- ever sees its belly. A half turn of roll about the nose-to-tail axis brings
+-- the top of the plane into sight; taken with the 180 nose-down angle the two
+-- turns leave no left/right flip behind.
+local ENEMY_ROLL = 180
 
 local function size_of(m)
   return math.max(m.width, m.depth)
@@ -151,7 +182,7 @@ local function init_models()
 
   for i = 1, ENEMY_POOL do
     local m = models.new("enemy_jet_" .. i)
-    m:load("jet.glb")
+    m:load(ENEMY_MESH)
     m:hide()
     enemyPool[i] = m
   end
@@ -433,25 +464,26 @@ local function new_enemy(kind, x, sy)
   if kind == "grunt" then
     e.hw, e.hh = 15, 13; e.hp = 1; e.vy = randf(60, 95)
     e.amp = randf(20, 60); e.freq = randf(1.2, 2.4); e.base = x; e.t = 0
-    e.tint = colors.red; e.scale = e_scale; e.score = 100
+    e.scale = e_scale; e.score = 100
   elseif kind == "diver" then
     e.hw, e.hh = 15, 13; e.hp = 1; e.vy = randf(40, 60)
     e.amp = 0; e.freq = 0; e.base = x; e.t = 0; e.dive = false
-    e.tint = colors.orange; e.scale = e_scale; e.score = 200
+    e.scale = e_scale; e.score = 200
   elseif kind == "gunner" then
     e.hw, e.hh = 16, 14; e.hp = 2; e.vy = randf(45, 65)
     e.amp = randf(50, 90); e.freq = randf(0.8, 1.4); e.base = x; e.t = 0
     e.hold = randf(90, 150)  -- stops at this screen y and strafes
-    e.tint = colors.maroon; e.scale = e_scale; e.score = 300
+    e.scale = e_scale; e.score = 300
   else -- bomber
     e.hw, e.hh = 34, 26; e.hp = 22 + math.floor(6 * difficulty())
     e.vy = 40; e.amp = 40; e.freq = 0.6; e.base = x; e.t = 0
     e.hold = 120
-    e.tint = colors.darkblue; e.scale = b_scale; e.score = 1500
+    e.scale = b_scale; e.score = 1500
   end
   m.scale = e.scale
-  m.tint = e.tint
+  m.tint = colors.white     -- the squadron wears its own paint, not a role color
   m.angle = 180            -- fly nose-down
+  m.roll = ENEMY_ROLL      -- and show the eye the top of the plane, not the belly
   m:show()
   enemies[#enemies + 1] = e
   return e
@@ -494,11 +526,18 @@ end
 -- debris always rains over the jets that made it. The 2D blast rings below
 -- stay as the flash; these are the shrapnel on top.
 local function spark_burst(x, sy, big)
+  -- A column of grey smoke goes up first: thrown down at the sea's own pace
+  -- it rides the water instead of hanging in the air, and it burns on the
+  -- UNDER layer so the bright shrapnel stays the top of the blast.
   if big then
+    particles.emit(x, sy, 12, { color = colors.gray, speed = SCROLL, life = 0.9,
+      size = 7, gravity = 0, drag = 0.7, spread = 60, direction = 90, under = true })
     particles.emit(x, sy, 26, { color = colors.orange, speed = 200, life = 0.7, size = 4, gravity = 160, drag = 1.2 })
     particles.emit(x, sy, 14, { color = colors.yellow, speed = 130, life = 0.45, size = 3, gravity = 120 })
     particles.emit(x, sy, 8,  { color = colors.white,  speed = 90,  life = 0.25, size = 2 })
   else
+    particles.emit(x, sy, 7, { color = colors.gray, speed = SCROLL, life = 0.7,
+      size = 5, gravity = 0, drag = 0.7, spread = 60, direction = 90, under = true })
     particles.emit(x, sy, 12, { color = colors.orange, speed = 150, life = 0.5, size = 3, gravity = 140 })
     particles.emit(x, sy, 6,  { color = colors.yellow, speed = 100, life = 0.3, size = 2 })
   end
@@ -575,6 +614,7 @@ local function reset()
   msgTimer = 0
   engineOn = false
   enginePitch = -1
+  SCROLL = SCROLL_BASE
   sound.loopStop()
   trailT, smokeT, haze, hitT, slowT = 0, 0, 0, 0, 0
   world.timescale = 1
@@ -720,7 +760,7 @@ local function step_powerups(ft)
 end
 
 local function step_clouds(ft)
-  local drift = SCROLL * 0.55
+  local drift = SCROLL * CLOUD_DRIFT   -- nearer the eye than the sea: see CLOUD_DRIFT
   for i = 1, #clouds do
     local c = clouds[i]
     c.sy = c.sy + (c.vy + drift) * ft
@@ -775,6 +815,10 @@ local function simulate(ft)
   for i = #blasts, 1, -1 do
     local bl = blasts[i]
     bl.t = bl.t + ft
+    -- The fireball rides down with the sea. Nailed to one screen spot while
+    -- the water flows under it, the blast reads as a sticker frozen on the
+    -- glass instead of a wreck going down with the world.
+    bl.sy = bl.sy + SCROLL * ft
     if bl.t > 0.55 then table.remove(blasts, i) end
   end
   if msgTimer > 0 then msgTimer = msgTimer - ft end
@@ -808,6 +852,18 @@ local function simulate(ft)
     if dy == 0 then dy = sy end
     dx = clamp(dx, -1, 1); dy = clamp(dy, -1, 1)
 
+    -- Throttle: Shift+UP opens it, Shift+DOWN pulls it back. While Shift is
+    -- held the up/down keys belong to the throttle, not to the climb - the
+    -- jet holds its depth and only the world speeds up or settles down.
+    if keyboard.down("shift") then
+      dy = 0
+      if keyboard.down("up") then
+        SCROLL = math.min(SPEED_MAX, SCROLL + SPEED_RATE * ft)
+      elseif keyboard.down("down") then
+        SCROLL = math.max(SPEED_MIN, SCROLL - SPEED_RATE * ft)
+      end
+    end
+
     -- Left/right strafes across the sea; up/down is a real climb and dive:
     -- the jet closes on the camera (grows, its shadow slides) or drops back
     -- (shrinks), while its screen position only drifts a little - enough for
@@ -830,7 +886,9 @@ local function simulate(ft)
 
     -- Afterburner trail: the air stands still while the sea scrolls under
     -- it, so the exhaust is thrown in behind the jet and rides down with
-    -- the waves. The flame burns in the power level's colors.
+    -- the waves. The flame burns in the power level's colors. It rides the
+    -- UNDER layer and starts TRAIL_BEHIND px aft of the tail, so the jet
+    -- covers the flame at its own skin and only the burn behind shows.
     trailT = trailT - ft
     if trailT <= 0 then
       trailT = 0.03
@@ -838,9 +896,10 @@ local function simulate(ft)
       local flame = colors.orange
       if player.weapon == 2 then flame = colors.gold
       elseif player.weapon >= 3 then flame = colors.skyblue end
-      particles.emit(player.x, player.y + 15 * s, 2,
+      particles.emit(player.x, player.y + 15 * s + TRAIL_BEHIND, 2,
         { color = flame, speed = 70, life = 0.3, size = 2.5 * s,
-          gravity = 90, drag = 1.6, spread = 26, direction = 90 })
+          gravity = 90, drag = 1.6, spread = 26, direction = 90,
+          under = true })
     end
 
     -- Wingtip smoke: leaned over hard, the jet tears two ribbons off its
@@ -909,11 +968,18 @@ local function simulate(ft)
     -- invulnerability blink
     playerJet.visible = (invuln <= 0) or (math.floor(millis() / 100) % 2 == 0)
 
-    -- engine drone retuned with nothing to do but fly: a steady hum
+    -- engine drone retuned with nothing to do but fly: a steady hum that
+    -- slides up and down with the throttle, so the pitch IS the speed sense
     if not engineOn then
       engineOn = true
-      enginePitch = 320
-      sound.loopPlay("Engine", 320, 0.25)
+      enginePitch = engine_pitch()
+      sound.loopPlay("Engine", enginePitch, 0.25)
+    else
+      local wantPitch = engine_pitch()
+      if math.abs(wantPitch - enginePitch) >= 4 then
+        enginePitch = wantPitch
+        sound.loopPitch(enginePitch)
+      end
     end
   elseif state == "dying" then
     dyingTimer = dyingTimer - ft
@@ -1051,6 +1117,17 @@ local function draw_hud()
     screen.rectangle(48 + (i - 1) * 16, H - 20, 12, 12, true)
   end
 
+  -- throttle readout: SPD and a bar mirroring the GUN pips on the right, so
+  -- the throttle the player just set is always visible without breaking stride
+  screen.color = colors.silver
+  screen.text(W - 116, H - 22, "SPD")
+  local lit = math.floor((SCROLL - SPEED_MIN) / (SPEED_MAX - SPEED_MIN) * 6 + 0.5)
+  local barw = math.max(12, lit * 12)
+  screen.color = SCROLL >= SPEED_MAX - 1 and colors.skyblue
+      or (SCROLL <= SPEED_MIN + 1 and colors.orange or colors.gold)
+  screen.rectangle(W - 10 - 72, H - 20, 72, 12, false)
+  screen.rectangle(W - 10 - 72, H - 20, barw, 12, true)
+
   if msgTimer > 0 then
     center_text(msg, 110, colors.yellow)
   end
@@ -1067,8 +1144,9 @@ local function draw_overlay()
     center_text("PRESS SPACE / START TO FLY", 224, colors.white)
     center_text("ARROWS / WASD / STICK   fly", 258, colors.silver)
     center_text("SPACE / A / X / RT      fire (hold auto)", 278, colors.silver)
-    center_text("P / START  pause    ESC / BACK  quit", 298, colors.silver)
-    center_text("Blast the squadron. Grab P to power up.", 330, colors.skyblue)
+    center_text("SHIFT + UP / DOWN       throttle up / down", 298, colors.silver)
+    center_text("P / START  pause    ESC / BACK  quit", 318, colors.silver)
+    center_text("Blast the squadron. Grab P to power up.", 348, colors.skyblue)
     if gamepad.available() then
       local padName = gamepad.name(); if padName == "" then padName = "Gamepad" end
       center_text("READY: " .. padName, 372, colors.lime)
@@ -1175,8 +1253,14 @@ if JET2026_TEST then
     ebullets     = function() return ebullets end,
     powerups     = function() return powerups end,
     clouds       = function() return clouds end,
+    islands      = function() return islands end,
+    blasts       = function() return blasts end,
     fx           = function() return haze, hitT, slowT end,
     fire         = fire,
+    -- throttle readout + a setter (headless cannot hold Shift, so the harness
+    -- moves the world speed directly to drive the speed-dependent code paths)
+    speed        = function() return SCROLL end,
+    set_speed    = function(v) SCROLL = clamp(v, SPEED_MIN, SPEED_MAX) end,
     -- capture the game's draw() now (it is defined above as a global); the
     -- harness may replace the global afterwards, so keep our own reference
     render       = draw,
