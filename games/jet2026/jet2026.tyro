@@ -28,6 +28,8 @@
 --             C                    drop a bomb on the warships (3 aboard,
 --                                  they reload one by one between hits)
 --             SHIFT + UP / DOWN    throttle up / down (world speed)
+--             SHIFT + LEFT / RIGHT barrel roll - hold it and the jet keeps
+--                                  spinning a continuous aileron roll
 --             P                    pause / resume
 --             ESC                  quit
 --  Gamepad:   Left stick / D-pad   fly
@@ -48,6 +50,11 @@ local H = world.height
 -- ---- helpers ---------------------------------------------------------
 local function clamp(v, lo, hi)
   if v < lo then return lo elseif v > hi then return hi else return v end
+end
+
+-- fold any angle into [-180, 180]
+local function norm_deg(a)
+  return ((a + 180) % 360) - 180
 end
 
 local function randf(a, b)
@@ -128,6 +135,7 @@ local EBULLET_SPEED = 260
 local ENEMY_POOL    = 18
 local BANK_DEG      = 48         -- roll angle held into a strafe (degrees)
 local BANK_RATE     = 9          -- how fast the bank eases toward its target
+local BARREL_RATE   = 300        -- deg/s: Shift+Left/Right holds a continuous aileron roll
 local CLIMB_SPEED   = 200        -- climb/dive speed toward/away from the eye
 local CLIMB_DRIFT   = 80         -- screen drift while climbing/diving (px/s)
 local Z_NEAR        = -170       -- top of the climb: nearest the eye
@@ -462,6 +470,8 @@ local spawnTimer, waveTimer, bossWave, msg, msgTimer, engineOn, enginePitch
 -- juice timers: exhaust/smoke pacing, the cloud fly-through haze (0..1),
 -- the red hit flash and the slow-motion countdown for a bomber down
 local trailT, smokeT, haze, hitT, slowT
+-- the test hook's stand-in for a held Shift+Left/Right barrel roll
+local barrelDir = 0
 
 -- Load the saved high score at boot (best-effort; a missing file is fine).
 local function load_hi()
@@ -638,7 +648,8 @@ local function reset()
   invuln = 2.0
   dyingTimer = 0
   player = { x = W / 2, y = H - 110, z = Z_HOME, cool = 0, weapon = 1,
-             roll = 0, pitch = 0, bombs = BOMB_MAX, bcool = 0, ammoT = 0, vx = 0 }
+             roll = 0, pitch = 0, rollSpin = 0, wasRolling = false,
+             bombs = BOMB_MAX, bcool = 0, ammoT = 0, vx = 0 }
   pbullets = {}
   ebullets = {}
   enemies = {}
@@ -661,6 +672,7 @@ local function reset()
   SCROLL = SCROLL_BASE
   sound.loopStop()
   trailT, smokeT, haze, hitT, slowT = 0, 0, 0, 0, 0
+  barrelDir = 0
   world.timescale = 1
   for i = 1, ENEMY_POOL do poolFree[i] = true; enemyPool[i]:hide() end
   playerJet:show()
@@ -844,9 +856,9 @@ end
 -- that finds a hull blows it apart in one explosion. (hp stays a field so
 -- a tougher hull could be tuned later without touching the bomb logic.)
 local SHIP_DEFS = {
-  { kind = "cruiser",   tex = "ShipCruiser.png",   scale = 0.62,
+  { kind = "cruiser",   tex = "ShipCruiser.png",   scale = 1,
     hp = 1, score = 800, salvo = 2, cool = 2.6 },
-  { kind = "destroyer", tex = "ShipDestroyer.png", scale = 0.66,
+  { kind = "destroyer", tex = "ShipDestroyer.png", scale = 1,
     hp = 1, score = 500, salvo = 1, cool = 2.0 },
 }
 
@@ -1126,8 +1138,30 @@ local function simulate(ft)
     -- no yaw, the nose always stays pointed up the screen. Both ease toward
     -- their target, so the jet leans over smoothly instead of snapping.
     local ease = clamp(BANK_RATE * ft, 0, 1)
-    player.roll  = player.roll  + (BANK_DEG * dx - player.roll) * ease
-    player.pitch = player.pitch + (-10 * dy - player.pitch) * ease
+
+    -- Barrel roll: hold Shift + Left/Right and the ailerons stay pinned -
+    -- the jet spins a continuous aileron roll (a barrel roll in all but the
+    -- loop), the bank just keeps spooling while the keys are held and the
+    -- strafe arcs it across the sea like a corkscrew. Letting go unwinds
+    -- the wing back into the normal bank ease. barrelDir is the test hook's
+    -- stand-in for the held Shift.
+    local barrel = barrelDir ~= 0 and barrelDir or 0
+    if keyboard.down("shift") and dx ~= 0 then barrel = dx end
+    if barrel ~= 0 then
+      if not player.wasRolling then player.rollSpin = player.roll end
+      local prev = player.rollSpin
+      player.rollSpin = prev + barrel * BARREL_RATE * ft
+      if math.floor(player.rollSpin / 360) ~= math.floor(prev / 360) then
+        gamepad.vibrate(0.25, 0.25, 0.1)     -- a pulse per full turn
+      end
+      player.roll = norm_deg(player.rollSpin)
+      player.pitch = player.pitch + (0 - player.pitch) * ease
+    else
+      player.rollSpin = player.roll          -- keep the accumulator in sync
+      player.roll = player.roll + (BANK_DEG * dx - player.roll) * ease
+      player.pitch = player.pitch + (-10 * dy - player.pitch) * ease
+    end
+    player.wasRolling = barrel ~= 0
 
     playerJet:move(player.x, player.y, player.z)
     playerJet.roll  = player.roll
@@ -1258,6 +1292,7 @@ local function simulate(ft)
       player.y = H - 110
       player.z = Z_HOME
       player.roll, player.pitch = 0, 0
+      player.rollSpin, player.wasRolling = 0, false
       invuln = 2.0
       state = "play"
       playerJet:show()
@@ -1466,7 +1501,7 @@ end
 local function draw_overlay()
   if state == "ready" then
     screen.color = colors.black
-    screen.rectangle(0, 150, W, 250, true)
+    screen.rectangle(0, 150, W, 272, true)
     center_text("JET 2026", 168, colors.red)
     center_text("JET 2026", 166, colors.yellow)
     center_text("PRESS SPACE / START TO FLY", 224, colors.white)
@@ -1474,11 +1509,12 @@ local function draw_overlay()
     center_text("SPACE / X / A / RT      fire (hold auto)", 278, colors.silver)
     center_text("C / LB                bombs sink the warships", 298, colors.silver)
     center_text("SHIFT + UP / DOWN       throttle up / down", 318, colors.silver)
-    center_text("P / START  pause    ESC / BACK  quit", 338, colors.silver)
-    center_text("Blast the squadron. Grab P to power up. Bomb the ships.", 362, colors.skyblue)
+    center_text("SHIFT + LEFT / RIGHT    hold for a barrel roll", 338, colors.silver)
+    center_text("P / START  pause    ESC / BACK  quit", 358, colors.silver)
+    center_text("Blast the squadron. Grab P to power up. Bomb the ships.", 382, colors.skyblue)
     if gamepad.available() then
       local padName = gamepad.name(); if padName == "" then padName = "Gamepad" end
-      center_text("READY: " .. padName, 384, colors.lime)
+      center_text("READY: " .. padName, 402, colors.lime)
     end
   elseif state == "over" then
     screen.color = colors.black
@@ -1539,7 +1575,8 @@ local function boot()
   lives = 3
   wave = 1
   player = { x = W / 2, y = H - 110, z = Z_HOME, cool = 0, weapon = 1,
-             roll = 0, pitch = 0, bombs = BOMB_MAX, bcool = 0, ammoT = 0, vx = 0 }
+             roll = 0, pitch = 0, rollSpin = 0, wasRolling = false,
+             bombs = BOMB_MAX, bcool = 0, ammoT = 0, vx = 0 }
   pbullets = {}
   ebullets = {}
   enemies = {}
@@ -1622,6 +1659,10 @@ if JET2026_TEST then
     set_invuln = function(v) invuln = v end,
     set_lives  = function(v) lives = v end,
     set_bombs  = function(v) player.bombs = clamp(v, 0, BOMB_MAX) end,
+    -- hold a barrel-roll direction (Shift+Left/Right) for the headless rig:
+    -- -1 spins left, +1 spins right, 0 lets the wing settle back to level
+    set_barrel = function(v) barrelDir = clamp(v, -1, 1) end,
+    barrel       = function() return player.roll, player.rollSpin, player.wasRolling end,
     -- pretend the player holds a direction, so a headless frame shows the
     -- banking exactly like a held key would
     set_bank = function(dx, dy)

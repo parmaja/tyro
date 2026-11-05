@@ -50,9 +50,12 @@ are painted straight onto the frame buffer with `world` primitives.
   cargo.
 - **Juice**: screen shake, gamepad vibration, engine hum loop
   (`sound.loopPlay`), roll-into-the-turn jet banking (the model's `roll`
-  property), cast shadows — every jet and cloud projects its real silhouette
-  onto the sea along the sun ray (`model.shadow` + `world.light/ambient/
-  ground`) — hi-score persistence (`jet2026.hi`).
+  property), a hold-to-spin **barrel/aileron roll** on `SHIFT`+`LEFT`/`RIGHT`
+  — the bank keeps spooling a full 360 while the keys are pinned and the
+  strafe arcs the jet like a corkscrew — cast shadows — every jet and cloud
+  projects its real silhouette onto the sea along the sun ray
+  (`model.shadow` + `world.light/ambient/ground`) — hi-score persistence
+  (`jet2026.hi`).
 - **3D clouds**: each cloud is a cluster of `models.sphere` puffs parked at
   `CLOUD_Z`, a depth nearer the eye than the shadow plane, so shadows always
   land on the sea behind them and a cloud never wears one on top.
@@ -65,6 +68,7 @@ are painted straight onto the frame buffer with `world` primitives.
 | **Fire** (hold for auto) | `SPACE` / `X` | `A` / `X` / `RB` / `RT` |
 | **Drop bomb** (warships only take bombs) | `C` | `LB` / `LT` |
 | **Throttle up / down** | `SHIFT` + `UP` / `DOWN` | — |
+| **Barrel roll** (hold to keep spinning) | `SHIFT` + `LEFT` / `RIGHT` | — |
 | **Play / Pause / Resume** | `SPACE` / `P` | `START` |
 | **Quit (menu/pause)** | `ESC` | `BACK` |
 
@@ -88,6 +92,11 @@ are painted straight onto the frame buffer with `world` primitives.
   steel, one bomb blows a hull apart, missed shells splash and sink, the
   rack paces and reloads its drops, wrecks sail back, and the ships'
   missiles bite.
+- `tests/test_jet2026_roll.tyro`: Headless barrel-roll test — a held
+  Shift+Left/Right (through the `set_barrel()` stand-in, exactly like
+  `set_speed()` for the throttle) keeps the bank spooling at a real roll
+  pace, wraps the shown angle into [-180, 180], reverses with the
+  direction, and unwinds to the normal bank ease on release.
 
 ## Running
 
@@ -105,6 +114,7 @@ Copy-Item games\jet2026\sea.frag tests\
 Copy-Item games\jet2026\ShipCruiser.png,games\jet2026\ShipDestroyer.png tests\
 bin\tyro.exe tests\test_jet2026.tyro --console --exit:4
 bin\tyro.exe tests\test_jet2026_ships.tyro --console --exit:25
+bin\tyro.exe tests\test_jet2026_roll.tyro --console --exit:10
 bin\tyro.exe tests\test_jet2026_play.tyro --console --screenshot:8 --exit:9
 ```
 
