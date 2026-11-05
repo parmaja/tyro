@@ -7,10 +7,12 @@ RayLib, a real 3D model for every jet, world-painted waves and Lua.
 
 Fly your jet up the screen over the open sea and blast the enemy squadron
 streaming in from the top. The world scrolls while you climb, you weave
-through formations, and a big bomber shows up every sixth wave. A homage to
-the 1984 Capcom classic — but the stars of the show are real 3D models
-(`jet.glb` for the player, `enemy.glb` for the squadron) rendered by Tyro's
-new 3D model pass.
+through formations, and a big bomber shows up every sixth wave. Two
+warships — a sea cruiser and a destroyer — cruise the water below: their
+missile batteries track your jet, and your guns bark harmlessly at steel —
+only bombs (`C` / `LB`) can sink them. A homage to the 1984 Capcom classic
+— but the stars of the show are real 3D models (`jet.glb` for the player,
+`enemy.glb` for the squadron) rendered by Tyro's new 3D model pass.
 
 This is the showcase game for the `models` API: the player flies `jet.glb`
 and the whole squadron flies `enemy.glb` in its own paint, flown nose-down,
@@ -35,6 +37,15 @@ are painted straight onto the frame buffer with `world` primitives.
   health bar's worth of hits every 6th wave.
 - **Power-ups**: grab the `P` crate to go from single to double to triple
   shot; maxed-out crates score instead.
+- **Warships & bombs**: `ShipCruiser.png` and `ShipDestroyer.png` sprites
+  ride the sea at the water's own pace — anchored to the scene, level, no
+  patrol of their own, and the jet flies right over them — firing
+  smoke-tailed missiles at the plane (`sprites.new` + `.load`, layer -5 —
+  over the islands, under the clouds). The jets' guns never scratch them:
+  `C` / `LB` drops one of three bombs aboard (they reload one by one); the
+  shell falls behind the plane carrying a pinch of the jet's drift, dents
+  the hull, and a sunk wreck pays 500–800 and sails back a few seconds
+  later. `BMB` pips in the HUD count the cargo.
 - **Juice**: screen shake, gamepad vibration, engine hum loop
   (`sound.loopPlay`), roll-into-the-turn jet banking (the model's `roll`
   property), cast shadows — every jet and cloud projects its real silhouette
@@ -49,7 +60,8 @@ are painted straight onto the frame buffer with `world` primitives.
 | Action | Keyboard | Gamepad |
 |---|---|---|
 | **Fly** | `Arrows` / `WASD` | Left stick / D-pad |
-| **Fire** (hold for auto) | `SPACE` | `A` / `X` / `RB` / `RT` |
+| **Fire** (hold for auto) | `SPACE` / `X` | `A` / `X` / `RB` / `RT` |
+| **Drop bomb** (warships only take bombs) | `C` | `LB` / `LT` |
 | **Throttle up / down** | `SHIFT` + `UP` / `DOWN` | — |
 | **Play / Pause / Resume** | `SPACE` / `P` | `START` |
 | **Quit (menu/pause)** | `ESC` | `BACK` |
@@ -63,10 +75,16 @@ are painted straight onto the frame buffer with `world` primitives.
 - `jet.glb`: The player's 3D mesh (binary glTF).
 - `enemy.glb`: The squadron's 3D mesh (binary glTF) — fighters and bomber
   alike, flown in its own paint and scaled up for the bomber.
+- `ShipCruiser.png` / `ShipDestroyer.png`: The two warship sprites (top-down,
+  bow up), recycled through fixed sprite objects — sunk ships hide and sail
+  back in on a respawn timer.
 - `tests/test_jet2026.tyro`: Headless logic test (pool acquire/release,
   scoring, hit/respawn/game-over flow) — see Running.
 - `tests/test_jet2026_play.tyro`: Screenshot driver that replays real
   frames through the game's own `simulate`/`draw` for visual QA.
+- `tests/test_jet2026_ships.tyro`: Headless warship test — the guns ignore
+  steel, bombs dent and sink the hull, the rack paces and reloads its drops,
+  wrecks sail back, and the ships' missiles bite.
 
 ## Running
 
@@ -81,6 +99,16 @@ copy of the game and its media next to the harness first):
 Copy-Item games\jet2026\jet2026.tyro tests\jet2026_test.tyro
 Copy-Item games\jet2026\jet.glb,games\jet2026\enemy.glb tests\
 Copy-Item games\jet2026\sea.frag tests\
+Copy-Item games\jet2026\ShipCruiser.png,games\jet2026\ShipDestroyer.png tests\
 bin\tyro.exe tests\test_jet2026.tyro --console --exit:4
+bin\tyro.exe tests\test_jet2026_ships.tyro --console --exit:25
 bin\tyro.exe tests\test_jet2026_play.tyro --console --screenshot:8 --exit:9
 ```
+
+### Ships
+
+Jet Plane https://sketchfab.com/3d-models/f-16-fighter-jet-d84491f443384ee488593cc6f0f0839e
+
+Jet Plane https://sketchfab.com/3d-models/jet-88a540bdacd940648223f517b9af9452
+
+https://opengameart.org/content/sea-warfare-set-ships-and-more

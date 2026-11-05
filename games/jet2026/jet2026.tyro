@@ -5,7 +5,9 @@
 --  blast the enemy squadron that streams in from the top. It is a classic
 --  top-down arcade shooter in the spirit of 1942: the world scrolls
 --  downward while you climb, you weave through formations, and a bigger
---  bomber shows up every few waves.
+--  bomber shows up every few waves. Two warships - a sea cruiser and a
+--  destroyer - cruise the water below: their missile batteries track your
+--  jet, and your guns bark harmlessly at steel - only bombs can sink them.
 --
 --  The player flies its own 3D mesh (jet.glb) and the whole enemy squadron -
 --  fighters and bomber alike - flies theirs (enemy.glb), both drawn by the
@@ -22,12 +24,15 @@
 --  screen buffer - above all drawing, immune to the shake of a hit.
 --
 --  Controls:  ARROWS / WASD        fly - left/right strafe, up/down climb/dive
---             SPACE                fire (tap or hold for auto-fire)
+--             SPACE / X            fire (tap or hold for auto-fire)
+--             C                    drop a bomb on the warships (3 aboard,
+--                                  they reload one by one between hits)
 --             SHIFT + UP / DOWN    throttle up / down (world speed)
 --             P                    pause / resume
 --             ESC                  quit
 --  Gamepad:   Left stick / D-pad   fly
 --             A / X / RB / RT      fire (tap or hold)
+--             LB / LT              drop a bomb on the warships
 --             START                play / pause / resume
 --             BACK / SELECT        quit (menu/pause)
 --  Run:  tyro games/jet2026/jet2026.tyro
@@ -60,7 +65,7 @@ local function pad_axis(name)
 end
 
 local function is_fire_pressed()
-  return keyboard.pressed("space")
+  return keyboard.pressed("space") or keyboard.pressed("x")
       or gamepad.pressed("a") or gamepad.pressed("x")
       or gamepad.pressed("b") or gamepad.pressed("y")
       or gamepad.pressed("rb") or gamepad.pressed("rt")
@@ -68,11 +73,18 @@ local function is_fire_pressed()
 end
 
 local function is_fire_down()
-  return keyboard.down("space")
+  return keyboard.down("space") or keyboard.down("x")
       or gamepad.down("a") or gamepad.down("x")
       or gamepad.down("b") or gamepad.down("y")
       or gamepad.down("rb") or gamepad.down("rt")
       or gamepad.down("fire") or gamepad.down("trigger")
+end
+
+-- The jets' guns bark harmlessly at steel: the warships only take bombs.
+-- C on the keyboard, the left bumpers on a pad.
+local function is_bomb_pressed()
+  return keyboard.pressed("c")
+      or gamepad.pressed("lb") or gamepad.pressed("lt")
 end
 
 local function is_start_pressed()
@@ -131,6 +143,19 @@ local CLOUD_Z       = 40         -- the clouds' nominal height: climb past it fo
 local CLOUD_DRIFT   = 1.2        -- cloud deck speed, as a multiple of SCROLL
 local SLOWMO        = 0.4        -- slow-motion length (scaled seconds) for a bomber down
 local TRAIL_BEHIND  = 3          -- px: the exhaust flame starts behind the tail
+
+-- Warships and bombs: two sea sprites (ShipCruiser.png, ShipDestroyer.png,
+-- bow up like the jets fly) ride the water at the sea's own pace, swing
+-- slow missiles at the plane and only take bomb hits - the guns can't
+-- scratch them. The player carries BOMB_MAX bombs and earns one back every
+-- BOMB_REGEN seconds, so the cargo never sits empty for long.
+local SHIP_LAYER    = -5         -- over the islands, under the clouds
+local BOMB_MAX      = 3          -- bombs aboard
+local BOMB_REGEN    = 5.0        -- seconds to win one bomb back
+local BOMB_COOL     = 0.8        -- seconds between drops
+local BOMB_SPEED    = 170        -- px/s the dropped bomb sinks down the screen (over SCROLL)
+local BOMB_CARRY    = 0.35       -- share of the jet's drift a dropped bomb keeps
+local MISSILE_SPEED = 205        -- the warships' missiles: slow enough to outfly
 
 -- The engine hum's pitch: the 320 Hz drone at cruise, rising and falling with
 -- the throttle so the sound tells you the speed without a glance at the HUD.
@@ -431,6 +456,7 @@ local score, hi, lives, wave
 local player                -- { x, y, z, cool, weapon, roll, pitch }
 local invuln, dyingTimer
 local pbullets, ebullets, enemies, blasts, clouds, islands, powerups
+local ships, bombs, missiles
 local spawnTimer, waveTimer, bossWave, msg, msgTimer, engineOn, enginePitch
 -- juice timers: exhaust/smoke pacing, the cloud fly-through haze (0..1),
 -- the red hit flash and the slow-motion countdown for a bomber down
@@ -497,9 +523,12 @@ local function spawn_formation()
     bossWave = new_enemy("bomber", W / 2, -60)
     return
   end
+  -- the first waves fly thin on purpose: formations gain a plane only as
+  -- the difficulty climbs, so the opening is weaving, not a wall of lead
   if roll <= 40 then
     -- V formation of grunts descending in the middle
-    local n = rand(4, 5)
+    local n = rand(3, 4)
+    if difficulty() > 0.5 then n = n + 1 end
     local cx = rand(80, W - 80)
     for i = 1, n do
       local ox = (i - (n + 1) / 2) * 42
@@ -507,14 +536,17 @@ local function spawn_formation()
     end
   elseif roll <= 72 then
     -- a line of divers near the top that will swoop
-    local n = rand(3, 4)
+    local n = rand(2, 3)
+    if difficulty() > 0.5 then n = n + 1 end
     for i = 1, n do
       new_enemy("diver", rand(40, W - 40), -30 - i * 30)
     end
   else
-    -- a couple of gunners to hold the top line
+    -- a gunner to hold the top line; a second one joins as the war heats up
     new_enemy("gunner", rand(60, W - 60), -40)
-    if rand(1, 100) <= 50 then new_enemy("gunner", rand(60, W - 60), -90) end
+    if rand(1, 100) <= 20 + 40 * difficulty() then
+      new_enemy("gunner", rand(60, W - 60), -90)
+    end
   end
 end
 
@@ -605,12 +637,19 @@ local function reset()
   invuln = 2.0
   dyingTimer = 0
   player = { x = W / 2, y = H - 110, z = Z_HOME, cool = 0, weapon = 1,
-             roll = 0, pitch = 0 }
+             roll = 0, pitch = 0, bombs = BOMB_MAX, bcool = 0, ammoT = 0, vx = 0 }
   pbullets = {}
   ebullets = {}
   enemies = {}
   blasts = {}
   powerups = {}
+  bombs = {}
+  missiles = {}
+  for i = 1, #ships do
+    ships[i].alive = false
+    ships[i].spr.hide()
+    ships[i].respawnT = 2 + i * 4    -- the cruiser sails in first
+  end
   spawnTimer = 1.2
   waveTimer = 22
   bossWave = nil
@@ -791,6 +830,188 @@ local function step_islands(ft)
   end
 end
 
+-- ---- warships --------------------------------------------------------
+-- The cruiser and the destroyer are two permanent sprites that recycle:
+-- each is anchored to the water - no own speed, no patrol, only the drift
+-- of the scrolling scene carries it down like an island - and it swings
+-- missiles at the plane from an in-game range. When one sinks (or goes
+-- off the bottom) it hides and a respawn timer brings it back over the
+-- top a few seconds later - the sea never lies empty for long. Their
+-- hitboxes follow the loaded textures, so the PNGs may be redrawn at any
+-- size and the game keeps up.
+local SHIP_DEFS = {
+  { kind = "cruiser",   tex = "ShipCruiser.png",   scale = 0.62,
+    hp = 5, score = 800, salvo = 2, cool = 2.6 },
+  { kind = "destroyer", tex = "ShipDestroyer.png", scale = 0.66,
+    hp = 3, score = 500, salvo = 1, cool = 2.0 },
+}
+
+local function make_ships()
+  ships = {}
+  for i = 1, #SHIP_DEFS do
+    local d = SHIP_DEFS[i]
+    -- the dot form for sprites: the colon form currently misreports the file
+    -- (see the same note in games/waddle/waddle.tyro)
+    local spr = sprites.new("ship_" .. d.kind)
+    spr.load(d.tex)
+    spr.layer = SHIP_LAYER
+    spr.scale = d.scale
+    spr.hide()
+    ships[i] = {
+      kind = d.kind, spr = spr, def = d,
+      hw = math.max(8, spr.width() / 2 * d.scale - 2),
+      hh = spr.height() / 2 * d.scale,
+      alive = false, respawnT = 3 + i * 4,
+      x = 0, sy = 0, fire = 2, hp = d.hp, flash = 0,
+    }
+  end
+end
+
+local function spawn_ship(s)
+  s.hp = s.def.hp
+  s.alive = true
+  -- one lane is the ship's whole sea: it rides down with the scene and
+  -- never steers across it
+  s.x = clamp(rand(70, W - 70), s.hw + 6, W - s.hw - 6)
+  s.sy = -s.hh - rand(10, 140)
+  s.fire = randf(1.2, s.def.cool)
+  s.flash = 0
+  s.spr.tint = colors.white
+  s.spr.angle = 0
+  s.spr.show()
+end
+
+-- Retire a ship (sunk or gone off the bottom) and arm its comeback timer.
+local function retire_ship(s, sunk)
+  s.alive = false
+  s.spr.hide()
+  s.respawnT = sunk and rand(5, 10) or rand(3, 6)
+end
+
+local function step_ships(ft)
+  for i = 1, #ships do
+    local s = ships[i]
+    if not s.alive then
+      s.respawnT = s.respawnT - ft
+      if s.respawnT <= 0 then spawn_ship(s) end
+    else
+      -- anchored to the current: the scene's scroll is the only motion, and
+      -- the hull rides flat - no bob, no turn
+      s.sy = s.sy + SCROLL * ft
+      s.flash = math.max(0, s.flash - ft)
+      s.spr.tint = s.flash > 0 and colors.red or colors.white
+      s.spr.angle = 0
+      s.spr.x = s.x
+      s.spr.y = s.sy
+
+      -- missile battery: track the plane while the ship sits in the field
+      s.fire = s.fire - ft
+      if s.fire <= 0 and state == "play" and s.sy > 10 and s.sy < H - 170 then
+        s.fire = s.def.cool
+        local n = s.def.salvo
+        for k = 1, n do
+          local ang = math.atan2(player.x - s.x + (k - (n + 1) / 2) * 30,
+                                 player.y - s.sy)
+          missiles[#missiles + 1] = {
+            x = s.x, sy = s.sy - s.hh * 0.4,
+            vx = math.sin(ang) * MISSILE_SPEED, vy = math.cos(ang) * MISSILE_SPEED,
+            puff = 0,
+          }
+        end
+        music.sound('Missile', 140, 220)
+      end
+
+      -- the warships are below the flight path: the plane passes right over
+      -- the hulls, no collision - only their missiles and the bombs meet
+
+      if s.sy - s.hh > H then retire_ship(s, false) end
+    end
+  end
+end
+
+-- ---- bombs -----------------------------------------------------------
+-- The plane's answer to the warships: C drops one of the three bombs
+-- aboard. The bomb sheds the jet's speed the moment it leaves the rack, so
+-- on screen it falls BEHIND the plane and sinks down the sea - and the
+-- guns' bullets simply never look at a ship's hitbox, so steel really is
+-- bomb-only. The shell leaves the rack with a pinch of the jet's own drift
+-- (carried BOMB_CARRY), so a bomb dropped in a hard turn keeps arcing
+-- sideways until the air bleeds that speed away.
+local function drop_bomb()
+  if state ~= "play" or player.bombs <= 0 or player.bcool > 0 then return end
+  player.bombs = player.bombs - 1
+  player.bcool = BOMB_COOL
+  bombs[#bombs + 1] = { x = player.x, sy = player.y + 10,
+                        vx = (player.vx or 0) * BOMB_CARRY }
+  beep(220, 70)
+  gamepad.vibrate(0.15, 0.15, 0.08)
+end
+
+local function step_bombs(ft)
+  for i = #bombs, 1, -1 do
+    local b = bombs[i]
+    b.sy = b.sy + (SCROLL + BOMB_SPEED) * ft
+    b.x = b.x + b.vx * ft
+    b.vx = b.vx * math.max(0, 1 - 2.2 * ft)   -- the air sheds the carried drift
+    if b.sy > H + 14 then
+      table.remove(bombs, i)
+    else
+      for j = 1, #ships do
+        local s = ships[j]
+        if s.alive and math.abs(s.x - b.x) < s.hw + 5 and math.abs(s.sy - b.sy) < s.hh then
+          table.remove(bombs, i)
+          s.hp = s.hp - 1
+          s.flash = 0.18
+          if s.hp <= 0 then
+            add_blast(s.x, s.sy - s.hh * 0.3, true)
+            spark_burst(s.x, s.sy, true)
+            score = score + s.def.score
+            msg = "SHIP SUNK +" .. s.def.score
+            msgTimer = 1.4
+            boom_sfx()
+            world.shake(350, 10)
+            gamepad.vibrate(0.7, 0.7, 0.3)
+            retire_ship(s, true)
+          else
+            add_blast(b.x, b.sy, false)
+            particles.emit(b.x, b.sy, 6,
+              { color = colors.orange, speed = 130, life = 0.35, size = 3,
+                gravity = 60, drag = 1.4 })
+            beep(140, 90)
+            gamepad.vibrate(0.2, 0.2, 0.1)
+          end
+          break
+        end
+      end
+    end
+  end
+end
+
+-- ---- ship missiles ---------------------------------------------------
+-- Slow, smoke-tailed, aimed at where the plane SITS when the trigger
+-- breaks - a hard turn outruns them, which is the whole dodge.
+local function step_missiles(ft)
+  for i = #missiles, 1, -1 do
+    local m = missiles[i]
+    m.x = m.x + m.vx * ft
+    m.sy = m.sy + m.vy * ft
+    m.puff = m.puff - ft
+    if m.puff <= 0 then
+      m.puff = 0.05
+      particles.emit(m.x - m.vx * 0.05, m.sy - m.vy * 0.05, 1,
+        { color = colors.gray, speed = 12, life = 0.5, size = 2.5,
+          gravity = 0, drag = 2.2, under = true })
+    end
+    if m.sy < -16 or m.sy > H + 16 or m.x < -16 or m.x > W + 16 then
+      table.remove(missiles, i)
+    elseif invuln <= 0 and state == "play"
+        and math.abs(m.x - player.x) < 12 and math.abs(m.sy - player.y) < 12 then
+      table.remove(missiles, i)
+      player_hit()
+    end
+  end
+end
+
 local function fire()
   local px, py = player.x, player.y
   if player.weapon == 1 then
@@ -873,6 +1094,8 @@ local function simulate(ft)
     -- (shrinks), while its screen position only drifts a little - enough for
     -- the eye, small enough to keep dodging by.
     player.x = clamp(player.x + dx * PLAYER_SPEED * ft, 22, W - 22)
+    -- remember the lateral speed: a dropped bomb keeps a pinch of this drift
+    player.vx = dx * PLAYER_SPEED
     player.y = clamp(player.y + dy * CLIMB_DRIFT * ft, PLAYER_Y_MIN, H - 30)
     player.z = clamp(player.z - dy * CLIMB_SPEED * ft, Z_NEAR, Z_FAR)
 
@@ -951,11 +1174,28 @@ local function simulate(ft)
       player.cool = 0.15
     end
 
+    -- bomb rack: C / LB drops one of the bombs aboard, and the crew wins
+    -- one back every BOMB_REGEN seconds while any slot sits empty
+    player.bcool = math.max(0, player.bcool - ft)
+    if player.bombs < BOMB_MAX then
+      player.ammoT = player.ammoT + ft
+      if player.ammoT >= BOMB_REGEN then
+        player.ammoT = 0
+        player.bombs = player.bombs + 1
+        beep(660, 60)
+      end
+    else
+      player.ammoT = 0
+    end
+    if is_bomb_pressed() then drop_bomb() end
+
     -- wave / spawn scheduling
     spawnTimer = spawnTimer - ft
     if spawnTimer <= 0 and #enemies < ENEMY_POOL - 4 then
       spawn_formation()
-      spawnTimer = math.max(1.6, 3.4 - 1.6 * difficulty())
+      -- a wide, quiet gap in the first waves, tightening as the difficulty
+      -- climbs: early game breathes, late game swarms
+      spawnTimer = math.max(1.8, 4.2 - 2.4 * difficulty())
     end
     waveTimer = waveTimer - ft
     if waveTimer <= 0 then
@@ -968,6 +1208,9 @@ local function simulate(ft)
     step_bullets(ft)
     step_enemies(ft)
     step_powerups(ft)
+    step_ships(ft)
+    step_bombs(ft)
+    step_missiles(ft)
 
     -- invulnerability blink
     playerJet.visible = (invuln <= 0) or (math.floor(millis() / 100) % 2 == 0)
@@ -1046,6 +1289,31 @@ local function draw_bullets()
   for i = 1, #ebullets do
     local b = ebullets[i]
     world.circle(b.sx, b.sy, 4, true)
+  end
+end
+
+-- Dropped steel: a dark shell with a pale band, riding down the sea behind
+-- the plane. It paints under the ship sprite - the hit check fires the
+-- moment it overlaps the hull, and the blast covers the last few px.
+local function draw_bombs()
+  for i = 1, #bombs do
+    local b = bombs[i]
+    world.color = colors.black
+    world.circle(b.x, b.sy + 2, 4, true)
+    world.color = colors.darkgray
+    world.circle(b.x, b.sy - 2, 3, true)
+  end
+end
+
+-- Missiles: a white body along its own flight line, a red nose riding
+-- ahead of it - the smoke trail is already on the particle pass.
+local function draw_missiles()
+  for i = 1, #missiles do
+    local m = missiles[i]
+    world.color = colors.white
+    world.line(m.x - m.vx * 0.055, m.sy - m.vy * 0.055, m.x, m.sy, 4)
+    world.color = colors.red
+    world.circle(m.x + m.vx * 0.012, m.sy + m.vy * 0.012, 3, true)
   end
 end
 
@@ -1129,6 +1397,15 @@ local function draw_hud()
     screen.rectangle(48 + (i - 1) * 16, H - 20, 12, 12, true)
   end
 
+  -- bombs aboard: the warships only take bombs, so the count rides right
+  -- beside the gun pips where the eye already rests
+  screen.color = colors.silver
+  screen.text(120, H - 22, "BMB")
+  for i = 1, BOMB_MAX do
+    screen.color = i <= player.bombs and colors.gold or colors.darkgray
+    screen.rectangle(158 + (i - 1) * 16, H - 20, 12, 12, true)
+  end
+
   -- throttle readout: SPD and a bar mirroring the GUN pips on the right, so
   -- the throttle the player just set is always visible without breaking stride
   screen.color = colors.silver
@@ -1155,13 +1432,14 @@ local function draw_overlay()
     center_text("JET 2026", 166, colors.yellow)
     center_text("PRESS SPACE / START TO FLY", 224, colors.white)
     center_text("ARROWS / WASD / STICK   fly", 258, colors.silver)
-    center_text("SPACE / A / X / RT      fire (hold auto)", 278, colors.silver)
-    center_text("SHIFT + UP / DOWN       throttle up / down", 298, colors.silver)
-    center_text("P / START  pause    ESC / BACK  quit", 318, colors.silver)
-    center_text("Blast the squadron. Grab P to power up.", 348, colors.skyblue)
+    center_text("SPACE / X / A / RT      fire (hold auto)", 278, colors.silver)
+    center_text("C / LB                bombs sink the warships", 298, colors.silver)
+    center_text("SHIFT + UP / DOWN       throttle up / down", 318, colors.silver)
+    center_text("P / START  pause    ESC / BACK  quit", 338, colors.silver)
+    center_text("Blast the squadron. Grab P to power up. Bomb the ships.", 362, colors.skyblue)
     if gamepad.available() then
       local padName = gamepad.name(); if padName == "" then padName = "Gamepad" end
-      center_text("READY: " .. padName, 372, colors.lime)
+      center_text("READY: " .. padName, 384, colors.lime)
     end
   elseif state == "over" then
     screen.color = colors.black
@@ -1188,6 +1466,8 @@ function draw()
   draw_sea()
   draw_powerups()
   draw_bullets()
+  draw_bombs()
+  draw_missiles()
   draw_blasts()
   screen.clear('blank')
   draw_fx()
@@ -1198,6 +1478,7 @@ end
 -- ---- boot ------------------------------------------------------------
 local function boot()
   init_models()
+  make_ships()   -- the two warships: one cruiser, one destroyer, recycling
   -- The sun sits high behind the viewer and a touch to the side, so every
   -- jet and cloud drops its true silhouette onto the sea (world.ground) a
   -- little below and to the right; ambient keeps the shadow soft.
@@ -1219,12 +1500,14 @@ local function boot()
   lives = 3
   wave = 1
   player = { x = W / 2, y = H - 110, z = Z_HOME, cool = 0, weapon = 1,
-             roll = 0, pitch = 0 }
+             roll = 0, pitch = 0, bombs = BOMB_MAX, bcool = 0, ammoT = 0, vx = 0 }
   pbullets = {}
   ebullets = {}
   enemies = {}
   blasts = {}
   powerups = {}
+  bombs = {}
+  missiles = {}
   clouds = {}
   islands = {}
   for i = 1, 7 do
@@ -1271,8 +1554,12 @@ if JET2026_TEST then
     clouds       = function() return clouds end,
     islands      = function() return islands end,
     blasts       = function() return blasts end,
+    ships        = function() return ships end,
+    bombs        = function() return bombs end,
+    missiles     = function() return missiles end,
     fx           = function() return haze, hitT, slowT end,
     fire         = fire,
+    drop_bomb    = drop_bomb,
     -- throttle readout + a setter (headless cannot hold Shift, so the harness
     -- moves the world speed directly to drive the speed-dependent code paths)
     speed        = function() return SCROLL end,
@@ -1295,6 +1582,7 @@ if JET2026_TEST then
     end,
     set_invuln = function(v) invuln = v end,
     set_lives  = function(v) lives = v end,
+    set_bombs  = function(v) player.bombs = clamp(v, 0, BOMB_MAX) end,
     -- pretend the player holds a direction, so a headless frame shows the
     -- banking exactly like a held key would
     set_bank = function(dx, dy)
