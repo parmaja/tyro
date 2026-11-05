@@ -155,6 +155,7 @@ local BOMB_REGEN    = 5.0        -- seconds to win one bomb back
 local BOMB_COOL     = 0.8        -- seconds between drops
 local BOMB_SPEED    = 170        -- px/s the dropped bomb sinks down the screen (over SCROLL)
 local BOMB_CARRY    = 0.35       -- share of the jet's drift a dropped bomb keeps
+local BOMB_SPLASH   = 56         -- px above the bottom where a missed shell hits the water
 local MISSILE_SPEED = 205        -- the warships' missiles: slow enough to outfly
 
 -- The engine hum's pitch: the 320 Hz drone at cruise, rising and falling with
@@ -839,11 +840,14 @@ end
 -- top a few seconds later - the sea never lies empty for long. Their
 -- hitboxes follow the loaded textures, so the PNGs may be redrawn at any
 -- size and the game keeps up.
+-- One bomb is enough: every warship has a single hit point, so any shell
+-- that finds a hull blows it apart in one explosion. (hp stays a field so
+-- a tougher hull could be tuned later without touching the bomb logic.)
 local SHIP_DEFS = {
   { kind = "cruiser",   tex = "ShipCruiser.png",   scale = 0.62,
-    hp = 5, score = 800, salvo = 2, cool = 2.6 },
+    hp = 1, score = 800, salvo = 2, cool = 2.6 },
   { kind = "destroyer", tex = "ShipDestroyer.png", scale = 0.66,
-    hp = 3, score = 500, salvo = 1, cool = 2.0 },
+    hp = 1, score = 500, salvo = 1, cool = 2.0 },
 }
 
 local function make_ships()
@@ -936,53 +940,72 @@ end
 -- guns' bullets simply never look at a ship's hitbox, so steel really is
 -- bomb-only. The shell leaves the rack with a pinch of the jet's own drift
 -- (carried BOMB_CARRY), so a bomb dropped in a hard turn keeps arcing
--- sideways until the air bleeds that speed away.
+-- sideways until the air bleeds that speed away. One shell, one wreck:
+-- any hit destroys the warship outright. And a shell that misses does not
+-- just blink out at the frame edge - it hits the water with a splash,
+-- keeps its dive for a short stretch while the water kills its speed, and
+-- shrinks away under the surface before the sea hides it.
 local function drop_bomb()
   if state ~= "play" or player.bombs <= 0 or player.bcool > 0 then return end
   player.bombs = player.bombs - 1
   player.bcool = BOMB_COOL
   bombs[#bombs + 1] = { x = player.x, sy = player.y + 10,
-                        vx = (player.vx or 0) * BOMB_CARRY }
+                        vx = (player.vx or 0) * BOMB_CARRY,
+                        sink = false, dipV = 0, scale = 1 }
   beep(220, 70)
   gamepad.vibrate(0.15, 0.15, 0.08)
+end
+
+-- a crown of white spray over a blue wash - the sea closing over a shell
+local function bomb_splash(x, sy)
+  particles.emit(x, sy, 10, { color = colors.white, speed = 130, life = 0.3,
+    size = 3, gravity = 140, drag = 1.2, spread = 150, direction = -90 })
+  particles.emit(x, sy, 8, { color = colors.skyblue, speed = 80, life = 0.5,
+    size = 4, gravity = 40, drag = 1.0, spread = 360 })
+  beep(160, 70)
 end
 
 local function step_bombs(ft)
   for i = #bombs, 1, -1 do
     local b = bombs[i]
-    b.sy = b.sy + (SCROLL + BOMB_SPEED) * ft
+    if b.sink then
+      -- under the surface: the water strangles the dive, the shell shrinks
+      b.dipV = b.dipV * math.max(0, 1 - 2.4 * ft)
+      b.sy = b.sy + (SCROLL + b.dipV) * ft
+      b.scale = b.scale - ft * 2.4
+    else
+      b.sy = b.sy + (SCROLL + BOMB_SPEED) * ft
+      if b.sy >= H - BOMB_SPLASH then
+        b.sink = true
+        b.dipV = 30                 -- the sea grabs the shell mid-dive
+        bomb_splash(b.x, b.sy)
+      end
+    end
     b.x = b.x + b.vx * ft
     b.vx = b.vx * math.max(0, 1 - 2.2 * ft)   -- the air sheds the carried drift
-    if b.sy > H + 14 then
-      table.remove(bombs, i)
-    else
-      for j = 1, #ships do
-        local s = ships[j]
-        if s.alive and math.abs(s.x - b.x) < s.hw + 5 and math.abs(s.sy - b.sy) < s.hh then
-          table.remove(bombs, i)
-          s.hp = s.hp - 1
-          s.flash = 0.18
-          if s.hp <= 0 then
-            add_blast(s.x, s.sy - s.hh * 0.3, true)
-            spark_burst(s.x, s.sy, true)
-            score = score + s.def.score
-            msg = "SHIP SUNK +" .. s.def.score
-            msgTimer = 1.4
-            boom_sfx()
-            world.shake(350, 10)
-            gamepad.vibrate(0.7, 0.7, 0.3)
-            retire_ship(s, true)
-          else
-            add_blast(b.x, b.sy, false)
-            particles.emit(b.x, b.sy, 6,
-              { color = colors.orange, speed = 130, life = 0.35, size = 3,
-                gravity = 60, drag = 1.4 })
-            beep(140, 90)
-            gamepad.vibrate(0.2, 0.2, 0.1)
-          end
-          break
-        end
+
+    -- one shell, one wreck: steel this heavy does not beg twice
+    local struck
+    for j = 1, #ships do
+      local s = ships[j]
+      if s.alive and math.abs(s.x - b.x) < s.hw + 5 and math.abs(s.sy - b.sy) < s.hh then
+        struck = s
+        break
       end
+    end
+    if struck then
+      table.remove(bombs, i)
+      add_blast(struck.x, struck.sy - struck.hh * 0.3, true)
+      spark_burst(struck.x, struck.sy, true)
+      score = score + struck.def.score
+      msg = "SHIP SUNK +" .. struck.def.score
+      msgTimer = 1.4
+      boom_sfx()
+      world.shake(350, 10)
+      gamepad.vibrate(0.7, 0.7, 0.3)
+      retire_ship(struck, true)
+    elseif b.scale <= 0 or b.sy > H + 40 then
+      table.remove(bombs, i)        -- fully sunk: the sea has it
     end
   end
 end
@@ -1294,26 +1317,42 @@ end
 
 -- Dropped steel: a dark shell with a pale band, riding down the sea behind
 -- the plane. It paints under the ship sprite - the hit check fires the
--- moment it overlaps the hull, and the blast covers the last few px.
+-- moment it overlaps the hull, and the blast covers the last few px. Once
+-- a miss hits the water (b.sink) it shrinks into a deep-blue smudge - the
+-- shell going under before the sea hides it.
 local function draw_bombs()
   for i = 1, #bombs do
     local b = bombs[i]
-    world.color = colors.black
-    world.circle(b.x, b.sy + 2, 4, true)
-    world.color = colors.darkgray
-    world.circle(b.x, b.sy - 2, 3, true)
+    if b.sink then
+      local s = b.scale
+      if s > 0.15 then
+        world.color = colors.navy
+        world.circle(b.x, b.sy + 2, math.floor(4 * s), true)
+        world.color = colors.darkblue
+        world.circle(b.x, b.sy - 2, math.floor(3 * s), true)
+      end
+    else
+      world.color = colors.black
+      world.circle(b.x, b.sy + 2, 4, true)
+      world.color = colors.darkgray
+      world.circle(b.x, b.sy - 2, 3, true)
+    end
   end
 end
 
 -- Missiles: a white body along its own flight line, a red nose riding
--- ahead of it - the smoke trail is already on the particle pass.
+-- ahead of it - the smoke trail is already on the particle pass. They ride
+-- the fixed screen buffer on purpose: world drawing sits under ALL sprites,
+-- so a low missile would vanish behind an island (or a cloud) otherwise.
+-- On the screen glass the shell is never swallowed - and the HUD, painted
+-- into the same buffer after it, still reads on top.
 local function draw_missiles()
   for i = 1, #missiles do
     local m = missiles[i]
-    world.color = colors.white
-    world.line(m.x - m.vx * 0.055, m.sy - m.vy * 0.055, m.x, m.sy, 4)
-    world.color = colors.red
-    world.circle(m.x + m.vx * 0.012, m.sy + m.vy * 0.012, 3, true)
+    screen.color = colors.white
+    screen.line(m.x - m.vx * 0.055, m.sy - m.vy * 0.055, m.x, m.sy, 4)
+    screen.color = colors.red
+    screen.circle(m.x + m.vx * 0.012, m.sy + m.vy * 0.012, 3, true)
   end
 end
 
@@ -1467,9 +1506,9 @@ function draw()
   draw_powerups()
   draw_bullets()
   draw_bombs()
-  draw_missiles()
   draw_blasts()
   screen.clear('blank')
+  draw_missiles()
   draw_fx()
   draw_hud()
   draw_overlay()

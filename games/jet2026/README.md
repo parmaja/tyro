@@ -43,9 +43,11 @@ are painted straight onto the frame buffer with `world` primitives.
   smoke-tailed missiles at the plane (`sprites.new` + `.load`, layer -5 —
   over the islands, under the clouds). The jets' guns never scratch them:
   `C` / `LB` drops one of three bombs aboard (they reload one by one); the
-  shell falls behind the plane carrying a pinch of the jet's drift, dents
-  the hull, and a sunk wreck pays 500–800 and sails back a few seconds
-  later. `BMB` pips in the HUD count the cargo.
+  shell falls behind the plane carrying a pinch of the jet's drift, and
+  **one bomb destroys one warship** in a full explosion worth 500–800.
+  A miss hits the water with a splash and visibly sinks — slowing and
+  shrinking — before the sea hides it. `BMB` pips in the HUD count the
+  cargo.
 - **Juice**: screen shake, gamepad vibration, engine hum loop
   (`sound.loopPlay`), roll-into-the-turn jet banking (the model's `roll`
   property), cast shadows — every jet and cloud projects its real silhouette
@@ -83,8 +85,9 @@ are painted straight onto the frame buffer with `world` primitives.
 - `tests/test_jet2026_play.tyro`: Screenshot driver that replays real
   frames through the game's own `simulate`/`draw` for visual QA.
 - `tests/test_jet2026_ships.tyro`: Headless warship test — the guns ignore
-  steel, bombs dent and sink the hull, the rack paces and reloads its drops,
-  wrecks sail back, and the ships' missiles bite.
+  steel, one bomb blows a hull apart, missed shells splash and sink, the
+  rack paces and reloads its drops, wrecks sail back, and the ships'
+  missiles bite.
 
 ## Running
 
