@@ -280,6 +280,7 @@ function Flute_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function FM_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function PinkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function DarkNoise_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+
 function Pew_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Explode_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Fire_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;

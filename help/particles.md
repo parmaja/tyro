@@ -40,6 +40,7 @@ cleanup. The sparks move, shrink, fade and vanish on their own.
 | `drag` | `1.5` | fraction of the speed shed per second (air friction) |
 | `spread` | `360` | degrees the burst covers; `360` is a full ring |
 | `direction` | `0` | the middle of the spread, degrees (`0` right, `-90` up) |
+| `under` | `false` | `true` draws the burst BELOW the 3D models - for a flame a jet carries, so the model covers it |
 
 The engine caps the sky at 2048 sparks; when it is full, a new burst is
 simply dropped - so firing wildly can never slow the game down.
@@ -82,4 +83,7 @@ particles.emit(fairy.x, fairy.y, 2, { color = 'skyblue', speed = 20,
   callback or in plain script code - it is not a drawing command, it is a
   request the engine takes over.
 - The bursts are drawn **above the 3D models**, so an explosion always reads
-  over the jets, cars or wizards that made it.
+  over the jets, cars or wizards that made it. A burst emitted with
+  `under = true` takes the layer *below* the models instead - the right choice
+  for an exhaust flame a jet carries: the plane covers the flame at its own
+  skin, and only the burn behind the tail shows.

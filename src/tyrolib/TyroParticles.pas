@@ -13,8 +13,10 @@ unit TyroParticles;
  *  the sparks during Update (the same step the sprite animations get, so a
  *  paused scene freezes them too) and draws them once per frame right after
  *  the 3D models, so an explosion always reads on top of the jets and sprites
- *  that made it. No per-frame call is needed from the script, exactly like the
- *  model pass.
+ *  that made it. A burst emitted with under = true takes the other layer: it
+ *  is drawn BEFORE the model pass, so a jet covers the exhaust flame burning
+ *  at its own tail. No per-frame call is needed from the script, exactly
+ *  like the model pass.
  *
  *  Sparks live in plain screen space - x grows right, y grows down, gravity
  *  pulls toward the bottom edge, and the whole pass rides the camera offset
@@ -51,6 +53,7 @@ type
     Gravity: Single;        // px/s^2, positive pulls toward the bottom edge
     Drag: Single;           // fraction of the speed shed per second
     Color: TColor;
+    Under: Boolean;         // True: rides the layer BELOW the 3D models
   end;
 
   { One burst request: the shape every spark of an emit() is born from. The
@@ -67,6 +70,7 @@ type
     Drag: Single;           // fraction of the speed shed per second
     Spread: Single;         // degrees; 360 throws a full ring
     Direction: Single;      // degrees; the middle of the spread, 0 = right
+    Under: Boolean;         // True: draw below the 3D models (burning exhaust)
   end;
 
   { TParticles }
@@ -104,11 +108,13 @@ type
       ASpeed, ALife, ASize: single): integer; overload;
     // Advance every spark by one frame (main thread, from the engine Update).
     procedure Step(ADt: single);
-    // Draw every spark (main thread, after the 3D models). AX/AY are the
-    // Camera2D offset so the sparks shake with the world like the models do.
-    procedure Draw(AX, AY: single);
-    // True when at least one spark is alive, so the caller can skip the pass.
-    function HasAny: boolean;
+    // Draw one layer of sparks (main thread). AUnder picks the layer: the
+    // under-sparks go before the 3D model pass, the rest after it. AX/AY are
+    // the Camera2D offset so the sparks shake with the world like the models.
+    procedure Draw(AX, AY: single; AUnder: Boolean = False);
+    // True when at least one spark of a layer is alive, so the caller can
+    // skip the pass.
+    function HasAny(AUnder: Boolean = False): boolean;
     property Count: integer read GetCount;
   end;
 
@@ -201,6 +207,7 @@ begin
       P.Gravity := Burst.Gravity;
       P.Drag := Burst.Drag;
       P.Color := Burst.Color;
+      P.Under := Burst.Under;
       FItems[FCount] := P;
       Inc(FCount);
     end;
@@ -226,6 +233,7 @@ begin
   Burst.Drag := 1;
   Burst.Spread := 360;
   Burst.Direction := 0;
+  Burst.Under := False;
   Result := Emit(Burst);
 end;
 
@@ -269,8 +277,9 @@ end;
 
 //A spark fades and shrinks along its life: alpha rides the remaining time
 //straight down, the radius keeps a small core so the last frame still shows a
-//dot instead of a vanishing smear.
-procedure TParticles.Draw(AX, AY: single);
+//dot instead of a vanishing smear. Only the sparks of the requested layer are
+//drawn; AUnder picks under-the-model (True) or over-the-model (False).
+procedure TParticles.Draw(AX, AY: single; AUnder: Boolean);
 var
   I: Integer;
   P: TParticle;
@@ -282,6 +291,8 @@ begin
     for I := 0 to FCount - 1 do
     begin
       P := FItems[I];
+      if P.Under <> AUnder then
+        Continue;
       Remain := P.Life / P.TTL;
       Col := P.Color;
       Col.RGBA.Alpha := Byte(Round(P.Color.RGBA.Alpha * Remain));
@@ -293,11 +304,16 @@ begin
   end;
 end;
 
-function TParticles.HasAny: boolean;
+function TParticles.HasAny(AUnder: Boolean): boolean;
+var
+  I: Integer;
 begin
+  Result := False;
   FLock.Enter;
   try
-    Result := FCount > 0;
+    for I := 0 to FCount - 1 do
+      if FItems[I].Under = AUnder then
+        Exit(True);
   finally
     FLock.Leave;
   end;

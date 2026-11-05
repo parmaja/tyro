@@ -1816,9 +1816,10 @@ begin
 
   // Particle sparks: particles.emit(x, y [, count] [, options]) throws a burst
   // of sparks at a screen pixel and the engine steps and draws it (on top of
-  // the 3D models) until the last spark fades - no per-frame call needed.
+  // the 3D models, or under them with under = true) until the last spark
+  // fades - no per-frame call needed.
   // options is a table with any of: color, speed, life, size, gravity, drag,
-  // spread, direction. particles.count reads how many sparks are alive.
+  // spread, direction, under. particles.count reads how many sparks are alive.
   Lua.State.RegisterTable('particles');
   Lua.State.Register('particles', 'emit', Particles, Particles.Emit_func);
   Lua.State.Register('particles', 'clear', Particles, Particles.Clear_func);
@@ -7230,6 +7231,7 @@ begin
   Burst.Drag := 1.5;
   Burst.Spread := 360;
   Burst.Direction := 0;
+  Burst.Under := False;
   if (L.ArgsCount >= 4) and L.IsTable(4) then
   begin
     lua_getfield(L, 4, PUTF8Char(UTF8String('color')));
@@ -7245,6 +7247,11 @@ begin
     NumField('drag', Burst.Drag);
     NumField('spread', Burst.Spread);
     NumField('direction', Burst.Direction);
+    //under = true draws the burst BELOW the 3D models (a flame the jet
+    //carries, not debris thrown over it); a missing field stays False.
+    lua_getfield(L, 4, PUTF8Char(UTF8String('under')));
+    Burst.Under := L.ToBoolean(-1);
+    lua_pop(L, 1);
   end;
   if Burst.Life <= 0 then
     Burst.Life := 0.1;

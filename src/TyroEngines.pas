@@ -427,7 +427,8 @@ type
     Models: TModels3D;
     //* Engine-owned particle sparks (see TyroParticles); the script throws a
     //* burst with particles.emit() and the engine steps and draws it, on top
-    //* of the 3D models, until the last spark fades.
+    //* of the 3D models (under them when emitted with under = true), until
+    //* the last spark fades.
     Particles: TParticles;
     Physics: TPhysics;
     //* Scrolling parallax backgrounds the script created (see TyroParallax).
@@ -699,6 +700,13 @@ begin
           Draw;
           EndMode2D;
 
+          //Sparks flagged under = true burn BELOW the jets: they take a pass
+          //before the 3D models, so a model covers the exhaust flame riding at
+          //its own tail. They take the same margin/shake offset as everything
+          //else on this frame.
+          if (Particles <> nil) and Particles.HasAny(True) then
+            Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, True);
+
           //The 3D models ride above the 2D scene but below the controls, so the
           //pass sits between EndMode2D and the control tree. Camera2D.Offset is
           //the same margin/shake offset the board and sprites got, so everything
@@ -707,9 +715,9 @@ begin
             Models.DrawAll(Camera2D.Offset.X, Camera2D.Offset.Y,
               RayLib.GetScreenWidth, RayLib.GetScreenHeight);
 
-          //The sparks ride on top of the 3D models, so an explosion always
-          //reads over the jets and sprites that made it; they take the same
-          //margin/shake offset the models got and shake together with them.
+          //The rest of the sparks ride on top of the 3D models, so an explosion
+          //always reads over the jets and sprites that made it; they take the
+          //same margin/shake offset the models got and shake together with them.
           if (Particles <> nil) and Particles.HasAny then
             Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y);
 
