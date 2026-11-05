@@ -245,29 +245,139 @@ local function place_cloud(c)
 end
 
 -- ---- islands ---------------------------------------------------------
--- Islands are not circles: each gets a little archipelago of lobes, a sand
--- rim on the south side, jungle on the sun side and a palm or two. The lobes
--- are generated once (and again when an island recycles) as offsets around
--- the centre, so one shape seed drives every layer and the coast stays
--- coherent between the surf, the sand and the jungle.
+-- Cute little atolls, built from the engine's Sprites.blob sprites: the same
+-- lumpy organic rim as the cloud puffs but with a CRISP edge, so the islands
+-- never look fluffy. One shape seed per island drives every layer, and each
+-- lobe stacks: a pale shallow glow of beach water (soft puff), a white foam
+-- line, a dark sticker rim, a sand beach, and on most islands a green meadow
+-- with a sunlit lime patch on top - about a third stay bare sandy atolls with
+-- a light lagoon in the middle. No palms, no buildings. Little stars twinkle
+-- in the shallows. The puffs ride a deep sprite layer, so islands always sit
+-- behind the clouds and the jets.
+local ISLAND_LAYER = -10
+local ISLAND_LOBES = 6           -- sprite slots per island; lobes past the seed hide
+local ISLAND_SPARKS = 3          -- twinkles in the shallows per island
+
 local function island_shape(s)
+  -- chubby lobes: close to the centre and big, so the island reads as a
+  -- plump cookie rather than a scatter of rocks
   local lobes = {}
-  local n = rand(4, 6)
+  local n = rand(5, ISLAND_LOBES)
   for i = 1, n do
-    local ang = (i - 1) / n * 6.283 + randf(-0.4, 0.4)
-    local dist = randf(0.15, 0.65)
-    lobes[i] = { dx = math.cos(ang) * dist, dy = math.sin(ang) * dist * 0.8,
-                 r = randf(0.55, 1) }
+    local ang = (i - 1) / n * 6.283 + randf(-0.3, 0.3)
+    local dist = randf(0.1, 0.42)
+    lobes[i] = { dx = math.cos(ang) * dist, dy = math.sin(ang) * dist * 0.85,
+                 r = randf(0.7, 1) }
   end
   s.lobes = lobes
-  local palms = {}
-  local pn = rand(1, 3)
-  for i = 1, pn do
+  s.grass = rand(1, 100) <= 70   -- the rest are lagoon atolls
+  local tw = {}
+  for i = 1, ISLAND_SPARKS do
     local ang = randf(0, 6.283)
-    local dist = randf(0, 0.45)
-    palms[i] = { dx = math.cos(ang) * dist, dy = math.sin(ang) * dist * 0.8 }
+    local dist = randf(1.0, 1.45)
+    tw[i] = { dx = math.cos(ang) * dist, dy = math.sin(ang) * dist * 0.85,
+              phase = randf(0, 6.28) }
   end
-  s.palms = palms
+  s.twinkles = tw
+end
+
+-- Built once at boot, one batched hop per role: glow under foam under rim
+-- under sand under meadow - so even when two islands cross, the water stays
+-- under the beach and the beach under the grass. The blobs share the puff's
+-- 128 px texture size; a blob's opaque disc fills the texture, so a sprite
+-- scale of r * 2 / PUFF_TEX draws it with radius r.
+local function make_islands(list)
+  local k = #list * ISLAND_LOBES
+  local glow = Sprites.puff("isl_glow", PUFF_TEX, k)
+  local foam = Sprites.blob("isl_foam", PUFF_TEX, k)
+  local rim = Sprites.blob("isl_rim", PUFF_TEX, k)
+  local sand = Sprites.blob("isl_sand", PUFF_TEX, k)
+  local turf = Sprites.blob("isl_turf", PUFF_TEX, k)
+  local sun = Sprites.blob("isl_sun", PUFF_TEX, k)
+  local lagoon = Sprites.blob("isl_lagoon", PUFF_TEX, k)
+  local tw = Sprites.puff("isl_twinkle", PUFF_TEX, #list * ISLAND_SPARKS)
+  local function setrole(t, tint, a)
+    for i = 1, #t do
+      t[i].tint = tint
+      t[i].alpha = a
+      t[i].layer = ISLAND_LAYER
+      t[i].visible = false
+    end
+  end
+  setrole(glow, colors.skyblue, 90)
+  setrole(foam, colors.white, 170)
+  setrole(rim, colors.darkblue, 170)
+  setrole(sand, colors.beige, 255)
+  setrole(turf, colors.green, 255)
+  setrole(sun, colors.lime, 255)
+  setrole(lagoon, colors.skyblue, 255)
+  setrole(tw, colors.white, 255)
+  for i = 1, #list do
+    local s = list[i]
+    s.puffs = {}
+    for j = 1, ISLAND_LOBES do
+      local o = (i - 1) * ISLAND_LOBES + j
+      s.puffs[j] = { glow[o], foam[o], rim[o], sand[o], turf[o], sun[o] }
+    end
+    s.lagoonp = lagoon[(i - 1) * ISLAND_LOBES + 1]
+    s.twinks = {}
+    for j = 1, ISLAND_SPARKS do
+      s.twinks[j] = tw[(i - 1) * ISLAND_SPARKS + j]
+    end
+  end
+end
+
+-- Carried down with the sea every frame; the twinkles pulse on their own beat.
+local function place_island(s)
+  local t = millis()
+  for j = 1, ISLAND_LOBES do
+    local lb = s.lobes[j]
+    local p = s.puffs[j]
+    if lb then
+      local x = s.x + lb.dx * s.r
+      local y = s.sy + lb.dy * s.r
+      local rr = s.r * lb.r
+      for q = 1, 4 do
+        p[q].visible = true
+        p[q].x = x
+        p[q].y = y
+      end
+      p[1].scale = (rr + s.r * 0.45) * 2 / PUFF_TEX
+      p[2].scale = (rr + 8) * 2 / PUFF_TEX
+      p[3].scale = (rr + 5) * 2 / PUFF_TEX
+      p[4].scale = (rr + 2) * 2 / PUFF_TEX
+      p[5].visible = s.grass
+      p[6].visible = s.grass
+      if s.grass then
+        local grr = math.max(rr - 3, s.r * 0.2)
+        p[5].x = x
+        p[5].y = y
+        p[5].scale = grr * 2 / PUFF_TEX
+        p[6].x = x - s.r * 0.16
+        p[6].y = y - s.r * 0.16
+        p[6].scale = grr * 1.1 / PUFF_TEX
+      end
+    else
+      for q = 1, 6 do
+        p[q].visible = false
+      end
+    end
+  end
+  s.lagoonp.visible = not s.grass
+  if not s.grass then
+    s.lagoonp.x = s.x
+    s.lagoonp.y = s.sy
+    s.lagoonp.scale = s.r * 0.76 / PUFF_TEX
+  end
+  for j = 1, ISLAND_SPARKS do
+    local off = s.twinkles[j]
+    local sp = s.twinks[j]
+    local tw = 0.5 + 0.5 * math.sin(t / 300 + off.phase)
+    sp.x = s.x + off.dx * s.r
+    sp.y = s.sy + off.dy * s.r
+    sp.scale = s.r * 0.09 * 2 / PUFF_TEX
+    sp.alpha = math.floor(20 + 150 * tw)
+  end
 end
 
 -- ---- state -----------------------------------------------------------
@@ -616,12 +726,13 @@ local function step_islands(ft)
   for i = #islands, 1, -1 do
     local s = islands[i]
     s.sy = s.sy + SCROLL * ft
-    if s.sy - s.r > H then
-      s.sy = -s.r - rand(120, 480)
+    if s.sy - s.r * 1.6 > H then          -- the foam and glow trail the land
+      s.sy = -s.r * 1.8 - rand(120, 480)
       s.x = rand(20, W - 20)
       s.r = rand(16, 40)
       island_shape(s)
     end
+    place_island(s)
   end
 end
 
@@ -836,49 +947,8 @@ local function draw_sea()
       end
     end
   end
-  -- distant islands drifting down: a lobe-built rock with surf, a sand rim
-  -- on the near side, jungle shading away from the sun and a palm or two
-  for i = 1, #islands do
-    local s = islands[i]
-    -- surf: the whole lobe shape again, a little larger and pale
-    world.color = colors.skyblue
-    world.alpha = 90
-    for k = 1, #s.lobes do
-      local lb = s.lobes[k]
-      world.circle(s.x + lb.dx * s.r, s.sy + lb.dy * s.r, s.r * lb.r + 4, true)
-    end
-    -- sand: same shape, mid size, pulled toward the viewer
-    world.color = colors.beige
-    for k = 1, #s.lobes do
-      local lb = s.lobes[k]
-      world.circle(s.x + lb.dx * s.r, s.sy + lb.dy * s.r + 3, s.r * lb.r + 2, true)
-    end
-    -- jungle: the full shape at its own size, then the sunlit patch
-    world.color = colors.darkgreen
-    for k = 1, #s.lobes do
-      local lb = s.lobes[k]
-      world.circle(s.x + lb.dx * s.r, s.sy + lb.dy * s.r, s.r * lb.r, true)
-    end
-    world.color = colors.green
-    for k = 1, #s.lobes do
-      local lb = s.lobes[k]
-      world.circle(s.x + lb.dx * s.r - s.r * 0.18, s.sy + lb.dy * s.r - s.r * 0.18,
-                   s.r * lb.r * 0.62, true)
-    end
-    -- palms: a brown trunk dot and a frond star
-    for k = 1, #s.palms do
-      local pm = s.palms[k]
-      local px = s.x + pm.dx * s.r
-      local py = s.sy + pm.dy * s.r
-      world.color = colors.brown
-      world.circle(px, py, 2, true)
-      world.color = colors.green
-      world.line(px, py, px - 5, py - 4, 2)
-      world.line(px, py, px + 5, py - 4, 2)
-      world.line(px, py, px - 4, py + 4, 2)
-      world.line(px, py, px + 4, py + 4, 2)
-    end
-  end
+  -- (the cute little islands are Sprites.blob/puff sprites - see make_islands
+  -- - and draw themselves on the sprite layer, behind the clouds)
 end
 
 local function draw_bullets()
@@ -1057,6 +1127,10 @@ local function boot()
   for i = 1, 4 do
     islands[i] = { x = rand(20, W - 20), sy = rand(0, H), r = rand(16, 40) }
     island_shape(islands[i])
+  end
+  make_islands(islands)             -- batched hops for the whole archipelago
+  for i = 1, 4 do
+    place_island(islands[i])
   end
   poolFree = {}
   for i = 1, ENEMY_POOL do poolFree[i] = true end

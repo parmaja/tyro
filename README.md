@@ -335,6 +335,7 @@ positioned with `move` or by setting `x`/`y` properties.
 |----------|-------------|
 | `Sprites.new("name"?)` | Create a new sprite. Optional name registers it for lookup. |
 | `Sprites.puff("name"? [, size] [, count])` | Create a sprite carrying an **engine-built soft puff texture** (no file, like `models.sphere`): a solid core with a feathered, lumpy rim — the arcade building block for clouds and smoke. `size` is the texture in pixels (default 128). `count` above 1 builds that many puffs in one hop and returns a table of them, named `name1..nameN`. Stack a few with jittered position/scale/alpha and their soft edges fuse into one fluffy mass. |
+| `Sprites.blob("name"? [, size] [, count])` | The **crisp-rim twin** of `Sprites.puff`: the same lumpy, wobbled silhouette, but the alpha cuts off at the coast within a pixel instead of feathering — an organic shape with a sharp edge (islands, rocks, hard-edged decor that must not look fluffy). Same `size`/`count`/batch behaviour as `Sprites.puff`. |
 | `Sprites("name")` | Look up a sprite by name (returns the sprite object or `nil`). |
 | `Sprites.find("name")` | Same as above. |
 

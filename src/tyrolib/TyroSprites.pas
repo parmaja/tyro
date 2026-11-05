@@ -263,22 +263,27 @@ type
 
   { TPuffSpriteObject }
 
-  { Builds engine-generated soft puff sprites on the main thread: solid core
-    with a feathered, lumpy rim, the classic arcade trick for clouds and
-    smoke. Stacking a few of these soft quads fuses them into a fluffy mass
-    with no hard silhouette anywhere. A COUNT of puffs is built in ONE
-    round-trip: a sky full of clouds otherwise stalls the script thread on a
-    frame wait for every single sprite. }
+  { Builds engine-generated puff sprites on the main thread. Soft mode (the
+    classic arcade cloud trick): solid core with a feathered, lumpy rim -
+    stacking a few of these fuses them into a fluffy mass with no hard
+    silhouette anywhere. Hard mode (the BLOB flag): the same lumpy, wobbled
+    rim but alpha cuts off within a couple of pixels at the coast, giving an
+    organic silhouette with a crisp edge - islands, rocks and hard decor that
+    must not look fluffy. A COUNT of sprites is built in ONE round-trip: a
+    sky full of clouds otherwise stalls the script thread on a frame wait for
+    every single sprite. }
   TPuffSpriteObject = class(TQueueObject)
   private
     FName: string;
     FSize: integer;
     FCount: integer;
+    FHard: boolean;
     FHandles: array of integer;
   protected
     procedure DoExecute; override;
   public
-    constructor Create(const AName: string; ASize, ACount: integer);
+    constructor Create(const AName: string; ASize, ACount: integer;
+      AHard: boolean = False);
     property Handles: TArray<integer> read FHandles;
   end;
 
@@ -2016,11 +2021,13 @@ end;
 
 { TPuffSpriteObject }
 
-constructor TPuffSpriteObject.Create(const AName: string; ASize, ACount: integer);
+constructor TPuffSpriteObject.Create(const AName: string; ASize, ACount: integer;
+  AHard: boolean);
 begin
   inherited Create;
   FName := AName;
   FSize := ASize;
+  FHard := AHard;
   if ACount < 1 then
     ACount := 1
   else if ACount > 512 then
@@ -2034,7 +2041,7 @@ var
   Tex: TTexture2D;
   Px: PColor;
   X, Y, I: integer;
-  NX, NY, D, W, A: single;
+  NX, NY, D, W, A, E: single;
   aName: string;
 begin
   if FSize < 32 then
@@ -2059,12 +2066,31 @@ begin
       W := Sin(NX * 3.1 + Sin(NY * 2.3) * 1.4) * 0.6 +
            Sin(NY * 3.7 + Sin(NX * 2.9) * 1.2) * 0.4;
       D := D - W * 0.10;
-      A := 1 - D;
-      if A <= 0 then
-        A := 0
-      else if A >= 1 then
-        A := 1;
-      A := A * A * (3 - 2 * A); // smoothstep falloff: this is where fluff lives
+      if FHard then
+      begin
+        // Blob mode: the wobbled rim IS the coast and alpha falls off within
+        // a pixel or two of it - an organic silhouette with a crisp edge, for
+        // islands and decor that must never look fluffy.
+        E := 4 / FSize;
+        if D <= 1 - E then
+          A := 1
+        else if D >= 1 + E then
+          A := 0
+        else
+        begin
+          A := (1 + E - D) / (2 * E);
+          A := A * A * (3 - 2 * A); // a whisker of anti-aliasing
+        end;
+      end
+      else
+      begin
+        A := 1 - D;
+        if A <= 0 then
+          A := 0
+        else if A >= 1 then
+          A := 1;
+        A := A * A * (3 - 2 * A); // smoothstep falloff: this is where fluff lives
+      end;
       // TColor packs as r | g<<8 | b<<16 | a<<24 (little endian): white with
       // the falloff as alpha.
       Px.Value := $00FFFFFF or (Cardinal(Round(A * 255)) shl 24);

@@ -299,7 +299,9 @@ type
   public
     //sprites
     function New_func(L: Plua_State): integer; cdecl;
+    function PuffOrBlob(L: Plua_State; AHard: boolean): integer; cdecl;
     function Puff_func(L: Plua_State): integer; cdecl;
+    function Blob_func(L: Plua_State): integer; cdecl;
     function Find_func(L: Plua_State): integer; cdecl;
     function Call_func(L: Plua_State): integer; cdecl;
   end;
@@ -1790,6 +1792,7 @@ begin
   Lua.State.RegisterTable('Sprites');
   Lua.State.Register('Sprites', 'new', Self, Sprites.New_func);
   Lua.State.Register('Sprites', 'puff', Self, Sprites.Puff_func);
+  Lua.State.Register('Sprites', 'blob', Self, Sprites.Blob_func);
   Lua.State.Register('Sprites', 'find', Self, Sprites.Find_func);
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
   Lua.State.Register('Sprites', '__call', Self, Sprites.Call_func, True);
@@ -4252,13 +4255,17 @@ begin
   Result := 1;
 end;
 
-// Sprites.puff("name" [, size] [, count]) -> a sprite carrying an engine-generated
-// soft puff texture: a solid core with a feathered, lumpy rim. The arcade cloud
+// Sprites.puff("name" [, size] [, count]) / Sprites.blob("name" [, size] [, count])
+// -> shared body. Puff: a sprite carrying an engine-generated soft puff
+// texture: a solid core with a feathered, lumpy rim. The arcade cloud
 // and smoke trick: stack a few of these with jittered position/scale/alpha and
-// the soft edges fuse into one fluffy mass. Size is the texture in px (default
-// 128). A count above 1 builds that many puffs in ONE hop and returns a table
+// the soft edges fuse into one fluffy mass. Blob: the SAME lumpy rim, but the
+// alpha cuts off at the coast within a pixel - an organic silhouette with a
+// crisp edge for islands, rocks and decor that must not look fluffy. Size is
+// the texture in px (default
+// 128). A count above 1 builds that many in ONE hop and returns a table
 // of them - a whole sky of clouds should not stall on one round-trip per puff.
-function TLuaSprites.Puff_func(L: Plua_State): integer; cdecl;
+function TLuaSprites.PuffOrBlob(L: Plua_State; AHard: boolean): integer; cdecl;
 var
   aName, aOne: string;
   aSize, aCount, I, handle: integer;
@@ -4286,7 +4293,7 @@ begin
     aCount := Round(L.ToNumber(3))
   else
     aCount := 1;
-  PuffObj := TPuffSpriteObject.Create(aName, aSize, aCount);
+  PuffObj := TPuffSpriteObject.Create(aName, aSize, aCount, AHard);
   try
     PuffObj.Run(Script.Thread); //Will run in Synchronize
     if Length(PuffObj.Handles) <= 1 then
@@ -4325,6 +4332,18 @@ begin
   finally
     PuffObj.Free;
   end;
+end;
+
+// Sprites.puff("name" [, size] [, count]) -> the soft cloud puff, see PuffOrBlob
+function TLuaSprites.Puff_func(L: Plua_State): integer; cdecl;
+begin
+  Result := PuffOrBlob(L, False);
+end;
+
+// Sprites.blob("name" [, size] [, count]) -> the crisp-rim twin of the puff
+function TLuaSprites.Blob_func(L: Plua_State): integer; cdecl;
+begin
+  Result := PuffOrBlob(L, True);
 end;
 
 // Sprites.find("name") -> returns a sprite object for the named sprite, or nil
