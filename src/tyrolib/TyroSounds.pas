@@ -299,6 +299,7 @@ function Sweep_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Bee_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function CyberBass_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function TurboRev_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Missile_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 
 implementation
 
@@ -2349,6 +2350,97 @@ begin
   else if Result < -1.0 then Result := -1.0;
 end;
 
+// Missile launch from a jet: the ignition thump as the rocket motor lights,
+// a short rising squeal as it climbs the rail, and a broadband exhaust roar
+// that starts bright and darkens while it decays, the way the plume sounds
+// as the missile pulls away from the plane.
+//
+// Enhancements over the original:
+//  - Sharper ignition: a click transient + sub-bass shockwave on top of the thump
+//  - Squeal now detunes (doppler) as the missile departs, not just sweeps up
+//  - Rocket "crackle": sparse impulsive pops in the exhaust (supersonic combustion)
+//  - Two-stage roar envelope: bright hiss -> dark rumble, with a mid "body" band
+//  - Everything still derived from HashNoise, so a given Index always matches.
+function Missile_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  ThumpRatio   = 0.35;  // ignition thump pitch, fraction of the base frequency
+  ThumpTau     = 0.06;  // ignition thump decay, seconds
+  ShockRatio   = 0.18;  // sub-bass shockwave pitch (below the thump)
+  ShockTau     = 0.10;  // shockwave decay, seconds
+  ClickTau     = 0.004; // ignition click transient, seconds
+  RiseTau      = 0.05;  // how fast the squeal climbs, seconds
+  SweepDepth   = 1.5;   // squeal climb, in multiples of the base pitch
+  SquealTau    = 0.13;  // squeal decay, seconds
+  DetuneDepth  = 0.8;   // doppler detune at departure, fraction of pitch
+  DetuneTau    = 0.20;  // how fast the detune settles, seconds
+  RoarTau      = 0.25;  // exhaust roar decay, seconds
+  RoarBright   = 0.12;  // how long the roar stays bright before it darkens
+  RoarLevel    = 0.7;   // exhaust roar level
+  CrackleTau   = 0.35;  // crackle envelope decay, seconds
+  CrackleRate  = 0.004; // base probability of a crackle pop per sample
+var
+  t, Thump, Shock, Click, Squeal, Phase, Bright, Fine, Dark, Body, Roar, Env: Double;
+  R, Crackle: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+
+  // --- Ignition thump: low sine kick as the motor lights ---
+  Thump := Sin(2 * Pi * Frequency * ThumpRatio * t) * Exp(-t / ThumpTau);
+
+  // --- Sub-bass shockwave: a lower, slower swell under the thump ---
+  Shock := Sin(2 * Pi * Frequency * ShockRatio * t) * Exp(-t / ShockTau);
+
+  // --- Click transient: a very short broadband tick at ignition ---
+  Click := (HashNoise(Index) * 2 - 1) * Exp(-t / ClickTau);
+
+  // --- Squeal with doppler detune as the missile pulls away ---
+  // f(t) = Frequency * (1 + SweepDepth*(1 - Exp(-t/RiseTau)))   // climb
+  //         - Frequency * DetuneDepth*(1 - Exp(-t/DetuneTau))  // doppler drop
+  // Phase is integrated analytically (same trick as Pew).
+  Phase := 2 * Pi * Frequency * (
+      t * (1 + SweepDepth - DetuneDepth)
+    + SweepDepth * RiseTau * (Exp(-t / RiseTau) - 1)
+    - DetuneDepth * DetuneTau * (Exp(-t / DetuneTau) - 1)
+  );
+  Squeal := Sin(Phase) * Exp(-t / SquealTau);
+
+  // --- Roar: three-band noise crossfaded from bright -> mid -> dark ---
+  Bright := Exp(-t / RoarBright);
+  Fine   := HashNoise(Index)         * Bright;        // high hiss at the rail
+  Body   := HashNoise(Index shr 2)   * (1 - Abs(2 * Bright - 1)); // mid band peaks
+  Dark   := HashNoise(Index shr 5)   * (1 - Bright);  // low rumble at departure
+  Env    := (1 - Exp(-t * 1500)) * Exp(-t / RoarTau);
+  Roar   := (Fine + 0.5 * Body + Dark) * RoarLevel * Env;
+
+  // --- Rocket crackle: sparse impulsive pops in the exhaust ---
+  // HashNoise(Index xor $5A5A) gives an independent stream; pops fire when
+  // it crosses a threshold, enveloped by CrackleTau and a fast per-pop decay.
+  R := HashNoise(Index xor $5A5A);
+  Crackle := 0;
+  if R > (1 - CrackleRate) then
+  begin
+    // Impulse shaped by a short exponential; sign alternates by stream.
+    Crackle := (2 * HashNoise(Index xor $A5A5) - 1)
+             * Exp(-((R - (1 - CrackleRate)) / CrackleRate) * 6)
+             * Exp(-t / CrackleTau) * 0.35;
+  end;
+
+  Result := Thump * 0.85
+          + Shock * 0.45
+          + Click * 0.25
+          + Squeal * 0.55
+          + Roar
+          + Crackle;
+
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 initialization
   WaveForms := TWaveForms.Create;
   //Default one is the first one
@@ -2400,6 +2492,7 @@ initialization
   Waveforms.Add('Bee', @Bee_Waveform); //insect wing buzz (bee/fly)
   Waveforms.Add('CyberBass', @CyberBass_Waveform); //fat resonant cyber synth bass
   Waveforms.Add('TurboRev', @TurboRev_Waveform); //ion turbine / boost rev-up whoosh
+  Waveforms.Add('Missile', @Missile_Waveform); //jet missile launch thump + exhaust roar
 
   PlayingMelodies := TList.Create;
   PlayingWaveforms := TList.Create;

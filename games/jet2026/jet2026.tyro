@@ -87,7 +87,7 @@ end
 
 -- ---- sound helpers ---------------------------------------------------
 local function beep(freq, ms)   music.sound(freq, ms) end
-local function shoot_sfx()      music.sound('Pew', 240, 90) end
+local function shoot_sfx()      music.sound('Missile', 100, 160) end
 local function boom_sfx()       music.sound('Explode', 50, 240); sound.noise(360, 300) end
 
 -- HUD/overlay text is centered on the fixed screen buffer (see draw()).
