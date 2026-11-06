@@ -685,45 +685,55 @@ begin
           World.Clear;
 
         try
-          Camera2D.Target := Vector2Of(0, 0);
-          Camera2D.Offset := Vector2Of(Window.Margin, Window.Margin);
-          Camera2D.Zoom := 1;
-          Camera2D.Rotation := 0;
+          //world.enable = false: the scene keeps running - the queue drains
+          //above, so loads of sprites, textures and models still land - but
+          //nothing of the world is presented: the board, sprites, models,
+          //particles and controls all sit out the frame, and only the screen
+          //canvas (the loading splash over the background) reaches the window.
+          if World.Enabled then
+          begin
+            Camera2D.Target := Vector2Of(0, 0);
+            Camera2D.Offset := Vector2Of(Window.Margin, Window.Margin);
+            Camera2D.Zoom := 1;
+            Camera2D.Rotation := 0;
 
-          //A running shake (accident/error feedback) jitters the world camera,
-          //so the canvas and the sprites move together while the terminal and
-          //the other controls stay glued to the window.
-          if World.UpdateShake(RayLib.GetFrameTime()) then
-            Camera2D.Offset := Vector2Of(World.ShakeX, World.ShakeY);
+            //A running shake (accident/error feedback) jitters the world camera,
+            //so the canvas and the sprites move together while the terminal and
+            //the other controls stay glued to the window.
+            if World.UpdateShake(RayLib.GetFrameTime()) then
+              Camera2D.Offset := Vector2Of(World.ShakeX, World.ShakeY);
 
-          BeginMode2D(Camera2D);
-          Draw;
-          EndMode2D;
+            BeginMode2D(Camera2D);
+            Draw;
+            EndMode2D;
 
-          //Sparks flagged under = true burn BELOW the jets: they take a pass
-          //before the 3D models, so a model covers the exhaust flame riding at
-          //its own tail. They take the same margin/shake offset as everything
-          //else on this frame.
-          if (Particles <> nil) and Particles.HasAny(True) then
-            Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, True);
+            //Sparks flagged under = true burn BELOW the jets: they take a pass
+            //before the 3D models, so a model covers the exhaust flame riding at
+            //its own tail. They take the same margin/shake offset as everything
+            //else on this frame.
+            if (Particles <> nil) and Particles.HasAny(True) then
+              Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, True);
 
-          //The 3D models ride above the 2D scene but below the controls, so the
-          //pass sits between EndMode2D and the control tree. Camera2D.Offset is
-          //the same margin/shake offset the board and sprites got, so everything
-          //shakes together; the camera inside DrawAll maps it onto the models.
-          if (Models <> nil) and Models.HasVisible then
-            Models.DrawAll(Camera2D.Offset.X, Camera2D.Offset.Y,
-              RayLib.GetScreenWidth, RayLib.GetScreenHeight);
+            //The 3D models ride above the 2D scene but below the controls, so the
+            //pass sits between EndMode2D and the control tree. Camera2D.Offset is
+            //the same margin/shake offset the board and sprites got, so everything
+            //shakes together; the camera inside DrawAll maps it onto the models.
+            if (Models <> nil) and Models.HasVisible then
+              Models.DrawAll(Camera2D.Offset.X, Camera2D.Offset.Y,
+                RayLib.GetScreenWidth, RayLib.GetScreenHeight);
 
-          //The rest of the sparks ride on top of the 3D models, so an explosion
-          //always reads over the jets and sprites that made it; they take the
-          //same margin/shake offset the models got and shake together with them.
-          if (Particles <> nil) and Particles.HasAny then
-            Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y);
+            //The rest of the sparks ride on top of the 3D models, so an explosion
+            //always reads over the jets and sprites that made it; they take the
+            //same margin/shake offset the models got and shake together with them.
+            if (Particles <> nil) and Particles.HasAny then
+              Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y);
 
-          if Window <> nil then
-            Window.Paint;
+            if Window <> nil then
+              Window.Paint;
+          end;
 
+          //The screen canvas is the one layer that survives world.enable =
+          //false, so a splash can own the window while the world stays dark.
           Screen.PostDraw;
 
           if moShowFPS in Options then

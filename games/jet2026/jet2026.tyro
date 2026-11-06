@@ -1620,7 +1620,16 @@ local function boot()
   playerJet:hide()
 end
 
+-- Splash: boot() below loads the meshes, the warship sprites and the sea
+-- shader, and the engine keeps draining the queue while they do. With
+-- world.enable = false nothing of the world reaches the window - only the
+-- screen canvas - so this LOADING line rides a black screen until the last
+-- asset has landed, then the world wakes and the ready panel takes over.
+world.enable = false
+screen.clear('black')
+center_text('LOADING', H / 2 - 8, colors.white)
 boot()
+world.enable = true
 
 -- Test hook: when the global JET2026_TEST is set, this file was pulled in via
 -- require() from a test harness instead of run as the game. Export a small API

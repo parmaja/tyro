@@ -376,6 +376,7 @@ type
   TTyroWorld = class(TTyroCanvas)
   private
     FOpaque: Boolean;
+    FEnabled: Boolean;
     FTitle: string;
     FTimescale: Single;
     // Screen shake state
@@ -409,6 +410,13 @@ type
     property Timescale: Single read FTimescale write SetTimescale;
 
     property Opaque: Boolean read FOpaque write FOpaque;
+    // The presentation switch (the Lua world.enable): while disabled the
+    // engine keeps living - the queue still drains, so loads of sprites,
+    // textures and models land - but it presents nothing of the world: the
+    // board, sprites, models, particles and controls all sit out the frame
+    // and only the Screen canvas reaches the window. A loading splash owns
+    // the screen while this is false.
+    property Enabled: Boolean read FEnabled write FEnabled;
     property ShakeX: Integer read GetShakeX;
     property ShakeY: Integer read GetShakeY;
   end;
@@ -1240,6 +1248,7 @@ constructor TTyroWorld.Create;
 begin
   inherited;
   FOpaque := True;
+  FEnabled := True;
   FTimescale := 1;
   FWidth := cDefaultWindowWidth;
   FHeight := cDefaultWindowHeight;

@@ -111,6 +111,7 @@ World extras (things only the camera owns):
 | `world.ground(z)` | the depth plane the 3D shadows land on |
 | `world.shadowsoft(px)` | how far the shadows' edges blur — a penumbra (`0`..`6`; `0` is a hard edge, default) |
 | `world.timescale` | slow motion: `0.35` runs the whole scene at a third speed (default `1`) |
+| `world.enable` | `false` presents nothing but the `screen`: the queue keeps running, so loading sprites and textures works while the world stays dark - a loading splash (default `true`) |
 
 ### `world` drawing only works inside `draw()` ⚠️
 

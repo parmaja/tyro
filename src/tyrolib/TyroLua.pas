@@ -1111,6 +1111,18 @@ begin
     Result := 1;
     exit;
   end;
+  if field = 'enable' then
+  begin
+    //Presentation switch: while false the engine keeps draining the queue
+    //(loads of sprites, textures and models still land) but presents only
+    //the screen canvas - the world stays dark for a loading splash.
+    if lua_isboolean(L, -1) then
+    begin
+      Engine.World.Enabled := L.ToBoolean(-1);
+      Result := 1;
+      exit;
+    end
+  end;
   if Result = 0 then
     Result := inherited;
 end;
@@ -1135,6 +1147,11 @@ begin
   else if field = 'timescale' then
   begin
     L.PushNumber(Engine.World.Timescale);
+    Result := 1;
+  end
+  else if field = 'enable' then
+  begin
+    L.PushBoolean(Engine.World.Enabled);
     Result := 1;
   end;
   if Result = 0 then
