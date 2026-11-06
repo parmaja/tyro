@@ -27,7 +27,7 @@
 --
 --  Controls:  ARROWS / WASD        fly - left/right strafe, up/down climb/dive
 --             SPACE / X            fire (tap or hold for auto-fire)
---             C                    drop a bomb on the warships (3 aboard,
+--             Z                    drop a bomb on the warships (3 aboard,
 --                                  they reload one by one between hits)
 --             SHIFT + UP / DOWN    throttle up / down (world speed)
 --             SHIFT + LEFT / RIGHT barrel roll - hold it and the jet keeps
@@ -90,9 +90,9 @@ local function is_fire_down()
 end
 
 -- The jets' guns bark harmlessly at steel: the warships only take bombs.
--- C on the keyboard, the left bumpers on a pad.
+-- Z on the keyboard, the left bumpers on a pad.
 local function is_bomb_pressed()
-  return keyboard.pressed("c")
+  return keyboard.pressed("z")
       or gamepad.pressed("lb") or gamepad.pressed("lt")
 end
 
@@ -948,7 +948,7 @@ local function step_ships(ft)
 end
 
 -- ---- bombs -----------------------------------------------------------
--- The plane's answer to the warships: C drops one of the three bombs
+-- The plane's answer to the warships: Z drops one of the three bombs
 -- aboard. The bomb sheds the jet's speed the moment it leaves the rack, so
 -- on screen it falls BEHIND the plane and sinks down the sea - and the
 -- guns' bullets simply never look at a ship's hitbox, so steel really is
@@ -1233,7 +1233,7 @@ local function simulate(ft)
       player.cool = 0.15
     end
 
-    -- bomb rack: C / LB drops one of the bombs aboard, and the crew wins
+    -- bomb rack: Z / LB drops one of the bombs aboard, and the crew wins
     -- one back every BOMB_REGEN seconds while any slot sits empty
     player.bcool = math.max(0, player.bcool - ft)
     if player.bombs < BOMB_MAX then
@@ -1514,11 +1514,11 @@ local function draw_overlay()
     center_text("PRESS SPACE / START TO FLY", 224, colors.white)
     center_text("ARROWS / WASD / STICK   fly", 258, colors.silver)
     center_text("SPACE / X / A / RT      fire (hold auto)", 278, colors.silver)
-    center_text("C / LB                bombs sink the warships", 298, colors.silver)
+    center_text("Z / LB                bombs sink the warships", 298, colors.silver)
     center_text("SHIFT + UP / DOWN       throttle up / down", 318, colors.silver)
     center_text("SHIFT + LEFT / RIGHT    hold for a barrel roll", 338, colors.silver)
     center_text("P / START  pause    ESC / BACK  quit", 358, colors.silver)
-    center_text("Blast the squadron. Grab P to power up. Bomb the ships.", 382, colors.skyblue)
+    center_text("Blast the squadron. Bomb the ships.", 382, colors.skyblue)
     if gamepad.available() then
       local padName = gamepad.name(); if padName == "" then padName = "Gamepad" end
       center_text("READY: " .. padName, 402, colors.lime)
