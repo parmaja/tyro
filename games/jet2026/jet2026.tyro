@@ -1574,6 +1574,7 @@ local function boot()
   world.shadowsoft(3)
   -- the living sea: a board effect that ripples every blue pixel; if the
   -- shader file is missing, draw_sea's hand-drawn crests cover for it
+  -- sea.frag exists in bin/assets
   seaShader = pcall(function() shader.load("sea.frag") end)
   if seaShader then shader.value = 1.0 end
   hi = load_hi()

@@ -1163,5 +1163,3 @@ https://pixelfonts.org/#116
 https://github.com/IT-Studio-Rech/bdf-fonts
 
 https://forums.adafruit.com/viewtopic.php?t=203655
-
-Jet Plan https://sketchfab.com/3d-models/jet-88a540bdacd940648223f517b9af9452
