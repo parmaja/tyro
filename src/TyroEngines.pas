@@ -270,6 +270,9 @@ type
     //* Diagnostics-facing: the counters it reports are only populated in debug
     //* builds, so a release build shows 0 for most of them.
     FShowQueueStats: Boolean;
+    //* True while the keyboard shortcuts help panel is drawn over the window.
+    //* Toggled with F1 or through the ShowHelp property.
+    FShowHelp: Boolean;
     //* Lua enter()/leave() queue grouping. FQueueHold counts the open enter()
     //* calls: while it is above zero ProcessQueue stops executing commands, so
     //* a whole group of draw calls is drawn at one drawing cycle instead of
@@ -350,6 +353,10 @@ type
     //* window's top-left corner. A no-op when the panel is hidden. Called from
     //* the drawing cycle, after the world and the controls, so it stays on top.
     procedure DrawQueueStats;
+    //* Draw the keyboard shortcuts help panel (see FShowHelp), centered on the
+    //* screen. Called from the drawing cycle after DrawQueueStats, so it is the
+    //* top-most layer.
+    procedure DrawHelpPanel;
 
     procedure LoadConfig;
     procedure Stop; //and wait
@@ -441,6 +448,8 @@ type
     //* Show/hide the queue/frame statistics panel (also Ctrl+F10). See
     //* FShowQueueStats: the diagnostic counters read 0 outside debug builds.
     property ShowQueueStats: Boolean read FShowQueueStats write FShowQueueStats;
+    //* Show/hide the keyboard shortcuts help panel (also F1).
+    property ShowHelp: Boolean read FShowHelp write FShowHelp;
 
     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
     procedure ShowConsole; overload;
@@ -748,6 +757,9 @@ begin
           //Queue/frame statistics panel (Ctrl+F10), on top of the controls.
           if FShowQueueStats then
             DrawQueueStats;
+          //Keyboard shortcuts help panel (F1), the top-most layer.
+          if FShowHelp then
+            DrawHelpPanel;
         finally
           RayLib.EndDrawing;
           FPresentedFrame := True;
@@ -1102,6 +1114,63 @@ begin
 
   for i := 0 to High(Lines) do
     RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(UTF8String(Lines[i])), Vector2Of(x, y + i * cLine), Res.Font.Height, 0, clWhite);
+end;
+
+procedure TTyroEngine.DrawHelpPanel;
+const
+  cPad = 10;
+  cLine = 18;
+  cKeyCol = 11; //column where the descriptions start, in characters
+  cTitle = 'Keyboard shortcuts (F1 to close)';
+type
+  THotkey = record
+    Key: string;
+    Desc: string;
+  end;
+const
+  cKeys: array[0..9] of THotkey = (
+    (Key: 'F1';       Desc: 'Show / hide this help'),
+    (Key: 'F2';       Desc: 'Code editor'),
+    (Key: 'F3';       Desc: 'Sprite editor'),
+    (Key: 'F4';       Desc: 'Open a script file'),
+    (Key: 'F5';       Desc: 'Run the script'),
+    (Key: 'F7';       Desc: 'Output panel'),
+    (Key: 'F8';       Desc: 'Console'),
+    (Key: 'Ctrl+F10'; Desc: 'Stats panel'),
+    (Key: 'Ctrl+S';   Desc: 'Save and run (in the editor)'),
+    (Key: 'ESC';      Desc: 'Close the editor or file list'));
+var
+  i: Integer;
+  w, maxW, x, y, h: Integer;
+begin
+  //Size the panel to its widest row, measured with the default font, then
+  //center it on the screen so it stays readable over any scene.
+  maxW := Length(cTitle);
+  for i := Low(cKeys) to High(cKeys) do
+  begin
+    w := cKeyCol + Length(cKeys[i].Desc);
+    if w > maxW then
+      maxW := w;
+  end;
+  w := maxW * Res.Font.Width + cPad * 2;
+  h := (Length(cKeys) + 1) * cLine + cPad * 2;
+  x := (RayLib.GetScreenWidth - w) div 2;
+  y := (RayLib.GetScreenHeight - h) div 2;
+  //Translucent backdrop so the text stays readable over any drawing.
+  RayLib.DrawRectangle(x, y, w, h, clBlack.ReplaceAlpha(220));
+  RayLib.DrawRectangleLines(x, y, w, h, clGray);
+
+  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(UTF8String(cTitle)),
+    Vector2Of(x + cPad, y + cPad), Res.Font.Height, 0, clYellow);
+  for i := Low(cKeys) to High(cKeys) do
+  begin
+    //The key name is yellow so it stands out from its white description.
+    RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(UTF8String(cKeys[i].Key)),
+      Vector2Of(x + cPad, y + cPad + (i + 1) * cLine), Res.Font.Height, 0, clYellow);
+    RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(UTF8String(cKeys[i].Desc)),
+      Vector2Of(x + cPad + cKeyCol * Res.Font.Width, y + cPad + (i + 1) * cLine),
+      Res.Font.Height, 0, clWhite);
+  end;
 end;
 
 procedure TTyroEngine.Start;
@@ -1714,9 +1783,19 @@ begin
   end;
 
   //* Global UI shortcuts work whether or not a control is focused.
-  // F5 reruns the loaded script on a new script thread
+  // F1 toggles the keyboard shortcuts help panel.
+  if RayLib.IsKeyPressed(KEY_F1) then
+    FShowHelp := not FShowHelp;
+  // F5 reruns the loaded script on a new script thread. Like the console's
+  // "run", the restart hides the console and the editor - the fresh run owns
+  // the whole window - and hiding the editor also copies its edited buffer
+  // into the source, so F5 never executes a stale template.
   if RayLib.IsKeyPressed(KEY_F5) then
+  begin
+    HideConsole;
+    HideEditor;
     RunScriptThread;
+  end;
   // F2 toggles the script editor
   if RayLib.IsKeyPressed(KEY_F2) then
     ToggleEditor;

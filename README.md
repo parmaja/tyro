@@ -130,7 +130,9 @@ These work while the engine is running, whatever has the keyboard focus:
 
 | Key | Description |
 |-----|-------------|
+| `F1` | Toggle the keyboard shortcuts help panel (lists every shortcut below) |
 | `F2` | Toggle the script editor. Opening it stops the script; closing it (also with `ESC`) saves the edited source back to the script and runs it |
+| `F3` | Toggle the sprite editor |
 | `F4` | Toggle the script picker (`*.tyro` and `*.lua`) |
 | `F5` | Rerun the loaded script on a new script thread |
 | `F7` | Toggle the output panel |
@@ -273,7 +275,7 @@ The following commands are built in:
 
 | Command | Description |
 |---------|-------------|
-| `dir`, `list`, `ls` | List files in the current directory |
+| `list`, `ls` | List files in the current directory |
 | `clear`, `cls` | Clear the console output |
 | `help`, `?` | Show available commands |
 | `load <script>` | Load a script from the current directory (F4 to pick one) |
