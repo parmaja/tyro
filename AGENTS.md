@@ -30,7 +30,7 @@ You have full access to the current folder and this relative paths.
 - Do not commit without being asked to commit.
 - Do not add ignored files.
 - Do not add untracked files that you did not generate yourself; leave them untracked.
-- Whenever you are asked to make a git commit, you must identify and include your active model name at top of comment and as the author but do not change email in git.
+- Whenever you are asked to make a git commit, you must identify and include your active model name at end of comment and as the git author but do not change email in git.
 
 ## Testing Framework Architecture
 
