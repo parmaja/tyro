@@ -1,0 +1,305 @@
+--======================================================================
+--  Starloop - a perfect space loop with flying stars
+--  (projects/starloop/starloop.tyro)
+--======================================================================
+--  A seamless, infinitely looping deep-space backdrop:
+--
+--    * ~450 twinkling stars on three parallax layers that drift
+--      slowly past the window, wrapping around the edges
+--    * a faint galactic band of dust stars across the sky
+--    * glowing nebula clouds that breathe with soft aurora light
+--    * hero stars with spinning four-point sparkles and flares
+--    * shooting stars that streak across with shining fire trails
+--
+--  Perfect loop: every motion in the scene has a period that
+--  divides LOOP seconds - the twinkle sines, the parallax drift
+--  (an exact whole number of screen wraps per loop), the sparkle
+--  spins and the shooting-star schedule (a pure function of loop
+--  time). So frame 0 and the frame at LOOP are identical: record
+--  one loop and the video stitches together with no seam.
+--
+--  Controls:
+--    [SPACE] pause / resume
+--    [R]     roll a brand-new sky
+--    [H]     toggle the info line
+--    [Q/Esc] quit
+--
+--  Run:  tyro projects/starloop/starloop.tyro
+--======================================================================
+
+window.show(960, 540)
+world.title = 'Starloop - flying stars'
+world.backcolor = 'black'
+
+local TAU  = 2 * math.pi
+local LOOP = 60          -- seconds for one perfect cycle
+local WM   = 60          -- off-screen margin so stars wrap unseen
+
+-- ---- deterministic sky rng (a Lehmer generator) -----------------------
+local rseed = 7
+local function rnd()
+  rseed = (rseed * 16807) % 2147483647
+  return rseed / 2147483647
+end
+local function rr(a, b) return a + (b - a) * rnd() end
+local function ri(a, b) return math.floor(a + (b - a + 1) * rnd()) end
+
+-- star tints: mostly white with a few warm, ice-blue and rose stars
+local TINTS = {
+  {255, 255, 255}, {255, 255, 255}, {255, 255, 255},
+  {214, 228, 255}, {255, 243, 214}, {255, 222, 234},
+}
+
+-- ---- the sky, stored in normalized 0..1 coordinates -------------------
+-- (the window size is only known inside draw(), so everything scales there)
+local layers, band, heroes, nebulas, shooters = {}, {}, {}, {}, {}
+
+local function new_star(smin, smax, dim)
+  local tint = TINTS[ri(1, #TINTS)]
+  return {
+    u = rnd(), v = rnd(),     -- normalized position on the wrap plane
+    r = rr(smin, smax),
+    cr = tint[1], cg = tint[2], cb = tint[3],
+    base = dim * rr(0.45, 0.75),
+    amp  = rr(0.10, 0.30),
+    k    = ri(1, 9),          -- twinkle cycles per loop (integer = loop-safe)
+    ph   = rr(0, TAU),
+  }
+end
+
+local function build_sky()
+  layers, band, heroes, nebulas, shooters = {}, {}, {}, {}, {}
+
+  -- three parallax layers; n/m = whole wraps per loop (loop-safe drift)
+  local spec = {
+    { count = 170, smin = 0.7, smax = 1.2, dim = 0.55, n = 1, m = 0 },
+    { count = 95,  smin = 1.0, smax = 1.7, dim = 0.70, n = 2, m = 1 },
+    { count = 42,  smin = 1.5, smax = 2.6, dim = 0.90, n = 3, m = 2 },
+  }
+  for li = 1, #spec do
+    local s = spec[li]
+    local stars = {}
+    for i = 1, s.count do stars[i] = new_star(s.smin, s.smax, s.dim) end
+    layers[li] = { stars = stars, n = s.n, m = s.m }
+  end
+
+  -- galactic band: a diagonal ribbon of faint dust on the far layer's speed
+  local dust = {}
+  for i = 1, 130 do
+    local s = new_star(0.6, 1.1, 0.40)
+    s.u = rnd()
+    s.v = ((s.u * 0.42 + 0.18) + rr(-0.06, 0.06) * 0.1) % 1
+    dust[i] = s
+  end
+  band = { stars = dust, n = spec[1].n, m = spec[1].m }
+
+  -- hero stars: the shiny ones with spinning cross sparkles
+  for i = 1, 11 do
+    local tint = TINTS[ri(1, #TINTS)]
+    heroes[i] = {
+      u = rr(0.06, 0.94), v = rr(0.08, 0.88),
+      r = rr(4.5, 8.5),
+      cr = tint[1], cg = tint[2], cb = tint[3],
+      k    = ri(1, 4),        -- flare cycles per loop
+      spin = ri(-2, 2),       -- whole turns of the sparkle per loop
+      ph   = rr(0, TAU),
+    }
+  end
+
+  -- nebula clouds: soft radial glows that breathe (r scales with the window)
+  local NB = {
+    { 42,  16,  90 },         -- violet
+    { 16,  48,  96 },         -- deep teal
+    { 88,  24,  72 },         -- rose
+    { 20,  26, 104 },         -- indigo
+  }
+  for i = 1, 4 do
+    local c = NB[i]
+    nebulas[i] = {
+      u = rnd(), v = rnd(), r = rr(0.42, 0.75),
+      cr = c[1], cg = c[2], cb = c[3],
+      k = ri(1, 3), ph = rr(0, TAU),
+    }
+  end
+
+  -- shooting stars: a fixed schedule inside the loop, drawn as a pure
+  -- function of loop time so events can even cross the seam seamlessly
+  for i = 1, 15 do
+    local L = rr(1.6, 3.2)                      -- flight lifetime
+    local tint = TINTS[ri(1, 4)]                -- white, ice, warm or rose
+    local edge = ri(1, 3)
+    local su, sv
+    if edge == 1 then su, sv = -0.05, rr(-0.1, 0.7)          -- from the left
+    elseif edge == 2 then su, sv = rr(-0.05, 1.05), -0.08    -- from the top
+    else su, sv = 1.05, rr(-0.1, 0.55) end                   -- from the right
+    shooters[i] = {
+      t0 = rr(-L, LOOP - L), L = L,
+      su = su, sv = sv, tu = rr(0.1, 0.9), tv = rr(0.1, 0.85),
+      trail = rr(0.13, 0.24),                   -- length, scaled by the window
+      r = rr(2.0, 3.4),
+      cr = tint[1], cg = tint[2], cb = tint[3],
+    }
+  end
+end
+
+build_sky()
+
+-- ---- painting ----------------------------------------------------------
+local function paint_star(s, lt, lay, wrapw, wraph, glow)
+  local b = s.base + s.amp * math.sin(TAU * s.k * lt / LOOP + s.ph)
+  if b < 0.03 then return end
+  if b > 1 then b = 1 end
+  local x = (s.u * wrapw + lay.n * wrapw * lt / LOOP) % wrapw - WM
+  local y = (s.v * wraph + lay.m * wraph * lt / LOOP) % wraph - WM
+  if glow then  -- a soft halo around the near, bright stars
+    canvas.gradient.circle(x, y, s.r * 4.5,
+      rgba(s.cr, s.cg, s.cb, math.floor(46 * b)), rgba(s.cr, s.cg, s.cb, 0))
+  end
+  canvas.color = rgb(s.cr, s.cg, s.cb)
+  canvas.alpha = math.floor(255 * b)
+  if s.r <= 1.1 then
+    canvas.point(x, y)
+  else
+    canvas.circle(x, y, s.r * (0.72 + 0.3 * b), true)
+  end
+  if glow and s.r >= 2.1 and b > 0.85 then
+    -- the brightest moment of a near star: a quick tiny cross sparkle
+    local l = s.r * 3.2
+    canvas.alpha = math.floor(160 * (b - 0.85) / 0.15)
+    canvas.line(x - l, y, x + l, y)
+    canvas.line(x, y - l, x, y + l)
+  end
+end
+
+-- a four-point sparkle: long+short cross rays in three ink passes
+local function paint_cross(x, y, len, rot, cr, cg, cb, a)
+  local passes = { { 1.00, 22 }, { 0.55, 70 }, { 0.24, 160 } }
+  for p = 1, 3 do
+    local f, pa = passes[p][1], passes[p][2]
+    canvas.color = rgb(cr, cg, cb)
+    canvas.alpha = math.floor(pa * a)
+    canvas.pen = p >= 3 and 2 or 1
+    for i = 0, 3 do
+      local ang = rot + i * math.pi / 2
+      canvas.line(x - f * len * math.cos(ang), y - f * len * math.sin(ang),
+                  x + f * len * math.cos(ang), y + f * len * math.sin(ang))
+    end
+    for i = 0, 3 do  -- the short diagonal ticks
+      local ang = rot + math.pi / 4 + i * math.pi / 2
+      canvas.line(x, y, x + f * len * 0.45 * math.cos(ang),
+                          y + f * len * 0.45 * math.sin(ang))
+    end
+  end
+  canvas.pen = 1
+end
+
+local function paint_hero(h, lt, W, H)
+  local x, y = h.u * W, h.v * H
+  local flare = 0.55 + 0.45 * math.sin(TAU * h.k * lt / LOOP + h.ph)
+  local rot = TAU * h.spin * lt / LOOP + h.ph
+  canvas.gradient.circle(x, y, h.r * 4.5,
+    rgba(h.cr, h.cg, h.cb, math.floor(90 * flare)),
+    rgba(h.cr, h.cg, h.cb, 0))
+  paint_cross(x, y, h.r * (2.0 + 2.4 * flare), rot, h.cr, h.cg, h.cb, 0.55 + 0.45 * flare)
+  canvas.gradient.circle(x, y, h.r * 0.9,
+    rgba(255, 255, 255, 255), rgba(h.cr, h.cg, h.cb, 0))
+end
+
+local function paint_shooter(ev, lt, W, H, short)
+  local s = (lt - ev.t0) % LOOP
+  if s > ev.L then return end
+  local env = math.sin(math.pi * s / ev.L)      -- fade in, fly, fade out
+  local sx, sy = ev.su * W, ev.sv * H
+  local dx, dy = ev.tu * W - sx, ev.tv * H - sy
+  local d = math.sqrt(dx * dx + dy * dy)
+  dx, dy = dx / d, dy / d
+  local trail = ev.trail * short
+  local v = (d + 3 * WM + trail) / ev.L
+  local hx, hy = sx + dx * v * s, sy + dy * v * s
+  -- the shining streak: a continuous faint fire line ...
+  canvas.color = rgb(ev.cr, ev.cg, ev.cb)
+  canvas.alpha = math.floor(34 * env)
+  canvas.line(hx - dx * trail, hy - dy * trail, hx, hy)
+  canvas.pen = 2
+  canvas.alpha = math.floor(20 * env)
+  canvas.line(hx - dx * trail * 0.4, hy - dy * trail * 0.4, hx, hy)
+  canvas.pen = 1
+  -- ... carrying a row of overlapping shrinking, fading cinders
+  local segs = math.max(14, math.min(60, math.floor(trail / 2.5)))
+  for i = 0, segs do
+    local u = i / segs                          -- 0 at the head, 1 at the tail
+    local a = env * (1 - u) * (1 - u) * 235
+    if a > 2 then
+      local mixw = (1 - u) * (1 - u)            -- white-hot head, tinted tail
+      canvas.color = rgb(math.floor(ev.cr + (255 - ev.cr) * mixw),
+                         math.floor(ev.cg + (255 - ev.cg) * mixw),
+                         math.floor(ev.cb + (255 - ev.cb) * mixw))
+      canvas.alpha = math.floor(a)
+      canvas.circle(hx - dx * trail * u, hy - dy * trail * u,
+                    ev.r * (1 - u * 0.85) + 0.6, true)
+    end
+  end
+  -- the shining head: halo, sparkle, white core
+  canvas.gradient.circle(hx, hy, ev.r * 8,
+    rgba(ev.cr, ev.cg, ev.cb, math.floor(90 * env)),
+    rgba(ev.cr, ev.cg, ev.cb, 0))
+  paint_cross(hx, hy, ev.r * (3.5 + 3 * env), 0.35, ev.cr, ev.cg, ev.cb, env)
+  canvas.color = colors.white
+  canvas.alpha = math.floor(230 * env)
+  canvas.circle(hx, hy, ev.r * 0.8, true)
+end
+
+local function paint_back(lt, W, H)
+  canvas.gradient.rectV(0, 0, W, H, rgb(9, 7, 28), rgb(1, 1, 6))
+  local short = math.min(W, H)
+  for i = 1, #nebulas do
+    local nb = nebulas[i]
+    local g = 0.55 + 0.45 * math.sin(TAU * nb.k * lt / LOOP + nb.ph)
+    local m = 0.6 + 0.7 * g
+    canvas.gradient.circle(nb.u * W, nb.v * H, nb.r * short,
+      rgba(math.floor(nb.cr * m), math.floor(nb.cg * m), math.floor(nb.cb * m), 74),
+      rgba(0, 0, 0, 0))
+  end
+end
+
+-- ---- main loop ---------------------------------------------------------
+local time, paused, show_info = 0, false, true
+
+function update(dt)
+  if not paused then time = time + dt end
+  if keyboard.pressed("space") then paused = not paused end
+  if keyboard.pressed("h") then show_info = not show_info end
+  if keyboard.pressed("r") then build_sky() end
+  if keyboard.pressed("q") or keyboard.pressed("escape") then exit() end
+end
+
+function draw()
+  local W, H = canvas.width, canvas.height      -- the window size is only
+  local wrapw, wraph = W + 2 * WM, H + 2 * WM   -- true inside draw()
+  local short = math.min(W, H)
+  local lt = time % LOOP
+
+  canvas.clear(rgb(0, 0, 0))
+  paint_back(lt, W, H)
+
+  for _, s in ipairs(band.stars) do paint_star(s, lt, band, wrapw, wraph, false) end
+  for li = 1, #layers do
+    local lay = layers[li]
+    local glow = (li == #layers)
+    for _, s in ipairs(lay.stars) do paint_star(s, lt, lay, wrapw, wraph, glow) end
+  end
+  for i = 1, #heroes do paint_hero(heroes[i], lt, W, H) end
+  for i = 1, #shooters do paint_shooter(shooters[i], lt, W, H, short) end
+
+  -- vignette: gently darken the corners
+  canvas.gradient.circle(W / 2, H / 2, math.sqrt(W * W + H * H) / 2,
+    rgba(0, 0, 0, 0), rgba(0, 0, 0, 110))
+
+  if show_info then
+    canvas.color = colors.white
+    canvas.alpha = 120
+    canvas.text(8, 6, "STARLOOP  loop " .. string.format("%.1f", lt) .. " / "
+      .. tostring(LOOP) .. " s" .. (paused and "   PAUSED" or ""))
+    canvas.text(8, H - 16, "[SPACE] pause   [R] new sky   [H] hide   [Q] quit")
+  end
+end
