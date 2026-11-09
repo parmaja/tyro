@@ -537,6 +537,8 @@ directory and the workspace, like sprites.
 | `model:show()` | Make the model visible (shown by default). |
 | `model:hide()` | Hide the model from rendering. |
 | `model:move(x, y[, z])` | Set the screen position (pixels) and optional depth in one call. |
+| `model:play([what])` | Start a skeletal animation by name or index (`model:play("Walk")`); with no argument it replays the last clip (or the file's first). Returns whether a clip was found. The engine poses the bones every frame while it plays. |
+| `model:stop()` | Stop the skeletal animation, keeping the current pose. |
 
 ## Model Properties
 
@@ -558,6 +560,12 @@ directory and the workspace, like sprites.
 | `model.height` | `number` | Bounding-box Y size (read-only). |
 | `model.depth` | `number` | Bounding-box Z size (read-only). |
 | `model.loaded` | `boolean` | Whether the mesh is ready (read-only). |
+| `model.animCount` | `number` | How many skeletal animation clips the loaded file carries (read-only). |
+| `model.anim` | `number`/`string` | The clip now posed — read its index (`-1` = the bind pose), or write a name/index to play it, like `model:play`. |
+| `model.animPlaying` | `boolean` | Whether a clip is playing (read/write; `false` stops and holds the pose). |
+| `model.animTime` | `number` | Position inside the current clip in seconds (read/write — write it to scrub a stopped walker frame by frame). |
+| `model.animSpeed` | `number` | Playback speed in keyframes per second; the fresh `30` is the clip's authored pace, `60` doubles it, `0` holds the pose while playing. |
+| `model.animName` | `string` | The current clip's name, or `""` before anything plays (read-only). |
 
 Models draw above the 2D canvas and sprites, below the controls, and they
 shake with the screen like everything else. All three rotations (`angle`,
@@ -594,6 +602,14 @@ sprites (one batch per cloud), their soft edges fusing into fluff, and the
 sea is a live one: `sea.frag` rolls swells, sun glitter and drifting crests
 over the board's blue pixels, masked so islands and bullets keep their
 sharp shapes.
+
+A GLB can also carry a **skeleton and baked animation clips** (the format
+stores them alongside the mesh). `model:load` picks those clips up and
+`model:play("Walk")` switches between them; the engine then poses the bones
+every frame on its own, so a script only names the clip and gets on with
+the game. `games/astro/astro.tyro` shows it: a little astronaut patrols a
+lunar ridge, playing his `Walk` clip as he paces and an `Idle` clip while he
+rests at each end, and you can steer him with the arrows.
 
 ## Light & Shadows
 

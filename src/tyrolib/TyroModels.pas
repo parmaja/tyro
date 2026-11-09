@@ -41,6 +41,13 @@ unit TyroModels;
  *  jobs: the store reports width/height/depth to the script (to size a model
  *  in pixels), and the box centre is the draw pivot, so a model whose mesh sits
  *  off the origin (the usual Sketchfab export) still rotates around itself.
+ *
+ *  A skinned GLB also carries its skeletal animation clips: Load grabs them
+ *  with LoadModelAnimations beside the mesh, the script cuts to one with
+ *  model:play("Walk"), and the engine's per-frame Step advances every playing
+ *  clip and writes its pose onto the model's bone matrices. DrawModel draws
+ *  whatever pose the last Step left, so the 3D pass itself never learns that
+ *  the mesh is alive - a static jet draws exactly the frame it always did.
  *}
 {$IFDEF FPC}
 {$mode delphi}
@@ -60,6 +67,12 @@ const
 
 type
   { TModel3D }
+
+  //raylib hands the animation clips of a file out as a plain C array. This is
+  //the Pascal handle to walk it: the element count is only a range-check
+  //cover, nothing is ever allocated through it.
+  TModelAnimArray = array[0..MaxInt div SizeOf(TModelAnimation) - 1] of TModelAnimation;
+  PModelAnimArray = ^TModelAnimArray;
 
   { One 3D model: the raylib model it draws, its bounding box (centre = pivot,
     sizes for the script to scale by) and the transform the engine applies in
@@ -84,9 +97,25 @@ type
     Shadow: Boolean;        // cast a shadow onto the world's ground plane
     Scale: Single;
     Tint: TColor;
+    //Skeletal animation: raylib's clips of the loaded file (nil/0 when the
+    //mesh has no skeleton or no animation), plus the playback state. Current
+    //is -1 when nothing has ever played and the mesh sits in its bind pose;
+    //Frame is the position inside that clip, in keyframes, and Step advances
+    //it by Dt * Speed each frame the model is playing.
+    Animations: PModelAnimation;
+    AnimCount: Integer;
+    Current: Integer;
+    Frame: Single;
+    Speed: Single;          // keyframes per second (glTF clips bake at 30)
+    Playing: Boolean;
     constructor Create(AHandle: Integer; const AName: string);
     destructor Destroy; override;
     function Loaded: Boolean;
+    //Releases the clip array Load took from the file and resets the playback
+    //state. Only ever called on the main thread, like the model itself.
+    procedure FreeAnimations;
+    //The current clip, or nil when there is none.
+    function CurrentAnim: PModelAnimation;
   end;
 
   { TModels3D }
@@ -140,6 +169,12 @@ type
     function GetItems(Index: Integer): TModel3D;
     //Frees the GPU model a slot owns and resets it to unloaded.
     procedure FreeModelData(AItem: TModel3D);
+    //Cut one model to a clip (AIndex < 0 = stop) and lift its play flag; the
+    //work behind PlayAnim/PlayAnimByName, called with the lock already held.
+    function PlayItemAnim(AItem: TModel3D; AIndex: integer): boolean;
+    //The name raylib left in a clip's fixed 32 bytes, called with the lock
+    //already held.
+    function GetItemAnimName(AItem: TModel3D; AIndex: integer): string;
     //Releases the shared shadow ink (main thread, GL context alive).
     procedure FreeShadowMaterial;
     //The store's one shadow ink, built on demand (see FShadowMat). Its Maps is
@@ -242,6 +277,30 @@ type
     procedure SetAlpha(Handle: integer; AAlpha: integer);
     function GetAlpha(Handle: integer): integer;
 
+    // -- skeletal animation (mirrored on the Lua model:play/model:stop) --
+    //Advance every playing clip by the frame time and pose its model. Runs on
+    //the main thread from the engine's Update, next to the sprite animations,
+    //so a paused scene freezes a walker mid-stride with everything else.
+    procedure Step(ADt: single);
+    function GetAnimCount(Handle: integer): integer;
+    function GetAnimName(Handle: integer; AIndex: integer): string;
+    function GetAnimFrames(Handle: integer; AIndex: integer): integer;
+    //Cut to AIndex (0 = the file's first clip), looping; AIndex < 0 stops and
+    //keeps the current pose. True when a clip was found.
+    function PlayAnim(Handle: integer; AIndex: integer): boolean;
+    //Same by clip name ("Walk"); False when no clip carries that name.
+    function PlayAnimByName(Handle: integer; const AName: string): boolean;
+    procedure StopAnim(Handle: integer);
+    function IsAnimPlaying(Handle: integer): boolean;
+    function GetAnimCurrent(Handle: integer): integer;
+    //Position inside the current clip, in seconds (the 30 fps bake converts).
+    procedure SetAnimTime(Handle: integer; ASeconds: single);
+    function GetAnimTime(Handle: integer): single;
+    //Playback rate as a keyframe count per second; the 30 of a fresh clip is
+    //its authored speed, 60 doubles it.
+    procedure SetAnimSpeed(Handle: integer; AValue: single);
+    function GetAnimSpeed(Handle: integer): single;
+
     // True when at least one visible model holds a mesh, so the caller can skip
     // the whole BeginMode3D/EndMode3D pass on a models-free frame.
     function HasVisible: boolean;
@@ -336,12 +395,19 @@ begin
   Shadow := True;
   Scale := 1;
   Tint := clWhite;
+  Animations := nil;
+  AnimCount := 0;
+  Current := -1;
+  Frame := 0;
+  Speed := 30;
+  Playing := False;
 end;
 
 destructor TModel3D.Destroy;
 begin
   //The store only frees models on the main thread (Clear/Load), so the GL
   //context is alive here, same rule as the sprite/texture owners.
+  FreeAnimations;
   if Loaded then
     RayLib.UnloadModel(Model);
   Model := Default(TModel);
@@ -351,6 +417,27 @@ end;
 function TModel3D.Loaded: Boolean;
 begin
   Result := Model.MeshCount > 0;
+end;
+
+procedure TModel3D.FreeAnimations;
+begin
+  if Animations <> nil then
+  begin
+    RayLib.UnloadModelAnimations(PModelAnimArray(Animations)^[0], AnimCount);
+    Animations := nil;
+  end;
+  AnimCount := 0;
+  Current := -1;
+  Frame := 0;
+  Playing := False;
+end;
+
+function TModel3D.CurrentAnim: PModelAnimation;
+begin
+  if (Animations <> nil) and (Current >= 0) and (Current < AnimCount) then
+    Result := @PModelAnimArray(Animations)^[Current]
+  else
+    Result := nil;
 end;
 
 { TModels3D }
@@ -386,6 +473,7 @@ procedure TModels3D.FreeModelData(AItem: TModel3D);
 begin
   if AItem = nil then
     Exit;
+  AItem.FreeAnimations;
   if AItem.Loaded then
     RayLib.UnloadModel(AItem.Model);
   AItem.Model := Default(TModel);
@@ -828,6 +916,8 @@ var
   Item: TModel3D;
   NewModel: TModel;
   Box: TBoundingBox;
+  AAnims: PModelAnimation;
+  ACount: Integer;
 begin
   Result := False;
   //LoadModel needs the GL context: the caller routes this through the queue.
@@ -859,6 +949,16 @@ begin
     Item.SizeX := Abs(Box.Max.X - Box.Min.X);
     Item.SizeY := Abs(Box.Max.Y - Box.Min.Y);
     Item.SizeZ := Abs(Box.Max.Z - Box.Min.Z);
+
+    //The animation clips ride in the same file: grab them right behind the
+    //mesh (this is already the queued, main-thread step). A jet or a cloud
+    //puff carries none and lands back with an empty list, exactly as before.
+    ACount := 0;
+    AAnims := RayLib.LoadModelAnimations(PUTF8Char(UTF8String(AFileName)), ACount);
+    if AAnims = nil then
+      ACount := 0;
+    Item.Animations := AAnims;
+    Item.AnimCount := ACount;
     Result := True;
   finally
     FLock.Leave;
@@ -1255,6 +1355,268 @@ begin
   try
     if FItems.TryGetValue(Handle, Item) then
       Result := Item.Tint.RGBA.Alpha;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+//A clip is posed by writing its bone transforms onto the model, so Step only
+//has to land the frame; the 3D pass draws whatever pose the last Step left.
+//glTF loaders bake a clip's keyframes at 30 per second, which is why Speed
+//counts keyframes and the seconds-facing setter below folds the same rate.
+const
+  cModel3DAnimFPS = 30;
+
+procedure TModels3D.Step(ADt: single);
+var
+  Item: TModel3D;
+  Anim: PModelAnimation;
+  LoopLen: Integer;
+begin
+  FLock.Enter;
+  try
+    for Item in FItems.Values do
+    begin
+      if (not Item.Playing) or (not Item.Loaded) then
+        Continue;
+      Anim := Item.CurrentAnim;
+      if (Anim = nil) or (Anim^.KeyframeCount < 2) or
+        (Item.Model.BoneMatrices = nil) then
+        Continue;
+      //The bake repeats the first pose at the last keyframe so the cycle
+      //closes; the loop therefore runs over KeyframeCount-1 frames and wraps.
+      LoopLen := Anim^.KeyframeCount - 1;
+      if LoopLen < 1 then
+        Continue;
+      Item.Frame := Item.Frame + ADt * Item.Speed;
+      while Item.Frame >= LoopLen do
+        Item.Frame := Item.Frame - LoopLen;
+      RayLib.UpdateModelAnimation(Item.Model, Anim^, Item.Frame);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetAnimCount(Handle: integer): integer;
+var
+  Item: TModel3D;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.AnimCount;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+//Cut one model to a clip and lift its play flag; AIndex < 0 stops and keeps
+//the current pose. Re-playing the clip already running does NOT rewind, so a
+//script can call play() every frame it wants the walker striding without the
+//stride stuttering. A fresh cut poses frame zero at once so the switch shows
+//this frame rather than a step later. The caller holds the lock.
+function TModels3D.PlayItemAnim(AItem: TModel3D; AIndex: integer): boolean;
+var
+  Anim: PModelAnimation;
+begin
+  Result := False;
+  if AIndex < 0 then
+  begin
+    AItem.Playing := False;
+    Exit(True);
+  end;
+  if (AItem.Animations = nil) or (AIndex >= AItem.AnimCount) then
+    Exit;
+  AItem.Playing := True;
+  if AIndex <> AItem.Current then
+  begin
+    AItem.Current := AIndex;
+    AItem.Frame := 0;
+    Anim := @PModelAnimArray(AItem.Animations)^[AIndex];
+    if (AItem.Model.BoneMatrices <> nil) and (Anim^.KeyframeCount > 0) then
+      RayLib.UpdateModelAnimation(AItem.Model, Anim^, 0);
+  end;
+  Result := True;
+end;
+
+function TModels3D.GetItemAnimName(AItem: TModel3D; AIndex: integer): string;
+begin
+  Result := '';
+  if (AItem.Animations <> nil) and (AIndex >= 0) and (AIndex < AItem.AnimCount) then
+    //raylib leaves the clip name zero-padded in its fixed 32 bytes; reading it
+    //as a C string stops at the first #0.
+    Result := string(PAnsiChar(@PModelAnimArray(AItem.Animations)^[AIndex].Name[0]));
+end;
+
+function TModels3D.GetAnimName(Handle: integer; AIndex: integer): string;
+var
+  Item: TModel3D;
+begin
+  Result := '';
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := GetItemAnimName(Item, AIndex);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetAnimFrames(Handle: integer; AIndex: integer): integer;
+var
+  Item: TModel3D;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      if (Item.Animations <> nil) and (AIndex >= 0) and (AIndex < Item.AnimCount) then
+        Result := PModelAnimArray(Item.Animations)^[AIndex].KeyframeCount;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.PlayAnim(Handle: integer; AIndex: integer): boolean;
+var
+  Item: TModel3D;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := PlayItemAnim(Item, AIndex);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.PlayAnimByName(Handle: integer; const AName: string): boolean;
+var
+  Item: TModel3D;
+  I: Integer;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+    begin
+      for I := 0 to Item.AnimCount - 1 do
+        if GetItemAnimName(Item, I) = AName then
+          Exit(PlayItemAnim(Item, I));
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.StopAnim(Handle: integer);
+begin
+  PlayAnim(Handle, -1);
+end;
+
+function TModels3D.IsAnimPlaying(Handle: integer): boolean;
+var
+  Item: TModel3D;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Playing;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetAnimCurrent(Handle: integer): integer;
+var
+  Item: TModel3D;
+begin
+  Result := -1;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Current;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+//Scrub to a moment in the current clip: the frame is written back and the
+//model posed at once, so a paused walker can be stepped through its stride
+//one frame at a time. The seconds the script sees fold the 30 fps bake.
+procedure TModels3D.SetAnimTime(Handle: integer; ASeconds: single);
+var
+  Item: TModel3D;
+  Anim: PModelAnimation;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+    begin
+      Anim := Item.CurrentAnim;
+      if (Anim <> nil) and (Anim^.KeyframeCount > 1) then
+      begin
+        Item.Frame := ASeconds * cModel3DAnimFPS;
+        if Item.Frame < 0 then
+          Item.Frame := 0
+        else if Item.Frame > Anim^.KeyframeCount - 1 then
+          Item.Frame := Anim^.KeyframeCount - 1;
+        if Item.Model.BoneMatrices <> nil then
+          RayLib.UpdateModelAnimation(Item.Model, Anim^, Item.Frame);
+      end;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetAnimTime(Handle: integer): single;
+var
+  Item: TModel3D;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      if Item.CurrentAnim <> nil then
+        Result := Item.Frame / cModel3DAnimFPS;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetAnimSpeed(Handle: integer; AValue: single);
+var
+  Item: TModel3D;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+    begin
+      //0 stops the clock but keeps the play flag, a negative speed walks the
+      //clip backwards; the cap is only there so a typo can't eat the frame.
+      if AValue > 600 then
+        AValue := 600;
+      Item.Speed := AValue;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetAnimSpeed(Handle: integer): single;
+var
+  Item: TModel3D;
+begin
+  Result := 30;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Speed;
   finally
     FLock.Leave;
   end;

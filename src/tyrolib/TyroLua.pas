@@ -373,6 +373,10 @@ type
     //model:show() / model:hide()
     function Show_func(L: Plua_State): integer; cdecl;
     function Hide_func(L: Plua_State): integer; cdecl;
+    //model:play([what]) -> play a skeletal animation by index or name.
+    function Play_func(L: Plua_State): integer; cdecl;
+    //model:stop() -> stop the skeletal animation, keeping the current pose.
+    function Stop_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaModels }
@@ -6827,6 +6831,8 @@ begin
     Lua.State.Register('move', Move_func);
     Lua.State.Register('show', Show_func);
     Lua.State.Register('hide', Hide_func);
+    Lua.State.Register('play', Play_func);
+    Lua.State.Register('stop', Stop_func);
 
     //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
     Lua.State.NewTable; //[model, model, meta]
@@ -6918,6 +6924,54 @@ begin
   handle := GetModelHandle(L, 1);
   if handle > cModel3DInvalid then
     Engine.Models.SetVisible(handle, False);
+  Result := 0;
+end;
+
+// model:play([what]) -> start a skeletal animation. `what` is a clip name
+// (model:play("Walk")) or its index (model:play(0)); with no argument it
+// (re)starts whatever clip the model last played, or the first in the file.
+// Returns whether a clip was found, so a script can check the name it asked
+// for. The engine poses the bones every frame while it plays.
+function TLuaModel.Play_func(L: Plua_State): integer; cdecl;
+var
+  b, handle, current: integer;
+  ok: boolean;
+begin
+  b := ModelArgBase(L);
+  handle := GetModelHandle(L, 1);
+  ok := False;
+  if handle > cModel3DInvalid then
+  begin
+    if L.ArgsCount >= b then
+    begin
+      //a name or a number: a string hits the name path, else it is an index.
+      if L.IsString(b) then
+        ok := Engine.Models.PlayAnimByName(handle, L.ToString(b))
+      else
+        ok := Engine.Models.PlayAnim(handle, L.ToInteger(b));
+    end
+    else
+    begin
+      //no argument: replay the last clip, or clip 0 when nothing played yet.
+      current := Engine.Models.GetAnimCurrent(handle);
+      if current < 0 then
+        current := 0;
+      ok := Engine.Models.PlayAnim(handle, current);
+    end;
+  end;
+  L.PushBoolean(ok);
+  Result := 1;
+end;
+
+// model:stop() -> stop the skeletal animation; the model keeps the pose it
+// reached. A stopped model still draws, it just no longer moves.
+function TLuaModel.Stop_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+begin
+  handle := GetModelHandle(L, 1);
+  if handle > cModel3DInvalid then
+    Engine.Models.StopAnim(handle);
   Result := 0;
 end;
 
@@ -7013,6 +7067,38 @@ begin
     begin
       L.PushBoolean(Engine.Models.IsLoaded(handle));
       Result := 1;
+    end
+    // -- skeletal animation --
+    else if field = 'animCount' then
+    begin
+      L.PushInteger(Engine.Models.GetAnimCount(handle));
+      Result := 1;
+    end
+    else if field = 'anim' then
+    begin
+      //the clip now posed, or -1 when the mesh still sits in its bind pose
+      L.PushInteger(Engine.Models.GetAnimCurrent(handle));
+      Result := 1;
+    end
+    else if field = 'animPlaying' then
+    begin
+      L.PushBoolean(Engine.Models.IsAnimPlaying(handle));
+      Result := 1;
+    end
+    else if field = 'animTime' then
+    begin
+      L.PushNumber(Engine.Models.GetAnimTime(handle));
+      Result := 1;
+    end
+    else if field = 'animSpeed' then
+    begin
+      L.PushNumber(Engine.Models.GetAnimSpeed(handle));
+      Result := 1;
+    end
+    else if field = 'animName' then
+    begin
+      L.PushString(Engine.Models.GetAnimName(handle, Engine.Models.GetAnimCurrent(handle)));
+      Result := 1;
     end;
   end;
   if Result = 0 then
@@ -7025,10 +7111,12 @@ begin
 end;
 
 // model.__newindex: write properties x, y, z, angle, tilt, roll, shadow,
-// scale, visible, tint, alpha, name; unknown keys raw-stored in the model table.
+// scale, visible, tint, alpha, name, anim, animPlaying, animTime, animSpeed;
+// unknown keys raw-stored in the model table.
 function TLuaModel.Setter(L: Plua_State): integer;
 var
   handle: integer;
+  current: integer;
   field: string;
 begin
   // arg 1 is the table, arg 2 is the key, arg 3 is the value
@@ -7090,6 +7178,39 @@ begin
   else if field = 'name' then
   begin
     Engine.Models.SetName(handle, L.ToString(3));
+  end
+  else if field = 'anim' then
+  begin
+    //write a clip name or index to cut to it (like model:play); a negative
+    //number stops the animation and keeps the current pose.
+    if L.IsString(3) then
+      Engine.Models.PlayAnimByName(handle, L.ToString(3))
+    else
+      Engine.Models.PlayAnim(handle, L.ToInteger(3));
+  end
+  else if field = 'animPlaying' then
+  begin
+    //true resumes/plays the current clip (the file's first when none played
+    //yet), false stops and holds the pose.
+    if L.ToBoolean(3) then
+    begin
+      current := Engine.Models.GetAnimCurrent(handle);
+      if current < 0 then
+        current := 0;
+      Engine.Models.PlayAnim(handle, current);
+    end
+    else
+      Engine.Models.StopAnim(handle);
+  end
+  else if field = 'animTime' then
+  begin
+    //scrub inside the current clip, in seconds.
+    Engine.Models.SetAnimTime(handle, L.ToNumber(3));
+  end
+  else if field = 'animSpeed' then
+  begin
+    //keyframes per second; a clip's fresh 30 is its authored pace.
+    Engine.Models.SetAnimSpeed(handle, L.ToNumber(3));
   end
   else
   begin

@@ -1649,6 +1649,10 @@ begin
     // with the rest of the world (the early Exit above skips this).
     if Particles <> nil then
       Particles.Step(DT);
+    //Skeletal model animations step in the same beat for the same reason: a
+    //paused scene holds a walking character mid-stride with everything else.
+    if Models <> nil then
+      Models.Step(DT);
   except
     on E: Exception do
     begin

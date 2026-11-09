@@ -1,0 +1,152 @@
+--======================================================================
+--  Astro - a walking robot for Tyro
+--======================================================================
+--  The little astronaut from games/astro/Astro.glb paces across a lunar
+--  night. He is a real 3D model with a skeleton, and for the first time
+--  in Tyro he MOVES: the GLB carries two baked animation clips - "Walk"
+--  (a waddling stride) and "Idle" (a quiet breath) - and the script
+--  switches between them with model:play("name"). The engine poses the
+--  bones every frame on its own; the script only chooses the clip.
+--
+--  Since the 3D pass looks straight at the character's front, he walks
+--  the screen sideways like a wind-up toy, leaning a little into the
+--  direction he travels. Left to his own devices he patrols the ridge -
+--  walk, a short rest (that's the Idle clip), turn, walk back - and the
+--  moment you touch the keys he takes the order and obeys.
+--
+--  Controls:  ARROWS / A D   walk left / right (he stops when you let go)
+--             W / I          force the Walk / Idle clip
+--             ESC            quit
+--  Run:  tyro games/astro/astro.tyro
+--======================================================================
+
+window.show(360, 240)
+world.backcolor = colors.darkpurple
+
+local W = world.width
+local H = world.height
+local GROUND = H - 46
+
+-- the character stands along its own +z, so its screen height is 'depth'
+local SIZE = 118
+
+-- a fixed scatter of stars for the night above the ridge
+local stars = {}
+for i = 1, 46 do
+  stars[i] = { x = rand(0, W), y = rand(4, GROUND - 60), a = rand(70, 230) }
+end
+
+astro = models.new("astro")
+astro:load("Astro.glb")
+-- the ground plane catches flying jets far away in the depth axis; a
+-- walker on screen gets a hand-painted blob under his boots instead.
+astro.shadow = false
+
+local x = W * 0.5
+local walking = false
+local sized = false
+local patrol = 1    -- the way he wanders when nobody steers
+local rest = 0      -- seconds left of an end-of-patrol pause (the Idle clip)
+
+local function set_walk(on)
+  if on ~= walking then
+    walking = on
+    if walking then astro:play("Walk") else astro:play("Idle") end
+  end
+end
+
+function update(dt)
+  -- the mesh lands one frame after load; size him as soon as it is there
+  if (not sized) and astro.loaded then
+    astro.scale = SIZE / astro.depth
+    sized = true
+    astro:play("Idle")
+  end
+  if not sized then return end
+
+  local dir = 0
+  local speed = 80
+  if keyboard.down("left") or keyboard.down("a") then dir = dir - 1 end
+  if keyboard.down("right") or keyboard.down("d") then dir = dir + 1 end
+
+  if keyboard.pressed("w") then astro:play("Walk") end
+  if keyboard.pressed("i") then astro:play("Idle") end
+
+  if dir ~= 0 then
+    patrol = dir    -- take the player's steer as the new wandering way
+    rest = 0        -- and cut short any patrol pause still running
+  else
+    -- nobody steering: patrol slowly, and rest a moment at every end
+    if rest > 0 then
+      rest = rest - dt
+    else
+      dir = patrol
+      speed = 45
+    end
+  end
+
+  local moving = dir ~= 0 and rest <= 0
+  if moving then
+    x = x + dir * speed * dt
+    if x < 26 then
+      x = 26
+      patrol = 1
+      rest = 1.6        -- pause at this end, and turn to face back
+    elseif x > W - 26 then
+      x = W - 26
+      patrol = -1
+      rest = 1.6
+    end
+  end
+  set_walk(moving)
+
+  astro.x = x
+  -- feet on the ridge: the pivot is the mesh's centre, so half a character
+  -- of height has to stand above the ground line.
+  astro.y = GROUND - (astro.depth * astro.scale) * 0.5 + 2
+  -- lean a little into the walk, straighten back to the middle when idle
+  if astro.angle < dir * 4 then astro.angle = astro.angle + 8 * dt end
+  if astro.angle > dir * 4 then astro.angle = astro.angle - 8 * dt end
+end
+
+function draw()
+  -- stars, each riding its own faintness on the pen alpha
+  world.color = colors.white
+  for _, s in ipairs(stars) do
+    world.alpha = s.a
+    world.rectangle(s.x, s.y, 2, 2, true)
+  end
+  world.alpha = 255
+
+  -- a low pale moon
+  world.color = colors.gold
+  world.circle(W - 52, 40, 16, true)
+
+  -- the ridge he paces on, and a couple of shallow craters
+  world.color = colors.gray
+  world.rectangle(0, GROUND, W, H - GROUND, true)
+  world.color = colors.darkgray
+  world.circle(58, GROUND + 12, 10, true)
+  world.circle(210, GROUND + 20, 14, true)
+  world.circle(320, GROUND + 10, 8, true)
+
+  -- the blob of shade under the boots (the model draws above the world,
+  -- so it sits right where his feet touch the ground)
+  if sized then
+    world.color = colors.black
+    world.alpha = 110
+    world.circle(astro.x, GROUND + 3, 13, true)
+    world.alpha = 255
+  end
+
+  -- the live animation state, straight off the model object, on the fixed
+  -- glass so it never wobbles
+  screen.clear('blank')
+  screen.color = colors.white
+  screen.text(8, 6, "ARROWS / A D walk   W/I force clip")
+  if sized then
+    local state = tostring(astro.animName)
+    if astro.animPlaying then state = state .. "  playing" else state = state .. "  stopped" end
+    screen.text(8, 18, "anim: " .. state .. "  t=" .. string.format("%.2f", astro.animTime))
+  end
+end
