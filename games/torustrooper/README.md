@@ -55,10 +55,11 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
   4 seconds gone, camera shake, and a moment of mercy before the next
   hit counts.
 - **Laps** pay a bonus and raise the multiplier; the distance flown
-  scores all the time. Laps are also **clocked** — LAST and BEST lap
-  times ride the HUD panel, and the best lap is called on the game-over
-  screen. The high score lives in `torustrooper.hi`, and a run that
-  beats it gets a NEW HIGH SCORE call.
+  scores all the time. Laps are also **clocked** — each crossing prints
+  its time across the track, a quicker lap goes down in lime as
+  NEW BEST, LAST and BEST ride the HUD panel, and the best lap is called
+  on the game-over screen. The high score lives in `torustrooper.hi`,
+  and a run that beats it gets a NEW HIGH SCORE call.
 
 ## Engine Showcase
 

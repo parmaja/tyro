@@ -156,6 +156,7 @@ local inv, shake, clock, drone = 0, 0, 0, false
 local grace, newhi = 0, false
 local bank, flash = 0, 0
 local lap_clock, last_lap, best_lap = 0, 0, 0
+local lap_msg, lap_msg_t, lap_msg_best = "", 0, false
 local last_tick = 0
 
 local function reset()
@@ -166,6 +167,7 @@ local function reset()
   grace = D.GRACE
   bank, flash = 0, 0
   lap_clock, last_lap, best_lap = 0, 0, 0
+  lap_msg, lap_msg_t, lap_msg_best = "", 0, false
   for _, o in ipairs(orbs) do
     o.live = true
     o.model:show()
@@ -253,8 +255,18 @@ local function update_play(dt)
     th = th - TAU
     laps = laps + 1
     last_lap = lap_clock
-    if best_lap == 0 or last_lap < best_lap then best_lap = last_lap end
+    local record = best_lap == 0 or last_lap < best_lap
+    if record then best_lap = last_lap end
     lap_clock = 0
+    -- announce the crossing over the track, and celebrate the shave
+    if record and laps > 1 then
+      lap_msg = "N E W   B E S T   " .. string.format("%.2f", last_lap) .. " s"
+      lap_msg_best = true
+    else
+      lap_msg = "LAP  " .. string.format("%.2f", last_lap) .. " s"
+      lap_msg_best = false
+    end
+    lap_msg_t = D.LAP_MSG
     score = score + D.SC_LAP * D.multiplier(laps)
     for _, o in ipairs(orbs) do
       o.live = true
@@ -386,6 +398,7 @@ function update(dt)
   if keyboard.pressed("escape") then exit() end
   clock = clock + dt
   if flash > 0 then flash = flash - dt end
+  if lap_msg_t > 0 then lap_msg_t = lap_msg_t - dt end
 
   if keyboard.pressed("m") then
     muted = not muted
@@ -494,6 +507,14 @@ function draw()
     center(120, "G O !")
   end
 
+  -- the lap callout: gold for a crossing, lime for a shave, blinking out.
+  if lap_msg_t > 0 and state == "play" then
+    if lap_msg_t > 0.7 or math.floor(clock * 8) % 2 == 0 then
+      screen.color = lap_msg_best and colors.lime or colors.gold
+      center(70, lap_msg)
+    end
+  end
+
   if state == "over" then
     band(180)
     screen.color = colors.red
@@ -549,6 +570,7 @@ if TESTING then
     flash     = function() return flash end,
     lastlap   = function() return last_lap end,
     bestlap   = function() return best_lap end,
+    lapmsg    = function() return lap_msg, lap_msg_t, lap_msg_best end,
     paused    = function() return paused end,
     set_pos   = function(a, b) th = a al = b end,
     set_v     = function(x) v = x end,
