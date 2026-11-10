@@ -1,0 +1,239 @@
+--======================================================================
+--  Torus Trooper - Data & Rules (pure Lua, no engine calls but files)
+--======================================================================
+--  The whole game rides the inside of one torus: a ship on the tube's
+--  inner wall, going round and round a loop that curves up ahead and back
+--  behind. This module owns the numbers - the track, the speeds, the time
+--  budget, the scoring, the fixed per-lap layout - so the game file is
+--  motion and the tests can check the rules head-free.
+--
+--  Positions on the tube are two angles:
+--    th - where around the loop (0..TAU), and
+--    al - where across the tube: 0 is the inner equator (the racing line,
+--         closest to the hole), +al climbs the wall toward the hole side,
+--         and AL_MAX is the highest the ship may climb either way.
+--  World space is the engine's: x right, y into the screen, z up.
+
+local M = {}
+
+M.W, M.H = 960, 540
+
+-- Track: ring radius R (centre to tube centre), tube radius TUBE.
+-- The world stays inside the camera's 1000-unit reach: R + TUBE = 324.
+M.R, M.TUBE = 280, 44
+M.TAU = math.pi * 2
+M.AL_MAX = 2.3          -- rad across the tube, either way from the floor
+
+-- Speed, in radians around the loop per second.
+M.CRUISE = 0.40         -- where the throttle always drifts back to
+M.MINV = 0.12
+M.MAXV = 1.15
+M.MAXV_PER_LAP = 0.03   -- each lap lifts the ceiling...
+M.MAXV_BONUS = 0.30     -- ...by at most this
+M.STEER = 1.5           -- rad/s across the tube
+M.THROTTLE_UP = 0.9     -- rad/s^2 while UP is held
+M.THROTTLE_DOWN = -1.3  -- rad/s^2 while DOWN is held
+M.EASE = 0.25           -- how hard the cruise pulls, per second
+
+-- The clock is the game: it always runs down, boosts give it back.
+M.START_TIME = 35
+M.TIME_CAP = 60
+M.DRAIN = 1.0           -- seconds spent per second...
+M.DRAIN_PER_LAP = 0.15  -- ...plus this per lap completed,
+M.DRAIN_MAX = 2.5       -- capped here.
+M.TIME_ORB = 0.7        -- an energy orb buys back this much time
+M.TIME_GATE = 2.5       -- a boost gate this much
+M.TIME_WALL = -4.0      -- hitting a wall costs this much
+M.CRASH_INV = 1.5       -- seconds of mercy after a hit
+
+-- Tunnel ribs: dark rings around the tube centre line. They close the grey
+-- tunnel into a readable one and turn into a pulse of speed as the ride
+-- quickens. Counted low on purpose: every model costs a boot frame, and a
+-- rib every quarter-lap still reads as a rhythm.
+M.RIBS = 24
+
+-- Scoring: distance always ticks up; pickups pay on top. The lap multiplier
+-- rewards surviving the loop over and over.
+M.SC_ORB = 100
+M.SC_GATE = 600
+M.SC_LAP = 1200
+M.SC_DIST = 2           -- per world unit flown (times the multiplier)
+M.MULT_PER_LAP = 0.15
+
+-- Pass/hit windows, in the two tube angles (th is generous because the
+-- pickup itself is one-shot; al is the real aim).
+M.ORB_DTH, M.ORB_DAL = 0.07, 0.30
+M.WALL_DTH, M.WALL_DAL = 0.08, 0.50
+M.GATE_DTH, M.GATE_DAL = 0.05, 0.45
+
+-- The eye: perspective field of view and the chase rig. The camera rides
+-- the tube behind and above the ship; the numbers are in tube angles, so
+-- they read the same at any ring size. CAM_IN sinks the eye that deep into
+-- the tube - along the MINUS normal, because the normal points out of the
+-- wall: add it and you float in the sky outside the track instead of
+-- inside it.
+M.FOV = 74
+M.CAM_BACK = 0.20       -- rad behind the ship around the loop
+M.CAM_UP = 0.50         -- rad up the tube wall from the ship
+M.CAM_LOOKAHEAD = 0.30  -- rad ahead the eye aims at
+-- The eye floats this deep inside the tube. Deeper than the walls stick
+-- out, or the camera clips through every low block it passes.
+M.CAM_IN = 18
+
+-- ---------------------------------------------------------------------
+-- Small pure helpers
+-- ---------------------------------------------------------------------
+
+function M.clamp(v, lo, hi)
+  if v < lo then return lo end
+  if v > hi then return hi end
+  return v
+end
+
+-- Wrap an angle to [-pi, pi).
+function M.wrapPi(a)
+  return ((a + math.pi) % M.TAU) - math.pi
+end
+
+-- How far a is from b, across the lap seam included.
+function M.angdiff(a, b)
+  return M.wrapPi(a - b)
+end
+
+-- A point on the tube at loop-angle th, across-tube al.
+function M.trackPoint(R, TUBE, th, al)
+  local k = R - TUBE * math.cos(al)
+  return k * math.cos(th), k * math.sin(th), TUBE * math.sin(al)
+end
+
+-- The tube's outward normal there (the direction a rider's head points).
+function M.trackNormal(R, TUBE, th, al)
+  local c = math.cos(al)
+  return -c * math.cos(th), -c * math.sin(th), math.sin(al)
+end
+
+-- ---------------------------------------------------------------------
+-- The track layout - fixed for the whole game, memorizable every lap
+-- ---------------------------------------------------------------------
+
+-- A tiny deterministic generator: same seed, same loop, lap after lap -
+-- the way the arcade original is the same course every time you ride it.
+function M.rng(seed)
+  local s = seed % 2147483648
+  return function()
+    s = (s * 1103515245 + 12345) % 2147483648
+    return s / 2147483648
+  end
+end
+
+function M.layout(seed)
+  local rnd = M.rng(seed)
+  local gates, walls, orbs = {}, {}, {}
+
+  -- Six boost gates, evenly spread with a seeded shuffle per lap loop.
+  for i = 0, 5 do
+    gates[#gates + 1] = { th = ((i + rnd() * 0.3) * M.TAU / 6) % M.TAU }
+  end
+
+  -- Twelve walls climbing one side of the tube: the racing line through
+  -- each one is on the other side of its wall or under its gap.
+  local nwall = 12
+  for i = 0, nwall - 1 do
+    local th = ((i + 0.15 + rnd() * 0.7) * M.TAU / nwall) % M.TAU
+    local side = rnd() < 0.5 and -1 or 1
+    local al = side * (0.55 + rnd() * 0.85)
+    walls[#walls + 1] = { th = th, al = al }
+  end
+
+  -- Ten arcs of three energy cells, each arc at one height of the wall.
+  for i = 0, 9 do
+    local th0 = ((i + rnd() * 0.4) * M.TAU / 10) % M.TAU
+    local al = (rnd() * 2 - 1) * 1.3
+    for j = 0, 2 do
+      orbs[#orbs + 1] = { th = (th0 + j * 0.07) % M.TAU, al = al }
+    end
+  end
+
+  -- A wall right in a gate's mouth is not a fair fight: drop it.
+  for i = #walls, 1, -1 do
+    for _, g in ipairs(gates) do
+      if math.abs(M.angdiff(walls[i].th, g.th)) < 0.14 then
+        table.remove(walls, i)
+        break
+      end
+    end
+  end
+
+  return { gates = gates, walls = walls, orbs = orbs }
+end
+
+-- ---------------------------------------------------------------------
+-- Pass checks: pure tests between the ship and one entity
+-- ---------------------------------------------------------------------
+
+-- True when the ship sits on the entity's angle (the windows are generous
+-- along th - the one-shot flags make the pickups single events).
+function M.onTh(th, at, win)
+  return math.abs(M.angdiff(th, at)) < win
+end
+
+function M.orbHit(th, al, orb)
+  return M.onTh(th, orb.th, M.ORB_DTH) and math.abs(al - orb.al) < M.ORB_DAL
+end
+
+function M.wallHit(th, al, wall)
+  return M.onTh(th, wall.th, M.WALL_DTH) and math.abs(al - wall.al) < M.WALL_DAL
+end
+
+-- A gate pays only when the ship flies through its middle.
+function M.gatePass(th, al, gate)
+  return M.onTh(th, gate.th, M.GATE_DTH) and math.abs(al) < M.GATE_DAL
+end
+
+-- The speed ceiling lifts a little with every lap.
+function M.vMax(laps)
+  return M.MAXV + math.min(laps * M.MAXV_PER_LAP, M.MAXV_BONUS)
+end
+
+-- The clock drains harder every lap.
+function M.drain(laps)
+  return math.min(M.DRAIN + laps * M.DRAIN_PER_LAP, M.DRAIN_MAX)
+end
+
+-- Score multiplier: one plus a step per lap survived.
+function M.multiplier(laps)
+  return 1 + laps * M.MULT_PER_LAP
+end
+
+-- ---------------------------------------------------------------------
+-- High-score file
+-- ---------------------------------------------------------------------
+
+local HI_FILE = "torustrooper.hi"
+
+function M.load_high_score()
+  local f = openfile(HI_FILE, "r")
+  if not f then return 10000 end
+  local line = f:read("l")
+  f:close()
+  local score = tonumber(line)
+  if score and score > 0 then
+    return score
+  end
+  return 10000
+end
+
+function M.save_high_score(score)
+  local cur = M.load_high_score()
+  if score > cur then
+    local f = openfile(HI_FILE, "w")
+    if f then
+      f:write(tostring(score) .. "\n")
+      f:close()
+    end
+    return score
+  end
+  return cur
+end
+
+return M

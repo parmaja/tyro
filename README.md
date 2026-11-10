@@ -556,7 +556,7 @@ directory and the workspace, like sprites.
 | `model.angle` | `number` | Spin in degrees around the view axis, clockwise (read/write). |
 | `model.roll` | `number` | Bank in degrees around the model's own axis — the nose-tail line of a jet — so it leans into a turn like the classic 1942 sprite effect (read/write). |
 | `model.tilt` | `number` | Bank in degrees around the screen's horizontal axis — foreshortens the model as it leans (read/write). |
-| `model.scale` | `number` | Uniform scale in model units; combine with the bounding box below to size in pixels (read/write). |
+| `model.scale` | `number` | Uniform scale in model units; combine with the bounding box below to size in pixels (read/write). A negative scale mirrors the mesh — winding and light flip with it — which lets a solid wear an inside-out skin (the tube liner in `games/torustrooper` is a torus at `scale = -1`). |
 | `model.visible` | `boolean` | Whether the model is drawn (read/write). |
 | `model.shadow` | `boolean` | Cast a real shadow: the mesh's true silhouette projected along the sun onto the ground plane — see Light & Shadows below (read/write, default `true`). |
 | `model.tint` | `number` | Colour multiplied over the mesh, the same integer format as `canvas.color` / `colors.*`; white is the default (read/write). |
@@ -663,6 +663,14 @@ shake and window margin no longer move the models (the camera owns the frame
 now). Cast shadows stay with the ortho eye: the ground plane is a top-down
 notion, and a free 3D scene reads its depth directly.
 
+Two more things change for the eye's sake. The model pass paints **both
+skins** of every solid — back-face culling is off and the depth test alone
+decides what is in front — so the eye can fly through bodies; faces that
+look away from it are simply lit as back faces. And models paint **over**
+the world canvas, so a HUD that must never dive under the scenery belongs
+on the screen layer: `screen.text`, `screen.rectangle` (with
+`screen.clear()` each frame — that layer keeps last frame's ink).
+
 ```lua
 window.show(640, 480)
 canvas.backcolor = colors.black
@@ -686,10 +694,17 @@ end
 ```
 
 `demos/torus_demo.tyro` is a whole free-camera game in one file: a generated
-torus loop to ride on its inside equator, boost hoops that stand across the
-tube and feed your speed, a chase eye whose up vector rides the tube so the
-frame rolls as the loop turns, and a planet parked in the hole to spin
-against.
+torus loop to ride inside, its tube closed by an inside-out liner (see
+`model.scale`), boost hoops that stand across the tube and feed your speed,
+a chase eye whose up vector rides the tube so the frame rolls as the loop
+turns, and a planet parked in the hole to spin against.
+
+`games/torustrooper/torustrooper.tyro` builds the full arcade ride on the
+same parts: a time trial inside the tube where energy cells buy back
+seconds, boost gates pay only for the middle of the ring, and blocks on
+the wall cost both. The course is one fixed layout, so every lap teaches
+the next — and every model in it (track, liner, ribs, gates, ship) is an
+engine-generated shape. See `games/torustrooper/README.md`.
 
 # Shader Effects
 

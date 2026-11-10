@@ -33,12 +33,20 @@ function angdiff(a, b)
   return ((a - b + math.pi) % TAU) - math.pi
 end
 
--- The track: one generated torus, its axis the world z. Riding on the inside
--- of the tube means looking at back faces, and the plain model shader dims
--- those hard - so the track wears white and reads as grey walls, and the trim
--- wears the bright colors.
+-- The track: one generated torus, its axis the world z. The model pass
+-- lights faces that look away from the eye as back faces, so the inside of
+-- a plain torus would be a dim shell everywhere - so the world wears a
+-- second skin. The liner is the same torus a hair narrower at scale -1:
+-- the mirror flip turns its normals (and its light) into the tube. Inside,
+-- the depth test hands the walls to the liner, properly lit; from outside
+-- the plain track wins and the title's orbit still shows a solid ring.
 local track = models.torus("track", R, RT)
 track.tint = colors.white
+local liner = models.torus("liner", R, RT - 1.5)
+liner.scale = -1
+-- light gray, not white: a fully lit white skin whites out the frame and
+-- swallows the HUD.
+liner.tint = colors.lightgray
 
 -- A planet in the hole, and a scatter of faraway star-blobs, so the rolling
 -- camera has something to spin against.
@@ -55,7 +63,24 @@ for i = 1, 18 do
   st.tint = colors.white
 end
 
+-- Tunnel ribs: rings centred on the tube centre line, holes square to the
+-- road, so the grey tunnel reads as a tube and speed has something to tick
+-- against. Pure scenery.
+for i = 1, 24 do
+  local th = (i - 1) * TAU / 24
+  local rb = models.torus("rib" .. i, RT - 3, 1.2)
+  local rx, ry, rz = trackPoint(th, 0)
+  local nx, ny, nz = trackNormal(th, 0)
+  rb:move(rx - nx * RT, ry - ny * RT, rz - nz * RT)
+  rb:face(rx - nx * (RT + 10), ry - ny * (RT + 10), rz - nz * (RT + 10),
+    -math.sin(th), math.cos(th), 0)
+  rb.tint = colors.gray
+end
+
 -- The boost hoops, standing square to the road every 1/14 of the loop.
+-- Everything that rides inside hangs off MINUS the tube normal: the normal
+-- points out of the wall (toward the hole at the floor), so minus the
+-- normal is the way into the tube - and the rider's head direction.
 local HOOPS = 14
 local hoops = {}
 for i = 1, HOOPS do
@@ -63,7 +88,7 @@ for i = 1, HOOPS do
   local h = models.torus("hoop" .. i, 16, 1.8)
   local hx, hy, hz = trackPoint(th, 0)
   local nx, ny, nz = trackNormal(th, 0)
-  h:move(hx + nx * 2, hy + ny * 2, hz + nz * 2)
+  h:move(hx - nx * 18, hy - ny * 18, hz - nz * 18)
   -- The hoop's own +z is its hole axis: lean it along the road's tangent so
   -- the ring stands across the track.
   h:face(hx, hy, hz + 10, -math.sin(th), math.cos(th), 0)
@@ -124,25 +149,27 @@ function update(dt)
     end
   end
 
-  -- Place and aim the ship: floor point plus a lift along the normal, nose
-  -- along the tangent, head toward the torus axis.
+  -- Place and aim the ship: floor point plus a lift into the tube, nose
+  -- along the tangent, head toward the tube's middle.
   local sx, sy, sz = trackPoint(th, al)
   local nx, ny, nz = trackNormal(th, al)
-  ship:move(sx + nx * 2, sy + ny * 2, sz + nz * 2)
-  ship:face(sx - math.sin(th) * 10 + nx * 2, sy + math.cos(th) * 10 + ny * 2, sz + nz * 2,
-    nx, ny, nz)
+  ship:move(sx - nx * 2, sy - ny * 2, sz - nz * 2)
+  ship:face(sx - math.sin(th) * 10 - nx * 2, sy + math.cos(th) * 10 - ny * 2, sz - nz * 2,
+    -nx, -ny, -nz)
 
   -- Chase cam: a little behind and up the wall, aimed at a point further along
   -- the loop so the tube visibly curves away ahead. The up vector rides the
-  -- tube, so the whole frame rolls as the loop turns.
+  -- tube, so the whole frame rolls as the loop turns. The eye sinks INSIDE the
+  -- tube (minus the normal - the normal points out of the wall), or the ride
+  -- skims over the outside skin with the sky all around.
   local ch = th - 0.12
   local cx, cy, cz = trackPoint(ch, al + 0.35)
   local wx, wy, wz = trackNormal(ch, al + 0.35)
   local ah = th + 0.30
   local ax, ay, az = trackPoint(ah, al)
-  world.camera(cx + wx * 4, cy + wy * 4, cz + wz * 4,
+  world.camera(cx - wx * 10, cy - wy * 10, cz - wz * 10,
     ax, ay, az,
-    wx, wy, wz)
+    -wx, -wy, -wz)
 
   -- the drone climbs with the speed
   if not drone then
@@ -155,8 +182,14 @@ end
 function draw()
   canvas.color = colors.black
   canvas.clear()
-  canvas.color = colors.white
-  canvas.text(10, 10, "speed  " .. math.floor(v * (R - RT) + 0.5) .. " u/s")
-  canvas.text(10, 26, "laps   " .. laps)
-  canvas.text(10, 42, "time   " .. string.format("%.1f", clock))
+  screen.clear()
+  -- the HUD rides the screen layer: under the free eye the models paint
+  -- over the world canvas, and inside the tube there is always tube right
+  -- behind the text. A dark board keeps it readable on the light walls.
+  screen.color = rgba(0, 0, 0, 150)
+  screen.rectangle(2, 2, 132, 54, true)
+  screen.color = colors.white
+  screen.text(6, 6, "speed  " .. math.floor(v * (R - RT) + 0.5) .. " u/s")
+  screen.text(6, 22, "laps   " .. laps)
+  screen.text(6, 38, "time   " .. string.format("%.1f", clock))
 end

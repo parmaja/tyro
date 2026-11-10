@@ -1,0 +1,484 @@
+--======================================================================
+--  TORUS TROOPER - a time trial inside a torus, for the Tyro Game Engine
+--======================================================================
+--  Fly the inside of a giant ring. The clock is always draining; energy
+--  orbs buy back a little time, boost gates buy back a lot - but a gate
+--  only pays when you fly through its middle, and the walls wear obstacles
+--  that punish leaving the line. The loop never changes: learn it by heart,
+--  lap after lap, while the speed ceiling lifts and the clock drains
+--  harder. A homage to Kenta Cho's 1.76 / Torus Trooper, riding Tyro's
+--  free perspective camera on the engine's own generated shapes.
+--
+--  Controls:
+--    LEFT / RIGHT (or stick)  slide across the tube wall
+--    UP / DOWN                throttle up and down
+--    SPACE / START            start, and retry after game over
+--    P                        pause        M mute        ESC quit
+--======================================================================
+
+local D = require("torustrooper_data")
+
+-- Set TORUSTROOPER_TEST before require() and this file is a module: it
+-- exports its internals instead of playing, and stays silent (see the
+-- test hook at the bottom). The harness stages a copy next to itself.
+local TESTING = TORUSTROOPER_TEST == true
+
+window.show(D.W, D.H)
+canvas.backcolor = colors.black
+
+local TAU = D.TAU
+local R, TUBE = D.R, D.TUBE
+
+-- ---------------------------------------------------------------------
+-- The world
+-- ---------------------------------------------------------------------
+
+-- The track: one generated torus. A rider lives inside the tube, so the
+-- world wears a second skin: the liner is the same torus a hair narrower
+-- and at scale -1 - the negative scale mirrors the mesh, so its faces
+-- (and its light) point into the tube. The depth test lets the liner win
+-- every look from inside and the plain track win every look from outside,
+-- which keeps the title's orbit of a solid ring and closes the tube walls
+-- on the ride.
+-- Everything that rides inside hangs off MINUS the tube normal: the normal
+-- points out of the wall (toward the hole at the floor), so minus the
+-- normal is the way into the tube, and it is the rider's head direction.
+local track = models.torus("track", R, TUBE)
+track.tint = colors.white
+local liner = models.torus("liner", R, TUBE - 1.5)
+liner.scale = -1
+-- light gray, not white: the tube wants to read as a shaded volume, and a
+-- bright tint on a fully-lit skin whites the whole frame out.
+liner.tint = colors.lightgray
+
+-- A planet in the hole, and a scatter of star-blobs to spin against.
+-- The frustum clips at 1000 units, so everything stays well inside it.
+local planet = models.sphere("planet")
+planet.scale = 90
+planet.tint = colors.maroon
+
+for i = 1, 40 do
+  local st = models.sphere("star" .. i)
+  local a = math.random() * TAU
+  local b = (math.random() * 2 - 1) * 0.85
+  local d = 560 + math.random() * 90
+  st:move(d * math.cos(a) * math.cos(b), d * math.sin(a) * math.cos(b), d * math.sin(b))
+  st.scale = 3 + math.random() * 4
+  st.tint = colors.white
+end
+
+-- ---------------------------------------------------------------------
+-- The entities - one fixed layout, memorizable lap after lap
+-- ---------------------------------------------------------------------
+
+local layout = D.layout(20261110)
+
+-- Boost gates: rings standing across the tube, gold until you pass.
+local gates = {}
+for i, g in ipairs(layout.gates) do
+  local m = models.torus("gate" .. i, 20, 2.5)
+  local hx, hy, hz = D.trackPoint(R, TUBE, g.th, 0)
+  local nx, ny, nz = D.trackNormal(R, TUBE, g.th, 0)
+  -- the ring floats in the middle of the tube, mouth square to the road
+  m:move(hx - nx * 22, hy - ny * 22, hz - nz * 22)
+  -- Own +y aims at the tube floor, +z leans along the road's tangent,
+  -- so the ring stands across the track.
+  m:face(hx, hy, hz, -math.sin(g.th), math.cos(g.th), 0)
+  m.tint = colors.gold
+  gates[i] = { th = g.th, model = m, cool = 0, flash = 0 }
+  m:hide()
+end
+
+-- Walls: blocks flush on the tube wall, long across the road. The hit box
+-- matches the drawn block, so what you see is what you crash into.
+local walls = {}
+for i, w in ipairs(layout.walls) do
+  local m = models.box("wall" .. i, 44, 12, 26)
+  local wx, wy, wz = D.trackPoint(R, TUBE, w.th, w.al)
+  local nx, ny, nz = D.trackNormal(R, TUBE, w.th, w.al)
+  -- half sunk into the wall, half standing in the tube
+  m:move(wx - nx * 13, wy - ny * 13, wz - nz * 13)
+  m:face(wx - nx * 13 - math.sin(w.th) * 10,
+    wy - ny * 13 + math.cos(w.th) * 10,
+    wz - nz * 13, -nx, -ny, -nz)
+  m.tint = colors.maroon
+  walls[i] = { th = w.th, al = w.al, model = m }
+  m:hide()
+end
+
+-- Energy cells: small lime spheres in arcs across the wall.
+local orbs = {}
+for i, o in ipairs(layout.orbs) do
+  local m = models.sphere("orb" .. i)
+  local ox, oy, oz = D.trackPoint(R, TUBE, o.th, o.al)
+  local nx, ny, nz = D.trackNormal(R, TUBE, o.th, o.al)
+  m:move(ox - nx * 7, oy - ny * 7, oz - nz * 7)
+  m.scale = 4
+  m.tint = colors.lime
+  orbs[i] = { th = o.th, al = o.al, model = m, live = true }
+  m:hide()
+end
+
+-- The tunnel ribs: rings centred on the tube centre line, their holes
+-- square to the road. Pure scenery - no hit test touches them.
+for i = 1, D.RIBS do
+  local th = (i - 1) * TAU / D.RIBS
+  local rb = models.torus("rib" .. i, TUBE - 3, 1.2)
+  local rx, ry, rz = D.trackPoint(R, TUBE, th, 0)
+  local nx, ny, nz = D.trackNormal(R, TUBE, th, 0)
+  rb:move(rx - nx * TUBE, ry - ny * TUBE, rz - nz * TUBE)
+  rb:face(rx - nx * (TUBE + 10), ry - ny * (TUBE + 10), rz - nz * (TUBE + 10),
+    -math.sin(th), math.cos(th), 0)
+  rb.tint = colors.gray
+end
+
+-- The ship: a box whose long axis is its own +y, which face() aims along
+-- the road, with a pulsing thruster blob glued to its tail.
+local ship = models.box("ship", 11, 20, 6)
+ship.tint = colors.orange
+local thruster = models.sphere("thruster")
+thruster.tint = colors.gold
+
+-- ---------------------------------------------------------------------
+-- Game state
+-- ---------------------------------------------------------------------
+
+world.fov(D.FOV)
+
+local state = "title"      -- "title" | "play" | "over"
+local paused = false
+local muted = false
+local hi = D.load_high_score()
+
+local th, al, v = 0, 0, D.CRUISE
+local time_left, score, laps = D.START_TIME, 0, 0
+local inv, shake, clock, drone = 0, 0, 0, false
+local last_tick = 0
+
+local function reset()
+  th, al, v = 0, 0, D.CRUISE
+  time_left, score, laps = D.START_TIME, 0, 0
+  inv, shake, last_tick = 0, 0, 0
+  for _, o in ipairs(orbs) do
+    o.live = true
+    o.model:show()
+  end
+  for _, g in ipairs(gates) do
+    g.cool, g.flash = 0, 0
+    g.model.tint = colors.gold
+    g.model:show()
+  end
+  for _, w in ipairs(walls) do w.model:show() end
+  ship.alpha = 255
+end
+
+local function sfx(fn, a, b, c)
+  if not muted and not TESTING then fn(a, b, c) end
+end
+
+local function start_play()
+  reset()
+  state = "play"
+  paused = false
+  if not drone and not TESTING then
+    sound.loopPlay("Engine", 60)
+    drone = true
+  end
+end
+
+local function end_play()
+  state = "over"
+  hi = D.save_high_score(score)
+  if drone then sound.loopStop() end
+  drone = false
+  sfx(music.mml, "t140 o4 g8 e8 c4")
+end
+
+local function crash()
+  v = v * 0.45
+  time_left = time_left + D.TIME_WALL
+  inv = D.CRASH_INV
+  shake = 0.45
+  sfx(music.noise, 250, 300)
+end
+
+-- ---------------------------------------------------------------------
+-- Update
+-- ---------------------------------------------------------------------
+
+local function update_play(dt)
+  -- Steering across the tube, keyboard and stick alike.
+  local steer = 0
+  if keyboard.down("left") then steer = steer + 1 end
+  if keyboard.down("right") then steer = steer - 1 end
+  local gx = gamepad.axis("leftx")
+  if math.abs(gx) > 0.15 then steer = steer - gx end
+  al = D.clamp(al + steer * D.STEER * dt, -D.AL_MAX, D.AL_MAX)
+
+  -- Throttle: the stick's vertical axis pushes too, and the cruise line
+  -- always wins in the end.
+  if keyboard.down("up") or gamepad.down("a") then v = v + D.THROTTLE_UP * dt end
+  if keyboard.down("down") or gamepad.down("x") then v = v + D.THROTTLE_DOWN * dt end
+  local gy = gamepad.axis("lefty")
+  if math.abs(gy) > 0.15 then v = v - gy * D.THROTTLE_UP * dt end
+  v = v + (D.CRUISE - v) * D.EASE * dt
+  v = D.clamp(v, D.MINV, D.vMax(laps))
+
+  -- Around the loop; a lap re-arms every orb and pays the lap bonus.
+  th = th + v * dt
+  if th >= TAU then
+    th = th - TAU
+    laps = laps + 1
+    score = score + D.SC_LAP * D.multiplier(laps)
+    for _, o in ipairs(orbs) do
+      o.live = true
+      o.model:show()
+    end
+    sfx(music.mml, "t160 o5 c8 e8 g8 >c4")
+  end
+
+  -- The clock: always draining, harder every lap. Distance pays too.
+  time_left = time_left - D.drain(laps) * dt
+  local k = R - TUBE * math.cos(al)
+  score = score + k * v * dt * D.SC_DIST * D.multiplier(laps)
+
+  -- Ticks in the last five seconds.
+  if time_left < 5.5 then
+    local tick = math.floor(time_left)
+    if tick ~= last_tick then
+      last_tick = tick
+      if tick >= 0 then sfx(music.sound, "Square", 1300, 60) end
+    end
+  end
+
+  -- Energy cells.
+  for _, o in ipairs(orbs) do
+    if o.live and D.orbHit(th, al, o) then
+      o.live = false
+      o.model:hide()
+      time_left = math.min(D.TIME_CAP, time_left + D.TIME_ORB)
+      v = v + 0.02
+      score = score + D.SC_ORB * D.multiplier(laps)
+      sfx(music.sound, "Tri", 700 + math.random(400), 70)
+    end
+  end
+
+  -- Boost gates: only the middle of the ring pays.
+  for _, g in ipairs(gates) do
+    g.cool = g.cool - dt
+    g.flash = g.flash - dt
+    if g.cool <= 0 and D.gatePass(th, al, g) then
+      g.cool = 2.0
+      g.flash = 0.4
+      g.model.tint = colors.lime
+      v = v + 0.12
+      time_left = math.min(D.TIME_CAP, time_left + D.TIME_GATE)
+      score = score + D.SC_GATE * D.multiplier(laps)
+      sfx(music.sound, "Square", 660, 80)
+      sfx(music.sound, "Square", 990, 120)
+    elseif g.flash <= 0 then
+      g.model.tint = colors.gold
+    end
+  end
+
+  -- Walls, unless still in the mercy time after the last hit.
+  if inv > 0 then
+    inv = inv - dt
+    if math.floor(clock * 12) % 2 == 0 then ship.alpha = 80 else ship.alpha = 255 end
+  else
+    ship.alpha = 255
+    for _, w in ipairs(walls) do
+      if D.wallHit(th, al, w) then
+        crash()
+        break
+      end
+    end
+  end
+
+  if time_left <= 0 then
+    time_left = 0
+    end_play()
+    return
+  end
+
+  -- Place and aim the ship and its thruster.
+  local sx, sy, sz = D.trackPoint(R, TUBE, th, al)
+  local nx, ny, nz = D.trackNormal(R, TUBE, th, al)
+  local tx, ty, tz = -math.sin(th), math.cos(th), 0
+  ship:move(sx - nx * 3, sy - ny * 3, sz - nz * 3)
+  ship:face(sx + tx * 10 - nx * 3, sy + ty * 10 - ny * 3, sz - nz * 3, -nx, -ny, -nz)
+  thruster:move(sx - tx * 14 - nx * 3, sy - ty * 14 - ny * 3, sz - nz * 3)
+  thruster.scale = 1.6 + v * 1.6 + math.sin(clock * 22) * 0.3
+
+  -- Chase cam riding the tube, jittered by the last crash's shake.
+  local ch = th - D.CAM_BACK
+  local cx, cy, cz = D.trackPoint(R, TUBE, ch, al + D.CAM_UP)
+  local wx, wy, wz = D.trackNormal(R, TUBE, ch, al + D.CAM_UP)
+  local ah = th + D.CAM_LOOKAHEAD
+  local ax, ay, az = D.trackPoint(R, TUBE, ah, al)
+  local j = 0
+  if shake > 0 then
+    shake = shake - dt
+    j = shake * 34
+  end
+  world.camera(cx - wx * D.CAM_IN + (math.random() - 0.5) * j,
+    cy - wy * D.CAM_IN + (math.random() - 0.5) * j,
+    cz - wz * D.CAM_IN + (math.random() - 0.5) * j,
+    ax, ay, az, -wx, -wy, -wz)
+
+  -- The drone climbs with the speed, and obeys the mute switch.
+  if drone then
+    sound.loopPitch(50 + v * 110)
+    sound.loopVolume(muted and 0 or 1)
+  end
+end
+
+function update(dt)
+  if keyboard.pressed("escape") then exit() end
+  clock = clock + dt
+
+  if keyboard.pressed("m") then
+    muted = not muted
+    if drone then sound.loopVolume(muted and 0 or 1) end
+  end
+
+  if state == "title" then
+    -- Attract mode: a slow eye orbiting the whole ring.
+    local a = clock * 0.12
+    world.camera(520 * math.cos(a), -520 * math.sin(a), 260,
+      0, 0, 0, 0, 0, 1)
+    if keyboard.pressed("space") or gamepad.pressed("start") or gamepad.pressed("a") then
+      start_play()
+    end
+    return
+  end
+
+  if state == "over" then
+    if keyboard.pressed("space") or gamepad.pressed("start") or gamepad.pressed("a") then
+      start_play()
+    end
+    return
+  end
+
+  if keyboard.pressed("p") then
+    paused = not paused
+    if drone then sound.loopVolume(paused and 0 or (muted and 0 or 1)) end
+  end
+  if paused then return end
+
+  update_play(dt)
+end
+
+-- ---------------------------------------------------------------------
+-- Draw
+-- ---------------------------------------------------------------------
+
+-- The HUD and the bands ride the screen layer: the world canvas sits under
+-- the 3D pass, and an arcade HUD must not dive under the track. The font is
+-- one fixed 18px size; textwidth() does the centering.
+local function center(y, s)
+  screen.text((D.W - textwidth(s)) / 2, y, s)
+end
+
+local function band(h)
+  screen.color = rgba(0, 0, 0, 220)
+  screen.rectangle(0, (D.H - h) / 2, D.W, h, true)
+end
+
+function draw()
+  canvas.color = colors.black
+  canvas.clear()
+  -- the screen buffer keeps whatever was drawn last frame unless told
+  -- otherwise, and a HUD whose numbers change would smear over its ghosts.
+  screen.clear()
+
+  if state == "title" then
+    band(190)
+    screen.color = colors.lime
+    center(196, "T O R U S   T R O O P E R")
+    screen.color = colors.white
+    center(226, "fly the inside of the ring - the clock is everything")
+    center(256, "orbs buy time, gates buy speed, walls cost both")
+    screen.color = colors.gold
+    center(292, "HI  " .. hi)
+    screen.color = colors.white
+    center(322, "press SPACE or START to fly")
+    return
+  end
+
+  local mult = D.multiplier(laps)
+  local k = R - TUBE * math.cos(al)
+  -- panels first: the tube is a light world, and a white HUD on it needs
+  -- a dark board to stand on.
+  local hint = "L/R slide   U/D throttle   P pause   M mute" .. (muted and "  [muted]" or "")
+  screen.color = rgba(0, 0, 0, 150)
+  screen.rectangle(4, 4, 150, 100, true)
+  screen.rectangle(D.W - 140, 4, 136, 26, true)
+  screen.rectangle(4, D.H - 28, textwidth(hint) + 16, 26, true)
+  screen.color = colors.white
+  screen.text(10, 8, "SPEED  " .. math.floor(v * k + 0.5) .. " u/s")
+  screen.text(10, 26, "LAP    " .. laps)
+  screen.text(10, 44, "SCORE  " .. math.floor(score))
+  screen.text(10, 62, "HI     " .. hi)
+  screen.text(10, 80, "x" .. string.format("%.2f", mult))
+
+  screen.color = colors.white
+  if time_left < 6 then
+    if math.floor(clock * 4) % 2 == 0 then screen.color = colors.red end
+  end
+  screen.text(D.W - 130, 8, "TIME " .. math.ceil(time_left))
+
+  screen.color = colors.gray
+  screen.text(10, D.H - 24, hint)
+
+  if state == "over" then
+    band(150)
+    screen.color = colors.red
+    center(210, "T I M E   U P")
+    screen.color = colors.white
+    center(244, "SCORE  " .. math.floor(score) .. "    LAPS  " .. laps)
+    screen.color = colors.gold
+    center(272, "HI  " .. hi)
+    screen.color = colors.white
+    center(304, "press SPACE or START to fly again")
+  elseif paused then
+    band(70)
+    screen.color = colors.lime
+    center(250, "P A U S E D")
+  end
+end
+
+-- ---------------------------------------------------------------------
+-- Test hook
+-- ---------------------------------------------------------------------
+
+-- With TORUSTROOPER_TEST set this file was pulled in via require() from a
+-- harness, not run as the game: export just enough internals to drive the
+-- ride frame by frame and check what it decides. The harness owns the
+-- update/draw callbacks then (and keeps the window alive).
+if TESTING then
+  return {
+    start     = start_play,
+    frame     = update,
+    render    = draw,
+    state     = function() return state end,
+    th        = function() return th end,
+    al        = function() return al end,
+    v         = function() return v end,
+    time      = function() return time_left end,
+    score     = function() return score end,
+    laps      = function() return laps end,
+    invuln    = function() return inv end,
+    paused    = function() return paused end,
+    set_pos   = function(a, b) th = a al = b end,
+    set_v     = function(x) v = x end,
+    set_time  = function(x) time_left = x end,
+    set_inv   = function(x) inv = x end,
+    set_paused = function(x) paused = x end,
+    orbs      = function() return orbs end,
+    walls     = function() return walls end,
+    gates     = function() return gates end,
+    liner     = function() return liner end,
+    hi        = function() return hi end,
+  }
+end

@@ -745,7 +745,7 @@ var
   FaceM: TMatrix;
 begin
   S := AItem.Scale;
-  if S <= 0 then
+  if S = 0 then
     S := 1;
   RayLib.rlPushMatrix;
   RayLib.rlMultMatrixf(@AProjection);
@@ -2553,13 +2553,22 @@ begin
       //depth, and the depth left in the buffer would otherwise punch the
       //models' silhouettes into those layers (a cloud hiding the HUD text).
       RayLib.rlEnableDepthTest;
+      //A rider can end up inside a body - the tube of a torus is the classic
+      //case - and a world that throws away its back faces then reads as
+      //painted cloth with the sky showing through. Every body here is solid
+      //and the depth test has already decided what is in front, so the far
+      //skins are simply painted too.
+      RayLib.rlDisableBackfaceCulling;
       //The models themselves, painted over the shade.
       for Item in FItems.Values do
       begin
         if (not Item.Visible) or (not Item.Loaded) then
           Continue;
         S := Item.Scale;
-        if S <= 0 then
+        //Zero would flatten the body away to nothing, but a negative scale is
+        //kept on purpose: it mirrors the mesh, and with the winding it flips
+        //the facing - the trick that lets one solid wear an inside-out skin.
+        if S = 0 then
           S := 1;
 
         //Screen-pixel anchor under the ortho eye: x runs right, y runs down
@@ -2611,6 +2620,11 @@ begin
       end;
     finally
       RayLib.EndMode3D;
+      //The batched 3D pass only lets its drawcalls fall when the mode ends,
+      //so the depth test and the culling switch stay set all the way through
+      //that last stroke; the 2D layers painted after this get their habits
+      //back here.
+      RayLib.rlEnableBackfaceCulling;
       //Leave the depth test off for the 2D layers painted after this pass.
       RayLib.rlDisableDepthTest;
     end;
