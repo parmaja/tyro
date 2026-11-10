@@ -151,6 +151,14 @@ type
     //world.shadowsoft([px]) -> the penumbra radius the shadows are blurred by
     //(screen pixels, 0..6); 0 keeps their edge hard.
     function ShadowSoft_func(L: Plua_State): integer; cdecl;
+    //world.camera([x,y,z [, tx,ty,tz [, upx,upy,upz]]]) -> the free 3D eye.
+    //Setting it hands the model pass from the top-down ortho camera to this
+    //perspective one, and the models' x/y/z then read as world coordinates.
+    function Camera_func(L: Plua_State): integer; cdecl;
+    //world.ortho() -> back to the default top-down pixel camera.
+    function Ortho_func(L: Plua_State): integer; cdecl;
+    //world.fov([deg]) -> the free camera's vertical field of view.
+    function Fov_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaFont }
@@ -377,17 +385,36 @@ type
     function Play_func(L: Plua_State): integer; cdecl;
     //model:stop() -> stop the skeletal animation, keeping the current pose.
     function Stop_func(L: Plua_State): integer; cdecl;
+    //model:face(x,y,z [, upx,upy,upz]) -> aim the model's own +y at a world
+    //point and lean its +z toward an up direction; no args clears the aim.
+    function Face_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaModels }
 
   TLuaModels = class(TTyroLuaObject)
   protected
+    // Shared body of the shape builders (sphere/box/cylinder/cone/torus):
+    // the optional first argument is the name (a number in that slot means
+    // no name, like controls.new), the ones after it the size numbers, each
+    // falling back to its unit default. The mesh build uploads to the GPU,
+    // so - like load() - it runs on the main thread through the engine
+    // queue. Leaves the model table on the stack and returns it.
+    function BuildShapeModel(L: Plua_State; AShape: TTyroModelShape;
+      ADef, BDef, CDef: Single): integer;
   public
     //models.new([name]) -> a new model object
     function New_func(L: Plua_State): integer; cdecl;
     //models.sphere([name]) -> a model built from the builtin unit sphere mesh
     function Sphere_func(L: Plua_State): integer; cdecl;
+    //models.box([name] [, w, h, d]) -> a box of those sizes (unit by default)
+    function Box_func(L: Plua_State): integer; cdecl;
+    //models.cylinder([name] [, radius] [, height]) -> a drum standing on z
+    function Cylinder_func(L: Plua_State): integer; cdecl;
+    //models.cone([name] [, radius] [, height]) -> a cone standing on z
+    function Cone_func(L: Plua_State): integer; cdecl;
+    //models.torus([name] [, radius] [, tube]) -> a ring lying in x/y around z
+    function Torus_func(L: Plua_State): integer; cdecl;
     //models.find(name) -> the named model object, or nil
     function Find_func(L: Plua_State): integer; cdecl;
     //models(name) -> __call metamethod, same as models.find
@@ -1175,6 +1202,9 @@ begin
   Script.Lua.State.Register(Name, 'ambient', Self, Self.Ambient_func);
   Script.Lua.State.Register(Name, 'ground', Self, Self.Ground_func);
   Script.Lua.State.Register(Name, 'shadowsoft', Self, Self.ShadowSoft_func);
+  Script.Lua.State.Register(Name, 'camera', Self, Self.Camera_func);
+  Script.Lua.State.Register(Name, 'ortho', Self, Self.Ortho_func);
+  Script.Lua.State.Register(Name, 'fov', Self, Self.Fov_func);
   //Lua.State.Register('world', World); //Should be last one for world
   inherited;
 end;
@@ -1260,6 +1290,73 @@ begin
   if L.ArgsCount >= 1 then
     Engine.Models.SetSoftness(L.ToNumber(1));
   L.PushNumber(Engine.Models.GetSoftness);
+  Result := 1;
+end;
+
+// world.camera() -> px,py,pz, tx,ty,tz, ux,uy,uz
+// world.camera(px,py,pz [, tx,ty,tz [, upx,upy,upz]])
+// The free 3D eye: position, the point it looks at, and which way is up on
+// the screen - all in the model world space (x right, y into the screen,
+// z up). Setting it switches the model pass from the top-down ortho camera
+// to this perspective one, and every model's x/y/z then means a world
+// position instead of screen pixels. With three numbers the eye looks at the
+// origin, with six up is world +z; the store keeps them behind its lock.
+function TLuaWorld.Camera_func(L: Plua_State): integer; cdecl;
+var
+  x, y, z, tx, ty, tz, ux, uy, uz: Single;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  if L.ArgsCount >= 9 then
+    Engine.Models.SetCamera(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3),
+      L.ToNumber(4), L.ToNumber(5), L.ToNumber(6),
+      L.ToNumber(7), L.ToNumber(8), L.ToNumber(9))
+  else if L.ArgsCount >= 6 then
+    Engine.Models.SetCamera(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3),
+      L.ToNumber(4), L.ToNumber(5), L.ToNumber(6), 0, 0, 1)
+  else if L.ArgsCount >= 3 then
+    Engine.Models.SetCamera(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3),
+      0, 0, 0, 0, 0, 1)
+  else if L.ArgsCount > 0 then
+    Script.DoError('camera() takes no arguments (read), or 3, 6 or 9 numbers (set)');
+  Engine.Models.GetCamera(x, y, z, tx, ty, tz, ux, uy, uz);
+  L.PushNumber(x);
+  L.PushNumber(y);
+  L.PushNumber(z);
+  L.PushNumber(tx);
+  L.PushNumber(ty);
+  L.PushNumber(tz);
+  L.PushNumber(ux);
+  L.PushNumber(uy);
+  L.PushNumber(uz);
+  Result := 9;
+end;
+
+// world.ortho()
+// Hand the model pass back to the default top-down ortho camera: x/y are
+// screen pixels again and the cast shadows return with the sea plane. The
+// free camera's own shot stays stored, so a later world.camera() without
+// numbers resumes exactly where it was left.
+function TLuaWorld.Ortho_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  Engine.Models.SetFreeCam(False);
+end;
+
+// world.fov() -> deg   |   world.fov(deg)
+// The free camera's vertical field of view in degrees (10..170, 60 default):
+// the wider the angle, more of the looping world bends into the frame.
+function TLuaWorld.Fov_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  if L.ArgsCount >= 1 then
+    Engine.Models.SetFov(L.ToNumber(1));
+  L.PushNumber(Engine.Models.GetFov);
   Result := 1;
 end;
 
@@ -1851,6 +1948,10 @@ begin
   Lua.State.RegisterTable('models');
   Lua.State.Register('models', 'new', Self, Models.New_func);
   Lua.State.Register('models', 'sphere', Self, Models.Sphere_func);
+  Lua.State.Register('models', 'box', Self, Models.Box_func);
+  Lua.State.Register('models', 'cylinder', Self, Models.Cylinder_func);
+  Lua.State.Register('models', 'cone', Self, Models.Cone_func);
+  Lua.State.Register('models', 'torus', Self, Models.Torus_func);
   Lua.State.Register('models', 'find', Self, Models.Find_func);
   Lua.State.Register('models', '__call', Self, Models.Call_func, True);
 
@@ -6833,6 +6934,7 @@ begin
     Lua.State.Register('hide', Hide_func);
     Lua.State.Register('play', Play_func);
     Lua.State.Register('stop', Stop_func);
+    Lua.State.Register('face', Face_func);
 
     //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
     Lua.State.NewTable; //[model, model, meta]
@@ -6972,6 +7074,35 @@ begin
   handle := GetModelHandle(L, 1);
   if handle > cModel3DInvalid then
     Engine.Models.StopAnim(handle);
+  Result := 0;
+end;
+
+// model:face(x, y, z [, upx, upy, upz]) -> turn the model so its own +y axis
+// aims at that world point and its own +z leans toward the up direction
+// (world up by default). This is how a ship rides a curved track or a hoop
+// stands square to the road: the point and the lean follow the surface, and
+// angle/roll/tilt become trims on top of the pose. model:face() with no
+// numbers drops the aim and hands the model back to its plain angles.
+function TLuaModel.Face_func(L: Plua_State): integer; cdecl;
+var
+  b, handle: integer;
+begin
+  b := ModelArgBase(L);
+  handle := GetModelHandle(L, 1);
+  if handle > cModel3DInvalid then
+  begin
+    if L.ArgsCount >= b + 2 then
+    begin
+      if L.ArgsCount >= b + 5 then
+        Engine.Models.SetFace(handle, L.ToNumber(b), L.ToNumber(b + 1), L.ToNumber(b + 2),
+          L.ToNumber(b + 3), L.ToNumber(b + 4), L.ToNumber(b + 5))
+      else
+        Engine.Models.SetFace(handle, L.ToNumber(b), L.ToNumber(b + 1), L.ToNumber(b + 2),
+          0, 0, 1);
+    end
+    else
+      Engine.Models.ClearFace(handle);
+  end;
   Result := 0;
 end;
 
@@ -7250,27 +7381,48 @@ begin
   Result := 1;
 end;
 
-// models.sphere("name"?) -> a model whose mesh is the builtin unit sphere
-// (radius 1, scaled like any model). The mesh upload needs the GL context, so
-// - like load() - it runs on the main thread through the engine queue.
-function TLuaModels.Sphere_func(L: Plua_State): integer; cdecl;
+// Shared body of the shape builders - see the class note. The queue object
+// runs on the script thread's behalf, so the model table it hands back is
+// complete by the time the script reads it.
+function TLuaModels.BuildShapeModel(L: Plua_State; AShape: TTyroModelShape;
+  ADef, BDef, CDef: Single): integer;
 var
+  b: integer;
   aName: string;
+  aSizeA, aSizeB, aSizeC: Single;
   handle: integer;
-  BuildObj: TSphereModelObject;
+  BuildObj: TShapeModelObject;
 begin
-  if L.ArgsCount >= 1 then
-    aName := L.ToString(1)
+  if (L.ArgsCount >= 1) and L.IsString(1) then
+  begin
+    aName := L.ToString(1);
+    b := 2;
+  end
   else
+  begin
     aName := '';
+    b := 1;
+  end;
+  if L.ArgsCount >= b then
+    aSizeA := L.ToNumber(b)
+  else
+    aSizeA := ADef;
+  if L.ArgsCount >= b + 1 then
+    aSizeB := L.ToNumber(b + 1)
+  else
+    aSizeB := BDef;
+  if L.ArgsCount >= b + 2 then
+    aSizeC := L.ToNumber(b + 2)
+  else
+    aSizeC := CDef;
   handle := Engine.Models.AddEmpty(aName);
   if handle > cModel3DInvalid then
   begin
-    BuildObj := TSphereModelObject.Create(handle, 1);
+    BuildObj := TShapeModelObject.Create(handle, AShape, aSizeA, aSizeB, aSizeC);
     try
       BuildObj.Run(Script.Thread);
       if not BuildObj.HandleResult then
-        Script.DoError('Sphere model not built');
+        Script.DoError('Model shape not built');
     finally
       BuildObj.Free;
     end;
@@ -7285,6 +7437,42 @@ begin
     L.SetField(-2, '__name');
   end;
   Result := 1;
+end;
+
+// models.sphere("name"? [, radius]) -> a model whose mesh is the builtin
+// unit sphere (or one of the given radius), scaled like any model.
+function TLuaModels.Sphere_func(L: Plua_State): integer; cdecl;
+begin
+  Result := BuildShapeModel(L, msSphere, 1, 0, 0);
+end;
+
+// models.box("name"? [, w, h, d]) -> a flat-shaded box with those sizes
+// along x/y/z (unit by default) - the vector block of a 3D world.
+function TLuaModels.Box_func(L: Plua_State): integer; cdecl;
+begin
+  Result := BuildShapeModel(L, msBox, 1, 1, 1);
+end;
+
+// models.cylinder("name"? [, radius] [, height]) -> a drum standing on the
+// z axis (unit by default).
+function TLuaModels.Cylinder_func(L: Plua_State): integer; cdecl;
+begin
+  Result := BuildShapeModel(L, msCylinder, 1, 1, 0);
+end;
+
+// models.cone("name"? [, radius] [, height]) -> a cone standing on the z
+// axis: its point aims at +z (unit by default).
+function TLuaModels.Cone_func(L: Plua_State): integer; cdecl;
+begin
+  Result := BuildShapeModel(L, msCone, 1, 1, 0);
+end;
+
+// models.torus("name"? [, radius] [, tube]) -> a ring lying in x/y around
+// the z axis: the donut a looping track and its boost hoops are built from
+// (ring radius 1, thin tube by default).
+function TLuaModels.Torus_func(L: Plua_State): integer; cdecl;
+begin
+  Result := BuildShapeModel(L, msTorus, 1, 0.25, 0);
 end;
 
 // models.find("name") -> returns the named model object, or nil

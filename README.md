@@ -514,14 +514,19 @@ top-down orthographic pass that is pixel-aligned with the 2D canvas — a model
 at `x, y` sits on exactly the same pixel as a sprite or a `canvas.rectangle`.
 It is the easy way to put a real 3D object inside a 2D game. The recommended
 file format is **GLB** (binary glTF 2.0), a single self-contained file with
-mesh, texture and material.
+mesh, texture and material. For a full 3D scene — a perspective eye of your
+own inside the world — there is the Free Camera section further down.
 
 ## Creating & Loading
 
 | Function | Description |
 |----------|-------------|
 | `models.new("name"?)` | Create a new model object. Optional name registers it for lookup. |
-| `models.sphere("name"?)` | An engine-built unit sphere (2 wide, centred) — ready-made puffs, bubbles and planets with no file at all. |
+| `models.sphere("name"? [, radius])` | An engine-built sphere (radius `1` by default, so the bare call is 2 wide and centred) — ready-made puffs, bubbles and planets with no file at all. |
+| `models.box("name"? [, w, h, d])` | An engine-built flat-shaded box, `w × h × d` units along x/y/z (unit by default) — the vector block of a 3D world. |
+| `models.cylinder("name"? [, radius, height])` | An engine-built drum standing on the z axis (unit by default), smooth on the mantle with hard lids — posts, wheels, pipes. |
+| `models.cone("name"? [, radius, height])` | An engine-built cone standing on the z axis with its apex up (unit by default) — roofs, spikes, rockets. |
+| `models.torus("name"? [, radius, tube])` | An engine-built ring lying on the x/y plane (radius `1`, tube `0.25` by default): `radius` is centre-of-hole to centre-of-tube, `tube` the thickness of the ring itself — a race loop, a portal, a donut. |
 | `models("name")` | Look up a model by name (returns the model object or `nil`). |
 | `models.find("name")` | Same as above. |
 
@@ -537,6 +542,7 @@ directory and the workspace, like sprites.
 | `model:show()` | Make the model visible (shown by default). |
 | `model:hide()` | Hide the model from rendering. |
 | `model:move(x, y[, z])` | Set the screen position (pixels) and optional depth in one call. |
+| `model:face(tx, ty, tz[, ux, uy, uz])` | Point the model's own +y axis at the target `tx,ty,tz`; with the optional up vector, its own +z leans toward it. Aim once and fly; `angle`/`roll`/`tilt` still add small trims on top. (Meaningful under the free camera; see below.) |
 | `model:play([what])` | Start a skeletal animation by name or index (`model:play("Walk")`); with no argument it replays the last clip (or the file's first). Returns whether a clip was found. The engine poses the bones every frame while it plays. |
 | `model:stop()` | Stop the skeletal animation, keeping the current pose. |
 
@@ -635,6 +641,55 @@ world.light(0.10, 1, -0.05)   -- shadows land to the right and below
 world.ambient(0.45)           -- soft darkness, sky light fills the rest
 world.ground(300)             -- the sea plane, far behind the jets
 ```
+
+# Free Camera
+
+The model pass runs on a top-down orthographic eye by default — the pixel-
+aligned one 2D games want. Hand it a real perspective eye of your own with
+`world.camera` and the same world turns into a 3D playground: the space stays
+exactly as it was (x right, y into the screen, z up, the same 1000-unit reach
+of the depth buffer), only the way you look through it changes.
+
+| Function | Description |
+|----------|-------------|
+| `world.camera(x, y, z[, tx, ty, tz[, ux, uy, uz]])` | Put the free eye at `x,y,z` looking at `tx,ty,tz` (default the origin) with the given up vector (default world up, `0,0,1`). Any call switches the model pass to this perspective eye. |
+| `world.camera()` | With no arguments it reads the shot back as nine numbers — and never changes the mode, so `local x,y,z = ...` after a `world.ortho()` still tells where the free eye was parked. |
+| `world.ortho()` | Hand the model pass back to the default top-down eye: `x/y` are screen pixels again and the cast shadows return. |
+| `world.fov([deg])` | The free eye's vertical field of view in degrees, clamped to `10..170` (default 60). Read with no argument. |
+
+Under the free eye a model's `x/y/z` are plain **world coordinates** — the
+same numbers `world.camera` takes — instead of screen pixels, and the screen
+shake and window margin no longer move the models (the camera owns the frame
+now). Cast shadows stay with the ortho eye: the ground plane is a top-down
+notion, and a free 3D scene reads its depth directly.
+
+```lua
+window.show(640, 480)
+canvas.backcolor = colors.black
+
+local ship = models.box("ship", 5, 11, 3)   -- long axis on its own +y
+world.fov(72)
+
+local t = 0
+function update(dt)
+  t = t + dt
+  -- a ship circling the origin at height 20, always nose-first along the ring
+  local x, y = 120 * math.cos(t), 120 * math.sin(t)
+  ship:move(x, y, 20)
+  ship:face(x - math.sin(t) * 10, y + math.cos(t) * 10, 20)
+  -- an eye that rides behind it, looking down at where it is going
+  world.camera(x * 0.7, y * 0.7, 60, x, y, 10)
+end
+function draw()
+  canvas.clear()
+end
+```
+
+`demos/torus_demo.tyro` is a whole free-camera game in one file: a generated
+torus loop to ride on its inside equator, boost hoops that stand across the
+tube and feed your speed, a chase eye whose up vector rides the tube so the
+frame rolls as the loop turns, and a planet parked in the hole to spin
+against.
 
 # Shader Effects
 
@@ -1090,6 +1145,7 @@ tyro demos/<name>.tyro
 | `demos/text.tyro` | Multi-language text rendering |
 | `demos/shader_demo.tyro` | Post-processing shaders: water, glow, gray, sepia, invert, vignette, pixelate |
 | `demos/shake_demo.tyro` | Screen shake: `shake(ms, power)` / `window.shake(ms, power)` — the world jolts like an accident or an error |
+| `demos/torus_demo.tyro` | Free camera: ride the inside of a generated torus loop, boost hoops feed your speed, a chase eye rolls with the tube — `world.camera` / `models.torus` |
 
 # Threading model & lifecycle
 

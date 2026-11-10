@@ -24,6 +24,20 @@ unit TyroModels;
  *  axis (clockwise on screen, the sprite convention); Tilt tips it around the
  *  screen's horizontal axis, which foreshortens it for a cheap banking pose.
  *
+ *  The store also carries one free scene camera (world.camera in Lua): with it
+ *  on, the same world is looked at through a script-driven perspective eye and
+ *  the model x/y/z are read as plain world coordinates instead of screen
+ *  pixels. The top-down ortho pass stays the default, so every 2D game is
+ *  untouched, and the ground-plane cast shadows stay with it - a free 3D scene
+ *  has real depth instead of a projected shade.
+ *
+ *  The built-in shapes (models.sphere/box/cylinder/cone/torus in Lua) are
+ *  meshes the engine generates itself, so a game needs no asset file at all
+ *  for its vector blocks. They stand on the engine's Z axis: the generators
+ *  raylib spins around Y carry an axis-fix matrix the pass composes onto the
+ *  mesh, and a model:face() aim rotates any model in the world so a ship or a
+ *  hoop can point along an arbitrary path (a torus-riding demo, say).
+ *
  *  A model with Shadow on casts a real shadow: its mesh is drawn a second time
  *  through a plane-projection matrix that flattens it along the light ray onto
  *  the world's ground plane (world.light / world.ambient / world.ground in
@@ -97,6 +111,17 @@ type
     Shadow: Boolean;        // cast a shadow onto the world's ground plane
     Scale: Single;
     Tint: TColor;
+    //Free 3D pose: the world point the model's own +y aims at and the
+    //direction its +z leans toward (see FaceMatrixOf in the pass). Face is
+    //optional - without it the plain Angle/Roll/Tilt Euler pose stands.
+    FaceTo: TVector3;
+    FaceUp: TVector3;
+    HasFace: Boolean;
+    //The axis fix a generated shape carries: a rotation the pass composes
+    //onto the mesh so raylib's Y-spun generators (cylinder, cone, torus)
+    //stand on the engine's Z axis. A loaded mesh file never has one.
+    AxisFix: TMatrix;
+    HasAxisFix: Boolean;
     //Skeletal animation: raylib's clips of the loaded file (nil/0 when the
     //mesh has no skeleton or no animation), plus the playback state. Current
     //is -1 when nothing has ever played and the mesh sits in its bind pose;
@@ -117,6 +142,18 @@ type
     //The current clip, or nil when there is none.
     function CurrentAnim: PModelAnimation;
   end;
+
+  { TTyroModelShape }
+
+  { The built-in shapes BuildShape generates, with the A/B/C reading:
+      msSphere     A = radius
+      msBox        A, B, C = size along x, y, z
+      msCylinder   A = radius, B = height (axis along z)
+      msCone       A = radius, B = height (axis along z)
+      msTorus      A = ring radius, B = tube radius (the ring lies in x/y
+                   around the z axis)
+    Every shape is centred on the origin and stands on the engine's Z axis. }
+  TTyroModelShape = (msSphere, msBox, msCylinder, msCone, msTorus);
 
   { TModels3D }
 
@@ -143,6 +180,16 @@ type
     //band (0 keeps the old hard ink). One sun, one softness for the scene,
     //exactly like the light itself.
     FSoftness: Single;
+    //The free scene camera (the Lua world.camera/world.ortho). Off by default:
+    //the models then ride the top-down pixel ortho pass as ever. On, the same
+    //world is looked at through this perspective eye and the model x/y/z are
+    //read as plain world coordinates. The parameters stay stored either way,
+    //so flipping back to the free camera restores the shot where it was left.
+    FFreeCam: Boolean;
+    FCamPos: TVector3;
+    FCamTarget: TVector3;
+    FCamUp: TVector3;
+    FFov: Single;
     //The shadow ink: raylib's default material, which is the plain unlit shader
     //and a 1x1 white pixel, so whatever color is written into its albedo comes
     //out at the other end unchanged - a solid silhouette with no texture and no
@@ -221,11 +268,13 @@ type
     procedure Clear;
     // Add a mesh-less model, returns a handle
     function AddEmpty(const AName: string = ''): integer;
-    // Generate a UV sphere mesh into an existing handle (main thread, like
-    // Load). The script scales/positions it like any other model; it is the
-    // primitive a top-down "cloud puff" or a placeholder is built from, so a
-    // game needs no mesh file to put a real 3D shape on screen.
-    function BuildSphere(Handle: integer; ARadius: Single): boolean;
+    // Generate one of the built-in shapes into an existing handle (main
+    // thread, like Load). The script scales/positions it like any other model;
+    // these are the primitives a game builds its vector world from, so it needs
+    // no mesh file to put a real 3D shape on screen. See TTyroModelShape for
+    // what A, B and C read per shape.
+    function BuildShape(Handle: integer; AShape: TTyroModelShape;
+      A, B, C: Single): boolean;
     function FindByName(const AName: string): integer;
     function Exists(Handle: integer): boolean;
 
@@ -243,6 +292,20 @@ type
     //The penumbra radius in screen pixels (see FSoftness): 0..6, clamped.
     procedure SetSoftness(AValue: single);
     function GetSoftness: single;
+
+    // -- free scene camera (mirrored on the Lua 'world' table) --
+    //The eye, the point it looks at and its up vector, in the model pass's
+    //world space (x right, y into the screen, z up). Setting it also switches
+    //the pass to the free camera; SetFreeCam(False) hands the world back to
+    //the top-down ortho eye the 2D games ride.
+    procedure SetCamera(PX, PY, PZ, TX, TY, TZ, UX, UY, UZ: single);
+    procedure GetCamera(out PX, PY, PZ, TX, TY, TZ, UX, UY, UZ: single);
+    procedure SetFreeCam(AEnabled: boolean);
+    function GetFreeCam: boolean;
+    //Vertical field of view in degrees (clamped 10..170), read only while the
+    //free camera is on; 60 is the plain-eye default.
+    procedure SetFov(AValue: single);
+    function GetFov: single;
 
     function GetName(Handle: integer): string;
     procedure SetName(Handle: integer; const AName: string);
@@ -276,6 +339,14 @@ type
     // misty volume instead of hard white balls.
     procedure SetAlpha(Handle: integer; AAlpha: integer);
     function GetAlpha(Handle: integer): integer;
+
+    // -- model facing (mirrored on the Lua model:face) --
+    //Aim the model's own +y at the world point (TX,TY,TZ) and lean its +z
+    //toward the direction (UX,UY,UZ). The pose is composed before the plain
+    //angles, which then trim on top of it. ClearFace hands the model back to
+    //the Angle/Roll/Tilt Euler pose.
+    procedure SetFace(Handle: integer; TX, TY, TZ, UX, UY, UZ: single);
+    procedure ClearFace(Handle: integer);
 
     // -- skeletal animation (mirrored on the Lua model:play/model:stop) --
     //Advance every playing clip by the frame time and pose its model. Runs on
@@ -329,17 +400,22 @@ type
     property HandleResult: boolean read FResult;
   end;
 
-  { TSphereModelObject }
+  { TShapeModelObject }
 
-  { Builds the builtin sphere mesh into a model on the main thread (the upload
-    needs the GL context) and returns whether it succeeded. }
-  TSphereModelObject = class(TQueueObject)
+  { Builds one of the engine-generated shapes (see TTyroModelShape) into a
+    model on the main thread (the upload needs the GL context) and returns
+    whether it succeeded. }
+  TShapeModelObject = class(TQueueObject)
   private
-    FRadius: Single;
+    FShape: TTyroModelShape;
+    FA: Single;
+    FB: Single;
+    FC: Single;
     FHandle: integer;
     FResult: boolean;
   public
-    constructor Create(AHandle: integer; ARadius: Single);
+    constructor Create(AHandle: integer; AShape: TTyroModelShape;
+      A, B, C: Single);
     procedure DoExecute; override;
     property HandleResult: boolean read FResult;
   end;
@@ -357,6 +433,10 @@ type
   PMeshArray = ^TMeshArray;
 
 const
+  //Where the free eye parks until a script takes it over: the same spot the
+  //ortho pass hovers (its cModel3DDistance), so a first world.camera() starts
+  //from the shot the script already sees.
+  cModel3DCamRest = 400.0;
   //Cast-shadow look: the ink the silhouette is laid in, and how dark it can
   //get. Ambient light fills a shadow, so at full ambient the alpha drops to 0
   //and the whole shade switches itself off. Here rather than in DrawAll
@@ -372,8 +452,90 @@ const
      m1: 0;  m5: 1;  m9: 0;  m13: 0;
      m2: 0;  m6: 0;  m10: 1; m14: 0;
      m3: 0;  m7: 0;  m11: 0; m15: 1);
+  //The axis fix the generated cylinder, cone and torus carry: raylib spins
+  //all three around its Y axis, the engine's world stands them on Z. For the
+  //column-vector reading rlMultMatrixf gets (see the note in DrawAll) that is
+  //the map (x, y, z) -> (x, -z, y): Y lands on +Z, and Z swings to -Y.
+  cModel3DAxisZUp: TMatrix =
+    (m0: 1;  m4: 0;  m8: 0;  m12: 0;
+     m1: 0;  m5: 0;  m9: 1;  m13: 0;
+     m2: 0;  m6: -1; m10: 0; m14: 0;
+     m3: 0;  m7: 0;  m11: 0; m15: 1);
 
 { TModel3D }
+
+//The few vector maths the facing basis needs. The raylib math functions are
+//not bound, and a basis turn needs nothing beyond these three.
+function V3Length(const A: TVector3): Single;
+begin
+  Result := Sqrt(A.X * A.X + A.Y * A.Y + A.Z * A.Z);
+end;
+
+function V3Dot(const A, B: TVector3): Single;
+begin
+  Result := A.X * B.X + A.Y * B.Y + A.Z * B.Z;
+end;
+
+function V3Cross(const A, B: TVector3): TVector3;
+begin
+  Result := Vector3Of(
+    A.Y * B.Z - A.Z * B.Y,
+    A.Z * B.X - A.X * B.Z,
+    A.X * B.Y - A.Y * B.X);
+end;
+
+//Zero-vector-safe normalise: (0,0,0) in, (0,0,0) out (the caller decides the
+//fallback), any other vector comes out one unit long.
+function V3Unit(const A: TVector3): TVector3;
+var
+  L: Single;
+begin
+  L := V3Length(A);
+  if L < 1e-6 then
+    Result := Vector3Of(0, 0, 0)
+  else
+    Result := Vector3Of(A.X / L, A.Y / L, A.Z / L);
+end;
+
+//The pose face() asks for: the model's own +y aimed from APos at ATarget, its
+//+z leaning toward AUp (flattened to lie square across the sight line). The
+//result is a plain rotation - det +1, no mirror - and a degenerate aim
+// (target on the model, or up straight along the sight line) still lands on
+//an upright frame rather than a NaN pose. For the column-vector reading of
+//rlMultMatrixf the axes live in the COLUMNS: +y (the aim) goes in m1,m5,m9.
+function FaceMatrixOf(const APos, ATarget, AUp: TVector3): TMatrix;
+var
+  D, U, X: TVector3;
+begin
+  D := V3Unit(Vector3Of(ATarget.X - APos.X, ATarget.Y - APos.Y,
+    ATarget.Z - APos.Z));
+  if (D.X = 0) and (D.Y = 0) and (D.Z = 0) then
+    D := Vector3Of(0, 1, 0); //aim at itself: face "up the screen" as the model does bare
+  U := V3Unit(AUp);
+  if (U.X = 0) and (U.Y = 0) and (U.Z = 0) then
+    U := Vector3Of(0, 0, 1);
+  //Lean the up vector square across the sight line; when it sat right along
+  //it, pick any standing axis instead of a zero one.
+  U := Vector3Of(U.X - D.X * V3Dot(D, U), U.Y - D.Y * V3Dot(D, U),
+    U.Z - D.Z * V3Dot(D, U));
+  U := V3Unit(U);
+  if (U.X = 0) and (U.Y = 0) and (U.Z = 0) then
+  begin
+    if Abs(D.Z) < 0.9 then
+      U := Vector3Of(0, 0, 1)
+    else
+      U := Vector3Of(0, 1, 0);
+    U := V3Unit(Vector3Of(U.X - D.X * V3Dot(D, U), U.Y - D.Y * V3Dot(D, U),
+      U.Z - D.Z * V3Dot(D, U)));
+  end;
+  //Right-handed frame: with +y = D and +z = U, +x completes it as y cross z.
+  X := V3Cross(D, U);
+
+  Result.m0 := X.X;  Result.m4 := X.Y;  Result.m8 := X.Z;  Result.m12 := 0;
+  Result.m1 := D.X;  Result.m5 := D.Y;  Result.m9 := D.Z;  Result.m13 := 0;
+  Result.m2 := U.X;  Result.m6 := U.Y;  Result.m10 := U.Z; Result.m14 := 0;
+  Result.m3 := 0;    Result.m7 := 0;    Result.m11 := 0;   Result.m15 := 1;
+end;
 
 constructor TModel3D.Create(AHandle: Integer; const AName: string);
 begin
@@ -395,6 +557,11 @@ begin
   Shadow := True;
   Scale := 1;
   Tint := clWhite;
+  FaceTo := Vector3Of(0, 0, 0);
+  FaceUp := Vector3Of(0, 0, 1);
+  HasFace := False;
+  AxisFix := cModel3DIdentity;
+  HasAxisFix := False;
   Animations := nil;
   AnimCount := 0;
   Current := -1;
@@ -459,6 +626,15 @@ begin
   //game but the ones that opt in keep the old crisp silhouette.
   FSoftness := 0;
   FBlurReady := False;
+  //The free eye starts parked at the ortho pass's own viewpoint, so the first
+  //world.camera() call starts from the shot the script can already see, and
+  //the pass itself stays on the top-down ortho until one asks for the free
+  //camera.
+  FFreeCam := False;
+  FCamPos := Vector3Of(0, -cModel3DCamRest, 0);
+  FCamTarget := Vector3Of(0, 0, 0);
+  FCamUp := Vector3Of(0, 0, 1);
+  FFov := 60;
 end;
 
 destructor TModels3D.Destroy;
@@ -565,6 +741,8 @@ procedure TModels3D.PushShadowPose(AItem: TModel3D; const AProjection: TMatrix;
   AX, AY: Single; AWidth, AHeight: Integer);
 var
   S: Single;
+  Pos: TVector3;
+  FaceM: TMatrix;
 begin
   S := AItem.Scale;
   if S <= 0 then
@@ -574,11 +752,21 @@ begin
   //The same screen-pixel anchor the models get, so the shade belongs to the
   //body that casts it: x runs right, y runs down (so it becomes -z), and the
   //body's own Z depth rides along the world y axis.
-  RayLib.rlTranslatef(AItem.X + AX - AWidth * 0.5, AItem.Z,
+  Pos := Vector3Of(AItem.X + AX - AWidth * 0.5, AItem.Z,
     AHeight * 0.5 - (AItem.Y + AY));
+  RayLib.rlTranslatef(Pos.X, Pos.Y, Pos.Z);
+  //The body's full pose from the pass, cast-shadow parts included: the shade
+  //is the drawn silhouette flattened, so facing and axis fix ride along.
+  if AItem.HasFace then
+  begin
+    FaceM := FaceMatrixOf(Pos, AItem.FaceTo, AItem.FaceUp);
+    RayLib.rlMultMatrixf(@FaceM);
+  end;
   RayLib.rlRotatef(AItem.Angle, 0, 1, 0);
   RayLib.rlRotatef(AItem.Roll, 0, 0, 1);
   RayLib.rlRotatef(AItem.Tilt, 1, 0, 0);
+  if AItem.HasAxisFix then
+    RayLib.rlMultMatrixf(@AItem.AxisFix);
   RayLib.rlScalef(S, S, S);
   RayLib.rlTranslatef(-AItem.Center.X, -AItem.Center.Y, -AItem.Center.Z);
 end;
@@ -797,6 +985,14 @@ begin
     FAmbient := 0.45;
     FGroundY := 300;
     FSoftness := 0;
+    //...and under its own eye: the free camera goes back to its rest behind
+    //the ortho viewpoint, switched off, until the new script calls
+    //world.camera again.
+    FFreeCam := False;
+    FCamPos := Vector3Of(0, -cModel3DCamRest, 0);
+    FCamTarget := Vector3Of(0, 0, 0);
+    FCamUp := Vector3Of(0, 0, 1);
+    FFov := 60;
     //...and the shadow ink goes with it: it belongs to this run's GL context
     //and is rebuilt on the next frame that casts a shadow.
     FreeShadowMaterial;
@@ -829,29 +1025,409 @@ begin
   end;
 end;
 
-//Generate a UV sphere and upload it into an existing slot, mirroring Load:
-//GenMeshSphere/LoadModelFromMesh are by-value record calls, but the same
-//hazard hit only DrawModelEx (whose binding signature did not match this
-//build); DrawModel and LoadModel pass and return full records every frame
-//without trouble, so the sphere is safe here. Must run on the main thread.
-function TModels3D.BuildSphere(Handle: integer; ARadius: Single): boolean;
+//The engine's own torus, built as a plain indexed mesh: A is the ring radius
+//(centre to tube centre), B the tube radius, and the result stands on the
+//engine's Z so it needs no axis fix. raylib 6.2's GenMeshTorus ignores its
+//ring radius (the mesh only ever grows with the tube size) and hangs on its
+//second call in a session, so it cannot be used here. The vertex arrays use
+//raylib's own allocator so UnloadMesh frees them back into the same heap.
+function BuildTorusMesh(Radius, Tube: Single; RingSegs, TubeSegs: Integer): TMesh;
+var
+  i, j, vi, ii, VertCount: Integer;
+  theta, phi, ring: Single;
+  Verts, Norms, Uvs: PSingle;
+  Cols: PByte;
+  Idx: PWord;
+begin
+  Result := Default(TMesh);
+  if RingSegs < 3 then RingSegs := 3;
+  if TubeSegs < 3 then TubeSegs := 3;
+  if RingSegs > 255 then RingSegs := 255;
+  if TubeSegs > 255 then TubeSegs := 255;
+  //A closed grid: (RingSegs+1) x (TubeSegs+1) vertices, the last row/column
+  //duplicated for a clean UV seam, stitched into quads by index.
+  VertCount := (RingSegs + 1) * (TubeSegs + 1);
+  Verts := MemAlloc(VertCount * SizeOf(Single) * 3);
+  Norms := MemAlloc(VertCount * SizeOf(Single) * 3);
+  Uvs := MemAlloc(VertCount * SizeOf(Single) * 2);
+  //The white vertex colors are not decoration: rlgl only reads the mesh's
+  //normals into the VBO when it also has per-vertex colors, and a mesh
+  //without them uploads as flat position+texcoord and draws unlit - what
+  //every GenMesh* builder fills, so the torus fills it too.
+  Cols := MemAlloc(VertCount * 4);
+  Idx := MemAlloc(RingSegs * TubeSegs * 6 * SizeOf(Word));
+  vi := 0;
+  for i := 0 to RingSegs do
+  begin
+    theta := (2 * Pi * i) / RingSegs;
+    for j := 0 to TubeSegs do
+    begin
+      phi := (2 * Pi * j) / TubeSegs;
+      ring := Radius + Tube * Cos(phi);
+      Verts[vi * 3] := ring * Cos(theta);
+      Verts[vi * 3 + 1] := ring * Sin(theta);
+      Verts[vi * 3 + 2] := Tube * Sin(phi);
+      Norms[vi * 3] := Cos(phi) * Cos(theta);
+      Norms[vi * 3 + 1] := Cos(phi) * Sin(theta);
+      Norms[vi * 3 + 2] := Sin(phi);
+      Uvs[vi * 2] := i / RingSegs;
+      Uvs[vi * 2 + 1] := j / TubeSegs;
+      Cols[vi * 4] := 255;
+      Cols[vi * 4 + 1] := 255;
+      Cols[vi * 4 + 2] := 255;
+      Cols[vi * 4 + 3] := 255;
+      Inc(vi);
+    end;
+  end;
+  ii := 0;
+  for i := 0 to RingSegs - 1 do
+    for j := 0 to TubeSegs - 1 do
+    begin
+      //Two triangles for the quad (i,j)-(i+1,j+1) of the grid.
+      Idx[ii] := i * (TubeSegs + 1) + j;
+      Idx[ii + 1] := (i + 1) * (TubeSegs + 1) + j;
+      Idx[ii + 2] := i * (TubeSegs + 1) + (j + 1);
+      Idx[ii + 3] := (i + 1) * (TubeSegs + 1) + j;
+      Idx[ii + 4] := (i + 1) * (TubeSegs + 1) + (j + 1);
+      Idx[ii + 5] := i * (TubeSegs + 1) + (j + 1);
+      Inc(ii, 6);
+    end;
+  Result.VertexCount := VertCount;
+  Result.TriangleCount := RingSegs * TubeSegs * 2;
+  Result.Vertices := Verts;
+  Result.Texcoords := Uvs;
+  Result.Normals := Norms;
+  Result.Colors := Cols;
+  Result.Indices := Idx;
+end;
+
+//The engine's own sphere: a lat-long grid standing on the Z axis, one ring
+//per step from the +z pole down, slices around. The pole quads collapse to
+//points and the seam column repeats the first one for a clean UV wrap - like
+//the GenMesh grids, and just as harmless.
+function BuildSphereMesh(Radius: Single; Rings, Slices: Integer): TMesh;
+var
+  i, j, vi, ii, VertCount: Integer;
+  theta, phi, st: Single;
+  Verts, Norms, Uvs: PSingle;
+  Cols: PByte;
+  Idx: PWord;
+
+  procedure Corner(ATheta, APhi, AU, AV: Single);
+  var
+    x, y, z: Single;
+  begin
+    st := Radius * Sin(ATheta);
+    x := st * Cos(APhi);
+    y := st * Sin(APhi);
+    z := Radius * Cos(ATheta);
+    Verts[vi * 3] := x;
+    Verts[vi * 3 + 1] := y;
+    Verts[vi * 3 + 2] := z;
+    Norms[vi * 3] := x / Radius;
+    Norms[vi * 3 + 1] := y / Radius;
+    Norms[vi * 3 + 2] := z / Radius;
+    Uvs[vi * 2] := AU;
+    Uvs[vi * 2 + 1] := AV;
+    Cols[vi * 4] := 255;
+    Cols[vi * 4 + 1] := 255;
+    Cols[vi * 4 + 2] := 255;
+    Cols[vi * 4 + 3] := 255;
+    Inc(vi);
+  end;
+
+begin
+  Result := Default(TMesh);
+  if Rings < 2 then Rings := 2;
+  if Slices < 3 then Slices := 3;
+  if Radius <= 0 then Radius := 1;
+  VertCount := (Rings + 1) * (Slices + 1);
+  Verts := MemAlloc(VertCount * SizeOf(Single) * 3);
+  Norms := MemAlloc(VertCount * SizeOf(Single) * 3);
+  Uvs := MemAlloc(VertCount * SizeOf(Single) * 2);
+  Cols := MemAlloc(VertCount * 4);
+  Idx := MemAlloc(Rings * Slices * 6 * SizeOf(Word));
+  vi := 0;
+  for i := 0 to Rings do
+    for j := 0 to Slices do
+      Corner((Pi * i) / Rings, (2 * Pi * j) / Slices, j / Slices, i / Rings);
+  ii := 0;
+  for i := 0 to Rings - 1 do
+    for j := 0 to Slices - 1 do
+    begin
+      Idx[ii] := i * (Slices + 1) + j;
+      Idx[ii + 1] := (i + 1) * (Slices + 1) + j;
+      Idx[ii + 2] := i * (Slices + 1) + (j + 1);
+      Idx[ii + 3] := (i + 1) * (Slices + 1) + j;
+      Idx[ii + 4] := (i + 1) * (Slices + 1) + (j + 1);
+      Idx[ii + 5] := i * (Slices + 1) + (j + 1);
+      Inc(ii, 6);
+    end;
+  Result.VertexCount := VertCount;
+  Result.TriangleCount := Rings * Slices * 2;
+  Result.Vertices := Verts;
+  Result.Texcoords := Uvs;
+  Result.Normals := Norms;
+  Result.Colors := Cols;
+  Result.Indices := Idx;
+end;
+
+//The engine's own drum, standing on the Z axis: one side band with radial
+//normals, then a centre-and-rim cap on each end. Smooth on the mantle, hard
+//edged where the lids meet it - the look a post or a wheel wants.
+function BuildCylinderMesh(Radius, Height: Single; Slices: Integer): TMesh;
+var
+  i, j, vi, ii, VertCount: Integer;
+  ang, x, y, z, n: Single;
+  SideVerts, CapVerts: Integer;
+  Verts, Norms, Uvs: PSingle;
+  Cols: PByte;
+  Idx: PWord;
+
+  procedure Corner(X, Y, Z, NX, NY, NZ, AU, AV: Single);
+  begin
+    Verts[vi * 3] := X;
+    Verts[vi * 3 + 1] := Y;
+    Verts[vi * 3 + 2] := Z;
+    Norms[vi * 3] := NX;
+    Norms[vi * 3 + 1] := NY;
+    Norms[vi * 3 + 2] := NZ;
+    Uvs[vi * 2] := AU;
+    Uvs[vi * 2 + 1] := AV;
+    Cols[vi * 4] := 255;
+    Cols[vi * 4 + 1] := 255;
+    Cols[vi * 4 + 2] := 255;
+    Cols[vi * 4 + 3] := 255;
+    Inc(vi);
+  end;
+
+begin
+  Result := Default(TMesh);
+  if Slices < 3 then Slices := 3;
+  if Radius <= 0 then Radius := 1;
+  if Height <= 0 then Height := 1;
+  SideVerts := 2 * (Slices + 1);
+  CapVerts := 2 * (Slices + 2);
+  VertCount := SideVerts + CapVerts;
+  Verts := MemAlloc(VertCount * SizeOf(Single) * 3);
+  Norms := MemAlloc(VertCount * SizeOf(Single) * 3);
+  Uvs := MemAlloc(VertCount * SizeOf(Single) * 2);
+  Cols := MemAlloc(VertCount * 4);
+  Idx := MemAlloc(Slices * 6 * SizeOf(Word) + 2 * Slices * 3 * SizeOf(Word));
+  vi := 0;
+  for i := 0 to 1 do
+    for j := 0 to Slices do
+    begin
+      ang := (2 * Pi * j) / Slices;
+      Corner(Radius * Cos(ang), Radius * Sin(ang), (i - 0.5) * Height,
+        Cos(ang), Sin(ang), 0, j / Slices, i);
+    end;
+  for i := 0 to 1 do
+  begin
+    if i = 1 then n := 1 else n := -1;
+    z := (i - 0.5) * Height;
+    Corner(0, 0, z, 0, 0, n, 0.5, 0.5);
+    for j := 0 to Slices do
+    begin
+      ang := (2 * Pi * j) / Slices;
+      x := Radius * Cos(ang);
+      y := Radius * Sin(ang);
+      Corner(x, y, z, 0, 0, n, (Cos(ang) + 1) * 0.5, (Sin(ang) + 1) * 0.5);
+    end;
+  end;
+  ii := 0;
+  for j := 0 to Slices - 1 do
+  begin
+    //The mantle: two triangles per step, wound so the normals face out.
+    Idx[ii] := j;
+    Idx[ii + 1] := j + 1;
+    Idx[ii + 2] := Slices + 1 + j;
+    Idx[ii + 3] := Slices + 1 + j;
+    Idx[ii + 4] := j + 1;
+    Idx[ii + 5] := Slices + 2 + j;
+    Inc(ii, 6);
+  end;
+  for i := 0 to 1 do
+  begin
+    //The lids: a fan from the centre vertex; the bottom one winds the other
+    //way so its flat normal still faces out.
+    vi := SideVerts + i * CapVerts div 2;
+    for j := 0 to Slices - 1 do
+      if i = 1 then
+      begin
+        Idx[ii] := vi;
+        Idx[ii + 1] := vi + 1 + j;
+        Idx[ii + 2] := vi + 2 + j;
+      end
+      else
+      begin
+        Idx[ii] := vi;
+        Idx[ii + 1] := vi + 2 + j;
+        Idx[ii + 2] := vi + 1 + j;
+      end;
+      Inc(ii, 3);
+  end;
+  Result.VertexCount := VertCount;
+  Result.TriangleCount := Slices * 4;
+  Result.Vertices := Verts;
+  Result.Texcoords := Uvs;
+  Result.Normals := Norms;
+  Result.Colors := Cols;
+  Result.Indices := Idx;
+end;
+
+//The engine's own cone: a base ring and an apex ring (the apex sits on one
+//point but keeps one normal per angle, so the mantle shades smooth), plus the
+//base lid. Standing on the Z axis like the drum.
+function BuildConeMesh(Radius, Height: Single; Slices: Integer): TMesh;
+var
+  j, vi, ii, VertCount, CapStart: Integer;
+  ang, x, y, nlen: Single;
+  Verts, Norms, Uvs: PSingle;
+  Cols: PByte;
+  Idx: PWord;
+
+  procedure Corner(X, Y, Z, NX, NY, NZ, AU, AV: Single);
+  begin
+    Verts[vi * 3] := X;
+    Verts[vi * 3 + 1] := Y;
+    Verts[vi * 3 + 2] := Z;
+    Norms[vi * 3] := NX;
+    Norms[vi * 3 + 1] := NY;
+    Norms[vi * 3 + 2] := NZ;
+    Uvs[vi * 2] := AU;
+    Uvs[vi * 2 + 1] := AV;
+    Cols[vi * 4] := 255;
+    Cols[vi * 4 + 1] := 255;
+    Cols[vi * 4 + 2] := 255;
+    Cols[vi * 4 + 3] := 255;
+    Inc(vi);
+  end;
+
+begin
+  Result := Default(TMesh);
+  if Slices < 3 then Slices := 3;
+  if Radius <= 0 then Radius := 1;
+  if Height <= 0 then Height := 1;
+  nlen := Sqrt(Height * Height + Radius * Radius);
+  VertCount := 2 * (Slices + 1) + (Slices + 2);
+  Verts := MemAlloc(VertCount * SizeOf(Single) * 3);
+  Norms := MemAlloc(VertCount * SizeOf(Single) * 3);
+  Uvs := MemAlloc(VertCount * SizeOf(Single) * 2);
+  Cols := MemAlloc(VertCount * 4);
+  Idx := MemAlloc(Slices * 9 * SizeOf(Word));
+  vi := 0;
+  for j := 0 to Slices do
+  begin
+    ang := (2 * Pi * j) / Slices;
+    Corner(Radius * Cos(ang), Radius * Sin(ang), -Height * 0.5,
+      Height * Cos(ang) / nlen, Height * Sin(ang) / nlen, Radius / nlen,
+      j / Slices, 0);
+  end;
+  for j := 0 to Slices do
+  begin
+    ang := (2 * Pi * j) / Slices;
+    Corner(0, 0, Height * 0.5,
+      Height * Cos(ang) / nlen, Height * Sin(ang) / nlen, Radius / nlen,
+      j / Slices, 1);
+  end;
+  CapStart := 2 * (Slices + 1);
+  Corner(0, 0, -Height * 0.5, 0, 0, -1, 0.5, 0.5);
+  for j := 0 to Slices do
+  begin
+    ang := (2 * Pi * j) / Slices;
+    x := Radius * Cos(ang);
+    y := Radius * Sin(ang);
+    Corner(x, y, -Height * 0.5, 0, 0, -1,
+      (Cos(ang) + 1) * 0.5, (Sin(ang) + 1) * 0.5);
+  end;
+  ii := 0;
+  for j := 0 to Slices - 1 do
+  begin
+    //The mantle, base edge first so the slope normals face out; the apex
+    //quads close to points at the top, like the poles of the sphere.
+    Idx[ii] := j;
+    Idx[ii + 1] := Slices + 1 + j;
+    Idx[ii + 2] := j + 1;
+    Idx[ii + 3] := Slices + 1 + j;
+    Idx[ii + 4] := Slices + 2 + j;
+    Idx[ii + 5] := j + 1;
+    Inc(ii, 3);
+    Inc(ii, 3);
+  end;
+  for j := 0 to Slices - 1 do
+  begin
+    //The lid, wound the other way for its down-facing normal.
+    Idx[ii] := CapStart;
+    Idx[ii + 1] := CapStart + 2 + j;
+    Idx[ii + 2] := CapStart + 1 + j;
+    Inc(ii, 3);
+  end;
+  Result.VertexCount := VertCount;
+  Result.TriangleCount := Slices * 3;
+  Result.Vertices := Verts;
+  Result.Texcoords := Uvs;
+  Result.Normals := Norms;
+  Result.Colors := Cols;
+  Result.Indices := Idx;
+end;
+
+//Generate one of the built-in shapes and put it into an existing slot,
+//mirroring Load. Only the box comes from raylib (GenMeshCube, whose output
+//arrives already on the GPU); the sphere, drum, cone and torus are built by
+//the engine's own generators above, standing on the world's z like everything
+//else here - no axis fixes anywhere. The engine-built meshes therefore need
+//their one UploadMesh here, before LoadModelFromMesh takes them: that call
+//trusts a mesh with no VBO to be already uploaded the way raylib's builders
+//deliver it, and a mesh that never went up draws nothing at all. Must run on
+//the main thread, where the GL context lives.
+function TModels3D.BuildShape(Handle: integer; AShape: TTyroModelShape;
+  A, B, C: Single): boolean;
 var
   Item: TModel3D;
   NewModel: TModel;
   Mesh: TMesh;
   Box: TBoundingBox;
+  EngineBuilt: Boolean;
 begin
   Result := False;
-  if ARadius <= 0 then
-    ARadius := 1;
-  //12 rings / 16 slices: smooth enough for a puff seen from above, cheap for
-  //dozens of clouds.
-  Mesh := RayLib.GenMeshSphere(ARadius, 12, 16);
+  //Unit sizes where the script left a hole, so a bare models.box() still
+  //builds something rather than a degenerate point.
+  if A <= 0 then
+    A := 1;
+  if B <= 0 then
+    B := 1;
+  if C <= 0 then
+    C := 1;
+  EngineBuilt := True;
+  case AShape of
+    msBox:
+      begin
+        Mesh := RayLib.GenMeshCube(A, B, C);
+        EngineBuilt := False;
+      end;
+    msCylinder:
+      //24 slices: round enough for a post or a wheel at game distances.
+      Mesh := BuildCylinderMesh(A, B, 24);
+    msCone:
+      Mesh := BuildConeMesh(A, B, 24);
+    msTorus:
+      //64 steps around the loop, 24 around the tube: smooth enough to ride,
+      //cheap enough to build a whole track and a score of hoops from it.
+      Mesh := BuildTorusMesh(A, B, 64, 24);
+  else
+    //msSphere - 16 rings / 24 slices: smooth enough for a planet in close
+    //view, cheap for dozens of cloud puffs and stars.
+    Mesh := BuildSphereMesh(A, 16, 24);
+  end;
+  if EngineBuilt then
+    UploadMesh(@Mesh, False);
   NewModel := RayLib.LoadModelFromMesh(Mesh);
   if NewModel.MeshCount <= 0 then
   begin
     if IsConsole then
-      WriteLn('Sphere model not built: radius ' + FloatToStr(ARadius));
+      WriteLn('Model shape not built: kind ' + IntToStr(Ord(AShape)) +
+        ' (' + FloatToStr(A) + ', ' + FloatToStr(B) + ', ' + FloatToStr(C) + ')');
     Exit;
   end;
 
@@ -866,7 +1442,7 @@ begin
     Item.Model := NewModel;
 
     //Same bookkeeping as Load: the box feeds the script-side sizes and the
-    //pivot, so the sphere stays centred on its x/y/z however it is moved.
+    //pivot, so the shape stays centred on its x/y/z however it is moved.
     Box := RayLib.GetModelBoundingBox(NewModel);
     Item.Center := Vector3Of(
       (Box.Min.X + Box.Max.X) * 0.5,
@@ -1712,6 +2288,123 @@ begin
   end;
 end;
 
+//Setting the shot from the script thread always takes the free camera on: a
+//script that wants the old top-down pass after this calls world.ortho().
+procedure TModels3D.SetCamera(PX, PY, PZ, TX, TY, TZ, UX, UY, UZ: single);
+begin
+  FLock.Enter;
+  try
+    FCamPos := Vector3Of(PX, PY, PZ);
+    //An eye aimed at itself has no direction to look: keep the old target
+    //then (and the origin when there is no better one yet).
+    if (TX = PX) and (TY = PY) and (TZ = PZ) then
+    begin
+      if (FCamTarget.X = PX) and (FCamTarget.Y = PY) and (FCamTarget.Z = PZ) then
+        FCamTarget := Vector3Of(0, 0, 0);
+    end
+    else
+      FCamTarget := Vector3Of(TX, TY, TZ);
+    if (UX <> 0) or (UY <> 0) or (UZ <> 0) then
+      FCamUp := Vector3Of(UX, UY, UZ);
+    FFreeCam := True;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.GetCamera(out PX, PY, PZ, TX, TY, TZ, UX, UY, UZ: single);
+begin
+  FLock.Enter;
+  try
+    PX := FCamPos.X;
+    PY := FCamPos.Y;
+    PZ := FCamPos.Z;
+    TX := FCamTarget.X;
+    TY := FCamTarget.Y;
+    TZ := FCamTarget.Z;
+    UX := FCamUp.X;
+    UY := FCamUp.Y;
+    UZ := FCamUp.Z;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetFreeCam(AEnabled: boolean);
+begin
+  FLock.Enter;
+  try
+    FFreeCam := AEnabled;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetFreeCam: boolean;
+begin
+  FLock.Enter;
+  try
+    Result := FFreeCam;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetFov(AValue: single);
+begin
+  FLock.Enter;
+  try
+    //Past a right angle the wide-angle edge of the frame already swallows the
+    //sides, and below ten degrees it is a telephoto peek - neither helps a kid.
+    FFov := Min(170, Max(10, AValue));
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetFov: single;
+begin
+  FLock.Enter;
+  try
+    Result := FFov;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetFace(Handle: integer; TX, TY, TZ, UX, UY, UZ: single);
+var
+  Item: TModel3D;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+    begin
+      Item.FaceTo := Vector3Of(TX, TY, TZ);
+      if (UX = 0) and (UY = 0) and (UZ = 0) then
+        Item.FaceUp := Vector3Of(0, 0, 1) //a zero lean would flatten the basis
+      else
+        Item.FaceUp := Vector3Of(UX, UY, UZ);
+      Item.HasFace := True;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.ClearFace(Handle: integer);
+var
+  Item: TModel3D;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Item.HasFace := False;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 function TModels3D.HasVisible: boolean;
 var
   Item: TModel3D;
@@ -1737,6 +2430,7 @@ var
   Item: TModel3D;
   S: Single;
   Pos: TVector3;
+  FaceM: TMatrix;
   ShadowM: TMatrix;
   ItemAlpha: Integer;
   KX, KZ, G, LY: Single;
@@ -1787,11 +2481,26 @@ begin
     //pixel coordinates are shifted by half the screen below. The sheet is inked
     //through this same camera, which is why the stroke that lays it needs no
     //placing of its own: it lands where the world already is.
-    Cam.Position := Vector3Of(0, -cModel3DDistance, 0);
-    Cam.Target := Vector3Of(0, 0, 0);
-    Cam.Up := Vector3Of(0, 0, 1);
-    Cam.Fovy := AHeight;
-    Cam.Projection := Ord(CAMERA_ORTHOGRAPHIC); //the field is a plain Integer
+    if FFreeCam then
+    begin
+      //The script-driven eye (world.camera): the same z-up world, looked at
+      //through a perspective frustum. raylib's perspective clips at the same
+      //0.01..1000 as the ortho box, so a free 3D world has to live inside
+      //that reach - no tighter or looser than the pass that drew it before.
+      Cam.Position := FCamPos;
+      Cam.Target := FCamTarget;
+      Cam.Up := FCamUp;
+      Cam.Fovy := FFov;
+      Cam.Projection := Ord(CAMERA_PERSPECTIVE); //the field is a plain Integer
+    end
+    else
+    begin
+      Cam.Position := Vector3Of(0, -cModel3DDistance, 0);
+      Cam.Target := Vector3Of(0, 0, 0);
+      Cam.Up := Vector3Of(0, 0, 1);
+      Cam.Fovy := AHeight;
+      Cam.Projection := Ord(CAMERA_ORTHOGRAPHIC); //the field is a plain Integer
+    end;
 
     //The shade the bodies drop on the world, laid before a single model is
     //drawn: the sea under it, every model over it, so a cloud that floats
@@ -1801,8 +2510,10 @@ begin
     //canopy over a wing, or one body over another, cannot make it deeper, any
     //more than a spot can be out of one sun twice. Without the ink or without
     //the sheet there is no shade at all (a store that could not build them
-    //leaves the sea bare).
-    if (Alpha > 0) and (ShadowMaterial.Maps <> nil)
+    //leaves the sea bare). Only the ortho eye lays this shade: the ground
+    //plane it falls on is a top-down notion, and a free 3D scene reads its
+    //depth directly instead.
+    if (not FFreeCam) and (Alpha > 0) and (ShadowMaterial.Maps <> nil)
       and ShadowSheet(AWidth, AHeight) then
     begin
       //The solid bodies share one sheet: their shade is the same shade, so one
@@ -1851,11 +2562,19 @@ begin
         if S <= 0 then
           S := 1;
 
-        //Screen-pixel anchor: x runs right, y runs down (so it becomes -z), and
-        //the model's Z depth rides along the world y axis into the screen.
-        Pos.X := Item.X + AX - AWidth * 0.5;
-        Pos.Y := Item.Z;                              //depth (bigger = farther)
-        Pos.Z := AHeight * 0.5 - (Item.Y + AY);       //pixel y, screen down
+        //Screen-pixel anchor under the ortho eye: x runs right, y runs down
+        //(so it becomes -z), and the model's Z depth rides along the world y
+        //axis into the screen. Under the free eye the three are simply the
+        //model's world coordinates - the same x-right/y-into/z-up space the
+        //top-down pass already lives in, only with a perspective eye on it.
+        if FFreeCam then
+          Pos := Vector3Of(Item.X, Item.Y, Item.Z)
+        else
+        begin
+          Pos.X := Item.X + AX - AWidth * 0.5;
+          Pos.Y := Item.Z;                              //depth (bigger = farther)
+          Pos.Z := AHeight * 0.5 - (Item.Y + AY);       //pixel y, screen down
+        end;
 
         //Build the transform on rlgl's matrix stack rather than DrawModelEx:
         //the by-value records that binding passes have an ABI mismatch against
@@ -1863,6 +2582,14 @@ begin
         //compose the exact same position + spin + bank + pivot transform.
         RayLib.rlPushMatrix;
         RayLib.rlTranslatef(Pos.X, Pos.Y, Pos.Z);
+        //A faced model turns to its aim first, so the three angles that follow
+        //become trims on top of the pose (their fixed axes now read against
+        //the model's own frame: Angle spins it along its own line of sight).
+        if Item.HasFace then
+        begin
+          FaceM := FaceMatrixOf(Pos, Item.FaceTo, Item.FaceUp);
+          RayLib.rlMultMatrixf(@FaceM);
+        end;
         //Spin around the view axis (world y), then roll around the model's own
         //axis, then pitch around the screen's horizontal axis (world x).
         //Applied after the pivot translate below, so all of them turn the
@@ -1870,6 +2597,11 @@ begin
         RayLib.rlRotatef(Item.Angle, 0, 1, 0);
         RayLib.rlRotatef(Item.Roll, 0, 0, 1);
         RayLib.rlRotatef(Item.Tilt, 1, 0, 0);
+        //A generated Y-spun shape stands up here: the fix goes under the
+        //angles and above the pivot shift, so the model turns about its own
+        //centre in whatever direction it was aimed.
+        if Item.HasAxisFix then
+          RayLib.rlMultMatrixf(@Item.AxisFix);
         RayLib.rlScalef(S, S, S);
         //Shift the (still unrotated) box centre onto the origin so the model
         //turns about its own middle even when its mesh sits off the origin.
@@ -1903,20 +2635,24 @@ begin
     FResult := Engine.Models.Load(FHandle, FFileName);
 end;
 
-{ TSphereModelObject }
+{ TShapeModelObject }
 
-constructor TSphereModelObject.Create(AHandle: integer; ARadius: Single);
+constructor TShapeModelObject.Create(AHandle: integer; AShape: TTyroModelShape;
+  A, B, C: Single);
 begin
   inherited Create;
   FHandle := AHandle;
-  FRadius := ARadius;
+  FShape := AShape;
+  FA := A;
+  FB := B;
+  FC := C;
   FResult := False;
 end;
 
-procedure TSphereModelObject.DoExecute;
+procedure TShapeModelObject.DoExecute;
 begin
   if Engine.Models <> nil then
-    FResult := Engine.Models.BuildSphere(FHandle, FRadius);
+    FResult := Engine.Models.BuildShape(FHandle, FShape, FA, FB, FC);
 end;
 
 end.

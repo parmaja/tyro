@@ -1,0 +1,162 @@
+-- torus_demo.tyro : ride a loop that curves up ahead and wraps back behind you.
+-- A taste of Torus Trooper on the free camera: a solid torus track, boost
+-- hoops that feed your speed, a chase eye that rolls with the tube, and a
+-- planet parked in the hole. Up/down speed, left/right lean across the tube,
+-- every hoop you fly through pushes you faster.
+
+window.show(640, 480)
+canvas.backcolor = colors.black
+
+-- The world: a torus with main radius R and tube radius RT. The ship runs on
+-- the inside equator (the floor of the loop); alpha is where it sits across
+-- the tube: 0 = floor centre, positive = up the +z wall.
+local R, RT = 250, 40
+local TAU = math.pi * 2
+local CRUISE, MINV, MAXV = 0.42, 0.15, 1.05   -- speed in radians per second
+
+-- trackPoint / trackNormal: a point (and its outward normal) on the tube at
+-- around-loop angle th and across-tube angle al. All plain trigonometry in
+-- the engine's world space: x right, y into the screen, z up.
+function trackPoint(th, al)
+  local k = R - RT * math.cos(al)
+  return k * math.cos(th), k * math.sin(th), RT * math.sin(al)
+end
+
+function trackNormal(th, al)
+  local c = math.cos(al)
+  return -c * math.cos(th), -c * math.sin(th), math.sin(al)
+end
+
+-- Angular difference wrapped to [-pi, pi): how far the ship sits from a hoop,
+-- across the lap seam included.
+function angdiff(a, b)
+  return ((a - b + math.pi) % TAU) - math.pi
+end
+
+-- The track: one generated torus, its axis the world z. Riding on the inside
+-- of the tube means looking at back faces, and the plain model shader dims
+-- those hard - so the track wears white and reads as grey walls, and the trim
+-- wears the bright colors.
+local track = models.torus("track", R, RT)
+track.tint = colors.white
+
+-- A planet in the hole, and a scatter of faraway star-blobs, so the rolling
+-- camera has something to spin against.
+local planet = models.sphere("planet")
+planet.scale = 90
+planet.tint = colors.gold
+for i = 1, 18 do
+  local st = models.sphere("star" .. i)
+  local a = math.random() * TAU
+  local b = (math.random() * 2 - 1) * 0.9
+  local d = 500 + math.random() * 60
+  st:move(d * math.cos(a) * math.cos(b), d * math.sin(a) * math.cos(b), d * math.sin(b))
+  st.scale = 4 + math.random() * 4
+  st.tint = colors.white
+end
+
+-- The boost hoops, standing square to the road every 1/14 of the loop.
+local HOOPS = 14
+local hoops = {}
+for i = 1, HOOPS do
+  local th = (i - 1) * TAU / HOOPS
+  local h = models.torus("hoop" .. i, 16, 1.8)
+  local hx, hy, hz = trackPoint(th, 0)
+  local nx, ny, nz = trackNormal(th, 0)
+  h:move(hx + nx * 2, hy + ny * 2, hz + nz * 2)
+  -- The hoop's own +z is its hole axis: lean it along the road's tangent so
+  -- the ring stands across the track.
+  h:face(hx, hy, hz + 10, -math.sin(th), math.cos(th), 0)
+  hoops[i] = { th = th, model = h, cool = 0 }
+end
+
+-- The ship: a box whose long axis is its own +y, which is what face() aims.
+local ship = models.box("ship", 5, 11, 3)
+ship.tint = colors.orange
+
+-- The free eye: perspective, a little wide so the loop bends hard ahead.
+world.fov(72)
+
+local th = 0          -- around the loop
+local al = 0          -- across the tube
+local v = CRUISE      -- speed, radians/second
+local laps = 0
+local clock = 0
+local drone = false
+
+function update(dt)
+  if keyboard.pressed("escape") then exit() end
+  clock = clock + dt
+
+  -- up/down push the speed, which always drifts back toward the cruise line.
+  if keyboard.down("up") then v = v + 0.9 * dt end
+  if keyboard.down("down") then v = v - 1.2 * dt end
+  v = v + (CRUISE - v) * 0.25 * dt
+  if v < MINV then v = MINV end
+  if v > MAXV then v = MAXV end
+
+  -- left/right slide across the tube and bank into the move.
+  local lean = 0
+  if keyboard.down("left") then lean = 1 end
+  if keyboard.down("right") then lean = -1 end
+  al = al + lean * 1.4 * dt
+  if al > 1.15 then al = 1.15 end
+  if al < -1.15 then al = -1.15 end
+
+  th = th + v * dt
+  if th >= TAU then
+    th = th - TAU
+    laps = laps + 1
+  end
+
+  -- Hoops: when the ship sits on a hoop's angle (angdiff folds the lap seam),
+  -- and it is not already on cooldown, feed the speed and flash the ring lime.
+  for i = 1, HOOPS do
+    local h = hoops[i]
+    h.cool = h.cool - dt
+    if h.cool <= 0 and math.abs(angdiff(th, h.th)) < 0.03 and math.abs(al) < 0.6 then
+      h.cool = 1.0
+      v = v + 0.14
+      h.model.tint = colors.lime
+      music.sound(880, 70)
+    elseif h.cool < 0.6 then
+      h.model.tint = colors.gold
+    end
+  end
+
+  -- Place and aim the ship: floor point plus a lift along the normal, nose
+  -- along the tangent, head toward the torus axis.
+  local sx, sy, sz = trackPoint(th, al)
+  local nx, ny, nz = trackNormal(th, al)
+  ship:move(sx + nx * 2, sy + ny * 2, sz + nz * 2)
+  ship:face(sx - math.sin(th) * 10 + nx * 2, sy + math.cos(th) * 10 + ny * 2, sz + nz * 2,
+    nx, ny, nz)
+
+  -- Chase cam: a little behind and up the wall, aimed at a point further along
+  -- the loop so the tube visibly curves away ahead. The up vector rides the
+  -- tube, so the whole frame rolls as the loop turns.
+  local ch = th - 0.12
+  local cx, cy, cz = trackPoint(ch, al + 0.35)
+  local wx, wy, wz = trackNormal(ch, al + 0.35)
+  local ah = th + 0.30
+  local ax, ay, az = trackPoint(ah, al)
+  world.camera(cx + wx * 4, cy + wy * 4, cz + wz * 4,
+    ax, ay, az,
+    wx, wy, wz)
+
+  -- the drone climbs with the speed
+  if not drone then
+    sound.loopPlay("Engine", 60)
+    drone = true
+  end
+  sound.loopPitch(55 + v * 90)
+end
+
+function draw()
+  canvas.color = colors.black
+  canvas.clear()
+  canvas.color = colors.white
+  canvas.text(10, 10, "speed  " .. math.floor(v * (R - RT) + 0.5) .. " u/s")
+  canvas.text(10, 26, "laps   " .. laps)
+  canvas.text(10, 42, "time   " .. string.format("%.1f", clock))
+end
