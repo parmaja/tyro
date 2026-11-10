@@ -43,9 +43,9 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
 
 - **The clock** starts at 35 seconds and always drains (a little harder
   every lap, capped). Zero ends the run.
-- **Energy cells** (lime spheres in arcs across the wall): +time, +a
-  touch of speed, +score. Re-armed at every lap, so the track is the
-  same course every time round.
+- **Energy cells** (lime spheres in arcs across the wall, never on the
+  center line): +time, +a touch of speed, +score. Re-armed at every lap,
+  so the track is the same course every time round.
 - **Boost gates** (gold rings): +2.5 s and a hard push — only from the
   middle of the ring. Off-center, they are decoration. They flash lime
   when they pay.

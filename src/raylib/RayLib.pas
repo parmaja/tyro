@@ -118,13 +118,6 @@ const
   RAYLIB_VERSION_PATCH = 0;
   RAYLIB_VERSION = '6.2';
 
-  // rlBegin primitive modes (rlgl.h) - the ones the engine's own mesh
-  // builders use.
-  RL_POINTS = 0;
-  RL_LINES = 1;
-  RL_TRIANGLES = 4;
-  RL_QUADS = 7;
-
 type
   PPUTF8Char = ^PUTF8Char;
 
