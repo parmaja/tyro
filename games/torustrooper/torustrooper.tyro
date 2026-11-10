@@ -154,6 +154,8 @@ local th, al, v = 0, 0, D.CRUISE
 local time_left, score, laps = D.START_TIME, 0, 0
 local inv, shake, clock, drone = 0, 0, 0, false
 local grace, newhi = 0, false
+local bank, flash = 0, 0
+local lap_clock, last_lap, best_lap = 0, 0, 0
 local last_tick = 0
 
 local function reset()
@@ -162,6 +164,8 @@ local function reset()
   -- the count-in doubles as start-line mercy: no wall bites before GO!
   inv, shake, last_tick = D.GRACE, 0, 0
   grace = D.GRACE
+  bank, flash = 0, 0
+  lap_clock, last_lap, best_lap = 0, 0, 0
   for _, o in ipairs(orbs) do
     o.live = true
     o.model:show()
@@ -209,6 +213,7 @@ local function crash()
   time_left = time_left + D.TIME_WALL
   inv = D.CRASH_INV
   shake = 0.45
+  flash = D.FLASH
   sfx(music.noise, 250, 300)
 end
 
@@ -226,6 +231,10 @@ local function update_play(dt)
   -- the tube, full tilt only at a hard push.
   if math.abs(gx) > 0.15 then steer = steer - gx * math.abs(gx) end
   al = D.clamp(al + steer * D.STEER * dt, -D.AL_MAX, D.AL_MAX)
+  -- the ship rolls into a slide like a motorcycle, smoothed so a flick
+  -- of the stick leans rather than snaps.
+  local want_bank = -D.BANK * D.clamp(steer, -1, 1)
+  bank = bank + (want_bank - bank) * math.min(1, 8 * dt)
 
   -- Throttle: the stick's vertical axis pushes too, and the cruise line
   -- always wins in the end.
@@ -236,11 +245,16 @@ local function update_play(dt)
   v = v + (D.CRUISE - v) * D.EASE * dt
   v = D.clamp(v, D.MINV, D.vMax(laps))
 
-  -- Around the loop; a lap re-arms every orb and pays the lap bonus.
+  -- Around the loop; a lap re-arms every orb, pays the lap bonus and is
+  -- clocked - the course is fixed, so laps are comparable by construction.
+  lap_clock = lap_clock + dt
   th = th + v * dt
   if th >= TAU then
     th = th - TAU
     laps = laps + 1
+    last_lap = lap_clock
+    if best_lap == 0 or last_lap < best_lap then best_lap = last_lap end
+    lap_clock = 0
     score = score + D.SC_LAP * D.multiplier(laps)
     for _, o in ipairs(orbs) do
       o.live = true
@@ -319,12 +333,21 @@ local function update_play(dt)
     return
   end
 
-  -- Place and aim the ship and its thruster.
+  -- Place and aim the ship and its thruster. The ship rolls about its
+  -- nose by `bank`: rotate the rest up (-n) around the forward tangent t
+  -- with Rodrigues; at bank=0 the cos/sin terms leave -n untouched.
   local sx, sy, sz = D.trackPoint(R, TUBE, th, al)
   local nx, ny, nz = D.trackNormal(R, TUBE, th, al)
   local tx, ty, tz = -math.sin(th), math.cos(th), 0
+  local ux, uy, uz = -nx, -ny, -nz
+  local cb, sb = math.cos(bank), math.sin(bank)
+  -- t cross u
+  local cx_, cy_, cz_ = ty * uz - tz * uy, tz * ux - tx * uz, tx * uy - ty * ux
+  ux = ux * cb + cx_ * sb
+  uy = uy * cb + cy_ * sb
+  uz = uz * cb + cz_ * sb
   ship:move(sx - nx * 3, sy - ny * 3, sz - nz * 3)
-  ship:face(sx + tx * 10 - nx * 3, sy + ty * 10 - ny * 3, sz - nz * 3, -nx, -ny, -nz)
+  ship:face(sx + tx * 10 - nx * 3, sy + ty * 10 - ny * 3, sz - nz * 3, ux, uy, uz)
   thruster:move(sx - tx * 14 - nx * 3, sy - ty * 14 - ny * 3, sz - nz * 3)
   thruster.scale = 1.6 + v * 1.6 + math.sin(clock * 22) * 0.3
 
@@ -339,10 +362,18 @@ local function update_play(dt)
     shake = shake - dt
     j = shake * 34
   end
+  -- The view breathes with speed: cruise keeps the calm lens, wide-open
+  -- speed opens the tunnel. And the eye rolls with a third of the bank,
+  -- so a hard slide pulls the whole tube sideways with it.
+  world.fov(D.FOV + (v - D.CRUISE) * D.FOV_PUNCH)
+  local cbm, sbm = math.cos(bank * 0.34), math.sin(bank * 0.34)
+  local fx, fy, fz = -math.sin(ch), math.cos(ch), 0
+  local px, py, pz = -wx, -wy, -wz
+  local qx, qy, qz = fy * pz - fz * py, fz * px - fx * pz, fx * py - fy * px
   world.camera(cx - wx * D.CAM_IN + (math.random() - 0.5) * j,
     cy - wy * D.CAM_IN + (math.random() - 0.5) * j,
     cz - wz * D.CAM_IN + (math.random() - 0.5) * j,
-    ax, ay, az, -wx, -wy, -wz)
+    ax, ay, az, px * cbm + qx * sbm, py * cbm + qy * sbm, pz * cbm + qz * sbm)
 
   -- The drone climbs with the speed, and obeys the mute switch.
   if drone then
@@ -354,6 +385,7 @@ end
 function update(dt)
   if keyboard.pressed("escape") then exit() end
   clock = clock + dt
+  if flash > 0 then flash = flash - dt end
 
   if keyboard.pressed("m") then
     muted = not muted
@@ -410,6 +442,12 @@ function draw()
   -- otherwise, and a HUD whose numbers change would smear over its ghosts.
   screen.clear()
 
+  -- the wall's autograph: a red pulse that fades under everything else.
+  if flash > 0 then
+    screen.color = rgba(255, 70, 50, math.floor(flash / D.FLASH * 150))
+    screen.rectangle(0, 0, D.W, D.H, true)
+  end
+
   if state == "title" then
     band(190)
     screen.color = colors.lime
@@ -430,7 +468,7 @@ function draw()
   -- a dark board to stand on.
   local hint = "L/R slide   U/D throttle   P pause   M mute" .. (muted and "  [muted]" or "")
   screen.color = rgba(0, 0, 0, 150)
-  screen.rectangle(4, 4, 150, 100, true)
+  screen.rectangle(4, 4, 150, 136, true)
   screen.rectangle(D.W - 140, 4, 136, 26, true)
   screen.rectangle(4, D.H - 28, textwidth(hint) + 16, 26, true)
   screen.color = colors.white
@@ -439,6 +477,8 @@ function draw()
   screen.text(10, 44, "SCORE  " .. math.floor(score))
   screen.text(10, 62, "HI     " .. hi)
   screen.text(10, 80, "x" .. string.format("%.2f", mult))
+  screen.text(10, 98, "LAST   " .. (last_lap > 0 and string.format("%.2f", last_lap) or "--"))
+  screen.text(10, 116, "BEST   " .. (best_lap > 0 and string.format("%.2f", best_lap) or "--"))
 
   screen.color = colors.white
   if time_left < 6 then
@@ -455,20 +495,23 @@ function draw()
   end
 
   if state == "over" then
-    band(150)
+    band(180)
     screen.color = colors.red
-    center(210, "T I M E   U P")
+    center(200, "T I M E   U P")
     screen.color = colors.white
-    center(244, "SCORE  " .. math.floor(score) .. "    LAPS  " .. laps)
+    center(234, "SCORE  " .. math.floor(score) .. "    LAPS  " .. laps)
     if newhi then
       screen.color = colors.lime
-      center(272, "N E W   H I G H   S C O R E !")
+      center(262, "N E W   H I G H   S C O R E !")
     else
       screen.color = colors.gold
-      center(272, "HI  " .. hi)
+      center(262, "HI  " .. hi)
     end
     screen.color = colors.white
-    center(304, "press SPACE or START to fly again")
+    if best_lap > 0 then
+      center(290, "BEST LAP  " .. string.format("%.2f", best_lap) .. " s")
+    end
+    center(322, "press SPACE or START to fly again")
   elseif paused then
     band(70)
     screen.color = colors.lime
@@ -501,6 +544,11 @@ if TESTING then
     set_grace = function(x) grace = x end,
     newhi     = function() return newhi end,
     set_score = function(x) score = x end,
+    bank      = function() return bank end,
+    set_bank  = function(x) bank = x end,
+    flash     = function() return flash end,
+    lastlap   = function() return last_lap end,
+    bestlap   = function() return best_lap end,
     paused    = function() return paused end,
     set_pos   = function(a, b) th = a al = b end,
     set_v     = function(x) v = x end,

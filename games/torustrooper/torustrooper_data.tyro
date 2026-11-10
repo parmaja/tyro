@@ -75,6 +75,11 @@ M.GATE_DTH, M.GATE_DAL = 0.05, 0.45
 -- wall: add it and you float in the sky outside the track instead of
 -- inside it.
 M.FOV = 74
+M.FOV_PUNCH = 20        -- extra degrees of view per unit of speed above cruise
+                        -- - the tunnel breathes with the throttle (about +15
+                        -- at the base speed ceiling, narrower when slow)
+M.BANK = 0.5            -- the most the ship rolls into a slide, radians
+M.FLASH = 0.3           -- seconds of red screen after a wall bite
 M.CAM_BACK = 0.20       -- rad behind the ship around the loop
 M.CAM_UP = 0.50         -- rad up the tube wall from the ship
 M.CAM_LOOKAHEAD = 0.30  -- rad ahead the eye aims at
