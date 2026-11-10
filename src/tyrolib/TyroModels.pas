@@ -133,6 +133,11 @@ type
     Frame: Single;
     Speed: Single;          // keyframes per second (glTF clips bake at 30)
     Playing: Boolean;
+    //The light coat: when world.lights is on the pass swaps the materials'
+    //shader to the light one, and the plain ones wait here to be worn again
+    //the moment it goes off (see TModels3D.WearLight/WearOwn).
+    WearingLight: Boolean;
+    OwnShaders: array of TShader;
     constructor Create(AHandle: Integer; const AName: string);
     destructor Destroy; override;
     function Loaded: Boolean;
@@ -193,6 +198,29 @@ type
     //Wire mode: the models are painted as their edges only - DrawModelWires
     //instead of DrawModel - for the glowing-vector look some games want.
     FWire: Boolean;
+    // -- scene lights (mirrored on the Lua 'world' table) --
+    //The flat dress is the classic one: every model inked in its solid tint.
+    //With the lights on the solids put on a lambert skin: the sky's ambient
+    //fill (world.ambient), a sun shining along the world.light ray, and up to
+    //four bulbs hung anywhere in the world (SetPointLight). The material's
+    //shader is built lazily on the first lit frame - it wants the GL context
+    //the way the shadow ink does - and a world that cannot compile it simply
+    //keeps its flat dress.
+    FLightOn: Boolean;
+    FLightTried: Boolean;
+    FLightReady: Boolean;
+    FLightShader: TShader;
+    FLightLocAmbient: Integer;
+    FLightLocSun: Integer;
+    FLightLocPL: array[0..3] of Integer;
+    FLightLocPLC: array[0..3] of Integer;
+    //The bulbs, index 0..3: a world-space place, a range where the light has
+    //faded out (Range <= 0 means the bulb is dark), and its color as 0..1
+    //parts with the intensity already folded into them.
+    FPointLights: array[0..3] of record
+      X, Y, Z, Range: Single;
+      R, G, B: Single;
+    end;
     //The shadow ink: raylib's default material, which is the plain unlit shader
     //and a 1x1 white pixel, so whatever color is written into its albedo comes
     //out at the other end unchanged - a solid silhouette with no texture and no
@@ -230,6 +258,16 @@ type
     //The store's one shadow ink, built on demand (see FShadowMat). Its Maps is
     //nil when it could not be built, and the caller then casts no shade.
     function ShadowMaterial: TMaterial;
+    //The light dress (see cLightVs/cLightFs): built once, on the main thread,
+    //and only tried once a run - a shader the GPU will not compile leaves the
+    //world in its flat dress rather than spoiling the picture.
+    procedure EnsureLightShader;
+    procedure FreeLightShader;
+    //The dress swap for one body: on, the materials copy their plain shaders
+    //aside and wear the light one; off, the originals come back. Both are a
+    //no-op when the model already dresses as asked.
+    procedure WearLight(Item: TModel3D);
+    procedure WearOwn(Item: TModel3D);
     //One model's meshes, all painted with the shadow ink. The model's pose is
     //already on the rlgl matrix stack, so the meshes go down with the identity.
     procedure DrawShadowMeshes(AModel: TModel; AInk: TColor);
@@ -312,6 +350,12 @@ type
     //Paint every model as wire instead of solid (mirrored on world.wire).
     procedure SetWire(AEnabled: boolean);
     function GetWire: boolean;
+    //Dress the solids in light: the sun's ray, the ambient fill and the
+    //bulbs are all read from this store's own fields (mirrored on
+    //world.lights / world.light / world.ambient / world.pointlight).
+    procedure SetLighting(AEnabled: boolean);
+    function GetLighting: boolean;
+    procedure SetPointLight(ANum: integer; PX, PY, PZ, ARange, R, G, B: single);
 
     function GetName(Handle: integer): string;
     procedure SetName(Handle: integer; const AName: string);
@@ -642,6 +686,11 @@ begin
   FCamUp := Vector3Of(0, 0, 1);
   FFov := 60;
   FWire := False;
+  FLightOn := False;
+  FLightTried := False;
+  FLightReady := False;
+  FLightShader := Default(TShader);
+  FillChar(FPointLights, SizeOf(FPointLights), 0);
 end;
 
 destructor TModels3D.Destroy;
@@ -886,6 +935,161 @@ void main()
 }
 ''';
 
+// The light dress for the solids (world.lights): a pair of shaders where the
+// vertex stage hands the fragment stage the world position and the world
+// normal, and the fragment stage pays the lambert bill - the ambient fill of
+// the sky, the sun along the world.light ray, and up to four point bulbs
+// fading out over their range. The names are the contract: rlgl fills mvp,
+// matModel and matNormal into any shader that asks by these names (the
+// normal matrix arrives as transpose(inverse(model)), which keeps the
+// inside-out liner - a mirrored mesh - lit from the right side), and
+// DrawModel writes the model's tint into colDiffuse.
+const
+  cLightVs: UTF8String = '''
+#version 330
+
+in vec3 vertexPosition;
+in vec3 vertexNormal;
+in vec2 vertexTexcoords;
+in vec4 vertexColor;
+
+uniform mat4 mvp;
+uniform mat4 matModel;
+uniform mat4 matNormal;
+
+out vec2 fragTexCoord;
+out vec4 fragColor;
+out vec3 fragPos;
+out vec3 fragNormal;
+
+void main()
+{
+    fragTexCoord = vertexTexcoords;
+    fragColor = vertexColor;
+    fragPos = (matModel * vec4(vertexPosition, 1.0)).xyz;
+    fragNormal = normalize(mat3(matNormal) * vertexNormal);
+    gl_Position = mvp * vec4(vertexPosition, 1.0);
+}
+''';
+
+  cLightFs: UTF8String = '''
+#version 330
+
+in vec2 fragTexCoord;
+in vec4 fragColor;
+in vec3 fragPos;
+in vec3 fragNormal;
+
+uniform sampler2D texture0;
+uniform vec4 colDiffuse;
+
+uniform float amb;          // the sky's fill light, 0..1
+uniform vec4 sun;           // the ray the sunlight travels along; w = 0 means overcast
+uniform vec4 pl[4];         // the bulbs: position, with the fade-out range in w
+uniform vec4 plc[4];        // their colors, intensity already folded in
+
+out vec4 finalColor;
+
+void main()
+{
+    vec3 albedo = texture(texture0, fragTexCoord).rgb * colDiffuse.rgb * fragColor.rgb;
+    vec3 n = normalize(fragNormal);
+    vec3 lit = albedo * amb;
+
+    if (sun.w > 0.0)
+    {
+        // the light travels along sun.xyz, so the way *to* it is the opposite
+        lit += albedo * max(dot(n, -sun.xyz), 0.0);
+    }
+
+    for (int i = 0; i < 4; i++)
+    {
+        if (pl[i].w > 0.0)
+        {
+            vec3 toLight = pl[i].xyz - fragPos;
+            float d = length(toLight);
+            // the bulb fades the way a shadow edge does: square the falloff
+            float att = clamp(1.0 - d / pl[i].w, 0.0, 1.0);
+            att *= att;
+            lit += albedo * plc[i].rgb * max(dot(n, toLight / (d + 0.0001)), 0.0) * att;
+        }
+    }
+
+    finalColor = vec4(min(lit, vec3(1.0)), colDiffuse.a);
+}
+''';
+
+// The light dress: the shader pair is tried once a run, here on the main
+// thread where the GL context lives (DrawAll is about to ask for it). A GPU
+// that will not compile it leaves the world in its flat dress - the models
+// simply never hear about the swap - rather than spoiling the frame every
+// frame. The uniform names are the shader's own ("amb", "sun", and the two
+// bulb arrays); raylib's own names (mvp, matModel, matNormal, colDiffuse)
+// need no fetching - rlgl and DrawModel fill those in for whoever asks.
+procedure TModels3D.EnsureLightShader;
+var
+  i: Integer;
+  Uf: UTF8String;
+begin
+  if FLightTried then
+    Exit;
+  FLightTried := True;
+  FLightShader := RayLib.LoadShaderFromMemory(PUTF8Char(cLightVs), PUTF8Char(cLightFs));
+  FLightReady := RayLib.IsShaderValid(FLightShader);
+  if not FLightReady then
+    Exit;
+  FLightLocAmbient := RayLib.GetShaderLocation(FLightShader, 'amb');
+  FLightLocSun := RayLib.GetShaderLocation(FLightShader, 'sun');
+  for i := 0 to 3 do
+  begin
+    Uf := 'pl[' + IntToStr(i) + ']';
+    FLightLocPL[i] := RayLib.GetShaderLocation(FLightShader, PUTF8Char(Uf));
+    Uf := 'plc[' + IntToStr(i) + ']';
+    FLightLocPLC[i] := RayLib.GetShaderLocation(FLightShader, PUTF8Char(Uf));
+  end;
+end;
+
+procedure TModels3D.FreeLightShader;
+begin
+  if FLightShader.ID <> 0 then
+    RayLib.UnloadShader(FLightShader);
+  FLightShader := Default(TShader);
+  FLightReady := False;
+  FLightTried := False;
+end;
+
+// On: the model's materials copy their own shaders aside once and put on the
+// light one. The records are plain data (program id + location table), and
+// every later DrawModel of this model dresses the same - so the swap sticks
+// until WearOwn hands the originals back.
+procedure TModels3D.WearLight(Item: TModel3D);
+var
+  m: Integer;
+begin
+  if Item.WearingLight then
+    Exit;
+  SetLength(Item.OwnShaders, Item.Model.MaterialCount);
+  for m := 0 to Item.Model.MaterialCount - 1 do
+  begin
+    Item.OwnShaders[m] := Item.Model.Materials[m].Shader;
+    Item.Model.Materials[m].Shader := FLightShader;
+  end;
+  Item.WearingLight := True;
+end;
+
+procedure TModels3D.WearOwn(Item: TModel3D);
+var
+  m: Integer;
+begin
+  if not Item.WearingLight then
+    Exit;
+  for m := 0 to High(Item.OwnShaders) do
+    if m < Item.Model.MaterialCount then
+      Item.Model.Materials[m].Shader := Item.OwnShaders[m];
+  SetLength(Item.OwnShaders, 0);
+  Item.WearingLight := False;
+end;
+
 procedure TModels3D.FreeBlurPass;
 begin
   if FBlurSheet.ID <> 0 then
@@ -1001,6 +1205,13 @@ begin
     FCamUp := Vector3Of(0, 0, 1);
     FFov := 60;
     FWire := False;
+    //...the lights go off with the rerun too: every bulb is this run's, and
+    //the light shader belongs to the GL context that just closed (the models
+    //are new bodies anyway, and they never wore it yet).
+    FLightOn := False;
+    FLightTried := False;
+    FillChar(FPointLights, SizeOf(FPointLights), 0);
+    FreeLightShader;
     //...and the world is painted solid again: the rerun earns its own
     //world.wire call, just like it earns its own sky and eye.
     //...and the shadow ink goes with it: it belongs to this run's GL context
@@ -2402,6 +2613,44 @@ begin
   end;
 end;
 
+procedure TModels3D.SetLighting(AEnabled: boolean);
+begin
+  FLock.Enter;
+  try
+    FLightOn := AEnabled;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetLighting: boolean;
+begin
+  FLock.Enter;
+  try
+    Result := FLightOn;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetPointLight(ANum: integer; PX, PY, PZ, ARange, R, G, B: single);
+begin
+  if (ANum < 0) or (ANum > 3) then
+    Exit;
+  FLock.Enter;
+  try
+    FPointLights[ANum].X := PX;
+    FPointLights[ANum].Y := PY;
+    FPointLights[ANum].Z := PZ;
+    FPointLights[ANum].Range := ARange;
+    FPointLights[ANum].R := R;
+    FPointLights[ANum].G := G;
+    FPointLights[ANum].B := B;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 procedure TModels3D.SetFace(Handle: integer; TX, TY, TZ, UX, UY, UZ: single);
 var
   Item: TModel3D;
@@ -2466,6 +2715,10 @@ var
   KX, KZ, G, LY: Single;
   Alpha: Integer;
   AnyVisible: Boolean;
+  LitNow: Boolean;
+  i: Integer;
+  Amb, L: Single;
+  Sun4, Light4: array[0..3] of Single;
 begin
   AnyVisible := False;
   FLock.Enter;
@@ -2589,11 +2842,64 @@ begin
       //and the depth test has already decided what is in front, so the far
       //skins are simply painted too.
       RayLib.rlDisableBackfaceCulling;
+      // The scene lights: the frame decides here whether the solids wear the
+      // light dress (built lazily, on this GL-alive thread). Wires skip it -
+      // a bare grid takes its mood from the bloom instead. The light itself
+      // is the store's own kit: the sky's ambient fill, the sun along the
+      // cast-shadow ray normalised, and the four bulbs as they were hung.
+      // The settings go into the shared shader with its program active; they
+      // sit there for every model that wears it this frame.
+      LitNow := False;
+      if FLightOn and (not FWire) then
+      begin
+        EnsureLightShader;
+        LitNow := FLightReady;
+      end;
+      if LitNow then
+      begin
+        RayLib.BeginShaderMode(FLightShader);
+        try
+          Amb := FAmbient;
+          RayLib.SetShaderValue(FLightShader, FLightLocAmbient,
+            PUTF8Char(Pointer(@Amb)), Ord(SHADER_UNIFORM_FLOAT));
+          L := Sqrt(FLightDir.X * FLightDir.X + FLightDir.Y * FLightDir.Y
+            + FLightDir.Z * FLightDir.Z);
+          if L = 0 then
+            L := 1; //SetLight keeps the ray alive; belt and braces again.
+          Sun4[0] := FLightDir.X / L;
+          Sun4[1] := FLightDir.Y / L;
+          Sun4[2] := FLightDir.Z / L;
+          Sun4[3] := 1; //the sun shines whenever the lights are on
+          RayLib.SetShaderValue(FLightShader, FLightLocSun,
+            PUTF8Char(Pointer(@Sun4[0])), Ord(SHADER_UNIFORM_VEC4));
+          for i := 0 to 3 do
+          begin
+            Light4[0] := FPointLights[i].X;
+            Light4[1] := FPointLights[i].Y;
+            Light4[2] := FPointLights[i].Z;
+            Light4[3] := FPointLights[i].Range; //<= 0: the bulb stays dark
+            RayLib.SetShaderValue(FLightShader, FLightLocPL[i],
+              PUTF8Char(Pointer(@Light4[0])), Ord(SHADER_UNIFORM_VEC4));
+            Light4[0] := FPointLights[i].R;
+            Light4[1] := FPointLights[i].G;
+            Light4[2] := FPointLights[i].B;
+            Light4[3] := 1;
+            RayLib.SetShaderValue(FLightShader, FLightLocPLC[i],
+              PUTF8Char(Pointer(@Light4[0])), Ord(SHADER_UNIFORM_VEC4));
+          end;
+        finally
+          RayLib.EndShaderMode;
+        end;
+      end;
       //The models themselves, painted over the shade.
       for Item in FItems.Values do
       begin
         if (not Item.Visible) or (not Item.Loaded) then
           Continue;
+        //The dress: the light skin while the lights are on, the model's own
+        //the moment they are not (both calls no-op when nothing changes).
+        if LitNow then WearLight(Item)
+        else WearOwn(Item);
         S := Item.Scale;
         //Zero would flatten the body away to nothing, but a negative scale is
         //kept on purpose: it mirrors the mesh, and with the winding it flips

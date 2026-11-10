@@ -91,6 +91,11 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
   the ride with `sound.loopPitch()` climbing with speed; cells, gates,
   countdown ticks, the crash and the time-up jingle are one-shot
   `music.sound` / `sound.noise` / `music.mml`, all behind a mute switch.
+- **Lit in 3D** — the ride runs with `world.lights(true)`: the sun along
+  the engine's default ray and the sky's ambient fill shade every solid
+  (lambert), and a headlamp (`world.pointlight`) rides a nose-ahead off
+  the floor, so the tube ahead is lit while the tube behind falls back
+  to the dim sky fill — the ride reads its own direction.
 - **Vector mode (`W`)** — the whole ride as bare wireframe (`world.wire`)
   with `neon.frag` on the board so every wire blooms like a hot CRT tube.
   The HUD rides the screen layer above the board, so it stays crisp while

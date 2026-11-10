@@ -161,6 +161,10 @@ type
     function Fov_func(L: Plua_State): integer; cdecl;
     //world.wire([on]) -> paint the models as their edges only (the vector look).
     function Wire_func(L: Plua_State): integer; cdecl;
+    //world.lights([on]) -> dress the solids in light: sky fill, sun and bulbs.
+    function Lights_func(L: Plua_State): integer; cdecl;
+    //world.pointlight(i, x, y, z [, color [, range]]) -> one of four bulbs.
+    function PointLight_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaFont }
@@ -1208,6 +1212,8 @@ begin
   Script.Lua.State.Register(Name, 'ortho', Self, Self.Ortho_func);
   Script.Lua.State.Register(Name, 'fov', Self, Self.Fov_func);
   Script.Lua.State.Register(Name, 'wire', Self, Self.Wire_func);
+  Script.Lua.State.Register(Name, 'lights', Self, Self.Lights_func);
+  Script.Lua.State.Register(Name, 'pointlight', Self, Self.PointLight_func);
   //Lua.State.Register('world', World); //Should be last one for world
   inherited;
 end;
@@ -1375,6 +1381,71 @@ begin
     Engine.Models.SetWire(L.ToBoolean(1));
   L.PushBoolean(Engine.Models.GetWire);
   Result := 1;
+end;
+
+// world.lights() -> true/false   |   world.lights(true/false)
+// Dress the solids in light: the sky's ambient fill (world.ambient), a sun
+// shining along the world.light ray, and up to four point bulbs hanging in
+// the world (world.pointlight). The lambert shading is what makes a 3D world
+// read as 3D; the wire pass dresses flat, as a bare grid takes its mood from
+// the bloom. Every run starts with the lights off.
+function TLuaWorld.Lights_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  if L.ArgsCount >= 1 then
+    Engine.Models.SetLighting(L.ToBoolean(1));
+  L.PushBoolean(Engine.Models.GetLighting);
+  Result := 1;
+end;
+
+// world.pointlight(i, x, y, z [, color [, range]])
+// Hang one of the four bulbs (i = 1..4) at a world-space place. The color
+// takes the same forms as canvas.color ("gold", a number), default white;
+// the range is how far its light reaches before fading out, default 300.
+// The bulb travels with whatever the script re-hangs - a headlight that
+// follows the ship is the classic trick. Ask for just (i) and the bulb is
+// unscrewed. The dress must be on (world.lights(true)) for a bulb to shine.
+function TLuaWorld.PointLight_func(L: Plua_State): integer; cdecl;
+var
+  i: Integer;
+  Range: Single;
+  C: TColor;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  if L.ArgsCount < 1 then
+  begin
+    Script.DoError('pointlight(i, x, y, z [, color [, range]]) wants a bulb number');
+    Exit;
+  end;
+  i := L.ToInteger(1) - 1;
+  if (i < 0) or (i > 3) then
+  begin
+    Script.DoError('pointlight bulbs are numbered 1..4');
+    Exit;
+  end;
+  if L.ArgsCount < 4 then
+  begin
+    Engine.Models.SetPointLight(i, 0, 0, 0, 0, 0, 0, 0); // unscrew the bulb
+    Exit;
+  end;
+  Range := 300;
+  if L.ArgsCount >= 6 then
+    Range := L.ToNumber(6);
+  if L.ArgsCount >= 5 then
+  begin
+    if L.IsString(5) then
+      C := StrToColor(L.ToString(5))
+    else
+      C := IntToColor(round(L.ToNumber(5)));
+  end
+  else
+    C := clWhite;
+  Engine.Models.SetPointLight(i, L.ToNumber(2), L.ToNumber(3), L.ToNumber(4),
+    Range, C.RGBA.Red / 255, C.RGBA.Green / 255, C.RGBA.Blue / 255);
 end;
 
 { TLuaFont }

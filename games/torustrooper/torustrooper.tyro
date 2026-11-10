@@ -144,6 +144,9 @@ thruster.tint = colors.gold
 -- ---------------------------------------------------------------------
 
 world.fov(D.FOV)
+world.lights(true)   -- a 3D ride wears its lights: sun along world.light's
+                     -- default ray, the sky at its default fill, and the
+                     -- ship's headlamp below
 
 local state = "title"      -- "title" | "play" | "over"
 local paused = false
@@ -377,8 +380,15 @@ local function update_play(dt)
   uz = uz * cb + cz_ * sb
   ship:move(sx - nx * 3, sy - ny * 3, sz - nz * 3)
   ship:face(sx + tx * 10 - nx * 3, sy + ty * 10 - ny * 3, sz - nz * 3, ux, uy, uz)
-  thruster:move(sx - tx * 14 - nx * 3, sy - ty * 14 - ny * 3, sz - nz * 3)
+  thruster:move(sx - tx * 14 - nx * 3, sy - ty * 14 - ny * 3, sz - tz * 14 - nz * 3)
   thruster.scale = 1.6 + v * 1.6 + math.sin(clock * 22) * 0.3
+
+  -- The headlamp: a bulb a nose-ahead off the floor, lighting the tube
+  -- around the ship while the tube behind stays in the sky's dimmer fill -
+  -- the ride reads its own direction. Vector mode ignores the dress: the
+  -- bare grid takes its mood from the bloom.
+  world.pointlight(1, sx + tx * 14 - nx * 8, sy + ty * 14 - ny * 8,
+    sz + tz * 14 - nz * 8, D.LAMP, D.LAMP_RANGE)
 
   -- Chase cam riding the tube, jittered by the last crash's shake.
   local ch = th - D.CAM_BACK

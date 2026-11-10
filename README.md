@@ -625,8 +625,8 @@ when called with them.
 
 | Function | Description |
 |----------|-------------|
-| `world.light([dx, dy, dz])` | The direction the sunlight travels (`dy` may not be 0). The default `(0.06, 1, -0.035)` sits the sun high behind the viewer, so shadows slide a little right and down. |
-| `world.ambient([v])` | How much sky light fills the shadows, `0..1` (clamped). `0` is a hard sun with the darkest shadows, `1` is all ambient light so nothing stays dark. Default `0.45`. |
+| `world.light([dx, dy, dz])` | The direction the sunlight travels (`dy` may not be 0). The default `(0.06, 1, -0.035)` sits the sun high behind the viewer, so shadows slide a little right and down. With `world.lights` on it is also the sun that shades the solids. |
+| `world.ambient([v])` | How much sky light fills the shadows, `0..1` (clamped). `0` is a hard sun with the darkest shadows, `1` is all ambient light so nothing stays dark. Default `0.45`. With `world.lights` on it is also the fill light of the shaded solids. |
 | `world.ground([z])` | The `model.z` plane shadows fall on — the "floor" (the sea, say), which must sit farther from the eye than the models flying over it. Default `300`. |
 
 A shadow is the mesh projected along the light ray onto that plane, so it
@@ -657,6 +657,8 @@ of the depth buffer), only the way you look through it changes.
 | `world.ortho()` | Hand the model pass back to the default top-down eye: `x/y` are screen pixels again and the cast shadows return. |
 | `world.fov([deg])` | The free eye's vertical field of view in degrees, clamped to `10..170` (default 60). Read with no argument. |
 | `world.wire([on])` | Paint every model as its edges only — `true` for the bare vector look (a glowing grid pairs nicely with `shader.effect = "glow"` or your own `shader.load("...frag")`), `false` for solid faces. Read with no argument; every model keeps its own tint. |
+| `world.lights([on])` | Dress the solid models in light: they shade with lambert lighting from `world.ambient` (the sky fill), `world.light` (the sun ray) and up to four point bulbs (`world.pointlight`). Off by default — the classic flat ink — and the wire pass always dresses flat, as a bare grid takes its mood from the bloom. Read with no argument. |
+| `world.pointlight(i, x, y, z [, color [, range]])` | Hang one of four bulbs (`i` = 1..4) at a world point. The color takes the same forms as `canvas.color` (default `"white"`); `range` is how far the light reaches before fading out (default 300). A bulb with no range left is dark, and calling with just `(i)` unscrews it. Only shines while `world.lights` is on. |
 
 Under the free eye a model's `x/y/z` are plain **world coordinates** — the
 same numbers `world.camera` takes — instead of screen pixels, and the screen
