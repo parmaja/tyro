@@ -55,7 +55,8 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
   4 seconds gone, camera shake, and a moment of mercy before the next
   hit counts.
 - **Laps** pay a bonus and raise the multiplier; the distance flown
-  scores all the time. The high score lives in `torustrooper.hi`.
+  scores all the time. The high score lives in `torustrooper.hi`, and a
+  run that beats it gets a NEW HIGH SCORE call on the game-over screen.
 
 ## Engine Showcase
 
