@@ -182,7 +182,9 @@ local function reset()
 end
 
 local function sfx(fn, a, b, c)
-  if not muted and not TESTING then fn(a, b, c) end
+  -- one nil call must not kill a live run mid-crash; the play test asserts
+  -- the whole audio surface exists so a wrong name is caught at test time.
+  if fn and not muted and not TESTING then fn(a, b, c) end
 end
 
 local function start_play()
@@ -216,7 +218,7 @@ local function crash()
   inv = D.CRASH_INV
   shake = 0.45
   flash = D.FLASH
-  sfx(music.noise, 250, 300)
+  sfx(sound.noise, 250, 300)
 end
 
 -- ---------------------------------------------------------------------
