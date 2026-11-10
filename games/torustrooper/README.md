@@ -1,9 +1,9 @@
 # Torus Trooper (Tyro Game Engine)
 
 A time trial inside a torus for kids, built for Tyro on the free
-perspective camera and the engine's own generated shapes — no external
-models, no sprites, no textures: one torus, some boxes and spheres, and
-one fixed loop to master.
+perspective camera and the engine's own generated shapes — one torus,
+some boxes and spheres, one fixed loop to master, and a rider whose own
+delta-wing jet (`Ship.glb`) replaces the box the moment it loads.
 
 ## Overview
 
@@ -69,10 +69,16 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
   the wide 74° eye; the title screen flies a slow attract orbit around
   the whole ring. The crash shake jitters the camera position directly
   (`shake()` belongs to the pixel pass and does not move the 3D world).
-- **Generated shapes only** — `models.torus` for the track, liner, ribs
+- **Generated shapes** — `models.torus` for the track, liner, ribs
   and gates, `models.box` for the ship and walls, `models.sphere` for
   the planet, stars and cells. The whole game is one fixed layout from
   `torustrooper_data.layout(seed)`, so the course is the same every run.
+- **The rider's own hull** — the ship's box is a spare hull: `model:load`
+  swaps in the hand-made delta-wing `Ship.glb` the moment it lands, sized
+  to the box's 20-unit nose-to-tail and aimed with `model.nose = "-y"` —
+  the axis the file's nose lives on once the loader has stood the glTF
+  upright. No file, no fuss: the engine shrugs, the box flies, and the
+  game never notices the difference.
 - **The liner** — the model pass lights faces that look away from the eye
   as back faces, so the inside of a plain torus is a dim shell no matter
   where you fly. The trick rides in the engine's negative scale: a second
@@ -107,6 +113,7 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
 | ----------------------------- | ------------------------------------------------- |
 | `torustrooper.tyro`           | the game — camera, entities, HUD, sound, states   |
 | `torustrooper_data.tyro`      | pure rules and tuning (single source of truth)    |
+| `Ship.glb`                    | the rider's own jet (optional — the box flies without it) |
 | `neon.frag`                   | the wireframe bloom for vector mode (`shader.load`) |
 | `torustrooper.hi`             | the high score (generated, git-ignored)           |
 | `../../tests/test_torustrooper_data.tyro` | headless checks of the rules module  |
@@ -121,11 +128,20 @@ stage copies next to themselves first:
 Copy-Item games\torustrooper\torustrooper_data.tyro tests\ -Force
 Copy-Item games\torustrooper\torustrooper.tyro tests\torustrooper_play.tyro -Force
 Copy-Item games\torustrooper\neon.frag tests\ -Force
+Copy-Item games\torustrooper\Ship.glb tests\ -Force
 bin\tyro.exe tests\test_torustrooper_data.tyro --console --exit:5
 bin\tyro.exe tests\test_torustrooper_play.tyro --console --exit:10
 ```
+
+(`Ship.glb` is optional here too — without it the tests still pass on the
+spare box hull; with it the jet path gets its miles.)
 
 With `TORUSTROOPER_TEST` set the game exports its internals instead of
 playing (and stays silent), so the play test drives real frames: cells,
 gates, crashes, mercy time, pause, the lap seam and the game-over
 retry all run through the actual game code.
+
+
+###
+
+Ship mesh https://sketchfab.com/3d-models/spaceships-69d7d84573be4e358d92d63e9cee4e50

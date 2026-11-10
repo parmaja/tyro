@@ -7265,6 +7265,15 @@ begin
       L.PushString(Engine.Models.GetName(handle));
       Result := 1;
     end
+    //model.nose names the model's own nose axis for face(): "y" (the box
+    //default), or "-y"/"z"/"-z"/"x"/"-x" for a loaded file that draws with
+    //its nose elsewhere - find the axis by eye, the loader's upright swap
+    //often leaves a Blender jet asking for "-y".
+    else if field = 'nose' then
+    begin
+      L.PushString(Engine.Models.GetNose(handle));
+      Result := 1;
+    end
     //read-only: the loaded mesh's bounding box, so a script can scale to a
     //pixel size: m.scale = 40 / math.max(m.width, m.depth)
     else if field = 'width' then
@@ -7397,6 +7406,10 @@ begin
   else if field = 'name' then
   begin
     Engine.Models.SetName(handle, L.ToString(3));
+  end
+  else if field = 'nose' then
+  begin
+    Engine.Models.SetNose(handle, LowerCase(L.ToString(3)));
   end
   else if field = 'anim' then
   begin

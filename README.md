@@ -542,7 +542,7 @@ directory and the workspace, like sprites.
 | `model:show()` | Make the model visible (shown by default). |
 | `model:hide()` | Hide the model from rendering. |
 | `model:move(x, y[, z])` | Set the screen position (pixels) and optional depth in one call. |
-| `model:face(tx, ty, tz[, ux, uy, uz])` | Point the model's own +y axis at the target `tx,ty,tz`; with the optional up vector, its own +z leans toward it. Aim once and fly; `angle`/`roll`/`tilt` still add small trims on top. (Meaningful under the free camera; see below.) |
+| `model:face(tx, ty, tz[, ux, uy, uz])` | Point the model's own +y axis — its nose, wherever `model.nose` says it lives — at the target `tx,ty,tz`; with the optional up vector, its own +z leans toward it. Aim once and fly; `angle`/`roll`/`tilt` still add small trims on top. (Meaningful under the free camera; see below.) |
 | `model:play([what])` | Start a skeletal animation by name or index (`model:play("Walk")`); with no argument it replays the last clip (or the file's first). Returns whether a clip was found. The engine poses the bones every frame while it plays. |
 | `model:stop()` | Stop the skeletal animation, keeping the current pose. |
 
@@ -562,6 +562,7 @@ directory and the workspace, like sprites.
 | `model.tint` | `number` | Colour multiplied over the mesh, the same integer format as `canvas.color` / `colors.*`; white is the default (read/write). |
 | `model.alpha` | `number` | Opacity 0..255, folded into the tint's alpha like a sprite; a see-through model also casts a proportionally softer shadow (read/write). |
 | `model.name` | `string` | The model's name (read/write). |
+| `model.nose` | `string` | Which own axis `face()` and `roll` treat as the nose-tail line: `"y"` (the default — engine-built shapes and hand-made boxes fly on their +y), or `"-y"`, `"z"`, `"-z"`, `"x"`, `"-x"` when a loaded file draws with its nose elsewhere. The loader stands glTF files upright, so a jet modelled nose-up in Blender typically asks for `"-y"`; when in doubt, point the model at something and try. The fix rides along in the draw — the mesh itself is never touched (read/write). |
 | `model.width` | `number` | Bounding-box X size of the loaded mesh (read-only). |
 | `model.height` | `number` | Bounding-box Y size (read-only). |
 | `model.depth` | `number` | Bounding-box Z size (read-only). |

@@ -132,10 +132,15 @@ for i = 1, D.RIBS do
   rb.tint = colors.gray
 end
 
--- The ship: a box whose long axis is its own +y, which face() aims along
--- the road, with a pulsing thruster blob glued to its tail.
+-- The ship: the rider's own delta-wing jet (Ship.glb). The engine loads glTF
+-- upright (Y-up), so on the engine's Z-up stage the jet lies down along y with
+-- its nose on -y; declaring `nose = "-y"` turns it around so face() aims the
+-- nose down the road. The box below is the spare hull: it flies as-is if the
+-- file is not there. A pulsing thruster blob is glued to the tail either way.
 local ship = models.box("ship", 11, 20, 6)
 ship.tint = colors.orange
+ship:load("Ship.glb")
+local jet = false   -- whether the glb hull has landed (the box is the spare)
 local thruster = models.sphere("thruster")
 thruster.tint = colors.gold
 
@@ -424,6 +429,15 @@ end
 function update(dt)
   if keyboard.pressed("escape") then exit() end
   clock = clock + dt
+  -- When the jet lands: declare its nose, size it to the tuned hull (the
+  -- box's 20-unit nose-to-tail), and let the file's own paint shine - the
+  -- spare box stays orange. One-time business, then never looked at again.
+  if (not jet) and ship.loaded then
+    jet = true
+    ship.nose = "-y"          -- the loaded jet lies along y, nose on -y
+    ship.scale = 20 / math.max(ship.width, ship.height, ship.depth)
+    ship.tint = colors.white
+  end
   if flash > 0 then flash = flash - dt end
   if lap_msg_t > 0 then lap_msg_t = lap_msg_t - dt end
 

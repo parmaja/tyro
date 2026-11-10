@@ -117,11 +117,14 @@ type
     FaceTo: TVector3;
     FaceUp: TVector3;
     HasFace: Boolean;
-    //The axis fix a generated shape carries: a rotation the pass composes
-    //onto the mesh so raylib's Y-spun generators (cylinder, cone, torus)
-    //stand on the engine's Z axis. A loaded mesh file never has one.
+    //The axis fix a model carries: a rotation the pass composes onto the
+    //mesh so a nose that lives on another own axis (see Nose) lands on the
+    //face()'s +y. Engine-built shapes never need one; a loaded file does if
+    //the script names its nose.
     AxisFix: TMatrix;
     HasAxisFix: Boolean;
+    Nose: string;           // which drawn axis is the nose: "y" (default),
+                            // "-y", "z", "-z", "x" or "-x"
     //Skeletal animation: raylib's clips of the loaded file (nil/0 when the
     //mesh has no skeleton or no animation), plus the playback state. Current
     //is -1 when nothing has ever played and the mesh sits in its bind pose;
@@ -397,6 +400,15 @@ type
     //the Angle/Roll/Tilt Euler pose.
     procedure SetFace(Handle: integer; TX, TY, TZ, UX, UY, UZ: single);
     procedure ClearFace(Handle: integer);
+    // -- model nose axis (mirrored on the Lua model.nose) --
+    //The model's own axis that face() and roll treat as the nose-tail line.
+    //Engine-built shapes fly with their +y ("y", the default). A loaded file
+    //whose nose sits on another axis says so here - a glb whose nose ends up
+    //on -y after the loader's upright conversion wears "-y" - and the store
+    //fills the reserved AxisFix matrix so face()'s +y finds the nose. The
+    //mesh itself is never touched; the fix rides along in the draw stack.
+    procedure SetNose(Handle: integer; const ANose: string);
+    function GetNose(Handle: integer): string;
 
     // -- skeletal animation (mirrored on the Lua model:play/model:stop) --
     //Advance every playing clip by the frame time and pose its model. Runs on
@@ -511,6 +523,36 @@ const
      m1: 0;  m5: 0;  m9: 1;  m13: 0;
      m2: 0;  m6: -1; m10: 0; m14: 0;
      m3: 0;  m7: 0;  m11: 0; m15: 1);
+  //The nose fixes (model.nose, see SetNose): each brings a named own axis
+  //onto the +y that face() aims. Column i is where the model's i-th axis
+  //lands, matching the column-vector reading rlMultMatrixf gets.
+  //Nose "z": (x, y, z) -> (x, z, -y) - the nose lies down to +y, the flat
+  //back swings to -z, wings stay on x. A proper rotation, winding kept.
+  cModel3DAxisNoseZ: TMatrix =
+    (m0: 1;  m4: 0;  m8: 0;  m12: 0;
+     m1: 0;  m5: 0;  m9: -1; m13: 0;
+     m2: 0;  m6: 1;  m10: 0; m14: 0;
+     m3: 0;  m7: 0;  m11: 0; m15: 1);
+  //Nose "x": (x, y, z) -> (-y, x, z) - +x rises to +y, +z stays up.
+  cModel3DAxisNoseX: TMatrix =
+    (m0: 0;  m4: 1;  m8: 0;  m12: 0;
+     m1: -1; m5: 0;  m9: 0;  m13: 0;
+     m2: 0;  m6: 0;  m10: 1; m14: 0;
+     m3: 0;  m7: 0;  m11: 0; m15: 1);
+  //Nose "-x": (x, y, z) -> (y, -x, z) - -x rises to +y, +z stays up.
+  cModel3DAxisNoseNegX: TMatrix =
+    (m0: 0;  m4: -1; m8: 0;  m12: 0;
+     m1: 1;  m5: 0;  m9: 0;  m13: 0;
+     m2: 0;  m6: 0;  m10: 1; m14: 0;
+     m3: 0;  m7: 0;  m11: 0; m15: 1);
+  //Nose "-y": (x, y, z) -> (-x, -y, z) - a half turn about +z: a file whose
+  //nose sits on the BACK of the convention axis comes around nose-first,
+  //wings trading ends, sky side staying sky side.
+  cModel3DAxisNoseNegY: TMatrix =
+    (m0: -1; m4: 0;  m8: 0;  m12: 0;
+     m1: 0;  m5: -1; m9: 0;  m13: 0;
+     m2: 0;  m6: 0;  m10: 1; m14: 0;
+     m3: 0;  m7: 0;  m11: 0; m15: 1);
 
 { TModel3D }
 
@@ -612,6 +654,7 @@ begin
   HasFace := False;
   AxisFix := cModel3DIdentity;
   HasAxisFix := False;
+  Nose := 'y';
   Animations := nil;
   AnimCount := 0;
   Current := -1;
@@ -2679,6 +2722,78 @@ begin
   try
     if FItems.TryGetValue(Handle, Item) then
       Item.HasFace := False;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetNose(Handle: integer; const ANose: string);
+var
+  Item: TModel3D;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+    begin
+      Item.Nose := ANose;
+      // The fix rotates the mesh so the named nose axis lands on the +y that
+      // face() aims, keeping a right-handed frame (a true rotation, so the
+      // winding - and with it the light - is untouched). Each is the map of
+      // the model's own axes onto the engine's (columns are the images).
+      if ANose = 'z' then
+      begin
+        // +z -> +y, +y -> -z, +x -> +x: a nose-up file lies down to fly.
+        Item.AxisFix := cModel3DAxisNoseZ;
+        Item.HasAxisFix := True;
+      end
+      else if ANose = '-z' then
+      begin
+        // -z -> +y: the same swing the other way - and the very map the old
+        // Y-spun generators wanted, so it borrows that constant.
+        Item.AxisFix := cModel3DAxisZUp;
+        Item.HasAxisFix := True;
+      end
+      else if ANose = 'x' then
+      begin
+        // +x -> +y, +y -> -x, +z -> +z.
+        Item.AxisFix := cModel3DAxisNoseX;
+        Item.HasAxisFix := True;
+      end
+      else if ANose = '-x' then
+      begin
+        // -x -> +y, +y -> +x, +z -> +z.
+        Item.AxisFix := cModel3DAxisNoseNegX;
+        Item.HasAxisFix := True;
+      end
+      else if ANose = '-y' then
+      begin
+        // -y -> +y: a half turn about +z, for a file whose nose points
+        // backwards down the engine's own convention axis. Wings swap ends
+        // and the belly keeps facing down.
+        Item.AxisFix := cModel3DAxisNoseNegY;
+        Item.HasAxisFix := True;
+      end
+      else
+      begin
+        // "y" (the default): the mesh already flies with the box convention.
+        Item.AxisFix := cModel3DIdentity;
+        Item.HasAxisFix := False;
+      end;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetNose(Handle: integer): string;
+var
+  Item: TModel3D;
+begin
+  Result := 'y';
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Nose;
   finally
     FLock.Leave;
   end;
