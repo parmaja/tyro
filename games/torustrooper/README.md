@@ -19,7 +19,8 @@ drains the clock harder, until your luck runs out; then it is just you,
 the loop, and the high score.
 
 This is the showcase game for the free 3D camera: a real perspective
-eye that rides the tube, rolls with it, and shakes on impact.
+eye that rides the tube, rolls with it, and shakes on impact — through a
+glass ring hung in a shining sky.
 
 ## How to Run
 
@@ -87,6 +88,19 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
   torus a hair narrower at `scale = -1` mirrors the mesh so its faces (and
   its light) point into the tube, and the depth test lets it win from
   inside while the plain track wins from outside.
+- **The tube as glass** — both skins wear `model.alpha` (`WALL_ALPHA` on the
+  liner, the thinner of the two, `TRACK_ALPHA` on the outer skin, which keeps
+  more body for the title's orbit), so the starfield outside shines through the
+  ceiling and the floor of the chute and the ride flies in a lit aquarium rather
+  than a painted tunnel. The engine backs this up: a see-through body is painted
+  after the solids, far end first, and keeps no depth of its own, so the sky
+  shows through the glass whichever order the world was built in.
+- **A shining sky** — every star wears `model.glow`, so no lamp dims it, in the
+  hot colours of a real sky (white, gold, aqua); the fattest ones carry a bright
+  inner skin and a faint wide one over the bead, standing in for the falloff a
+  bloom would give, and each star beats its own twinkle of size and brightness
+  in `update()`. Skins cost a body each, and every body costs a boot frame, so
+  the shine is gated by `FLARE_FROM` and `HALO_FROM` and the thin stars go bare.
 - **`model:face(target, up)`** — the ship's long axis aims down the
   road and its roof into the tube; the gates and tunnel ribs stand
   square to the road; all of it recomputed every frame as the loop

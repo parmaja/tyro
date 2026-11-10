@@ -676,6 +676,13 @@ the world canvas, so a HUD that must never dive under the scenery belongs
 on the screen layer: `screen.text`, `screen.rectangle` (with
 `screen.clear()` each frame — that layer keeps last frame's ink).
 
+A **see-through** model — one whose `model.alpha` is under 255 — is painted
+after the solids, far end first, and keeps no depth of its own. That is what
+makes glass behave like glass whatever order the scripts built the world in: it
+always finds what it looks through already painted, and it never hides a body
+from the next stroke. Two glasses still sort between themselves, and a solid in
+front of the glass hides it as usual.
+
 ```lua
 window.show(640, 480)
 canvas.backcolor = colors.black

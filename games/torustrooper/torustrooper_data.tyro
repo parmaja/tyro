@@ -54,6 +54,33 @@ M.GRACE = 1.2           -- the count-in: seconds at the start of every ride
 -- rib every quarter-lap still reads as a rhythm.
 M.RIBS = 24
 
+-- The tube as glass: the walls are translucent, so the starfield outside
+-- shines through the ceiling and the floor of the chute and the ride reads
+-- as a glass track in space. WALL_ALPHA dresses the liner - the skin the
+-- rider actually sees - and TRACK_ALPHA the outer skin, which keeps more
+-- body so the ring still stands as a solid object on the title's orbit.
+M.WALL_ALPHA = 90
+M.TRACK_ALPHA = 125
+
+-- The stars' shine: a star fatter than FLARE_FROM wears a bright inner skin,
+-- FLARE_SPAN times its core; one fatter than HALO_FROM wears a faint wide skin
+-- HALO_SPAN times that again. Both pulse on the star's own beat. A skin is a
+-- see-through body, so it never hides the core inside it - but it is a body
+-- too, and every body costs a boot frame, so the thin stars go bare and the
+-- wide skin is kept for the giants.
+M.FLARE_FROM = 5.5
+M.FLARE_SPAN = 3.2
+M.FLARE_ALPHA = 46
+M.HALO_FROM = 6.3
+M.HALO_SPAN = 2.1
+M.HALO_ALPHA = 20
+
+-- The sky's twinkle: every star beats its own, and both the size and the
+-- brightness ride that beat - the field shimmers instead of sitting still.
+M.TWINKLE_MIN = 0.78      -- the thin end of the beat, as a fraction of size
+M.TWINKLE_SPAN = 0.5      -- ...and how much it grows to at the bright end
+M.TWINKLE_DIM = 150       -- alpha at the thin end (the peak is full 255)
+
 -- Scoring: distance always ticks up; pickups pay on top. The lap multiplier
 -- rewards surviving the loop over and over.
 M.SC_ORB = 100

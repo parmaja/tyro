@@ -3071,6 +3071,16 @@ const
   //Distance of the eye above the pixel plane. The ortho frustum clips at
   //0.01..1000, so this leaves the models room for a +/-399 depth range.
   cModel3DDistance = 400.0;
+type
+  //One body on the painter's list: where it stands, how far down the sight
+  //line it is, and whether it is glass - a see-through skin, which is painted
+  //after the solids and does not keep its depth.
+  TPaintOne = record
+    Item: TModel3D;
+    Pos: TVector3;
+    Depth: Single;
+    Glass: Boolean;
+  end;
 var
   Cam: TCamera3D;
   Item: TModel3D;
@@ -3083,6 +3093,11 @@ var
   Alpha: Integer;
   AnyVisible: Boolean;
   LitNow: Boolean;
+  SeeThrough: Boolean;
+  PaintList: array of TPaintOne;
+  One, Hold: TPaintOne;
+  N, j: Integer;
+  DX, DY, DZ, DL: Single;
   i: Integer;
   Amb, L: Single;
   Sun4, Light4: array[0..3] of Single;
@@ -3151,6 +3166,19 @@ begin
       Cam.Fovy := AHeight;
       Cam.Projection := Ord(CAMERA_ORTHOGRAPHIC); //the field is a plain Integer
     end;
+
+    //The sight line, unit long: the axis the see-through bodies are measured
+    //along. Under the ortho eye the camera looks straight down the world's y, so
+    //the same measure is the pass's own depth - bigger = farther - unchanged.
+    DX := Cam.Target.X - Cam.Position.X;
+    DY := Cam.Target.Y - Cam.Position.Y;
+    DZ := Cam.Target.Z - Cam.Position.Z;
+    DL := Sqrt(DX * DX + DY * DY + DZ * DZ);
+    if DL = 0 then
+      DL := 1; //an eye aimed at itself: keep the division finite
+    DX := DX / DL;
+    DY := DY / DL;
+    DZ := DZ / DL;
 
     //The shade the bodies drop on the world, laid before a single model is
     //drawn: the sea under it, every model over it, so a cloud that floats
@@ -3258,11 +3286,65 @@ begin
           RayLib.EndShaderMode;
         end;
       end;
-      //The models themselves, painted over the shade.
+      //The models themselves, painted over the shade - in an order of the
+      //pass's own making, not the store's. The solids go first, exactly as they
+      //were born; the see-through bodies follow them far end first, and none of
+      //those keeps its depth in the buffer. That is what makes a translucent
+      //body behave like glass whatever order the scripts built the world in: it
+      //always finds what it looks through already painted, and it never hides a
+      //body from the next stroke. (The starfield behind the glass tube of
+      //games/torustrooper is what asked for this.) Two skins of the same glass
+      //at one tint and one alpha blend the same picture either way, so the
+      //see-through bodies sort by depth alone, never among the solids.
+      SetLength(PaintList, 0);
       for Item in FItems.Values do
       begin
         if (not Item.Visible) or (not Item.Loaded) then
           Continue;
+        //Screen-pixel anchor under the ortho eye: x runs right, y runs down
+        //(so it becomes -z), and the model's Z depth rides along the world y
+        //axis into the screen. Under the free eye the three are simply the
+        //model's world coordinates - the same x-right/y-into/z-up space the
+        //top-down pass already lives in, only with a perspective eye on it.
+        if FFreeCam then
+          One.Pos := Vector3Of(Item.X, Item.Y, Item.Z)
+        else
+        begin
+          One.Pos.X := Item.X + AX - AWidth * 0.5;
+          One.Pos.Y := Item.Z;                          //depth (bigger = farther)
+          One.Pos.Z := AHeight * 0.5 - (Item.Y + AY);   //pixel y, screen down
+        end;
+        //How far down the sight line the body stands - the same measure the
+        //depth test judges by, so the glass sorts the way it covers.
+        One.Depth := (One.Pos.X - Cam.Position.X) * DX +
+          (One.Pos.Y - Cam.Position.Y) * DY + (One.Pos.Z - Cam.Position.Z) * DZ;
+        One.Item := Item;
+        One.Glass := Item.Tint.RGBA.Alpha < 255;
+        N := Length(PaintList);
+        SetLength(PaintList, N + 1);
+        PaintList[N] := One;
+      end;
+      //An insertion sort: the list is only the bodies on screen and it comes in
+      //nearly ordered, which is this sort's best case - and it is stable, so the
+      //solids keep the store's own order while the glass slides behind them,
+      //the farther skin before the nearer one.
+      for i := 1 to High(PaintList) do
+      begin
+        Hold := PaintList[i];
+        j := i - 1;
+        while (j >= 0) and PaintList[j].Glass and
+          ((not Hold.Glass) or (PaintList[j].Depth < Hold.Depth)) do
+        begin
+          PaintList[j + 1] := PaintList[j];
+          Dec(j);
+        end;
+        PaintList[j + 1] := Hold;
+      end;
+      for i := 0 to High(PaintList) do
+      begin
+        Item := PaintList[i].Item;
+        SeeThrough := PaintList[i].Glass;
+        Pos := PaintList[i].Pos;
         //The dress: the light skin while the lights are on, the model's own
         //the moment they are not (both calls no-op when nothing changes).
         if LitNow then WearLight(Item)
@@ -3273,20 +3355,6 @@ begin
         //the facing - the trick that lets one solid wear an inside-out skin.
         if S = 0 then
           S := 1;
-
-        //Screen-pixel anchor under the ortho eye: x runs right, y runs down
-        //(so it becomes -z), and the model's Z depth rides along the world y
-        //axis into the screen. Under the free eye the three are simply the
-        //model's world coordinates - the same x-right/y-into/z-up space the
-        //top-down pass already lives in, only with a perspective eye on it.
-        if FFreeCam then
-          Pos := Vector3Of(Item.X, Item.Y, Item.Z)
-        else
-        begin
-          Pos.X := Item.X + AX - AWidth * 0.5;
-          Pos.Y := Item.Z;                              //depth (bigger = farther)
-          Pos.Z := AHeight * 0.5 - (Item.Y + AY);       //pixel y, screen down
-        end;
 
         //Build the transform on rlgl's matrix stack rather than DrawModelEx:
         //the by-value records that binding passes have an ABI mismatch against
@@ -3318,12 +3386,21 @@ begin
         //Shift the (still unrotated) box centre onto the origin so the model
         //turns about its own middle even when its mesh sits off the origin.
         RayLib.rlTranslatef(-Item.Center.X, -Item.Center.Y, -Item.Center.Z);
+        //A see-through body keeps its own depth out of the buffer: glass must
+        //not decide what the world behind it looks like, or the skin hides
+        //whatever the draw hands it next - the starfield behind the tube goes
+        //missing instead of shining through. The depth test stays in charge the
+        //other way round: a solid body in front of the glass still hides it.
+        if SeeThrough then
+          RayLib.rlDisableDepthMask;
         if FWire then
           //The wire pass: the model's own edges in its tint, no faces. The
           //games pair this with shader.effect="glow" for the hot-vector look.
           RayLib.DrawModelWires(Item.Model, Vector3Of(0, 0, 0), 1.0, Item.Tint)
         else
           RayLib.DrawModel(Item.Model, Vector3Of(0, 0, 0), 1.0, Item.Tint);
+        if SeeThrough then
+          RayLib.rlEnableDepthMask;
         RayLib.rlPopMatrix;
       end;
     finally

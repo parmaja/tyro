@@ -50,6 +50,13 @@ liner.scale = -1
 -- light gray, not white: the tube wants to read as a shaded volume, and a
 -- bright tint on a fully-lit skin whites the whole frame out.
 liner.tint = colors.lightgray
+-- and both skins wear it half-seen: the tube is a glass chute, so the
+-- starfield outside shines through the walls and the ride keeps its bearings
+-- in space instead of sitting in a painted tunnel. The liner is the skin the
+-- rider looks at, so it carries most of the see-through; the outer skin keeps
+-- more body for the title's orbit of the ring.
+liner.alpha = D.WALL_ALPHA
+track.alpha = D.TRACK_ALPHA
 
 -- A planet in the hole, and a scatter of star-blobs to spin against.
 -- The frustum clips at 1000 units, so everything stays well inside it.
@@ -57,14 +64,52 @@ local planet = models.sphere("planet")
 planet.scale = 90
 planet.tint = colors.maroon
 
+-- The stars burn: `glow` keeps each one at full bright, immune to the sun and
+-- the sky's fill (a star 600 units out only ever catches the fill, which reads
+-- as a dull bead), and the hot colours of a real sky - white, pale gold, a cool
+-- blue - make the field glitter instead of sitting there in one tone.
+local hot = { colors.white, colors.gold, colors.aqua }
+
+-- One skin of a star's shine: the same sphere the bead wears, grown wide and
+-- worn thin, glowing so no lamp can dim it. A skin is a body of its own and
+-- every body costs a boot frame, so only the stars fat enough carry them.
+local function wear_skin(name, x, y, z, tint, span, skin)
+  local g = models.sphere(name)
+  g:move(x, y, z)
+  g.scale = span
+  g.tint = tint
+  g.glow = true
+  g.alpha = skin
+  return { m = g, base = span, skin = skin }
+end
+
+local stars = {}
 for i = 1, 40 do
   local st = models.sphere("star" .. i)
   local a = math.random() * TAU
   local b = (math.random() * 2 - 1) * 0.85
   local d = 560 + math.random() * 90
-  st:move(d * math.cos(a) * math.cos(b), d * math.sin(a) * math.cos(b), d * math.sin(b))
-  st.scale = 3 + math.random() * 4
-  st.tint = colors.white
+  local sx, sy, sz = d * math.cos(a) * math.cos(b), d * math.sin(a) * math.cos(b), d * math.sin(b)
+  st:move(sx, sy, sz)
+  local size = 3 + math.random() * 4
+  local tint = hot[1 + i % #hot]
+  st.scale = size
+  st.tint = tint
+  st.glow = true
+  -- Two skins over the bead - a bright inner one and a faint wide one - stand
+  -- in for the falloff a real bloom would give, since the engine has no
+  -- additive blend for bodies. FLARE_FROM wears the first, HALO_FROM the second.
+  local shine = {}
+  if size > D.FLARE_FROM then
+    shine[#shine + 1] = wear_skin("flare" .. i, sx, sy, sz, tint,
+      size * D.FLARE_SPAN, D.FLARE_ALPHA)
+  end
+  if size > D.HALO_FROM then
+    shine[#shine + 1] = wear_skin("halo" .. i, sx, sy, sz, tint,
+      size * D.FLARE_SPAN * D.HALO_SPAN, D.HALO_ALPHA)
+  end
+  stars[i] = { m = st, shine = shine, size = size, phase = math.random() * TAU,
+    beat = 1.1 + math.random() * 2.4 }
 end
 
 -- ---------------------------------------------------------------------
@@ -136,14 +181,11 @@ end
 -- upright (Y-up), so on the engine's Z-up stage the jet lies down along y with
 -- its nose on -y; declaring `nose = "-y"` turns it around so face() aims the
 -- nose down the road. The box below is the spare hull: it flies as-is if the
--- file is not there. A pulsing thruster blob is glued to the tail either way.
+-- file is not there.
 local ship = models.box("ship", 11, 20, 6)
 ship.tint = colors.orange
 ship:load("Ship.glb")
 local jet = false   -- whether the glb hull has landed (the box is the spare)
-local thruster = models.sphere("thruster")
-thruster.tint = colors.gold
-
 -- ---------------------------------------------------------------------
 -- Game state
 -- ---------------------------------------------------------------------
@@ -370,7 +412,6 @@ local function update_play(dt)
     return
   end
 
-  -- Place and aim the ship and its thruster. The ship rolls about its
   -- nose by `bank`: rotate the rest up (-n) around the forward tangent t
   -- with Rodrigues; at bank=0 the cos/sin terms leave -n untouched.
   local sx, sy, sz = D.trackPoint(R, TUBE, th, al)
@@ -385,8 +426,6 @@ local function update_play(dt)
   uz = uz * cb + cz_ * sb
   ship:move(sx - nx * 3, sy - ny * 3, sz - nz * 3)
   ship:face(sx + tx * 10 - nx * 3, sy + ty * 10 - ny * 3, sz - nz * 3, ux, uy, uz)
-  thruster:move(sx - tx * 14 - nx * 3, sy - ty * 14 - ny * 3, sz - tz * 14 - nz * 3)
-  thruster.scale = 1.6 + v * 1.6 + math.sin(clock * 22) * 0.3
 
   -- The headlamp: a bulb a nose-ahead off the floor, lighting the tube
   -- around the ship while the tube behind stays in the sky's dimmer fill -
@@ -441,6 +480,20 @@ function update(dt)
   end
   if flash > 0 then flash = flash - dt end
   if lap_msg_t > 0 then lap_msg_t = lap_msg_t - dt end
+
+  -- The sky shimmers: every star beats its own twinkle and the shine rides the
+  -- beat - the bead fattens and its skins open at the flash, then thin and
+  -- nearly go out between. It runs in every state, so the attract orbit wears
+  -- the same living sky as the ride.
+  for _, s in ipairs(stars) do
+    local tw = 0.5 + 0.5 * math.sin(clock * s.beat + s.phase)
+    s.m.scale = s.size * (D.TWINKLE_MIN + D.TWINKLE_SPAN * tw)
+    s.m.alpha = D.TWINKLE_DIM + math.floor((255 - D.TWINKLE_DIM) * tw)
+    for _, g in ipairs(s.shine) do
+      g.m.scale = g.base * (0.6 + 0.6 * tw)
+      g.m.alpha = math.floor(g.skin * (0.4 + 0.6 * tw))
+    end
+  end
 
   if keyboard.pressed("m") then
     muted = not muted
