@@ -64,52 +64,92 @@ local planet = models.sphere("planet")
 planet.scale = 90
 planet.tint = colors.maroon
 
--- The stars burn: `glow` keeps each one at full bright, immune to the sun and
--- the sky's fill (a star 600 units out only ever catches the fill, which reads
--- as a dull bead), and the hot colours of a real sky - white, pale gold, a cool
--- blue - make the field glitter instead of sitting there in one tone.
-local hot = { colors.white, colors.gold, colors.aqua }
-
--- One skin of a star's shine: the same sphere the bead wears, grown wide and
--- worn thin, glowing so no lamp can dim it. A skin is a body of its own and
--- every body costs a boot frame, so only the stars fat enough carry them.
-local function wear_skin(name, x, y, z, tint, span, skin)
-  local g = models.sphere(name)
-  g:move(x, y, z)
-  g.scale = span
-  g.tint = tint
-  g.glow = true
-  g.alpha = skin
-  return { m = g, base = span, skin = skin }
-end
-
+-- The stars are the sky, not the scenery. Each one is painted on the world
+-- canvas as a radial gradient - a hot core softening out to nothing - and the
+-- model pass lays its glass over them exactly as it lays it over the sky, so
+-- the field blooms the way a real one does and the ride carries no bodies up
+-- there at all. The colours are the hot ones of a real sky: white, gold, a
+-- cool blue. `on_screen()` below does the projecting.
+local hot = { {255, 255, 255}, {255, 205, 90}, {140, 215, 255} }
 local stars = {}
-for i = 1, 40 do
-  local st = models.sphere("star" .. i)
+for i = 1, D.STARS do
   local a = math.random() * TAU
   local b = (math.random() * 2 - 1) * 0.85
-  local d = 560 + math.random() * 90
-  local sx, sy, sz = d * math.cos(a) * math.cos(b), d * math.sin(a) * math.cos(b), d * math.sin(b)
-  st:move(sx, sy, sz)
-  local size = 3 + math.random() * 4
-  local tint = hot[1 + i % #hot]
-  st.scale = size
-  st.tint = tint
-  st.glow = true
-  -- Two skins over the bead - a bright inner one and a faint wide one - stand
-  -- in for the falloff a real bloom would give, since the engine has no
-  -- additive blend for bodies. FLARE_FROM wears the first, HALO_FROM the second.
-  local shine = {}
-  if size > D.FLARE_FROM then
-    shine[#shine + 1] = wear_skin("flare" .. i, sx, sy, sz, tint,
-      size * D.FLARE_SPAN, D.FLARE_ALPHA)
+  local d = D.STAR_FAR + math.random() * D.STAR_DEPTH
+  stars[i] = {
+    x = d * math.cos(a) * math.cos(b), y = d * math.sin(a) * math.cos(b),
+    z = d * math.sin(b),
+    size = D.STAR_MIN + math.random() * D.STAR_SPAN,
+    col = hot[1 + i % #hot],
+    phase = math.random() * TAU, beat = 1.1 + math.random() * 2.4, tw = 1 }
+end
+
+-- Where the free eye puts a world point on the canvas, in pixels, plus how big
+-- it looks there. The look-at basis is built the way the camera builds its own
+-- - sight line, right hand of that and the up, so a glow lands on the star it
+-- belongs to - and it is built once a frame for the whole field. A point behind
+-- the eye has no place on the canvas and gives nothing back.
+local cam = { ok = false }
+local function read_camera()
+  local ex, ey, ez, tx, ty, tz, ux, uy, uz = world.camera()
+  cam.ok = false
+  local fx, fy, fz = tx - ex, ty - ey, tz - ez
+  local fl = math.sqrt(fx * fx + fy * fy + fz * fz)
+  if fl < 1e-6 then return end
+  fx, fy, fz = fx / fl, fy / fl, fz / fl
+  local rx, ry, rz = fy * uz - fz * uy, fz * ux - fx * uz, fx * uy - fy * ux
+  local rl = math.sqrt(rx * rx + ry * ry + rz * rz)
+  if rl < 1e-6 then return end
+  rx, ry, rz = rx / rl, ry / rl, rz / rl
+  cam.ex, cam.ey, cam.ez = ex, ey, ez
+  cam.fx, cam.fy, cam.fz = fx, fy, fz
+  cam.rx, cam.ry, cam.rz = rx, ry, rz
+  cam.ux, cam.uy, cam.uz = ry * fz - rz * fy, rz * fx - rx * fz, rx * fy - ry * fx
+  -- Pixels per world unit at one unit down the sight line: the vertical field
+  -- of view over half the canvas height.
+  cam.k = (D.H * 0.5) / math.tan(math.rad(world.fov()) * 0.5)
+  cam.ok = true
+end
+
+local function on_screen(x, y, z)
+  if not cam.ok then return nil end
+  local vx, vy, vz = x - cam.ex, y - cam.ey, z - cam.ez
+  local d = vx * cam.fx + vy * cam.fy + vz * cam.fz
+  if d < 1 then return nil end
+  local s = cam.k / d
+  return D.W * 0.5 + (vx * cam.rx + vy * cam.ry + vz * cam.rz) * s,
+    D.H * 0.5 - (vx * cam.ux + vy * cam.uy + vz * cam.uz) * s, s
+end
+
+-- The field painted, in four strokes per star: the halo - two gradient discs, a
+-- wide faint one and a narrower one on top, which is what turns the gradient's
+-- straight fade into a bell - then the bloom, nearly white, and the point, the
+-- small hard dot that makes it a star and not a cloud. All of it rides the
+-- star's own twinkle. This is canvas ink under the model pass, so the glass tube
+-- dims the stars exactly as it dims the sky behind it.
+local MARGIN = 240        -- how far off the edge a glow may sit and still draw
+local function paint_stars()
+  read_camera()
+  for _, s in ipairs(stars) do
+    local px, py, scale = on_screen(s.x, s.y, s.z)
+    if px and px > -MARGIN and px < D.W + MARGIN
+      and py > -MARGIN and py < D.H + MARGIN then
+      local tw = s.tw
+      local r = s.size * scale
+      local c = s.col
+      local glow = math.floor(D.GLOW_ALPHA * (0.3 + 0.7 * tw))
+      local clear = rgba(c[1], c[2], c[3], 0)
+      canvas.gradient.circle(px, py, r * D.GLOW_SPAN * (0.7 + 0.5 * tw),
+        rgba(c[1], c[2], c[3], glow), clear)
+      canvas.gradient.circle(px, py, r * D.GLOW_SPAN * D.GLOW_MID,
+        rgba(c[1], c[2], c[3], glow), clear)
+      canvas.gradient.circle(px, py, r * D.CORE_SPAN,
+        rgba(255, 255, 255, math.floor(D.CORE_ALPHA * (0.4 + 0.6 * tw))), clear)
+      local dot = math.max(1, r * D.POINT_SPAN)
+      canvas.color = rgba(255, 255, 255, math.floor(D.POINT_ALPHA * (0.3 + 0.7 * tw)))
+      canvas.circle(px, py, dot, true)
+    end
   end
-  if size > D.HALO_FROM then
-    shine[#shine + 1] = wear_skin("halo" .. i, sx, sy, sz, tint,
-      size * D.FLARE_SPAN * D.HALO_SPAN, D.HALO_ALPHA)
-  end
-  stars[i] = { m = st, shine = shine, size = size, phase = math.random() * TAU,
-    beat = 1.1 + math.random() * 2.4 }
 end
 
 -- ---------------------------------------------------------------------
@@ -481,18 +521,13 @@ function update(dt)
   if flash > 0 then flash = flash - dt end
   if lap_msg_t > 0 then lap_msg_t = lap_msg_t - dt end
 
-  -- The sky shimmers: every star beats its own twinkle and the shine rides the
-  -- beat - the bead fattens and its skins open at the flash, then thin and
-  -- nearly go out between. It runs in every state, so the attract orbit wears
-  -- the same living sky as the ride.
+  -- The sky shimmers: every star beats its own twinkle, and the painter rides
+  -- that one number - the halo opens at the flash, the core nearly goes out
+  -- between. It runs in every state, so the attract orbit wears the same living
+  -- sky as the ride.
   for _, s in ipairs(stars) do
-    local tw = 0.5 + 0.5 * math.sin(clock * s.beat + s.phase)
-    s.m.scale = s.size * (D.TWINKLE_MIN + D.TWINKLE_SPAN * tw)
-    s.m.alpha = D.TWINKLE_DIM + math.floor((255 - D.TWINKLE_DIM) * tw)
-    for _, g in ipairs(s.shine) do
-      g.m.scale = g.base * (0.6 + 0.6 * tw)
-      g.m.alpha = math.floor(g.skin * (0.4 + 0.6 * tw))
-    end
+    local beat = 0.5 + 0.5 * math.sin(clock * s.beat + s.phase)
+    s.tw = D.TWINKLE_FLOOR + (1 - D.TWINKLE_FLOOR) * beat
   end
 
   if keyboard.pressed("m") then
@@ -553,6 +588,9 @@ end
 function draw()
   canvas.color = colors.black
   canvas.clear()
+  -- The sky first: the stars are canvas ink, and the model pass paints its
+  -- glass over them a moment later.
+  paint_stars()
   -- the screen buffer keeps whatever was drawn last frame unless told
   -- otherwise, and a HUD whose numbers change would smear over its ghosts.
   screen.clear()

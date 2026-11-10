@@ -95,12 +95,14 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
   than a painted tunnel. The engine backs this up: a see-through body is painted
   after the solids, far end first, and keeps no depth of its own, so the sky
   shows through the glass whichever order the world was built in.
-- **A shining sky** — every star wears `model.glow`, so no lamp dims it, in the
-  hot colours of a real sky (white, gold, aqua); the fattest ones carry a bright
-  inner skin and a faint wide one over the bead, standing in for the falloff a
-  bloom would give, and each star beats its own twinkle of size and brightness
-  in `update()`. Skins cost a body each, and every body costs a boot frame, so
-  the shine is gated by `FLARE_FROM` and `HALO_FROM` and the thin stars go bare.
+- **A painted sky** — the stars are not models at all: each one is ink on the
+  world canvas, a soft radial gradient (`canvas.gradient.circle`) under a hard
+  point, projected by hand from the free camera that `world.camera()` reads back.
+  So the sky blooms instead of scattering discs, the field can be as thick as it
+  likes without costing a boot frame (the ride boots at 72 bodies), and since the
+  glow rides under the model pass the glass tube dims a star exactly as it dims
+  the sky behind it. Every star beats its own twinkle, and the one number drives
+  the halo, the bloom and the point together.
 - **`model:face(target, up)`** — the ship's long axis aims down the
   road and its roof into the tube; the gates and tunnel ribs stand
   square to the road; all of it recomputed every frame as the loop
