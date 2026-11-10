@@ -37,6 +37,7 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
 | SPACE / START    | start the ride, retry after game over |
 | P                | pause                               |
 | M                | mute                                |
+| W                | vector mode — glowing wires on/off  |
 | ESC              | quit                                |
 
 ## Gameplay
@@ -89,7 +90,11 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
 - **Procedural sound** — `sound.loopPlay("Engine", ...)` drones under
   the ride with `sound.loopPitch()` climbing with speed; cells, gates,
   countdown ticks, the crash and the time-up jingle are one-shot
-  `music.sound` / `music.noise` / `music.mml`, all behind a mute switch.
+  `music.sound` / `sound.noise` / `music.mml`, all behind a mute switch.
+- **Vector mode (`W`)** — the whole ride as bare wireframe (`world.wire`)
+  with `neon.frag` on the board so every wire blooms like a hot CRT tube.
+  The HUD rides the screen layer above the board, so it stays crisp while
+  the track glows.
 
 ## Files
 
@@ -97,6 +102,7 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
 | ----------------------------- | ------------------------------------------------- |
 | `torustrooper.tyro`           | the game — camera, entities, HUD, sound, states   |
 | `torustrooper_data.tyro`      | pure rules and tuning (single source of truth)    |
+| `neon.frag`                   | the wireframe bloom for vector mode (`shader.load`) |
 | `torustrooper.hi`             | the high score (generated, git-ignored)           |
 | `../../tests/test_torustrooper_data.tyro` | headless checks of the rules module  |
 | `../../tests/test_torustrooper_play.tyro` | headless ride: drives the game itself |
@@ -109,6 +115,7 @@ stage copies next to themselves first:
 ```
 Copy-Item games\torustrooper\torustrooper_data.tyro tests\ -Force
 Copy-Item games\torustrooper\torustrooper.tyro tests\torustrooper_play.tyro -Force
+Copy-Item games\torustrooper\neon.frag tests\ -Force
 bin\tyro.exe tests\test_torustrooper_data.tyro --console --exit:5
 bin\tyro.exe tests\test_torustrooper_play.tyro --console --exit:10
 ```

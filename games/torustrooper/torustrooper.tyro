@@ -148,6 +148,7 @@ world.fov(D.FOV)
 local state = "title"      -- "title" | "play" | "over"
 local paused = false
 local muted = false
+local wire = false           -- vector mode: meshes as edges, shader makes them glow
 local hi = D.load_high_score()
 
 local th, al, v = 0, 0, D.CRUISE
@@ -185,6 +186,20 @@ local function sfx(fn, a, b, c)
   -- one nil call must not kill a live run mid-crash; the play test asserts
   -- the whole audio surface exists so a wrong name is caught at test time.
   if fn and not muted and not TESTING then fn(a, b, c) end
+end
+
+-- Vector mode: the whole ride as its wireframe, and the board wears the
+-- game's neon frag so the wires burn like the arcade CRT they imitate (the
+-- built-in "glow" is the understudy when the frag file is not at hand). The
+-- HUD rides the screen layer above the board, so the panels stay crisp
+-- while the tube blooms.
+local function apply_wire()
+  world.wire(wire)
+  if not wire then
+    shader.effect = "none"
+  elseif not pcall(function() shader.load("neon.frag") end) then
+    shader.effect = "glow"
+  end
 end
 
 local function start_play()
@@ -407,6 +422,13 @@ function update(dt)
     if drone then sound.loopVolume((muted or paused) and 0 or 1) end
   end
 
+  -- vector mode, for the pure-grid ride: wires only, glowing.
+  if keyboard.pressed("w") then
+    wire = not wire
+    apply_wire()
+    sfx(music.sound, "Tri", wire and 990 or 660, 70)
+  end
+
   if state == "title" then
     -- Attract mode: a slow eye orbiting the whole ring.
     local a = clock * 0.12
@@ -481,7 +503,8 @@ function draw()
   local k = R - TUBE * math.cos(al)
   -- panels first: the tube is a light world, and a white HUD on it needs
   -- a dark board to stand on.
-  local hint = "L/R slide   U/D throttle   P pause   M mute" .. (muted and "  [muted]" or "")
+  local hint = "L/R slide   U/D throttle   P pause   M mute   W wires"
+    .. (muted and "  [muted]" or "") .. (wire and "  [wires]" or "")
   screen.color = rgba(0, 0, 0, 150)
   screen.rectangle(4, 4, 150, 136, true)
   screen.rectangle(D.W - 140, 4, 136, 26, true)
@@ -574,6 +597,8 @@ if TESTING then
     bestlap   = function() return best_lap end,
     lapmsg    = function() return lap_msg, lap_msg_t, lap_msg_best end,
     paused    = function() return paused end,
+    wire      = function() return wire end,
+    set_wire  = function(on) wire = on apply_wire() end,
     set_pos   = function(a, b) th = a al = b end,
     set_v     = function(x) v = x end,
     set_time  = function(x) time_left = x end,

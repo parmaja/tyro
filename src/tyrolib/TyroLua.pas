@@ -159,6 +159,8 @@ type
     function Ortho_func(L: Plua_State): integer; cdecl;
     //world.fov([deg]) -> the free camera's vertical field of view.
     function Fov_func(L: Plua_State): integer; cdecl;
+    //world.wire([on]) -> paint the models as their edges only (the vector look).
+    function Wire_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaFont }
@@ -1205,6 +1207,7 @@ begin
   Script.Lua.State.Register(Name, 'camera', Self, Self.Camera_func);
   Script.Lua.State.Register(Name, 'ortho', Self, Self.Ortho_func);
   Script.Lua.State.Register(Name, 'fov', Self, Self.Fov_func);
+  Script.Lua.State.Register(Name, 'wire', Self, Self.Wire_func);
   //Lua.State.Register('world', World); //Should be last one for world
   inherited;
 end;
@@ -1357,6 +1360,20 @@ begin
   if L.ArgsCount >= 1 then
     Engine.Models.SetFov(L.ToNumber(1));
   L.PushNumber(Engine.Models.GetFov);
+  Result := 1;
+end;
+
+// world.wire() -> true/false   |   world.wire(true/false)
+// Paint every model as its wire - the mesh's own edges in its tint, no faces.
+// The glowing-vector look pairs it with shader.effect = "glow".
+function TLuaWorld.Wire_func(L: Plua_State): integer; cdecl;
+begin
+  Result := 0;
+  if (Engine = nil) or (Engine.Models = nil) then
+    Exit;
+  if L.ArgsCount >= 1 then
+    Engine.Models.SetWire(L.ToBoolean(1));
+  L.PushBoolean(Engine.Models.GetWire);
   Result := 1;
 end;
 

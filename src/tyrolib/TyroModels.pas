@@ -190,6 +190,9 @@ type
     FCamTarget: TVector3;
     FCamUp: TVector3;
     FFov: Single;
+    //Wire mode: the models are painted as their edges only - DrawModelWires
+    //instead of DrawModel - for the glowing-vector look some games want.
+    FWire: Boolean;
     //The shadow ink: raylib's default material, which is the plain unlit shader
     //and a 1x1 white pixel, so whatever color is written into its albedo comes
     //out at the other end unchanged - a solid silhouette with no texture and no
@@ -306,6 +309,9 @@ type
     //free camera is on; 60 is the plain-eye default.
     procedure SetFov(AValue: single);
     function GetFov: single;
+    //Paint every model as wire instead of solid (mirrored on world.wire).
+    procedure SetWire(AEnabled: boolean);
+    function GetWire: boolean;
 
     function GetName(Handle: integer): string;
     procedure SetName(Handle: integer; const AName: string);
@@ -635,6 +641,7 @@ begin
   FCamTarget := Vector3Of(0, 0, 0);
   FCamUp := Vector3Of(0, 0, 1);
   FFov := 60;
+  FWire := False;
 end;
 
 destructor TModels3D.Destroy;
@@ -993,6 +1000,9 @@ begin
     FCamTarget := Vector3Of(0, 0, 0);
     FCamUp := Vector3Of(0, 0, 1);
     FFov := 60;
+    FWire := False;
+    //...and the world is painted solid again: the rerun earns its own
+    //world.wire call, just like it earns its own sky and eye.
     //...and the shadow ink goes with it: it belongs to this run's GL context
     //and is rebuilt on the next frame that casts a shadow.
     FreeShadowMaterial;
@@ -2372,6 +2382,26 @@ begin
   end;
 end;
 
+procedure TModels3D.SetWire(AEnabled: boolean);
+begin
+  FLock.Enter;
+  try
+    FWire := AEnabled;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetWire: boolean;
+begin
+  FLock.Enter;
+  try
+    Result := FWire;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 procedure TModels3D.SetFace(Handle: integer; TX, TY, TZ, UX, UY, UZ: single);
 var
   Item: TModel3D;
@@ -2615,7 +2645,12 @@ begin
         //Shift the (still unrotated) box centre onto the origin so the model
         //turns about its own middle even when its mesh sits off the origin.
         RayLib.rlTranslatef(-Item.Center.X, -Item.Center.Y, -Item.Center.Z);
-        RayLib.DrawModel(Item.Model, Vector3Of(0, 0, 0), 1.0, Item.Tint);
+        if FWire then
+          //The wire pass: the model's own edges in its tint, no faces. The
+          //games pair this with shader.effect="glow" for the hot-vector look.
+          RayLib.DrawModelWires(Item.Model, Vector3Of(0, 0, 0), 1.0, Item.Tint)
+        else
+          RayLib.DrawModel(Item.Model, Vector3Of(0, 0, 0), 1.0, Item.Tint);
         RayLib.rlPopMatrix;
       end;
     finally

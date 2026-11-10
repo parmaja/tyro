@@ -656,6 +656,7 @@ of the depth buffer), only the way you look through it changes.
 | `world.camera()` | With no arguments it reads the shot back as nine numbers — and never changes the mode, so `local x,y,z = ...` after a `world.ortho()` still tells where the free eye was parked. |
 | `world.ortho()` | Hand the model pass back to the default top-down eye: `x/y` are screen pixels again and the cast shadows return. |
 | `world.fov([deg])` | The free eye's vertical field of view in degrees, clamped to `10..170` (default 60). Read with no argument. |
+| `world.wire([on])` | Paint every model as its edges only — `true` for the bare vector look (a glowing grid pairs nicely with `shader.effect = "glow"` or your own `shader.load("...frag")`), `false` for solid faces. Read with no argument; every model keeps its own tint. |
 
 Under the free eye a model's `x/y/z` are plain **world coordinates** — the
 same numbers `world.camera` takes — instead of screen pixels, and the screen
