@@ -7274,6 +7274,16 @@ begin
       L.PushString(Engine.Models.GetNose(handle));
       Result := 1;
     end
+    //model.glow names the material that shines instead of being lit: a name
+    //from the loaded file ("Engine"), true (or "*") for the whole model - a
+    //thruster flame - and "" (the default) or false to leave it to the lamps.
+    //A glowing material never wears the light coat, so world.lights cannot
+    //dim it; a name the file does not carry simply never matches.
+    else if field = 'glow' then
+    begin
+      L.PushString(Engine.Models.GetGlow(handle));
+      Result := 1;
+    end
     //read-only: the loaded mesh's bounding box, so a script can scale to a
     //pixel size: m.scale = 40 / math.max(m.width, m.depth)
     else if field = 'width' then
@@ -7410,6 +7420,20 @@ begin
   else if field = 'nose' then
   begin
     Engine.Models.SetNose(handle, LowerCase(L.ToString(3)));
+  end
+  else if field = 'glow' then
+  begin
+    //a material name of the loaded file, or true/"*" for the whole model,
+    //or false/"" for none (see the getter note)
+    if L.IsString(3) then
+      Engine.Models.SetGlow(handle, L.ToString(3))
+    else
+    begin
+      if L.ToBoolean(3) then
+        Engine.Models.SetGlow(handle, cModel3DGlowAll)
+      else
+        Engine.Models.SetGlow(handle, '');
+    end;
   end
   else if field = 'anim' then
   begin

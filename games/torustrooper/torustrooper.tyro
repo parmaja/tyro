@@ -437,6 +437,7 @@ function update(dt)
     ship.nose = "-y"          -- the loaded jet lies along y, nose on -y
     ship.scale = 20 / math.max(ship.width, ship.height, ship.depth)
     ship.tint = colors.white
+    ship.glow = "Engine"      -- the intakes burn full-bright, lamps or not
   end
   if flash > 0 then flash = flash - dt end
   if lap_msg_t > 0 then lap_msg_t = lap_msg_t - dt end

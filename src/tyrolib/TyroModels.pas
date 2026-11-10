@@ -78,8 +78,18 @@ uses
 
 const
   cModel3DInvalid: Integer = 0;
+  //The glow value that shines everywhere (model.glow = true in Lua): every
+  //material keeps its flat skin, so the whole model reads as a lamp - what
+  //a thruster flame wants. A plain text instead names one material to shine.
+  cModel3DGlowAll = '*';
 
 type
+  //The material names a loaded glTF file carries, one per material index in
+  //the file's own order. raylib's Material record has no name field, so a
+  //script that wants to single one material out (model.glow) has to hear the
+  //names from the file itself - Load keeps this copy for that.
+  TMatNames = array of string;
+
   { TModel3D }
 
   //raylib hands the animation clips of a file out as a plain C array. This is
@@ -125,6 +135,15 @@ type
     HasAxisFix: Boolean;
     Nose: string;           // which drawn axis is the nose: "y" (default),
                             // "-y", "z", "-z", "x" or "-x"
+    //Glow: the material that shines instead of being lit. "" leaves every
+    //material to the lamps, cModel3DGlowAll shines the whole model (a
+    //thruster flame says true and lands there), and any other text names one
+    //material of the loaded file - compare MatNames, which Load read from
+    //the file's JSON head because raylib drops the names. A glowing material
+    //never wears the light coat (see WearLight), so it keeps raylib's own
+    //flat shader and shows at full bright whatever the lights do.
+    Glow: string;
+    MatNames: TMatNames;
     //Skeletal animation: raylib's clips of the loaded file (nil/0 when the
     //mesh has no skeleton or no animation), plus the playback state. Current
     //is -1 when nothing has ever played and the mesh sits in its bind pose;
@@ -149,6 +168,9 @@ type
     procedure FreeAnimations;
     //The current clip, or nil when there is none.
     function CurrentAnim: PModelAnimation;
+    //True when material m shines on its own: the whole-model glow, or the
+    //one whose name the script wrote into Glow (compare MatNames).
+    function GlowAt(m: Integer): Boolean;
   end;
 
   { TTyroModelShape }
@@ -409,6 +431,13 @@ type
     //mesh itself is never touched; the fix rides along in the draw stack.
     procedure SetNose(Handle: integer; const ANose: string);
     function GetNose(Handle: integer): string;
+
+    //The glowing material of a model (see TModel3D.Glow): "" for none,
+    //cModel3DGlowAll for the whole model, or one material name of the loaded
+    //file. Writing it takes the light coat off, so the next frame dresses
+    //again with the new answer.
+    procedure SetGlow(Handle: integer; const AGlow: string);
+    function GetGlow(Handle: integer): string;
 
     // -- skeletal animation (mirrored on the Lua model:play/model:stop) --
     //Advance every playing clip by the frame time and pose its model. Runs on
@@ -698,6 +727,18 @@ begin
     Result := @PModelAnimArray(Animations)^[Current]
   else
     Result := nil;
+end;
+
+function TModel3D.GlowAt(m: Integer): boolean;
+begin
+  if Glow = '' then
+    Result := False
+  else if Glow = cModel3DGlowAll then
+    Result := True //the whole model shines - a thruster flame
+  else if (m >= 0) and (m <= High(MatNames)) then
+    Result := SameText(MatNames[m], Glow) //the one material the file names
+  else
+    Result := False;
 end;
 
 { TModels3D }
@@ -1115,7 +1156,11 @@ begin
   for m := 0 to Item.Model.MaterialCount - 1 do
   begin
     Item.OwnShaders[m] := Item.Model.Materials[m].Shader;
-    Item.Model.Materials[m].Shader := FLightShader;
+    //A glowing material stays in its own flat skin: no coat, no lambert -
+    //the face keeps the full-bright colour the file painted it, whatever
+    //the lamps do to everything else.
+    if not Item.GlowAt(m) then
+      Item.Model.Materials[m].Shader := FLightShader;
   end;
   Item.WearingLight := True;
 end;
@@ -1704,6 +1749,11 @@ begin
     end;
     FreeModelData(Item);
     Item.Model := NewModel;
+    //The shape carries no file, so no material names - and like Load, the
+    //fresh mesh starts in its own skin (the old dress went with the old mesh).
+    Item.MatNames := nil;
+    Item.WearingLight := False;
+    SetLength(Item.OwnShaders, 0);
 
     //Same bookkeeping as Load: the box feeds the script-side sizes and the
     //pivot, so the shape stays centred on its x/y/z however it is moved.
@@ -1741,6 +1791,149 @@ begin
   end;
 end;
 
+{ The material names of a glTF file. raylib uploads the meshes and forgets
+  the materials were ever named - its Material record carries no name - so a
+  script that asks for one by name (model.glow) gets the names back out of
+  the package's JSON head, the one plain-text part of the file. }
+
+function GltfMatNames(const AFileName: string): TMatNames;
+const
+  cGlbMagic = $46546C67;  //'glTF' as the package spells it little-endian
+  cJsonChunk = $4E4F534A; //and 'JSON' for the chunk type right behind it
+  cMaxJson = $400000;     //4 MB of JSON is already a very talkative model
+var
+  FS: TFileStream;
+  Head: array[0..19] of Byte;
+  Json: string;
+  Code: RawByteString;
+  n, i, j, Len, Depth, Slot: Integer;
+  C: Char;
+  InStr, Esc: Boolean;
+  S, Key: string;
+
+  function LE(At: Integer): Cardinal;
+  begin
+    Result := Head[At] or (Cardinal(Head[At + 1]) shl 8)
+      or (Cardinal(Head[At + 2]) shl 16) or (Cardinal(Head[At + 3]) shl 24);
+  end;
+
+begin
+  Result := nil;
+  if not SameText(ExtractFileExt(AFileName), '.glb') and
+     not SameText(ExtractFileExt(AFileName), '.gltf') then
+    Exit;
+  //The JSON head: in a .glb it rides as the file's first chunk, plain text
+  //behind the 20-byte double header - only that chunk is read, the binary
+  //belly stays on the disk. A plain .gltf is JSON from byte one.
+  FS := nil;
+  try
+    try
+      FS := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
+      if FS.Size > SizeOf(Head) then
+      begin
+        FS.ReadBuffer(Head, SizeOf(Head));
+        if (LE(0) = cGlbMagic) and (LE(16) = cJsonChunk) then
+        begin
+          n := LE(12); //the JSON chunk's own length
+          if (n > 0) and (n <= cMaxJson) and
+            (Cardinal(FS.Size) >= n + SizeOf(Head)) then
+          begin
+            SetLength(Code, n);
+            FS.ReadBuffer(Code[1], n);
+            Json := string(Code);
+          end;
+        end
+        else if (LE(0) <> cGlbMagic) and (FS.Size <= cMaxJson) then
+        begin
+          FS.Position := 0;
+          SetLength(Code, FS.Size);
+          FS.ReadBuffer(Code[1], Length(Code));
+          Json := string(Code);
+        end;
+      end;
+    except
+      Json := '';
+    end;
+  finally
+    FS.Free;
+  end;
+  Len := Length(Json);
+  i := Pos('"materials"', Json);
+  if (i = 0) or (Len = 0) then
+    Exit;
+  while (i <= Len) and (Json[i] <> '[') do
+    Inc(i);
+  if i > Len then
+    Exit;
+  //Walk the array counting the brackets under it, with quoted text read as a
+  //whole so nothing written inside a string fools the walk. Every '{' one
+  //level in opens a material and books its slot right away - a nameless
+  //material cannot slide the ones after it off their index - and a "name"
+  //property of one is copied in.
+  Depth := 0;
+  Slot := -1;
+  InStr := False;
+  Esc := False;
+  Key := '';
+  S := '';
+  while i <= Len do
+  begin
+    C := Json[i];
+    if InStr then
+    begin
+      if Esc then
+      begin
+        S := S + C;
+        Esc := False;
+      end
+      else if C = '\' then
+        S := S + C //the escape rides along - quoted quotes are rare air
+      else if C = '"' then
+      begin
+        InStr := False;
+        if Depth = 2 then
+        begin
+          //a property of the material: the text with a colon ahead of it is
+          //the property's name, the one behind a "name" is the material's
+          j := i + 1;
+          while (j <= Len) and ((Json[j] = ' ') or (Json[j] = #9) or
+            (Json[j] = #13) or (Json[j] = #10)) do
+            Inc(j);
+          if (j <= Len) and (Json[j] = ':') then
+            Key := S
+          else if (Key = 'name') and (Slot >= 0) then
+            Result[Slot] := S;
+        end;
+      end
+      else
+        S := S + C;
+    end
+    else if C = '"' then
+    begin
+      InStr := True;
+      Esc := False;
+      S := '';
+    end
+    else if (C = '[') or (C = '{') then
+    begin
+      Inc(Depth);
+      if (C = '{') and (Depth = 2) then
+      begin
+        Inc(Slot);
+        SetLength(Result, Slot + 1);
+        Result[Slot] := '';
+      end;
+    end
+    else if (C = ']') or (C = '}') then
+    begin
+      if (C = ']') and (Depth = 1) then
+        Break; //the materials array ends here
+      Dec(Depth);
+    end;
+    Inc(i);
+  end;
+end;
+
 function TModels3D.Exists(Handle: integer): boolean;
 begin
   FLock.Enter;
@@ -1758,6 +1951,7 @@ var
   Box: TBoundingBox;
   AAnims: PModelAnimation;
   ACount: Integer;
+  m: Integer;
 begin
   Result := False;
   //LoadModel needs the GL context: the caller routes this through the queue.
@@ -1778,6 +1972,28 @@ begin
     end;
     FreeModelData(Item);
     Item.Model := NewModel;
+    //raylib drops the glTF material names once the mesh is on the GPU, so
+    //the package's own JSON head is read for them - that is what model.glow
+    //matches. The loader keeps one spare skin of its own (the white default
+    //material primitives without one wear) ahead of the file's list, so the
+    //names start at the material behind it. The fresh model also starts in
+    //its own skin again: the dress and the saved shaders belonged to the
+    //model that just went away.
+    Item.MatNames := GltfMatNames(AFileName);
+    //raylib's glTF loader keeps one white default material at index 0 for
+    //primitives that name none, so the file's list lines up one behind it -
+    //and only does when that spare is there. If a build ever lines them up
+    //one-to-one, the names stay where they are.
+    if (Length(Item.MatNames) > 0) and
+      (Item.Model.MaterialCount = Length(Item.MatNames) + 1) then
+    begin
+      SetLength(Item.MatNames, Item.Model.MaterialCount);
+      for m := High(Item.MatNames) - 1 downto 0 do
+        Item.MatNames[m + 1] := Item.MatNames[m];
+      Item.MatNames[0] := '';
+    end;
+    Item.WearingLight := False;
+    SetLength(Item.OwnShaders, 0);
 
     //The bounding box feeds both the script-side size properties and the draw
     //pivot: meshes that sit off the origin still turn around themselves.
@@ -2794,6 +3010,42 @@ begin
   try
     if FItems.TryGetValue(Handle, Item) then
       Result := Item.Nose;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TModels3D.SetGlow(Handle: integer; const AGlow: string);
+var
+  Item: TModel3D;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+    begin
+      if Item.Glow = AGlow then
+        Exit;
+      Item.Glow := AGlow;
+      //The dress was put on under the old answer, so take it off: the next
+      //frame's WearLight dresses again and the newly-named material - or the
+      //one that no longer glows - gets its shader right then.
+      if Item.WearingLight then
+        WearOwn(Item);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetGlow(Handle: integer): string;
+var
+  Item: TModel3D;
+begin
+  Result := '';
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Glow;
   finally
     FLock.Leave;
   end;

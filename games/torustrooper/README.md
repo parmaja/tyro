@@ -77,7 +77,9 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
   swaps in the hand-made delta-wing `Ship.glb` the moment it lands, sized
   to the box's 20-unit nose-to-tail and aimed with `model.nose = "-y"` —
   the axis the file's nose lives on once the loader has stood the glTF
-  upright. No file, no fuss: the engine shrugs, the box flies, and the
+  upright. Its intakes wear `model.glow = "Engine"`, so the file's own
+  engine material stays full-bright cyan no matter how the ring's lamps
+  dim the hull. No file, no fuss: the engine shrugs, the box flies, and the
   game never notices the difference.
 - **The liner** — the model pass lights faces that look away from the eye
   as back faces, so the inside of a plain torus is a dim shell no matter

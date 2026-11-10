@@ -563,6 +563,7 @@ directory and the workspace, like sprites.
 | `model.alpha` | `number` | Opacity 0..255, folded into the tint's alpha like a sprite; a see-through model also casts a proportionally softer shadow (read/write). |
 | `model.name` | `string` | The model's name (read/write). |
 | `model.nose` | `string` | Which own axis `face()` and `roll` treat as the nose-tail line: `"y"` (the default — engine-built shapes and hand-made boxes fly on their +y), or `"-y"`, `"z"`, `"-z"`, `"x"`, `"-x"` when a loaded file draws with its nose elsewhere. The loader stands glTF files upright, so a jet modelled nose-up in Blender typically asks for `"-y"`; when in doubt, point the model at something and try. The fix rides along in the draw — the mesh itself is never touched (read/write). |
+| `model.glow` | `string`/`boolean` | The material that shines instead of being lit. A name from the loaded file (e.g. `"Engine"`) keeps just that material at full bright, immune to `world.lights` — glowing intakes, a lamp, a screen. `true` (or `"*"`) shines the whole model, ideal for a thruster flame; `""`/`false` (the default) leaves it to the lamps. The names come from the file's own JSON (raylib drops them), so a name the file does not carry simply never matches. It only shows while lights are on — with none, every material is already flat-lit (read/write). |
 | `model.width` | `number` | Bounding-box X size of the loaded mesh (read-only). |
 | `model.height` | `number` | Bounding-box Y size (read-only). |
 | `model.depth` | `number` | Bounding-box Z size (read-only). |
