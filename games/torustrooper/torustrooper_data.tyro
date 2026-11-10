@@ -45,6 +45,8 @@ M.TIME_ORB = 0.7        -- an energy orb buys back this much time
 M.TIME_GATE = 2.5       -- a boost gate this much
 M.TIME_WALL = -4.0      -- hitting a wall costs this much
 M.CRASH_INV = 1.5       -- seconds of mercy after a hit
+M.GRACE = 1.2           -- the count-in: seconds at the start of every ride
+                        -- during which the clock waits and walls can't bite
 
 -- Tunnel ribs: dark rings around the tube centre line. They close the grey
 -- tunnel into a readable one and turn into a pulse of speed as the ride

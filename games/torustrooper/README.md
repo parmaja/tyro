@@ -42,7 +42,9 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
 ## Gameplay
 
 - **The clock** starts at 35 seconds and always drains (a little harder
-  every lap, capped). Zero ends the run.
+  every lap, capped). Zero ends the run. Every ride opens with a short
+  **count-in**: the clock waits, the walls can't bite, and distance
+  already pays — then it is all yours.
 - **Energy cells** (lime spheres in arcs across the wall, never on the
   center line): +time, +a touch of speed, +score. Re-armed at every lap,
   so the track is the same course every time round.

@@ -153,12 +153,15 @@ local hi = D.load_high_score()
 local th, al, v = 0, 0, D.CRUISE
 local time_left, score, laps = D.START_TIME, 0, 0
 local inv, shake, clock, drone = 0, 0, 0, false
+local grace = 0
 local last_tick = 0
 
 local function reset()
   th, al, v = 0, 0, D.CRUISE
   time_left, score, laps = D.START_TIME, 0, 0
-  inv, shake, last_tick = 0, 0, 0
+  -- the count-in doubles as start-line mercy: no wall bites before GO!
+  inv, shake, last_tick = D.GRACE, 0, 0
+  grace = D.GRACE
   for _, o in ipairs(orbs) do
     o.live = true
     o.model:show()
@@ -212,7 +215,9 @@ local function update_play(dt)
   if keyboard.down("left") then steer = steer + 1 end
   if keyboard.down("right") then steer = steer - 1 end
   local gx = gamepad.axis("leftx")
-  if math.abs(gx) > 0.15 then steer = steer - gx end
+  -- squared response with a dead zone: fine control near the middle of
+  -- the tube, full tilt only at a hard push.
+  if math.abs(gx) > 0.15 then steer = steer - gx * math.abs(gx) end
   al = D.clamp(al + steer * D.STEER * dt, -D.AL_MAX, D.AL_MAX)
 
   -- Throttle: the stick's vertical axis pushes too, and the cruise line
@@ -220,7 +225,7 @@ local function update_play(dt)
   if keyboard.down("up") or gamepad.down("a") then v = v + D.THROTTLE_UP * dt end
   if keyboard.down("down") or gamepad.down("x") then v = v + D.THROTTLE_DOWN * dt end
   local gy = gamepad.axis("lefty")
-  if math.abs(gy) > 0.15 then v = v - gy * D.THROTTLE_UP * dt end
+  if math.abs(gy) > 0.15 then v = v - gy * math.abs(gy) * D.THROTTLE_UP * dt end
   v = v + (D.CRUISE - v) * D.EASE * dt
   v = D.clamp(v, D.MINV, D.vMax(laps))
 
@@ -237,8 +242,13 @@ local function update_play(dt)
     sfx(music.mml, "t160 o5 c8 e8 g8 >c4")
   end
 
-  -- The clock: always draining, harder every lap. Distance pays too.
-  time_left = time_left - D.drain(laps) * dt
+  -- The clock: always draining, harder every lap - except during the
+  -- count-in, which is free. Distance still pays from the first frame.
+  if grace > 0 then
+    grace = grace - dt
+  else
+    time_left = time_left - D.drain(laps) * dt
+  end
   local k = R - TUBE * math.cos(al)
   score = score + k * v * dt * D.SC_DIST * D.multiplier(laps)
 
@@ -431,6 +441,11 @@ function draw()
   screen.color = colors.gray
   screen.text(10, D.H - 24, hint)
 
+  if grace > 0 then
+    screen.color = colors.lime
+    center(120, "G O !")
+  end
+
   if state == "over" then
     band(150)
     screen.color = colors.red
@@ -469,6 +484,8 @@ if TESTING then
     score     = function() return score end,
     laps      = function() return laps end,
     invuln    = function() return inv end,
+    grace     = function() return grace end,
+    set_grace = function(x) grace = x end,
     paused    = function() return paused end,
     set_pos   = function(a, b) th = a al = b end,
     set_v     = function(x) v = x end,
