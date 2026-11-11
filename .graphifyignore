@@ -1,8 +1,0 @@
-# graphify ignore file — negation (!) re-includes paths that .gitignore excluded.
-# tests/ is gitignored, but its script files are real code for the knowledge
-# graph. Re-include only scripts; keep test artifacts (logs, captures, pngs) out.
-!tests/
-tests/**
-!tests/**/*.lua
-!tests/**/*.tyro
-!tests/**/*.lpr
