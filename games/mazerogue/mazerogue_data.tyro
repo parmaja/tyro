@@ -94,7 +94,42 @@ M.ENEMIES = {
     is_ranged = false,
     explode_radius = 65,
   },
+  turret = {
+    hp = 140,
+    speed = 0,
+    damage = 18,
+    radius = 15,
+    score = 250,
+    is_ranged = true,
+    immobile = true,      -- static emplacement, never moves from its pad
+    gun_immune = true,    -- gun rounds ricochet off the armor, only blasts hurt it
+    fire_rate = 2.4,
+    bullet_speed = 240,
+  },
 }
+
+-- Enemies keep "seeing" the player for this many seconds after he leaves
+-- sight range or breaks line of sight, then give up the chase.
+M.SIGHT_MEMORY_TIME = 3.0
+
+-- Sight memory bookkeeping (pure). While the player is visible the enemy
+-- stamps the player's position into e.last_x / e.last_y and refreshes the
+-- memory timer. Afterwards it decays. Returns true while the enemy should
+-- stay alert and keep hunting the last known position.
+function M.update_sight_memory(e, can_see_player, player_x, player_y, dt)
+  if can_see_player then
+    e.memory = M.SIGHT_MEMORY_TIME
+    e.last_x = player_x
+    e.last_y = player_y
+    return true
+  end
+  local mem = e.memory or 0
+  if mem > 0 then
+    e.memory = mem - dt
+    return e.memory > 0
+  end
+  return false
+end
 
 -- ---- Math & Collision Helpers ----------------------------------------
 function M.clamp(v, lo, hi)
@@ -488,11 +523,19 @@ function M.separate_enemies(enemies)
               overlap = min_dist
             end
 
-            local half = overlap * 0.5
-            e1.x = e1.x - nx * half
-            e1.y = e1.y - ny * half
-            e2.x = e2.x + nx * half
-            e2.y = e2.y + ny * half
+            -- Immobile emplacements (turrets) never get pushed; the free
+            -- enemy absorbs the whole overlap instead.
+            if not (e1.immobile and e2.immobile) then
+              local share1 = e1.immobile and 0 or 0.5
+              local share2 = e2.immobile and 0 or 0.5
+              if share1 == 0 then share2 = 1 end
+              if share2 == 0 then share1 = 1 end
+
+              e1.x = e1.x - nx * overlap * share1
+              e1.y = e1.y - ny * overlap * share1
+              e2.x = e2.x + nx * overlap * share2
+              e2.y = e2.y + ny * overlap * share2
+            end
           end
         end
       end
@@ -512,7 +555,7 @@ function M.spawn_level_entities(maze_data, floor_num)
   local start_room = maze_data.start_room
   local exit_room = maze_data.exit_room
 
-  -- Roster weighting based on floor depth
+  -- Roster weighting based on floor depth (turrets guard deeper sectors)
   local function pick_enemy_kind()
     local roll = rng(1, 100)
     if floor_num <= 1 then
@@ -520,14 +563,16 @@ function M.spawn_level_entities(maze_data, floor_num)
       elseif roll <= 85 then return "drone"
       else return "kamikaze" end
     elseif floor_num <= 3 then
-      if roll <= 40 then return "scuttler"
-      elseif roll <= 70 then return "drone"
-      elseif roll <= 88 then return "kamikaze"
+      if roll <= 38 then return "scuttler"
+      elseif roll <= 64 then return "drone"
+      elseif roll <= 82 then return "kamikaze"
+      elseif roll <= 92 then return "turret"
       else return "brute" end
     else
-      if roll <= 30 then return "scuttler"
-      elseif roll <= 55 then return "drone"
-      elseif roll <= 75 then return "kamikaze"
+      if roll <= 28 then return "scuttler"
+      elseif roll <= 50 then return "drone"
+      elseif roll <= 68 then return "kamikaze"
+      elseif roll <= 82 then return "turret"
       else return "brute" end
     end
   end
@@ -540,6 +585,16 @@ function M.spawn_level_entities(maze_data, floor_num)
         local kind = pick_enemy_kind()
         local ex = (rm.x + rng(1, rm.w - 2)) * ts + ts / 2
         local ey = (rm.y + rng(1, rm.h - 2)) * ts + ts / 2
+
+        -- Keep static cannons far enough from the exit portal so they
+        -- never sit on top of the stairs; move them to a room corner.
+        if kind == "turret" and maze_data.exit_pos then
+          if M.distance(ex, ey, maze_data.exit_pos.x, maze_data.exit_pos.y) < 3 * ts then
+            ex = (rm.x + 1) * ts + ts / 2
+            ey = (rm.y + 1) * ts + ts / 2
+          end
+        end
+
         local stats = M.ENEMIES[kind]
         table.insert(enemies, {
           kind = kind,
@@ -552,6 +607,9 @@ function M.spawn_level_entities(maze_data, floor_num)
           radius = stats.radius,
           score = stats.score,
           is_ranged = stats.is_ranged,
+          immobile = stats.immobile,
+          gun_immune = stats.gun_immune,
+          memory = 0,
           fire_timer = rng(5, 20) / 10.0,
         })
       end
@@ -569,6 +627,51 @@ function M.spawn_level_entities(maze_data, floor_num)
           radius = 12,
         })
       end
+    end
+  end
+
+  -- Guarantee at least one plasma turret emplacement from floor 2 onward
+  if floor_num >= 2 then
+    local has_turret = false
+    for _, e in ipairs(enemies) do
+      if e.kind == "turret" then
+        has_turret = true
+        break
+      end
+    end
+    if not has_turret then
+      local t_room = nil
+      for _, rm in ipairs(rooms) do
+        if rm ~= start_room then
+          t_room = rm
+          break
+        end
+      end
+      t_room = t_room or rooms[1]
+      local stats = M.ENEMIES.turret
+      local tx = (t_room.x + 2) * ts + ts / 2
+      local ty = (t_room.y + 2) * ts + ts / 2
+      if maze_data.exit_pos
+         and M.distance(tx, ty, maze_data.exit_pos.x, maze_data.exit_pos.y) < 3 * ts then
+        tx = (t_room.x + t_room.w - 2) * ts + ts / 2
+        ty = (t_room.y + t_room.h - 2) * ts + ts / 2
+      end
+      table.insert(enemies, {
+        kind = "turret",
+        x = tx,
+        y = ty,
+        hp = math.floor(stats.hp * (1.0 + (floor_num - 1) * 0.15)),
+        max_hp = math.floor(stats.hp * (1.0 + (floor_num - 1) * 0.15)),
+        speed = stats.speed,
+        damage = stats.damage,
+        radius = stats.radius,
+        score = stats.score,
+        is_ranged = stats.is_ranged,
+        immobile = stats.immobile,
+        gun_immune = stats.gun_immune,
+        memory = 0,
+        fire_timer = 1.5,
+      })
     end
   end
 

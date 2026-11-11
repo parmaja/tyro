@@ -48,6 +48,11 @@ CLR_KAMI_BODY = (210, 140, 20, 255)
 CLR_KAMI_STRIPE = (25, 25, 30, 255)
 CLR_KAMI_GLOW = (255, 40, 40, 255)
 
+CLR_TURRET_DARK = (28, 32, 40, 255)
+CLR_TURRET_BASE = (52, 58, 70, 255)
+CLR_TURRET_LIGHT = (100, 112, 130, 255)
+CLR_TURRET_STEEL = (150, 162, 180, 255)
+
 def new_img(w, h):
     im = Image.new("RGBA", (w, h), CLR_CLEAR)
     return im, ImageDraw.Draw(im)
@@ -246,11 +251,53 @@ def make_kamikaze_frame(step):
     d.point((12, 1 + bob), fill=(255, 255, 0, 255))
     return im
 
+def make_turret_frame(step):
+    """Static plasma cannon emplacement. Faces right (barrel to the +X).
+    A pulsing energy coil shows it charging. Immobile, gun-immune."""
+    im, d = new_img(32, 32)
+    charge = step / 3.0
+    # Barrel aims right (angle 0). Camera rotates the sprite toward the player.
+
+    # Shadow
+    d.ellipse((6, 25, 26, 30), fill=(10, 12, 18, 110))
+
+    # Bolted floor mount (heavy armored base)
+    d.rectangle((5, 19, 27, 27), fill=CLR_TURRET_DARK)
+    d.rectangle((6, 20, 26, 26), fill=CLR_TURRET_BASE)
+    d.rectangle((4, 24, 28, 28), fill=CLR_TURRET_LIGHT)
+    for bx in (7, 24):
+        d.point((bx, 26), fill=CLR_TURRET_STEEL)
+
+    # Rotating turret housing (a rounded armored pod)
+    d.ellipse((8, 8, 24, 22), fill=CLR_TURRET_DARK)
+    d.ellipse((9, 9, 23, 21), fill=CLR_TURRET_BASE)
+    d.ellipse((11, 11, 21, 19), fill=CLR_TURRET_LIGHT)
+
+    # Twin plasma barrels pointing right
+    d.rectangle((20, 12, 31, 14), fill=CLR_TURRET_STEEL)
+    d.rectangle((20, 16, 31, 18), fill=CLR_TURRET_STEEL)
+    d.rectangle((20, 13, 31, 14), fill=(200, 210, 225, 255))
+    d.rectangle((20, 17, 31, 18), fill=(200, 210, 225, 255))
+
+    # Charging energy core (pulses green-cyan)
+    core_r = int(2 + charge * 2)
+    cx, cy = 16, 15
+    glow = (80 + int(charge * 120), 255, 120, 255)
+    d.ellipse((cx - core_r, cy - core_r, cx + core_r, cy + core_r), fill=glow)
+    d.point((cx, cy), fill=CLR_WHITE)
+
+    # Armor "immune" hazard plate on the base
+    d.rectangle((9, 22, 23, 24), fill=(255, 190, 40, 255))
+    for hx in range(9, 23, 4):
+        d.line((hx, 24, hx + 2, 22), fill=(20, 20, 25, 255), width=1)
+    return im
+
 def build_enemies():
     save_sheet([make_scuttler_frame(i) for i in range(4)], 28, 28, "enemy_scuttler", duration=100)
     save_sheet([make_drone_frame(i) for i in range(4)], 28, 28, "enemy_drone", duration=120)
     save_sheet([make_brute_frame(i) for i in range(4)], 36, 36, "enemy_brute", duration=140)
     save_sheet([make_kamikaze_frame(i) for i in range(4)], 24, 24, "enemy_kamikaze", duration=80)
+    save_sheet([make_turret_frame(i) for i in range(4)], 32, 32, "enemy_turret", duration=140)
 
 # -----------------------------------------------------------------------------
 # 3. Weapons: Bullets, Grenade, Explosion, Muzzle Flash
@@ -281,6 +328,16 @@ def build_weapons():
     d.rectangle((8, 4, 13, 7), fill=CLR_WHITE)
     d.polygon([(13, 4), (16, 6), (13, 7)], fill=CLR_WHITE)
     save_png(im, "bullet_enemy")
+
+    # Turret heavy plasma orb (magenta/violet, nose pointing RIGHT at 0 deg, 24x14)
+    im, d = new_img(24, 14)
+    d.polygon([(1, 7), (8, 3), (8, 11)], fill=(180, 40, 255, 120))
+    d.polygon([(4, 7), (11, 4), (11, 10)], fill=(210, 90, 255, 190))
+    d.ellipse((8, 2, 20, 12), fill=(160, 30, 230, 255))
+    d.ellipse((10, 4, 18, 10), fill=(230, 140, 255, 255))
+    d.ellipse((12, 5, 17, 9), fill=CLR_WHITE)
+    d.polygon([(19, 4), (23, 7), (19, 10)], fill=(255, 220, 255, 255))
+    save_png(im, "plasma_big")
 
     # Muzzle flash (24x24)
     im, d = new_img(24, 24)

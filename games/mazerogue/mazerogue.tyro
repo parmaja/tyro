@@ -13,6 +13,9 @@
 --    * Attack Drones (ranged plasma snipers)
 --    * Kamikaze Bombers (sprinting suicide units)
 --    * Heavy Brutes (tanky armored juggernauts)
+--    * Plasma Turrets (immobile cannons - immune to gunfire, bombs only!)
+--  - Enemy sight memory: hostiles keep hunting the last seen position
+--    for ~3 seconds after the player breaks line of sight or escapes range
 --  - Dynamic interactive objects:
 --    * Explosive Barrels (chain-reaction detonations)
 --    * Supply Crates (health, shield, grenade ammo, gems)
@@ -55,8 +58,10 @@ local P = {
   drone        = make_pool("enemy_drone.png", 1.15),
   brute        = make_pool("enemy_brute.png", 1.2),
   kamikaze     = make_pool("enemy_kamikaze.png", 1.15),
+  turret       = make_pool("enemy_turret.png", 1.2),
   bullet       = make_pool("bullet.png", 1.0),
   bullet_enemy = make_pool("bullet_enemy.png", 1.0),
+  plasma_big   = make_pool("plasma_big.png", 1.3),
   grenade      = make_pool("grenade.png", 1.2),
   explosion    = make_pool("explosion.png", 1.2),
   gem          = make_pool("gem.png", 1.1),
@@ -104,6 +109,14 @@ end
 
 local function sfx_enemy_shoot()
   music.sound("Pew", 420, 80)
+end
+
+local function sfx_turret_shoot()
+  music.sound("Pew", 220, 140)
+end
+
+local function sfx_ricochet()
+  music.sound("HiHat", 1250, 45)
 end
 
 local function sfx_grenade_throw()
@@ -299,13 +312,16 @@ local function init_floor(f_num)
   for _, e in ipairs(spawned.enemies) do
     local pool = (e.kind == "scuttler" and P.scuttler) or
                  (e.kind == "drone" and P.drone) or
-                 (e.kind == "brute" and P.brute) or P.kamikaze
+                 (e.kind == "brute" and P.brute) or
+                 (e.kind == "turret" and P.turret) or P.kamikaze
     e.s = acquire(pool)
     e.s:show()
+    e.s.angle = 0
     e.s.x = e.x - cam_x
     e.s.y = e.y - cam_y
     e.vx = 0
     e.vy = 0
+    e.memory = 0
     e.flash_timer = 0
     enemies[#enemies + 1] = e
   end
@@ -410,10 +426,12 @@ local function trigger_explosion(ex, ey, max_radius, max_dmg, knockback)
           e.flash_timer = 0.15
           add_text("-" .. dmg, e.x, e.y - 15, colors.orange, 0.6)
 
-          -- Knockback impulse away from blast center
-          local angle = math.atan2(e.y - ey, e.x - ex)
-          e.vx = (e.vx or 0) + math.cos(angle) * (knockback or 250)
-          e.vy = (e.vy or 0) + math.sin(angle) * (knockback or 250)
+          -- Knockback impulse away from blast center (static turrets stay put)
+          if not e.immobile then
+            local angle = math.atan2(e.y - ey, e.x - ex)
+            e.vx = (e.vx or 0) + math.cos(angle) * (knockback or 250)
+            e.vy = (e.vy or 0) + math.sin(angle) * (knockback or 250)
+          end
 
           if e.hp <= 0 then
             e.dead = true
@@ -627,20 +645,26 @@ local function update_game(dt)
     if not hit then
       for _, e in ipairs(enemies) do
         if not e.dead and D.distance(b.x, b.y, e.x, e.y) < e.radius + 6 then
-          e.hp = e.hp - D.GUN_DAMAGE
-          e.flash_timer = 0.12
-          sfx_hit()
-          add_text("-" .. D.GUN_DAMAGE, e.x, e.y - 12, colors.yellow, 0.5)
+          if e.gun_immune then
+            -- Armor plating: gun rounds spark off the turret, only blasts hurt it
+            sfx_ricochet()
+            add_text("RICOCHET! BOMB IT!", e.x - 30, e.y - 18, colors.aqua, 0.8)
+          else
+            e.hp = e.hp - D.GUN_DAMAGE
+            e.flash_timer = 0.12
+            sfx_hit()
+            add_text("-" .. D.GUN_DAMAGE, e.x, e.y - 12, colors.yellow, 0.5)
 
-          -- Slight bullet knockback
-          e.vx = (e.vx or 0) + (b.vx / D.GUN_SPEED) * 80
-          e.vy = (e.vy or 0) + (b.vy / D.GUN_SPEED) * 80
+            -- Slight bullet knockback
+            e.vx = (e.vx or 0) + (b.vx / D.GUN_SPEED) * 80
+            e.vy = (e.vy or 0) + (b.vy / D.GUN_SPEED) * 80
 
-          if e.hp <= 0 then
-            e.dead = true
-            score = score + e.score
-            kills = kills + 1
-            release(e.s)
+            if e.hp <= 0 then
+              e.dead = true
+              score = score + e.score
+              kills = kills + 1
+              release(e.s)
+            end
           end
           hit = true
           break
@@ -728,55 +752,93 @@ local function update_game(dt)
       if e.flash_timer and e.flash_timer > 0 then e.flash_timer = e.flash_timer - dt end
 
       local dist_to_player = D.distance(e.x, e.y, player.x, player.y)
-      local max_detect_dist = (e.kind == "brute") and 380 or 340
+      local max_detect_dist = (e.kind == "brute") and 380 or
+                              (e.kind == "turret") and 430 or 340
 
       -- Check line of sight: enemy cannot see through walls so not move toward player or shoot
       local can_see_player = (dist_to_player < max_detect_dist) and
                              D.has_line_of_sight(e.x, e.y, player.x, player.y, maze.grid, COLS, ROWS, D.TILE_SIZE)
 
-      if can_see_player then
-        local ang = math.atan2(player.y - e.y, player.x - e.x)
+      -- Sight memory: enemies keep hunting the last known position for
+      -- ~3 seconds after the player escapes range or breaks line of sight.
+      local alert = D.update_sight_memory(e, can_see_player, player.x, player.y, dt)
 
-        if e.kind == "drone" then
-          -- Ranged Drone keeps distance (~150px) and strafes
-          if dist_to_player > 160 then
-            e.x = e.x + math.cos(ang) * e.speed * dt
-            e.y = e.y + math.sin(ang) * e.speed * dt
-          elseif dist_to_player < 110 then
-            e.x = e.x - math.cos(ang) * e.speed * dt
-            e.y = e.y - math.sin(ang) * e.speed * dt
+      if alert then
+        local target_x = e.last_x or player.x
+        local target_y = e.last_y or player.y
+        local chase_ang = math.atan2(target_y - e.y, target_x - e.x)
+        local chase_dist = D.distance(e.x, e.y, target_x, target_y)
+        local player_ang = math.atan2(player.y - e.y, player.x - e.x)
+
+        if e.kind == "turret" then
+          -- Static plasma cannon: swivels its barrel toward the prey and
+          -- fires heavy plasma bolts only while the player is actually visible.
+          if e.s then e.s.angle = math.deg(player_ang) end
+          if can_see_player then
+            e.fire_timer = (e.fire_timer or 2.0) - dt
+            if e.fire_timer <= 0 then
+              e.fire_timer = D.ENEMIES.turret.fire_rate
+              sfx_turret_shoot()
+              local bs = acquire(P.plasma_big)
+              local e_deg = math.deg(player_ang)
+              bs.angle = e_deg
+              enemy_bullets[#enemy_bullets + 1] = {
+                s = bs,
+                x = e.x + math.cos(player_ang) * 18,
+                y = e.y + math.sin(player_ang) * 18,
+                vx = math.cos(player_ang) * D.ENEMIES.turret.bullet_speed,
+                vy = math.sin(player_ang) * D.ENEMIES.turret.bullet_speed,
+                angle = e_deg,
+                life = 2.4,
+                damage = D.ENEMIES.turret.damage,
+              }
+            end
+          end
+        elseif e.kind == "drone" then
+          -- Ranged Drone keeps distance (~150px) from its target and strafes
+          if chase_dist > 160 then
+            e.x = e.x + math.cos(chase_ang) * e.speed * dt
+            e.y = e.y + math.sin(chase_ang) * e.speed * dt
+          elseif can_see_player and dist_to_player < 110 then
+            e.x = e.x - math.cos(player_ang) * e.speed * dt
+            e.y = e.y - math.sin(player_ang) * e.speed * dt
           end
           -- Firing timer (only fires if line of sight is clear!)
-          e.fire_timer = (e.fire_timer or 1.5) - dt
-          if e.fire_timer <= 0 then
-            e.fire_timer = D.ENEMIES.drone.fire_rate
-            sfx_enemy_shoot()
-            local bs = acquire(P.bullet_enemy)
-            local e_deg = math.deg(ang)
-            bs.angle = e_deg
-            enemy_bullets[#enemy_bullets + 1] = {
-              s = bs,
-              x = e.x,
-              y = e.y,
-              vx = math.cos(ang) * D.ENEMIES.drone.bullet_speed,
-              vy = math.sin(ang) * D.ENEMIES.drone.bullet_speed,
-              angle = e_deg,
-              life = 2.0,
-              damage = D.ENEMIES.drone.damage,
-            }
+          if can_see_player then
+            e.fire_timer = (e.fire_timer or 1.5) - dt
+            if e.fire_timer <= 0 then
+              e.fire_timer = D.ENEMIES.drone.fire_rate
+              sfx_enemy_shoot()
+              local bs = acquire(P.bullet_enemy)
+              local e_deg = math.deg(player_ang)
+              bs.angle = e_deg
+              enemy_bullets[#enemy_bullets + 1] = {
+                s = bs,
+                x = e.x,
+                y = e.y,
+                vx = math.cos(player_ang) * D.ENEMIES.drone.bullet_speed,
+                vy = math.sin(player_ang) * D.ENEMIES.drone.bullet_speed,
+                angle = e_deg,
+                life = 2.0,
+                damage = D.ENEMIES.drone.damage,
+              }
+            end
           end
         else
-          -- Direct Chase for Scuttler, Kamikaze, Brute
-          local spd = e.speed
-          if e.kind == "kamikaze" and dist_to_player < 100 then
-            spd = spd * 1.4 -- Enrage sprint
+          -- Direct Chase for Scuttler, Kamikaze, Brute toward the target spot.
+          -- While hunting from memory they stop once they reach the last seen point.
+          if can_see_player or chase_dist > 16 then
+            local spd = e.speed
+            if e.kind == "kamikaze" and dist_to_player < 100 then
+              spd = spd * 1.4 -- Enrage sprint
+            end
+            e.x = e.x + math.cos(chase_ang) * spd * dt
+            e.y = e.y + math.sin(chase_ang) * spd * dt
           end
-          e.x = e.x + math.cos(ang) * spd * dt
-          e.y = e.y + math.sin(ang) * spd * dt
         end
 
-        -- Enemy Melee / Contact with Player
-        if dist_to_player < e.radius + D.PLAYER_RADIUS then
+        -- Enemy Melee / Contact with Player (also while stalking from memory)
+        if e.kind ~= "turret" and dist_to_player < e.radius + D.PLAYER_RADIUS then
           if e.kind == "kamikaze" then
             -- Suicide blast: mark dead and release first, then trigger explosion safely
             e.dead = true
@@ -785,14 +847,14 @@ local function update_game(dt)
           else
             damage_player(e.damage)
             -- Push enemy slightly back so it doesn't instantly re-hit
-            e.x = e.x - math.cos(ang) * 18
-            e.y = e.y - math.sin(ang) * 18
+            e.x = e.x - math.cos(player_ang) * 18
+            e.y = e.y - math.sin(player_ang) * 18
           end
         end
       end
 
       -- Apply knockback decay (applies whether player is in LOS or not)
-      if e.vx and e.vy then
+      if not e.immobile and e.vx and e.vy then
         e.x = e.x + e.vx * dt
         e.y = e.y + e.vy * dt
         e.vx = e.vx * math.max(0, 1.0 - 6.0 * dt)
