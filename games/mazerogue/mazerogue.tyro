@@ -16,6 +16,9 @@
 --    * Plasma Turrets (immobile cannons - immune to gunfire, bombs only!)
 --  - Enemy sight memory: hostiles keep hunting the last seen position
 --    for ~3 seconds after the player breaks line of sight or escapes range
+--  - Sector darkness: from sector B-2 a custom flashlight fragment shader
+--    (flashlight.frag) plunges everything but the torch ring around the
+--    gunner into darkness. Radius is tunable (D.LIGHT_RADIUS, live via - / =).
 --  - Dynamic interactive objects:
 --    * Explosive Barrels (chain-reaction detonations)
 --    * Supply Crates (health, shield, grenade ammo, gems)
@@ -29,6 +32,7 @@
 --    Mouse Aim:               Aim weapons (crosshair tracks mouse cursor)
 --    Left Mouse / Space:      Fire Gun (plasma bullet + backward recoil kick)
 --    Right Mouse / G / E / F: Throw Grenade
+--    - / = :                    Shrink / Grow the torch light (dark sectors)
 --    R:                       Quick restart / New floor
 --    ESC:                     Pause / Title menu
 --
@@ -158,6 +162,10 @@ local stairs_locked_timer = 0
 local cam_x = 0
 local cam_y = 0
 
+-- Torch / flashlight circle radius on the current sector (0 = fully lit).
+-- Tunable at runtime with the - / = keys; base value lives in D.LIGHT_RADIUS.
+local light_radius = 0
+
 -- Player Gunner
 local player = {
   s = nil,
@@ -183,6 +191,22 @@ local player = {
 }
 
 local crosshair_sprite = nil
+local dark_active = false
+
+-- ---- Torch / Darkness Shader ------------------------------------------
+-- Deeper sectors plunge into darkness; only the ring around the player
+-- stays lit. Uses a custom fragment shader (flashlight.frag). On the
+-- title / start screen we keep the world fully lit so it reads clearly.
+local function set_darkness(enabled)
+  if enabled and not dark_active then
+    shader.load("flashlight.frag")
+    shader.value = D.DARK_STRENGTH
+    dark_active = true
+  elseif not enabled and dark_active then
+    shader.effect = "none"
+    dark_active = false
+  end
+end
 
 -- Maze & Level data
 local maze = nil
@@ -346,6 +370,15 @@ local function init_floor(f_num)
     pk.s.x = pk.x - cam_x
     pk.s.y = pk.y - cam_y
     pickups[#pickups + 1] = pk
+  end
+
+  -- 6. Sector darkness: deeper floors go dark around the gunner
+  light_radius = D.light_radius_for_floor(floor_num)
+  set_darkness(light_radius > 0)
+  -- On dark sectors the crosshair moves to the shader-proof screen layer
+  if crosshair_sprite then
+    crosshair_sprite.visible = (light_radius <= 0)
+    if light_radius <= 0 then crosshair_sprite:show() end
   end
 
   add_text("SECTOR B-" .. floor_num .. " INFILTRATED", player.x, player.y - 40, colors.yellow, 2.0)
@@ -610,6 +643,15 @@ local function update_game(dt)
   end
   if mouse.pressed("right") or keyboard.pressed("g") or keyboard.pressed("e") or keyboard.pressed("f") then
     throw_grenade()
+  end
+
+  -- Torch tuning: - shrinks and = widens the light circle live
+  if light_radius > 0 then
+    if keyboard.pressed("-") then
+      light_radius = D.clamp(light_radius - 20, 60, 900)
+    elseif keyboard.pressed("=") then
+      light_radius = D.clamp(light_radius + 20, 60, 900)
+    end
   end
 
   -- 5. Update Camera (Smooth Scroll Left / Right / Up / Down)
@@ -978,6 +1020,15 @@ local function update_game(dt)
 end
 
 -- ---- Render sprites to Screen Space ----------------------------------
+-- On dark sectors, objects outside the torch circle fade into the night.
+-- Explosions, bullets and the gunner itself stay lit (emissive / player).
+local function sprite_lit_alpha(x, y)
+  if not dark_active or light_radius <= 0 then return 255 end
+  local f = D.light_factor(x, y, player.x, player.y, light_radius)
+  -- keep a very faint silhouette so the dark feels alive, not empty
+  return 20 + math.floor(235 * f)
+end
+
 local function sync_sprites()
   -- Gunner
   if player.s and player.s.visible then
@@ -1002,6 +1053,7 @@ local function sync_sprites()
     stairs_entity.s.x = stairs_entity.x - cam_x
     stairs_entity.s.y = stairs_entity.y - cam_y
     stairs_entity.s.tint = player.has_key and colors.white or colors.red
+    stairs_entity.s.alpha = sprite_lit_alpha(stairs_entity.x, stairs_entity.y)
   end
 
   -- Enemies
@@ -1015,6 +1067,8 @@ local function sync_sprites()
         e.s.tint = (e.kind == "brute" and colors.white) or
                    (e.kind == "kamikaze" and colors.orange) or colors.white
       end
+      -- Alpha AFTER tint: assigning tint replaces its alpha channel too
+      e.s.alpha = sprite_lit_alpha(e.x, e.y)
     end
   end
 
@@ -1023,6 +1077,7 @@ local function sync_sprites()
     if not pr.dead and pr.s and pr.s.visible and pr.x and pr.y then
       pr.s.x = pr.x - cam_x
       pr.s.y = pr.y - cam_y
+      pr.s.alpha = sprite_lit_alpha(pr.x, pr.y)
     end
   end
 
@@ -1031,6 +1086,7 @@ local function sync_sprites()
     if pk.s and pk.s.visible then
       pk.s.x = pk.x - cam_x
       pk.s.y = pk.y - cam_y
+      pk.s.alpha = sprite_lit_alpha(pk.x, pk.y)
     end
   end
 
@@ -1075,10 +1131,23 @@ local function sync_sprites()
     crosshair_sprite.x = mouse.x
     crosshair_sprite.y = mouse.y
   end
+
+  -- Torch light follows the gunner (shader area uses y-from-bottom coords)
+  if dark_active and light_radius > 0 then
+    local sx = player.x - cam_x
+    local sy = player.y - cam_y
+    shader.area = {
+      sx - light_radius,
+      (H - sy) - light_radius,
+      light_radius * 2,
+      light_radius * 2,
+    }
+  end
 end
 
-local function draw_hud()
-  -- Flashlight / Glow around Player Gunner
+-- World-space glow around the gunner + overhead mini health bar.
+-- (These live in the light circle anyway, so they may be darkened.)
+local function draw_player_aura()
   if player.s and player.s.visible then
     world.color = colors.cyan
     world.alpha = 25
@@ -1095,99 +1164,117 @@ local function draw_hud()
     world.color = (player.hp > 30) and colors.lime or colors.red
     world.rectangle(player.s.x - 15, player.s.y - 28, cur_w, 4, true)
   end
+end
 
+-- HUD lives on the `screen` layer: above sprites, immune to the darkness
+-- shader and camera shake, so the panels stay readable in pitch black.
+local function draw_hud()
   -- Top Tactical HUD Bar
-  world.color = colors.black
-  world.alpha = 210
-  world.rectangle(0, 0, W, 46, true)
-  world.alpha = 255
-  world.color = colors.cyan
-  world.rectangle(0, 46, W, 2, true)
+  screen.color = colors.black
+  screen.alpha = 225
+  screen.rectangle(0, 0, W, 46, true)
+  screen.alpha = 255
+  screen.color = colors.cyan
+  screen.rectangle(0, 46, W, 2, true)
 
   -- Sector / Floor & Score
-  world.color = colors.yellow
-  world.text(18, 14, "SECTOR: B-" .. floor_num)
-  world.color = colors.white
-  world.text(180, 14, "SCORE: " .. score)
-  world.text(320, 14, "KILLS: " .. kills)
+  screen.color = colors.yellow
+  screen.text(18, 14, "SECTOR: B-" .. floor_num)
+  screen.color = colors.white
+  screen.text(180, 14, "SCORE: " .. score)
+  screen.text(320, 14, "KILLS: " .. kills)
 
   -- HP Bar
   local hp_w = 120
-  world.color = colors.gray
-  world.rectangle(440, 14, hp_w, 18, true)
+  screen.color = colors.gray
+  screen.rectangle(440, 14, hp_w, 18, true)
   local cur_hp_w = math.floor((player.hp / player.max_hp) * hp_w)
-  world.color = (player.hp > 30) and colors.green or colors.red
-  world.rectangle(440, 14, cur_hp_w, 18, true)
-  world.color = colors.white
-  world.text(450, 15, "HP " .. player.hp .. "/" .. player.max_hp)
+  screen.color = (player.hp > 30) and colors.green or colors.red
+  screen.rectangle(440, 14, cur_hp_w, 18, true)
+  screen.color = colors.white
+  screen.text(450, 15, "HP " .. player.hp .. "/" .. player.max_hp)
 
   -- Shield Bar
   local sh_w = 90
-  world.color = colors.gray
-  world.rectangle(580, 14, sh_w, 18, true)
+  screen.color = colors.gray
+  screen.rectangle(580, 14, sh_w, 18, true)
   local cur_sh_w = math.floor((player.shield / player.max_shield) * sh_w)
-  world.color = colors.aqua
-  world.rectangle(580, 14, cur_sh_w, 18, true)
-  world.color = colors.white
-  world.text(590, 15, "SHIELD " .. player.shield)
+  screen.color = colors.aqua
+  screen.rectangle(580, 14, cur_sh_w, 18, true)
+  screen.color = colors.white
+  screen.text(590, 15, "SHIELD " .. player.shield)
 
   -- Grenades Ammo Counter
-  world.color = colors.orange
-  world.text(685, 14, "GRENADES: " .. player.grenades .. "/" .. player.max_grenades)
+  screen.color = colors.orange
+  screen.text(685, 14, "GRENADES: " .. player.grenades .. "/" .. player.max_grenades)
 
   -- Key Status
   if player.has_key then
-    world.color = colors.gold
-    world.text(805, 14, "KEY: [ACQUIRED]")
+    screen.color = colors.gold
+    screen.text(805, 14, "KEY: [ACQUIRED]")
   else
-    world.color = colors.gray
-    world.text(805, 14, "KEY: [LOCKED]")
+    screen.color = colors.gray
+    screen.text(805, 14, "KEY: [LOCKED]")
   end
 
   -- Controls tip
-  world.color = colors.lightgray
-  world.text(W - 75, 14, "[ESC]")
+  screen.color = colors.lightgray
+  screen.text(W - 75, 14, "[ESC]")
 
   -- Bottom Tactical Controls Reminder
-  world.color = colors.black
-  world.alpha = 180
-  world.rectangle(14, H - 36, 440, 24, true)
-  world.alpha = 255
-  world.color = colors.yellow
-  world.text(20, H - 30, "WASD: Move | LMB: Fire (Recoil Kick) | RMB/G: Grenade")
+  screen.color = colors.black
+  screen.alpha = 195
+  screen.rectangle(14, H - 36, 440, 24, true)
+  screen.alpha = 255
+  screen.color = colors.yellow
+  screen.text(20, H - 30, "WASD: Move | LMB: Fire (Recoil Kick) | RMB/G: Grenade")
 
   -- Floaty damage / score texts
   for _, t in ipairs(texts) do
     local sx = t.x - cam_x
     local sy = t.y - cam_y
     if sx > -100 and sx < W + 100 and sy > -50 and sy < H + 50 then
-      world.color = t.clr
-      world.text(math.floor(sx), math.floor(sy), t.msg)
+      screen.color = t.clr
+      screen.text(math.floor(sx), math.floor(sy), t.msg)
     end
   end
 
-  -- Radar / Mini-map in bottom-right corner
-  local mw, mh = 110, 110
-  local mx, my = W - mw - 14, H - mh - 14
-  world.color = colors.black
-  world.alpha = 190
-  world.rectangle(mx, my, mw, mh, true)
-  world.alpha = 255
-  world.color = colors.cyan
-  world.rectangle(mx, my, mw, mh, false)
+  -- Shape crosshair on the screen layer while the sprite one is hidden on dark sectors
+  if light_radius > 0 then
+    local cx, cy = mouse.x, mouse.y
+    screen.color = colors.aqua
+    screen.circle(cx, cy, 8, false)
+    screen.line(cx - 8, cy, cx - 3, cy)
+    screen.line(cx + 3, cy, cx + 8, cy)
+    screen.line(cx, cy - 8, cx, cy - 3)
+    screen.line(cx, cy + 3, cx, cy + 8)
+    screen.point(cx, cy)
+  end
 
-  -- Draw player blip on radar
-  local blip_x = mx + math.floor((player.x / (COLS * D.TILE_SIZE)) * mw)
-  local blip_y = my + math.floor((player.y / (ROWS * D.TILE_SIZE)) * mh)
-  world.color = colors.lime
-  world.circle(blip_x, blip_y, 3, true)
+  -- Radar / Mini-map in bottom-right corner (deeper sectors lose the uplink!)
+  if floor_num <= D.RADAR_MAX_FLOOR then
+    local mw, mh = 110, 110
+    local mx, my = W - mw - 14, H - mh - 14
+    screen.color = colors.black
+    screen.alpha = 200
+    screen.rectangle(mx, my, mw, mh, true)
+    screen.alpha = 255
+    screen.color = colors.cyan
+    screen.rectangle(mx, my, mw, mh, false)
 
-  -- Draw stairs blip
-  if stairs_entity then
-    local st_x = mx + math.floor((stairs_entity.x / (COLS * D.TILE_SIZE)) * mw)
-    local st_y = my + math.floor((stairs_entity.y / (ROWS * D.TILE_SIZE)) * mh)
-    world.color = player.has_key and colors.yellow or colors.red
-    world.circle(st_x, st_y, 3, true)
+    -- Draw player blip on radar
+    local blip_x = mx + math.floor((player.x / (COLS * D.TILE_SIZE)) * mw)
+    local blip_y = my + math.floor((player.y / (ROWS * D.TILE_SIZE)) * mh)
+    screen.color = colors.lime
+    screen.circle(blip_x, blip_y, 3, true)
+
+    -- Draw stairs blip
+    if stairs_entity then
+      local st_x = mx + math.floor((stairs_entity.x / (COLS * D.TILE_SIZE)) * mw)
+      local st_y = my + math.floor((stairs_entity.y / (ROWS * D.TILE_SIZE)) * mh)
+      screen.color = player.has_key and colors.yellow or colors.red
+      screen.circle(st_x, st_y, 3, true)
+    end
   end
 end
 
@@ -1208,26 +1295,30 @@ local function draw_title_screen()
   screen.text(W / 2 - 200, H / 2 + 40, "Left Click / Space   : Shoot Gun (Knocks Gunner Back!)")
   screen.text(W / 2 - 200, H / 2 + 70, "Right Click / G / E  : Throw Bouncing Grenade")
 
+  screen.color = colors.orange
+  screen.text(W / 2 - 200, H / 2 + 100, "WARNING: Sectors B-2+ go DARK     - torch light only!")
+
   screen.color = colors.lime
   screen.text(W / 2 - 110, H / 2 + 130, "[ PRESS SPACE TO START ]")
 end
 
 local function draw_game_over_screen()
-  world.color = colors.black
-  world.alpha = 220
-  world.rectangle(0, 0, W, H, true)
-  world.alpha = 255
+  -- Screen layer: stays bright and readable even on dark sectors
+  screen.color = colors.black
+  screen.alpha = 235
+  screen.rectangle(0, 0, W, H, true)
+  screen.alpha = 255
 
-  world.color = colors.red
-  world.text(W / 2 - 80, H / 2 - 60, "M.I.A. - GUNNER DOWN")
+  screen.color = colors.red
+  screen.text(W / 2 - 80, H / 2 - 60, "M.I.A. - GUNNER DOWN")
 
-  world.color = colors.white
-  world.text(W / 2 - 70, H / 2 - 10, "FINAL SCORE: " .. score)
-  world.text(W / 2 - 70, H / 2 + 15, "SECTOR REACHED: B-" .. floor_num)
-  world.text(W / 2 - 70, H / 2 + 40, "ENEMIES PURGED: " .. kills)
+  screen.color = colors.white
+  screen.text(W / 2 - 70, H / 2 - 10, "FINAL SCORE: " .. score)
+  screen.text(W / 2 - 70, H / 2 + 15, "SECTOR REACHED: B-" .. floor_num)
+  screen.text(W / 2 - 70, H / 2 + 40, "ENEMIES PURGED: " .. kills)
 
-  world.color = colors.yellow
-  world.text(W / 2 - 120, H / 2 + 90, "[ PRESS SPACE / R TO RESTART ]")
+  screen.color = colors.yellow
+  screen.text(W / 2 - 120, H / 2 + 90, "[ PRESS SPACE / R TO RESTART ]")
 end
 
 -- ---- Engine-Driven Callbacks (update & draw) ------------------------
@@ -1275,6 +1366,9 @@ function update(dt)
 end
 
 function draw()
+  -- The screen buffer (HUD/overlays) persists between frames, so wipe it first
+  screen.clear('blank')
+
   world.color = colors.black
   world.clear()
 
@@ -1283,7 +1377,12 @@ function draw()
     tilemap.draw(-cam_x, -cam_y, 1.0)
   end
 
-  -- 2. Draw HUD and Overlay UI
+  -- 2. Player glow / overhead bar ride in the world layer (shake with camera)
+  if state == "play" then
+    draw_player_aura()
+  end
+
+  -- 3. Draw HUD and Overlay UI (on the shader-proof screen layer)
   if state == "play" then
     draw_hud()
   elseif state == "title" then

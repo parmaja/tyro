@@ -9,3 +9,6 @@
 * [x] New enemy: immobile Plasma Turret cannon, only destroyed by bombs (grenades/barrels), gun rounds ricochet
 * [x] Enemies remember player about 3 seconds after he is out of sight and keep chasing/attacking the last seen spot
 
+* [x] Sector darkness from B-2 using a flashlight shader (torch ring around player, tunable radius, - / = keys)
+* [x] Remove the mini-map (radar) from sector B-3 and deeper
+

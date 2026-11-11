@@ -57,6 +57,35 @@ M.GRENADE_COOLDOWN = 0.65
 M.BARREL_RADIUS    = 80
 M.BARREL_DAMAGE    = 110
 
+-- Sector darkness (torch / flashlight shader) ---------------------------
+M.DARK_START_FLOOR = 2    -- floors below this stay fully lit
+M.LIGHT_RADIUS     = 300  -- torch radius in pixels on DARK_START_FLOOR.
+                          -- INCREASE THIS for a wider light circle!
+M.LIGHT_SHRINK     = 15   -- torch shrinks this many px per deeper sector
+M.LIGHT_MIN_RADIUS = 170  -- the torch never gets smaller than this
+M.DARK_STRENGTH    = 0.93 -- 0..1 how black the darkness gets (shader.value)
+M.RADAR_MAX_FLOOR  = 2    -- radar / mini-map only shows up to this sector
+
+-- Torch light radius for a floor. 0 means the sector is fully lit.
+function M.light_radius_for_floor(floor_num)
+  if floor_num < M.DARK_START_FLOOR then return 0 end
+  local r = M.LIGHT_RADIUS - (floor_num - M.DARK_START_FLOOR) * M.LIGHT_SHRINK
+  return math.max(M.LIGHT_MIN_RADIUS, r)
+end
+
+-- How strongly a world point is lit by the torch: 1 inside the inner core,
+-- fading smoothly to 0 at the rim. Mirrors flashlight.frag's falloff so
+-- sprites and terrain dim together.
+function M.light_factor(x, y, cx, cy, radius)
+  if radius <= 0 then return 1 end
+  local inner = radius * 0.45
+  local d = M.distance(x, y, cx, cy)
+  if d <= inner then return 1 end
+  if d >= radius then return 0 end
+  local t = (radius - d) / (radius - inner)
+  return t * t * (3.0 - 2.0 * t) -- smoothstep
+end
+
 -- Enemy rosters
 M.ENEMIES = {
   scuttler = {
