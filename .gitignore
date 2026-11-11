@@ -83,3 +83,7 @@ __recovery/
 /games/minerman
 /tests
 /.kilo
+# graphify: local extraction cache and machine-specific paths
+graphify-out/cache/
+graphify-out/.graphify_python
+graphify-out/.graphify_root
