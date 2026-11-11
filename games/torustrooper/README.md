@@ -32,7 +32,7 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
 
 | Key / pad        | Action                              |
 | ---------------- | ----------------------------------- |
-| LEFT / RIGHT     | slide across the tube wall          |
+| LEFT / RIGHT     | roll the ring around the tube       |
 | UP / DOWN        | throttle up / down (A / X on pad)   |
 | left stick       | slide / throttle on the pad         |
 | SPACE / START    | start the ride, retry after game over |
@@ -47,6 +47,13 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
   every lap, capped). Zero ends the run. Every ride opens with a short
   **count-in**: the clock waits, the walls can't bite, and distance
   already pays — then it is all yours.
+- **Rolling** — LEFT/RIGHT move the ship along the inside surface, and the angle
+  wraps at the ceiling: hold a key and the ring keeps turning under you — up the
+  wall, across the top, down the far side, back to the floor. The camera rides
+  the ship's own normal, so the ship stays at the bottom of the frame while the
+  tube turns around it. The far half of the tube is the **risk lane**: maroon
+  blocks sit out past where the course otherwise climbs (`AL_CEIL`), so rolling
+  the long way around is a shortcut you pay for.
 - **Energy cells** (lime spheres in arcs across the wall, never on the
   center line): +time, +a touch of speed, +score. Re-armed at every lap,
   so the track is the same course every time round.
@@ -80,7 +87,8 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
   the axis the file's nose lives on once the loader has stood the glTF
   upright. Its intakes wear `model.glow = "Engine"`, so the file's own
   engine material stays full-bright cyan no matter how the ring's lamps
-  dim the hull. No file, no fuss: the engine shrugs, the box flies, and the
+  dim the hull, and `model.bright = 3` burns it past the colour the file was
+  painted with — the intakes read as machinery on fire, not as blue paint. No file, no fuss: the engine shrugs, the box flies, and the
   game never notices the difference.
 - **The liner** — the model pass lights faces that look away from the eye
   as back faces, so the inside of a plain torus is a dim shell no matter

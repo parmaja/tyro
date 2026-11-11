@@ -10,7 +10,7 @@
 --  free perspective camera on the engine's own generated shapes.
 --
 --  Controls:
---    LEFT / RIGHT (or stick)  slide across the tube wall
+--    LEFT / RIGHT (or stick)  roll the ring around the tube
 --    UP / DOWN                throttle up and down
 --    SPACE / START            start, and retry after game over
 --    P                        pause        M mute        ESC quit
@@ -242,6 +242,9 @@ local wire = false           -- vector mode: meshes as edges, shader makes them 
 local hi = D.load_high_score()
 
 local th, al, v = 0, 0, D.CRUISE
+-- The steering the tests hold: the keyboard and the pad add to this, so a
+-- headless ride can lean on the stick and watch the ring turn.
+local stick = 0
 local time_left, score, laps = D.START_TIME, 0, 0
 local inv, shake, clock, drone = 0, 0, 0, false
 local grace, newhi = 0, false
@@ -252,6 +255,7 @@ local last_tick = 0
 
 local function reset()
   th, al, v = 0, 0, D.CRUISE
+  stick = 0
   time_left, score, laps = D.START_TIME, 0, 0
   -- the count-in doubles as start-line mercy: no wall bites before GO!
   inv, shake, last_tick = D.GRACE, 0, 0
@@ -332,14 +336,19 @@ end
 
 local function update_play(dt)
   -- Steering across the tube, keyboard and stick alike.
-  local steer = 0
+  local steer = stick
   if keyboard.down("left") then steer = steer + 1 end
   if keyboard.down("right") then steer = steer - 1 end
   local gx = gamepad.axis("leftx")
   -- squared response with a dead zone: fine control near the middle of
   -- the tube, full tilt only at a hard push.
   if math.abs(gx) > 0.15 then steer = steer - gx * math.abs(gx) end
-  al = D.clamp(al + steer * D.STEER * dt, -D.AL_MAX, D.AL_MAX)
+  -- The ring rolls rather than the ship climbing to a stop: the angle wraps at
+  -- the ceiling, so a held key keeps travelling over the inside surface - up
+  -- the wall, across the top, down the far side and back to the floor. The
+  -- camera's up rides the ship's own normal, so the ship stays at the bottom
+  -- of the frame while the tube turns around it.
+  al = D.wrapPi(al + steer * D.STEER * dt)
   -- the ship rolls into a slide like a motorcycle, smoothed so a flick
   -- of the stick leans rather than snaps.
   local want_bank = -D.BANK * D.clamp(steer, -1, 1)
@@ -620,7 +629,7 @@ function draw()
   local k = R - TUBE * math.cos(al)
   -- panels first: the tube is a light world, and a white HUD on it needs
   -- a dark board to stand on.
-  local hint = "L/R slide   U/D throttle   P pause   M mute   W wires"
+  local hint = "L/R roll   U/D throttle   P pause   M mute   W wires"
     .. (muted and "  [muted]" or "") .. (wire and "  [wires]" or "")
   screen.color = rgba(0, 0, 0, 150)
   screen.rectangle(4, 4, 150, 136, true)
@@ -717,6 +726,7 @@ if TESTING then
     wire      = function() return wire end,
     set_wire  = function(on) wire = on apply_wire() end,
     set_pos   = function(a, b) th = a al = b end,
+    set_stick = function(x) stick = x end,
     set_v     = function(x) v = x end,
     set_time  = function(x) time_left = x end,
     set_inv   = function(x) inv = x end,

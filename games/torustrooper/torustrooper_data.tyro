@@ -10,8 +10,9 @@
 --  Positions on the tube are two angles:
 --    th - where around the loop (0..TAU), and
 --    al - where across the tube: 0 is the inner equator (the racing line,
---         closest to the hole), +al climbs the wall toward the hole side,
---         and AL_MAX is the highest the ship may climb either way.
+--         closest to the hole), +al climbs the wall toward the hole side, and
+--         the angle WRAPS at the ceiling - a rider who keeps leaning rolls all
+--         the way round and comes back to the floor from the other side.
 --  World space is the engine's: x right, y into the screen, z up.
 
 local M = {}
@@ -22,7 +23,12 @@ M.W, M.H = 960, 540
 -- The world stays inside the camera's 1000-unit reach: R + TUBE = 324.
 M.R, M.TUBE = 280, 44
 M.TAU = math.pi * 2
-M.AL_MAX = 2.3          -- rad across the tube, either way from the floor
+M.AL_MAX = 2.3          -- rad across the tube the COURSE climbs (the ship does not stop)
+-- The risk lane: the ship can now roll all the way round the tube, so the far
+-- half is not empty sky - blocks sit out past AL_MAX, and AL_CEIL is as near
+-- the ceiling as one may go. N_CEIL of them are laid out each lap.
+M.AL_CEIL = 3.02
+M.N_CEIL = 6
 
 -- Speed, in radians around the loop per second.
 M.CRUISE = 0.40         -- where the throttle always drifts back to
@@ -209,6 +215,17 @@ function M.layout(seed)
     end
   end
 
+  -- The risk lane: blocks out on the ceiling and the far side, past where the
+  -- course otherwise climbs. They never touch the floor route, but a rider who
+  -- rolls the long way - over the top to get around a block - finds the far
+  -- half of the tube is the hazard side, not an empty shortcut.
+  for i = 0, M.N_CEIL - 1 do
+    local th = ((i + 0.2 + rnd() * 0.6) * M.TAU / M.N_CEIL) % M.TAU
+    local side = rnd() < 0.5 and -1 or 1
+    local al = side * (M.AL_MAX + rnd() * (M.AL_CEIL - M.AL_MAX))
+    walls[#walls + 1] = { th = th, al = al }
+  end
+
   -- A wall right in a gate's mouth is not a fair fight: drop it.
   for i = #walls, 1, -1 do
     for _, g in ipairs(gates) do
@@ -232,17 +249,20 @@ function M.onTh(th, at, win)
   return math.abs(M.angdiff(th, at)) < win
 end
 
+-- The across-tube tests read the SHORT way round: a rider at 3.10 and a block
+-- at -3.10 sit next to each other over the ceiling, six units apart in raw
+-- numbers and 0.08 in the tube.
 function M.orbHit(th, al, orb)
-  return M.onTh(th, orb.th, M.ORB_DTH) and math.abs(al - orb.al) < M.ORB_DAL
+  return M.onTh(th, orb.th, M.ORB_DTH) and math.abs(M.angdiff(al, orb.al)) < M.ORB_DAL
 end
 
 function M.wallHit(th, al, wall)
-  return M.onTh(th, wall.th, M.WALL_DTH) and math.abs(al - wall.al) < M.WALL_DAL
+  return M.onTh(th, wall.th, M.WALL_DTH) and math.abs(M.angdiff(al, wall.al)) < M.WALL_DAL
 end
 
 -- A gate pays only when the ship flies through its middle.
 function M.gatePass(th, al, gate)
-  return M.onTh(th, gate.th, M.GATE_DTH) and math.abs(al) < M.GATE_DAL
+  return M.onTh(th, gate.th, M.GATE_DTH) and math.abs(M.angdiff(al, 0)) < M.GATE_DAL
 end
 
 -- The speed ceiling lifts a little with every lap.
