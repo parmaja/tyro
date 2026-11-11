@@ -27,8 +27,9 @@ Deploy as a heavily armored cyberpunk commando into deep, procedurally generated
   - **Plasma Turret**: Immobile emplacement from sector B-2 upward. Swivels and fires heavy plasma bolts; gun rounds ricochet off its armor - **only bombs (grenades / barrel / kamikaze blasts) destroy it**.
 - **Enemy Sight Memory**: Hostiles keep hunting the last position they saw the gunner at for ~3 seconds after he escapes range or breaks line of sight, so ducking behind a wall only buys you a moment.
 - **Sector Darkness / Torch Light**: From sector B-2 a custom fragment shader (`flashlight.frag`) drowns the maze in flickering blue night - only the torch ring around the gunner stays lit, and distant sprites fade into silhouettes (explosions and plasma bolts still glow in the dark). The HUD lives on the shader-proof `screen` layer so it stays readable.
-  - Tunable: `D.LIGHT_RADIUS` (base radius), `D.LIGHT_SHRINK` (tighter each sector), `D.LIGHT_MIN_RADIUS`, `D.DARK_STRENGTH` - or press `-` / `=` in-game to shrink/grow the torch live.
+  - Tunable in code: `D.LIGHT_RADIUS` (base radius), `D.LIGHT_SHRINK` (tighter each sector), `D.LIGHT_MIN_RADIUS`, `D.DARK_STRENGTH`.
 - **Radar Uplink Lost Deeper**: The mini-map only works up to sector B-2 (`D.RADAR_MAX_FLOOR`); from B-3 onward you must find the exit on your own.
+- **Sector Loading Splash**: Boot and stair-descend show a screen-layer "ENTERING SECTOR" banner while `world.enable = false` keeps the world dark until the new sector's assets are ready (same trick as Jet2026).
 - **Destructibles & Chain Reactions**:
   - **Explosive Barrels**: Red pressurized drums that detonate when shot or caught in blast radiuses, triggering chain reactions.
   - **Supply Crates**: Breakable containers storing health packs, grenade bandoliers, and gems.
@@ -46,7 +47,6 @@ Deploy as a heavily armored cyberpunk commando into deep, procedurally generated
 | **Aim** | Mouse Cursor (Crosshair reticle) |
 | **Shoot (Recoil Kick)** | Left Mouse Button / `SPACE` |
 | **Throw Grenade** | Right Mouse Button / `G` / `E` / `F` |
-| **Torch Smaller / Bigger** | `-` / `=` (dark sectors only) |
 | **Restart / Retry** | `R` / `SPACE` |
 | **Menu / Pause** | `ESC` |
 

@@ -18,7 +18,7 @@
 --    for ~3 seconds after the player breaks line of sight or escapes range
 --  - Sector darkness: from sector B-2 a custom flashlight fragment shader
 --    (flashlight.frag) plunges everything but the torch ring around the
---    gunner into darkness. Radius is tunable (D.LIGHT_RADIUS, live via - / =).
+--    gunner into darkness. Radius is code-tunable via D.LIGHT_RADIUS.
 --  - Dynamic interactive objects:
 --    * Explosive Barrels (chain-reaction detonations)
 --    * Supply Crates (health, shield, grenade ammo, gems)
@@ -32,7 +32,6 @@
 --    Mouse Aim:               Aim weapons (crosshair tracks mouse cursor)
 --    Left Mouse / Space:      Fire Gun (plasma bullet + backward recoil kick)
 --    Right Mouse / G / E / F: Throw Grenade
---    - / = :                    Shrink / Grow the torch light (dark sectors)
 --    R:                       Quick restart / New floor
 --    ESC:                     Pause / Title menu
 --
@@ -158,12 +157,22 @@ local score = 0
 local kills = 0
 local stairs_locked_timer = 0
 
+-- Sector transition splash (Jet2026 style): while splash_timer runs the
+-- world is switched off (world.enable = false) and only the screen glass
+-- shows the "entering sector" banner, hiding the fresh maze popping in.
+local splash_timer = 0
+
+local function start_sector_splash()
+  world.enable = false
+  splash_timer = 0.9
+end
+
 -- Camera
 local cam_x = 0
 local cam_y = 0
 
 -- Torch / flashlight circle radius on the current sector (0 = fully lit).
--- Tunable at runtime with the - / = keys; base value lives in D.LIGHT_RADIUS.
+-- Comes from the code config: D.LIGHT_RADIUS / D.LIGHT_SHRINK / D.LIGHT_MIN_RADIUS.
 local light_radius = 0
 
 -- Player Gunner
@@ -645,15 +654,6 @@ local function update_game(dt)
     throw_grenade()
   end
 
-  -- Torch tuning: - shrinks and = widens the light circle live
-  if light_radius > 0 then
-    if keyboard.pressed("-") then
-      light_radius = D.clamp(light_radius - 20, 60, 900)
-    elseif keyboard.pressed("=") then
-      light_radius = D.clamp(light_radius + 20, 60, 900)
-    end
-  end
-
   -- 5. Update Camera (Smooth Scroll Left / Right / Up / Down)
   local target_cam_x = player.x - W / 2
   local target_cam_y = player.y - H / 2
@@ -978,6 +978,7 @@ local function update_game(dt)
       score = score + 1000 * floor_num
       player.has_key = false
       init_floor(floor_num + 1)
+      start_sector_splash()
     else
       if stairs_locked_timer <= 0 then
         stairs_locked_timer = 1.0
@@ -1132,13 +1133,14 @@ local function sync_sprites()
     crosshair_sprite.y = mouse.y
   end
 
-  -- Torch light follows the gunner (shader area uses y-from-bottom coords)
+  -- Torch light follows the gunner. Pass plain screen coords (y from top);
+  -- the engine flips the area uniform to shader space itself.
   if dark_active and light_radius > 0 then
     local sx = player.x - cam_x
     local sy = player.y - cam_y
     shader.area = {
       sx - light_radius,
-      (H - sy) - light_radius,
+      sy - light_radius,
       light_radius * 2,
       light_radius * 2,
     }
@@ -1149,7 +1151,7 @@ end
 -- (These live in the light circle anyway, so they may be darkened.)
 local function draw_player_aura()
   if player.s and player.s.visible then
-    world.color = colors.cyan
+    world.color = colors.aqua
     world.alpha = 25
     world.circle(player.s.x, player.s.y, 48, true)
     world.alpha = 55
@@ -1174,7 +1176,7 @@ local function draw_hud()
   screen.alpha = 225
   screen.rectangle(0, 0, W, 46, true)
   screen.alpha = 255
-  screen.color = colors.cyan
+  screen.color = colors.aqua
   screen.rectangle(0, 46, W, 2, true)
 
   -- Sector / Floor & Score
@@ -1259,7 +1261,7 @@ local function draw_hud()
     screen.alpha = 200
     screen.rectangle(mx, my, mw, mh, true)
     screen.alpha = 255
-    screen.color = colors.cyan
+    screen.color = colors.aqua
     screen.rectangle(mx, my, mw, mh, false)
 
     -- Draw player blip on radar
@@ -1284,7 +1286,7 @@ local function draw_title_screen()
   screen.rectangle(0, 0, W, H, true)
   screen.alpha = 255
 
-  screen.color = colors.cyan
+  screen.color = colors.aqua
   screen.text(W / 2 - 120, H / 2 - 120, "M A Z E   R O G U E")
   screen.color = colors.yellow
   screen.text(W / 2 - 140, H / 2 - 70, "SCI-FI GUNNER ROGUELIKE")
@@ -1324,6 +1326,18 @@ end
 -- ---- Engine-Driven Callbacks (update & draw) ------------------------
 function update(dt)
   if dt > 0.05 then dt = 0.05 end
+
+  -- Sector splash: world stays dark, gameplay is frozen, only the screen
+  -- glass shows the banner until the timer runs out and the world wakes.
+  if splash_timer > 0 then
+    splash_timer = splash_timer - dt
+    if splash_timer <= 0 then
+      splash_timer = 0
+      world.enable = true
+    end
+    sync_sprites()
+    return
+  end
 
   -- Input handling for Title & Game Over
   if state == "title" then
@@ -1369,6 +1383,18 @@ function draw()
   -- The screen buffer (HUD/overlays) persists between frames, so wipe it first
   screen.clear('blank')
 
+  -- Sector transition splash: the world is switched off (world.enable = false),
+  -- so only the screen glass reaches the window while the new maze settles.
+  if splash_timer > 0 then
+    screen.color = colors.aqua
+    screen.text(W / 2 - 130, H / 2 - 34, "M A Z E   R O G U E")
+    screen.color = colors.yellow
+    screen.text(W / 2 - 110, H / 2 + 4, "ENTERING SECTOR B-" .. floor_num)
+    screen.color = colors.gray
+    screen.text(W / 2 - 60, H / 2 + 34, "LOADING ...")
+    return
+  end
+
   world.color = colors.black
   world.clear()
 
@@ -1392,5 +1418,16 @@ function draw()
   end
 end
 
--- Initialize first floor
+-- Boot: the first init_floor loads the tilemap and the whole sprite pool for
+-- sector B-1, and the engine keeps draining the queue while it does. With
+-- world.enable = false nothing of the world reaches the window - only the
+-- screen canvas - so this LOADING line rides a black screen until the last
+-- asset has landed, then the world wakes.
+world.enable = false
+screen.clear('black')
+screen.color = colors.aqua
+screen.text(W / 2 - 130, H / 2 - 34, "M A Z E   R O G U E")
+screen.color = colors.yellow
+screen.text(W / 2 - 100, H / 2 + 4, "LOADING SECTOR B-1 ...")
 init_floor(1)
+world.enable = true

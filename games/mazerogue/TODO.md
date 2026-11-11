@@ -9,6 +9,8 @@
 * [x] New enemy: immobile Plasma Turret cannon, only destroyed by bombs (grenades/barrels), gun rounds ricochet
 * [x] Enemies remember player about 3 seconds after he is out of sight and keep chasing/attacking the last seen spot
 
-* [x] Sector darkness from B-2 using a flashlight shader (torch ring around player, tunable radius, - / = keys)
+* [x] Sector darkness from B-2 using a flashlight shader (torch ring around player, radius configured in D.LIGHT_RADIUS)
 * [x] Remove the mini-map (radar) from sector B-3 and deeper
+* [x] Fix light not following player at maze bottom (area uniform was double-flipped, engine already flips it)
+* [x] Loading splash with world.enable = false like Jet2026 (boot + sector transition); fix colors.cyan -> colors.aqua (cyan is not a registered engine color)
 
