@@ -1,0 +1,3 @@
+# graphify project config — https://docs.graphify.com
+# Tyro's game scripts (.tyro) are a Lua dialect; parse them with the Lua AST extractor.
+language.tyro=lua
