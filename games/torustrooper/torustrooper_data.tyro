@@ -62,6 +62,13 @@ M.RIBS = 24
 M.WALL_ALPHA = 90
 M.TRACK_ALPHA = 125
 
+-- The rider's own fire: the jet's Engine material shines instead of being lit
+-- (model.glow), and this is how HARD it shines (model.bright). 1 is the colour
+-- the file was painted with - which for this jet is a middling blue, and a lamp
+-- that colour does not read as; anything above pushes the intakes up toward
+-- white-hot, which is what an engine burning behind you should look like.
+M.JET_HOT = 3
+
 -- The stars are painted, not modelled: the sky carries no bodies at all, just a
 -- few gradient discs per star on the world canvas (see paint_stars in the game),
 -- so the field can be as thick as the sky wants without costing a boot frame.

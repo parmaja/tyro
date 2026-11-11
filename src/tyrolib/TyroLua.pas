@@ -7284,6 +7284,16 @@ begin
       L.PushString(Engine.Models.GetGlow(handle));
       Result := 1;
     end
+    //model.bright is how hard that shining material burns: 1 (the default) is
+    //the colour the file was painted with, 2 pushes it twice as hot toward
+    //white, and the level snaps to 1/8 steps. It speaks for a glowing material
+    //only - a body the lamps light simply keeps its shading - and like the
+    //shine itself it only shows while world.lights is on.
+    else if field = 'bright' then
+    begin
+      L.PushNumber(Engine.Models.GetBright(handle));
+      Result := 1;
+    end
     //read-only: the loaded mesh's bounding box, so a script can scale to a
     //pixel size: m.scale = 40 / math.max(m.width, m.depth)
     else if field = 'width' then
@@ -7420,6 +7430,13 @@ begin
   else if field = 'nose' then
   begin
     Engine.Models.SetNose(handle, LowerCase(L.ToString(3)));
+  end
+  else if field = 'bright' then
+  begin
+    //how hot the shining material burns (1 = as painted); the store clamps the
+    //level and snaps it to its detent, so a pulse costs one shader, not one
+    //per frame
+    Engine.Models.SetBright(handle, L.ToNumber(3));
   end
   else if field = 'glow' then
   begin

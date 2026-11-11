@@ -517,6 +517,7 @@ function update(dt)
     ship.scale = 20 / math.max(ship.width, ship.height, ship.depth)
     ship.tint = colors.white
     ship.glow = "Engine"      -- the intakes burn full-bright, lamps or not
+    ship.bright = D.JET_HOT   -- and burn HARDER than the colour the file has
   end
   if flash > 0 then flash = flash - dt end
   if lap_msg_t > 0 then lap_msg_t = lap_msg_t - dt end

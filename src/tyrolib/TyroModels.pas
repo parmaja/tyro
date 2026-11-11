@@ -82,6 +82,13 @@ const
   //material keeps its flat skin, so the whole model reads as a lamp - what
   //a thruster flame wants. A plain text instead names one material to shine.
   cModel3DGlowAll = '*';
+  //How bright a shining material can be asked for (model.bright), and the detent
+  //its level snaps to. The detent keeps a script that RIMS the shine - a lamp
+  //pulsing, an engine spooling up - from compiling a fresh dress every frame:
+  //the level rides in the shader's source, so each distinct step costs one
+  //small program, and a pulse across the useful range costs a handful.
+  cModel3DBrightMax = 16;
+  cModel3DBrightStep = 0.125;
 
 type
   //The material names a loaded glTF file carries, one per material index in
@@ -89,6 +96,17 @@ type
   //script that wants to single one material out (model.glow) has to hear the
   //names from the file itself - Load keeps this copy for that.
   TMatNames = array of string;
+
+  //One shine dress: the level it burns a shining material at (model.bright)
+  //and the shader that does it. The level rides in the source instead of a
+  //uniform, because a material is picked by the SHADER it wears - and one
+  //model's materials all share the dress, so a per-draw value would colour the
+  //wrong faces. A script asks for one or two levels a run, so the store only
+  //ever keeps a handful of these.
+  TShineShader = record
+    Bright: Single;
+    Shader: TShader;
+  end;
 
   { TModel3D }
 
@@ -143,6 +161,12 @@ type
     //never wears the light coat (see WearLight), so it keeps raylib's own
     //flat shader and shows at full bright whatever the lights do.
     Glow: string;
+    //How hard the shining material burns (model.bright in Lua): 1 is the colour
+    //the file was painted with, and more pushes that colour up toward white -
+    //the difference between a coloured panel and a lamp you can look at. It
+    //only speaks for a material that shines (see Glow), and like the shine it
+    //only shows while the lights are on.
+    Bright: Single;
     MatNames: TMatNames;
     //Skeletal animation: raylib's clips of the loaded file (nil/0 when the
     //mesh has no skeleton or no animation), plus the playback state. Current
@@ -239,6 +263,8 @@ type
     FLightLocSun: Integer;
     FLightLocPL: array[0..3] of Integer;
     FLightLocPLC: array[0..3] of Integer;
+    //The shine dresses built so far, one per level asked for (see ShineShader).
+    FShine: array of TShineShader;
     //The bulbs, index 0..3: a world-space place, a range where the light has
     //faded out (Range <= 0 means the bulb is dark), and its color as 0..1
     //parts with the intensity already folded into them.
@@ -288,6 +314,13 @@ type
     //world in its flat dress rather than spoiling the picture.
     procedure EnsureLightShader;
     procedure FreeLightShader;
+    //The shine dress for one level (see TModel3D.Bright): compiled the first
+    //frame that asks for that level - the GL context is alive by then, and a
+    //compile does not belong in the draw - and kept for the rest of the run.
+    //A GPU that will not compile it leaves the material in its own skin, which
+    //is the ordinary full-bright shine with no boost: less hot, never wrong.
+    function ShineShader(ABright: Single): TShader;
+    procedure FreeShineShaders;
     //The dress swap for one body: on, the materials copy their plain shaders
     //aside and wear the light one; off, the originals come back. Both are a
     //no-op when the model already dresses as asked.
@@ -438,6 +471,13 @@ type
     //again with the new answer.
     procedure SetGlow(Handle: integer; const AGlow: string);
     function GetGlow(Handle: integer): string;
+
+    //How hard a model's shining material burns (model.bright in Lua): 1 is the
+    //colour as painted, more pushes it toward white. Clamped to cModel3DBrightMax
+    //and snapped to cModel3DBrightStep; like SetGlow, it takes the light coat off
+    //so the next frame dresses with the level asked for.
+    procedure SetBright(Handle: integer; ABright: Single);
+    function GetBright(Handle: integer): Single;
 
     // -- skeletal animation (mirrored on the Lua model:play/model:stop) --
     //Advance every playing clip by the frame time and pose its model. Runs on
@@ -684,6 +724,7 @@ begin
   AxisFix := cModel3DIdentity;
   HasAxisFix := False;
   Nose := 'y';
+  Bright := 1;
   Animations := nil;
   AnimCount := 0;
   Current := -1;
@@ -1142,6 +1183,88 @@ begin
   FLightTried := False;
 end;
 
+// The shine dress: what a material that answers to no lamp wears when the script
+// asks for more than its painted colour. This is raylib's own flat look - the
+// file's colour times the model's tint, with the tint's alpha riding along -
+// except the colour is pushed up by the level asked for, so a hot intake or a
+// lamp burns PAST the colour the file was painted with instead of stopping at
+// it. The level is written into the source where HOT sits: a material is chosen
+// by the shader it wears, not by a value set per draw, and one model's materials
+// all share the dress.
+function ShineSource(ABright: Single): UTF8String;
+const
+  cShineFs = '''
+#version 330
+
+in vec2 fragTexCoord;
+in vec4 fragColor;
+
+uniform sampler2D texture0;
+uniform vec4 colDiffuse;
+
+out vec4 finalColor;
+
+void main()
+{
+    vec4 albedo = texture(texture0, fragTexCoord) * colDiffuse * fragColor;
+    finalColor = vec4(min(albedo.rgb * %HOT%, vec3(1.0)), albedo.a);
+}
+''';
+var
+  S: string;
+  Whole, Part: Integer;
+begin
+  // The level in GLSL's own spelling: always a dot, whatever the run's locale
+  // decides a number looks like.
+  Whole := Trunc(ABright);
+  Part := Round((ABright - Whole) * 1000);
+  if Part >= 1000 then      // the rounding carried: the next whole level up
+  begin
+    Inc(Whole);
+    Part := 0;
+  end;
+  S := IntToStr(Part);
+  while Length(S) < 3 do
+    S := '0' + S;
+  Result := StringReplace(cShineFs, '%HOT%', IntToStr(Whole) + '.' + S, [rfReplaceAll]);
+end;
+
+// The dress for one level, built the first time the run asks for it and kept
+// afterwards - including the time it failed, so a GPU that will not compile it
+// is asked once and the material simply keeps its own flat skin.
+function TModels3D.ShineShader(ABright: Single): TShader;
+var
+  i, N: Integer;
+begin
+  for i := 0 to High(FShine) do
+    if Abs(FShine[i].Bright - ABright) < 0.001 then
+      Exit(FShine[i].Shader);
+  Result := RayLib.LoadShaderFromMemory(PUTF8Char(cLightVs),
+    PUTF8Char(ShineSource(ABright)));
+  if not RayLib.IsShaderValid(Result) then
+  begin
+    if Result.ID <> 0 then
+      RayLib.UnloadShader(Result);
+    Result := Default(TShader);
+  end;
+  N := Length(FShine);
+  SetLength(FShine, N + 1);
+  FShine[N].Bright := ABright;
+  FShine[N].Shader := Result;
+end;
+
+// The dresses belong to the GL context, so a rerun hands them all back and the
+// next run compiles whatever it asks for again.
+procedure TModels3D.FreeShineShaders;
+var
+  i: Integer;
+begin
+  for i := 0 to High(FShine) do
+    if FShine[i].Shader.ID <> 0 then
+      RayLib.UnloadShader(FShine[i].Shader);
+  SetLength(FShine, 0);
+end;
+
 // On: the model's materials copy their own shaders aside once and put on the
 // light one. The records are plain data (program id + location table), and
 // every later DrawModel of this model dresses the same - so the swap sticks
@@ -1149,6 +1272,7 @@ end;
 procedure TModels3D.WearLight(Item: TModel3D);
 var
   m: Integer;
+  Hot: TShader;
 begin
   if Item.WearingLight then
     Exit;
@@ -1158,9 +1282,17 @@ begin
     Item.OwnShaders[m] := Item.Model.Materials[m].Shader;
     //A glowing material stays in its own flat skin: no coat, no lambert -
     //the face keeps the full-bright colour the file painted it, whatever
-    //the lamps do to everything else.
+    //the lamps do to everything else. Asked to burn harder (model.bright) it
+    //wears the shine dress instead, which is that same flat look with the
+    //colour pushed up; a dress this GPU refused leaves the skin on.
     if not Item.GlowAt(m) then
-      Item.Model.Materials[m].Shader := FLightShader;
+      Item.Model.Materials[m].Shader := FLightShader
+    else if Item.Bright <> 1 then
+    begin
+      Hot := ShineShader(Item.Bright);
+      if Hot.ID <> 0 then
+        Item.Model.Materials[m].Shader := Hot;
+    end;
   end;
   Item.WearingLight := True;
 end;
@@ -1300,6 +1432,9 @@ begin
     FLightTried := False;
     FillChar(FPointLights, SizeOf(FPointLights), 0);
     FreeLightShader;
+    //...and so do the shine dresses: they belong to the closed context too,
+    //and the next run compiles whatever level it asks for.
+    FreeShineShaders;
     //...and the world is painted solid again: the rerun earns its own
     //world.wire call, just like it earns its own sky and eye.
     //...and the shadow ink goes with it: it belongs to this run's GL context
@@ -3046,6 +3181,48 @@ begin
   try
     if FItems.TryGetValue(Handle, Item) then
       Result := Item.Glow;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+// How hard the shining material burns. The level snaps to the detent (see
+// cModel3DBrightStep) so a script that pulses the shine cannot ask for a new
+// shader every frame, and the dress the old level wore comes off here: the next
+// frame's WearLight puts the right one on.
+procedure TModels3D.SetBright(Handle: integer; ABright: Single);
+var
+  Item: TModel3D;
+begin
+  if ABright < 0 then
+    ABright := 0
+  else if ABright > cModel3DBrightMax then
+    ABright := cModel3DBrightMax;
+  ABright := Round(ABright / cModel3DBrightStep) * cModel3DBrightStep;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+    begin
+      if Abs(Item.Bright - ABright) < 0.001 then
+        Exit;
+      Item.Bright := ABright;
+      if Item.WearingLight then
+        WearOwn(Item);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetBright(Handle: integer): Single;
+var
+  Item: TModel3D;
+begin
+  Result := 1;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Bright;
   finally
     FLock.Leave;
   end;
