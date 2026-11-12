@@ -7250,6 +7250,15 @@ begin
       L.PushBoolean(Engine.Models.GetVisible(handle));
       Result := 1;
     end
+    //model.layer picks the side of the 2D world: 0 (the default) flies over
+    //the sprites as ever, a negative layer sinks the whole body - and its
+    //shade - under the 2D world. See also cLayerTop3D for the other direction
+    //(a sprite.layer at or above it rides over every model).
+    else if field = 'layer' then
+    begin
+      L.PushInteger(Engine.Models.GetLayer(handle));
+      Result := 1;
+    end
     else if field = 'tint' then
     begin
       L.PushInteger(ColorToInt(Engine.Models.GetTint(handle)));
@@ -7359,8 +7368,8 @@ begin
 end;
 
 // model.__newindex: write properties x, y, z, angle, tilt, roll, shadow,
-// scale, visible, tint, alpha, name, anim, animPlaying, animTime, animSpeed;
-// unknown keys raw-stored in the model table.
+// scale, visible, tint, alpha, name, layer, anim, animPlaying, animTime,
+// animSpeed; unknown keys raw-stored in the model table.
 function TLuaModel.Setter(L: Plua_State): integer;
 var
   handle: integer;
@@ -7426,6 +7435,12 @@ begin
   else if field = 'name' then
   begin
     Engine.Models.SetName(handle, L.ToString(3));
+  end
+  else if field = 'layer' then
+  begin
+    //0 (the default) rides over the 2D world, a negative layer sinks the whole
+    //body under it (see the getter note)
+    Engine.Models.SetLayer(handle, L.ToInteger(3));
   end
   else if field = 'nose' then
   begin

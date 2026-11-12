@@ -212,13 +212,23 @@ type
     constructor Create(AHandle: Integer = 0; const AName: string = ''); virtual;
   end;
 
+const
+  //Where the sprite layers cross the 3D pass: a sprite below this layer draws
+  //with the 2D world (under every model, as always), and one at or above it is
+  //drawn a second time after the models - the sprite way to ride over a jet.
+  //The models answer with their own Layer: negative sinks the whole body under
+  //the 2D world, 0 (the default) keeps it on top, exactly the old order.
+  cLayerTop3D = 1000;
+
+type
   { TTyroAnimatedObject }
 
   { A TTyroObject the engine draws and can bring to life: the screen-pixel
     transform every 2D/3D pass reads, the tint (alpha included, so it fades),
-    and the play flag the store's per-frame animation step advances. The
-    animation data itself (frame list, skeletal clips) stays with the kind
-    that owns it. }
+    the layer that orders it against every other drawable (see cLayerTop3D for
+    where the 3D pass cuts the line), and the play flag the store's per-frame
+    animation step advances. The animation data itself (frame list, skeletal
+    clips) stays with the kind that owns it. }
   TTyroAnimatedObject = class(TTyroObject)
   public
     X: Single;              // screen pixel position
@@ -226,6 +236,7 @@ type
     Angle: Single;          // rotation degrees, clockwise on screen
     Scale: Single;
     Tint: TColor;           // multiplied colour, alpha included: tint and fade
+    Layer: Integer;         // draw order: lower layers are drawn first (behind), 0 = default
     Playing: Boolean;       // true while the animation advances each frame
     constructor Create(AHandle: Integer = 0; const AName: string = ''); override;
   end;
@@ -563,6 +574,7 @@ begin
   Angle := 0;
   Scale := 1.0;
   Tint := clWhite;
+  Layer := 0;
   Playing := False;
 end;
 

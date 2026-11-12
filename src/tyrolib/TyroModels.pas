@@ -14,7 +14,12 @@ unit TyroModels;
  *  is the recommended one-file format: meshes, materials and textures in one
  *  package), then moves it by writing x/y like any sprite. The engine draws
  *  every visible model once per frame in its own 3D pass, so no per-frame
- *  draw call is needed from the script.
+ *  draw call is needed from the script. A model's Layer picks the side of the
+ *  2D world it rides: 0 (the default) draws after the sprites, over them as
+ *  ever, and a negative layer takes a first 3D pass before the 2D world so
+ *  the whole scene covers the body (and its shade). Sprites answer from their
+ *  side: one whose layer reaches cLayerTop3D is drawn after the models, over
+ *  them.
  *
  *  The 3D pass uses a top-down ORTHOGRAPHIC camera mapped pixel for pixel onto
  *  the window, so model x/y are screen pixels: x grows to the right, y grows
@@ -288,6 +293,9 @@ type
     FBlurReady: Boolean;
     function GetCount: integer;
     function GetItems(Index: Integer): TModel3D;
+    //Shared walk of HasUnder/HasTop: true when a visible, loaded model sits on
+    //the asked side of the 2D world (Layer < 0 or not).
+    function HasSide(AUnder: boolean): boolean;
     //Frees the GPU model a slot owns and resets it to unloaded.
     procedure FreeModelData(AItem: TModel3D);
     //Cut one model to a clip (AIndex < 0 = stop) and lift its play flag; the
@@ -333,12 +341,14 @@ type
     //the matrix it opened here.
     procedure PushShadowPose(AItem: TModel3D; const AProjection: TMatrix;
       AX, AY: Single; AWidth, AHeight: Integer);
-    //Wipes the sheet and inks it with the silhouette of every body whose own
-    //alpha is ATintAlpha (255 = the ordinary, solid bodies, inked all together;
-    //a see-through body is inked on its own so its thinness stays its own).
+    //Wipes the sheet and inks it with the silhouette of every body on this
+    //pass (AUnder: layer < 0 or not) whose own alpha is ATintAlpha
+    //(255 = the ordinary, solid bodies, inked all together; a see-through body
+    //is inked on its own so its thinness stays its own).
     //True when it inked anything, which is when the sheet is worth laying.
     function InkShadowSheet(const ACam: TCamera3D; const AProjection: TMatrix;
-      AX, AY: Single; AWidth, AHeight: Integer; ATintAlpha: Byte): Boolean;
+      AX, AY: Single; AWidth, AHeight: Integer; ATintAlpha: Byte;
+      AUnder: Boolean): Boolean;
     //Lays the inked sheet over the world: one coat of ink, under every model.
     procedure LayShadowSheet(AAlpha: Integer);
     //True when the blur shader and its second sheet stand ready at the
@@ -430,6 +440,11 @@ type
     function GetRoll(Handle: integer): single;
     procedure SetShadow(Handle: integer; AShadow: boolean);
     function GetShadow(Handle: integer): boolean;
+    //Which side of the 2D world the model rides (see DrawAll's AUnder and
+    //TTyroAnimatedObject.Layer): 0 (the default) flies over the 2D scene as
+    //ever, a negative layer sinks the whole body - and its shade - under it.
+    procedure SetLayer(Handle: integer; ALayer: integer);
+    function GetLayer(Handle: integer): integer;
     procedure SetScale(Handle: integer; AScale: single);
     function GetScale(Handle: integer): single;
     procedure SetTint(Handle: integer; ATint: TColor);
@@ -495,14 +510,20 @@ type
     procedure SetAnimSpeed(Handle: integer; AValue: single);
     function GetAnimSpeed(Handle: integer): single;
 
-    // True when at least one visible model holds a mesh, so the caller can skip
-    // the whole BeginMode3D/EndMode3D pass on a models-free frame.
-    function HasVisible: boolean;
+    // True when at least one visible, loaded model rides this side of the 2D
+    // world (see Layer/DrawAll): HasTop the layer >= 0 bodies over it,
+    // HasUnder the layer < 0 bodies below it. Lets the caller skip the whole
+    // BeginMode3D/EndMode3D pass on an empty side.
+    function HasUnder: boolean;
+    function HasTop: boolean;
 
-    // Draw every visible model under the top-down pixel camera. AX/AY shift the
-    // whole pass so the models ride with the 2D camera (window margin, shake);
-    // AWidth/AHeight are the screen size in pixels.
-    procedure DrawAll(AX, AY: single; AWidth, AHeight: Integer);
+    // Draw every visible model under the top-down pixel camera. AX/AY shift
+    // the whole pass so the models ride with the 2D camera (window margin,
+    // shake); AWidth/AHeight are the screen size in pixels. AUnder picks the
+    // side of the 2D world this pass draws (see Layer): True only the
+    // layer < 0 bodies, drawn before the 2D world so it covers them; False
+    // (the default) the rest, riding over it as ever.
+    procedure DrawAll(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean = False);
 
     property Count: integer read GetCount;
     property Items[Index: Integer]: TModel3D read GetItems; default;
@@ -944,7 +965,7 @@ end;
 //colour, and only the stroke that lays it brings the alpha.
 function TModels3D.InkShadowSheet(const ACam: TCamera3D;
   const AProjection: TMatrix; AX, AY: Single; AWidth, AHeight: Integer;
-  ATintAlpha: Byte): Boolean;
+  ATintAlpha: Byte; AUnder: Boolean): Boolean;
 var
   Item: TModel3D;
   Ink: TColor;
@@ -978,6 +999,10 @@ begin
         for Item in FItems.Values do
         begin
           if (not Item.Visible) or (not Item.Loaded) or (not Item.Shadow) then
+            Continue;
+          //Only this pass's side of the 2D world casts a shade in it: an under
+          //body is inked in the under pass, an over body in the over pass.
+          if ((Item.Layer < 0) <> AUnder) then
             Continue;
           if Item.Tint.RGBA.Alpha <> ATintAlpha then
             Continue;
@@ -2449,6 +2474,33 @@ begin
   end;
 end;
 
+procedure TModels3D.SetLayer(Handle: integer; ALayer: integer);
+var
+  Item: TModel3D;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Item.Layer := ALayer;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.GetLayer(Handle: integer): integer;
+var
+  Item: TModel3D;
+begin
+  Result := 0;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+      Result := Item.Layer;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 procedure TModels3D.SetScale(Handle: integer; AScale: single);
 var
   Item: TModel3D;
@@ -3211,7 +3263,7 @@ begin
   end;
 end;
 
-function TModels3D.HasVisible: boolean;
+function TModels3D.HasSide(AUnder: boolean): boolean;
 var
   Item: TModel3D;
 begin
@@ -3219,14 +3271,24 @@ begin
   FLock.Enter;
   try
     for Item in FItems.Values do
-      if Item.Visible and Item.Loaded then
+      if Item.Visible and Item.Loaded and ((Item.Layer < 0) = AUnder) then
         Exit(True);
   finally
     FLock.Leave;
   end;
 end;
 
-procedure TModels3D.DrawAll(AX, AY: single; AWidth, AHeight: Integer);
+function TModels3D.HasUnder: boolean;
+begin
+  Result := HasSide(True);
+end;
+
+function TModels3D.HasTop: boolean;
+begin
+  Result := HasSide(False);
+end;
+
+procedure TModels3D.DrawAll(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean);
 const
   //Distance of the eye above the pixel plane. The ortho frustum clips at
   //0.01..1000, so this leaves the models room for a +/-399 depth range.
@@ -3266,7 +3328,7 @@ begin
   FLock.Enter;
   try
     for Item in FItems.Values do
-      if Item.Visible and Item.Loaded then
+      if Item.Visible and Item.Loaded and ((Item.Layer < 0) = AUnder) then
       begin
         AnyVisible := True;
         Break;
@@ -3356,7 +3418,7 @@ begin
     begin
       //The solid bodies share one sheet: their shade is the same shade, so one
       //stroke of it covers all of them.
-      if InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight, 255) then
+      if InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight, 255, AUnder) then
       begin
         if (FSoftness > 0) and BlurPassReady then
           BlurShadowSheet;
@@ -3369,12 +3431,14 @@ begin
       begin
         if (not Item.Visible) or (not Item.Loaded) or (not Item.Shadow) then
           Continue;
+        if ((Item.Layer < 0) <> AUnder) then
+          Continue;
         if Item.Tint.RGBA.Alpha >= 255 then
           Continue;
         ItemAlpha := Round(Alpha * Item.Tint.RGBA.Alpha / 255);
         if (ItemAlpha > 0)
           and InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight,
-            Item.Tint.RGBA.Alpha) then
+            Item.Tint.RGBA.Alpha, AUnder) then
         begin
           if (FSoftness > 0) and BlurPassReady then
             BlurShadowSheet;
@@ -3460,6 +3524,10 @@ begin
       for Item in FItems.Values do
       begin
         if (not Item.Visible) or (not Item.Loaded) then
+          Continue;
+        //This pass draws its own side of the 2D world only: the under bodies
+        //came through here before the 2D world, the over bodies after it.
+        if ((Item.Layer < 0) <> AUnder) then
           Continue;
         //Screen-pixel anchor under the ortho eye: x runs right, y runs down
         //(so it becomes -z), and the model's Z depth rides along the world y

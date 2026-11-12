@@ -712,7 +712,34 @@ begin
             if World.UpdateShake(RayLib.GetFrameTime()) then
               Camera2D.Offset := Vector2Of(World.ShakeX, World.ShakeY);
 
+            //3D models whose layer is negative sink UNDER the 2D world: their
+            //pass runs before the board and the sprites, so everything on the
+            //canvas covers them (their shade too). The default layer 0 never
+            //comes here, so a world that does not opt in draws as ever.
+            if (Models <> nil) and Models.HasUnder then
+              Models.DrawAll(Camera2D.Offset.X, Camera2D.Offset.Y,
+                RayLib.GetScreenWidth, RayLib.GetScreenHeight, True);
+
             BeginMode2D(Camera2D);
+
+            if Parallaxes <> nil then
+              Parallaxes.Draw(Screen.Width, Screen.Height);
+
+            //Canvas layer: normally at the bottom (its opaque background must not cover
+            //the sprites); when BoardOnTop is set the script uses the canvas as a HUD and
+            //it is composited after the sprites instead.
+            Board.PostDraw;
+            try
+              Sprites.DrawAll;
+            except
+              on E: Exception do
+              begin
+                if IsConsole then
+                  WriteLn('EX-DRAW: ' + E.ClassName + ': ' + E.Message);
+                raise;
+              end;
+            end;
+            Sprites.DrawScripts;
             Draw;
             EndMode2D;
 
@@ -720,22 +747,37 @@ begin
             //before the 3D models, so a model covers the exhaust flame riding at
             //its own tail. They take the same margin/shake offset as everything
             //else on this frame.
-            if (Particles <> nil) and Particles.HasAny(True) then
+            if (Particles <> nil) and Particles.HasUnder then
               Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, True);
 
             //The 3D models ride above the 2D scene but below the controls, so the
             //pass sits between EndMode2D and the control tree. Camera2D.Offset is
             //the same margin/shake offset the board and sprites got, so everything
             //shakes together; the camera inside DrawAll maps it onto the models.
-            if (Models <> nil) and Models.HasVisible then
+            if (Models <> nil) and Models.HasTop then
               Models.DrawAll(Camera2D.Offset.X, Camera2D.Offset.Y,
-                RayLib.GetScreenWidth, RayLib.GetScreenHeight);
+                RayLib.GetScreenWidth, RayLib.GetScreenHeight, False);
+
+            //The top sprite band (layer >= cLayerTop3D) rides over the 3D pass:
+            //the same 2D camera hands the sprites their margin/shake offset
+            //again, so only the sprites the game lifted above the models come
+            //back through here. The sparks stay painted after it, so an
+            //explosion still reads over everything that made it.
+            if (Sprites <> nil) and Sprites.HasTop then
+            begin
+              BeginMode2D(Camera2D);
+              try
+                Sprites.DrawAll(False);
+              finally
+                EndMode2D;
+              end;
+            end;
 
             //The rest of the sparks ride on top of the 3D models, so an explosion
             //always reads over the jets and sprites that made it; they take the
             //same margin/shake offset the models got and shake together with them.
-            if (Particles <> nil) and Particles.HasAny then
-              Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y);
+            if (Particles <> nil) and Particles.HasTop then
+              Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, False);
 
             if Window <> nil then
               Window.Paint;
@@ -1571,36 +1613,7 @@ begin
 end;
 
 procedure TTyroEngine.Draw;
-var
-  W, H: Integer;
 begin
-  if Board = nil then
-    Exit;
-
-  //The parallax backgrounds are the farthest layer, so they go down first and
-  //fill the whole drawable area (the same area Board covers).
-  W := Board.Width;
-  H := Board.Height;
-
-  if Parallaxes <> nil then
-    Parallaxes.Draw(W, H);
-
-  //Canvas layer: normally at the bottom (its opaque background must not cover
-  //the sprites); when BoardOnTop is set the script uses the canvas as a HUD and
-  //it is composited after the sprites instead.
-  Board.PostDraw;
-
-  try
-    Sprites.DrawAll;
-  except
-    on E: Exception do
-    begin
-      if IsConsole then
-        WriteLn('EX-DRAW: ' + E.ClassName + ': ' + E.Message);
-      raise;
-    end;
-  end;
-  Sprites.DrawScripts;
 end;
 
 function TTyroEngine.TimeScale: Single;

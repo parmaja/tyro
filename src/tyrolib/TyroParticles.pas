@@ -78,7 +78,7 @@ type
   { The store. One dense array, swap-remove when a spark dies. Like TModels3D
     it hands the script thread a lock, and the draw thread reads the live
     sparks under the same lock. }
-  TParticles = class
+  TParticles = class(TObject)
   private
     const
       cParticleMax = 2048; //hard cap; a full sky drops new bursts
@@ -93,6 +93,9 @@ type
     FRand: Cardinal;
     function NextRand: single;
     function GetCount: integer;
+    //Shared walk of HasUnder/HasTop: true when a live spark sits on the
+    //asked side of the 3D pass (the emit's under flag).
+    function HasSide(AUnder: Boolean): boolean;
   public
     constructor Create;
     destructor Destroy; override;
@@ -112,9 +115,10 @@ type
     // under-sparks go before the 3D model pass, the rest after it. AX/AY are
     // the Camera2D offset so the sparks shake with the world like the models.
     procedure Draw(AX, AY: single; AUnder: Boolean = False);
-    // True when at least one spark of a layer is alive, so the caller can
-    // skip the pass.
-    function HasAny(AUnder: Boolean = False): boolean;
+    // True when at least one alive spark rides this side of the 3D pass
+    // (the emit's under flag, see Draw), so the caller can skip an empty layer.
+    function HasUnder: boolean; // some spark burns below the models
+    function HasTop: boolean;   // some spark burns over them
     property Count: integer read GetCount;
   end;
 
@@ -304,7 +308,7 @@ begin
   end;
 end;
 
-function TParticles.HasAny(AUnder: Boolean): boolean;
+function TParticles.HasSide(AUnder: Boolean): boolean;
 var
   I: Integer;
 begin
@@ -317,6 +321,16 @@ begin
   finally
     FLock.Leave;
   end;
+end;
+
+function TParticles.HasUnder: boolean;
+begin
+  Result := HasSide(True);
+end;
+
+function TParticles.HasTop: boolean;
+begin
+  Result := HasSide(False);
 end;
 
 end.

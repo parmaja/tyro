@@ -53,7 +53,6 @@ type
     Texture: TTexture2D;
     FlipH: boolean;    //mirror the texture horizontally (right-facing art from a left-facing sheet)
     FlipV: boolean;    //mirror the texture vertically
-    Layer: Integer;    //draw order: lower layers are drawn first (behind), 0 = default
     Collides: boolean;
     Kind: TSpriteKind;
     Mass: single;
@@ -228,8 +227,15 @@ type
     // Update all scripted sprites (called on the main thread after physics step)
     procedure UpdateScripts;
 
-    // Draw all valid sprites (called in the engine's draw loop)
-    procedure DrawAll;
+    // True when a sprite sits on the top band (layer >= cLayerTop3D), so the
+    // caller can skip the second draw pass on a world that never opts in.
+    function HasTop: boolean;
+    // Draw all valid sprites (called in the engine's draw loop). ABelow3D
+    // picks the side of the 3D pass (see cLayerTop3D): True (the default)
+    // draws the sprites that ride under the models - the whole 2D world as
+    // ever - and False draws only the top band, the sprites that opt to sit
+    // over them.
+    procedure DrawAll(ABelow3D: boolean = True);
     // Dispatch on_draw() for visible scripted sprites (called after the
     // legacy Graphic layer is blitted, so script overlays stay on top)
     procedure DrawScripts;
@@ -324,7 +330,6 @@ begin
   Texture := ATexture;
   FlipH := False;
   FlipV := False;
-  Layer := 0;
   Collides := False;
   Kind := skDynamic;
   Mass := 1.0;
@@ -1749,7 +1754,23 @@ begin
     Result := A.Handle < B.Handle;
 end;
 
-procedure TSprites.DrawAll;
+function TSprites.HasTop: boolean;
+var
+  Sprite: TSprite;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    for Sprite in FItems.Values do
+      if Sprite.Visible and (Sprite.Texture.id > 0)
+        and (Sprite.Layer >= cLayerTop3D) then
+        Exit(True);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.DrawAll(ABelow3D: boolean);
 var
   Sprite: TSprite;
   Order: array of TSprite;
@@ -1764,14 +1785,19 @@ var
 begin
   FLock.Enter;
   try
-    //Collect the drawable sprites, then sort them by layer so a script can
-    //stack its world deterministically (distant decor first, effects last).
+    //Collect the drawable sprites on this side of the 3D pass (see
+    //cLayerTop3D): the call inside Draw takes the ones that ride under the
+    //models - the whole 2D world as ever - and the engine's second pass after
+    //the models takes only the top band, the sprites that ride over them.
+    //Then sort them by layer so a script can stack its world
+    //deterministically (distant decor first, effects last).
     //The lists are tiny, so an insertion sort into one small array beats
     //allocating a comparer every frame (same trick as TParallax.Draw).
     Count := 0;
     SetLength(Order, FItems.Count);
     for Sprite in FItems.Values do
-      if Sprite.Visible and (Sprite.Texture.id > 0) then
+      if Sprite.Visible and (Sprite.Texture.id > 0)
+        and (ABelow3D = (Sprite.Layer < cLayerTop3D)) then
       begin
         Order[Count] := Sprite;
         Inc(Count);
