@@ -48,19 +48,11 @@ type
 
   { TSprite }
 
-  TSprite = class(TTyroObject)
+  TSprite = class(TTyroAnimatedObject)
   public
-    Handle: Integer;
     Texture: TTexture2D;
-    Name: string;
-    X: single;
-    Y: single;
-    Angle: single;
-    Scale: single;
-    Visible: boolean;
     FlipH: boolean;    //mirror the texture horizontally (right-facing art from a left-facing sheet)
     FlipV: boolean;    //mirror the texture vertically
-    Tint: TColor;      //multiplied colour, alpha included: tint and fade the sprite
     Layer: Integer;    //draw order: lower layers are drawn first (behind), 0 = default
     Collides: boolean;
     Kind: TSpriteKind;
@@ -80,7 +72,6 @@ type
     AnimFrame: Integer;             // current frame index
     AnimTime: Single;               // seconds spent on the current frame
     AnimSpeed: Single;              // frames-per-second override; 0 = file durations
-    Playing: Boolean;               // true while the animation advances each frame
     Looping: Boolean;
     // Named animations from the file (meta.tyro.actions in a .sprite). Empty
     // for plain sheets; ActionIndex is -1 while the whole frame list plays.
@@ -329,18 +320,10 @@ uses
 
 constructor TSprite.Create(AHandle: Integer; ATexture: TTexture2D; const AName: string);
 begin
-  inherited Create;
-  Handle := AHandle;
+  inherited Create(AHandle, AName);
   Texture := ATexture;
-  Name := AName;
-  X := 0;
-  Y := 0;
-  Angle := 0;
-  Scale := 1.0;
-  Visible := True;
   FlipH := False;
   FlipV := False;
-  Tint := clWhite;
   Layer := 0;
   Collides := False;
   Kind := skDynamic;
@@ -357,7 +340,6 @@ begin
   AnimFrame := 0;
   AnimTime := 0;
   AnimSpeed := 0;
-  Playing := False;
   Actions := nil;
   ActionIndex := -1;
   AnimSeq := nil;

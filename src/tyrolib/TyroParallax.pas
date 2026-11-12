@@ -67,12 +67,9 @@ type
 
   TParallax = class(TTyroObject)
   public
-    Handle: Integer;
-    Name: string;
     Layers: TList<TParallaxLayer>;
     Offset: Single;      //master scroll position, in pixels
     GlobalSpeed: Single; //extra multiplier over every layer's own speed
-    Visible: Boolean;
     Tile: Boolean;       //when True layers repeat; when False they scroll off
     constructor Create(AHandle: Integer; const AName: string);
     destructor Destroy; override;
@@ -189,13 +186,10 @@ end;
 
 constructor TParallax.Create(AHandle: Integer; const AName: string);
 begin
-  inherited Create;
-  Handle := AHandle;
-  Name := AName;
+  inherited Create(AHandle, AName);
   Layers := TList<TParallaxLayer>.Create;
   Offset := 0;
   GlobalSpeed := 1.0;
-  Visible := True;
   Tile := True;
 end;
 

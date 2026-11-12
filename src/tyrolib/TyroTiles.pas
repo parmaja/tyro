@@ -48,8 +48,6 @@ type
     means "empty"; ids are 1-based, so id 1 is the top-left tile of the sheet. }
   TTileMap = class(TTyroObject)
   public
-    Handle: Integer;
-    Name: string;
     Texture: TTexture2D;
     TileWidth: Integer;
     TileHeight: Integer;
@@ -60,7 +58,6 @@ type
     Rows: Integer;      // map height in tiles
     Data: TArray<Integer>; // Cols*Rows tile ids, row-major, 0 = empty
     Solid: TDictionary<Integer, Boolean>; // tile ids treated as solid walls
-    Visible: Boolean;
     X: Single;          // last drawn position
     Y: Single;
     Scale: Single;
@@ -197,9 +194,7 @@ uses
 
 constructor TTileMap.Create(AHandle: Integer; const AName: string);
 begin
-  inherited Create;
-  Handle := AHandle;
-  Name := AName;
+  inherited Create(AHandle, AName);
   Texture := Default(TTexture2D);
   TileWidth := 16;
   TileHeight := 16;
@@ -210,7 +205,6 @@ begin
   Rows := 0;
   Data := nil;
   Solid := TDictionary<Integer, Boolean>.Create;
-  Visible := True;
   X := 0;
   Y := 0;
   Scale := 1.0;

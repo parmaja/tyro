@@ -119,26 +119,18 @@ type
   { One 3D model: the raylib model it draws, its bounding box (centre = pivot,
     sizes for the script to scale by) and the transform the engine applies in
     the per-frame 3D pass. X/Y are screen pixels, Z is depth into the screen. }
-  TModel3D = class(TTyroObject)
+  TModel3D = class(TTyroAnimatedObject)
   public
-    Handle: Integer;
-    Name: string;
     Model: TModel;          // raylib model; MeshCount = 0 while nothing is loaded
     Center: TVector3;       // bounding-box centre: the pivot the model turns around
     SizeX: Single;          // bounding-box size along the model's own axes
     SizeY: Single;
     SizeZ: Single;
-    Visible: Boolean;
-    X: Single;              // screen pixel position (like a sprite)
-    Y: Single;
     Z: Single;              // depth (bigger = farther from the eye, behind)
-    Angle: Single;          // rotation around the view axis, degrees, clockwise on screen
     Tilt: Single;           // rotation around the screen's horizontal axis, degrees
     Roll: Single;           // rotation around the model's own axis (the nose-tail
                             // line of a jet), degrees - the classic bank-into-turn
     Shadow: Boolean;        // cast a shadow onto the world's ground plane
-    Scale: Single;
-    Tint: TColor;
     //Free 3D pose: the world point the model's own +y aims at and the
     //direction its +z leans toward (see FaceMatrixOf in the pass). Face is
     //optional - without it the plain Angle/Roll/Tilt Euler pose stands.
@@ -700,24 +692,16 @@ end;
 
 constructor TModel3D.Create(AHandle: Integer; const AName: string);
 begin
-  inherited Create;
-  Handle := AHandle;
-  Name := AName;
+  inherited Create(AHandle, AName);
   Model := Default(TModel);
   Center := Vector3Of(0, 0, 0);
   SizeX := 0;
   SizeY := 0;
   SizeZ := 0;
-  Visible := True;
-  X := 0;
-  Y := 0;
   Z := 0;
-  Angle := 0;
   Tilt := 0;
   Roll := 0;
   Shadow := True;
-  Scale := 1;
-  Tint := clWhite;
   FaceTo := Vector3Of(0, 0, 0);
   FaceUp := Vector3Of(0, 0, 1);
   HasFace := False;
@@ -730,7 +714,6 @@ begin
   Current := -1;
   Frame := 0;
   Speed := 30;
-  Playing := False;
 end;
 
 destructor TModel3D.Destroy;

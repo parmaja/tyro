@@ -171,7 +171,8 @@ const
     cShaderPreamble +
     'void main()' + #10 +
     '{' + #10 +
-    cShaderRegion +
+
+  cShaderRegion +
     '    vec4 color = texture(texture0, fragTexCoord);' + #10 +
     '    float dist = distance(fragTexCoord, vec2(0.5, 0.5));' + #10 +
     '    float vig = 1.0 - smoothstep(0.25, 0.75, dist) * clamp(value, 0.0, 1.0);' + #10 +
@@ -199,12 +200,34 @@ type
 
   { TTyroObject }
 
+  { The base of the store objects (sprites, 3D models, tilemaps, parallaxes):
+    the handle the script holds, the name it can find the object back by, and
+    the visible flag every draw loop respects. The store hands out handles from
+    its own counter, so the object only carries the number it was born with. }
   TTyroObject = class(TObject)
-  private
-    FScripted: Boolean;
   public
-    procedure SetAsScripted;
-    property Scripted: Boolean read FScripted;
+    Handle: Integer;
+    Name: string;
+    Visible: Boolean;
+    constructor Create(AHandle: Integer = 0; const AName: string = ''); virtual;
+  end;
+
+  { TTyroAnimatedObject }
+
+  { A TTyroObject the engine draws and can bring to life: the screen-pixel
+    transform every 2D/3D pass reads, the tint (alpha included, so it fades),
+    and the play flag the store's per-frame animation step advances. The
+    animation data itself (frame list, skeletal clips) stays with the kind
+    that owns it. }
+  TTyroAnimatedObject = class(TTyroObject)
+  public
+    X: Single;              // screen pixel position
+    Y: Single;
+    Angle: Single;          // rotation degrees, clockwise on screen
+    Scale: Single;
+    Tint: TColor;           // multiplied colour, alpha included: tint and fade
+    Playing: Boolean;       // true while the animation advances each frame
+    constructor Create(AHandle: Integer = 0; const AName: string = ''); override;
   end;
 
   TTyroCanvas = class;
@@ -520,6 +543,29 @@ implementation
 uses
   minibidi;
 
+{ TTyroObject }
+
+constructor TTyroObject.Create(AHandle: Integer; const AName: string);
+begin
+  inherited Create;
+  Handle := AHandle;
+  Name := AName;
+  Visible := True;
+end;
+
+{ TTyroAnimatedObject }
+
+constructor TTyroAnimatedObject.Create(AHandle: Integer; const AName: string);
+begin
+  inherited Create(AHandle, AName);
+  X := 0;
+  Y := 0;
+  Angle := 0;
+  Scale := 1.0;
+  Tint := clWhite;
+  Playing := False;
+end;
+
 function IsNumber(const Value: string): Boolean;
 var
   I: Integer;
@@ -679,13 +725,6 @@ end;
 function UTF8Delete(const S: string; ACol, ACount: Integer): string;
 begin
   Result := UTF8SubStr(S, 0, ACol) + UTF8SubStr(S, ACol + ACount, UTF8Length(S) - ACol - ACount);
-end;
-
-{ TTyroObject }
-
-procedure TTyroObject.SetAsScripted;
-begin
-  FScripted := True;
 end;
 
 { TTyroCanvas }
