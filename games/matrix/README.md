@@ -24,12 +24,12 @@ bin\tyro.exe games\matrix\matrix.tyro
 
 ## Game Elements
 
-- **Sentinels (`sentinel.png`)**: Squid hunter-killer drones descending through the matrix code. Neutralize them before they reach the bottom and damage Zion's system integrity.
-- **Agents (`agent.png`)**: Heavily armored rogue Agent glitches that take multiple EMP hits.
-- **Red Pill (`pill_red.png`)**: Trigger Matrix Overdrive and instant Bullet Time.
-- **Blue Pill (`pill_blue.png`)**: Detonate a full-screen EMP shockwave resetting corrupted threats.
-- **White Rabbit (`rabbit.png`)**: "Follow the White Rabbit" bonus target: awards high score points and restores +25% system integrity.
-- **Hardline Phone (`phone.png`)**: Escape/checkpoint node that advances threat levels with high score rewards.
+- **Sentinels**: Squid hunter-killer drones descending through the matrix code. Neutralize them before they reach the bottom and damage Zion's system integrity.
+- **Agents**: Heavily armored rogue Agent glitches that take multiple EMP hits.
+- **Red Pill**: Trigger Matrix Overdrive and instant Bullet Time.
+- **Blue Pill**: Detonate a full-screen EMP shockwave resetting corrupted threats.
+- **White Rabbit**: "Follow the White Rabbit" bonus target: awards high score points and restores +25% system integrity.
+- **Hardline Phone**: Escape/checkpoint node that advances threat levels with high score rewards.
 
 ## Credits & Sources
 
@@ -42,8 +42,8 @@ bin\tyro.exe games\matrix\matrix.tyro
   - *White Rabbit* TrueType font by Matthew Welch (Square Gear, http://www.squaregear.net/fonts/).
   - Free for personal and commercial use.
 
-- **sprites (`make_matrix_assets.py`)**:
-  - All sprites (`rabbit.png`, `sentinel.png`, `agent.png`, `pill_red.png`, `pill_blue.png`, `crosshair.png`, `phone.png`) were procedurally generated at native pixel resolution using Python and Pillow via `make_matrix_assets.py`.
+- **Sprites**:
+  - All sprites (rabbit, sentinel, agent, both pills, crosshair, phone) are painted at run time by `matrix.tyro` itself with the engine's `images.new()` paint sheets and `sprite:fromimage()` — no PNG files and no asset-generation step. The drawing code in the game mirrors the PIL shapes of the former `make_matrix_assets.py` (now removed).
 
 - **Shader (`matrix.frag`)**:
   - Custom CRT raster scanline, vignette, and phosphor bloom GLSL post-processing fragment shader written for Tyro.

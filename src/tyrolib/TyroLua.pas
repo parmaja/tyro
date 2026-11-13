@@ -85,6 +85,43 @@ type
     constructor Create(const AName: string; AScript: TLuaScript); override;
   end;
 
+  { TLuaImage }
+
+  //A paint sheet: the canvas draw API pointed at a render texture that
+  //images.new made, so a script can paint a sprite without a file. The engine
+  //owns the texture (Engine.Images); this object only points at it. Methods
+  //are dot-called like the canvas globals: sheet.rectangle(4, 4, 8, 6, true).
+  TLuaImage = class(TLuaCustomCanvas)
+  private
+    function GetSheet: TTyroCanvas;
+  public
+    constructor Create(const AName: string; AScript: TLuaScript;
+      ACanvas: TTyroCanvas); overload;
+    //Builds the sheet's Lua table and leaves it on the stack: the inherited
+    //canvas draw methods bound to this very sheet (RegisterMethod carries
+    //Self), plus the property accessors from TLuaCustomCanvas. The __sheet and
+    //__name keys are written raw before the metatable goes on, because the
+    //sheet's own __newindex would otherwise swallow them (like RegisterSprite).
+    function RegisterImage(AIndex: Integer; const AName: string): Integer;
+    property Sheet: TTyroCanvas read GetSheet;
+  end;
+
+  { TLuaImages }
+
+  //The global `images` table. It owns every sheet handed out by images.new();
+  //the sheets are pure memory (their render textures live in Engine.Images),
+  //so freeing them with the script is safe on any thread.
+  TLuaImages = class(TTyroLuaObject)
+  private
+    FItems: TList; //of TLuaImage, freed in Destroy
+    function GetItem(AIndex: Integer): TLuaImage;
+  public
+    constructor Create(const AName: string; AScript: TLuaScript); override;
+    destructor Destroy; override;
+    function New_func(L: Plua_State): integer; cdecl;
+    property Items[AIndex: Integer]: TLuaImage read GetItem;
+  end;
+
   { TLuaShader }
 
   TLuaShader = class(TTyroLuaObject)
@@ -299,6 +336,7 @@ type
   public
     function RegisterSprite(AHandle: Integer): Integer;
     function Load_func(L: Plua_State): integer; cdecl;
+    function FromImage_func(L: Plua_State): integer; cdecl;
     function LoadScript_func(L: Plua_State): integer; cdecl;
     function Show_func(L: Plua_State): integer; cdecl;
     function Hide_func(L: Plua_State): integer; cdecl;
@@ -688,6 +726,8 @@ type
     Radio: TLuaRadio;
     Sprite: TLuaSprite;
     Sprites: TLuaSprites;
+    //Global `images` table; owns every paint sheet handed out by images.new()
+    Images: TLuaImages;
     Tile: TLuaTile;
     Tiles: TLuaTiles;
     Model: TLuaModel;
@@ -1644,8 +1684,15 @@ begin
   end
   else if field = 'backcolor' then
   begin
-    i := L.ToInteger(-1);
-    FScript.AddQueueObject(TDrawSetBackColorObject.Create(Canvas, IntToColor(i)));
+    //Read like 'color' above: a packed alpha of 128 or more passes
+    //High(Integer), so the number has to be taken by its bits.
+    if L.IsInteger(-1) then
+      aColor := Int64ToColor(L.ToInt64(-1))
+    else if L.IsString(-1) then
+      aColor := StrToColor(L.ToString(-1))
+    else
+      aColor := IntToColor(L.ToInteger(-1));
+    FScript.AddQueueObject(TDrawSetBackColorObject.Create(Canvas, aColor));
     Result := 1;
   end
   else if (field = 'pen') then
@@ -1844,6 +1891,7 @@ begin
   Spectrum := TLuaSpectrum.Create('spectrum', Self);
   Sprite := TLuaSprite.Create('sprite', Self);
   Sprites := TLuaSprites.Create('sprites', Self);
+  Images := TLuaImages.Create('images', Self);
   Tile := TLuaTile.Create('tile', Self);
   Tiles := TLuaTiles.Create('tiles', Self);
   Model := TLuaModel.Create('model', Self);
@@ -2027,6 +2075,13 @@ begin
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
   Lua.State.Register('sprites', '__call', Self, Sprites.Call_func, True);
 
+  // Paint sheets: images.new(w, h) makes a small canvas the script draws on
+  // itself (no file); sprite:fromimage(sheet) turns those pixels into a sprite
+  // texture. The sheet keeps the whole canvas API: color, rectangle, circle,
+  // triangle, line, point, text, clear.
+  Lua.State.RegisterTable('images');
+  Lua.State.Register('images', 'new', Self, Images.New_func);
+
   // Tilemap system: tiles.new(...) creates a map, tiles.find(name) finds one.
   // A map table (returned by tiles.new) carries map:load/resize/set/get/data/
   // solidtile/solid/draw plus the property fields (map.cols, map.x, ...).
@@ -2177,6 +2232,9 @@ begin
   FreeAndNil(Controls);
   FreeAndNil(Sprites);
   FreeAndNil(Sprite);
+  //the sheets die with the state that holds their closures; their render
+  //textures live in Engine.Images and are unloaded by the engine
+  FreeAndNil(Images);
   FreeAndNil(Parallaxes);
   FreeAndNil(Parallax);
   FreeAndNil(Tiles);
@@ -4428,6 +4486,7 @@ begin
 
     //methods receive the sprite table injected as argument 1
     Lua.State.Register('load', Load_func);
+    Lua.State.Register('fromimage', FromImage_func);
     Lua.State.Register('loadscript', LoadScript_func);
     Lua.State.Register('show', Show_func);
     Lua.State.Register('hide', Hide_func);
@@ -4489,6 +4548,132 @@ begin
     L.SetField(-2, '__name');
   end;
   Result := 1;
+end;
+
+{ TLuaImage }
+
+constructor TLuaImage.Create(const AName: string; AScript: TLuaScript;
+  ACanvas: TTyroCanvas);
+begin
+  inherited Create(AName, AScript);
+  Canvas := ACanvas;
+end;
+
+function TLuaImage.GetSheet: TTyroCanvas;
+begin
+  Result := Canvas;
+end;
+
+//Build the sheet's Lua table. RegisterMethod keeps the argument indexes the
+//inherited canvas methods expect (no table injected), so a sheet is dot-called
+//exactly like the canvas globals: sheet.circle(10, 10, 4, true).
+function TLuaImage.RegisterImage(AIndex: Integer; const AName: string): Integer;
+begin
+  with Script do
+  begin
+    Lua.State.BeginTable; //[sheet]
+    //raw keys, set before the metatable: __sheet lets fromimage() find this
+    //object back, __name is only for messages
+    Lua.State.PushInteger(AIndex);
+    Lua.State.SetField(-2, '__sheet'); //sheet.__sheet = AIndex
+    if AName <> '' then
+    begin
+      Lua.State.PushString(AName);
+      Lua.State.SetField(-2, '__name');
+    end;
+    Lua.State.RegisterMethod('clear', Self.Clear_func);
+    Lua.State.RegisterMethod('text', Self.Text_func);
+    Lua.State.RegisterMethod('circle', Self.Circle_func);
+    Lua.State.RegisterMethod('triangle', Self.Triangle_func);
+    Lua.State.RegisterMethod('rectangle', Self.Rectangle_func);
+    Lua.State.RegisterMethod('line', Self.Line_func);
+    Lua.State.RegisterMethod('point', Self.Point_func);
+    //properties: sheet.color, sheet.backcolor, sheet.pen, sheet.width ...
+    Lua.State.NewTable; //[sheet, meta]
+    //Self on purpose: inside "with Script" a bare __getter would bind the
+    //script's accessor, and only this object knows its own Canvas.
+    Lua.State.RegisterMeta('__index', Self.__getter);
+    Lua.State.RegisterMeta('__newindex', Self.__setter);
+    Lua.State.SetMetaTable(-2); //sheet.metatable = meta -> [sheet]
+    Result := 1;
+  end;
+end;
+
+{ TLuaImages }
+
+constructor TLuaImages.Create(const AName: string; AScript: TLuaScript);
+begin
+  inherited Create(AName, AScript);
+  FItems := TList.Create; //of TLuaImage
+end;
+
+destructor TLuaImages.Destroy;
+var
+  i: Integer;
+begin
+  if FItems <> nil then
+  begin
+    for i := FItems.Count - 1 downto 0 do
+      TLuaImage(FItems[i]).Free; //the render texture lives in Engine.Images
+    FreeAndNil(FItems);
+  end;
+  inherited;
+end;
+
+function TLuaImages.GetItem(AIndex: Integer): TLuaImage;
+begin
+  if (FItems <> nil) and (AIndex >= 0) and (AIndex < FItems.Count) then
+    Result := TLuaImage(FItems[AIndex])
+  else
+    Result := nil;
+end;
+
+//images.new(width, height [, name]) -> a paint sheet the script draws on
+//itself, the way a `canvas`, but living only in memory: no PNG has to exist
+//before the game runs. sprite:fromimage(sheet) installs the pixels.
+function TLuaImages.New_func(L: Plua_State): integer; cdecl;
+var
+  aName: string;
+  aWidth, aHeight, idx: Integer;
+  Sheet: TLuaImage;
+  CreateObj: TCreateImageObject;
+begin
+  if L.ArgsCount < 2 then
+  begin
+    L.PushNil;
+    L.PushString('images.new: needs a width and a height');
+    Exit(2);
+  end;
+  aWidth := L.ToInteger(1);
+  aHeight := L.ToInteger(2);
+  if (aWidth < 1) or (aHeight < 1) or (aWidth > 4096) or (aHeight > 4096) then
+  begin
+    L.PushNil;
+    L.PushString('images.new: width and height must be between 1 and 4096');
+    Exit(2);
+  end;
+  aName := '';
+  if L.ArgsCount >= 3 then
+    aName := L.ToString(3);
+  //A render texture is GL memory: create it on the Engine thread and let the
+  //engine own it (Engine.Images), a script thread can neither make nor free
+  //GL objects safely.
+  CreateObj := TCreateImageObject.Create(aWidth, aHeight);
+  try
+    CreateObj.Run(Script.Thread); //Will run in Synchronize
+    if CreateObj.Canvas = nil then
+    begin
+      L.PushNil;
+      L.PushString('images.new: could not create the paint sheet');
+      Exit(2);
+    end;
+    Sheet := TLuaImage.Create(aName, Script, CreateObj.Canvas);
+    idx := FItems.Add(Sheet);
+    //the table carries its raw __sheet index; fromimage() maps it back here
+    Result := Sheet.RegisterImage(idx, aName); //[sheet]
+  finally
+    CreateObj.Free;
+  end;
 end;
 
 // Sprites.puff("name" [, size] [, count]) / Sprites.blob("name" [, size] [, count])
@@ -6070,6 +6255,49 @@ begin
   finally
     LoadObj.Free;
   end;
+  Result := 0;
+end;
+
+// sprite:fromimage(sheet) -> installs the pixels of a paint sheet made by
+// images.new() as this sprite's texture. It can be called again after the
+// sheet is redrawn, and on a pooled sprite to swap its look, the same way
+// sprite:load() swaps a file. The sheet keeps its own copy of the pixels, so
+// one sheet can dress any number of sprites.
+function TLuaSprite.FromImage_func(L: Plua_State): integer;
+var
+  aName: string;
+  handle, idx: Integer;
+  Sheet: TLuaImage;
+begin
+  L.GetField(1, '__name');
+  if L.IsString(-1) then
+    aName := L.ToString(-1)
+  else
+    aName := '';
+  L.Pop(1);
+  handle := GetSpriteHandle(L, 1);
+  if not L.IsTable(2) then
+  begin
+    Script.DoError('sprite:fromimage: needs a paint sheet from images.new()');
+    Exit(0);
+  end;
+  L.GetField(2, '__sheet');
+  if L.IsInteger(-1) then
+    idx := L.PopInteger
+  else
+  begin
+    L.Pop(1);
+    idx := -1;
+  end;
+  Sheet := Script.Images.Items[idx];
+  if Sheet = nil then
+  begin
+    Script.DoError('sprite:fromimage: ''' + L.ToString(2) + ''' is not a paint sheet');
+    Exit(0);
+  end;
+  //Queued, not Run(): the sheet's draw commands live in the same queue and
+  //must all land before its pixels are copied out of the texture.
+  FScript.AddQueueObject(TSpriteImageObject.Create(Sheet.Sheet, aName, handle));
   Result := 0;
 end;
 

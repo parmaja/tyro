@@ -117,10 +117,354 @@ for i = 1, NUM_COLS do
 end
 
 -- ======================================================================
---  sprites
+--  Sprites, painted in code (no PNG files)
 -- ======================================================================
+--  images.new(w, h) makes a paint sheet: a small canvas that exists only in
+--  memory. The canvas primitives draw the art onto it, and sprite.fromimage()
+--  uploads those pixels as the sprite's texture. A sheet can dress any number
+--  of sprites and can be painted again for a new look. Sprite methods are
+--  dot-called (s.fromimage(sheet)), the way s.load(...) is.
+--
+--  The shape helpers below cover what PIL offered in the old
+--  make_matrix_assets.py: filled and outlined ellipses, elliptical arcs,
+--  half domes, filled polygons, polylines and points. Ellipse boxes are the
+--  same inclusive pairs [(x0, y0), (x1, y1)] PIL used.
+
+-- Filled ellipse, using the current color: one scanline row at a time, filling
+-- the pixels whose center sits inside the ellipse.
+local function ellipseFill(img, x0, y0, x1, y1)
+  local cx = (x0 + x1) / 2
+  local cy = (y0 + y1) / 2
+  local rx = (x1 - x0) / 2
+  local ry = (y1 - y0) / 2
+  if rx <= 0 or ry <= 0 then
+    img.point(x0, y0)
+    return
+  end
+  for y = y0, y1 do
+    local dy = (y - cy) / ry
+    local t = 1 - dy * dy
+    if t >= 0 then
+      local hx = rx * math.sqrt(t)
+      local xa = math.floor(cx - hx + 0.5)
+      local xb = math.floor(cx + hx + 0.5)
+      img.rectangle(xa, y, xb - xa + 1, 1, true)
+    end
+  end
+end
+
+-- Ellipse outline (an arc when a0/a1 are given): 0 degrees at 3 o'clock,
+-- growing clockwise because y points down, same as PIL.
+local function ellipseRing(img, x0, y0, x1, y1, a0, a1)
+  a0 = a0 or 0
+  a1 = a1 or 360
+  local cx = (x0 + x1) / 2
+  local cy = (y0 + y1) / 2
+  local rx = (x1 - x0) / 2
+  local ry = (y1 - y0) / 2
+  local steps = math.max(20, math.pi * math.max(rx, ry) * 4)
+  for i = 0, steps - 1 do
+    local a = math.rad(a0 + (a1 - a0) * i / steps)
+    img.point(math.floor(cx + rx * math.cos(a) + 0.5),
+              math.floor(cy + ry * math.sin(a) + 0.5))
+  end
+end
+
+-- Filled half ellipse, "left" or "right": the domes of the capsule pills.
+local function dome(img, x0, y0, x1, y1, side)
+  local cx = (x0 + x1) / 2
+  local cy = (y0 + y1) / 2
+  local rx = (x1 - x0) / 2
+  local ry = (y1 - y0) / 2
+  local mid = math.floor(cx + 0.5)
+  for y = y0, y1 do
+    local dy = (y - cy) / ry
+    local t = 1 - dy * dy
+    if t >= 0 then
+      local hx = rx * math.sqrt(t)
+      if side == "left" then
+        local xa = math.floor(cx - hx + 0.5)
+        img.rectangle(xa, y, mid - xa + 1, 1, true)
+      else
+        img.rectangle(mid, y, math.floor(cx + hx + 0.5) - mid + 1, 1, true)
+      end
+    end
+  end
+end
+
+-- Filled polygon (even-odd scanline), pts = {{x, y}, ...}
+local function polyFill(img, pts)
+  local miny, maxy = pts[1][2], pts[1][2]
+  for i = 1, #pts do
+    if pts[i][2] < miny then miny = pts[i][2] end
+    if pts[i][2] > maxy then maxy = pts[i][2] end
+  end
+  for y = miny, maxy do
+    local xs = {}
+    for i = 1, #pts do
+      local p, q = pts[i], pts[i % #pts + 1]
+      if (p[2] <= y and q[2] > y) or (q[2] <= y and p[2] > y) then
+        xs[#xs + 1] = p[1] + (y - p[2]) / (q[2] - p[2]) * (q[1] - p[1])
+      end
+    end
+    table.sort(xs)
+    for k = 1, #xs - 1, 2 do
+      local xa = math.floor(xs[k] + 0.5)
+      local xb = math.floor(xs[k + 1] + 0.5)
+      if xb >= xa then
+        img.rectangle(xa, y, xb - xa + 1, 1, true)
+      end
+    end
+  end
+end
+
+-- Stroke a chain (or, with a closing point, a ring) of points
+local function polyLine(img, pts, w)
+  for i = 1, #pts - 1 do
+    img.line(pts[i][1], pts[i][2], pts[i + 1][1], pts[i + 1][2], w or 1)
+  end
+end
+
+-- The White Rabbit: white pixel-art bunny, 28x26
+local function paintRabbit(img)
+  local WHITE = rgba(245, 245, 255)
+  local SHADOW = rgba(185, 195, 215)
+  local PINK = rgba(255, 175, 195)
+  local EYE = rgba(40, 20, 25)
+  local OUTLINE = rgba(60, 80, 70, 200)
+
+  img.color = WHITE
+  ellipseFill(img, 6, 11, 22, 23)   -- body
+  img.color = OUTLINE
+  ellipseRing(img, 6, 11, 22, 23)
+  img.color = SHADOW
+  ellipseRing(img, 6, 11, 22, 23, 40, 140)  -- body shadow
+
+  img.color = WHITE
+  ellipseFill(img, 2, 14, 8, 20)    -- fluffy tail
+  img.color = OUTLINE
+  ellipseRing(img, 2, 14, 8, 20)
+
+  img.color = WHITE
+  ellipseFill(img, 14, 7, 26, 18)   -- head
+  img.color = OUTLINE
+  ellipseRing(img, 14, 7, 26, 18)
+
+  img.color = WHITE                 -- paws
+  ellipseFill(img, 9, 21, 15, 25)
+  ellipseFill(img, 17, 21, 23, 25)
+  img.color = OUTLINE
+  ellipseRing(img, 9, 21, 15, 25)
+  ellipseRing(img, 17, 21, 23, 25)
+
+  img.color = WHITE                 -- left ear
+  polyFill(img, {{16, 10}, {13, 1}, {17, 0}, {20, 9}})
+  img.color = OUTLINE
+  polyLine(img, {{16, 10}, {13, 1}, {17, 0}, {20, 9}, {16, 10}})
+  img.color = PINK
+  polyFill(img, {{15, 8}, {14, 2}, {16, 2}, {18, 7}})
+
+  img.color = WHITE                 -- right ear
+  polyFill(img, {{19, 9}, {19, 0}, {23, 0}, {23, 8}})
+  img.color = OUTLINE
+  polyLine(img, {{19, 9}, {19, 0}, {23, 0}, {23, 8}, {19, 9}})
+  img.color = PINK
+  polyFill(img, {{20, 7}, {20, 1}, {22, 1}, {22, 6}})
+
+  img.color = EYE                   -- eye with a glint
+  ellipseFill(img, 22, 10, 24, 12)
+  img.color = rgba(255, 255, 255)
+  img.point(23, 10)
+  img.color = PINK                  -- nose
+  img.point(26, 13)
+end
+
+-- 3D capsule pill, 26x14; theme "red" or "blue"
+local function paintPill(img, theme)
+  local main_c, bright_c, dark_c
+  if theme == "red" then
+    main_c = rgba(220, 35, 45)
+    bright_c = rgba(255, 100, 110)
+    dark_c = rgba(140, 15, 25)
+  else
+    main_c = rgba(35, 120, 240)
+    bright_c = rgba(90, 180, 255)
+    dark_c = rgba(15, 60, 150)
+  end
+  local white_c = rgba(245, 245, 250)
+  local gray_c = rgba(180, 185, 195)
+  local outline = rgba(20, 25, 30, 220)
+
+  img.color = main_c                -- left colored dome
+  dome(img, 2, 2, 14, 12, "left")
+  img.rectangle(8, 2, 6, 11, true)
+  img.color = white_c               -- right white dome
+  img.rectangle(13, 2, 6, 11, true)
+  dome(img, 12, 2, 24, 12, "right")
+
+  img.color = rgba(40, 40, 50, 180) -- center seam
+  img.line(13, 2, 13, 12, 1)
+
+  img.color = bright_c              -- highlights along the top
+  img.line(5, 4, 12, 4, 1)
+  img.color = rgba(255, 255, 255)
+  img.line(14, 4, 21, 4, 1)
+
+  img.color = dark_c                -- shading along the bottom
+  img.line(5, 10, 12, 10, 1)
+  img.color = gray_c
+  img.line(14, 10, 21, 10, 1)
+
+  img.color = outline               -- outer outline
+  ellipseRing(img, 2, 2, 14, 12, 90, 270)
+  ellipseRing(img, 12, 2, 24, 12, 270, 450)
+  img.line(8, 2, 18, 2, 1)
+  img.line(8, 12, 18, 12, 1)
+end
+
+-- Targeting reticle, 32x32: four corner brackets, a ring, ticks, center dot
+local function paintCrosshair(img)
+  local G_BRIGHT = rgba(120, 255, 160)
+  local G_DIM = rgba(40, 180, 80, 200)
+
+  img.color = G_BRIGHT
+  local arm = 7                     -- 4 corner brackets
+  img.line(3, 3, 3 + arm, 3, 2)
+  img.line(3, 3, 3, 3 + arm, 2)
+  img.line(28, 3, 28 - arm, 3, 2)
+  img.line(28, 3, 28, 3 + arm, 2)
+  img.line(3, 28, 3 + arm, 28, 2)
+  img.line(3, 28, 3, 28 - arm, 2)
+  img.line(28, 28, 28 - arm, 28, 2)
+  img.line(28, 28, 28, 28 - arm, 2)
+
+  img.color = G_DIM                 -- outer circle
+  ellipseRing(img, 8, 8, 23, 23)
+
+  img.color = G_BRIGHT              -- center cross tick lines
+  img.line(15, 6, 15, 11, 1)
+  img.line(15, 20, 15, 25, 1)
+  img.line(6, 15, 11, 15, 1)
+  img.line(20, 15, 25, 15, 1)
+
+  img.color = rgba(255, 255, 255)   -- center dot
+  ellipseFill(img, 14, 14, 16, 16)
+end
+
+-- Sentinel drone with red eyes and tentacles, 36x28
+local function paintSentinel(img)
+  local HULL = rgba(45, 52, 60)
+  local HULL_LIGHT = rgba(75, 88, 100)
+  local HULL_DARK = rgba(25, 30, 35)
+  local RED_GLOW = rgba(255, 40, 50)
+  local RED_DIM = rgba(180, 20, 30)
+  local TENTACLE = rgba(50, 60, 68, 240)
+
+  -- tentacles trailing back/down, bright tip on each
+  local t_points = {
+    {{8, 15}, {4, 18}, {1, 25}},
+    {{11, 17}, {8, 22}, {6, 27}},
+    {{15, 18}, {14, 23}, {12, 27}},
+    {{19, 18}, {20, 23}, {22, 27}},
+    {{23, 17}, {26, 22}, {28, 27}},
+    {{26, 15}, {30, 18}, {33, 25}},
+  }
+  for i = 1, #t_points do
+    local pts = t_points[i]
+    img.color = TENTACLE
+    polyLine(img, pts, 2)
+    img.color = rgba(80, 95, 110)
+    img.point(pts[#pts][1], pts[#pts][2])
+  end
+
+  img.color = HULL                  -- main carapace
+  ellipseFill(img, 7, 4, 27, 18)
+  img.color = HULL_DARK
+  ellipseRing(img, 7, 4, 27, 18)
+
+  img.color = HULL_LIGHT            -- upper crest
+  ellipseFill(img, 10, 2, 24, 12)
+  img.color = rgba(120, 140, 160)
+  img.line(11, 3, 23, 3, 1)
+
+  local eyes = {{13, 12}, {17, 13}, {21, 12}, {15, 9}, {19, 9}}
+  for i = 1, #eyes do               -- glowing red cluster eyes
+    local ex, ey = eyes[i][1], eyes[i][2]
+    img.color = RED_GLOW
+    ellipseFill(img, ex - 1, ey - 1, ex + 1, ey + 1)
+    img.color = RED_DIM
+    ellipseRing(img, ex - 1, ey - 1, ex + 1, ey + 1)
+  end
+end
+
+-- Agent Smith silhouette, 24x30
+local function paintAgent(img)
+  local SUIT = rgba(25, 28, 32)
+  local SHIRT = rgba(220, 225, 230)
+  local TIE = rgba(15, 15, 18)
+  local SKIN = rgba(210, 170, 140)
+  local HAIR = rgba(40, 32, 28)
+  local SHADES = rgba(10, 15, 20)
+
+  img.color = HAIR
+  img.rectangle(7, 2, 10, 6, true)  -- hair
+  img.color = SKIN
+  img.rectangle(8, 6, 8, 9, true)   -- head / jaw
+  img.color = SHADES                -- sunglasses
+  img.rectangle(7, 8, 5, 3, true)
+  img.rectangle(12, 8, 5, 3, true)
+  img.color = rgba(80, 240, 120)    -- green glints
+  img.point(9, 8)
+  img.point(14, 8)
+  img.color = rgba(180, 180, 190, 200)
+  polyLine(img, {{16, 9}, {17, 12}, {17, 16}}, 1)  -- earpiece wire
+
+  img.color = SUIT                  -- shoulders & torso
+  polyFill(img, {{2, 16}, {21, 16}, {19, 29}, {4, 29}})
+  img.color = SHIRT                 -- white shirt triangle
+  polyFill(img, {{10, 16}, {13, 16}, {12, 22}, {11, 22}})
+  img.color = TIE                   -- black tie
+  polyFill(img, {{11, 17}, {12, 17}, {13, 24}, {11, 27}, {10, 24}})
+end
+
+-- Green wireframe hardline phone, 24x26
+local function paintPhone(img)
+  local G = rgba(60, 255, 120)
+  local G_DIM = rgba(20, 140, 60, 200)
+
+  img.color = G                     -- receiver handset
+  ellipseFill(img, 2, 3, 8, 9)
+  ellipseFill(img, 15, 3, 21, 9)
+  polyLine(img, {{5, 5}, {11, 2}, {18, 5}}, 2)
+
+  img.color = G_DIM                 -- base cradle
+  polyFill(img, {{4, 12}, {19, 12}, {21, 23}, {2, 23}})
+  img.color = G
+  polyLine(img, {{4, 12}, {19, 12}, {21, 23}, {2, 23}, {4, 12}}, 1)
+  ellipseRing(img, 8, 14, 15, 21)   -- rotary dial
+  img.color = rgba(255, 255, 255)   -- dial light point
+  img.point(11, 17)
+end
+
+-- Paint the seven sheets once; pooled sprites take a copy of the pixels with
+-- fromimage() every time their look is swapped.
+local sheetRabbit = images.new(28, 26, "rabbit")
+paintRabbit(sheetRabbit)
+local sheetPillRed = images.new(26, 14, "pill_red")
+paintPill(sheetPillRed, "red")
+local sheetPillBlue = images.new(26, 14, "pill_blue")
+paintPill(sheetPillBlue, "blue")
+local sheetCrosshair = images.new(32, 32, "crosshair")
+paintCrosshair(sheetCrosshair)
+local sheetSentinel = images.new(36, 28, "sentinel")
+paintSentinel(sheetSentinel)
+local sheetAgent = images.new(24, 30, "agent")
+paintAgent(sheetAgent)
+local sheetPhone = images.new(24, 26, "phone")
+paintPhone(sheetPhone)
+
 local sCrosshair = sprites.new("crosshair")
-sCrosshair.load("crosshair.png")
+sCrosshair.fromimage(sheetCrosshair)
 sCrosshair.move(W / 2, H / 2)
 sCrosshair:show()
 
@@ -128,7 +472,7 @@ local MAX_ENEMIES = 8
 local enemysprites = {}
 for i = 1, MAX_ENEMIES do
   local s = sprites.new("sentinel_" .. i)
-  s.load("sentinel.png")
+  s.fromimage(sheetSentinel)
   s:hide()
   enemysprites[i] = {
     spr = s,
@@ -146,7 +490,7 @@ local MAX_ITEMS = 4
 local itemsprites = {}
 for i = 1, MAX_ITEMS do
   local s = sprites.new("item_" .. i)
-  s.load("pill_red.png")
+  s.fromimage(sheetPillRed)
   s:hide()
   itemsprites[i] = {
     spr = s,
@@ -223,11 +567,11 @@ local function spawnEnemy()
       e.active = true
       e.kind = (math.random(1, 3) == 1) and "agent" or "sentinel"
       if e.kind == "agent" then
-        e.spr.load("agent.png")
+        e.spr.fromimage(sheetAgent)
         e.hp = 2
         e.radius = 16
       else
-        e.spr.load("sentinel.png")
+        e.spr.fromimage(sheetSentinel)
         e.hp = 1
         e.radius = 20
       end
@@ -261,16 +605,16 @@ local function spawnItem()
       local roll = math.random(1, 10)
       if roll <= 4 then
         it.kind = "red"
-        it.spr.load("pill_red.png")
+        it.spr.fromimage(sheetPillRed)
       elseif roll <= 7 then
         it.kind = "blue"
-        it.spr.load("pill_blue.png")
+        it.spr.fromimage(sheetPillBlue)
       elseif roll <= 9 then
         it.kind = "rabbit"
-        it.spr.load("rabbit.png")
+        it.spr.fromimage(sheetRabbit)
       else
         it.kind = "phone"
-        it.spr.load("phone.png")
+        it.spr.fromimage(sheetPhone)
       end
       it.x = math.random(60, W - 60)
       it.y = -20

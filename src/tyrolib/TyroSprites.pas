@@ -302,6 +302,45 @@ type
     property HandleResult: integer read FHandleResult;
   end;
 
+  { TCreateImageObject }
+
+  { Makes the render texture of a paint sheet (images.new) on the Engine
+    thread, where GL calls belong, and registers it with Engine.Images so the
+    engine can unload it while the context is still alive. The script thread
+    that asked for it waits (Run synchronizes) and takes the canvas back. }
+  TCreateImageObject = class(TQueueObject)
+  private
+    FWidth: integer;
+    FHeight: integer;
+    FCanvas: TTyroTextureCanvas;
+  protected
+    procedure DoExecute; override;
+  public
+    constructor Create(AWidth, AHeight: integer);
+    property Canvas: TTyroTextureCanvas read FCanvas;
+  end;
+
+  { TSpriteImageObject }
+
+  { Bakes a paint sheet into a sprite. It is a TDrawObject so the queue binds
+    and flushes the sheet's own texture around DoExecute, which then downloads
+    the sheet's pixels whole (LoadImageFromTexture keeps true alpha; the screen
+    readback cannot). Those pixels are copied into a fresh texture owned by the
+    sprite store (SetTexture/Add), so the sheet survives and can dress more
+    sprites, or be redrawn and baked again. }
+  TSpriteImageObject = class(TDrawObject)
+  private
+    FName: string;
+    FHandle: integer;
+    FHandleResult: integer;
+  protected
+    procedure DoExecute; override;
+  public
+    constructor Create(ASheet: TTyroCanvas; const AName: string;
+      AHandle: integer);
+    property HandleResult: integer read FHandleResult;
+  end;
+
   { TDrawSpriteObject }
 
   {TDrawSpriteObject = class(TDrawObject)
@@ -2228,6 +2267,138 @@ begin
       WriteLn('Sprite not loaded: ' + FFileName);
     FHandleResult := 0;
   end;
+end;
+
+{ TCreateImageObject }
+
+constructor TCreateImageObject.Create(AWidth, AHeight: integer);
+begin
+  inherited Create;
+  FWidth := AWidth;
+  FHeight := AHeight;
+end;
+
+//LoadRenderTexture hands over undefined GPU memory (on many drivers it reads
+//back as opaque black), so the sheet is cleared to clBlank once here: until the
+//script paints on it, a paint sheet must be a sheet of glass.
+procedure TCreateImageObject.DoExecute;
+begin
+  FCanvas := TTyroTextureCanvas.Create(FWidth, FHeight);
+  FCanvas.Name := 'Image';
+  FCanvas.BeginDraw;
+  try
+    FCanvas.Clear; //FBackColor is clBlank: start as a sheet of glass
+  finally
+    FCanvas.EndDraw;
+  end;
+  Engine.Images.Add(FCanvas);
+end;
+
+{ TSpriteImageObject }
+
+constructor TSpriteImageObject.Create(ASheet: TTyroCanvas; const AName: string;
+  AHandle: integer);
+begin
+  inherited Create(ASheet);
+  FName := AName;
+  FHandle := AHandle;
+end;
+
+//raylib blends every draw with SRC_ALPHA/ONE_MINUS_SRC_ALPHA on ALL channels,
+//the alpha channel included, so a shape of alpha a painted on the transparent
+//sheet lands as (rgb * a/255, a*a/255): the red 128 of a test reads back as
+//(115,21,28,64). A render texture must hand the sprite store ordinary straight
+//alpha, so undo one round of that: a = sqrt(a*255), rgb = rgb*255/a. Empty and
+//fully opaque pixels pass through untouched; a shape painted over an already
+//opaque area lands a hair under 255 (200 over white gives 212, and this makes
+//it 233), close enough for hand-painted sheets and invisible at these sizes.
+procedure UnsquareAlpha(Data: PByteArray; Count: Integer);
+var
+  i, A, ATrue, R: Integer;
+begin
+  for i := 0 to Count - 1 do
+  begin
+    A := Data^[i*4 + 3];
+    if (A = 0) or (A = 255) then
+      Continue;
+    ATrue := Round(Sqrt(A * 255));
+    if ATrue <= 0 then
+    begin
+      Data^[i*4 + 3] := 0;
+      Continue;
+    end;
+    R := Round(Data^[i*4] * 255 / ATrue);
+    if R > 255 then
+      R := 255;
+    Data^[i*4] := R;
+    R := Round(Data^[i*4 + 1] * 255 / ATrue);
+    if R > 255 then
+      R := 255;
+    Data^[i*4 + 1] := R;
+    R := Round(Data^[i*4 + 2] * 255 / ATrue);
+    if R > 255 then
+      R := 255;
+    Data^[i*4 + 2] := R;
+    Data^[i*4 + 3] := ATrue;
+  end;
+end;
+
+procedure TSpriteImageObject.DoExecute;
+var
+  Sheet: TTyroTextureCanvas;
+  Img: TImage;
+  Tex: TTexture2D;
+begin
+  FHandleResult := cSpriteInvalid;
+  if not (Canvas is TTyroTextureCanvas) then
+    Exit;
+  Sheet := TTyroTextureCanvas(Canvas);
+  //EndDraw flushes raylib's draw batch into the sheet's texture and detaches
+  //it, which is what makes the texture safe to download; LoadImageFromTexture
+  //(glGetTexImage) then copies the true RGBA out. The screen path is not
+  //usable here: raylib's screen readback forces every alpha byte to 255, so
+  //it cannot carry a painted sprite's transparency.
+  Tex.ID := 0;
+  Sheet.EndDraw;
+  try
+    Img := RayLib.LoadImageFromTexture(Sheet.Texture.Texture);
+    if Img.Data <> nil then
+    try
+      //glGetTexImage returns the rows as the texture stores them, bottom-up;
+      //flip to the top-down order every sprite texture uses.
+      RayLib.ImageFlipVertical(Img);
+      if Img.Format <> Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) then
+        RayLib.ImageFormat(Img, Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8));
+      UnsquareAlpha(PByteArray(Img.Data), Img.Width * Img.Height);
+      Tex := RayLib.LoadTextureFromImage(Img);
+    finally
+      RayLib.UnloadImage(Img);
+    end;
+  finally
+    //rebind: ProcessQueue still counts this sheet as the bound target
+    Sheet.BeginDraw;
+  end;
+  if Tex.ID = 0 then
+  begin
+    if IsConsole then
+      WriteLn('Sprite image: readback failed');
+    Exit;
+  end;
+  if FHandle > cSpriteInvalid then
+  begin
+    //swap the texture of an existing sprite (works repeatedly: pooled
+    //sprites can change their look with it)
+    if Engine.Sprites.SetTexture(FHandle, Tex) then
+      FHandleResult := FHandle
+    else
+    begin
+      RayLib.UnloadTexture(Tex); //store did not take ownership
+      if IsConsole then
+        WriteLn('Sprite image: handle ' + IntToStr(FHandle) + ' is gone');
+    end;
+  end
+  else
+    FHandleResult := Engine.Sprites.Add(Tex, FName); //takes ownership
 end;
 
 { TDrawSpriteObject }

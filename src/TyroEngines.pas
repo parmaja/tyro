@@ -203,6 +203,7 @@ type
     procedure Clear;
     procedure ClearCanvas(ACanvas: TTyroCanvas);
     procedure ClearScriptSprites;
+    procedure ClearScriptImages;
     procedure ClearScriptTiles;
     procedure ClearScriptModels;
     procedure ClearScriptParticles;
@@ -330,7 +331,7 @@ type
     procedure Unload; virtual;
     //* After window initialized and other resource, load your resources here
     procedure Start; virtual;
-    procedure Update;
+    procedure Update; virtual;
     procedure Draw; virtual;
 
     //When application exit, unload your resources
@@ -414,6 +415,12 @@ type
 
     //Board where Lua drawing on it
     Board: TTyroCanvas;
+
+    //Paint sheets made by images.new() (of TTyroTextureCanvas, engine owns
+    //them): the game script draws on them, sprites copy their pixels with
+    //sprite:fromimage(). A script thread can neither create nor free GL
+    //memory, so they live and die on the Engine thread (see ClearScriptImages).
+    Images: TList;
 
     World: TTyroWorld;
 
@@ -1446,6 +1453,9 @@ begin
   FreeAndNil(Particles);
   //Parallaxes own layer textures: unload them while the GL context is alive.
   FreeAndNil(Parallaxes);
+  //Paint sheets own render textures too: same rule.
+  ClearScriptImages;
+  FreeAndNil(Images);
   FreeAndNil(Board);
   FreeAndNil(Res);
   FreeAndNil(FQueue);
@@ -1582,6 +1592,9 @@ begin
   //during ProcessQueue and are composited by Board.PostDraw inside the camera.
   Board := TTyroTextureCanvas.Create(AWidth, AHeight);
   Board.Name := 'Board';
+  //The list behind images.new(): paint sheets are born here, on the Engine
+  //thread, and are freed by ClearScriptImages (rerun) or Unload.
+  Images := TList.Create;
   //Board.BackColor := Res.Theme.Window.BackColor;
   //Screen is top most texture used for HUD or Status
   Screen := TTyroTextureCanvas.Create(AWidth, AHeight);
@@ -2379,6 +2392,7 @@ begin
   //new script inherits them.
   ClearScriptControls;
   ClearScriptSprites;
+  ClearScriptImages;
   ClearScriptTiles;
   ClearScriptModels;
   ClearScriptParticles;
@@ -2434,6 +2448,23 @@ begin
     Physics.RemoveAll;
   if Sprites <> nil then
     Sprites.Clear;
+end;
+
+//Paint sheets (images.new) belong to the run that made them: a rerun has to
+//unload their render textures while the GL context is alive, or every F5
+//leaks one. Sprites keep their own copies of the pixels, so dropping a sheet
+//never breaks a sprite that was already painted from it.
+procedure TTyroEngine.ClearScriptImages;
+var
+  i: Integer;
+begin
+  if Images = nil then
+    Exit;
+  for i := Images.Count - 1 downto 0 do
+  begin
+    TTyroTextureCanvas(Images[i]).Free;
+    Images.Delete(i);
+  end;
 end;
 
 //Free the tilemaps the previous run created and unload their tileset textures.
