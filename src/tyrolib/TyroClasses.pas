@@ -527,6 +527,7 @@ type
 function IsNumber(const Value: string): Boolean;
 function StrToColor(Value: String): TColor;
 function IntToColor(I: Integer): TColor;
+function Int64ToColor(I: Int64): TColor;
 function ColorToInt(C: TColor): Integer;
 
 { Codepoint helpers for UTF-8 strings }
@@ -623,7 +624,7 @@ begin
     end;
   end;
   if IsNumber(Value) then
-    Result := IntToColor(StrToIntDef(Value, 0))
+    Result := Int64ToColor(StrToInt64Def(Value, 0))
   else if SameText(Value, 'black') then
     Result := clBlack
   else if SameText(Value, 'white') then
@@ -685,6 +686,22 @@ begin
   Result.RGBA.Blue := I and $ff;
   I := I shr 8;
   Result.RGBA.Alpha := I and $ff;
+end;
+
+{ Reads the low 32 bits of a 64-bit number as the RRGGBBAA pattern.
+  Scripts pack a color as r + g*256 + b*65536 + a*16777216, so any alpha from
+  128 up passes High(Integer), and a signed parse of it (StrToColor's number
+  branch, for one) answers 0: a blank, fully transparent pen that paints
+  nothing at all. Taking the bits off an unsigned value keeps the alpha. }
+function Int64ToColor(I: Int64): TColor;
+var
+  v: Cardinal;
+begin
+  v := Cardinal(I and Int64($FFFFFFFF));
+  Result.RGBA.Red := v and $FF;
+  Result.RGBA.Green := (v shr 8) and $FF;
+  Result.RGBA.Blue := (v shr 16) and $FF;
+  Result.RGBA.Alpha := (v shr 24) and $FF;
 end;
 
 function ColorToInt(C: TColor): Integer;

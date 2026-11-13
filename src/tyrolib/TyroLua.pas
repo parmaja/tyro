@@ -1624,7 +1624,12 @@ begin
   field := L.ToString(2);
   if field = 'color' then
   begin
-    if L.IsString(-1) then
+    // lua_isstring answers true for numbers, so a packed color used to be read
+    // back from its text and StrToColor lost any alpha of 128 or more (the
+    // value passes High(Integer)). Take a real Lua integer by its bits instead.
+    if L.IsInteger(-1) then
+      aColor := Int64ToColor(L.ToInt64(-1))
+    else if L.IsString(-1) then
       aColor := StrToColor(L.ToString(-1))
     else
       aColor := IntToColor(L.ToInteger(-1));

@@ -26,11 +26,14 @@
 --======================================================================
 
 window.show(800, 600)
-local W = canvas.width
-local H = canvas.height
+local W = world.width
+local H = world.height
 
 -- Load custom Matrix font (White Rabbit)
-font.load("whitrabt.ttf", 12)
+-- 12 is the size this pixel font builds a glyph sheet for: ask raylib for a
+-- bigger one and it comes back with empty glyphs, so no text shows at all.
+local FONT_SIZE = 12
+font.load("whitrabt.ttf", FONT_SIZE)
 
 -- Enable CRT phosphor shader
 local shaderOn = true
@@ -47,9 +50,17 @@ local MUSIC_DURATION = 139.5 -- 2m 19.5s
 music.play(musicFile)
 
 -- Helper color functions (ABGR packed integer format for Tyro)
+-- The engine reads a color as a 32-bit signed integer, so a packed alpha of
+-- 128 or more (a * 16777216 >= 2^31) leaves the signed range and arrives as 0:
+-- a fully transparent pen that paints nothing at all. Wrap it back into the
+-- signed range so every alpha from 0 to 255 reaches the pen.
 local function rgba(r, g, b, a)
   a = a or 255
-  return r + g * 256 + b * 65536 + a * 16777216
+  local value = r + g * 256 + b * 65536 + a * 16777216
+  if value >= 2147483648 then
+    value = value - 4294967296
+  end
+  return value
 end
 
 local COL_BG       = rgba(3, 8, 5, 255)
@@ -272,6 +283,9 @@ local function spawnItem()
   end
 end
 
+-- The page behind the rain: a near-black phosphor green, never the pen color.
+world.backcolor = COL_BG
+world.title = "THE MATRIX - DIGITAL RAIN & CYBER DEFENSE"
 -- ======================================================================
 --  Main Loop
 -- ======================================================================
@@ -544,12 +558,15 @@ function update(dt)
     notifTimer = 3.0
     sfxExplode()
   end
+end
 
-  -- ------------------------------------------------------------------
-  -- DRAW SCREEN
-  -- ------------------------------------------------------------------
-  canvas.color = COL_BG
-  canvas.clear()
+-- ======================================================================
+--  Draw - the world page is repainted every frame, so all of it lives here
+-- ======================================================================
+function draw()
+  -- Fresh phosphor every frame: the board keeps what it was painted with,
+  -- so without this the rain would smear down the screen and never fade.
+  world.clear()
 
   -- 1. Draw Digital Rain Columns
   for i = 1, NUM_COLS do
@@ -565,18 +582,18 @@ function update(dt)
 
         if step == 0 then
           -- Bright white-hot leading character
-          canvas.color = COL_HEAD
+          world.color = COL_HEAD
         elseif step <= 3 then
-          canvas.color = COL_BRIGHT
+          world.color = COL_BRIGHT
         elseif step <= 9 then
-          canvas.color = COL_MID
+          world.color = COL_MID
         elseif step <= 18 then
-          canvas.color = COL_DIM
+          world.color = COL_DIM
         else
-          canvas.color = COL_FAINT
+          world.color = COL_FAINT
         end
 
-        canvas.text(col.x, charY, ch)
+        world.text(col.x, charY, ch)
       end
     end
   end
@@ -584,72 +601,72 @@ function update(dt)
   -- 2. Draw Particles
   for k = 1, #particles do
     local p = particles[k]
-    canvas.color = p.color
-    canvas.text(p.x, p.y, p.char)
+    world.color = p.color
+    world.text(p.x, p.y, p.char)
   end
 
   -- 3. Draw EMP Ring if active
   if empActive then
-    canvas.color = COL_CYAN
-    canvas.circle(empOriginX, empOriginY, math.floor(empWaveRadius), false)
-    canvas.circle(empOriginX, empOriginY, math.floor(empWaveRadius - 2), false)
+    world.color = COL_CYAN
+    world.circle(empOriginX, empOriginY, math.floor(empWaveRadius), false)
+    world.circle(empOriginX, empOriginY, math.floor(empWaveRadius - 2), false)
   end
 
   -- 4. Draw HUD / Matrix Terminal Status
   -- Top bar backdrop
-  canvas.color = rgba(5, 15, 10, 210)
-  canvas.rectangle(0, 0, W, 42, true)
-  canvas.color = COL_BRIGHT
-  canvas.line(0, 42, W, 42)
+  world.color = rgba(5, 15, 10, 210)
+  world.rectangle(0, 0, W, 42, true)
+  world.color = COL_BRIGHT
+  world.line(0, 42, W, 42)
 
-  canvas.color = COL_BRIGHT
-  canvas.text(14, 12, "SYSTEM INTEGRITY:")
+  world.color = COL_BRIGHT
+  world.text(14, 12, "SYSTEM INTEGRITY:")
 
   -- Integrity health bar
   local barW = 120
-  canvas.color = rgba(20, 50, 30, 255)
-  canvas.rectangle(170, 14, barW, 14, true)
+  world.color = rgba(20, 50, 30, 255)
+  world.rectangle(170, 14, barW, 14, true)
   local fillW = math.floor((integrity / 100) * barW)
   if integrity > 50 then
-    canvas.color = COL_BRIGHT
+    world.color = COL_BRIGHT
   elseif integrity > 25 then
-    canvas.color = COL_GOLD
+    world.color = COL_GOLD
   else
-    canvas.color = COL_RED
+    world.color = COL_RED
   end
   if fillW > 0 then
-    canvas.rectangle(170, 14, fillW, 14, true)
+    world.rectangle(170, 14, fillW, 14, true)
   end
-  canvas.color = COL_HEAD
-  canvas.rectangle(170, 14, barW, 14, false)
+  world.color = COL_HEAD
+  world.rectangle(170, 14, barW, 14, false)
 
   -- Score & Threat
-  canvas.color = COL_HEAD
-  canvas.text(310, 12, string.format("CODE: %06d", score))
-  canvas.color = COL_CYAN
-  canvas.text(470, 12, string.format("THREAT: LVL %d", threatLevel))
+  world.color = COL_HEAD
+  world.text(310, 12, string.format("CODE: %06d", score))
+  world.color = COL_CYAN
+  world.text(470, 12, string.format("THREAT: LVL %d", threatLevel))
 
   -- Bullet Time indicator
   if bulletTime > 0 then
-    canvas.color = COL_GOLD
-    canvas.text(630, 12, string.format("BULLET-TIME: %.1fs", bulletTime))
+    world.color = COL_GOLD
+    world.text(630, 12, string.format("BULLET-TIME: %.1fs", bulletTime))
   else
-    canvas.color = COL_DIM
-    canvas.text(630, 12, "[B]ULLET TIME")
+    world.color = COL_DIM
+    world.text(630, 12, "[B]ULLET TIME")
   end
 
   -- Bottom status / notification ticker
   if notifTimer > 0 and notification ~= "" then
-    canvas.color = rgba(0, 15, 5, 230)
-    canvas.rectangle(0, H - 36, W, 36, true)
-    canvas.color = COL_BRIGHT
-    canvas.line(0, H - 36, W, 36)
-    canvas.color = COL_HEAD
-    canvas.text(20, H - 26, "> " .. notification)
+    world.color = rgba(0, 15, 5, 230)
+    world.rectangle(0, H - 36, W, 36, true)
+    world.color = COL_BRIGHT
+    world.line(0, H - 36, W, H - 36)
+    world.color = COL_HEAD
+    world.text(20, H - 26, "> " .. notification)
   else
-    canvas.color = rgba(0, 10, 5, 160)
-    canvas.rectangle(0, H - 26, W, 26, true)
-    canvas.color = COL_DIM
-    canvas.text(14, H - 20, "CONTROLS: MOUSE/ARROWS to AIM | SPACE/CLICK FIRE | [B] BULLET TIME | [M] MUTE | [R] SOUNDTRACK | [S] CRT SHADER | [ESC] QUIT")
+    world.color = rgba(0, 10, 5, 160)
+    world.rectangle(0, H - 26, W, 26, true)
+    world.color = COL_DIM
+    world.text(14, H - 20, "CONTROLS: MOUSE/ARROWS to AIM | SPACE/CLICK FIRE | [B] BULLET TIME | [M] MUTE | [R] SOUNDTRACK | [S] CRT SHADER | [ESC] QUIT")
   end
 end
