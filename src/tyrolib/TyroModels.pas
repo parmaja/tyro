@@ -211,13 +211,13 @@ type
   { The store. Mirrors TTiles: a lock, a dictionary keyed by handle and an
     ever-increasing handle counter, so a handle a script still holds can never
     address a model of a later run. The engine drains the visible models once
-    per frame inside DrawAll, reading the live transform under the same lock. }
+    per frame inside Draw, reading the live transform under the same lock. }
   TModels3D = class(TObject)
   private
     FLock: TmnCriticalSection;
     FItems: TDictionary<Integer, TModel3D>;
     FNextHandle: Integer;
-    //Cast-shadow light (see DrawAll). LightDir is the direction the light
+    //Cast-shadow light (see Draw). LightDir is the direction the light
     //travels, Ambient (0..1) fills the shadow with sky light, and GroundY is
     //the world-depth plane the shadows fall on (the "sea floor" behind the
     //models). They live on the store (not a single model) because every model
@@ -440,7 +440,7 @@ type
     function GetRoll(Handle: integer): single;
     procedure SetShadow(Handle: integer; AShadow: boolean);
     function GetShadow(Handle: integer): boolean;
-    //Which side of the 2D world the model rides (see DrawAll's AUnder and
+    //Which side of the 2D world the model rides (see Draw's AUnder and
     //TTyroAnimatedObject.Layer): 0 (the default) flies over the 2D scene as
     //ever, a negative layer sinks the whole body - and its shade - under it.
     procedure SetLayer(Handle: integer; ALayer: integer);
@@ -511,7 +511,7 @@ type
     function GetAnimSpeed(Handle: integer): single;
 
     // True when at least one visible, loaded model rides this side of the 2D
-    // world (see Layer/DrawAll): HasTop the layer >= 0 bodies over it,
+    // world (see Layer/Draw): HasTop the layer >= 0 bodies over it,
     // HasUnder the layer < 0 bodies below it. Lets the caller skip the whole
     // BeginMode3D/EndMode3D pass on an empty side.
     function HasUnder: boolean;
@@ -523,7 +523,7 @@ type
     // side of the 2D world this pass draws (see Layer): True only the
     // layer < 0 bodies, drawn before the 2D world so it covers them; False
     // (the default) the rest, riding over it as ever.
-    procedure DrawAll(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean = False);
+    procedure Draw(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean = False);
 
     property Count: integer read GetCount;
     property Items[Index: Integer]: TModel3D read GetItems; default;
@@ -583,7 +583,7 @@ const
   cModel3DCamRest = 400.0;
   //Cast-shadow look: the ink the silhouette is laid in, and how dark it can
   //get. Ambient light fills a shadow, so at full ambient the alpha drops to 0
-  //and the whole shade switches itself off. Here rather than in DrawAll
+  //and the whole shade switches itself off. Here rather than in Draw
   //because the sheet, the ink and the coat that lays it are three hands on the
   //same colour.
   cModel3DShadowMaxAlpha = 150;
@@ -598,7 +598,7 @@ const
      m3: 0;  m7: 0;  m11: 0; m15: 1);
   //The axis fix the generated cylinder, cone and torus carry: raylib spins
   //all three around its Y axis, the engine's world stands them on Z. For the
-  //column-vector reading rlMultMatrixf gets (see the note in DrawAll) that is
+  //column-vector reading rlMultMatrixf gets (see the note in Draw) that is
   //the map (x, y, z) -> (x, -z, y): Y lands on +Z, and Z swings to -Y.
   cModel3DAxisZUp: TMatrix =
     (m0: 1;  m4: 0;  m8: 0;  m12: 0;
@@ -1153,7 +1153,7 @@ void main()
 ''';
 
 // The light dress: the shader pair is tried once a run, here on the main
-// thread where the GL context lives (DrawAll is about to ask for it). A GPU
+// thread where the GL context lives (Draw is about to ask for it). A GPU
 // that will not compile it leaves the world in its flat dress - the models
 // simply never hear about the swap - rather than spoiling the frame every
 // frame. The uniform names are the shader's own ("amb", "sun", and the two
@@ -3288,7 +3288,7 @@ begin
   Result := HasSide(False);
 end;
 
-procedure TModels3D.DrawAll(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean);
+procedure TModels3D.Draw(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean);
 const
   //Distance of the eye above the pixel plane. The ortho frustum clips at
   //0.01..1000, so this leaves the models room for a +/-399 depth range.

@@ -717,10 +717,9 @@ begin
             //canvas covers them (their shade too). The default layer 0 never
             //comes here, so a world that does not opt in draws as ever.
             if (Models <> nil) and Models.HasUnder then
-              Models.DrawAll(Camera2D.Offset.X, Camera2D.Offset.Y,
-                RayLib.GetScreenWidth, RayLib.GetScreenHeight, True);
+              Models.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, Screen.Width, Screen.Height, True);
 
-            BeginMode2D(Camera2D);
+            RayLib.BeginMode2D(Camera2D);
 
             if Parallaxes <> nil then
               Parallaxes.Draw(Screen.Width, Screen.Height);
@@ -730,7 +729,7 @@ begin
             //it is composited after the sprites instead.
             Board.PostDraw;
             try
-              Sprites.DrawAll;
+              Sprites.Draw;
             except
               on E: Exception do
               begin
@@ -753,9 +752,9 @@ begin
             //The 3D models ride above the 2D scene but below the controls, so the
             //pass sits between EndMode2D and the control tree. Camera2D.Offset is
             //the same margin/shake offset the board and sprites got, so everything
-            //shakes together; the camera inside DrawAll maps it onto the models.
+            //shakes together; the camera inside Draw maps it onto the models.
             if (Models <> nil) and Models.HasTop then
-              Models.DrawAll(Camera2D.Offset.X, Camera2D.Offset.Y,
+              Models.Draw(Camera2D.Offset.X, Camera2D.Offset.Y,
                 RayLib.GetScreenWidth, RayLib.GetScreenHeight, False);
 
             //The top sprite band (layer >= cLayerTop3D) rides over the 3D pass:
@@ -767,7 +766,7 @@ begin
             begin
               BeginMode2D(Camera2D);
               try
-                Sprites.DrawAll(False);
+                Sprites.Draw(False);
               finally
                 EndMode2D;
               end;

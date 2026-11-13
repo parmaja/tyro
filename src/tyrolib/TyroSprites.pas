@@ -235,7 +235,7 @@ type
     // draws the sprites that ride under the models - the whole 2D world as
     // ever - and False draws only the top band, the sprites that opt to sit
     // over them.
-    procedure DrawAll(ABelow3D: boolean = True);
+    procedure Draw(ABelow3D: boolean = True);
     // Dispatch on_draw() for visible scripted sprites (called after the
     // legacy Graphic layer is blitted, so script overlays stay on top)
     procedure DrawScripts;
@@ -1093,7 +1093,7 @@ begin
       else
       begin
         Sprite.ShaderName := SName;
-        // Invalidate compiled shader so DrawAll acquires it with active OpenGL context
+        // Invalidate compiled shader so Draw acquires it with active OpenGL context
         Sprite.Shader := Default(TShader);
         Sprite.ShaderTimeLoc := -1;
         Sprite.ShaderResLoc := -1;
@@ -1770,7 +1770,7 @@ begin
   end;
 end;
 
-procedure TSprites.DrawAll(ABelow3D: boolean);
+procedure TSprites.Draw(ABelow3D: boolean);
 var
   Sprite: TSprite;
   Order: array of TSprite;
