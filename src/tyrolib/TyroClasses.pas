@@ -213,11 +213,12 @@ type
   end;
 
 const
-  //Where the sprite layers cross the 3D pass: a sprite below this layer draws
-  //with the 2D world (under every model, as always), and one at or above it is
-  //drawn a second time after the models - the sprite way to ride over a jet.
-  //The models answer with their own Layer: negative sinks the whole body under
-  //the 2D world, 0 (the default) keeps it on top, exactly the old order.
+  //Where the 2D drawables (sprites and particle bursts) cross the 3D pass: a
+  //layer below this stays with the 2D world (under every model, as always),
+  //and one at or above it is drawn after the models - the sprite way to ride
+  //over a jet, the spark way to rain debris. The models answer with their own
+  //Layer: negative sinks the whole body under the 2D world, 0 (the default)
+  //keeps it on top, exactly the old order.
   cLayerTop3D = 1000;
 
 type

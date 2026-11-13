@@ -569,26 +569,27 @@ local function add_blast(x, sy, big)
 end
 
 -- Engine-owned sparks (particles.emit): throw the burst and forget it - the
--- engine steps the sparks every frame and draws them above the 3D pass, so
--- debris always rains over the jets that made it. The 2D flash below is only
--- the hot core for its first frames; these are the shrapnel that carries the
--- blast from there on.
+-- engine steps the sparks every frame. Like a sprite, a burst's layer picks
+-- its side of the 3D pass: layer 0 (the default) burns under the jets, and
+-- layer 1000 (cLayerTop3D) rains the debris over them. The 2D flash below is
+-- only the hot core for its first frames; these are the shrapnel that carries
+-- the blast from there on.
 local function spark_burst(x, sy, big)
   -- A column of grey smoke goes up first: thrown down at the sea's own pace
   -- it rides the water instead of hanging in the air, and it burns on the
-  -- UNDER layer so the bright shrapnel stays the top of the blast.
+  -- under layer (0) so the bright shrapnel stays the top of the blast.
   if big then
     particles.emit(x, sy, 16, { color = colors.gray, speed = SCROLL, life = 1.0,
-      size = 8, gravity = 0, drag = 0.7, spread = 60, direction = 90, under = true })
-    particles.emit(x, sy, 34, { color = colors.orange, speed = 220, life = 0.8, size = 4, gravity = 150, drag = 1.1 })
-    particles.emit(x, sy, 18, { color = colors.yellow, speed = 140, life = 0.5, size = 3, gravity = 110 })
-    particles.emit(x, sy, 12, { color = colors.white,  speed = 100, life = 0.3, size = 3 })
+      size = 8, gravity = 0, drag = 0.7, spread = 60, direction = 90 })
+    particles.emit(x, sy, 34, { color = colors.orange, speed = 220, life = 0.8, size = 4, gravity = 150, drag = 1.1, layer = 1000 })
+    particles.emit(x, sy, 18, { color = colors.yellow, speed = 140, life = 0.5, size = 3, gravity = 110, layer = 1000 })
+    particles.emit(x, sy, 12, { color = colors.white,  speed = 100, life = 0.3, size = 3, layer = 1000 })
   else
     particles.emit(x, sy, 9, { color = colors.gray, speed = SCROLL, life = 0.8,
-      size = 6, gravity = 0, drag = 0.7, spread = 60, direction = 90, under = true })
-    particles.emit(x, sy, 18, { color = colors.orange, speed = 170, life = 0.6, size = 3.5, gravity = 130, drag = 1.2 })
-    particles.emit(x, sy, 10, { color = colors.yellow, speed = 110, life = 0.4, size = 3, gravity = 100 })
-    particles.emit(x, sy, 7,  { color = colors.white,  speed = 90,  life = 0.28, size = 2.5 })
+      size = 6, gravity = 0, drag = 0.7, spread = 60, direction = 90 })
+    particles.emit(x, sy, 18, { color = colors.orange, speed = 170, life = 0.6, size = 3.5, gravity = 130, drag = 1.2, layer = 1000 })
+    particles.emit(x, sy, 10, { color = colors.yellow, speed = 110, life = 0.4, size = 3, gravity = 100, layer = 1000 })
+    particles.emit(x, sy, 7,  { color = colors.white,  speed = 90,  life = 0.28, size = 2.5, layer = 1000 })
   end
 end
 
@@ -702,7 +703,7 @@ local function step_bullets(ft)
             kill_enemy(j)
           else
             add_blast(b.x, b.sy, false)
-            particles.emit(b.x, b.sy, 4, { color = colors.yellow, speed = 80, life = 0.2, size = 2 })
+            particles.emit(b.x, b.sy, 4, { color = colors.yellow, speed = 80, life = 0.2, size = 2, layer = 1000 })
             beep(500, 40)
           end
           hit = true
@@ -973,9 +974,9 @@ end
 -- a crown of white spray over a blue wash - the sea closing over a shell
 local function bomb_splash(x, sy)
   particles.emit(x, sy, 10, { color = colors.white, speed = 130, life = 0.3,
-    size = 3, gravity = 140, drag = 1.2, spread = 150, direction = -90 })
+    size = 3, gravity = 140, drag = 1.2, spread = 150, direction = -90, layer = 1000 })
   particles.emit(x, sy, 8, { color = colors.skyblue, speed = 80, life = 0.5,
-    size = 4, gravity = 40, drag = 1.0, spread = 360 })
+    size = 4, gravity = 40, drag = 1.0, spread = 360, layer = 1000 })
   beep(160, 70)
 end
 
@@ -1037,7 +1038,7 @@ local function step_missiles(ft)
       m.puff = 0.05
       particles.emit(m.x - m.vx * 0.05, m.sy - m.vy * 0.05, 1,
         { color = colors.gray, speed = 12, life = 0.5, size = 2.5,
-          gravity = 0, drag = 2.2, under = true })
+          gravity = 0, drag = 2.2 })
     end
     if m.sy < -16 or m.sy > H + 16 or m.x < -16 or m.x > W + 16 then
       table.remove(missiles, i)
@@ -1064,7 +1065,7 @@ local function fire()
   -- a pinch of muzzle flash at the nose, so every shot leaves a spark
   particles.emit(px, py - 14, 3,
     { color = colors.yellow, speed = 90, life = 0.12, size = 2,
-      gravity = 0, spread = 34, direction = -90 })
+      gravity = 0, spread = 34, direction = -90, layer = 1000 })
   shoot_sfx()
   gamepad.vibrate(0.06, 0.1, 0.05)
 end
@@ -1173,8 +1174,8 @@ local function simulate(ft)
     -- Afterburner trail: the air stands still while the sea scrolls under
     -- it, so the exhaust is thrown in behind the jet and rides down with
     -- the waves. The flame burns in the power level's colors. It rides the
-    -- UNDER layer and starts TRAIL_BEHIND px aft of the tail, so the jet
-    -- covers the flame at its own skin and only the burn behind shows.
+    -- under layer (0) and starts TRAIL_BEHIND px aft of the tail, so the
+    -- jet covers the flame at its own skin and only the burn behind shows.
     trailT = trailT - ft
     if trailT <= 0 then
       trailT = 0.03
@@ -1184,8 +1185,7 @@ local function simulate(ft)
       elseif player.weapon >= 3 then flame = colors.skyblue end
       particles.emit(player.x, player.y + 15 * s + TRAIL_BEHIND, 2,
         { color = flame, speed = 70, life = 0.3, size = 2.5 * s,
-          gravity = 90, drag = 1.6, spread = 26, direction = 90,
-          under = true })
+          gravity = 90, drag = 1.6, spread = 26, direction = 90 })
     end
 
     -- Wingtip smoke: leaned over hard, the jet tears two ribbons off its
@@ -1198,10 +1198,10 @@ local function simulate(ft)
       local wx = 20 * s * math.cos(math.rad(player.roll))
       particles.emit(player.x + wx, player.y, 1,
         { color = colors.gray, speed = 14, life = 0.5, size = 2.5,
-          gravity = 0, drag = 2.6 })
+          gravity = 0, drag = 2.6, layer = 1000 })
       particles.emit(player.x - wx, player.y, 1,
         { color = colors.gray, speed = 14, life = 0.5, size = 2.5,
-          gravity = 0, drag = 2.6 })
+          gravity = 0, drag = 2.6, layer = 1000 })
     end
 
     -- Fly-through haze: at cloud height with a puff around the jet the

@@ -3,8 +3,9 @@
 Something blew up and you want shards, sparks and smoke - without writing a
 particle engine yourself. Tyro has one built in: the global `particles` table.
 You **throw a burst** at a screen position and forget about it. The engine
-animates every spark and draws it for you, on top of the sprites and the 3D
-models, until the last spark fades.
+animates every spark and draws it for you, until the last spark fades. Like a
+sprite, a burst carries a `layer`: the default keeps it with the 2D world
+(under the 3D models), and `layer = 1000` rains it over them.
 
 ```lua
 function update(dt)
@@ -40,7 +41,7 @@ cleanup. The sparks move, shrink, fade and vanish on their own.
 | `drag` | `1.5` | fraction of the speed shed per second (air friction) |
 | `spread` | `360` | degrees the burst covers; `360` is a full ring |
 | `direction` | `0` | the middle of the spread, degrees (`0` right, `-90` up) |
-| `under` | `false` | `true` draws the burst BELOW the 3D models - for a flame a jet carries, so the model covers it |
+| `layer` | `0` | which side of the 3D models the burst rides, same as a sprite's layer: the default stays under them, `1000` or more draws it over them |
 
 The engine caps the sky at 2048 sparks; when it is full, a new burst is
 simply dropped - so firing wildly can never slow the game down.
@@ -82,8 +83,9 @@ particles.emit(fairy.x, fairy.y, 2, { color = 'skyblue', speed = 20,
 - **Emit anywhere.** `particles.emit()` is safe in `update()`, in a collision
   callback or in plain script code - it is not a drawing command, it is a
   request the engine takes over.
-- The bursts are drawn **above the 3D models**, so an explosion always reads
-  over the jets, cars or wizards that made it. A burst emitted with
-  `under = true` takes the layer *below* the models instead - the right choice
-  for an exhaust flame a jet carries: the plane covers the flame at its own
-  skin, and only the burn behind the tail shows.
+- A burst rides the **2D world layer** by default, so the 3D models cover it -
+  the right choice for an exhaust flame a jet carries: the plane covers the
+  flame at its own skin, and only the burn behind the tail shows. A burst
+  emitted with `layer = 1000` takes the layer *over* the models instead, so
+  the debris of an explosion always reads above the jets, cars or wizards
+  that made it.

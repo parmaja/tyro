@@ -11,12 +11,13 @@ unit TyroParticles;
  *  A script throws a burst with particles.emit(x, y [, count] [, options]) and
  *  forgets about it: the store owns every spark from then on. The engine steps
  *  the sparks during Update (the same step the sprite animations get, so a
- *  paused scene freezes them too) and draws them once per frame right after
- *  the 3D models, so an explosion always reads on top of the jets and sprites
- *  that made it. A burst emitted with under = true takes the other layer: it
- *  is drawn BEFORE the model pass, so a jet covers the exhaust flame burning
- *  at its own tail. No per-frame call is needed from the script, exactly
- *  like the model pass.
+ *  paused scene freezes them too) and draws them once per frame. Like every
+ *  other drawable the burst's Layer picks its side of the 3D pass (see
+ *  cLayerTop3D): the default 0 stays with the 2D world and is drawn BEFORE the
+ *  model pass, so a model covers an exhaust flame burning at its own tail; a
+ *  layer at or above the split is drawn AFTER the models, the way to rain
+ *  debris over the jets that made it. No per-frame call is needed from the
+ *  script, exactly like the model pass.
  *
  *  Sparks live in plain screen space - x grows right, y grows down, gravity
  *  pulls toward the bottom edge, and the whole pass rides the camera offset
@@ -53,7 +54,7 @@ type
     Gravity: Single;        // px/s^2, positive pulls toward the bottom edge
     Drag: Single;           // fraction of the speed shed per second
     Color: TColor;
-    Under: Boolean;         // True: rides the layer BELOW the 3D models
+    Layer: Integer;         // the emit's layer: >= cLayerTop3D rides OVER the 3D models
   end;
 
   { One burst request: the shape every spark of an emit() is born from. The
@@ -70,7 +71,7 @@ type
     Drag: Single;           // fraction of the speed shed per second
     Spread: Single;         // degrees; 360 throws a full ring
     Direction: Single;      // degrees; the middle of the spread, 0 = right
-    Under: Boolean;         // True: draw below the 3D models (burning exhaust)
+    Layer: Integer;         // which side of the 3D pass (see cLayerTop3D), 0 = with the 2D world
   end;
 
   { TParticles }
@@ -94,7 +95,8 @@ type
     function NextRand: single;
     function GetCount: integer;
     //Shared walk of HasUnder/HasTop: true when a live spark sits on the
-    //asked side of the 3D pass (the emit's under flag).
+    //asked side of the 3D pass (its layer, see cLayerTop3D). AUnder asks for
+    //the under-model side (True) or the over-model one (False).
     function HasSide(AUnder: Boolean): boolean;
   public
     constructor Create;
@@ -111,12 +113,13 @@ type
       ASpeed, ALife, ASize: single): integer; overload;
     // Advance every spark by one frame (main thread, from the engine Update).
     procedure Step(ADt: single);
-    // Draw one layer of sparks (main thread). AUnder picks the layer: the
-    // under-sparks go before the 3D model pass, the rest after it. AX/AY are
-    // the Camera2D offset so the sparks shake with the world like the models.
-    procedure Draw(AX, AY: single; AUnder: Boolean = False);
+    // Draw one layer of sparks (main thread). ABelow3D picks the layer by the
+    // spark's layer (see cLayerTop3D): True takes the ones below the 3D model
+    // pass, False the ones lifted over it. AX/AY are the Camera2D offset so the
+    // sparks shake with the world like the models do.
+    procedure Draw(AX, AY: single; ABelow3D: Boolean = False);
     // True when at least one alive spark rides this side of the 3D pass
-    // (the emit's under flag, see Draw), so the caller can skip an empty layer.
+    // (by its layer, see Draw), so the caller can skip an empty layer.
     function HasUnder: boolean; // some spark burns below the models
     function HasTop: boolean;   // some spark burns over them
     property Count: integer read GetCount;
@@ -211,7 +214,7 @@ begin
       P.Gravity := Burst.Gravity;
       P.Drag := Burst.Drag;
       P.Color := Burst.Color;
-      P.Under := Burst.Under;
+      P.Layer := Burst.Layer;
       FItems[FCount] := P;
       Inc(FCount);
     end;
@@ -237,7 +240,7 @@ begin
   Burst.Drag := 1;
   Burst.Spread := 360;
   Burst.Direction := 0;
-  Burst.Under := False;
+  Burst.Layer := 0;
   Result := Emit(Burst);
 end;
 
@@ -282,8 +285,9 @@ end;
 //A spark fades and shrinks along its life: alpha rides the remaining time
 //straight down, the radius keeps a small core so the last frame still shows a
 //dot instead of a vanishing smear. Only the sparks of the requested layer are
-//drawn; AUnder picks under-the-model (True) or over-the-model (False).
-procedure TParticles.Draw(AX, AY: single; AUnder: Boolean);
+//drawn; ABelow3D picks below-the-model (True, the 2D-world side) or
+//over-the-model (False) - the same cLayerTop3D split the sprites answer to.
+procedure TParticles.Draw(AX, AY: single; ABelow3D: Boolean);
 var
   I: Integer;
   P: TParticle;
@@ -295,7 +299,7 @@ begin
     for I := 0 to FCount - 1 do
     begin
       P := FItems[I];
-      if P.Under <> AUnder then
+      if ABelow3D = (P.Layer >= cLayerTop3D) then
         Continue;
       Remain := P.Life / P.TTL;
       Col := P.Color;
@@ -316,7 +320,7 @@ begin
   FLock.Enter;
   try
     for I := 0 to FCount - 1 do
-      if FItems[I].Under = AUnder then
+      if (FItems[I].Layer < cLayerTop3D) = AUnder then
         Exit(True);
   finally
     FLock.Leave;

@@ -742,10 +742,10 @@ begin
             Draw;
             EndMode2D;
 
-            //Sparks flagged under = true burn BELOW the jets: they take a pass
-            //before the 3D models, so a model covers the exhaust flame riding at
-            //its own tail. They take the same margin/shake offset as everything
-            //else on this frame.
+            //Sparks whose layer stays below cLayerTop3D burn UNDER the jets:
+            //they take a pass before the 3D models, so a model covers the
+            //exhaust flame riding at its own tail. They take the same
+            //margin/shake offset as everything else on this frame.
             if (Particles <> nil) and Particles.HasUnder then
               Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, True);
 
@@ -772,9 +772,10 @@ begin
               end;
             end;
 
-            //The rest of the sparks ride on top of the 3D models, so an explosion
-            //always reads over the jets and sprites that made it; they take the
-            //same margin/shake offset the models got and shake together with them.
+            //The sparks whose layer reaches cLayerTop3D ride on top of the 3D
+            //models, so an explosion lifted that high reads over the jets and
+            //sprites that made it; they take the same margin/shake offset the
+            //models got and shake together with them.
             if (Particles <> nil) and Particles.HasTop then
               Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, False);
 

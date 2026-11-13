@@ -13,7 +13,7 @@ Think of the window like a sandwich:
   screen   ← the glass in front of the window (always on top, never moves)
   controls ← buttons, terminal, output...
   models   ← 3D models (if you use any)
-  particles← engine sparks on top of the models (see help/particles.md)
+  particles← engine sparks (their layer picks the side of the models - see help/particles.md)
   sprites  ← your sprites and tiles
 ```
 
@@ -27,18 +27,21 @@ Think of the window like a sandwich:
 
 ## The Drawing Order (Back to Front)
 
-Every frame Tyro paints the window in this order:
+Every frame Tyro paints the window in this order (back to front):
 
 1. **world** - the background is filled with the world back color
 2. **canvas** - the sheet is composited (with its shader effect, if set)
-3. **sprites** - all your sprites and tile maps
-4. **3D models** - if any
-5. **particles** - the engine's live `particles.emit()` sparks, if any
-   (see `help/particles.md`)
-6. **controls** - the terminal, output panel, buttons
-7. **screen** - the top buffer, drawn **last**
+3. **sprites (under layer)** - your sprites and tiles with `layer < 1000`
+4. **particles (under layer)** - sparks with `layer < 1000` (the default)
+5. **3D models** - if any
+6. **sprites (top layer)** - the few sprites lifted to `layer >= 1000`
+7. **particles (top layer)** - sparks lifted to `layer >= 1000`
+8. **controls** - the terminal, output panel, buttons
+9. **screen** - the top buffer, drawn **last**
 
-So something you draw with `screen.text()` is always on top of sprites,
+One number, `layer`, orders everything against the 3D pass: below `1000`
+stays with the 2D world (under the models), at or above `1000` rides over
+them. So something you draw with `screen.text()` is always on top of sprites,
 controls and everything else.
 
 ---
