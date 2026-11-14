@@ -30,7 +30,8 @@
 local D = require("breakout_data")
 
 window.show(D.W, D.H)
-local W, H = canvas.width, canvas.height
+world.backcolor = colors.black          -- the page behind everything
+local W, H = world.width, world.height
 
 local WALL = D.WALL               -- side rail thickness for the ball bounds
 local TOP = D.TOP                 -- the ball bounces under the HUD bar
@@ -55,12 +56,11 @@ local function play_wav(file, vol)
   pcall(function() sound.play(file, vol or 0.85) end)
 end
 
--- Chiptune theme: music.mml has no stop, so the loop is re-armed by timer
--- only while the game is playing (same pattern as neonrunner).
+-- Chiptune theme: one endless music.mml loop (true = loop it). music.stop()
+-- ends it for the jingles, the pause screen and the mute button.
 local function play_theme()
-  music_timer = D.MUSIC_LOOP
   if muted then return end
-  pcall(function() music.mml(D.MML_LEAD, D.MML_BASS) end)
+  pcall(function() music.mml(D.MML_LEAD, D.MML_BASS, true) end)
 end
 
 -- Music volume: PLUS / MINUS adjust the tune only (music.volume), the sound
@@ -127,7 +127,6 @@ local particles = {}
 local trail = {}
 local floats = {}
 local combo = 0
-music_timer = 0
 local best_beat = false
 local MAX_PARTICLES = 180
 
@@ -138,7 +137,7 @@ local wide_t, sticky_t, laser_t = 0, 0, 0
 local laser_cd = 0
 local drop_seq = 0                -- round-robin for capsule sprite frames
 
--- Canvas colours matching the eight brick tiles (frame order of bricks.png)
+-- Pen colours matching the eight brick tiles (frame order of bricks.png)
 local BRICK_COLORS = {
   colors.red, colors.orange, colors.yellow,
   colors.lime, colors.aqua, colors.purple,
@@ -212,26 +211,26 @@ end
 
 local function draw_fx()
   -- Ball trail: fading afterglow circles under the sprites
-  canvas.color = colors.aqua
+  world.color = colors.aqua
   for _, p in ipairs(trail) do
     local k = 1 - p.t / 0.28
-    canvas.alpha = math.floor(k * 110)
-    canvas.circle(p.x, p.y, 2 + 5 * k, true)
+    world.alpha = math.floor(k * 110)
+    world.circle(p.x, p.y, 2 + 5 * k, true)
   end
   -- Brick debris
   for _, p in ipairs(particles) do
-    canvas.alpha = math.floor((1 - p.t / p.life) * 230)
-    canvas.color = p.col
-    canvas.rectangle(p.x, p.y, p.size, p.size, true)
+    world.alpha = math.floor((1 - p.t / p.life) * 230)
+    world.color = p.col
+    world.rectangle(p.x, p.y, p.size, p.size, true)
   end
-  canvas.alpha = 255
+  world.alpha = 255
   -- Floating texts
   for _, f in ipairs(floats) do
-    canvas.alpha = math.floor((1 - f.t) * 255)
-    canvas.color = f.col
-    canvas.text(f.x - 14, f.y, f.text)
+    world.alpha = math.floor((1 - f.t) * 255)
+    world.color = f.col
+    world.text(f.x - 14, f.y, f.text)
   end
-  canvas.alpha = 255
+  world.alpha = 255
 end
 
 -- -----------------------------------------------------------------------------
@@ -265,7 +264,7 @@ local function respawn_ball()
   ball_sp[1].show()
 end
 
--- sprites draw over the canvas, so the pause / game-over screens hide the field
+-- sprites draw over the world page, so the pause / game-over screens hide the field
 local function set_field_visible(on)
   paddle_sp.visible = on
   wall.visible = on
@@ -451,6 +450,7 @@ local function damage_brick(b, hit_x, hit_y, ball_hit)
         state_timer = D.CLEAR_DELAY
         for _, bl in ipairs(balls) do bl.sp.hide() end
         sfx("Chime", 880, 400)
+        music.stop() -- the clear jingle plays alone
         pcall(function() music.mml("t150 l16 o5 c e g > c2") end)
       end
     end
@@ -474,6 +474,7 @@ lose_ball = function()
     hi_score = D.save_high_score(score)
     state = "gameover"
     set_field_visible(false)
+    music.stop() -- the game-over jingle plays alone
     pcall(function() music.mml("t110 l8 o4 g e c <c2") end)
   else
     state = "dead"
@@ -631,7 +632,14 @@ end
 function update(dt)
   if dt > MAX_DT then dt = MAX_DT end   -- physics never skips on a hiccup frame
   if keyboard.pressed("escape") then exit() end
-  if keyboard.pressed("m") then muted = not muted end
+  if keyboard.pressed("m") then
+    muted = not muted
+    if muted then
+      music.stop()
+    elseif state == "playing" or state == "clear" or state == "dead" then
+      play_theme()
+    end
+  end
   if keyboard.pressed("plus") or keyboard.pressed("kp_plus") then
     change_music_vol(0.1)
   elseif keyboard.pressed("minus") or keyboard.pressed("kp_minus") then
@@ -649,17 +657,11 @@ function update(dt)
   end
 
   update_fx(dt)
-  if (state == "playing" or state == "clear" or state == "dead") then
-    if muted then music_timer = D.MUSIC_LOOP
-    else
-      music_timer = music_timer - dt
-      if music_timer <= 0 then play_theme() end
-    end
-  end
 
   if state == "playing" or state == "attract" then
     if keyboard.pressed("p") and state == "playing" then
       state = "paused"
+      music.stop()
       set_field_visible(false)
       return
     end
@@ -679,6 +681,7 @@ function update(dt)
   elseif state == "paused" then
     if keyboard.pressed("p") then
       state = "playing"
+      play_theme()
       set_field_visible(true)
     end
 
@@ -698,6 +701,7 @@ function update(dt)
       rebuild_bricks()
       respawn_ball()
       state = "playing"
+      play_theme() -- resume the theme after the clear jingle
     end
 
   elseif state == "gameover" then
@@ -710,28 +714,29 @@ end
 -- -----------------------------------------------------------------------------
 -- Drawing helpers
 -- -----------------------------------------------------------------------------
+-- Overlay messages ride the screen glass: always readable, never wobbles
 local function text_center(y, s, col)
   local tw = textwidth(s)
   local x = math.floor((W - tw) / 2)
-  canvas.color = colors.black
-  canvas.text(x + 2, y + 2, s)   -- drop shadow
-  canvas.color = col
-  canvas.text(x, y, s)
+  screen.color = colors.black
+  screen.text(x + 2, y + 2, s)   -- drop shadow
+  screen.color = col
+  screen.text(x, y, s)
 end
 
 local function draw_hud()
-  canvas.color = colors.black
-  canvas.rectangle(0, 0, W, D.HUD_H, true)
-  canvas.color = colors.aqua
-  canvas.text(10, 12, string.format("SCORE %06d", score))
-  canvas.color = colors.silver
-  canvas.text(math.floor(W / 2) - 60, 12, string.format("BEST %06d", math.max(hi_score, score)))
-  canvas.color = colors.yellow
-  canvas.text(W - 150, 12, "LEVEL " .. level)
+  screen.color = colors.black
+  screen.rectangle(0, 0, W, D.HUD_H, true)
+  screen.color = colors.aqua
+  screen.text(10, 12, string.format("SCORE %06d", score))
+  screen.color = colors.silver
+  screen.text(math.floor(W / 2) - 60, 12, string.format("BEST %06d", math.max(hi_score, score)))
+  screen.color = colors.yellow
+  screen.text(W - 150, 12, "LEVEL " .. level)
   -- Balls left as little glowing dots
   for i = 1, lives - 1 do
-    canvas.color = colors.aqua
-    canvas.circle(W - 26 - i * 20, 20, 6, true)
+    screen.color = colors.aqua
+    screen.circle(W - 26 - i * 20, 20, 6, true)
   end
   -- Active power-up timers
   local fx = ""
@@ -739,22 +744,22 @@ local function draw_hud()
   if sticky_t > 0 then fx = fx .. "STICKY " .. math.ceil(sticky_t) .. " " end
   if laser_t > 0 then fx = fx .. "LASER " .. math.ceil(laser_t) end
   if fx ~= "" then
-    canvas.color = colors.lime
-    canvas.text(10, D.HUD_H + 6, fx)
+    screen.color = colors.lime
+    screen.text(10, D.HUD_H + 6, fx)
   end
   -- Music volume read-out, right under the HUD bar
   local vt = "MUSIC " .. math.floor(music_vol * 100 + 0.5) .. "%"
-  canvas.color = colors.gray
-  canvas.text(W - 12 - textwidth(vt), D.HUD_H + 6, vt)
+  screen.color = colors.gray
+  screen.text(W - 12 - textwidth(vt), D.HUD_H + 6, vt)
 end
 
 local function draw_field()
   -- Side rails and ceiling glow lines
-  canvas.color = colors.darkblue
-  canvas.rectangle(0, D.HUD_H, WALL, H - D.HUD_H, true)
-  canvas.rectangle(W - WALL, D.HUD_H, WALL, H - D.HUD_H, true)
-  canvas.color = colors.aqua
-  canvas.line(0, TOP - 1, W, TOP - 1, 1)
+  world.color = colors.darkblue
+  world.rectangle(0, D.HUD_H, WALL, H - D.HUD_H, true)
+  world.rectangle(W - WALL, D.HUD_H, WALL, H - D.HUD_H, true)
+  world.color = colors.aqua
+  world.line(0, TOP - 1, W, TOP - 1, 1)
   -- The brick wall (one tilemap pass; snapshot taken right here)
   wall.draw(WALL_X, WALL_Y)
 end
@@ -762,11 +767,11 @@ end
 local function draw_stars(t)
   for _, s in ipairs(stars) do
     local glow = 0.5 + 0.5 * math.sin(t * 2 + s.tw)
-    canvas.color = colors.gray
-    canvas.rectangle(s.x, s.y, s.r, s.r, true)
+    world.color = colors.gray
+    world.rectangle(s.x, s.y, s.r, s.r, true)
     if glow > 0.75 then
-      canvas.color = colors.silver
-      canvas.point(s.x, s.y)
+      world.color = colors.silver
+      world.point(s.x, s.y)
     end
   end
 end
@@ -774,10 +779,11 @@ end
 function draw()
   local t = time()
 
-  -- Deep space backdrop
-  canvas.color = colors.black
-  canvas.rectangle(0, 0, W, H, true)
-  pcall(canvas.gradient.rectV, 0, 0, W, H, colors.black, colors.darkblue)
+  -- The screen buffer remembers last frame, so clear it before the overlays
+  screen.clear('blank')
+
+  -- Deep space backdrop on the world page (black comes from world.backcolor)
+  pcall(world.gradient.rectV, 0, 0, W, H, colors.black, colors.darkblue)
   draw_stars(t)
 
   draw_field()
@@ -785,10 +791,10 @@ function draw()
 
   -- Laser bolts
   for _, bo in ipairs(bolts) do
-    canvas.color = colors.white
-    canvas.rectangle(bo.x - 1, bo.y - 6, 3, 10, true)
-    canvas.color = colors.orange
-    canvas.rectangle(bo.x - 1, bo.y + 4, 3, 3, true)
+    world.color = colors.white
+    world.rectangle(bo.x - 1, bo.y - 6, 3, 10, true)
+    world.color = colors.orange
+    world.rectangle(bo.x - 1, bo.y + 4, 3, 3, true)
   end
 
   if state == "attract" then
@@ -817,12 +823,12 @@ function draw()
     text_center(H / 2 - 60, "BOARD CLEAR!", colors.lime)
     text_center(H / 2 - 20, "GET READY - " .. nxt.name, colors.yellow)
   elseif state == "paused" then
-    canvas.color = colors.black
-    canvas.rectangle(0, 0, W, H, true)
+    screen.color = colors.black
+    screen.rectangle(0, 0, W, H, true)
     text_center(H / 2 - 20, "P A U S E D", colors.yellow)
   elseif state == "gameover" then
-    canvas.color = colors.black
-    canvas.rectangle(0, 0, W, H, true)
+    screen.color = colors.black
+    screen.rectangle(0, 0, W, H, true)
     text_center(180, "G A M E   O V E R", colors.red)
     text_center(250, "SCORE " .. score, colors.silver)
     text_center(290, "BEST  " .. hi_score, colors.gold)

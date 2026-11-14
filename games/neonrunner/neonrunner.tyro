@@ -30,7 +30,8 @@
 local D = require("neonrunner_data")
 
 window.show(D.W, D.H)
-local W, H = canvas.width, canvas.height
+world.backcolor = colors.black          -- the page behind everything
+local W, H = world.width, world.height
 
 -- Audio & Mute State
 local muted = false
@@ -190,17 +191,19 @@ local hazard_spawn_timer = 2.0
 local item_spawn_timer = 1.5
 local road_scroll_x = 0.0
 local city_scroll_x = 0.0
-local music_timer = 0.0
 
 -- -----------------------------------------------------------------------------
 -- Audio Music Loop Manager
 -- -----------------------------------------------------------------------------
+-- The synthwave theme is one endless music.mml loop (true = loop it), armed
+-- from the title screen on; only the mute button ends it via music.stop().
 local function play_music_step()
   if muted then return end
   pcall(function()
-    music.mml(D.MML_THEME_LEAD, D.MML_THEME_BASS)
+    music.mml(D.MML_THEME_LEAD, D.MML_THEME_BASS, true)
   end)
 end
+play_music_step()
 
 -- -----------------------------------------------------------------------------
 -- Game Initialization & Reset
@@ -259,8 +262,9 @@ local function reset_game(is_attract)
   end
   if shield_sp then shield_sp.hide() end
 
-  play_music_step()
-  music_timer = 15.0
+  -- The theme already loops endlessly from the title screen
+  -- (music.mml(..., true)), so it just keeps playing through a restart;
+  -- starting it again here would stack a second copy (doubled music).
   sfx("CyberBass", 120, 300)
 end
 
@@ -369,15 +373,10 @@ function update(dt)
   -- Global Hotkeys
   if keyboard.pressed("m") then
     muted = not muted
-    if muted then sound.loopStop() else play_music_step() end
+    if muted then music.stop() else play_music_step() end
   end
 
   state_timer = state_timer + dt
-  music_timer = music_timer - dt
-  if music_timer <= 0 then
-    play_music_step()
-    music_timer = 15.0
-  end
 
   -- Global Screen Shake decay
   if shake_timer > 0 then
@@ -792,13 +791,16 @@ function update(dt)
 end
 
 -- -----------------------------------------------------------------------------
--- Drawing & Rendering (Canvas Layer)
+-- Drawing & Rendering
 -- -----------------------------------------------------------------------------
 function draw()
   local zone = D.ZONES[current_zone_idx]
 
+  -- The screen buffer remembers last frame, so clear it before the HUD
+  screen.clear('blank')
+
   -- 1. Sky Gradient & Retro Sun
-  canvas.gradient.rectV(0, 0, W, D.HORIZON_Y,
+  world.gradient.rectV(0, 0, W, D.HORIZON_Y,
     rgba(zone.sky_top[1], zone.sky_top[2], zone.sky_top[3], 255),
     rgba(zone.sky_bot[1], zone.sky_bot[2], zone.sky_bot[3], 255)
   )
@@ -807,10 +809,10 @@ function draw()
   local sun_cx = W / 2 + 100
   local sun_cy = D.HORIZON_Y - 30
   local sun_r = 54
-  canvas.gradient.circle(sun_cx, sun_cy, sun_r, rgba(255, 230, 60, 255), rgba(255, 40, 110, 200))
-  canvas.color = rgba(zone.sky_bot[1], zone.sky_bot[2], zone.sky_bot[3], 255)
+  world.gradient.circle(sun_cx, sun_cy, sun_r, rgba(255, 230, 60, 255), rgba(255, 40, 110, 200))
+  world.color = rgba(zone.sky_bot[1], zone.sky_bot[2], zone.sky_bot[3], 255)
   for sy = sun_cy, sun_cy + sun_r, 6 do
-    canvas.rectangle(sun_cx - sun_r, sy, sun_r * 2, 2, true)
+    world.rectangle(sun_cx - sun_r, sy, sun_r * 2, 2, true)
   end
 
   -- 2. Parallax Cyber Skyline
@@ -819,50 +821,50 @@ function draw()
   for bx = -60, W + 60, bldg_w do
     local scr_bx = (bx - math.floor(city_scroll_x)) % (W + 120) - 60
     local bh = 45 + ((bx * 7 + 13) % 75)
-    canvas.color = rgba(16, 20, 36, 255)
-    canvas.rectangle(scr_bx, D.HORIZON_Y - bh, bldg_w - 4, bh, true)
+    world.color = rgba(16, 20, 36, 255)
+    world.rectangle(scr_bx, D.HORIZON_Y - bh, bldg_w - 4, bh, true)
     -- Glowing cyberpunk window dots
-    canvas.color = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 150)
+    world.color = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 150)
     for wy = D.HORIZON_Y - bh + 6, D.HORIZON_Y - 6, 12 do
-      canvas.rectangle(scr_bx + 6, wy, 4, 4, true)
-      canvas.rectangle(scr_bx + bldg_w - 14, wy, 4, 4, true)
+      world.rectangle(scr_bx + 6, wy, 4, 4, true)
+      world.rectangle(scr_bx + bldg_w - 14, wy, 4, 4, true)
     end
   end
 
   -- 3. High-Speed Highway Track
-  canvas.color = rgba(zone.road_col[1], zone.road_col[2], zone.road_col[3], 255)
-  canvas.rectangle(0, D.TRACK_TOP - 10, W, H - D.TRACK_TOP + 10, true)
+  world.color = rgba(zone.road_col[1], zone.road_col[2], zone.road_col[3], 255)
+  world.rectangle(0, D.TRACK_TOP - 10, W, H - D.TRACK_TOP + 10, true)
 
   -- Perspective Perspective Grid / Neon Lane Markers
   local grid_col = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 200)
-  canvas.color = grid_col
+  world.color = grid_col
 
   -- Top and bottom guardrails with glowing barriers
-  canvas.rectangle(0, D.TRACK_TOP - 14, W, 4, true)
-  canvas.rectangle(0, D.TRACK_BOTTOM + 24, W, 4, true)
+  world.rectangle(0, D.TRACK_TOP - 14, W, 4, true)
+  world.rectangle(0, D.TRACK_BOTTOM + 24, W, 4, true)
 
   -- Longitudinal Lane Separators
   for i = 1, D.NUM_LANES - 1 do
     local ly = (D.LANES[i] + D.LANES[i + 1]) / 2
-    canvas.color = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 80)
+    world.color = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 80)
     -- Dashed horizontal speed lines
     for lx = -64, W + 64, 48 do
       local slx = lx - (math.floor(road_scroll_x * 2.0) % 48)
-      canvas.rectangle(slx, ly - 1, 24, 2, true)
+      world.rectangle(slx, ly - 1, 24, 2, true)
     end
   end
 
   -- Transverse perspective speed dashes
-  canvas.color = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 45)
+  world.color = rgba(zone.grid_col[1], zone.grid_col[2], zone.grid_col[3], 45)
   for sx = -64, W + 64, 64 do
     local slx = sx - math.floor(road_scroll_x)
-    canvas.line(slx, D.TRACK_TOP - 10, slx, D.TRACK_BOTTOM + 24)
+    world.line(slx, D.TRACK_TOP - 10, slx, D.TRACK_BOTTOM + 24)
   end
 
-  -- 4. Active EMP Shockwave Ring (Canvas Overlay)
+  -- 4. Active EMP Shockwave Ring (world overlay)
   if emp_active then
-    canvas.color = rgba(0, 240, 255, math.floor(180 * (1.0 - emp_shockwave_radius / (W * 1.2))))
-    canvas.gradient.circle(D.PLAYER_X, math.floor(current_y), math.floor(emp_shockwave_radius),
+    world.color = rgba(0, 240, 255, math.floor(180 * (1.0 - emp_shockwave_radius / (W * 1.2))))
+    world.gradient.circle(D.PLAYER_X, math.floor(current_y), math.floor(emp_shockwave_radius),
       rgba(0, 240, 255, 0),
       rgba(0, 240, 255, 140)
     )
@@ -870,137 +872,137 @@ function draw()
 
   -- 5. Floating Text Combat Popups
   for _, f in ipairs(float_texts) do
-    canvas.color = f.color
-    canvas.alpha = math.floor(255 * (f.life / f.max_life))
-    canvas.text(math.floor(f.x - textwidth(f.text) / 2), math.floor(f.y), f.text)
+    world.color = f.color
+    world.alpha = math.floor(255 * (f.life / f.max_life))
+    world.text(math.floor(f.x - textwidth(f.text) / 2), math.floor(f.y), f.text)
   end
-  canvas.alpha = 255
+  world.alpha = 255
 
   -- 6. Cyberpunk Arcade HUD Header
   local hud_y = 10
-  canvas.color = colors.black
-  canvas.alpha = 150
-  canvas.rectangle(0, 0, W, 40, true)
-  canvas.alpha = 255
+  screen.color = colors.black
+  screen.alpha = 150
+  screen.rectangle(0, 0, W, 40, true)
+  screen.alpha = 255
 
   -- Score & High Score
-  canvas.color = colors.white
-  canvas.text(18, hud_y, "SCORE: " .. string.format("%07d", score))
-  canvas.color = colors.silver
-  canvas.text(220, hud_y, "HI: " .. string.format("%07d", highscore))
+  screen.color = colors.white
+  screen.text(18, hud_y, "SCORE: " .. string.format("%07d", score))
+  screen.color = colors.silver
+  screen.text(220, hud_y, "HI: " .. string.format("%07d", highscore))
 
   -- Multiplier & Zone
-  canvas.color = multiplier > 1 and colors.gold or colors.cyan
-  canvas.text(400, hud_y, "MULT: x" .. multiplier)
-  canvas.color = colors.yellow
-  canvas.text(540, hud_y, "ZONE: " .. zone.name)
+  screen.color = multiplier > 1 and colors.gold or colors.cyan
+  screen.text(400, hud_y, "MULT: x" .. multiplier)
+  screen.color = colors.yellow
+  screen.text(540, hud_y, "ZONE: " .. zone.name)
 
   -- Speed (KM/H)
-  canvas.color = turbo_active and colors.lime or colors.white
-  canvas.text(760, hud_y, string.format("%03d KM/H", math.floor(current_speed)))
+  screen.color = turbo_active and colors.lime or colors.white
+  screen.text(760, hud_y, string.format("%03d KM/H", math.floor(current_speed)))
 
   -- 7. Bottom Status Dashboard (Lives, Turbo Energy Bar, EMP)
   local dash_y = H - 32
-  canvas.color = colors.black
-  canvas.alpha = 160
-  canvas.rectangle(0, dash_y - 6, W, 38, true)
-  canvas.alpha = 255
+  screen.color = colors.black
+  screen.alpha = 160
+  screen.rectangle(0, dash_y - 6, W, 38, true)
+  screen.alpha = 255
 
   -- Lives Indicator (Mini hoverbikes)
-  canvas.color = colors.silver
-  canvas.text(18, dash_y, "LIVES:")
+  screen.color = colors.silver
+  screen.text(18, dash_y, "LIVES:")
   for l = 1, lives do
     local lx = 80 + (l - 1) * 22
-    canvas.color = colors.cyan
-    canvas.triangle(lx + 14, dash_y + 8, lx + 2, dash_y + 2, lx + 2, dash_y + 14)
-    canvas.color = colors.white
-    canvas.rectangle(lx + 4, dash_y + 6, 3, 4, true)
+    screen.color = colors.cyan
+    screen.triangle(lx + 14, dash_y + 8, lx + 2, dash_y + 2, lx + 2, dash_y + 14)
+    screen.color = colors.white
+    screen.rectangle(lx + 4, dash_y + 6, 3, 4, true)
   end
 
   -- Turbo Energy Gauge
   local bar_x = 240
   local bar_w = 200
   local bar_h = 14
-  canvas.color = colors.silver
-  canvas.text(bar_x - 70, dash_y, "TURBO:")
-  canvas.color = colors.darkgray
-  canvas.rectangle(bar_x - 1, dash_y + 1, bar_w + 2, bar_h + 2, true)
+  screen.color = colors.silver
+  screen.text(bar_x - 70, dash_y, "TURBO:")
+  screen.color = colors.darkgray
+  screen.rectangle(bar_x - 1, dash_y + 1, bar_w + 2, bar_h + 2, true)
   local fill_w = math.floor(bar_w * (energy / D.MAX_ENERGY))
   local bar_color = (energy > 25.0) and (turbo_active and colors.yellow or colors.cyan) or colors.red
-  canvas.color = bar_color
-  canvas.rectangle(bar_x, dash_y + 2, fill_w, bar_h, true)
+  screen.color = bar_color
+  screen.rectangle(bar_x, dash_y + 2, fill_w, bar_h, true)
 
   -- EMP Bomb Charges
-  canvas.color = colors.silver
-  canvas.text(490, dash_y, "EMP:")
+  screen.color = colors.silver
+  screen.text(490, dash_y, "EMP:")
   for e = 1, 4 do
     local ex = 540 + (e - 1) * 20
-    canvas.color = (e <= emp_charges) and colors.magenta or colors.darkgray
-    canvas.rectangle(ex, dash_y + 2, 12, 12, true)
-    canvas.color = (e <= emp_charges) and colors.white or colors.black
-    canvas.rectangle(ex + 4, dash_y + 6, 4, 4, true)
+    screen.color = (e <= emp_charges) and colors.magenta or colors.darkgray
+    screen.rectangle(ex, dash_y + 2, 12, 12, true)
+    screen.color = (e <= emp_charges) and colors.white or colors.black
+    screen.rectangle(ex + 4, dash_y + 6, 4, 4, true)
   end
 
   -- Distance Traveled
-  canvas.color = colors.silver
-  canvas.text(670, dash_y, string.format("DIST: %04d M", math.floor(distance)))
+  screen.color = colors.silver
+  screen.text(670, dash_y, string.format("DIST: %04d M", math.floor(distance)))
 
   -- Mute controls help
-  canvas.color = colors.gray
-  canvas.text(850, dash_y, "M MUTE  P PAUSE")
+  screen.color = colors.gray
+  screen.text(850, dash_y, "M MUTE  P PAUSE")
 
   -- 8. State Screens: Title Screen / Attract Mode Overlay
   if current_state == STATE_TITLE then
-    canvas.color = colors.black
-    canvas.alpha = attract_mode and 70 or 170
-    canvas.rectangle(0, 0, W, H, true)
-    canvas.alpha = 255
+    screen.color = colors.black
+    screen.alpha = attract_mode and 70 or 170
+    screen.rectangle(0, 0, W, H, true)
+    screen.alpha = 255
 
     local title_y = H / 2 - 90
-    canvas.color = colors.cyan
+    screen.color = colors.cyan
     local t1 = "NEON CYBER RUNNER"
-    canvas.text(math.floor(W / 2 - textwidth(t1) / 2), title_y, t1)
+    screen.text(math.floor(W / 2 - textwidth(t1) / 2), title_y, t1)
 
-    canvas.color = colors.magenta
+    screen.color = colors.magenta
     local t2 = "HIGH-SPEED CYBERNETIC ARTERIAL ASSAULT"
-    canvas.text(math.floor(W / 2 - textwidth(t2) / 2), title_y + 28, t2)
+    screen.text(math.floor(W / 2 - textwidth(t2) / 2), title_y + 28, t2)
 
     local pulse = (math.floor(state_timer * 3) % 2 == 0)
-    canvas.color = pulse and colors.yellow or colors.white
+    screen.color = pulse and colors.yellow or colors.white
     local t3 = attract_mode and "DEMO MODE - PRESS SPACE / ENTER TO PLAY" or "PRESS SPACE / ENTER TO ENGAGE"
-    canvas.text(math.floor(W / 2 - textwidth(t3) / 2), title_y + 90, t3)
+    screen.text(math.floor(W / 2 - textwidth(t3) / 2), title_y + 90, t3)
 
-    canvas.color = colors.silver
+    screen.color = colors.silver
     local t4 = "UP/DOWN: STEER   SPACE: JUMP   SHIFT/RIGHT: TURBO   X: EMP"
-    canvas.text(math.floor(W / 2 - textwidth(t4) / 2), title_y + 130, t4)
+    screen.text(math.floor(W / 2 - textwidth(t4) / 2), title_y + 130, t4)
   end
 
   -- 9. State Screen: Game Over
   if current_state == STATE_GAMEOVER then
-    canvas.color = colors.black
-    canvas.alpha = 190
-    canvas.rectangle(0, 0, W, H, true)
-    canvas.alpha = 255
+    screen.color = colors.black
+    screen.alpha = 190
+    screen.rectangle(0, 0, W, H, true)
+    screen.alpha = 255
 
-    canvas.color = colors.red
+    screen.color = colors.red
     local g1 = "NEURAL LINK SEVERED - SYSTEM CRITICAL"
-    canvas.text(math.floor(W / 2 - textwidth(g1) / 2), H / 2 - 60, g1)
+    screen.text(math.floor(W / 2 - textwidth(g1) / 2), H / 2 - 60, g1)
 
-    canvas.color = colors.white
+    screen.color = colors.white
     local g2 = "FINAL SCORE: " .. string.format("%07d", score) .. "   DISTANCE: " .. string.format("%04d M", math.floor(distance))
-    canvas.text(math.floor(W / 2 - textwidth(g2) / 2), H / 2 - 15, g2)
+    screen.text(math.floor(W / 2 - textwidth(g2) / 2), H / 2 - 15, g2)
 
     if score >= highscore and score > 0 then
-      canvas.color = colors.gold
+      screen.color = colors.gold
       local g3 = "*** NEW RECORD HIGH SCORE ***"
-      canvas.text(math.floor(W / 2 - textwidth(g3) / 2), H / 2 + 15, g3)
+      screen.text(math.floor(W / 2 - textwidth(g3) / 2), H / 2 + 15, g3)
     end
 
     if state_timer > 1.2 then
       local pulse = (math.floor(state_timer * 4) % 2 == 0)
-      canvas.color = pulse and colors.cyan or colors.white
+      screen.color = pulse and colors.cyan or colors.white
       local g4 = "PRESS SPACE / ENTER TO REBOOT"
-      canvas.text(math.floor(W / 2 - textwidth(g4) / 2), H / 2 + 55, g4)
+      screen.text(math.floor(W / 2 - textwidth(g4) / 2), H / 2 + 55, g4)
     end
   end
 end

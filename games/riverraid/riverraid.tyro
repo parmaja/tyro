@@ -8,7 +8,7 @@
 --  fuel gauge drains the harder you push, and fuel depots along the banks
 --  refill it (+80) when you fly over them.
 --
---  Everything is drawn with canvas primitives - no image files.
+--  Everything is drawn with world & screen primitives - no image files.
 --
 --  Controls:  LEFT / RIGHT  (A / D)   steer
 --             UP   / DOWN   (W / S)   speed up / slow down
@@ -25,8 +25,9 @@
 
 window.show(480, 640)
 
-local W = canvas.width
-local H = canvas.height
+world.backcolor = colors.darkgreen      -- the land color fills the page behind everything
+local W = world.width
+local H = world.height
 
 -- ---- helpers ---------------------------------------------------------
 local function clamp(v, lo, hi)
@@ -94,9 +95,10 @@ local function beep(freq, ms)
   music.sound(freq, ms)
 end
 
+-- Messages and menus ride the screen glass: always on top and readable
 local function center_text(s, y, col)
-  canvas.color = col
-  canvas.text((W - textwidth(s)) / 2, y, s)
+  screen.color = col
+  screen.text((W - textwidth(s)) / 2, y, s)
 end
 
 -- ---- river geometry --------------------------------------------------
@@ -526,8 +528,8 @@ end
 -- ---- rendering -------------------------------------------------------
 local function draw_world()
   -- land
-  canvas.color = colors.darkgreen
-  canvas.rectangle(0, 0, W, H, true)
+  world.color = colors.darkgreen
+  world.rectangle(0, 0, W, H, true)
 
   -- river: a sandy edge under a blue channel, row by row
   local step = 5
@@ -537,10 +539,10 @@ local function draw_world()
     local l, r = riverBounds(wy)
     local ix = math.floor(l)
     local iw = math.floor(r - l)
-    canvas.color = colors.beige
-    canvas.rectangle(ix - 4, y, iw + 8, step + 1, true)
-    canvas.color = colors.blue
-    canvas.rectangle(ix, y, iw, step + 1, true)
+    world.color = colors.beige
+    world.rectangle(ix - 4, y, iw + 8, step + 1, true)
+    world.color = colors.blue
+    world.rectangle(ix, y, iw, step + 1, true)
     y = y + step
   end
 
@@ -554,8 +556,8 @@ local function draw_world()
       local l, r = riverBounds(wy)
       local span = math.max(1, math.floor(r - l - 40))
       local x = l + 20 + ((k * 97) % span)
-      canvas.color = colors.skyblue
-      canvas.line(x, sy, x + 14, sy)
+      world.color = colors.skyblue
+      world.line(x, sy, x + 14, sy)
     end
   end
 end
@@ -565,10 +567,10 @@ local function draw_islands()
     local s = islands[i]
     local sy = screenY(s.wy)
     if sy > -s.r - 4 and sy < H + s.r + 4 then
-      canvas.color = colors.green
-      canvas.circle(s.x, sy, s.r, true)
-      canvas.color = colors.darkgreen
-      canvas.circle(s.x - s.r * 0.3, sy - s.r * 0.3, s.r * 0.5, true)
+      world.color = colors.green
+      world.circle(s.x, sy, s.r, true)
+      world.color = colors.darkgreen
+      world.circle(s.x - s.r * 0.3, sy - s.r * 0.3, s.r * 0.5, true)
     end
   end
 end
@@ -580,12 +582,12 @@ local function draw_depots()
       local sy = screenY(wy)
       if sy >= -20 and sy <= H + 20 then
         local l, r = riverBounds(wy)
-        canvas.color = colors.silver
-        canvas.rectangle(l + 5, sy - 6, 14, 14, true)
-        canvas.rectangle(r - 19, sy - 6, 14, 14, true)
-        canvas.color = colors.red
-        canvas.rectangle(l + 5, sy - 8, 14, 4, true)
-        canvas.rectangle(r - 19, sy - 8, 14, 4, true)
+        world.color = colors.silver
+        world.rectangle(l + 5, sy - 6, 14, 14, true)
+        world.rectangle(r - 19, sy - 6, 14, 14, true)
+        world.color = colors.red
+        world.rectangle(l + 5, sy - 8, 14, 4, true)
+        world.rectangle(r - 19, sy - 8, 14, 4, true)
       end
     end
   end
@@ -599,10 +601,10 @@ local function draw_bridges()
       for k = 1, b.n do
         if b.segs[k] then
           local x = b.l + (k - 1) * b.sw
-          canvas.color = colors.darkbrown
-          canvas.rectangle(math.floor(x), math.floor(sy) - 8, math.ceil(b.sw) + 1, 16, true)
-          canvas.color = colors.gray
-          canvas.rectangle(math.floor(x), math.floor(sy) - 8, math.ceil(b.sw) + 1, 3, true)
+          world.color = colors.darkbrown
+          world.rectangle(math.floor(x), math.floor(sy) - 8, math.ceil(b.sw) + 1, 16, true)
+          world.color = colors.gray
+          world.rectangle(math.floor(x), math.floor(sy) - 8, math.ceil(b.sw) + 1, 3, true)
         end
       end
     end
@@ -614,36 +616,36 @@ local function draw_enemies()
     local e = enemies[i]
     local sy = screenY(e.wy)
     if e.kind == "ship" then
-      canvas.color = colors.gray
-      canvas.rectangle(e.x - e.hw, sy - e.hh, e.hw * 2, e.hh * 2, true)
-      canvas.color = colors.darkgray
-      canvas.triangle(e.x - e.hw, sy - e.hh, e.x + e.hw, sy - e.hh, e.x, sy - e.hh - 9, true)
-      canvas.color = colors.white
-      canvas.rectangle(e.x - 4, sy - 3, 8, 6, true)
+      world.color = colors.gray
+      world.rectangle(e.x - e.hw, sy - e.hh, e.hw * 2, e.hh * 2, true)
+      world.color = colors.darkgray
+      world.triangle(e.x - e.hw, sy - e.hh, e.x + e.hw, sy - e.hh, e.x, sy - e.hh - 9, true)
+      world.color = colors.white
+      world.rectangle(e.x - 4, sy - 3, 8, 6, true)
     else
-      canvas.color = colors.darkgray
-      canvas.circle(e.x, sy, e.hh + 2, true)
-      canvas.color = colors.black
-      canvas.circle(e.x, sy, 3, true)
-      canvas.color = colors.silver
-      canvas.line(e.x - e.hw, sy - e.hh - 5, e.x + e.hw, sy - e.hh - 5, 2)
-      canvas.line(e.x, sy - e.hh - 5, e.x, sy + 2)
-      canvas.line(e.x + e.hw, sy, e.x + e.hw + 8, sy, 2)
+      world.color = colors.darkgray
+      world.circle(e.x, sy, e.hh + 2, true)
+      world.color = colors.black
+      world.circle(e.x, sy, 3, true)
+      world.color = colors.silver
+      world.line(e.x - e.hw, sy - e.hh - 5, e.x + e.hw, sy - e.hh - 5, 2)
+      world.line(e.x, sy - e.hh - 5, e.x, sy + 2)
+      world.line(e.x + e.hw, sy, e.x + e.hw + 8, sy, 2)
     end
   end
 end
 
 local function draw_bullets()
-  canvas.color = colors.yellow
+  world.color = colors.yellow
   for i = 1, #pbullets do
     local b = pbullets[i]
     local sy = screenY(b.wy)
-    canvas.line(b.x, sy - 6, b.x, sy + 6, 3)
+    world.line(b.x, sy - 6, b.x, sy + 6, 3)
   end
   for i = 1, #ebullets do
     local b = ebullets[i]
-    canvas.color = colors.orange
-    canvas.circle(b.x, screenY(b.wy), 3, true)
+    world.color = colors.orange
+    world.circle(b.x, screenY(b.wy), 3, true)
   end
 end
 
@@ -651,15 +653,15 @@ local function draw_player()
   -- blink while invulnerable after a respawn
   if invuln > 0 and math.floor(millis() / 100) % 2 == 0 then return end
   local py = PLAYER_PY
-  canvas.color = colors.lightgray
-  canvas.triangle(player.x, py - 13, player.x - PLAYER_HW - 3, py + 9,
+  world.color = colors.lightgray
+  world.triangle(player.x, py - 13, player.x - PLAYER_HW - 3, py + 9,
                   player.x + PLAYER_HW + 3, py + 9, true)
-  canvas.color = colors.white
-  canvas.triangle(player.x, py - 10, player.x - 5, py + 4, player.x + 5, py + 4, true)
-  canvas.color = colors.red
-  canvas.line(player.x - PLAYER_HW - 3, py + 9, player.x + PLAYER_HW + 3, py + 9, 2)
-  canvas.color = colors.orange
-  canvas.circle(player.x, py + 13, 3, true)
+  world.color = colors.white
+  world.triangle(player.x, py - 10, player.x - 5, py + 4, player.x + 5, py + 4, true)
+  world.color = colors.red
+  world.line(player.x - PLAYER_HW - 3, py + 9, player.x + PLAYER_HW + 3, py + 9, 2)
+  world.color = colors.orange
+  world.circle(player.x, py + 13, 3, true)
 end
 
 local function draw_blasts()
@@ -668,40 +670,40 @@ local function draw_blasts()
     local sy = screenY(bl.wy)
     local p = bl.t / 0.6
     local rad = 6 + (bl.big and 34 or 24) * p
-    canvas.color = colors.red
-    canvas.circle(bl.x, sy, math.floor(rad), false)
-    canvas.color = colors.orange
-    canvas.circle(bl.x, sy, math.floor(rad * 0.65), false)
-    canvas.color = colors.yellow
-    canvas.circle(bl.x, sy, math.floor(rad * 0.3), true)
+    world.color = colors.red
+    world.circle(bl.x, sy, math.floor(rad), false)
+    world.color = colors.orange
+    world.circle(bl.x, sy, math.floor(rad * 0.65), false)
+    world.color = colors.yellow
+    world.circle(bl.x, sy, math.floor(rad * 0.3), true)
   end
 end
 
 local function draw_hud()
-  canvas.color = colors.white
-  canvas.text(8, 8, "SCORE " .. score)
+  screen.color = colors.white
+  screen.text(8, 8, "SCORE " .. score)
 
   local shown = math.min(lives, 6)
   for i = 1, shown do
     local lx = W - 18 - (i - 1) * 22
-    canvas.color = colors.lightgray
-    canvas.triangle(lx, 6, lx - 7, 22, lx + 7, 22, true)
+    screen.color = colors.lightgray
+    screen.triangle(lx, 6, lx - 7, 22, lx + 7, 22, true)
   end
 
   -- vertical fuel gauge down the left edge
   local gx, gy, gh = 8, 56, 200
-  canvas.color = colors.black
-  canvas.rectangle(gx - 3, gy - 3, 24, gh + 6, true)
-  canvas.color = colors.white
-  canvas.rectangle(gx, gy, 18, gh, false)
+  screen.color = colors.black
+  screen.rectangle(gx - 3, gy - 3, 24, gh + 6, true)
+  screen.color = colors.white
+  screen.rectangle(gx, gy, 18, gh, false)
   local fh = math.floor(gh * clamp(fuel, 0, 100) / 100)
-  if fuel > 50 then canvas.color = colors.green
-  elseif fuel > 25 then canvas.color = colors.yellow
-  else canvas.color = colors.red end
-  canvas.rectangle(gx + 1, gy + gh - fh, 16, fh, true)
-  canvas.color = colors.white
-  canvas.text(gx, gy + gh + 6, "FUEL")
-  canvas.text(gx, gy + gh + 24, "SPD " .. math.floor(speed))
+  if fuel > 50 then screen.color = colors.green
+  elseif fuel > 25 then screen.color = colors.yellow
+  else screen.color = colors.red end
+  screen.rectangle(gx + 1, gy + gh - fh, 16, fh, true)
+  screen.color = colors.white
+  screen.text(gx, gy + gh + 6, "FUEL")
+  screen.text(gx, gy + gh + 24, "SPD " .. math.floor(speed))
 
   if msgTimer > 0 then
     center_text(msg, H / 2 - 60, colors.yellow)
@@ -714,8 +716,8 @@ end
 
 local function draw_overlay()
   if state == "ready" then
-    canvas.color = colors.black
-    canvas.rectangle(0, 100, W, 220, true)
+    screen.color = colors.black
+    screen.rectangle(0, 100, W, 220, true)
     center_text("RIVER RAID", 116, colors.red)
     center_text("RIVER RAID", 114, colors.yellow)
     center_text("PRESS SPACE / GAMEPAD START TO PLAY", 168, colors.white)
@@ -731,14 +733,14 @@ local function draw_overlay()
       center_text("KEYBOARD OR GAMEPAD / JOYSTICK", 280, colors.darkgray)
     end
   elseif state == "over" then
-    canvas.color = colors.black
-    canvas.rectangle(0, 180, W, 150, true)
+    screen.color = colors.black
+    screen.rectangle(0, 180, W, 150, true)
     center_text("GAME OVER", 196, colors.red)
     center_text("SCORE " .. score, 228, colors.white)
     center_text("PRESS SPACE / GAMEPAD TO PLAY AGAIN", 262, colors.silver)
   elseif state == "pause" then
-    canvas.color = colors.black
-    canvas.rectangle(0, 200, W, 120, true)
+    screen.color = colors.black
+    screen.rectangle(0, 200, W, 120, true)
     center_text("GAME PAUSED", 216, colors.yellow)
     center_text("PRESS START / P TO RESUME", 250, colors.white)
     center_text("PRESS ESC / BACK TO QUIT", 274, colors.silver)
@@ -747,6 +749,8 @@ end
 
 -- Frame callback: the engine calls this once per frame, after update().
 function draw()
+  -- The screen buffer remembers last frame, so clear it before the HUD
+  screen.clear('blank')
   draw_world()
   draw_depots()
   draw_islands()

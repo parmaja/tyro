@@ -301,9 +301,9 @@ function M.ball_step(ball, paddle, bricks, sdt, floor_bounce)
   end
 end
 
--- Chiptune loop: 4 bars at t140 (~6.9 s), retried by MUSIC_LOOP timer.
--- A minor arcade riff (Am - G - F - E) over an eighth-note bass.
-M.MUSIC_LOOP = 6.9
+-- Chiptune theme: 4 bars at t140 (~6.9 s), played as an endless loop by
+-- music.mml(lead, bass, true). A minor arcade riff (Am - G - F - E) over an
+-- eighth-note bass.
 M.MML_LEAD =
   "t140 l16 o5 ms " ..
   "a c e a a c e a a c e a a c e a " ..
