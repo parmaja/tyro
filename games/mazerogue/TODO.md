@@ -13,4 +13,5 @@
 * [x] Remove the mini-map (radar) from sector B-3 and deeper
 * [x] Fix light not following player at maze bottom (area uniform was double-flipped, engine already flips it)
 * [x] Loading splash with world.enable = false like Jet2026 (boot + sector transition); fix colors.cyan -> colors.aqua (cyan is not a registered engine color)
+* [x] HUD: show the BOMB and KEY images instead of the "GRENADES:" / "KEY:" words, so the ammo numbers and key status get room
 

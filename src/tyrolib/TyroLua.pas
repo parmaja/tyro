@@ -63,6 +63,7 @@ type
     function Circle_func(L: Plua_State): integer; cdecl;
     function Triangle_func(L: Plua_State): integer; cdecl;
     function Rectangle_func(L: Plua_State): integer; cdecl;
+    function Image_func(L: Plua_State): integer; cdecl;
     function GradientH_func(L: Plua_State): integer; cdecl;
     function GradientV_func(L: Plua_State): integer; cdecl;
     function GradientCircle_func(L: Plua_State): integer; cdecl;
@@ -1755,6 +1756,7 @@ begin
     State.Register(Name, 'circle', Self, Self.Circle_func);
     State.Register(Name, 'triangle', Self, Self.Triangle_func);
     State.Register(Name, 'rectangle', Self, Self.Rectangle_func);
+    State.Register(Name, 'image', Self, Self.Image_func);
     State.Register(Name, 'line', Self, Self.Line_func);
     State.Register(Name, 'point', Self, Self.Point_func);
     State.Register(Name, 'test', Self, Self.Test_func);
@@ -2542,6 +2544,29 @@ begin
   if c >= 4 then
     f := L.ToBoolean(5);
   FScript.AddQueueObject(TDrawRectangleObject.Create(Canvas, x, y, w, h, f));
+  Result := 0;
+end;
+
+// x.image(x, y, file [, scale]) paints a picture on the canvas: (x, y) is its
+// top-left corner (like text and rectangles) and scale grows the file's own
+// pixels (1 = native, omitted). The current color tints the picture, so setting
+// x.alpha first fades it. The file is looked up the way every other script asset
+// is (script folder, then the engine's own) and its texture is cached, so
+// drawing the same picture every frame costs nothing.
+function TLuaCustomCanvas.Image_func(L: Plua_State): integer;
+cdecl;
+var
+  c: integer;
+  x, y: integer;
+  scale: Single;
+begin
+  c := L.ArgsCount;
+  x := round(L.ToNumber(1));
+  y := round(L.ToNumber(2));
+  scale := 1;
+  if (c >= 4) and L.IsNumber(4) then
+    scale := L.ToNumber(4);
+  FScript.AddQueueObject(TDrawImageObject.Create(Canvas, x, y, L.ToString(3), scale));
   Result := 0;
 end;
 

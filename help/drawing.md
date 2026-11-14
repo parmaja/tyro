@@ -206,6 +206,7 @@ you learn on one works on the others:
 | `x.text(px, py, s)` | draw text |
 | `x.rectangle(px, py, w, h, fill)` | draw a rectangle |
 | `x.circle(px, py, r, fill)` | draw a circle |
+| `x.image(px, py, file [, scale])` | paint a picture from a file |
 | `x.triangle(x1, y1, x2, y2, x3, y3, fill)` | draw a triangle |
 | `x.line(x1, y1, x2, y2)` | draw a line |
 | `x.point(px, py)` | draw one pixel |
@@ -213,6 +214,15 @@ you learn on one works on the others:
 | `x.gradient.rectH(...)`, `x.gradient.rectV(...)`, `x.gradient.circle(...)` | gradient fills |
 
 *(replace `x` with `canvas`, `world` or `screen`)*
+
+`x.image(px, py, file [, scale])` paints a PNG onto that same layer: `(px, py)`
+is the picture's **top-left corner** (like text and rectangles), and `scale`
+grows the file's own pixels (1 = native). The pen color tints the picture, so
+`x.color = colors.gray` / a low `x.alpha` fade an icon the same way they fade a
+rectangle. Files are looked up like every other script asset and their textures
+are cached - drawing the same picture every frame costs nothing, and a missing
+file is reported once, never again. A HUD icon drawn with `screen.image` rides
+the glass: above every sprite and untouched by shaders and shake.
 
 > Gotcha: the alpha lives inside the pen color. Setting `x.color` replaces the
 > whole color including its transparency, so to draw semi-transparent set the

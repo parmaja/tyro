@@ -403,6 +403,20 @@ type
     procedure DoExecute; override;
   end;
 
+  { TDrawImageObject }
+
+  //x.image(x, y, file [, scale]) paints a picture from the engine's texture
+  //cache: the file is read when the command runs (on the main thread), and the
+  //canvas color - its alpha included - tints the picture.
+  TDrawImageObject = class(TDrawObject)
+  public
+    fX, fY: Integer;
+    fFileName: string;
+    fScale: Single;
+    constructor Create(ACanvas: TTyroCanvas; X, Y: Integer; const AFileName: string; AScale: Single);
+    procedure DoExecute; override;
+  end;
+
   { TDrawGradientObject }
 
   TDrawGradientObject = class(TDrawObject)
@@ -1941,6 +1955,22 @@ begin
     Canvas.FillRectangle(fX, fY, fW, fH, Canvas.Color)
   else
     Canvas.DrawRectangle(fX, fY, fW, fH, Canvas.Color);
+end;
+
+{ TDrawImageObject }
+
+constructor TDrawImageObject.Create(ACanvas: TTyroCanvas; X, Y: Integer; const AFileName: string; AScale: Single);
+begin
+  inherited Create(ACanvas);
+  fX := X;
+  fY := Y;
+  fFileName := AFileName;
+  fScale := AScale;
+end;
+
+procedure TDrawImageObject.DoExecute;
+begin
+  Canvas.DrawImage(fX, fY, fFileName, fScale, Canvas.Color);
 end;
 
 { TDrawGradientObject }

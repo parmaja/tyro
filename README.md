@@ -63,6 +63,7 @@ to run. Use `--exit:N` to let such a script play for *N* seconds.
 
 The canvas primitives are `canvas.clear()`, `canvas.text(x, y, s)`,
 `canvas.rectangle(x, y, w, h [, fill])`, `canvas.circle(x, y, r [, fill])`,
+`canvas.image(x, y, file [, scale])`,
 `canvas.triangle(x1, y1, x2, y2, x3, y3 [, fill])`,
 `canvas.line(x1, y1, x2, y2 [, thickness])` and `canvas.point(x, y)`.
 `canvas.gradient.rectV(x, y, w, h [, startColor, endColor])` fills a rectangle with

@@ -21,7 +21,7 @@ unit TyroClasses;
 interface
 
 uses
-  Classes, SysUtils, Types, Character, SyncObjs,
+  Classes, SysUtils, Types, Character, SyncObjs, Generics.Collections,
   mnClasses, mnUtils, mnLogs, mnConfigs, mnTypes,
   RayLib, RayClasses,
   Melodies, TyroSounds;
@@ -244,6 +244,26 @@ type
 
   TTyroCanvas = class;
 
+  { TTyroImageStore }
+
+  // Texture cache behind x.image(): a HUD paints the same file every frame, so
+  // the picture is read once and kept on the GPU. Files are resolved and loaded
+  // while the draw queue drains, which runs on the main thread - the same place
+  // every other raylib texture is uploaded - so the dictionary needs no lock.
+  // A name that could not be read stays in the store with an empty texture: a
+  // missing file is then looked up (and reported) once, not every frame.
+  TTyroImageStore = class
+  private
+    FItems: TDictionary<string, TTexture2D>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Texture(const AFileName: string): TTexture2D;
+    //Unloads every cached texture; the engine calls it while the GL context is
+    //still alive (see TTyroEngine.Destroy).
+    procedure Clear;
+  end;
+
   { TTyroCanvas }
 
   TTyroEffect = (fxNone, fxWater, fxGlow, fxGray, fxSepia, fxInvert, fxVignette, fxPixelate, fxCustom);
@@ -328,6 +348,11 @@ type
 
     procedure FillRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Color: TColor); overload;
     procedure DrawRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Thick: Single; Color: TColor); overload;
+
+    //Image: the picture's top-left corner lands on (X, Y) and the file grows by
+    //AScale (1 = its own pixels). The color tints the texture, alpha included,
+    //so x.alpha fades an image just like it fades a rectangle.
+    procedure DrawImage(X, Y: Integer; const AFileName: string; AScale: Single; Color: TColor);
     //End of drawing functions
 
     function MeasureText(const Text: string): Single;
@@ -547,6 +572,8 @@ const
 var
   Res: TTyroResources = nil;
   Lock: TmnCriticalSection = nil;
+  //The x.image() texture cache; owned by this unit's initialization section.
+  ImageStore: TTyroImageStore = nil;
 
 const
   cFramePerSeconds: Integer = 60;
@@ -955,6 +982,23 @@ end;
 procedure TTyroCanvas.DrawRectangleRounded(ARectangle: TRectangle; Roundness: Single; Segments: Integer; Thick: Single; Color: TColor);
 begin
   RayLib.DrawRectangleRoundedLinesEx(OffsetRectangle(ARectangle), Roundness, Segments, Thick, Color);
+end;
+
+procedure TTyroCanvas.DrawImage(X, Y: Integer; const AFileName: string; AScale: Single; Color: TColor);
+var
+  Tex: TTexture2D;
+  Dest: TRectangle;
+begin
+  Tex := ImageStore.Texture(AFileName);
+  if Tex.id <= 0 then
+    Exit;
+  if AScale <= 0 then
+    AScale := 1;
+  // The whole texture maps onto the destination rectangle, so the picture keeps
+  // its own pixels at scale 1 and grows from its top-left corner beyond it.
+  Dest := RectangleOf(X, Y, Tex.Width * AScale, Tex.Height * AScale);
+  RayLib.DrawTexturePro(Tex, RectangleOf(0, 0, Tex.Width, Tex.Height),
+    OffsetRectangle(Dest), Vector2Of(0, 0), 0, Color);
 end;
 
 function TTyroCanvas.MeasureText(const Text: string): Single;
@@ -1588,6 +1632,59 @@ begin
   ResData := AResData;
 end;
 
+{ TTyroImageStore }
+
+constructor TTyroImageStore.Create;
+begin
+  inherited Create;
+  FItems := TDictionary<string, TTexture2D>.Create;
+end;
+
+destructor TTyroImageStore.Destroy;
+begin
+  Clear;
+  FreeAndNil(FItems);
+  inherited;
+end;
+
+function TTyroImageStore.Texture(const AFileName: string): TTexture2D;
+var
+  FileName: string;
+  Img: TImage;
+begin
+  Result := Default(TTexture2D);
+  if AFileName = '' then
+    Exit;
+  // The resolved path is the key, so two names for one file share one texture.
+  FileName := Res.GuessFileName(AFileName);
+  if FItems.TryGetValue(FileName, Result) then
+    Exit;
+  Result := Default(TTexture2D);
+  Img := RayLib.LoadImage(PUTF8Char(UTF8String(FileName)));
+  if RayLib.IsImageValid(Img) then
+  begin
+    Result := RayLib.LoadTextureFromImage(Img);
+    if not RayLib.IsTextureValid(Result) then
+      Result := Default(TTexture2D);
+  end
+  else
+    WriteLn('Image not loaded: ' + AFileName);
+  RayLib.UnloadImage(Img);
+  // Even a failed file is kept (with an empty texture): the miss is then
+  // reported once instead of once per frame.
+  FItems.Add(FileName, Result);
+end;
+
+procedure TTyroImageStore.Clear;
+var
+  Tex: TTexture2D;
+begin
+  for Tex in FItems.Values do
+    if Tex.id > 0 then
+      RayLib.UnloadTexture(Tex);
+  FItems.Clear;
+end;
+
 { TTyroTheme }
 
 constructor TTyroTheme.Create;
@@ -1624,7 +1721,9 @@ end;
 
 initialization
   Lock := TmnCriticalSection.Create;
+  ImageStore := TTyroImageStore.Create;
 finalization
+  FreeAndNil(ImageStore);
   FreeAndNil(Lock);
 end.
 

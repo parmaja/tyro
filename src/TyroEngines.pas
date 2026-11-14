@@ -1456,6 +1456,9 @@ begin
   //Paint sheets own render textures too: same rule.
   ClearScriptImages;
   FreeAndNil(Images);
+  //x.image() caches textures on the GPU: release them while the context lives.
+  if ImageStore <> nil then
+    ImageStore.Clear;
   FreeAndNil(Board);
   FreeAndNil(Res);
   FreeAndNil(FQueue);

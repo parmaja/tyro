@@ -44,7 +44,7 @@ M.GUN_RECOIL       = 175 -- pixels/sec backward impulse
 M.RECOIL_FRICTION  = 8.0 -- velocity decay per second
 
 -- Grenade tuning
-M.GRENADE_MAX_AMMO = 6
+M.GRENADE_MAX_AMMO = 10
 M.GRENADE_START    = 3
 M.GRENADE_SPEED    = 290
 M.GRENADE_FUSE     = 1.4 -- seconds until explosion

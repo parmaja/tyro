@@ -23,6 +23,8 @@
 --    * Explosive Barrels (chain-reaction detonations)
 --    * Supply Crates (health, shield, grenade ammo, gems)
 --    * Descending Stairs / Portal to deeper floors
+--  - Icon HUD: the bomb ammo and the security key read as artwork painted
+--    onto the top bar with screen.image, leaving the numbers room to breathe
 --  - High performance Sprite Pooling + Tilemap rendering
 --  - Audio feedback using native Tyro Waveforms (Laser, Pew, Explode, Kick, Boing)
 --  - Dynamic screen shake on heavy explosions and gunshots
@@ -1168,10 +1170,25 @@ local function draw_player_aura()
   end
 end
 
+-- ---- HUD Icon Slots --------------------------------------------------
+-- The bomb and key read as artwork, not words: screen.image paints the two
+-- PNGs straight onto the HUD glass - above the maze, the torch shader and the
+-- camera shake - so no sprite tricks (icon bands, notches, wells) are needed.
+-- The numbers get the room the "GRENADES:" / "KEY:" words used to take.
+local HUD_ICON_BOX = 36     -- the icon slot width (and the notch-free bar gap)
+local HUD_BOMB_X = 684      -- left edge of the bomb slot
+local HUD_KEY_X = 776       -- left edge of the key slot
+local HUD_BOMB_TEXT = HUD_BOMB_X + HUD_ICON_BOX + 6
+local HUD_KEY_TEXT = HUD_KEY_X + HUD_ICON_BOX + 6
+-- Top-left corners for screen.image: each picture centred in its slot of the
+-- 46 px bar (img/grenade.png is 16 px and rides at scale 2, the key is 22 px).
+local HUD_BOMB_IMG_X, HUD_BOMB_IMG_Y = HUD_BOMB_X + 2, 7
+local HUD_KEY_IMG_X, HUD_KEY_IMG_Y = HUD_KEY_X + 7, 12
+
 -- HUD lives on the `screen` layer: above sprites, immune to the darkness
 -- shader and camera shake, so the panels stay readable in pitch black.
 local function draw_hud()
-  -- Top Tactical HUD Bar
+  -- Top Tactical HUD Bar: one full strip; the icons paint over it below.
   screen.color = colors.black
   screen.alpha = 225
   screen.rectangle(0, 0, W, 46, true)
@@ -1187,36 +1204,51 @@ local function draw_hud()
   screen.text(320, 14, "KILLS: " .. kills)
 
   -- HP Bar
-  local hp_w = 120
+  local hp_w = 110
   screen.color = colors.gray
   screen.rectangle(440, 14, hp_w, 18, true)
   local cur_hp_w = math.floor((player.hp / player.max_hp) * hp_w)
   screen.color = (player.hp > 30) and colors.green or colors.red
   screen.rectangle(440, 14, cur_hp_w, 18, true)
   screen.color = colors.white
-  screen.text(450, 15, "HP " .. player.hp .. "/" .. player.max_hp)
+  screen.text(447, 15, "HP " .. player.hp .. "/" .. player.max_hp)
 
   -- Shield Bar
-  local sh_w = 90
+  local sh_w = 100
   screen.color = colors.gray
-  screen.rectangle(580, 14, sh_w, 18, true)
+  screen.rectangle(565, 14, sh_w, 18, true)
   local cur_sh_w = math.floor((player.shield / player.max_shield) * sh_w)
   screen.color = colors.aqua
-  screen.rectangle(580, 14, cur_sh_w, 18, true)
+  screen.rectangle(565, 14, cur_sh_w, 18, true)
   screen.color = colors.white
-  screen.text(590, 15, "SHIELD " .. player.shield)
+  screen.text(570, 15, "SHIELD " .. player.shield)
 
-  -- Grenades Ammo Counter
-  screen.color = colors.orange
-  screen.text(685, 14, "GRENADES: " .. player.grenades .. "/" .. player.max_grenades)
-
-  -- Key Status
-  if player.has_key then
-    screen.color = colors.gold
-    screen.text(805, 14, "KEY: [ACQUIRED]")
+  -- Bomb Ammo: the bomb artwork stands in for the "GRENADES:" word and dims
+  -- once the stock is spent (the canvas color tints the picture, alpha included)
+  if player.grenades > 0 then
+    screen.color = colors.white
   else
     screen.color = colors.gray
-    screen.text(805, 14, "KEY: [LOCKED]")
+    screen.alpha = 110
+  end
+  screen.image(HUD_BOMB_IMG_X, HUD_BOMB_IMG_Y, "img/grenade.png", 2)
+  screen.alpha = 255
+  screen.color = colors.orange
+  screen.text(HUD_BOMB_TEXT, 14, player.grenades .. "/" .. player.max_grenades)
+
+  -- Key Status: the key artwork lights up gold once the security key is found
+  if player.has_key then
+    screen.color = colors.white
+    screen.image(HUD_KEY_IMG_X, HUD_KEY_IMG_Y, "img/pickup_key.png")
+    screen.color = colors.gold
+    screen.text(HUD_KEY_TEXT, 14, "OPEN")
+  else
+    screen.color = colors.gray
+    screen.alpha = 95
+    screen.image(HUD_KEY_IMG_X, HUD_KEY_IMG_Y, "img/pickup_key.png")
+    screen.alpha = 255
+    screen.color = colors.gray
+    screen.text(HUD_KEY_TEXT, 14, "LOCK")
   end
 
   -- Controls tip
@@ -1408,7 +1440,8 @@ function draw()
     draw_player_aura()
   end
 
-  -- 3. Draw HUD and Overlay UI (on the shader-proof screen layer)
+  -- 3. Draw HUD and Overlay UI (on the shader-proof screen layer). The icon
+  -- artwork is part of draw_hud, so the title / game-over washes never see it.
   if state == "play" then
     draw_hud()
   elseif state == "title" then
