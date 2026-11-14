@@ -52,18 +52,19 @@ screen.color = rgb(150, 190, 150)
 screen.text(W / 2 - 4 * 21, 330, "warming up the mallet...")
 
 -- ---- Audio -------------------------------------------------------------
+-- sound.play / music.mml only queue objects for the engine thread, and the
+-- queue catches its own errors (the EX-QUEUE line), so a broken waveform or
+-- a missing audio device can never raise here - no pcall needed.
 local muted = false
 local function sfx(name, f, ms)
   if muted then return end
-  pcall(function()
-    if f and ms then sound.play(name, f, ms)
-    elseif f then sound.play(name, f)
-    else sound.play(name) end
-  end)
+  if f and ms then sound.play(name, f, ms)
+  elseif f then sound.play(name, f)
+  else sound.play(name) end
 end
 local function play_theme()
   if muted then return end
-  pcall(function() music.mml(D.MML_LEAD, D.MML_BASS, true) end)
+  music.mml(D.MML_LEAD, D.MML_BASS, true)
 end
 
 -- ---- Paint shop: every sprite drawn from scratch -------------------------
@@ -531,7 +532,7 @@ function update(dt)
   if keyboard.pressed("m") then
     muted = not muted
     if muted then
-      pcall(music.stop)
+      music.stop()
     else
       play_theme()
     end
@@ -564,7 +565,7 @@ function update(dt)
       local was_best = score > best
       best = D.save_high_score(score)
       new_best = was_best
-      pcall(music.stop)
+      music.stop()
       sfx(new_best and "Cash" or "Bell", new_best and 880 or 520, 350)
     end
   end
