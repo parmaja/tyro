@@ -171,6 +171,33 @@ music.mml("ms c4 d4 e4")  -- Bouncy and short
 
 ---
 
+## Making a Song Loop! 🔁
+
+Games usually want their theme to play again and again. Add `true` as the
+**last parameter** of `music.mml()` and the tune repeats forever:
+
+```tyro
+-- one voice, looping
+music.mml("t150 l8 c d e f g a b c5", true)
+
+-- two voices looping together (give both parts the same length!)
+music.mml("t150 l8 c e g c5", "t150 l8 c3 e3 g3 c4", true)
+```
+
+A looping song never ends on its own, so `music.stop()` is its partner: it
+silences every melody that is playing - loops included. Perfect for a game
+over screen or a mute button:
+
+```tyro
+if keyboard.pressed('m') then music.stop() end
+```
+
+> Note: `music.mml()` *without* `true` plays the song once and stops - and it
+> does not stop what is already playing, it joins in. So call a jingle with a
+> plain `music.mml(...)`, and `music.stop()` first if you want it alone.
+
+---
+
 ## Fun Examples for Kids!
 
 ### Tiny Scale

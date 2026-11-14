@@ -221,7 +221,12 @@ var
   WaveForms: TWaveForms = nil;
   SoundCache: TTyroFileSounds = nil;
 
-procedure PlayMML(const Song: TmmlSong);
+//music.mml(): play a chiptune song, one string per voice channel. With
+//Loop = true (music.mml(song1, song2, ..., true)) every channel rewinds at
+//its own end and the tune repeats until music.stop() ends it.
+procedure PlayMML(const Song: TmmlSong; Loop: Boolean = False);
+//music.stop(): stop all playing melodies now, endless loops included.
+procedure StopMML;
 
 //Volume multiplier for MML melodies only - music.volume(). It does not touch
 //one-shot sounds (music.sound/sound.play) or loop sounds; each melody note is
@@ -810,7 +815,7 @@ begin
   Result := MusicVolume;
 end;
 
-procedure PlayMML(const Song: TmmlSong);
+procedure PlayMML(const Song: TmmlSong; Loop: Boolean);
 var
   Melody: TRayMelody;
 begin
@@ -820,6 +825,7 @@ begin
     Exit;
   Melody := TRayMelody.Create;
   try
+    Melody.Loop := Loop;
     Melody.BeginPlay(Song);
     if Melody.Playing then
     begin
@@ -829,6 +835,22 @@ begin
   finally
     Melody.Free;
   end;
+end;
+
+procedure StopMML;
+var
+  I: Integer;
+  Melody: TRayMelody;
+begin
+  if PlayingMelodies = nil then
+    Exit;
+  for I := PlayingMelodies.Count - 1 downto 0 do
+  begin
+    Melody := TRayMelody(PlayingMelodies[I]);
+    Melody.Stop;
+    Melody.Free;
+  end;
+  PlayingMelodies.Clear;
 end;
 
 procedure PlayWaveform(Proc: TWaveformProc; Freq, Duration: Single);

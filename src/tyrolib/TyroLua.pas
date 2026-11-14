@@ -246,6 +246,9 @@ type
     function Sound_func(L: Plua_State): integer; cdecl;
     function Play_func(L: Plua_State): integer; cdecl;
     function MML_func(L: Plua_State): integer; cdecl;
+    //music.stop(): silence all playing melodies, music.mml(..., true) loops
+    //included.
+    function Stop_func(L: Plua_State): integer; cdecl;
   end;
 
 
@@ -1949,6 +1952,7 @@ begin
   Lua.State.Register('music', 'sound', Music, Music.Sound_func);
   Lua.State.Register('music', 'play', Music, Music.Play_func);
   Lua.State.Register('music', 'mml', Music, Music.MML_func);
+  Lua.State.Register('music', 'stop', Music, Music.Stop_func);
   Lua.State.Register('music', Music); //Should be last one
 
   //sound (one-shot file SFX + gapless/seamless looping playback)
@@ -2952,9 +2956,18 @@ var
   i, c: integer;
   s: string;
   Song: TmmlSong;
+  Loop: Boolean;
 begin
   Song := nil;
+  Loop := False;
   c := L.ArgsCount;
+  //Optional trailing boolean: music.mml(song1, song2, ..., true) replays the
+  //tune endlessly until music.stop().
+  if (c > 0) and lua_isboolean(L, c) then
+  begin
+    Loop := L.ToBoolean(c);
+    c := c - 1;
+  end;
   SetLength(Song, c);
   for i := 0 to c - 1 do
   begin
@@ -2963,7 +2976,13 @@ begin
   end;
   //Audio objects and raylib audio calls stay on the Engine thread. Playback is
   //advanced incrementally by TTyroMain.Update, so this does not block drawing.
-  FScript.AddQueueObject(TPlayMMLObject.Create(Song));
+  FScript.AddQueueObject(TPlayMMLObject.Create(Song, Loop));
+  Result := 0;
+end;
+
+function TLuaMusic.Stop_func(L: Plua_State): integer; cdecl;
+begin
+  FScript.AddQueueObject(TStopMMLObject.Create);
   Result := 0;
 end;
 

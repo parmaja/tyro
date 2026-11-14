@@ -584,7 +584,15 @@ type
    TPlayMMLObject = class(TQueueObject)
    public
      Song: TmmlSong;
-     constructor Create(ASong: TmmlSong);
+     Loop: Boolean;
+     constructor Create(ASong: TmmlSong; ALoop: Boolean = False);
+     procedure DoExecute; override;
+   end;
+
+   { TStopMMLObject }
+
+   TStopMMLObject = class(TQueueObject)
+   public
      procedure DoExecute; override;
    end;
 
@@ -1036,14 +1044,22 @@ end;
 
 { TPlayMMLObject }
 
-constructor TPlayMMLObject.Create(ASong: TmmlSong);
+constructor TPlayMMLObject.Create(ASong: TmmlSong; ALoop: Boolean);
 begin
   Song := ASong;
+  Loop := ALoop;
 end;
 
 procedure TPlayMMLObject.DoExecute;
 begin
-  PlayMML(Song);
+  PlayMML(Song, Loop);
+end;
+
+{ TStopMMLObject }
+
+procedure TStopMMLObject.DoExecute;
+begin
+  StopMML;
 end;
 
 { TLoadFontObject }

@@ -100,6 +100,9 @@ type
     procedure Update; virtual;
     procedure Prepare; virtual;
     procedure Unprepare; virtual;
+    //Rewind parser and scheduler so the song plays again from the start
+    //(the music.mml(..., true) loop). Keeps the sound buffers prepared.
+    procedure LoopRestart;
     procedure SetInstrument(Instrument: String); virtual;
     {
       SetSound used to genereate a wave to play it using PlaySound
@@ -130,6 +133,7 @@ type
   FChannels: TMelodyChannels;
   FPlaying: Boolean;
   FPlayPrepared: Boolean;
+  FLoop: Boolean;
     procedure FinishPlay;
   protected
     procedure BeforePlay; virtual;
@@ -146,6 +150,10 @@ type
     procedure Stop;
     procedure Play(Song: TmmlSong);
     property Playing: Boolean read FPlaying;
+    //When true, a channel that runs out of notes rewinds and plays its song
+    //string again instead of finishing (music.mml(..., true)). Set it before
+    //BeginPlay; music.stop() is the only way to end a looping melody.
+    property Loop: Boolean read FLoop write FLoop;
   end;
 
   { TMelodyThread }
@@ -306,6 +314,28 @@ procedure TMelodyChannel.Unprepare;
 begin
   SoundDuration := 0;
   SoundExpired := 0;
+end;
+
+procedure TMelodyChannel.LoopRestart;
+begin
+  //The same rewind the Prepare does at song start (its parser defaults are
+  //also what a fresh song begins with), but the channel keeps its prepared
+  //sound buffers, so looping costs no re-allocation.
+  Tempo := 120;
+  Octave := 4;
+  ShiftOctave := 0;
+  NoteLength := 4;
+  SubSequent := 0;
+  SetInstrument('');
+  Line := 1;
+  Current := 1;
+  Started := False;
+  HasPrepared := False;
+  PreparedDuration := 0;
+  NextTick := 0;
+  Finished := False;
+  if (Current <= Length(Notes)) then
+    Chr := Notes[Current];
 end;
 
 procedure TMelodyChannel.SetSound(Frequency, Duration, Rest: Single; Connected: Boolean; Volume: Single);
@@ -834,6 +864,7 @@ begin
   FChannels := nil;
   FPlaying := False;
   FPlayPrepared := False;
+  FLoop := False;
 end;
 
 destructor TMelody.Destroy;
@@ -949,8 +980,19 @@ begin
         if Now >= Channel.NextTick then
         begin
           Channel.StopSound;
-          Channel.Finished := True;
-          Channel.Unprepare;
+          if FLoop then
+          begin
+            //music.mml(..., true): rewind and play again. The next frame
+            //prepares the opening note and sounds it at once, so the wrap
+            //gap is at most one frame.
+            Channel.LoopRestart;
+            Busy := True;
+          end
+          else
+          begin
+            Channel.Finished := True;
+            Channel.Unprepare;
+          end;
         end
         else
           Busy := True;
