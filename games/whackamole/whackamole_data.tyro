@@ -1,0 +1,212 @@
+--======================================================================
+--  Whack-a-Mole - Data & Rules (pure Lua, no engine calls but files)
+--======================================================================
+--  Everything the game plays by lives here: the burrow grid, the combo
+--  scoring, the difficulty curve, the mole state machine and the high
+--  score file. Keeping it engine-free means tests/test_whackamole_data.tyro
+--  can check every rule without a window.
+--======================================================================
+
+local M = {}
+
+M.W, M.H = 800, 600
+M.ROUND_TIME = 60          -- seconds of whacking per go
+M.HUD_H = 46               -- top bar kept clear of the field
+
+-- ---- The burrow grid --------------------------------------------------
+-- Nine holes, three rows of three, spaced so a 48px mole always sits
+-- clear of its neighbours. y is the hole's centre; moles ride above it.
+function M.burrow_spots()
+  local cols = { M.W / 2 - 240, M.W / 2, M.W / 2 + 240 }
+  local rows = { 210, 350, 480 }
+  local spots = {}
+  for _, y in ipairs(rows) do
+    for _, x in ipairs(cols) do
+      spots[#spots + 1] = { x = x, y = y }
+    end
+  end
+  return spots
+end
+M.SPOT_R = 56               -- how near the hole a whack still counts
+
+-- ---- Scoring ----------------------------------------------------------
+M.POINTS = { mole = 10, golden = 50, bomb = -25 }
+M.COMBO_STEP = 3            -- every 3 whacks in a row raise the multiplier
+M.MAX_MULT = 4
+
+-- Multiplier from the current streak: 1..4.
+function M.mult(combo)
+  local m = 1 + math.floor((combo or 0) / M.COMBO_STEP)
+  if m > M.MAX_MULT then m = M.MAX_MULT end
+  return m
+end
+
+-- Points for one whack. The bomb-mole always costs its flat penalty and
+-- never rides a multiplier - you brought it on yourself.
+function M.score_for(kind, combo)
+  local base = M.POINTS[kind]
+  if not base then return 0 end
+  if kind == "bomb" then return base end
+  return base * M.mult(combo)
+end
+
+-- ---- Difficulty curve -------------------------------------------------
+local function progress(elapsed)
+  local p = (elapsed or 0) / M.ROUND_TIME
+  if p < 0 then p = 0 end
+  if p > 1 then p = 1 end
+  return p
+end
+
+-- Seconds a mole stays up: 1.6 s at the start, 0.65 s at full crank.
+function M.up_time(elapsed)
+  return 1.6 - 0.95 * progress(elapsed)
+end
+
+-- "not before ~ not after" seconds an empty burrow waits before popping.
+function M.delay_range(elapsed)
+  local p = progress(elapsed)
+  return 1.4 - 0.9 * p, 3.2 - 2.1 * p
+end
+
+-- How many moles may be up at once: 1, then 2, then all three.
+function M.max_up(elapsed)
+  local e = elapsed or 0
+  if e < 20 then return 1 end
+  if e < 40 then return 2 end
+  return 3
+end
+
+-- Which critter pops, from a random roll r in [0,1). Gold and bombs get
+-- more common as the round runs on; together they never crowd out the 10
+-- point bread-and-butter mole.
+function M.kind_roll(r, elapsed)
+  local p = progress(elapsed)
+  local gold = 0.06 + 0.06 * p
+  local bomb = gold + 0.10 + 0.12 * p
+  if r < gold then return "golden" end
+  if r < bomb then return "bomb" end
+  return "mole"
+end
+
+-- ---- Mole state machine -------------------------------------------------
+-- hidden -> rise -> up -> fall -> hidden          (an escape)
+--                \-> dizzy -> fall                (a whack)
+M.RISE_S = 0.16      -- pop up time
+M.FALL_S = 0.10      -- sink back time
+M.DIZZY_S = 0.55     -- stars-to-spin after a whack
+M.UP, M.DOWN, M.GONE = "up", "down", "gone"   -- escape categories for the game
+
+function M.new_mole()
+  return { state = "hidden", t = 0, kind = nil }
+end
+
+-- Start a pop; only an empty burrow can pop. Returns true on success.
+function M.pop_mole(m, kind)
+  if m.state ~= "hidden" then return false end
+  m.state = "rise"
+  m.t = 0
+  m.kind = kind
+  return true
+end
+
+-- Whack it. Only a rising or up mole is hittable; anything else (hidden,
+-- falling, already dizzy) shrugs the blow off. Returns true on a clean hit.
+function M.whack(m)
+  if m.state == "rise" or m.state == "up" then
+    m.state = "dizzy"
+    m.t = 0
+    return true
+  end
+  return false
+end
+
+-- Advance one mole; returns "escaped" the frame an unhittable mole sinks,
+-- "sunk" when it is fully back in the hole, else nil.
+function M.step_mole(m, dt, up_time)
+  if m.state == "rise" then
+    m.t = m.t + dt
+    if m.t >= M.RISE_S then m.state, m.t = "up", 0 end
+  elseif m.state == "up" then
+    m.t = m.t + dt
+    if m.t >= up_time then
+      m.state, m.t = "fall", 0
+      return "escaped"
+    end
+  elseif m.state == "dizzy" then
+    m.t = m.t + dt
+    if m.t >= M.DIZZY_S then m.state, m.t = "fall", 0 end
+  elseif m.state == "fall" then
+    m.t = m.t + dt
+    if m.t >= M.FALL_S then
+      m.state, m.t, m.kind = "hidden", 0, nil
+      return "sunk"
+    end
+  end
+  return nil
+end
+
+-- How visible the mole is, 0..1, for the sprite to turn into scale/offset.
+-- (The game adds its own overshoot bounce on top of this.)
+function M.rise_frac(m)
+  if m.state == "rise" then return math.min(m.t / M.RISE_S, 1) end
+  if m.state == "up" or m.state == "dizzy" then return 1 end
+  if m.state == "fall" then return math.max(1 - m.t / M.FALL_S, 0) end
+  return 0
+end
+
+-- Which animation frame the sprite should wear.
+function M.frame_for(m)
+  if m.state == "dizzy" then return 2 end
+  if m.state == "up" and m.t >= 0.35 then return 1 end
+  return 0
+end
+
+-- ---- High score file ----------------------------------------------------
+
+local HI_FILE = "whackamole.hi"
+local HI_DEFAULT = 0
+
+function M.load_high_score()
+  local f = openfile(HI_FILE, "r")
+  if not f then return HI_DEFAULT end
+  local line = f:read("l")
+  f:close()
+  local score = tonumber(line)
+  if score and score > 0 then
+    return math.floor(score)
+  end
+  return HI_DEFAULT
+end
+
+-- Writes the new best when score beats the stored one; returns the best.
+function M.save_high_score(score)
+  local cur = M.load_high_score()
+  if score > cur then
+    local f = openfile(HI_FILE, "w")
+    if f then
+      f:write(tostring(score) .. "\n")
+      f:close()
+    end
+    return score
+  end
+  return cur
+end
+
+-- ---- Music ---------------------------------------------------------------
+-- Cheerful circus oom-pah: 4 bars at t168 (~7.6 s), C - F - G - C,
+-- played as an endless loop by music.mml(lead, bass, true).
+M.MML_LEAD =
+  "t168 l8 o5 ms " ..
+  "g c e g >c g e c " ..
+  "a c f a >c a f c " ..
+  "b d g b >d b g d " ..
+  "g c e g c e g c"
+M.MML_BASS =
+  "t168 l8 o2 " ..
+  "c c c c c c c c " ..
+  "f f f f f f f f " ..
+  "g g g g g g g g " ..
+  "c c c c c c c c"
+
+return M

@@ -2312,7 +2312,15 @@ end;
 //fully opaque pixels pass through untouched; a shape painted over an already
 //opaque area lands a hair under 255 (200 over white gives 212, and this makes
 //it 233), close enough for hand-painted sheets and invisible at these sizes.
-procedure UnsquareAlpha(Data: PByteArray; Count: Integer);
+//PByteArray (FPC's Types unit) is array[Word] of Byte, so i*4+3 walks out of
+//its index range on big painted sheets and raises a range check error. The
+//readback must cover any sheet up to the render texture limit, so use an
+//open-sized byte array the pointer can span.
+type
+  PPixBytes = ^TPixBytes;
+  TPixBytes = array[0..MaxInt - 1] of Byte;
+
+procedure UnsquareAlpha(Data: PPixBytes; Count: Integer);
 var
   i, A, ATrue, R: Integer;
 begin
@@ -2369,7 +2377,7 @@ begin
       RayLib.ImageFlipVertical(Img);
       if Img.Format <> Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) then
         RayLib.ImageFormat(Img, Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8));
-      UnsquareAlpha(PByteArray(Img.Data), Img.Width * Img.Height);
+      UnsquareAlpha(PPixBytes(Img.Data), Img.Width * Img.Height);
       Tex := RayLib.LoadTextureFromImage(Img);
     finally
       RayLib.UnloadImage(Img);

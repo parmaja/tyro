@@ -1,0 +1,773 @@
+--======================================================================
+--  WHACK-A-MOLE - Bonk the moles, win the crown!
+--======================================================================
+--  Nine burrows, one mallet, sixty seconds. Brown moles are worth points,
+--  golden moles worth a fortune, and the grumpy bomb-mole costs you a
+--  fortune if you bonk it - which is exactly why it laughs at you.
+--
+--    games/whackamole/whackamole_data.tyro  pure rules (tested by
+--                                           tests/test_whackamole_data.tyro)
+--
+--  Every sprite is painted at load by this script itself: images.new()
+--  sheets draw the moles, burrows and mallet pixel by pixel, and
+--  sprite.fromimage() installs them - no PNG files in this folder at all.
+--  While the art is being painted the world stays dark and the splash
+--  screen plays (world.enable = false, see help/drawing.md).
+--
+--  Keys:
+--    LEFT MOUSE / ENTER    swing the mallet
+--    SPACE                 start a round (from the title / game over)
+--    R                     start a fresh round any time
+--    M                     mute / unmute the circus band
+--    ESC                   exit
+--
+--  A streak of hits raises the multiplier (x2 at 3, x3 at 6, x4 at 9);
+--  a whiff at grass or a greedy bomb hit resets it. Gold and bombs get
+--  bolder as the minute ticks away - late moles are fast moles.
+--======================================================================
+
+local D = require("whackamole_data")
+
+window.show(D.W, D.H)
+world.title = "Whack-a-Mole"
+world.backcolor = rgb(52, 118, 58)
+
+local W, H = D.W, D.H
+local spots = D.burrow_spots()
+local N = #spots
+local MOLE_DY = 28                   -- a mole's centre rides this high above its hole
+
+-- Splash first: screen commands queued here run before the paint shop's
+-- hundreds of sheet commands, so the title card is on glass from frame one
+-- and stays (the screen buffer remembers) while the art drains the queue.
+screen.clear('blank')
+screen.color = rgb(28, 46, 32)
+screen.rectangle(0, 0, W, H, true)
+screen.color = colors.white
+screen.text(W / 2 - 4 * 12, 220, "WHACK-A-MOLE")
+screen.color = rgb(255, 224, 150)
+screen.text(W / 2 - 4 * 27, 258, "bonk the brown, feast on gold,")
+screen.text(W / 2 - 4 * 26, 278, "never touch the grumpy bomb!")
+screen.color = rgb(150, 190, 150)
+screen.text(W / 2 - 4 * 21, 330, "warming up the mallet...")
+
+-- ---- Audio -------------------------------------------------------------
+local muted = false
+local function sfx(name, f, ms)
+  if muted then return end
+  pcall(function()
+    if f and ms then sound.play(name, f, ms)
+    elseif f then sound.play(name, f)
+    else sound.play(name) end
+  end)
+end
+local function play_theme()
+  if muted then return end
+  pcall(function() music.mml(D.MML_LEAD, D.MML_BASS, true) end)
+end
+
+-- ---- Paint shop: every sprite drawn from scratch -------------------------
+-- Small helpers over the images.new() sheets (see the TLuaImage API):
+-- `disc` fills a round box, `capsule` fuses two discs with a bar - the
+-- ellipse stand-ins - and everything else is plain rectangle/line/point.
+local function new_sheet(w, h, name)
+  local s = images.new(w, h, name)
+  s.clear("blank")
+  return s
+end
+local function disc(s, cx, cy, r, c)
+  s.color = c
+  s.circle(cx, cy, r, true)
+end
+local function capsule(s, x0, y0, x1, y1, c)
+  local r = (y1 - y0) / 2
+  disc(s, x0 + r, y0 + r, r, c)
+  disc(s, x1 - r, y0 + r, r, c)
+  s.color = c
+  s.rectangle(x0 + r, y0, x1 - x0 - 2 * r, y1 - y0, true)
+end
+
+local CLR_OUT   = rgb(38, 30, 24)
+local CLR_WHITE = colors.white
+
+-- The critter body: pear torso, head, paws, and one of three eye moods.
+local function critter_body(s, main, dark, light, eyes)
+  capsule(s, 7, 16, 41, 46, dark)
+  capsule(s, 8, 17, 40, 45, main)
+  capsule(s, 9, 6, 39, 34, dark)
+  capsule(s, 10, 7, 38, 33, main)
+  disc(s, 20, 15, 5, light)                       -- head shine
+  for _, px in ipairs({ 9, 34 }) do               -- paws on the hole edge
+    disc(s, px + 3, 40, 4, dark)
+    disc(s, px + 3, 40, 3, main)
+    s.color = dark
+    s.line(px + 2, 38, px + 2, 42)
+    s.line(px + 4, 38, px + 4, 42)
+  end
+  if eyes == "round" then
+    for _, ex in ipairs({ 19, 30 }) do
+      disc(s, ex, 17, 4, CLR_WHITE)
+      disc(s, ex + 1, 18, 2, CLR_OUT)
+      s.color = CLR_WHITE
+      s.point(ex, 16)
+    end
+  elseif eyes == "happy" then
+    s.pen = 2
+    for _, ex in ipairs({ 19, 30 }) do
+      s.line(ex - 3, 15, ex, 18)
+      s.line(ex, 18, ex + 3, 15)                  -- "> <" laughing eyes
+    end
+    s.pen = 1
+  elseif eyes == "dizzy" then
+    s.pen = 2
+    for _, ex in ipairs({ 19, 30 }) do
+      s.line(ex - 3, 14, ex + 3, 20)
+      s.line(ex + 3, 14, ex - 3, 20)
+    end
+    s.pen = 1
+  end
+end
+
+local function critter_snout(s, mood)
+  disc(s, 24, 26, 7, rgb(208, 134, 130))
+  disc(s, 24, 26, 6, rgb(246, 178, 170))
+  disc(s, 24, 24, 3, rgb(94, 52, 58))             -- nose
+  s.color = rgb(255, 214, 208)
+  s.point(23, 23)
+  s.pen = 1
+  for _, side in ipairs({ -1, 1 }) do             -- whiskers
+    s.color = rgb(96, 64, 40)
+    s.line(24 + 6 * side, 26, 24 + 14 * side, 24)
+    s.line(24 + 6 * side, 28, 24 + 14 * side, 30)
+  end
+  s.color = CLR_OUT
+  if mood == "smile" then
+    s.line(21, 29, 24, 31)
+    s.line(24, 31, 27, 29)
+    s.color = rgb(226, 96, 112)
+    s.rectangle(23, 29, 2, 3, true)               -- one brave tooth
+  elseif mood == "grin" then
+    s.line(20, 29, 24, 32)
+    s.line(24, 32, 28, 29)
+    s.color = rgb(226, 96, 112)
+    s.rectangle(22, 29, 4, 3, true)               -- two teeth
+  elseif mood == "dizzy" then
+    s.line(20, 30, 22, 29)
+    s.line(22, 29, 24, 30)
+    s.line(24, 30, 26, 29)
+    s.line(26, 29, 28, 30)
+  end
+end
+
+local function dizzy_stars(s)
+  for _, st in ipairs({ { 14, 8, 3 }, { 24, 6, 3 }, { 34, 8, 2 } }) do
+    s.color = rgb(255, 222, 96)
+    s.rectangle(st[1] - 1, st[2] - st[3], 3, 2 * st[3] + 1, true)
+    s.rectangle(st[1] - st[3], st[2] - 1, 2 * st[3] + 1, 3, true)
+  end
+end
+
+-- One sheet per kind per frame; the mole sheets share the body recipe.
+local SHEET = { mole = {}, golden = {}, bomb = {} }
+local FUR    = { rgb(140, 98, 62), rgb(96, 64, 40), rgb(186, 142, 98) }
+local GOLD   = { rgb(250, 204, 84), rgb(196, 140, 44), rgb(255, 244, 176) }
+local COAL   = { rgb(64, 66, 82), rgb(36, 38, 52), rgb(124, 128, 152) }
+
+local function paint_critter(s, pal, kind, frame)
+  if kind ~= "bomb" then
+    critter_body(s, pal[1], pal[2], pal[3],
+      frame == 0 and "round" or (frame == 1 and "happy" or "dizzy"))
+    critter_snout(s, frame == 0 and "smile" or (frame == 1 and "grin" or "dizzy"))
+    if kind == "golden" then
+      if frame < 2 then                            -- the gem wink
+        s.color = CLR_WHITE
+        s.triangle(34, 8, 37, 12, 34, 16, true)
+        s.triangle(34, 16, 31, 12, 34, 8, true)
+      end
+      if frame == 1 then                           -- extra twinkles
+        s.color = CLR_WHITE
+        s.rectangle(8, 8, 3, 9, true)
+        s.rectangle(5, 11, 9, 3, true)
+        s.rectangle(38, 5, 3, 7, true)
+        s.rectangle(36, 7, 7, 3, true)
+      end
+    end
+    if frame == 2 then dizzy_stars(s) end
+  else
+    -- Bomb-mole: a sooty grump with a lit fuse on its head.
+    critter_body(s, pal[1], pal[2], pal[3], frame == 2 and "happy" or "none")
+    if frame < 2 then
+      for _, ex in ipairs({ 19, 30 }) do           -- white eyes, then brows
+        disc(s, ex, 17, 4, CLR_WHITE)
+        disc(s, ex + 1, 18, 2, CLR_OUT)
+      end
+      s.pen = 3
+      s.color = pal[2]
+      s.line(15, 11, 21, 14)
+      s.line(33, 11, 27, 14)
+      s.pen = 1
+      s.color = CLR_OUT
+      if frame == 0 then s.line(20, 28, 28, 28)
+      else s.line(20, 28, 24, 30) end
+    else
+      critter_snout(s, "smile")
+    end
+    s.color = rgb(150, 118, 74)                    -- the fuse
+    s.line(24, 7, 25, 4)
+    if frame == 0 then
+      disc(s, 25, 3, 3, rgb(255, 132, 46))
+      s.color = rgb(255, 250, 216)
+      s.point(25, 3)
+    else
+      disc(s, 25, 2, 2, rgb(255, 200, 84))
+    end
+  end
+end
+
+for _, kind in ipairs({ "mole", "golden", "bomb" }) do
+  for f = 0, 2 do
+    local s = new_sheet(48, 48, kind .. f)
+    paint_critter(s, kind == "mole" and FUR or (kind == "golden" and GOLD or COAL), kind, f)
+    SHEET[kind][f] = s
+  end
+end
+
+-- The burrow: grass patch, dirt mound, black hole.
+local function paint_burrow(s)
+  capsule(s, 2, 4, 62, 30, rgb(72, 148, 68))
+  capsule(s, 3, 5, 61, 29, rgb(104, 190, 92))
+  capsule(s, 9, 9, 55, 27, rgb(118, 82, 52))
+  s.pen = 2
+  s.color = rgb(78, 52, 32)
+  s.line(12, 11, 52, 11)
+  s.pen = 1
+  capsule(s, 17, 11, 47, 25, rgb(32, 22, 16))
+  capsule(s, 18, 12, 46, 24, rgb(14, 10, 8))
+  s.pen = 2                                        -- grass tufts on the rim
+  for _, tx in ipairs({ 6, 58, 13, 51 }) do
+    s.color = rgb(72, 148, 68)
+    s.line(tx, 24, tx - 2, 18)
+    s.color = rgb(148, 220, 124)
+    s.line(tx, 24, tx + 1, 17)
+  end
+  s.pen = 1
+end
+
+-- The mallet: frame 0 raised, frame 1 swung low - the head sits upper-left
+-- so rotating around the centre drives it down onto the moles. Endpoints are
+-- hand-placed so every pixel (thick pen included) stays inside the 64x64.
+local HAM_HEAD   = { { 20, 20 }, { 28, 32 } }
+local HAM_HANDLE = { { { 44, 54 }, { 26, 31 } }, { { 50, 56 }, { 34, 43 } } }
+
+local function paint_mallet(s, swing)
+  local cx, cy = HAM_HEAD[swing + 1][1], HAM_HEAD[swing + 1][2]
+  local h1, h2 = HAM_HANDLE[swing + 1][1], HAM_HANDLE[swing + 1][2]
+  s.pen = 9
+  s.color = rgb(132, 84, 40)
+  s.line(h1[1], h1[2], h2[1], h2[2])
+  s.pen = 7
+  s.color = rgb(196, 138, 74)
+  s.line(h1[1], h1[2], h2[1], h2[2])
+  s.pen = 2
+  s.color = rgb(232, 180, 118)
+  s.line(h1[1] - 1, h1[2] - 1, h2[1] + 1, h2[2] + 1)
+  s.pen = 1
+  capsule(s, cx - 16, cy - 9, cx + 16, cy + 9, rgb(168, 44, 44))
+  capsule(s, cx - 15, cy - 8, cx + 15, cy + 8, rgb(226, 76, 66))
+  s.color = rgb(255, 150, 132)
+  s.rectangle(cx - 15, cy - 8, 30, 3, true)
+  s.color = rgb(168, 44, 44)
+  s.rectangle(cx - 3, cy - 8, 7, 17, true)
+  s.color = rgb(255, 150, 132)
+  s.rectangle(cx - 2, cy - 8, 4, 17, true)
+end
+
+-- Dirt puff, three softening clouds like the engine's own dust.
+local function paint_puff(s, step)
+  local grow = step
+  local alpha = 210 - step * 60
+  for _, c in ipairs({ { 12, 15, 5 }, { 6, 17, 4 }, { 17, 17, 4 } }) do
+    local r = c[3] + grow
+    s.color = rgb(178, 150, 118, alpha)
+    s.circle(c[1], c[2], r, true)
+  end
+  s.color = rgb(214, 190, 160, math.max(alpha - 40, 40))
+  s.circle(12, 9, 3 + grow, true)
+end
+
+local BURROW_SHEET = new_sheet(64, 32, "burrow")
+paint_burrow(BURROW_SHEET)
+local SHEET_HAMMER = {}
+for f = 0, 1 do
+  local s = new_sheet(64, 64, "hammer" .. f)
+  paint_mallet(s, f)
+  SHEET_HAMMER[f] = s
+end
+local SHEET_PUFF = {}
+for f = 0, 2 do
+  local s = new_sheet(24, 24, "puff" .. f)
+  paint_puff(s, f)
+  SHEET_PUFF[f] = s
+end
+
+-- ---- The meadow: one sheet painted once, worn as a full-window sprite ----
+-- Keeping the field to a single texture means the load queue stays small
+-- and the splash comes up the very first frame.
+local FIELD = new_sheet(W, H, "meadow")
+do
+  math.randomseed(20261114)
+  FIELD.color = rgb(122, 196, 108)
+  FIELD.rectangle(0, D.HUD_H, W, H - D.HUD_H, true)
+  for _ = 1, 300 do                       -- grass speckle (kept off the edge
+    local x, y = math.random(W - 6), math.random(D.HUD_H + 4, H - 6)
+    FIELD.color = math.random() < 0.5 and rgb(142, 214, 126) or rgb(102, 174, 92)
+    FIELD.rectangle(x, y, 3, 2, true)
+  end
+  for _ = 1, 22 do                        -- little meadow flowers
+    local x, y = math.random(8, W - 8), math.random(D.HUD_H + 12, H - 12)
+    local petal = ({ colors.white, colors.yellow, rgb(250, 150, 190) })[math.random(3)]
+    FIELD.color = petal
+    FIELD.circle(x, y, 3, true)
+    FIELD.color = colors.yellow
+    FIELD.circle(x, y, 1, true)
+  end
+end
+local field = sprites.new("meadow")
+field.layer = 0
+field.fromimage(FIELD)
+field.move(W / 2, H / 2)
+field.visible = true
+
+-- ---- Sprites: one per hole per kind, dressed from the painted sheets ----
+local function make_sprite(name, layer)
+  local sp = sprites.new(name)
+  sp.layer = layer
+  sp.visible = false
+  return sp
+end
+
+local burrows, critter = {}, {}
+for i = 1, N do
+  local b = make_sprite("burrow" .. i, 1)
+  b.fromimage(BURROW_SHEET)
+  b.move(spots[i].x, spots[i].y)
+  b.visible = true
+  burrows[i] = b
+  critter[i] = {}
+  for _, kind in ipairs({ "mole", "golden", "bomb" }) do
+    local sp = make_sprite(kind .. i, 3)
+    sp.fromimage(SHEET[kind][0])
+    critter[i][kind] = sp
+  end
+end
+
+local hammer = make_sprite("hammer", 9)
+hammer.fromimage(SHEET_HAMMER[0])
+hammer.visible = true
+
+-- Dust pool: each puff wears its frame by swapping sheets.
+local puffs = {}
+for i = 1, 12 do
+  local s = make_sprite("puff" .. i, 5)
+  s.fromimage(SHEET_PUFF[0])
+  puffs[i] = { s = s, life = 0, stage = -1 }
+end
+local PUFF_SPAN = 0.27
+local function fire_dust(x, y)
+  for _, p in ipairs(puffs) do
+    if p.life <= 0 then
+      p.life = PUFF_SPAN
+      p.stage = -1
+      p.s.move(x, y)
+      p.s.visible = true
+      return
+    end
+  end
+end
+
+-- ---- Game state ------------------------------------------------------------
+local state = "title"          -- title | play | over
+local moles = {}
+local cooldown = {}
+local clock, score, best, combo = 0, 0, D.load_high_score(), 0
+local new_best = false
+local beep_at = 0              -- countdown barks on each remaining second
+local gold_timer = 0
+local swing = 0                -- mallet swing timer, counts down
+local SWING_S = 0.14
+local popups = {}              -- floating score texts
+local frame_on = {}            -- which art sheet each hole-kind sprite wears
+
+-- Reset fills the same tables, so a staged test copy can hold the handle.
+local function reset_round()
+  for i = 1, N do
+    moles[i] = D.new_mole()
+    cooldown[i] = 0.4 + math.random() * 1.2
+    for _, kind in ipairs({ "mole", "golden", "bomb" }) do
+      frame_on[kind .. i] = 0
+    end
+  end
+  clock, score, combo = 0, 0, 0
+  new_best = false
+  beep_at = 11
+  popups = {}
+  particles.clear()
+end
+reset_round()
+
+-- Swap a hole's critter art when its frame changes; texture uploads are
+-- rare (a blink twice a second at most) and tiny (48 px).
+local function wear(i, kind, f)
+  local key = kind .. i
+  if frame_on[key] ~= f then
+    frame_on[key] = f
+    critter[i][kind].fromimage(SHEET[kind][f])
+  end
+end
+
+local function popup(x, y, text, color)
+  popups[#popups + 1] = { x = x, y = y, text = text, color = color, life = 1.0 }
+end
+
+-- ---- Spawning ---------------------------------------------------------------
+local function count_up()
+  local n = 0
+  for i = 1, N do
+    local s = moles[i].state
+    if s == "rise" or s == "up" then n = n + 1 end
+  end
+  return n
+end
+
+local function spawn_tick(dt)
+  for i = 1, N do
+    if moles[i].state == "hidden" then
+      cooldown[i] = cooldown[i] - dt
+      if cooldown[i] <= 0 then
+        local lo, hi = D.delay_range(clock)
+        local cap = state == "play" and D.max_up(clock) or 1
+        if count_up() < cap then
+          local kind = D.kind_roll(math.random(), clock)
+          if D.pop_mole(moles[i], kind) then
+            cooldown[i] = lo + math.random() * (hi - lo)
+            sfx("Pew", 420 + math.random(180), 70)
+            fire_dust(spots[i].x, spots[i].y - 6)
+          end
+        else
+          cooldown[i] = 0.5                    -- field is busy, look again soon
+        end
+      end
+    end
+  end
+end
+
+-- Whack resolution happens here, once, against the chosen target.
+local function resolve_whack(mx, my)
+  swing = SWING_S
+  local target, best_d = 0, D.SPOT_R * D.SPOT_R
+  for i = 1, N do
+    local m = moles[i]
+    if m.state == "rise" or m.state == "up" then
+      local dx, dy = mx - spots[i].x, my - (spots[i].y - MOLE_DY)
+      local d = dx * dx + dy * dy
+      if d <= best_d then target, best_d = i, d end
+    end
+  end
+
+  if target == 0 then                          -- the mallet met grass
+    combo = 0
+    fire_dust(mx, my)
+    sfx("Zap", 150, 80)
+    return
+  end
+
+  local m = moles[target]
+  local kind = m.kind
+  local s = spots[target]
+  D.whack(m)
+  if kind == "bomb" then
+    score = math.max(0, score + D.score_for("bomb", combo))
+    combo = 0
+    popup(s.x, s.y - 56, D.POINTS.bomb .. "! OW!", colors.red)
+    particles.emit(s.x, s.y - 30, 22, { color = 'orange', speed = 220, life = 0.7, size = 4, gravity = 160 })
+    particles.emit(s.x, s.y - 30, 10, { color = 'gray', speed = 120, life = 0.8, size = 5 })
+    world.shake(320, 12)
+    sfx("Explode", 90, 320)
+    return
+  end
+
+  local before = D.mult(combo)
+  combo = combo + 1
+  local gain = D.score_for(kind, combo - 1)
+  score = score + gain
+  if D.mult(combo) > before then
+    sfx("Chime", 560 + 90 * D.mult(combo), 120)
+  end
+  if kind == "golden" then
+    popup(s.x, s.y - 58, "+" .. gain .. " GOLD!", colors.yellow)
+    particles.emit(s.x, s.y - 30, 18, { color = 'yellow', speed = 190, life = 0.6, size = 3, gravity = 120 })
+    particles.emit(s.x, s.y - 30, 8, { color = 'white', speed = 90, life = 0.3, size = 2 })
+    sfx("Coin", 900, 110)
+    world.shake(160, 6)
+  else
+    popup(s.x, s.y - 56, "+" .. gain, colors.white)
+    particles.emit(s.x, s.y - 30, 10, { color = 'orange', speed = 150, life = 0.4, size = 3 })
+    fire_dust(s.x, s.y - 12)
+    sfx("Kick", 130, 90)
+    world.shake(90, 4)
+  end
+end
+
+-- ---- Update ---------------------------------------------------------------
+local function start_play()
+  reset_round()
+  state = "play"
+  play_theme()
+end
+
+function update(dt)
+  if keyboard.pressed("escape") then exit() end
+  if keyboard.pressed("r") then start_play() end
+  if keyboard.pressed("m") then
+    muted = not muted
+    if muted then
+      pcall(music.stop)
+    else
+      play_theme()
+    end
+  end
+
+  if (keyboard.pressed("space") or keyboard.pressed("enter")) and state ~= "play" then
+    start_play()
+  end
+
+  local clicked = mouse.pressed("left")
+  if swing > 0 then swing = swing - dt end
+  if clicked and state == "title" then
+    start_play()
+  elseif clicked and state == "play" then
+    resolve_whack(mouse.x, mouse.y)
+  end
+
+  if state == "play" then
+    clock = clock + dt
+    local left = D.ROUND_TIME - clock
+    if left <= 10 and left > 0 then
+      local whole = math.ceil(left)
+      if whole < beep_at then
+        beep_at = whole
+        sfx("Bee", 880, 70)
+      end
+    end
+    if clock >= D.ROUND_TIME then
+      state = "over"
+      local was_best = score > best
+      best = D.save_high_score(score)
+      new_best = was_best
+      pcall(music.stop)
+      sfx(new_best and "Cash" or "Bell", new_best and 880 or 520, 350)
+    end
+  end
+
+  -- mole machines + escapes
+  spawn_tick(dt)                                -- attract mode pops too
+  for i = 1, N do
+    local m = moles[i]
+    local evt = D.step_mole(m, dt, D.up_time(clock))
+    if evt == "escaped" and state == "play" and m.kind == "golden" then
+      popup(spots[i].x, spots[i].y - 58, "got away!", rgb(255, 224, 150))
+    end
+  end
+
+  -- golden sparkle trail
+  gold_timer = gold_timer + dt
+  if gold_timer > 0.16 then
+    gold_timer = 0
+    for i = 1, N do
+      local m = moles[i]
+      if m.kind == "golden" and (m.state == "up" or m.state == "rise") then
+        particles.emit(spots[i].x + math.random(-16, 16), spots[i].y - 40, 1,
+          { color = 'yellow', speed = 24, life = 0.6, size = 2, gravity = -30 })
+      end
+    end
+  end
+
+  -- dust pool frames
+  for _, p in ipairs(puffs) do
+    if p.life > 0 then
+      p.life = p.life - dt
+      local stage = math.floor((PUFF_SPAN - p.life) / (PUFF_SPAN / 3))
+      if stage > 2 then stage = 2 end
+      if stage < 0 then stage = 0 end
+      if stage ~= p.stage then
+        p.stage = stage
+        p.s.fromimage(SHEET_PUFF[stage])
+      end
+      if p.life <= 0 then p.s.visible = false end
+    end
+  end
+
+  -- floating score popups drift up and fade
+  for i = #popups, 1, -1 do
+    local p = popups[i]
+    p.life = p.life - dt
+    p.y = p.y - 30 * dt
+    if p.life <= 0 then table.remove(popups, i) end
+  end
+
+  -- ---- pose the sprites ----------------------------------------------------
+  for i = 1, N do
+    local m = moles[i]
+    local sp = m.kind and critter[i][m.kind] or nil
+    local scale
+    if m.state == "rise" then                   -- overshoot pop, like a cork
+      local t = math.min(m.t / D.RISE_S, 1)
+      scale = t * t * (3 - 2 * t) * 1.12 - (t > 0.8 and (t - 0.8) * 0.6 or 0)
+      if scale < 0 then scale = 0 end
+    else
+      scale = D.rise_frac(m)
+      if m.state == "fall" then scale = scale * scale end
+    end
+    for _, kind in ipairs({ "mole", "golden", "bomb" }) do
+      if critter[i][kind] ~= sp then critter[i][kind].visible = false end
+    end
+    if sp then
+      sp.visible = scale > 0.05
+      sp.scale = scale
+      if sp.visible then
+        local wob = 0
+        if m.state == "dizzy" then wob = math.sin(m.t * 26) * 3 end
+        sp.move(spots[i].x + wob, spots[i].y - MOLE_DY)
+        sp.angle = (m.state == "up" and math.sin(clock * 5 + i) * 3) or (m.state == "dizzy" and wob) or 0
+        wear(i, m.kind, D.frame_for(m))
+      end
+    end
+  end
+
+  -- the mallet rides the mouse; swing tilts it down and swaps the frame
+  hammer.move(mouse.x + 14, mouse.y + 14)
+  if swing > 0 then
+    local p = 1 - swing / SWING_S
+    hammer.angle = 14 - 58 * p * p
+    if (p > 0.5) ~= (hammer.frame == 1) then
+      hammer.frame = p > 0.5 and 1 or 0
+      hammer.fromimage(SHEET_HAMMER[hammer.frame])
+    end
+  else
+    hammer.angle = 14
+    if hammer.frame ~= 0 then
+      hammer.frame = 0
+      hammer.fromimage(SHEET_HAMMER[0])
+    end
+  end
+end
+
+-- ---- Draw -------------------------------------------------------------------
+local function center(x, s) return x - 4 * #s end   -- ~8 px per glyph
+
+local function banner(s, y, color)
+  screen.color = color
+  screen.text(center(W / 2, s), y, s)
+end
+
+-- Splash: an opaque screen-buffer panel over the freshly painted meadow,
+-- so the title card is the first thing anyone sees while the moles settle.
+local splash_t = 0
+local SPLASH_HOLD = WHACKAMOLE_TEST and 0.4 or 1.6
+local splashing = true
+
+function draw()
+  screen.clear('blank')
+
+  if splashing then
+    screen.color = rgb(28, 46, 32)
+    screen.rectangle(0, 0, W, H, true)
+    banner("WHACK-A-MOLE", 220, colors.white)
+    banner("bonk the brown, feast on gold,", 258, rgb(255, 224, 150))
+    banner("never touch the grumpy bomb!", 278, rgb(255, 224, 150))
+    local dots = string.rep(".", 1 + math.floor(splash_t * 3) % 3)
+    banner("warming up the mallet" .. dots, 330, rgb(150, 190, 150))
+    return
+  end
+
+  -- HUD on the screen buffer: never wobbles, even mid-shake
+  screen.color = rgb(38, 66, 40)
+  screen.rectangle(0, 0, W, D.HUD_H, true)
+  screen.color = rgb(148, 96, 58)
+  screen.rectangle(0, D.HUD_H - 4, W, 4, true)
+
+  screen.color = colors.white
+  screen.text(10, 6, "SCORE " .. score)
+  screen.color = rgb(255, 224, 150)
+  screen.text(10, 26, "BEST " .. best)
+
+  -- time bar: turns red in the last ten seconds
+  local left = math.max(D.ROUND_TIME - clock, 0)
+  local frac = left / D.ROUND_TIME
+  screen.color = rgb(22, 40, 24)
+  screen.rectangle(W / 2 - 150, 12, 300, 16, true)
+  screen.color = left <= 10 and colors.red or colors.lime
+  screen.rectangle(W / 2 - 148, 14, 296 * frac, 12, true)
+
+  if combo >= 2 then
+    screen.color = colors.yellow
+    screen.text(W - 170, 6, "STREAK x" .. D.mult(combo))
+  end
+  screen.color = rgb(186, 214, 186)
+  screen.text(W - 170, 26, muted and "M: sound off" or "M: sound on")
+
+  -- floating popups ride the world so they shake with it
+  for _, p in ipairs(popups) do
+    screen.color = p.color
+    screen.alpha = math.floor(math.max(p.life, 0) * 255)
+    screen.text(center(p.x, p.text), p.y, p.text)
+  end
+  screen.alpha = 255
+
+  if state == "title" then
+    screen.color = rgb(24, 40, 28, 200)
+    screen.rectangle(W / 2 - 260, 120, 520, 220, true)
+    banner("WHACK-A-MOLE", 150, colors.white)
+    banner("bonk the brown, feast on gold,", 190, rgb(255, 224, 150))
+    banner("never touch the grumpy bomb!", 210, rgb(255, 224, 150))
+    banner("SPACE or CLICK to start", 260, rgb(170, 255, 170))
+    banner("R round  M mute  ESC exit", 300, rgb(186, 214, 186))
+  elseif state == "over" then
+    screen.color = rgb(24, 40, 28, 210)
+    screen.rectangle(W / 2 - 220, 150, 440, 190, true)
+    banner("TIME UP!", 175, colors.white)
+    banner("you bonked " .. score .. " points", 215, colors.white)
+    if new_best then
+      banner("** NEW BEST! **", 245, colors.yellow)
+    else
+      banner("best " .. best, 245, rgb(186, 214, 186))
+    end
+    banner("SPACE for one more round", 295, colors.lime)
+  end
+end
+
+-- splash timer lives in update so the title card lifts after its moment
+local game_update = update
+function update(dt)
+  if splashing then
+    splash_t = splash_t + dt
+    if keyboard.pressed("escape") then exit() end
+    if keyboard.pressed("space") or keyboard.pressed("enter")
+        or mouse.pressed("left") then
+      splash_t = SPLASH_HOLD                      -- any key skips the splash
+    end
+    if splash_t >= SPLASH_HOLD then
+      splashing = false
+    end
+    return
+  end
+  game_update(dt)
+end
+
+-- Test hook: tests/test_whackamole_play.tyro sets WHACKAMOLE_TEST before
+-- requiring this file, starts a round right away and swings the mallet
+-- through WM.whack, so --screenshot catches genuine mid-play action.
+if WHACKAMOLE_TEST then
+  WM = { moles = moles, spots = spots, whack = resolve_whack, start = start_play }
+  start_play()
+end
