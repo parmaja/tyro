@@ -373,6 +373,9 @@ type
     procedure SetEffect(const AEffectName: string); virtual;
     procedure LoadCustomEffect(const AFileName: string); virtual;
     function GetEffectName: string; virtual;
+    //True only when a shader is compiled and actually in effect. Scripts
+    //read it one frame after shader.load: the load is queued.
+    function EffectOK: Boolean; virtual;
     procedure SetEffectValue(AValue: Single); virtual;
     function GetEffectValue: Single; virtual;
     procedure SetEffectArea(const AArea: TRectangle); virtual;
@@ -423,6 +426,7 @@ type
     procedure SetEffect(const AEffectName: string); override;
     procedure LoadCustomEffect(const AFileName: string); override;
     function GetEffectName: string; override;
+    function EffectOK: Boolean; override;
     procedure SetEffectValue(AValue: Single); override;
     function GetEffectValue: Single; override;
     procedure SetEffectArea(const AArea: TRectangle); override;
@@ -1111,6 +1115,11 @@ begin
   Result := 'none';
 end;
 
+function TTyroCanvas.EffectOK: Boolean;
+begin
+  Result := False;
+end;
+
 procedure TTyroCanvas.SetEffectValue(AValue: Single);
 begin
 end;
@@ -1274,6 +1283,14 @@ begin
   else
     Result := 'none';
   end;
+end;
+
+function TTyroTextureCanvas.EffectOK: Boolean;
+begin
+  //FEffect only leaves fxNone inside LoadEffect, after IsShaderValid said
+  //yes on the GL thread. Only plain field reads here: the script thread has
+  //no current OpenGL context, so never call RayLib.IsShaderValid from it.
+  Result := (FEffect <> fxNone) and (FShader.ID <> 0);
 end;
 
 procedure TTyroTextureCanvas.LoadCustomEffect(const AFileName: string);

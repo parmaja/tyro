@@ -491,15 +491,6 @@ local function update_play(dt)
   end
 end
 
-local bmp_err_shown = 0
-local function bmp_try(f, name, ...)
-  local ok, err = pcall(f, ...)
-  if not ok and bmp_err_shown < 5 then
-    bmp_err_shown = bmp_err_shown + 1
-    println("[bmp] " .. name .. " ERROR: " .. tostring(err))
-  end
-end
-
 local function update_inner(dt)
   if dt > 0.05 then dt = 0.05 end
 
@@ -565,7 +556,7 @@ local function update_inner(dt)
 end
 
 function update(dt)
-  bmp_try(update_inner, "update", dt)
+  update_inner(dt)
 end
 
 -- ---- Drawing ------------------------------------------------------------------

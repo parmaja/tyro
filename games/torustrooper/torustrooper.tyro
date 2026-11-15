@@ -239,6 +239,7 @@ local state = "title"      -- "title" | "play" | "over"
 local paused = false
 local muted = false
 local wire = false           -- vector mode: meshes as edges, shader makes them glow
+local wireProbe = 0          -- counts down to the frame shader.ok can judge neon.frag
 local hi = D.load_high_score()
 
 local th, al, v = 0, 0, D.CRUISE
@@ -291,10 +292,12 @@ local function apply_wire()
   world.wire(wire)
   if not wire then
     shader.effect = "none"
+    wireProbe = 0
   else
-    -- shader.load only queues; it never fails here, so the old pcall-based
-    -- "fall back to glow" branch was unreachable dead code - load neon.frag.
+    -- shader.load only queues, so wireProbe waits for the compile and
+    -- falls back to the built-in glow only if neon.frag really failed.
     shader.load("neon.frag")
+    wireProbe = 3
   end
 end
 
@@ -519,6 +522,13 @@ end
 function update(dt)
   if keyboard.pressed("escape") then exit() end
   clock = clock + dt
+  -- neon.frag verdict: still in wire mode and nothing compiled? keep glow
+  if wireProbe > 0 then
+    wireProbe = wireProbe - 1
+    if wireProbe == 0 and wire and not shader.ok then
+      shader.effect = "glow"
+    end
+  end
   -- When the jet lands: declare its nose, size it to the tuned hull (the
   -- box's 20-unit nose-to-tail), and let the file's own paint shine - the
   -- spare box stays orange. One-time business, then never looked at again.

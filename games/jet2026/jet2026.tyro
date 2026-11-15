@@ -180,6 +180,9 @@ end
 -- crests over the board's blue pixels. If the file is missing the game falls
 -- back to hand-drawn wave lines (draw_sea), so it never shows a dead flat sea.
 local seaShader = false
+-- shader.load only queues: seaProbe counts down to the frame where the
+-- engine has compiled the file and shader.ok can honestly answer.
+local seaProbe = 0
 
 -- The camera is an orthographic top-down one, so nothing scales itself with
 -- distance - the jet does that by hand: nearer the eye means bigger, and the
@@ -1572,13 +1575,12 @@ local function boot()
   -- rim, so the jets' silhouettes land on the water as soft shades and not
   -- as hard-cut stickers
   world.shadowsoft(3)
-  -- the living sea: a board effect that ripples every blue pixel; if the
-  -- sea.frag exists in bin/assets; shader.load only queues, so it never
-  -- raises here and seaShader is effectively always on (draw_sea's hand-drawn
-  -- crests are the safety net if the shader ever fails to compile at draw).
+  -- the living sea: a board effect that ripples every blue pixel. shader.load
+  -- only queues, so seaProbe waits a few frames and asks shader.ok: if
+  -- sea.frag is missing or fails to compile, seaShader stays false and
+  -- draw_sea's hand-drawn crests cover for it.
   shader.load("sea.frag")
-  seaShader = true
-  shader.value = 1.0
+  seaProbe = 3
   hi = load_hi()
   state = "ready"
   travel = 0
@@ -1709,6 +1711,15 @@ end
 function update(dt)
   if dt <= 0 then dt = 1 / 60 end
   if dt > 0.06 then dt = 0.06 end
+
+  -- the queued sea.frag had its chance to compile: decide once, then rest.
+  if seaProbe > 0 then
+    seaProbe = seaProbe - 1
+    if seaProbe == 0 then
+      seaShader = shader.ok
+      if seaShader then shader.value = 1.0 end
+    end
+  end
 
   if keyboard.pressed("escape") then exit() end
   if (gamepad.pressed("back") or gamepad.pressed("select"))

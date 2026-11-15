@@ -737,6 +737,7 @@ shader.area   = {x, y, w, h}     -- restrict the effect to a rectangle
 | `shader.value` | `0..1` effect parameter (see per-effect meaning below) |
 | `shader.area` | Rectangle `{x, y, w, h}` in canvas pixels (`y` from the top) where the effect applies; outside it the canvas is unchanged |
 | `shader.load(file)` | Load a custom fragment shader from a GLSL file and activate it (see below) |
+| `shader.ok` | Read-only boolean — `true` when a shader is compiled and in effect right now (see below) |
 
 | Effect | What it does | `value` meaning (default) |
 |--------|--------------|---------------------------|
@@ -804,6 +805,35 @@ shader.load("custom.frag")    -- activate the scanlines shader
 shader.value = 0.8
 shader.area  = {0, 0, canvas.width, canvas.height}
 ```
+
+## Did the shader actually load?
+
+Everything in Tyro is queued, so `shader.load` only *posts* the request; the
+engine compiles the file a frame later. `shader.ok` is the readback: it is
+`true` only while a shader is really compiled and in effect — `false` for
+`"none"`, for a missing file, and for a `.frag` that fails to compile. Read it
+a frame (or a few) after the load, e.g. with a small countdown:
+
+```lua
+local probe, sea_on = 0, false
+shader.load("sea.frag")        -- the request is only queued here
+probe = 3                      -- check the answer after 3 frames
+
+function update(dt)
+  if probe > 0 then
+    probe = probe - 1
+    if probe == 0 then
+      sea_on = shader.ok       -- now we know for sure
+      if sea_on then shader.value = 1.0 else draw_fallback_sea() end
+    end
+  end
+end
+```
+
+`shader.effect` tells the same truth as a name: it reports `"none"` when the
+last load failed, or the file name (custom shader) / effect name in effect.
+Games like `jet2026` and `torustrooper` use `shader.ok` to fall back to
+hand-drawn art or the built-in `"glow"` when their custom file is missing.
 
 # Screen Shake
 

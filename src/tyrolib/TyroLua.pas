@@ -1843,6 +1843,17 @@ begin
       L.PushNumber(1.0);
     Result := 1;
   end
+  else if field = 'ok' then
+  begin
+    //Did a shader actually compile? shader.load only queues, so the answer
+    //is only valid from the frame after the load (and for the built-in
+    //effects set through shader.effect).
+    if Engine.Board <> nil then
+      L.PushBoolean(Engine.Board.EffectOK)
+    else
+      L.PushBoolean(False);
+    Result := 1;
+  end
   else if field = 'area' then
   begin
     if Engine.Board <> nil then

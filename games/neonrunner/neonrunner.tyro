@@ -68,10 +68,8 @@ if player_sp then
   player_sp.x = D.PLAYER_X
   player_sp.y = D.LANES[2]
   player_sp.show()
-  pcall(function()
-    player_sp.shader = "player_turbo.frag"
-    player_sp.shaderValue = 0.0
-  end)
+  player_sp.shader = "player_turbo.frag"
+  player_sp.shaderValue = 0.0
 end
 
 -- Energy Shield Sprite attached to player
@@ -565,9 +563,7 @@ function update(dt)
     end
     player_sp.frame = p_frame
 
-    pcall(function()
-      player_sp.shaderValue = turbo_active and 1.0 or (shield_timer > 0 and 0.6 or 0.0)
-    end)
+    player_sp.shaderValue = turbo_active and 1.0 or (shield_timer > 0 and 0.6 or 0.0)
   end
 
   -- Update Shield Sprite position

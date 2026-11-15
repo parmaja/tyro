@@ -145,13 +145,13 @@ end
 -- The water shader grades the band below the surface; the HUD strip above
 -- it stays clean because shader.area stops at the waterline.
 local shaderReady = false
+-- shader.load only queues: waterProbe counts down to the first frame where
+-- shader.ok knows the truth about seaquest.frag, then we tune the band.
+local waterProbe = 0
 local function load_water()
   shader.load("seaquest.frag")
-  shaderReady = shader.effect ~= "none"
-  if shaderReady then
-    shader.value = 0.85
-    shader.area = { 0, WATER_TOP, W, H - WATER_TOP }
-  end
+  shaderReady = false
+  waterProbe = 3
 end
 
 -- ---- entity model ----------------------------------------------------
@@ -995,6 +995,18 @@ end
 
 -- ---- engine callback -------------------------------------------------
 function update(dt)
+  -- the water shader had its chance to compile: settle once, then rest
+  if waterProbe > 0 then
+    waterProbe = waterProbe - 1
+    if waterProbe == 0 then
+      shaderReady = shader.ok
+      if shaderReady then
+        shader.value = 0.85
+        shader.area = { 0, WATER_TOP, W, H - WATER_TOP }
+      end
+    end
+  end
+
   if keyboard.pressed('escape') then
     engine(false)
     exit()
