@@ -1,0 +1,32 @@
+-- probe: put Choo-Choo Express on 'The Y Split', lay the junction solution
+-- (straight-first cannot win there - only the solver's turn reaches town),
+-- depart, and trace the ride so the console shows progress.
+CHOCHO_TEST = true
+require("choochoo")
+
+local laid, t, report = false, 0, 0
+local game_update = update
+
+function update(dt)
+  game_update(dt)
+  if not laid then
+    CC.start(4)
+    local b = CC.board()
+    if b then
+      for x = 2, 7 do CC.D.place(b, x, 5, 'straight', 1) end
+      CC.D.place(b, 8, 5, 'junction', 3)
+      for y = 2, 4 do CC.D.place(b, 8, y, 'straight', 0) end
+      laid = true
+    end
+  else
+    t = t + dt
+    if t > 0.5 then CC.depart() t = -100 end
+  end
+  report = report + dt
+  if report > 0.5 then
+    report = 0
+    local total, d, done = CC.ride()
+    print(string.format("RIDE total=%.0f d=%.0f done=%s state=%s",
+                        total or -1, d or -1, tostring(done), CC.state()))
+  end
+end

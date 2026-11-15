@@ -1,0 +1,699 @@
+--======================================================================
+--  CHOO-CHOO EXPRESS - Lay the rails before the whistle blows!
+--======================================================================
+--  A top-down puzzle game for Tyro: in the build phase you place rail
+--  pieces (straight / curve / junction / cross / bridge) from a limited
+--  stock onto a grid, connecting the red station to the blue one before
+--  the departure clock runs out. Then the train rolls - with smoke.
+--
+--  Controls:
+--    1..5 / CLICK panel   choose a rail piece
+--    R                    rotate the piece in hand
+--    LEFT CLICK           lay a piece      RIGHT CLICK pick one back up
+--    SPACE                depart!          N next level   R? (see panel)
+--    M                    mute             ESC            title / quit
+--======================================================================
+
+local D = require("choochoo_data")
+
+window.show(960, 540)
+local W, H = canvas.width, canvas.height
+
+local SCALE = 1.5
+local TS = math.floor(32 * SCALE)          -- one cell on screen: 48 px
+local BX, BY = 28, 54                      -- board origin on screen
+
+-- Atlas frame order baked by make_assets.tyro (0-based)
+local GROUND = { grass = 1, flower = 2, water = 3, rock = 4, tree = 5,
+                 start = 6, goal = 7 }    -- 1-based ids for the tilemap
+local RAILFRAME = { straight = 7, curve = 9, junction = 13, cross = 17,
+                    bridge = 18 }
+
+local LEVEL_TIME = { 60, 75, 80, 75, 95 }   -- departure clock per level
+
+-- ---- high score: the ledger in the station office -------------------------
+local highscore = 0
+local function load_high()
+  local f = openfile("choochoo.hi", "r")
+  if f then
+    local s = f:read("*a")
+    f:close()
+    if s then highscore = tonumber(s) or 0 end
+  end
+end
+local function save_high()
+  local f = openfile("choochoo.hi", "w")
+  if f then
+    f:write(tostring(highscore))
+    f:close()
+  end
+end
+load_high()
+
+-- ---- floating station announcements (bomberman's combat text, polite edit)
+local floats = {}
+local function add_float(msg, x, y, clr)
+  floats[#floats + 1] = { msg = msg, x = x, y = y, life = 1.4, clr = clr }
+end
+
+-- ---- sound (wavetables only; no files) -------------------------------------
+local muted = false
+local function sfx(name)
+  if muted then return end
+  if name == "place" then sound.play("Pew", 520, 130)
+  elseif name == "remove" then sound.play("Pew", 300, 110)
+  elseif name == "deny" then sound.play("Zap", 170, 130)
+  elseif name == "rotate" then sound.play("Pew", 760, 70)
+  elseif name == "select" then sound.play("Pew", 640, 60)
+  elseif name == "tick" then sound.play("Pew", 900, 45)
+  elseif name == "low" then sound.play("Pew", 1150, 70)
+  elseif name == "chuff" then sound.play("Zap", 120, 55)
+  elseif name == "whistle" then
+    sound.play("Chime", 660, 420)
+    sound.play("Chime", 540, 560)
+  elseif name == "win" then sound.play("Coin", 880, 400)
+  elseif name == "fail" then sound.play("Sweep", 700, 350)
+  end
+end
+
+-- ---- sprites ------------------------------------------------------------
+local function rail_frame(piece, rot)
+  if piece == "cross" then return RAILFRAME.cross end
+  return RAILFRAME[piece] + rot
+end
+
+local rails = {}                           -- pooled overlay sprites per cell
+for i = 1, 32 do
+  local sp = sprites.new("cc_rail" .. i)
+  sp.load("img/choochoo_tiles.sprite")
+  sp.layer = 20
+  sp.scale = SCALE
+  sp.visible = false
+  sp.hide()
+  rails[i] = sp
+end
+
+local ghost = sprites.new("cc_ghost")
+ghost.load("img/choochoo_tiles.sprite")
+ghost.layer = 25
+ghost.scale = SCALE
+ghost.alpha = 150
+ghost.visible = false
+ghost.hide()
+
+-- the train itself: engine + two wagons from the train atlas
+local loco = sprites.new("cc_loco")
+loco.load("img/choochoo_train.sprite")
+local wagons = {}
+for i = 1, 2 do
+  local sp = sprites.new("cc_wagon" .. i)
+  sp.load("img/choochoo_train.sprite")
+  sp.frame = i
+  wagons[i] = sp
+end
+do
+  local parts = { loco, wagons[1], wagons[2] }
+  for _, sp in ipairs(parts) do
+    sp.layer = 30
+    sp.scale = SCALE
+    sp.visible = false
+    sp.hide()
+  end
+end
+
+local KINDS = D.PIECE_ORDER                -- straight curve junction cross bridge
+local icons = {}                           -- panel pictures of each kind
+for i, kind in ipairs(KINDS) do
+  local sp = sprites.new("cc_icon_" .. kind)
+  sp.load("img/choochoo_tiles.sprite")
+  sp.layer = 1000
+  sp.scale = 1.35
+  sp.frame = rail_frame(kind, 0)
+  sp.visible = false
+  sp.hide()
+  icons[kind] = sp
+end
+
+local tilemap = tiles.new("cc_ground")
+tilemap.load("img/choochoo_ground.png", 32, 32, 7, 0, 0)
+
+-- ---- game state ----------------------------------------------------------
+-- splash lives before update()/draw(): both close over these locals
+local splash_t = 0
+local SPLASH_HOLD = CHOCHO_TEST and 0.4 or 1.6
+local splashing = true
+
+local state = "title"                      -- title | build | score
+local level = 1
+local board = nil
+local clock_left = 0
+local last_tick = -1
+local stock = {}                           -- kind -> pieces still in the crate
+local sel = "straight"
+local sel_rot = 0
+local hover_gx, hover_gy = -1, -1
+local hover_ok = false
+local deny_msg = ""
+local deny_t = 0
+local result = nil                         -- { win, text, score } for the panel
+
+local DENY_WHY = {
+  flood = "water! only the bridge floats",
+  dry = "that wants deep water",
+  rock = "rock: no rails through here",
+  station = "a station owns that cell",
+  smash = "rails would smash a flank",
+  off = "outside the map",
+}
+
+local function panel_x()
+  if board then return BX + board.cols * TS + 26 end
+  return BX + 12 * TS + 26
+end
+
+local function start_level(n)
+  level = n
+  board = D.load_level(n)
+  if not board then level = 1; board = D.load_level(1) end
+  stock = {}
+  for k, v in pairs(board.stock) do stock[k] = v end
+  clock_left = LEVEL_TIME[n] or 60
+  last_tick = -1
+  deny_msg = ""
+  deny_t = 0
+  result = nil
+  sel_rot = sel_rot % D.rot_count(sel)
+  tilemap.resize(board.cols, board.rows)
+  for gy = 0, board.rows - 1 do
+    for gx = 0, board.cols - 1 do
+      local id = GROUND.grass
+      if D.station_at(board, gx, gy) == board.start then
+        id = GROUND.start
+      elseif D.station_at(board, gx, gy) == board.goal then
+        id = GROUND.goal
+      else
+        local t = D.tile(board, gx, gy)
+        if t == D.T_WATER then id = GROUND.water
+        elseif t == D.T_ROCK then id = GROUND.rock
+        elseif t == D.T_TREE then id = GROUND.tree
+        elseif (gx * 7 + gy * 13) % 6 == 0 then id = GROUND.flower
+        end
+      end
+      tilemap.set(gx, gy, id)
+    end
+  end
+  -- fresh platform: no train waiting yet, no leftover smoke
+  for _, sp in ipairs({ loco, wagons[1], wagons[2] }) do
+    sp.visible = false
+  end
+  particles.clear()
+  floats = {}
+  state = "build"
+end
+
+-- ---- the ride ------------------------------------------------------------
+-- The head rolls along a polyline of cell centres (start station, every
+-- path cell, goal station). Wagons trail the head by a fixed distance and
+-- every part turns smoothly toward its segment - that is what bends the
+-- train through the curves. Chuffs and smoke ride the distance travelled,
+-- like real wheel turns.
+local TRAIN_SPEED = 150          -- world px/s at scale 1.5
+local TRAIL = { 0, 100, 200 }    -- head and wagon distances behind it
+local CHUFF_GAP = 34             -- px between smoke puffs
+
+local run_pts, run_total, run_d = nil, 0, 0
+local run_ang, run_done, arrive_t, chuff_next = {}, false, 0, 34
+
+local function cell_px(gx, gy)
+  return BX + gx * TS + TS // 2, BY + gy * TS + TS // 2
+end
+
+local function dir_angle(d)
+  return ({ 270, 0, 90, 180 })[d + 1]
+end
+
+local function start_ride(path)
+  run_pts = {}
+  local x, y = cell_px(board.start.gx, board.start.gy)
+  run_pts[1] = { x = x, y = y }
+  for _, n in ipairs(path or {}) do
+    x, y = cell_px(n.gx, n.gy)
+    run_pts[#run_pts + 1] = { x = x, y = y }
+  end
+  if result.win then
+    x, y = cell_px(board.goal.gx, board.goal.gy)
+    run_pts[#run_pts + 1] = { x = x, y = y }
+  end
+  run_total = 0
+  for i = 1, #run_pts - 1 do
+    local dx = run_pts[i + 1].x - run_pts[i].x
+    local dy = run_pts[i + 1].y - run_pts[i].y
+    run_pts[i].len = math.sqrt(dx * dx + dy * dy)
+    run_total = run_total + run_pts[i].len
+  end
+  run_d = 0
+  run_done = false
+  arrive_t = 0
+  chuff_next = 34
+  local a0 = dir_angle(board.start.dir)
+  run_ang = { a0, a0, a0 }
+  for _, sp in ipairs({ loco, wagons[1], wagons[2] }) do
+    sp.visible = true
+    sp.show()
+  end
+end
+
+-- position and travel angle at distance d along the route
+local function route_at(d)
+  if #run_pts < 2 then return run_pts[1].x, run_pts[1].y, 0 end
+  local acc = 0
+  for i = 1, #run_pts - 1 do
+    if d <= acc + run_pts[i].len or i == #run_pts - 1 then
+      local t = 1
+      if run_pts[i].len > 0 then t = (d - acc) / run_pts[i].len end
+      if t < 0 then t = 0 elseif t > 1 then t = 1 end
+      local dx = run_pts[i + 1].x - run_pts[i].x
+      local dy = run_pts[i + 1].y - run_pts[i].y
+      return run_pts[i].x + dx * t, run_pts[i].y + dy * t,
+             math.atan2(dy, dx) * 180 / math.pi
+    end
+    acc = acc + run_pts[i].len
+  end
+end
+
+-- ease the displayed angle toward the segment direction (degrees/s)
+local function turn_to(cur, target, dt)
+  local diff = (target - cur + 540) % 360 - 180
+  local step = 300 * dt
+  if diff <= step and diff >= -step then return target end
+  return cur + (diff > 0 and step or -step)
+end
+
+local function puff_smoke()
+  local rad = run_ang[1] * math.pi / 180
+  local hx, hy, _ = route_at(run_d)
+  local cx, cy = hx + 27 * math.cos(rad), hy + 27 * math.sin(rad)
+  particles.emit(cx, cy, 2, { color = 'gray', speed = 16, life = 0.9,
+                              size = 4, gravity = -30, spread = 30,
+                              direction = -90 })
+  particles.emit(cx, cy, 1, { color = 'white', speed = 10, life = 0.45,
+                              size = 3, gravity = -40, spread = 24,
+                              direction = -90 })
+  sfx("chuff")
+end
+
+local function depart()
+  if state ~= "build" then return end
+  local path = D.solve(board)
+  local run = D.first_run(board)
+  if path then
+    local pts = D.score(board, clock_left)
+    local how = run.ok and "the train takes it straight" or
+                "the solver finds your route"
+    result = { win = true,
+               text = "ALL ABOARD! " .. how,
+               score = pts, rails = D.rail_count(board),
+               time = math.max(0, math.floor(clock_left)) }
+    if pts > highscore then
+      highscore = pts
+      save_high()
+      result.record = true
+    end
+    sfx("whistle")
+  else
+    local why = "the line does not reach the blue station"
+    if run.reason == "gap" then
+      why = "a gap stops the train at cell "
+            .. run.stop.gx .. "," .. run.stop.gy
+    elseif run.reason == "loop" then
+      why = "the rails run in a loop - no station"
+    elseif run.reason == "smash" then
+      why = "the train leans and stops at "
+            .. run.stop.gx .. "," .. run.stop.gy
+    end
+    result = { win = false, text = "CHOO CHOO? " .. why,
+               rails = D.rail_count(board), time = 0, score = 0 }
+    sfx("whistle")
+  end
+  start_ride(path or run.path)
+  state = "run"
+end
+
+local function try_place(gx, gy)
+  if (stock[sel] or 0) <= 0 then
+    deny_msg = "no " .. sel .. " pieces left"
+    deny_t = 2
+    sfx("deny")
+    return
+  end
+  local ok, why = D.place(board, gx, gy, sel, sel_rot)
+  if ok then
+    stock[sel] = stock[sel] - 1
+    sfx("place")
+  else
+    deny_msg = DENY_WHY[why] or "cannot lay that here"
+    deny_t = 2
+    sfx("deny")
+  end
+end
+
+-- refund helper: read the piece BEFORE removing it
+local function remove_refund(gx, gy)
+  if gx < 0 or gy < 0 or gx >= board.cols or gy >= board.rows then return end
+  local st = D.station_at(board, gx, gy)
+  if st then return end
+  local tr = board.track[gy + 1][gx + 1]
+  if tr then
+    D.remove(board, gx, gy)
+    stock[tr.piece] = (stock[tr.piece] or 0) + 1
+    sfx("remove")
+  end
+end
+
+-- icon boxes on the panel
+local function icon_box(i)
+  return panel_x() + 8, 96 + (i - 1) * 66
+end
+
+-- ---- update ------------------------------------------------------------
+function update(dt)
+  if splashing then
+    splash_t = splash_t + dt
+    if keyboard.pressed("escape") then exit() end
+    if keyboard.pressed("space") or keyboard.pressed("enter")
+        or mouse.pressed("left") then
+      splash_t = SPLASH_HOLD
+    end
+    if splash_t >= SPLASH_HOLD then splashing = false end
+    return
+  end
+
+  if deny_t > 0 then deny_t = deny_t - dt end
+  for i = #floats, 1, -1 do
+    local f = floats[i]
+    f.life = f.life - dt
+    f.y = f.y - 26 * dt
+    if f.life <= 0 then table.remove(floats, i) end
+  end
+
+  if state == "title" then
+    if keyboard.pressed("escape") then exit() end
+    if keyboard.pressed("space") or keyboard.pressed("enter")
+        or mouse.pressed("left") then
+      start_level(1)
+    end
+    return
+  end
+
+  if state == "run" then
+    if keyboard.pressed("space") or keyboard.pressed("escape") then
+      state = "score"
+      return
+    end
+    if run_done then
+      arrive_t = arrive_t + dt
+      if arrive_t > 1.0 then state = "score" end
+    else
+      -- ease off the throttle approaching the last stretch
+      local remaining = run_total - run_d
+      local v = TRAIN_SPEED
+      if remaining < 80 then v = math.max(20, TRAIN_SPEED * remaining / 80) end
+      run_d = run_d + v * dt
+      if run_d >= run_total then
+        run_d = run_total
+        run_done = true
+        sfx(result.win and "win" or "fail")
+        -- arrival: one big relieved cloud of steam over the chimney
+        local rad = run_ang[1] * math.pi / 180
+        local hx, hy = route_at(run_d)
+        particles.emit(hx + 27 * math.cos(rad), hy + 27 * math.sin(rad), 10,
+                       { color = "white", speed = 26, life = 1.1, size = 5,
+                         gravity = -45, spread = 36, direction = -90 })
+        -- the platform jolts as she parks, and the earnings float up
+        world.shake(result.win and 400 or 250, result.win and 12 or 6)
+        if result.win then
+          add_float("+" .. result.score, hx, hy - 46, colors.yellow)
+          if result.record then
+            add_float("NEW BEST!", hx, hy - 66, colors.lime)
+          end
+        else
+          add_float("out of rails", hx, hy - 46, rgb(220, 200, 200))
+        end
+      end
+      -- chuffs march with the wheel distance, not the clock
+      while not run_done and run_d >= chuff_next do
+        puff_smoke()
+        chuff_next = chuff_next + CHUFF_GAP
+      end
+    end
+    -- ride every part along the route, wagons on the head's breadcrumb
+    local parts = { loco, wagons[1], wagons[2] }
+    for i, sp in ipairs(parts) do
+      local d = run_d - TRAIL[i]
+      if d < 0 then d = 0 end
+      local x, y, a = route_at(d)
+      run_ang[i] = turn_to(run_ang[i], a, dt)
+      sp.move(x, y)
+      sp.angle = run_ang[i]
+    end
+    return
+  end
+
+  if state == "score" then
+    if keyboard.pressed("escape") then
+      state = "title"
+    elseif keyboard.pressed("r") then
+      start_level(level)
+    elseif keyboard.pressed("n") then
+      start_level(level % #D.LEVELS + 1)
+    elseif keyboard.pressed("space") then
+      start_level(level)
+    end
+    return
+  end
+
+  -- state == "build" ------------------------------------------------
+  if keyboard.pressed("escape") then state = "title" return end
+  if keyboard.pressed("m") then muted = not muted end
+  if keyboard.pressed("n") then start_level(level % #D.LEVELS + 1) return end
+  if keyboard.pressed("space") then depart() return end
+  if keyboard.pressed("r") then
+    sel_rot = (sel_rot + 1) % D.rot_count(sel)
+    sfx("rotate")
+  end
+  for i, kind in ipairs(KINDS) do
+    if keyboard.pressed(tostring(i)) and sel ~= kind then
+      sel = kind
+      sel_rot = 0
+      sfx("select")
+    end
+  end
+
+  -- clock and its last-ten ticks
+  clock_left = clock_left - dt
+  local whole = math.ceil(clock_left)
+  if whole ~= last_tick then
+    last_tick = whole
+    if whole <= 0 then sfx("low")
+    elseif whole <= 10 then sfx("tick")
+    end
+  end
+  if clock_left <= 0 then depart() return end
+
+  -- mouse: panel picks and board placing
+  if mouse.pressed("left") then
+    local picked = false
+    for i, kind in ipairs(KINDS) do
+      local ix, iy = icon_box(i)
+      if mouse.x >= ix - 6 and mouse.x < ix + 60 and mouse.y >= iy - 6
+          and mouse.y < iy + 48 then
+        if sel ~= kind then
+          sel = kind
+          sel_rot = 0
+          sfx("select")
+        end
+        picked = true
+      end
+    end
+    if not picked then
+      local gx = math.floor((mouse.x - BX) / TS)
+      local gy = math.floor((mouse.y - BY) / TS)
+      if D.in_bounds(board, gx, gy) then try_place(gx, gy) end
+    end
+  end
+  if mouse.pressed("right") then
+    local gx = math.floor((mouse.x - BX) / TS)
+    local gy = math.floor((mouse.y - BY) / TS)
+    remove_refund(gx, gy)
+  end
+
+  -- hover cell for the ghost preview
+  hover_gx = math.floor((mouse.x - BX) / TS)
+  hover_gy = math.floor((mouse.y - BY) / TS)
+  if D.in_bounds(board, hover_gx, hover_gy) then
+    local ok = D.can_place(board, hover_gx, hover_gy, sel, sel_rot)
+    hover_ok = ok and (stock[sel] or 0) > 0
+  else
+    hover_gx, hover_gy = -1, -1
+  end
+end
+
+-- ---- draw --------------------------------------------------------------
+local function center(x, s) return x - 4 * #s end
+
+local function banner(s, y, color)
+  screen.color = color
+  screen.text(center(W / 2, s), y, s)
+end
+
+local function sync_rails()
+  local used = 0
+  for gy = 0, board.rows - 1 do
+    for gx = 0, board.cols - 1 do
+      local tr = board.track[gy + 1][gx + 1]
+      if tr then
+        used = used + 1
+        local sp = rails[used]
+        if sp then
+          sp.frame = rail_frame(tr.piece, tr.rot)
+          -- sprites draw centred: +TS/2 lands the 32px frame on its cell
+          sp.move(BX + gx * TS + TS // 2, BY + gy * TS + TS // 2)
+          sp.visible = true
+        end
+      end
+    end
+  end
+  for i = used + 1, #rails do rails[i].visible = false end
+end
+
+function draw()
+  screen.clear("blank")
+  world.backcolor = rgb(110, 170, 230)
+  world.clear()
+
+  if board then
+    world.color = rgba(30, 38, 30, 255)
+    world.rectangle(BX - 6, BY - 6, board.cols * TS + 12,
+                    board.rows * TS + 12, true)
+    tilemap.draw(BX, BY, SCALE)
+    sync_rails()
+    if state == "build" and hover_gx >= 0 then
+      ghost.frame = rail_frame(sel, sel_rot)
+      ghost.move(BX + hover_gx * TS + TS // 2, BY + hover_gy * TS + TS // 2)
+      ghost.tint = hover_ok and rgb(190, 255, 190) or colors.red
+      ghost.visible = true
+    else
+      ghost.visible = false
+    end
+    if state == "run" then
+      world.color = colors.white
+      world.text(BX, BY + board.rows * TS + 14,
+                 "choo choo!   SPACE skips the ride")
+    end
+  else
+    for i = 1, #rails do rails[i].visible = false end
+    ghost.visible = false
+  end
+
+  -- side panel
+  if board and state == "build" then
+    local px = panel_x()
+    world.color = rgba(62, 46, 34, 255)
+    world.rectangle(px - 14, 40, W - px + 4, 470, true)
+    world.color = rgb(255, 224, 150)
+    world.text(px, 50, board.name)
+    world.color = colors.white
+    world.text(px, 70, "lay rails: red -> blue station")
+
+    for i, kind in ipairs(KINDS) do
+      local ix, iy = icon_box(i)
+      if sel == kind then
+        world.color = rgb(255, 236, 170)
+        world.rectangle(ix - 8, iy - 8, 66, 62, true)
+      end
+      world.color = rgba(20, 20, 26, 255)
+      world.rectangle(ix - 6, iy - 6, 56, 52, true)
+      icons[kind].visible = true
+      icons[kind].show()
+      icons[kind].move(ix + 22, iy + 20)      -- centre of the icon box
+      local left = stock[kind] or 0
+      world.color = left > 0 and colors.white or colors.gray
+      world.text(ix + 62, iy + 14, kind .. " x" .. left)
+      world.color = rgb(170, 170, 190)
+      world.text(ix + 62, iy + 30, "[" .. i .. "]")
+    end
+
+    -- clock bar
+    local total = LEVEL_TIME[level] or 60
+    local frac = math.max(clock_left, 0) / total
+    world.color = rgba(20, 20, 26, 255)
+    world.rectangle(px - 14, 432, W - px + 4, 26, true)
+    world.color = clock_left <= 10 and colors.red or colors.lime
+    world.rectangle(px - 12, 434, (W - px) * frac, 22, true)
+    world.color = colors.white
+    world.text(px, 464, "departure in " .. math.max(math.ceil(clock_left), 0)
+               .. " s   SPACE: depart!")
+    world.color = rgb(200, 200, 215)
+    world.text(px, 484, "R rotate   right-click: pick up   N level")
+
+    if deny_t > 0 then
+      world.color = colors.yellow
+      world.text(BX, BY + board.rows * TS + 14, deny_msg)
+    end
+  else
+    for _, kind in ipairs(KINDS) do icons[kind].visible = false end
+  end
+
+  -- floating announcements drift up over the yard
+  for _, f in ipairs(floats) do
+    world.color = f.clr
+    world.text(center(f.x, f.msg), f.y, f.msg)
+  end
+
+  -- splash card
+  if splashing then
+    screen.color = rgb(24, 40, 30)
+    screen.rectangle(0, 0, W, H, true)
+    banner("CHOO-CHOO EXPRESS", 200, colors.white)
+    banner("lay the rails before the whistle blows", 240, rgb(255, 224, 150))
+    local dots = string.rep(".", 1 + math.floor(splash_t * 3) % 3)
+    banner("stoking the boiler" .. dots, 300, rgb(150, 190, 150))
+    return
+  end
+
+  if state == "title" then
+    screen.color = rgba(20, 30, 40, 200)
+    screen.rectangle(W / 2 - 280, 130, 560, 260, true)
+    banner("CHOO-CHOO EXPRESS", 160, colors.white)
+    banner("build a railroad from the red station", 210, rgb(255, 224, 150))
+    banner("to the blue one - piece by piece -", 230, rgb(255, 224, 150))
+    banner("before the train departs!", 250, rgb(255, 224, 150))
+    banner("SPACE or CLICK to start", 300, colors.lime)
+    banner("1-5 pieces  R rotate  click lay  right-click lift", 340,
+           rgb(186, 214, 186))
+    if highscore > 0 then
+      banner("best run: " .. highscore .. " points", 366, rgb(255, 224, 150))
+    end
+  elseif state == "score" then
+    screen.color = rgba(18, 24, 34, 215)
+    screen.rectangle(W / 2 - 300, 120, 600, 300, true)
+    banner(result.text, 150, result.win and colors.lime or colors.red)
+    banner("rails laid: " .. result.rails, 210, colors.white)
+    if result.win then
+      banner("time left: " .. result.time .. " s", 240, colors.white)
+      banner("SCORE " .. result.score .. (result.record and "  NEW BEST!" or ""),
+             280, colors.yellow)
+      banner("best run: " .. highscore, 310, rgb(255, 224, 150))
+    end
+    banner("SPACE/R retry   N next level   ESC title", 370,
+           rgb(186, 214, 186))
+  end
+end
+
+-- Splash: a moment at the station before the title card lifts.
+if CHOCHO_TEST then
+  CC = { D = D, start = start_level, depart = depart, state = function()
+    return state end, board = function() return board end,
+    ride = function() return run_total, run_d, run_done end }
+  start_level(1)
+end

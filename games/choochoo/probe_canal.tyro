@@ -1,0 +1,30 @@
+-- probe: start Choo-Choo Express on 'Canal Town', lay the bridge solution
+-- and leave it riding for the screenshots (mid-crossing, then the panel).
+CHOCHO_TEST = true
+require("choochoo")
+
+local laid, t = false, 0
+local game_update = update
+
+function update(dt)
+  game_update(dt)
+  if not laid then
+    CC.start(5)
+    local b = CC.board()
+    if b then
+      for x = 2, 9 do CC.D.place(b, x, 1, 'straight', 1) end
+      CC.D.place(b, 10, 1, 'curve', 2)
+      CC.D.place(b, 10, 2, 'straight', 0)
+      CC.D.place(b, 10, 3, 'straight', 0)
+      CC.D.place(b, 10, 4, 'bridge', 0)
+      CC.D.place(b, 10, 5, 'bridge', 0)
+      CC.D.place(b, 10, 6, 'curve', 0)
+      CC.D.place(b, 11, 6, 'straight', 1)
+      CC.D.place(b, 12, 6, 'curve', 2)
+      laid = true
+    end
+  else
+    t = t + dt
+    if t > 0.5 then CC.depart() t = -100 end
+  end
+end

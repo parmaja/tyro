@@ -1,0 +1,320 @@
+--======================================================================
+--  make_assets.tyro - Choo-Choo Express Asset Painter
+--======================================================================
+--  Paints every pixel of the game's art with the engine's own paint
+--  sheets (images.new) and bakes them into .sprite atlases with
+--  images.savesprite - no Python, no external tools (per AGENTS.md).
+--
+--  Run: bin\tyro.exe games\choochoo\make_assets.tyro --exit:5 --console
+--  (absolute path: tyro.conf's workpath would swallow a relative one)
+--
+--  Outputs in games\choochoo\img:
+--    choochoo_tiles.sprite  ground + rails + stations (20 frames, 32px)
+--    choochoo_train.sprite  loco + three wagons     (4 frames, 64x32)
+--    preview_tiles.png / preview_train.png          the whole sheets
+--======================================================================
+
+local S = 32
+
+-- ---- palette ----------------------------------------------------------
+local C_GRASS   = rgba(102, 187, 106, 255)
+local C_GRASS_D = rgba(78, 146, 81, 255)
+local C_GRASS_L = rgba(129, 199, 132, 255)
+local C_WATER   = rgba(79, 163, 209, 255)
+local C_WATER_L = rgba(129, 212, 250, 255)
+local C_WATER_D = rgba(61, 143, 191, 255)
+local C_ROCK    = rgba(117, 117, 117, 255)
+local C_ROCK_L  = rgba(158, 158, 158, 255)
+local C_ROCK_D  = rgba(97, 97, 97, 255)
+local C_TREE    = rgba(46, 125, 50, 255)
+local C_TREE_L  = rgba(67, 160, 71, 255)
+local C_TRUNK   = rgba(109, 76, 65, 255)
+local C_TIE     = rgba(93, 64, 55, 255)
+local C_RAIL_D  = rgba(55, 71, 79, 255)
+local C_RAIL    = rgba(176, 190, 197, 255)
+local C_DECK    = rgba(141, 110, 99, 255)
+local C_DECK_D  = rgba(78, 52, 46, 255)
+local C_SLATE   = rgba(236, 239, 241, 255)
+local C_RED     = rgba(211, 47, 47, 255)
+local C_BLUE    = rgba(21, 101, 192, 255)
+local C_INK     = rgba(33, 33, 33, 255)
+local C_STEEL   = rgba(66, 66, 66, 255)
+local C_GOLD    = rgba(255, 213, 79, 255)
+local C_LAMP    = rgba(255, 241, 118, 255)
+local C_COAL    = rgba(78, 52, 46, 255)
+local C_YELLOW  = rgba(249, 168, 37, 255)
+local C_WHITE   = rgba(255, 255, 255, 255)
+
+-- ---- tiles sheet: 8 columns x 4 rows of 32px cells ----------------------
+local tiles = images.new(8 * S, 4 * S, 'choochoo_tiles')
+
+-- rotate a point inside a cell `r` quarter turns clockwise around (16,16)
+local function rp(x, y, r)
+  if r == 1 then return 32 - y, x end
+  if r == 2 then return 32 - x, 32 - y end
+  if r == 3 then return y, 32 - x end
+  return x, y
+end
+
+-- thick segment with round ends, cell coords rotated by `r`, at cell cx,cy
+local function seg(sheet, cx, cy, r, x1, y1, x2, y2, w, col)
+  local ax, ay = rp(x1, y1, r)
+  local bx, by = rp(x2, y2, r)
+  ax, ay = cx * S + ax, cy * S + ay
+  bx, by = cx * S + bx, cy * S + by
+  sheet.color = col
+  local n = math.max(math.abs(bx - ax), math.abs(by - ay), 1)
+  for i = 0, n do
+    local t = i / n
+    sheet.circle(ax + (bx - ax) * t, ay + (by - ay) * t, w / 2, true)
+  end
+end
+
+local function box(sheet, cx, cy, x, y, w, h, col)
+  sheet.color = col
+  sheet.rectangle(cx * S + x, cy * S + y, w, h, true)
+end
+
+local function dot(sheet, cx, cy, x, y, r, col)
+  sheet.color = col
+  sheet.circle(cx * S + x, cy * S + y, r, true)
+end
+
+-- ---- ground tiles + stations ------------------------------------------------
+-- painted twice: into the atlas sheet (for savesprite) and into a plain
+-- 7-tile strip PNG that the native tilemap can load directly.
+local function grass_base(sheet, cx, cy)
+  box(sheet, cx, cy, 0, 0, 32, 32, C_GRASS)
+  local speck_d = { {3,5}, {25,3}, {7,20}, {28,17}, {11,27} }
+  local speck_l = { {14,9}, {22,13}, {4,13}, {17,24}, {27,26} }
+  for _, p in ipairs(speck_d) do dot(sheet, cx, cy, p[1], p[2], 1, C_GRASS_D) end
+  for _, p in ipairs(speck_l) do dot(sheet, cx, cy, p[1], p[2], 1, C_GRASS_L) end
+end
+
+local function station(sheet, cx, cy, roof)
+  box(sheet, cx, cy, 2, 6, 28, 24, C_STEEL)              -- platform slab
+  box(sheet, cx, cy, 2, 26, 28, 4, C_ROCK_D)             -- slab edge
+  box(sheet, cx, cy, 6, 8, 18, 13, C_SLATE)              -- hut wall
+  box(sheet, cx, cy, 5, 5, 20, 5, roof)                  -- roof
+  box(sheet, cx, cy, 10, 14, 6, 7, C_TRUNK)              -- door
+  box(sheet, cx, cy, 26, 12, 2, 12, C_TRUNK)             -- sign post
+  box(sheet, cx, cy, 23, 8, 8, 6, C_WHITE)               -- sign board
+  dot(sheet, cx, cy, 27, 11, 2, roof)                    -- sign dot
+end
+
+local function paint_ground(sheet, st_col)
+  grass_base(sheet, 0, 0)                                 -- grass
+  grass_base(sheet, 1, 0)                                 -- grass_flower
+  local petals = { {8,8}, {23,20}, {16,27} }
+  for _, p in ipairs(petals) do
+    dot(sheet, 1, 0, p[1] - 2, p[2], 1, C_WHITE)
+    dot(sheet, 1, 0, p[1] + 2, p[2], 1, C_WHITE)
+    dot(sheet, 1, 0, p[1], p[2] - 2, 1, C_WHITE)
+    dot(sheet, 1, 0, p[1], p[2] + 2, 1, C_WHITE)
+    dot(sheet, 1, 0, p[1], p[2], 1, C_GOLD)
+  end
+
+  box(sheet, 2, 0, 0, 0, 32, 32, C_WATER)                -- water
+  local wave_l = { {4,8,8}, {16,9,6}, {26,8,3}, {8,20,7}, {20,21,8} }
+  local wave_d = { {2,14,5}, {14,15,6}, {25,14,4} }
+  for _, p in ipairs(wave_l) do box(sheet, 2, 0, p[1], p[2], p[3], 1, C_WATER_L) end
+  for _, p in ipairs(wave_d) do box(sheet, 2, 0, p[1], p[2], p[3], 1, C_WATER_D) end
+
+  grass_base(sheet, 3, 0)                                 -- rock
+  dot(sheet, 3, 0, 18, 22, 8, C_ROCK_D)
+  dot(sheet, 3, 0, 16, 18, 10, C_ROCK)
+  dot(sheet, 3, 0, 12, 13, 5, C_ROCK_L)
+
+  grass_base(sheet, 4, 0)                                 -- tree
+  box(sheet, 4, 0, 14, 20, 4, 9, C_TRUNK)
+  dot(sheet, 4, 0, 16, 14, 8, C_TREE)
+  dot(sheet, 4, 0, 11, 17, 5, C_TREE)
+  dot(sheet, 4, 0, 21, 17, 5, C_TREE)
+  dot(sheet, 4, 0, 13, 10, 3, C_TREE_L)
+
+  station(sheet, st_col, 0, C_RED)                        -- station_start
+  station(sheet, st_col + 1, 0, C_BLUE)                   -- station_goal
+end
+
+paint_ground(tiles, 6)
+local ground = images.new(7 * S, S, 'choochoo_ground')
+paint_ground(ground, 5)
+
+-- ---- rails -------------------------------------------------------------------
+-- Each piece is drawn from rail polylines (dark under, steel on top) and
+-- sleepers, all in cell coords; `r` turns the whole picture.
+local function rail_pair(sheet, cx, cy, r, pts)
+  for pass = 1, 2 do
+    local w = (pass == 1) and 4 or 2
+    local col = (pass == 1) and C_RAIL_D or C_RAIL
+    for i = 1, #pts - 1 do
+      seg(sheet, cx, cy, r, pts[i][1], pts[i][2], pts[i+1][1], pts[i+1][2], w, col)
+    end
+  end
+end
+
+local function draw_straight(sheet, cx, cy, r, with_ties)
+  rail_pair(sheet, cx, cy, r, { {10, 0}, {10, 32} })
+  rail_pair(sheet, cx, cy, r, { {22, 0}, {22, 32} })
+  if with_ties then
+    for _, y in ipairs({ 5, 13, 21, 29 }) do
+      seg(sheet, cx, cy, r, 7, y, 25, y, 4, C_TIE)
+    end
+  end
+end
+
+-- quarter arc from the north edge to the east edge, centre (32,0)
+local function arc_points(rail_r)
+  local pts = {}
+  for a = 0, 9 do
+    local rad = a * 10 * math.pi / 180
+    pts[#pts + 1] = { 32 - rail_r * math.sin(rad), rail_r * math.cos(rad) }
+  end
+  return pts
+end
+
+local function draw_curve(sheet, cx, cy, r)
+  rail_pair(sheet, cx, cy, r, arc_points(22))
+  rail_pair(sheet, cx, cy, r, arc_points(10))
+  for _, adeg in ipairs({ 22.5, 45, 67.5 }) do
+    local rad = adeg * math.pi / 180
+    seg(sheet, cx, cy, r,
+        32 - 7 * math.sin(rad), 7 * math.cos(rad),
+        32 - 25 * math.sin(rad), 25 * math.cos(rad), 3, C_TIE)
+  end
+end
+
+local function draw_junction(sheet, cx, cy, r)
+  draw_straight(sheet, cx, cy, r, false)
+  -- east spur
+  rail_pair(sheet, cx, cy, r, { {16, 13}, {32, 13} })
+  rail_pair(sheet, cx, cy, r, { {16, 19}, {32, 19} })
+  for _, y in ipairs({ 5, 27 }) do
+    seg(sheet, cx, cy, r, 7, y, 25, y, 4, C_TIE)
+  end
+  for _, y in ipairs({ 13, 19 }) do          -- west half only: the spur owns the east
+    seg(sheet, cx, cy, r, 7, y, 15, y, 4, C_TIE)
+  end
+  seg(sheet, cx, cy, r, 21, 10, 21, 22, 3, C_TIE)
+  seg(sheet, cx, cy, r, 29, 10, 29, 22, 3, C_TIE)
+end
+
+local function draw_cross(sheet, cx, cy)
+  draw_straight(sheet, cx, cy, 0, false)
+  rail_pair(sheet, cx, cy, 0, { {0, 10}, {32, 10} })
+  rail_pair(sheet, cx, cy, 0, { {0, 22}, {32, 22} })
+  for _, x in ipairs({ 4, 28 }) do           -- ties across the east-west rails
+    seg(sheet, cx, cy, 0, x, 8, x, 24, 3, C_TIE)
+  end
+  for _, y in ipairs({ 4, 28 }) do           -- ties across the north-south rails
+    seg(sheet, cx, cy, 0, 8, y, 24, y, 3, C_TIE)
+  end
+end
+
+local function draw_bridge(sheet, cx, cy, r)
+  box(sheet, cx, cy, 3, 3, 26, 26, C_DECK)   -- deck, water shows round it
+  for _, e in ipairs({ 7, 11, 15, 19, 23, 27 }) do   -- plank seams
+    seg(sheet, cx, cy, r, 3, e, 29, e, 1, C_DECK_D)
+  end
+  seg(sheet, cx, cy, r, 3, 3, 3, 29, 2, C_DECK_D)    -- side kerbs, turn with the deck
+  seg(sheet, cx, cy, r, 29, 3, 29, 29, 2, C_DECK_D)
+  draw_straight(sheet, cx, cy, r, false)     -- rails, no ties on a deck
+end
+
+draw_straight(tiles, 0, 1, 0, true)                      -- straight0
+draw_straight(tiles, 1, 1, 1, true)                      -- straight1
+draw_curve(tiles, 2, 1, 0)                               -- curve0  N|E
+draw_curve(tiles, 3, 1, 1)                               -- curve1  E|S
+draw_curve(tiles, 4, 1, 2)                               -- curve2  S|W
+draw_curve(tiles, 5, 1, 3)                               -- curve3  W|N
+draw_junction(tiles, 0, 2, 0)                            -- junction0 N|E|S
+draw_junction(tiles, 1, 2, 1)                            -- junction1 E|S|W
+draw_junction(tiles, 2, 2, 2)                            -- junction2 S|W|N
+draw_junction(tiles, 3, 2, 3)                            -- junction3 W|N|E
+draw_cross(tiles, 4, 2)                                  -- cross
+draw_bridge(tiles, 0, 3, 0)                              -- bridge0
+draw_bridge(tiles, 1, 3, 1)                              -- bridge1
+
+-- ---- train sheet: loco + three wagons, 64x32 each, facing east ----------
+local train = images.new(2 * S * 2, S * 2, 'choochoo_train')
+
+local function wagon_body(sheet, ox_, oy_, body, trim)
+  box(sheet, 0, 0, ox_ + 10, oy_ + 5, 8, 4, C_INK)       -- wheels
+  box(sheet, 0, 0, ox_ + 10, oy_ + 23, 8, 4, C_INK)
+  box(sheet, 0, 0, ox_ + 42, oy_ + 5, 8, 4, C_INK)
+  box(sheet, 0, 0, ox_ + 42, oy_ + 23, 8, 4, C_INK)
+  box(sheet, 0, 0, ox_ + 5, oy_ + 7, 52, 18, C_INK)      -- outline
+  box(sheet, 0, 0, ox_ + 6, oy_ + 8, 50, 16, body)       -- body
+  box(sheet, 0, 0, ox_ + 6, oy_ + 8, 50, 3, trim)        -- top shine
+end
+
+wagon_body(train, 64, 0, C_COAL, C_TRUNK)                -- wagon1 coal
+for _, p in ipairs({ {20, 16}, {31, 14}, {41, 18} }) do  -- coal lumps
+  dot(train, 0, 0, 64 + p[1], p[2], 4, C_INK)
+end
+
+wagon_body(train, 0, 32, C_BLUE, rgba(64, 118, 199, 255)) -- wagon2 mail
+box(train, 0, 0, 0 + 28, 32 + 8, 6, 16, C_GOLD)         -- mail cross
+box(train, 0, 0, 0 + 6, 32 + 13, 50, 6, C_GOLD)
+
+wagon_body(train, 64, 32, C_YELLOW, rgba(255, 202, 40, 255)) -- wagon3 passenger
+for _, x in ipairs({ 12, 24, 36, 48 }) do
+  box(train, 0, 0, 64 + x, 32 + 12, 6, 8, rgba(227, 242, 253, 255))
+end
+
+-- locomotive
+local LOX, LOY = 0, 0
+box(train, 0, 0, LOX + 14, LOY + 5, 9, 5, C_INK)         -- wheels
+box(train, 0, 0, LOX + 14, LOY + 22, 9, 5, C_INK)
+box(train, 0, 0, LOX + 36, LOY + 4, 11, 6, C_INK)
+box(train, 0, 0, LOX + 36, LOY + 22, 11, 6, C_INK)
+box(train, 0, 0, LOX + 4, LOY + 7, 54, 18, C_INK)        -- outline
+box(train, 0, 0, LOX + 5, LOY + 8, 52, 16, C_RED)        -- body
+box(train, 0, 0, LOX + 5, LOY + 8, 15, 16, C_DECK_D)     -- cab wall
+box(train, 0, 0, LOX + 6, LOY + 9, 13, 14, C_GOLD)       -- cab roof
+box(train, 0, 0, LOX + 24, LOY + 10, 27, 3, rgba(229, 115, 115, 255)) -- boiler shine
+box(train, 0, 0, LOX + 30, LOY + 8, 2, 16, C_INK)        -- bands
+box(train, 0, 0, LOX + 42, LOY + 8, 2, 16, C_INK)
+dot(train, 0, 0, LOX + 40, LOY + 16, 3, C_GOLD)          -- steam dome
+dot(train, 0, 0, LOX + 50, LOY + 16, 5, C_STEEL)         -- chimney
+dot(train, 0, 0, LOX + 50, LOY + 16, 3, C_INK)
+dot(train, 0, 0, LOX + 56, LOY + 16, 3, C_LAMP)          -- headlamp
+box(train, 0, 0, LOX + 59, LOY + 12, 3, 8, C_STEEL)      -- pilot
+box(train, 0, 0, LOX + 1, LOY + 15, 4, 3, C_STEEL)       -- coupler
+
+-- ---- bake the atlases --------------------------------------------------------
+-- frame name -> cell on the tiles sheet; the order IS the frame index list
+local TILE_FRAMES = {
+  { 'grass', 0, 0 }, { 'grass_flower', 1, 0 }, { 'water', 2, 0 },
+  { 'rock', 3, 0 }, { 'tree', 4, 0 },
+  { 'station_start', 6, 0 }, { 'station_goal', 7, 0 },
+  { 'straight0', 0, 1 }, { 'straight1', 1, 1 },
+  { 'curve0', 2, 1 }, { 'curve1', 3, 1 }, { 'curve2', 4, 1 }, { 'curve3', 5, 1 },
+  { 'junction0', 0, 2 }, { 'junction1', 1, 2 }, { 'junction2', 2, 2 },
+  { 'junction3', 3, 2 }, { 'cross', 4, 2 },
+  { 'bridge0', 0, 3 }, { 'bridge1', 1, 3 },
+}
+
+local frames = {}
+for i, f in ipairs(TILE_FRAMES) do
+  frames[i] = { image = tiles, name = f[1], x = f[2] * S, y = f[3] * S,
+                w = S, h = S }
+end
+local ok1, err1 = images.savesprite('img/choochoo_tiles.sprite', frames)
+if not ok1 then error('choochoo: tiles atlas failed: ' .. tostring(err1)) end
+
+local train_frames = {
+  { image = train, name = 'loco',     x = 0,  y = 0,  w = 64, h = 32 },
+  { image = train, name = 'wagon1',   x = 64, y = 0,  w = 64, h = 32 },
+  { image = train, name = 'wagon2',   x = 0,  y = 32, w = 64, h = 32 },
+  { image = train, name = 'wagon3',   x = 64, y = 32, w = 64, h = 32 },
+}
+local ok2, err2 = images.savesprite('img/choochoo_train.sprite', train_frames)
+if not ok2 then error('choochoo: train atlas failed: ' .. tostring(err2)) end
+
+-- whole sheets as PNGs, for a quick human look
+images.save(tiles, 'img/preview_tiles.png')
+images.save(train, 'img/preview_train.png')
+images.save(ground, 'img/choochoo_ground.png')
+
+print('choochoo assets queued: 20 tile frames + 4 train frames')

@@ -1,0 +1,413 @@
+--======================================================================
+--  choochoo_data.tyro - Pure Rail Rules: Board, Pieces & Path Solving
+--======================================================================
+--  Choo-Choo Express game rules: grid terrain, rail pieces with
+--  rotation-aware open ports, placement checks (terrain and side
+--  smash), a deterministic single-train walk for the animation, a
+--  backtracking solver from the Start station to the Goal station,
+--  level loading and scoring.
+--  Kept pure (no RayLib / engine calls) so it can run inside Tyro
+--  tests and be verified in tests/test_choochoo_data.tyro.
+--======================================================================
+
+local M = {}
+
+-- ---- Grid & terrain ----------------------------------------------------
+M.T_GRASS = 0   -- open field, every rail piece may ride
+M.T_WATER = 1   -- only the bridge floats here
+M.T_ROCK  = 2   -- nothing gets through
+M.T_TREE  = 3   -- trees make way for the rails
+
+-- ---- Directions (0..3, clockwise from North) --------------------------
+M.DIR_N, M.DIR_E, M.DIR_S, M.DIR_W = 0, 1, 2, 3
+local DX  = { 0, 1, 0, -1 }
+local DY  = { -1, 0, 1, 0 }
+local INV = { 2, 3, 0, 1 }   -- the opposite side, indexed by d + 1
+local POW = { 1, 2, 4, 8 }   -- side -> bit value inside a port mask
+
+function M.dx(d) return DX[d + 1] end
+function M.dy(d) return DY[d + 1] end
+function M.inv(d) return INV[d + 1] end
+
+-- Is side `s` open in the port mask?
+local function bit(s_mask, s)
+  return math.floor(s_mask / POW[s + 1]) % 2 == 1
+end
+M.bit = bit
+
+-- Turn a port mask `rot` quarter steps clockwise (N -> E -> S -> W).
+local function rot_mask(m, rot)
+  local out = 0
+  for s = 0, 3 do
+    if bit(m, s) then out = out + POW[((s + rot) % 4) + 1] end
+  end
+  return out
+end
+
+-- ---- Rail pieces --------------------------------------------------------
+-- `ports` are the open sides at rotation 0; `need` is the ground the piece
+-- wants; `rots` is how many distinct rotations the piece really has.
+M.PIECES = {
+  straight = { ports = 5,  rots = 2, need = 'land'  }, -- N|S
+  curve    = { ports = 3,  rots = 4, need = 'land'  }, -- N|E
+  junction = { ports = 7,  rots = 4, need = 'land'  }, -- N|E|S (W closed)
+  cross    = { ports = 15, rots = 1, need = 'land'  }, -- every side
+  bridge   = { ports = 5,  rots = 2, need = 'water' }, -- N|S over water
+}
+M.PIECE_ORDER = { 'straight', 'curve', 'junction', 'cross', 'bridge' }
+
+function M.rot_count(piece)
+  local def = M.PIECES[piece]
+  return def and def.rots or 0
+end
+
+-- Which sides does this piece (at this rotation) open? nil for bad input.
+function M.conn(piece, rot)
+  local def = M.PIECES[piece]
+  if not def then return nil end
+  rot = rot or 0
+  if rot < 0 or rot >= def.rots then return nil end
+  return rot_mask(def.ports, rot)
+end
+
+-- ---- Board --------------------------------------------------------------
+-- Grid cells are addressed in game coords gx,gy (0-based); the tables
+-- behind them are 1-based like every other Tyro board: t[gy + 1][gx + 1].
+function M.new_board(cols, rows)
+  local b = { cols = cols, rows = rows, terrain = {}, track = {},
+              start = nil, goal = nil }
+  for y = 1, rows do
+    b.terrain[y] = {}
+    b.track[y] = {}
+    for x = 1, cols do b.terrain[y][x] = M.T_GRASS end
+  end
+  return b
+end
+
+function M.in_bounds(b, gx, gy)
+  return gx >= 0 and gx < b.cols and gy >= 0 and gy < b.rows
+end
+
+function M.tile(b, gx, gy)
+  if not M.in_bounds(b, gx, gy) then return M.T_ROCK end
+  return b.terrain[gy + 1][gx + 1]
+end
+
+function M.set_tile(b, gx, gy, t)
+  if M.in_bounds(b, gx, gy) then b.terrain[gy + 1][gx + 1] = t end
+end
+
+-- The station record ({gx, gy, dir}) sitting on this cell, or nil.
+function M.station_at(b, gx, gy)
+  if b.start and b.start.gx == gx and b.start.gy == gy then return b.start end
+  if b.goal  and b.goal.gx  == gx and b.goal.gy  == gy then return b.goal  end
+  return nil
+end
+
+-- `which` is 'start' or 'goal'; dir is the side the station opens to.
+function M.set_station(b, which, gx, gy, dir)
+  b[which] = { gx = gx, gy = gy, dir = dir }
+  if M.in_bounds(b, gx, gy) then
+    b.terrain[gy + 1][gx + 1] = M.T_GRASS
+    b.track[gy + 1][gx + 1] = nil
+  end
+end
+
+-- Does this cell offer a rail port on side `side`? Stations count as
+-- one-port pieces; grass, water and rock offer nothing.
+function M.open_toward(b, gx, gy, side)
+  local st = M.station_at(b, gx, gy)
+  if st then return st.dir == side end
+  local tr = M.in_bounds(b, gx, gy) and b.track[gy + 1][gx + 1] or nil
+  if not tr then return false end
+  return bit(M.conn(tr.piece, tr.rot), side)
+end
+
+-- ---- Placement -----------------------------------------------------------
+-- can_place / place / remove answer ok plus a short `why` word that the
+-- ghost preview can show: 'off', 'piece', 'rot', 'station', 'flood',
+-- 'dry', 'rock', 'smash'.
+function M.can_place(b, gx, gy, piece, rot)
+  local def = M.PIECES[piece]
+  if not def then return false, 'piece' end
+  if type(rot) ~= 'number' or rot < 0 or rot >= def.rots then
+    return false, 'rot'
+  end
+  if not M.in_bounds(b, gx, gy) then return false, 'off' end
+  if M.station_at(b, gx, gy) then return false, 'station' end
+  local t = M.tile(b, gx, gy)
+  if def.need == 'water' then
+    if t ~= M.T_WATER then return false, 'dry' end
+  else
+    if t == M.T_WATER then return false, 'flood' end
+    if t == M.T_ROCK  then return false, 'rock' end
+  end
+  -- No nose against a closed flank: wherever a neighbour (or a station)
+  -- shows a port at us we must show one back, and wherever we show a
+  -- port at a track/station cell it must be answered.
+  local c = M.conn(piece, rot)
+  for s = 0, 3 do
+    local nx, ny = gx + M.dx(s), gy + M.dy(s)
+    if M.in_bounds(b, nx, ny) then
+      local face = M.station_at(b, nx, ny) ~= nil
+                   or b.track[ny + 1][nx + 1] ~= nil
+      if face and bit(c, s) ~= M.open_toward(b, nx, ny, M.inv(s)) then
+        return false, 'smash'
+      end
+    end
+  end
+  return true
+end
+
+function M.place(b, gx, gy, piece, rot)
+  local ok, why = M.can_place(b, gx, gy, piece, rot)
+  if not ok then return false, why end
+  b.track[gy + 1][gx + 1] = { piece = piece, rot = rot }
+  return true
+end
+
+function M.remove(b, gx, gy)
+  if not M.in_bounds(b, gx, gy) then return false, 'off' end
+  if M.station_at(b, gx, gy) then return false, 'station' end
+  if not b.track[gy + 1][gx + 1] then return false, 'empty' end
+  b.track[gy + 1][gx + 1] = nil
+  return true
+end
+
+function M.rail_count(b)
+  local n = 0
+  for y = 1, b.rows do
+    for x = 1, b.cols do
+      if b.track[y][x] then n = n + 1 end
+    end
+  end
+  return n
+end
+
+-- ---- Rolling stock: the exits a piece offers -----------------------------
+-- A train enters a cell from side `enter` (the neighbour it came from).
+-- Returns the exit sides, straight-first, or nil plus why not:
+-- 'gap' (no rail here) / 'smash' (rail's flank faces us).
+function M.steps(b, gx, gy, enter)
+  if M.station_at(b, gx, gy) then return nil, 'gap' end
+  local tr = M.in_bounds(b, gx, gy) and b.track[gy + 1][gx + 1] or nil
+  if not tr then return nil, 'gap' end
+  local c = M.conn(tr.piece, tr.rot)
+  if not bit(c, enter) then return nil, 'smash' end
+  local out = {}
+  local straight_on = M.inv(enter)
+  if tr.piece == 'junction' then
+    -- straight-first: the main line keeps priority, the two turns follow
+    if bit(c, straight_on) then out[#out + 1] = straight_on end
+    for s = 0, 3 do
+      if s ~= enter and s ~= straight_on and bit(c, s) then out[#out + 1] = s end
+    end
+  elseif tr.piece == 'curve' then
+    for s = 0, 3 do
+      if s ~= enter and bit(c, s) then out[1] = s end
+    end
+  else
+    -- straight, bridge and cross always carry on straight through
+    out[1] = straight_on
+  end
+  return out
+end
+
+-- ---- The single-train walk (drives the animation) -------------------------
+-- Leaves the start station and rolls straight-first until it reaches the
+-- goal, runs into a gap or a smashed flank, or loops a loop. Returns
+-- { ok, path, stop = {gx, gy, dir}, reason } with reason
+-- 'ok' | 'gap' | 'smash' | 'loop'. `path` holds the cells the train
+-- crossed, each as {gx, gy, enter, exit}.
+function M.first_run(b)
+  local s, g = b.start, b.goal
+  if not s or not g then
+    return { ok = false, path = {}, stop = nil, reason = 'nostation' }
+  end
+  local path = {}
+  local gx, gy = s.gx + M.dx(s.dir), s.gy + M.dy(s.dir)
+  local enter = M.inv(s.dir)
+  local stop = { gx = s.gx, gy = s.gy, dir = s.dir }  -- still at the platform
+  local seen = {}
+  local limit = b.cols * b.rows * 4 + 8
+  for _ = 1, limit do
+    if gx < 0 or gy < 0 or gx >= b.cols or gy >= b.rows then
+      return { ok = false, path = path, stop = stop, reason = 'gap' }
+    end
+    if gx == g.gx and gy == g.gy then
+      if enter == g.dir then
+        return { ok = true, path = path,
+                 stop = { gx = gx, gy = gy, dir = M.inv(enter) },
+                 reason = 'ok' }
+      end
+      return { ok = false, path = path, stop = stop, reason = 'smash' }
+    end
+    local key = (gy * b.cols + gx) * 4 + enter
+    if seen[key] then
+      return { ok = false, path = path, stop = stop, reason = 'loop' }
+    end
+    seen[key] = true
+    local ex, why = M.steps(b, gx, gy, enter)
+    if not ex then return { ok = false, path = path, stop = stop, reason = why } end
+    local e = ex[1]
+    path[#path + 1] = { gx = gx, gy = gy, enter = enter, exit = e }
+    stop = { gx = gx, gy = gy, dir = e }
+    gx, gy = gx + M.dx(e), gy + M.dy(e)
+    enter = M.inv(e)
+  end
+  return { ok = false, path = path, stop = stop, reason = 'loop' }
+end
+
+-- ---- The solver: is there ANY route to the goal? ---------------------------
+-- Same roll as first_run but a junction may turn, so a depth-first search
+-- with backtracking tries every branch. Returns the chosen path (list of
+-- {gx, gy, enter, exit} cells) or nil. The animation always follows the
+-- solved path, so junctions never surprise the player.
+function M.solve(b)
+  local s, g = b.start, b.goal
+  if not s or not g then return nil end
+  local path = {}
+  local seen = {}
+
+  local function go(gx, gy, enter)
+    if gx == g.gx and gy == g.gy then return enter == g.dir end
+    if not M.in_bounds(b, gx, gy) then return false end
+    local key = (gy * b.cols + gx) * 4 + enter
+    if seen[key] then return false end
+    seen[key] = true
+    local ex = M.steps(b, gx, gy, enter)
+    if not ex then return false end
+    for _, e in ipairs(ex) do
+      local nx, ny = gx + M.dx(e), gy + M.dy(e)
+      if M.open_toward(b, nx, ny, M.inv(e)) then
+        path[#path + 1] = { gx = gx, gy = gy, enter = enter, exit = e }
+        if go(nx, ny, M.inv(e)) then return true end
+        path[#path] = nil
+      end
+    end
+    return false
+  end
+
+  local fx, fy = s.gx + M.dx(s.dir), s.gy + M.dy(s.dir)
+  if not M.open_toward(b, fx, fy, M.inv(s.dir)) then return nil end
+  if go(fx, fy, M.inv(s.dir)) then return path end
+  return nil
+end
+
+-- ---- Score -----------------------------------------------------------------
+-- Rails laid pay, waiting pays nothing: 10 per rail cell, 2 per whole
+-- second left on the departure clock.
+function M.score(b, time_left)
+  local bonus = math.max(0, math.floor(time_left or 0)) * 2
+  return M.rail_count(b) * 10 + bonus
+end
+
+-- ---- Levels -----------------------------------------------------------------
+-- One character per cell: '.' grass, '~' water, '#' rock, ',' trees,
+-- 'S' start station, 'G' goal station (their open sides in the level).
+M.LEVELS = {
+  {
+    name = 'First Line',
+    start_dir = M.DIR_E, goal_dir = M.DIR_S,
+    stock = { straight = 9, curve = 3, junction = 1, cross = 1, bridge = 1 },
+    map = {
+      '............',
+      '.....,......',
+      '........G...',
+      '............',
+      '.S..........',
+      '...,........',
+      '............',
+      '............',
+    },
+  },
+  {
+    name = 'River Bend',
+    start_dir = M.DIR_E, goal_dir = M.DIR_E,
+    stock = { straight = 11, curve = 3, junction = 2, cross = 1, bridge = 3 },
+    map = {
+      '..............',
+      '.S............',
+      '..............',
+      '..............',
+      '~~~~~~~~~~~~~~',
+      '..............',
+      '......G.......',
+      '..............',
+      '..............',
+    },
+  },
+  {
+    name = 'Stony Pass',
+    start_dir = M.DIR_E, goal_dir = M.DIR_E,
+    stock = { straight = 14, curve = 5, junction = 1, cross = 1, bridge = 1 },
+    map = {
+      '............',
+      '.....#......',
+      '.....#....G.',
+      '.....#......',
+      '.S...#......',
+      '..,...#.....',
+      '.....#..,...',
+      '............',
+    },
+  },
+  {
+    name = 'The Y Split',
+    start_dir = M.DIR_E, goal_dir = M.DIR_S,
+    stock = { straight = 11, curve = 3, junction = 2, cross = 1, bridge = 1 },
+    map = {
+      '............',
+      '........G...',
+      '.......,...,',
+      '.....#......',
+      '.....#..,...',
+      '.S..........',
+      '..,...#.....',
+      '............',
+    },
+  },
+  {
+    name = 'Canal Town',
+    start_dir = M.DIR_E, goal_dir = M.DIR_N,
+    stock = { straight = 13, curve = 4, junction = 2, cross = 1, bridge = 3 },
+    map = {
+      '..............',
+      '.S..........,.',
+      '.....#........',
+      '..............',
+      '~~~~~~~~~~~~~~',
+      '~~~~~~#~~~~~~~',
+      '......,.......',
+      '............G.',
+      '.....#........',
+    },
+  },
+}
+
+-- Build a fresh board from a level number (1..#M.LEVELS). nil if unknown.
+function M.load_level(n)
+  local L = M.LEVELS[n]
+  if not L then return nil end
+  local rows = #L.map
+  local cols = #L.map[1]
+  local b = M.new_board(cols, rows)
+  for y = 1, rows do
+    local row = L.map[y]
+    for x = 1, cols do
+      local ch = string.sub(row, x, x)
+      local gx, gy = x - 1, y - 1
+      if     ch == '~' then b.terrain[y][x] = M.T_WATER
+      elseif ch == '#' then b.terrain[y][x] = M.T_ROCK
+      elseif ch == ',' then b.terrain[y][x] = M.T_TREE
+      elseif ch == 'S' then M.set_station(b, 'start', gx, gy, L.start_dir)
+      elseif ch == 'G' then M.set_station(b, 'goal',  gx, gy, L.goal_dir)
+      end
+    end
+  end
+  b.name = L.name
+  b.stock = L.stock
+  return b
+end
+
+return M
