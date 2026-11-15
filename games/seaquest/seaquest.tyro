@@ -146,8 +146,8 @@ end
 -- it stays clean because shader.area stops at the waterline.
 local shaderReady = false
 local function load_water()
-  local ok = pcall(function() shader.load("seaquest.frag") end)
-  shaderReady = ok and shader.effect ~= "none"
+  shader.load("seaquest.frag")
+  shaderReady = shader.effect ~= "none"
   if shaderReady then
     shader.value = 0.85
     shader.area = { 0, WATER_TOP, W, H - WATER_TOP }

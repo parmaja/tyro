@@ -56,28 +56,24 @@ end
 -- ---- Sound System ----------------------------------------------------
 local hasSound = (sound ~= nil)
 if hasSound then
-  pcall(function()
-    sound.loopPlay("Engine", 60, 0.25)
-  end)
+  sound.loopPlay("Engine", 60, 0.25)
 end
 
 local function sfx(name, f, ms)
   if not hasSound then return end
-  pcall(function()
-    if name == "laser" then
-      sound.play("Pew", 880, 100)
-    elseif name == "boom" then
-      sound.play("Explode", 160, 450)
-    elseif name == "hit" then
-      sound.play("Noise", 320, 80)
-    elseif name == "alarm" then
-      sound.play("Siren", 720, 250)
-    elseif name == "boss" then
-      sound.play("Explode", 90, 800)
-    else
-      sound.play(name, f or 440, ms or 150)
-    end
-  end)
+  if name == "laser" then
+    sound.play("Pew", 880, 100)
+  elseif name == "boom" then
+    sound.play("Explode", 160, 450)
+  elseif name == "hit" then
+    sound.play("Noise", 320, 80)
+  elseif name == "alarm" then
+    sound.play("Siren", 720, 250)
+  elseif name == "boss" then
+    sound.play("Explode", 90, 800)
+  else
+    sound.play(name, f or 440, ms or 150)
+  end
 end
 
 -- ---- Sprite Pool System ----------------------------------------------

@@ -43,24 +43,24 @@ local MAX_DT = 0.05               -- physics never jumps over a frame hiccup
 local muted = false
 
 for _, f in ipairs({ "sfx/bounce.wav", "sfx/brick.wav", "sfx/break.wav" }) do
-  pcall(function() sound.load(f) end)
+  sound.load(f)
 end
 
 local function sfx(wave, freq, ms)
   if muted then return end
-  pcall(function() music.sound(wave, freq, ms) end)
+  music.sound(wave, freq, ms)
 end
 
 local function play_wav(file, vol)
   if muted then return end
-  pcall(function() sound.play(file, vol or 0.85) end)
+  sound.play(file, vol or 0.85)
 end
 
 -- Chiptune theme: one endless music.mml loop (true = loop it). music.stop()
 -- ends it for the jingles, the pause screen and the mute button.
 local function play_theme()
   if muted then return end
-  pcall(function() music.mml(D.MML_LEAD, D.MML_BASS, true) end)
+  music.mml(D.MML_LEAD, D.MML_BASS, true)
 end
 
 -- Music volume: PLUS / MINUS adjust the tune only (music.volume), the sound
@@ -71,7 +71,7 @@ music.volume = music_vol
 -- CRT filter (crt.frag): scanlines, slow scan bar and a soft vignette.
 -- If the shader fails to compile the game simply runs without it.
 local crt_on = true
-pcall(function() shader.load("crt.frag") end)
+shader.load("crt.frag")
 shader.value = crt_on and 0.55 or 0.0
 
 -- -----------------------------------------------------------------------------
@@ -451,7 +451,7 @@ local function damage_brick(b, hit_x, hit_y, ball_hit)
         for _, bl in ipairs(balls) do bl.sp.hide() end
         sfx("Chime", 880, 400)
         music.stop() -- the clear jingle plays alone
-        pcall(function() music.mml("t150 l16 o5 c e g > c2") end)
+        music.mml("t150 l16 o5 c e g > c2")
       end
     end
   else
@@ -475,7 +475,7 @@ lose_ball = function()
     state = "gameover"
     set_field_visible(false)
     music.stop() -- the game-over jingle plays alone
-    pcall(function() music.mml("t110 l8 o4 g e c <c2") end)
+    music.mml("t110 l8 o4 g e c <c2")
   else
     state = "dead"
     state_timer = D.RESPAWN_DELAY
@@ -648,7 +648,7 @@ function update(dt)
   if keyboard.pressed("g") then
     crt_on = not crt_on
     if crt_on then
-      pcall(function() shader.load("crt.frag") end)
+      shader.load("crt.frag")
       shader.value = 0.55
     else
       shader.effect = "none"
@@ -783,7 +783,7 @@ function draw()
   screen.clear('blank')
 
   -- Deep space backdrop on the world page (black comes from world.backcolor)
-  pcall(world.gradient.rectV, 0, 0, W, H, colors.black, colors.darkblue)
+  world.gradient.rectV(0, 0, W, H, colors.black, colors.darkblue)
   draw_stars(t)
 
   draw_field()

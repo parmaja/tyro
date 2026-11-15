@@ -1573,10 +1573,12 @@ local function boot()
   -- as hard-cut stickers
   world.shadowsoft(3)
   -- the living sea: a board effect that ripples every blue pixel; if the
-  -- shader file is missing, draw_sea's hand-drawn crests cover for it
-  -- sea.frag exists in bin/assets
-  seaShader = pcall(function() shader.load("sea.frag") end)
-  if seaShader then shader.value = 1.0 end
+  -- sea.frag exists in bin/assets; shader.load only queues, so it never
+  -- raises here and seaShader is effectively always on (draw_sea's hand-drawn
+  -- crests are the safety net if the shader ever fails to compile at draw).
+  shader.load("sea.frag")
+  seaShader = true
+  shader.value = 1.0
   hi = load_hi()
   state = "ready"
   travel = 0

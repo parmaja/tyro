@@ -39,15 +39,13 @@ local highscore = D.load_high_score()
 
 local function sfx(name, f, ms)
   if muted then return end
-  pcall(function()
-    if f and ms then
-      sound.play(name, f, ms)
-    elseif f then
-      sound.play(name, f)
-    else
-      sound.play(name)
-    end
-  end)
+  if f and ms then
+    sound.play(name, f, ms)
+  elseif f then
+    sound.play(name, f)
+  else
+    sound.play(name)
+  end
 end
 
 -- -----------------------------------------------------------------------------
@@ -199,9 +197,7 @@ local city_scroll_x = 0.0
 -- from the title screen on; only the mute button ends it via music.stop().
 local function play_music_step()
   if muted then return end
-  pcall(function()
-    music.mml(D.MML_THEME_LEAD, D.MML_THEME_BASS, true)
-  end)
+  music.mml(D.MML_THEME_LEAD, D.MML_THEME_BASS, true)
 end
 play_music_step()
 

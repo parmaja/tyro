@@ -291,8 +291,10 @@ local function apply_wire()
   world.wire(wire)
   if not wire then
     shader.effect = "none"
-  elseif not pcall(function() shader.load("neon.frag") end) then
-    shader.effect = "glow"
+  else
+    -- shader.load only queues; it never fails here, so the old pcall-based
+    -- "fall back to glow" branch was unreachable dead code - load neon.frag.
+    shader.load("neon.frag")
   end
 end
 
