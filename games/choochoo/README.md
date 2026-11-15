@@ -39,10 +39,11 @@ bridges, and a nose against a closed flank means the rails would smash.
 | Action | Keyboard / Mouse |
 |---|---|
 | **Pick piece** | `1`..`5` or click the panel |
-| **Rotate** | `R` |
-| **Lay / lift rail** | left click / right click |
-| **Depart!** | `SPACE` (also skips the ride) |
-| **Next level** | `N` |
+| **Rotate** | `R` or right click |
+| **Lay rail** | left click |
+| **Lift rail (refund)** | `SHIFT` + right click |
+| **Depart! / next level** | `SPACE` (also skips the ride) |
+| **Skip level** | `N` |
 | **Sound On/Off** | `M` |
 | **Title / Quit** | `ESC` |
 

@@ -8,10 +8,10 @@
 --
 --  Controls:
 --    1..5 / CLICK panel   choose a rail piece
---    R                    rotate the piece in hand
---    LEFT CLICK           lay a piece      RIGHT CLICK pick one back up
---    SPACE                depart!          N next level   R? (see panel)
---    M                    mute             ESC            title / quit
+--    R or RIGHT CLICK     rotate the piece in hand
+--    LEFT CLICK           lay a piece   SHIFT+RIGHT CLICK pick one back up
+--    SPACE                depart!  (and next level on the result panel)
+--    N                    skip a level   M mute   ESC title / quit
 --======================================================================
 
 local D = require("choochoo_data")
@@ -22,6 +22,8 @@ local W, H = canvas.width, canvas.height
 local SCALE = 1.5
 local TS = math.floor(32 * SCALE)          -- one cell on screen: 48 px
 local BX, BY = 28, 54                      -- board origin on screen
+local TRAIN_SCALE = 0.9                    -- the train rides dainty (58 px loco)
+local CHIMNEY = 18 * TRAIN_SCALE           -- smokestack sits 18 frame-px ahead
 
 -- Atlas frame order baked by make_assets.tyro (0-based)
 local GROUND = { grass = 1, flower = 2, water = 3, rock = 4, tree = 5,
@@ -57,20 +59,24 @@ local function add_float(msg, x, y, clr)
 end
 
 -- ---- sound (wavetables only; no files) -------------------------------------
+-- All clicks ride the steam whistle 'Choo'; the ride itself is a rolling
+-- 'Train' chuff bed on the loop channel, geared down by loopPitch as the
+-- throttle eases toward the platform.
 local muted = false
 local function sfx(name)
   if muted then return end
-  if name == "place" then sound.play("Pew", 520, 130)
-  elseif name == "remove" then sound.play("Pew", 300, 110)
-  elseif name == "deny" then sound.play("Zap", 170, 130)
-  elseif name == "rotate" then sound.play("Pew", 760, 70)
-  elseif name == "select" then sound.play("Pew", 640, 60)
-  elseif name == "tick" then sound.play("Pew", 900, 45)
-  elseif name == "low" then sound.play("Pew", 1150, 70)
-  elseif name == "chuff" then sound.play("Zap", 120, 55)
+  if name == "place" then sound.play("Choo", 430, 160)
+  elseif name == "remove" then sound.play("Choo", 300, 140)
+  elseif name == "deny" then sound.play("Train", 2, 240)
+  elseif name == "rotate" then sound.play("Choo", 620, 90)
+  elseif name == "select" then sound.play("Choo", 540, 90)
+  elseif name == "tick" then sound.play("Choo", 900, 60)
+  elseif name == "low" then sound.play("Choo", 1150, 90)
   elseif name == "whistle" then
-    sound.play("Chime", 660, 420)
-    sound.play("Chime", 540, 560)
+    sound.play("Choo", 660, 420)
+    sound.play("Choo", 540, 560)
+  elseif name == "roll" then sound.loopPlay("Train", 4.5, 0.8)
+  elseif name == "roll_stop" then sound.loopStop()
   elseif name == "win" then sound.play("Coin", 880, 400)
   elseif name == "fail" then sound.play("Sweep", 700, 350)
   end
@@ -115,7 +121,7 @@ do
   local parts = { loco, wagons[1], wagons[2] }
   for _, sp in ipairs(parts) do
     sp.layer = 30
-    sp.scale = SCALE
+    sp.scale = TRAIN_SCALE
     sp.visible = false
     sp.hide()
   end
@@ -207,6 +213,7 @@ local function start_level(n)
     sp.visible = false
   end
   particles.clear()
+  sfx("roll_stop")
   floats = {}
   state = "build"
 end
@@ -218,11 +225,12 @@ end
 -- train through the curves. Chuffs and smoke ride the distance travelled,
 -- like real wheel turns.
 local TRAIN_SPEED = 150          -- world px/s at scale 1.5
-local TRAIL = { 0, 100, 200 }    -- head and wagon distances behind it
+local TRAIL = { 0, 60, 120 }     -- head and wagon distances behind it
 local CHUFF_GAP = 34             -- px between smoke puffs
 
 local run_pts, run_total, run_d = nil, 0, 0
 local run_ang, run_done, arrive_t, chuff_next = {}, false, 0, 34
+local last_pitch = 1                       -- geared pitch of the chuff bed
 
 local function cell_px(gx, gy)
   return BX + gx * TS + TS // 2, BY + gy * TS + TS // 2
@@ -257,10 +265,12 @@ local function start_ride(path)
   chuff_next = 34
   local a0 = dir_angle(board.start.dir)
   run_ang = { a0, a0, a0 }
+  last_pitch = 1
   for _, sp in ipairs({ loco, wagons[1], wagons[2] }) do
     sp.visible = true
     sp.show()
   end
+  sfx("roll")
 end
 
 -- position and travel angle at distance d along the route
@@ -292,14 +302,15 @@ end
 local function puff_smoke()
   local rad = run_ang[1] * math.pi / 180
   local hx, hy, _ = route_at(run_d)
-  local cx, cy = hx + 27 * math.cos(rad), hy + 27 * math.sin(rad)
-  particles.emit(cx, cy, 2, { color = 'gray', speed = 16, life = 0.9,
-                              size = 4, gravity = -30, spread = 30,
-                              direction = -90 })
-  particles.emit(cx, cy, 1, { color = 'white', speed = 10, life = 0.45,
-                              size = 3, gravity = -40, spread = 24,
-                              direction = -90 })
-  sfx("chuff")
+  local cx, cy = hx + CHIMNEY * math.cos(rad), hy + CHIMNEY * math.sin(rad)
+  -- a fat lazy cloud that hangs about over the line...
+  particles.emit(cx, cy, 3, { color = 'gray', speed = 14, life = 1.5,
+                              size = 7, gravity = -26, drag = 3,
+                              spread = 42, direction = -90, layer = 40 })
+  -- ...with a bright core popping out of the stack
+  particles.emit(cx, cy, 2, { color = 'white', speed = 26, life = 0.7,
+                              size = 4, gravity = -55, drag = 2.5,
+                              spread = 26, direction = -90, layer = 40 })
 end
 
 local function depart()
@@ -407,6 +418,7 @@ function update(dt)
 
   if state == "run" then
     if keyboard.pressed("space") or keyboard.pressed("escape") then
+      sfx("roll_stop")
       state = "score"
       return
     end
@@ -418,17 +430,29 @@ function update(dt)
       local remaining = run_total - run_d
       local v = TRAIN_SPEED
       if remaining < 80 then v = math.max(20, TRAIN_SPEED * remaining / 80) end
+      -- gear the chuff bed with the throttle
+      local pitch = v / TRAIN_SPEED
+      if math.abs(pitch - last_pitch) > 0.05 then
+        last_pitch = pitch
+        if not muted then sound.loopPitch(pitch) end
+      end
       run_d = run_d + v * dt
       if run_d >= run_total then
         run_d = run_total
         run_done = true
+        sfx("roll_stop")
         sfx(result.win and "win" or "fail")
         -- arrival: one big relieved cloud of steam over the chimney
         local rad = run_ang[1] * math.pi / 180
         local hx, hy = route_at(run_d)
-        particles.emit(hx + 27 * math.cos(rad), hy + 27 * math.sin(rad), 10,
-                       { color = "white", speed = 26, life = 1.1, size = 5,
-                         gravity = -45, spread = 36, direction = -90 })
+        particles.emit(hx + CHIMNEY * math.cos(rad), hy + CHIMNEY * math.sin(rad),
+                       14, { color = "gray", speed = 22, life = 1.8, size = 8,
+                             gravity = -30, drag = 2.5, spread = 50,
+                             direction = -90, layer = 40 })
+        particles.emit(hx + CHIMNEY * math.cos(rad), hy + CHIMNEY * math.sin(rad),
+                       8, { color = "white", speed = 34, life = 1.0, size = 5,
+                            gravity = -60, drag = 2.2, spread = 34,
+                            direction = -90, layer = 40 })
         -- the platform jolts as she parks, and the earnings float up
         world.shake(result.win and 400 or 250, result.win and 12 or 6)
         if result.win then
@@ -467,14 +491,17 @@ function update(dt)
     elseif keyboard.pressed("n") then
       start_level(level % #D.LEVELS + 1)
     elseif keyboard.pressed("space") then
-      start_level(level)
+      start_level(level % #D.LEVELS + 1)
     end
     return
   end
 
   -- state == "build" ------------------------------------------------
   if keyboard.pressed("escape") then state = "title" return end
-  if keyboard.pressed("m") then muted = not muted end
+  if keyboard.pressed("m") then
+    muted = not muted
+    if muted then sound.loopStop() end
+  end
   if keyboard.pressed("n") then start_level(level % #D.LEVELS + 1) return end
   if keyboard.pressed("space") then depart() return end
   if keyboard.pressed("r") then
@@ -522,9 +549,15 @@ function update(dt)
     end
   end
   if mouse.pressed("right") then
-    local gx = math.floor((mouse.x - BX) / TS)
-    local gy = math.floor((mouse.y - BY) / TS)
-    remove_refund(gx, gy)
+    if keyboard.down("shift") then
+      local gx = math.floor((mouse.x - BX) / TS)
+      local gy = math.floor((mouse.y - BY) / TS)
+      remove_refund(gx, gy)
+    else
+      -- right hand spins the piece in hand
+      sel_rot = (sel_rot + 1) % D.rot_count(sel)
+      sfx("rotate")
+    end
   end
 
   -- hover cell for the ghost preview
@@ -634,7 +667,7 @@ function draw()
     world.text(px, 464, "departure in " .. math.max(math.ceil(clock_left), 0)
                .. " s   SPACE: depart!")
     world.color = rgb(200, 200, 215)
-    world.text(px, 484, "R rotate   right-click: pick up   N level")
+    world.text(px, 484, "R/right rotate  shift+right lift  N level")
 
     if deny_t > 0 then
       world.color = colors.yellow
@@ -669,7 +702,7 @@ function draw()
     banner("to the blue one - piece by piece -", 230, rgb(255, 224, 150))
     banner("before the train departs!", 250, rgb(255, 224, 150))
     banner("SPACE or CLICK to start", 300, colors.lime)
-    banner("1-5 pieces  R rotate  click lay  right-click lift", 340,
+    banner("1-5 pieces  right-click rotate  click lay", 340,
            rgb(186, 214, 186))
     if highscore > 0 then
       banner("best run: " .. highscore .. " points", 366, rgb(255, 224, 150))
@@ -685,7 +718,7 @@ function draw()
              280, colors.yellow)
       banner("best run: " .. highscore, 310, rgb(255, 224, 150))
     end
-    banner("SPACE/R retry   N next level   ESC title", 370,
+    banner("SPACE next   R retry   ESC title", 370,
            rgb(186, 214, 186))
   end
 end

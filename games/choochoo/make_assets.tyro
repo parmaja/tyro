@@ -142,10 +142,12 @@ paint_ground(ground, 5)
 
 -- ---- rails -------------------------------------------------------------------
 -- Each piece is drawn from rail polylines (dark under, steel on top) and
--- sleepers, all in cell coords; `r` turns the whole picture.
+-- sleepers, all in cell coords; `r` turns the whole picture. The track is
+-- drawn slim (rails 6px apart on the centreline) so a cell of rail reads
+-- as dainty model track inside its 48px grid square.
 local function rail_pair(sheet, cx, cy, r, pts)
   for pass = 1, 2 do
-    local w = (pass == 1) and 4 or 2
+    local w = (pass == 1) and 3 or 1
     local col = (pass == 1) and C_RAIL_D or C_RAIL
     for i = 1, #pts - 1 do
       seg(sheet, cx, cy, r, pts[i][1], pts[i][2], pts[i+1][1], pts[i+1][2], w, col)
@@ -154,11 +156,11 @@ local function rail_pair(sheet, cx, cy, r, pts)
 end
 
 local function draw_straight(sheet, cx, cy, r, with_ties)
-  rail_pair(sheet, cx, cy, r, { {10, 0}, {10, 32} })
-  rail_pair(sheet, cx, cy, r, { {22, 0}, {22, 32} })
+  rail_pair(sheet, cx, cy, r, { {13, 0}, {13, 32} })
+  rail_pair(sheet, cx, cy, r, { {19, 0}, {19, 32} })
   if with_ties then
     for _, y in ipairs({ 5, 13, 21, 29 }) do
-      seg(sheet, cx, cy, r, 7, y, 25, y, 4, C_TIE)
+      seg(sheet, cx, cy, r, 10, y, 22, y, 3, C_TIE)
     end
   end
 end
@@ -174,13 +176,13 @@ local function arc_points(rail_r)
 end
 
 local function draw_curve(sheet, cx, cy, r)
-  rail_pair(sheet, cx, cy, r, arc_points(22))
-  rail_pair(sheet, cx, cy, r, arc_points(10))
+  rail_pair(sheet, cx, cy, r, arc_points(19))
+  rail_pair(sheet, cx, cy, r, arc_points(13))
   for _, adeg in ipairs({ 22.5, 45, 67.5 }) do
     local rad = adeg * math.pi / 180
     seg(sheet, cx, cy, r,
-        32 - 7 * math.sin(rad), 7 * math.cos(rad),
-        32 - 25 * math.sin(rad), 25 * math.cos(rad), 3, C_TIE)
+        32 - 10 * math.sin(rad), 10 * math.cos(rad),
+        32 - 22 * math.sin(rad), 22 * math.cos(rad), 3, C_TIE)
   end
 end
 
@@ -190,24 +192,24 @@ local function draw_junction(sheet, cx, cy, r)
   rail_pair(sheet, cx, cy, r, { {16, 13}, {32, 13} })
   rail_pair(sheet, cx, cy, r, { {16, 19}, {32, 19} })
   for _, y in ipairs({ 5, 27 }) do
-    seg(sheet, cx, cy, r, 7, y, 25, y, 4, C_TIE)
+    seg(sheet, cx, cy, r, 10, y, 22, y, 3, C_TIE)
   end
   for _, y in ipairs({ 13, 19 }) do          -- west half only: the spur owns the east
-    seg(sheet, cx, cy, r, 7, y, 15, y, 4, C_TIE)
+    seg(sheet, cx, cy, r, 10, y, 16, y, 3, C_TIE)
   end
-  seg(sheet, cx, cy, r, 21, 10, 21, 22, 3, C_TIE)
-  seg(sheet, cx, cy, r, 29, 10, 29, 22, 3, C_TIE)
+  seg(sheet, cx, cy, r, 21, 11, 21, 21, 3, C_TIE)
+  seg(sheet, cx, cy, r, 29, 11, 29, 21, 3, C_TIE)
 end
 
 local function draw_cross(sheet, cx, cy)
   draw_straight(sheet, cx, cy, 0, false)
-  rail_pair(sheet, cx, cy, 0, { {0, 10}, {32, 10} })
-  rail_pair(sheet, cx, cy, 0, { {0, 22}, {32, 22} })
+  rail_pair(sheet, cx, cy, 0, { {0, 13}, {32, 13} })
+  rail_pair(sheet, cx, cy, 0, { {0, 19}, {32, 19} })
   for _, x in ipairs({ 4, 28 }) do           -- ties across the east-west rails
-    seg(sheet, cx, cy, 0, x, 8, x, 24, 3, C_TIE)
+    seg(sheet, cx, cy, 0, x, 11, x, 21, 3, C_TIE)
   end
   for _, y in ipairs({ 4, 28 }) do           -- ties across the north-south rails
-    seg(sheet, cx, cy, 0, 8, y, 24, y, 3, C_TIE)
+    seg(sheet, cx, cy, 0, 11, y, 21, y, 3, C_TIE)
   end
 end
 
