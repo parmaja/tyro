@@ -120,6 +120,11 @@ type
     constructor Create(const AName: string; AScript: TLuaScript); override;
     destructor Destroy; override;
     function New_func(L: Plua_State): integer; cdecl;
+    function Save_func(L: Plua_State): integer; cdecl;
+    function SaveSprite_func(L: Plua_State): integer; cdecl;
+    //The paint sheet behind a table argument (a sheet made by images.new),
+    //or nil when the argument is anything else.
+    function SheetArg(L: Plua_State; AIndex: Integer): TLuaImage;
     property Items[AIndex: Integer]: TLuaImage read GetItem;
   end;
 
@@ -2098,6 +2103,8 @@ begin
   // triangle, line, point, text, clear.
   Lua.State.RegisterTable('images');
   Lua.State.Register('images', 'new', Self, Images.New_func);
+  Lua.State.Register('images', 'save', Self, Images.Save_func);
+  Lua.State.Register('images', 'savesprite', Self, Images.SaveSprite_func);
 
   // Tilemap system: tiles.new(...) creates a map, tiles.find(name) finds one.
   // A map table (returned by tiles.new) carries map:load/resize/set/get/data/
@@ -4729,6 +4736,186 @@ begin
   finally
     CreateObj.Free;
   end;
+end;
+
+function TLuaImages.SheetArg(L: Plua_State; AIndex: Integer): TLuaImage;
+var
+  idx: Integer;
+begin
+  Result := nil;
+  if not L.IsTable(AIndex) then
+    Exit;
+  L.GetField(AIndex, '__sheet');
+  if L.IsNumber(-1) then
+    idx := L.ToInteger(-1)
+  else
+    idx := -1;
+  lua_pop(L, 1);
+  if idx >= 0 then
+    Result := Items[idx];
+end;
+
+//images.save(sheet, 'file.png') -> queue a PNG write of the sheet's pixels.
+//Queued like every drawing call: the sheet's paints must all land before
+//its pixels are downloaded. Returns true when the write is on its way.
+function TLuaImages.Save_func(L: Plua_State): integer; cdecl;
+var
+  Sheet: TLuaImage;
+  aName, Resolved: string;
+begin
+  Sheet := SheetArg(L, 1);
+  if Sheet = nil then
+  begin
+    L.PushNil;
+    L.PushString('images.save: needs a paint sheet from images.new()');
+    Exit(2);
+  end;
+  aName := L.ToString(2);
+  if aName = '' then
+  begin
+    L.PushNil;
+    L.PushString('images.save: missing file name');
+    Exit(2);
+  end;
+  //Like openfile, a relative name may only land inside the workspace.
+  Resolved := ResolveAndValidatePath(aName, Res.WorkPath);
+  if Resolved = '' then
+  begin
+    L.PushNil;
+    L.PushString('images.save: ''' + aName + ''' resolves outside the workspace');
+    Exit(2);
+  end;
+  Script.AddQueueObject(TImageSaveObject.Create(Sheet.Sheet, Resolved));
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+//images.savesprite('file.sprite', frames) -> cut the frame rectangles out
+//of ONE paint sheet and pack them as a .sprite atlas (PNG + JSON in a ZIP,
+//the sprite editor's own format). frames is an array of
+//  { image = <sheet>, name = 'ride_n', x = 0, y = 0, w = 32, h = 32
+//    [, duration = 100] }
+//x/y/w/h may be left out to take the whole sheet; duration is milliseconds.
+//Like the other image calls this is queued; true means the write is on its
+//way. Returns nil plus a message on bad input.
+function TLuaImages.SaveSprite_func(L: Plua_State): integer; cdecl;
+var
+  i, n, frTop, sw, sh: Integer;
+  Sheet, Cur: TLuaImage;
+  aName, Resolved, BaseName: string;
+  Frames: array of TSheetFrame;
+  Ok: Boolean;
+
+  //number field of the frame table on top of the stack, or Fallback
+  function NumField(const AField: string; ADefault: Integer): Integer;
+  begin
+    L.GetField(frTop, AField);
+    if L.IsNumber(-1) then
+      Result := L.ToInteger(-1)
+    else
+      Result := ADefault;
+    lua_pop(L, 1);
+  end;
+
+begin
+  aName := L.ToString(1);
+  if aName = '' then
+  begin
+    L.PushNil;
+    L.PushString('images.savesprite: missing file name');
+    Exit(2);
+  end;
+  if not L.IsTable(2) then
+  begin
+    L.PushNil;
+    L.PushString('images.savesprite: needs a list of frames');
+    Exit(2);
+  end;
+  n := Integer(lua_rawlen(L, 2));
+  if n < 1 then
+  begin
+    L.PushNil;
+    L.PushString('images.savesprite: the frame list is empty');
+    Exit(2);
+  end;
+
+  Sheet := nil;
+  sw := 0;
+  sh := 0;
+  Ok := True;
+  SetLength(Frames, n);
+  for i := 1 to n do
+  begin
+    lua_rawgeti(L, 2, i);
+    frTop := lua_gettop(L);
+    Ok := lua_istable(L, frTop);
+    if Ok then
+    begin
+      //all frames share the one sheet the first frame names
+      L.GetField(frTop, 'image');
+      Cur := SheetArg(L, -1);
+      lua_pop(L, 1);
+      if Cur = nil then
+        Ok := False
+      else if Sheet = nil then
+      begin
+        Sheet := Cur;
+        L.GetField(frTop, 'image');
+        L.GetField(-1, 'width');
+        sw := L.ToInteger(-1);
+        lua_pop(L, 2);
+        L.GetField(frTop, 'image');
+        L.GetField(-1, 'height');
+        sh := L.ToInteger(-1);
+        lua_pop(L, 2);
+      end
+      else if Sheet <> Cur then
+        Ok := False; //one atlas, one paint sheet
+    end;
+    if Ok then
+    begin
+      Frames[i - 1].Name := '';
+      L.GetField(frTop, 'name');
+      if L.IsString(-1) then
+        Frames[i - 1].Name := L.ToString(-1);
+      lua_pop(L, 1);
+      if Frames[i - 1].Name = '' then
+        Frames[i - 1].Name := 'frame' + IntToStr(i - 1);
+      Frames[i - 1].X := NumField('x', 0);
+      Frames[i - 1].Y := NumField('y', 0);
+      Frames[i - 1].W := NumField('w', sw);
+      Frames[i - 1].H := NumField('h', sh);
+      Frames[i - 1].DurationMs := NumField('duration', 0);
+      if (Frames[i - 1].X < 0) or (Frames[i - 1].Y < 0)
+        or (Frames[i - 1].W < 1) or (Frames[i - 1].H < 1)
+        or (Frames[i - 1].X + Frames[i - 1].W > sw)
+        or (Frames[i - 1].Y + Frames[i - 1].H > sh) then
+        Ok := False;
+    end;
+    lua_settop(L, frTop - 1); //drop the frame table
+    if not Ok then
+    begin
+      L.PushNil;
+      L.PushString('images.savesprite: frame ' + IntToStr(i) + ' must name one'
+        + ' shared sheet and a rectangle inside it');
+      Exit(2);
+    end;
+  end;
+
+  Resolved := ResolveAndValidatePath(aName, Res.WorkPath);
+  if Resolved = '' then
+  begin
+    L.PushNil;
+    L.PushString('images.savesprite: ''' + aName + ''' resolves outside the workspace');
+    Exit(2);
+  end;
+  BaseName := ChangeFileExt(ExtractFileName(Resolved), '');
+  if BaseName = '' then
+    BaseName := 'sheet';
+  Script.AddQueueObject(TSaveSpriteObject.Create(Sheet.Sheet, Resolved,
+    BaseName + '.png', Frames));
+  L.PushBoolean(True);
+  Result := 1;
 end;
 
 // Sprites.puff("name" [, size] [, count]) / Sprites.blob("name" [, size] [, count])

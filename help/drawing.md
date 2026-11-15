@@ -78,6 +78,44 @@ sprites drawn above it, because they all ride inside the camera.
 
 ---
 
+## images.new - Off-screen Paint Sheets 🖌️
+
+`images.new(width, height)` hands you a `canvas` that lives only in memory:
+paint it with the same commands, then dress a sprite with the result - or
+save the sheet to a file. This is how a game paints its own art, no external
+editor needed.
+
+```lua
+local sheet = images.new(64, 32)
+sheet.color = 'red'
+sheet.rectangle(4, 4, 56, 24, true)
+
+local s = sprites.new('box')
+s.fromimage(sheet)        -- bake the sheet into a sprite texture
+s.move(100, 100) s.show()
+```
+
+The sheet survives the bake: dress more sprites from it, or repaint and bake
+again. Two ways to put a sheet on disk (both queued, like every draw call -
+they land in order after the paints above them):
+
+```lua
+images.save(sheet, 'img/preview.png')            -- the whole sheet as a PNG
+images.savesprite('img/tiles.sprite', {          -- cut frames, pack an atlas
+  { image = sheet, name = 'grass', x = 0,  y = 0, w = 32, h = 32 },
+  { image = sheet, name = 'water', x = 32, y = 0, w = 32, h = 32 },
+})                                               -- -> sprite:load('img/tiles.sprite')
+```
+
+`images.savesprite` cuts every rectangle out of **one** paint sheet and packs
+them into a `.sprite` atlas - the same file format the sprite editor writes,
+so `sprite:load()` reads the frames back in the order you listed them. Omit
+`x/y/w/h` to take the whole sheet; an optional `duration` (milliseconds) rides
+along for animated atlases. Like `openfile`, both calls only accept names
+inside the workspace.
+
+---
+
 ## world - the Page and the Camera
 
 `world` is the page behind everything, and at the same time the camera that

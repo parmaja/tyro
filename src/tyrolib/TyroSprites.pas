@@ -341,6 +341,52 @@ type
     property HandleResult: integer read FHandleResult;
   end;
 
+  { TImageSaveObject }
+
+  { Writes one paint sheet out as a PNG file (images.save). Like
+    TSpriteImageObject it is a TDrawObject, so the queue binds the sheet and
+    its draw calls have landed before the pixels are downloaded. }
+  TImageSaveObject = class(TDrawObject)
+  private
+    FFileName: string;
+  protected
+    procedure DoExecute; override;
+  public
+    constructor Create(ASheet: TTyroCanvas; const AFileName: string);
+  end;
+
+  { One frame cut out of a paint sheet for images.savesprite. }
+  TSheetFrame = record
+    Name: string;
+    X, Y, W, H: integer;
+    DurationMs: integer;
+  end;
+  TSheetFrameArray = array of TSheetFrame;
+
+  { TSaveSpriteObject }
+
+  { Bakes a paint sheet into a .sprite atlas: the sheet's pixels are read
+    back once, every frame rectangle is cropped out of them, and the pieces
+    are packed with SaveSpriteAtlas (one PNG plus its JSON descriptor, in a
+    ZIP). Frames come from the single sheet this object carries. }
+  TSaveSpriteObject = class(TDrawObject)
+  private
+    FFileName: string;
+    FImageName: string;
+    FFrames: TSheetFrameArray;
+  protected
+    procedure DoExecute; override;
+  public
+    constructor Create(ASheet: TTyroCanvas; const AFileName, AImageName: string;
+      const AFrames: array of TSheetFrame);
+  end;
+
+  //* Downloads a paint sheet's pixels as an RGBA8 CPU image (flipped
+  // top-down, straight alpha restored). The caller owns the image and must
+  // UnloadImage() it; Data = nil means the readback failed. The sheet is
+  // left bound for drawing again, so the queue pass can continue on it.
+  function SheetToImage(ASheet: TTyroCanvas): TImage;
+
   { TDrawSpriteObject }
 
   {TDrawSpriteObject = class(TDrawObject)
@@ -2351,40 +2397,58 @@ begin
   end;
 end;
 
-procedure TSpriteImageObject.DoExecute;
+//Downloads a paint sheet's pixels as an RGBA8 CPU image. The sheet's draw
+//batch is flushed by EndDraw and the sheet is re-bound afterwards, so the
+//queue pass can keep painting on it. The caller owns the returned image.
+function SheetToImage(ASheet: TTyroCanvas): TImage;
 var
   Sheet: TTyroTextureCanvas;
-  Img: TImage;
-  Tex: TTexture2D;
 begin
-  FHandleResult := cSpriteInvalid;
-  if not (Canvas is TTyroTextureCanvas) then
+  Result := Default(TImage);
+  Result.Data := nil;
+  if not (ASheet is TTyroTextureCanvas) then
     Exit;
-  Sheet := TTyroTextureCanvas(Canvas);
+  Sheet := TTyroTextureCanvas(ASheet);
   //EndDraw flushes raylib's draw batch into the sheet's texture and detaches
   //it, which is what makes the texture safe to download; LoadImageFromTexture
   //(glGetTexImage) then copies the true RGBA out. The screen path is not
   //usable here: raylib's screen readback forces every alpha byte to 255, so
   //it cannot carry a painted sprite's transparency.
-  Tex.ID := 0;
   Sheet.EndDraw;
   try
-    Img := RayLib.LoadImageFromTexture(Sheet.Texture.Texture);
-    if Img.Data <> nil then
-    try
+    Result := RayLib.LoadImageFromTexture(Sheet.Texture.Texture);
+    if Result.Data <> nil then
+    begin
       //glGetTexImage returns the rows as the texture stores them, bottom-up;
       //flip to the top-down order every sprite texture uses.
-      RayLib.ImageFlipVertical(Img);
-      if Img.Format <> Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) then
-        RayLib.ImageFormat(Img, Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8));
-      UnsquareAlpha(PPixBytes(Img.Data), Img.Width * Img.Height);
-      Tex := RayLib.LoadTextureFromImage(Img);
-    finally
-      RayLib.UnloadImage(Img);
+      RayLib.ImageFlipVertical(Result);
+      if Result.Format <> Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) then
+        RayLib.ImageFormat(Result, Ord(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8));
+      UnsquareAlpha(PPixBytes(Result.Data), Result.Width * Result.Height);
     end;
   finally
     //rebind: ProcessQueue still counts this sheet as the bound target
     Sheet.BeginDraw;
+  end;
+end;
+
+procedure TSpriteImageObject.DoExecute;
+var
+  Img: TImage;
+  Tex: TTexture2D;
+begin
+  FHandleResult := cSpriteInvalid;
+  Img := SheetToImage(Canvas);
+  if Img.Data = nil then
+  begin
+    if IsConsole then
+      WriteLn('Sprite image: readback failed');
+    Exit;
+  end;
+  try
+    Tex := RayLib.LoadTextureFromImage(Img);
+  finally
+    RayLib.UnloadImage(Img);
   end;
   if Tex.ID = 0 then
   begin
@@ -2407,6 +2471,82 @@ begin
   end
   else
     FHandleResult := Engine.Sprites.Add(Tex, FName); //takes ownership
+end;
+
+{ TImageSaveObject }
+
+constructor TImageSaveObject.Create(ASheet: TTyroCanvas; const AFileName: string);
+begin
+  inherited Create(ASheet);
+  FFileName := AFileName;
+end;
+
+procedure TImageSaveObject.DoExecute;
+var
+  Img: TImage;
+begin
+  Img := SheetToImage(Canvas);
+  if Img.Data = nil then
+  begin
+    if IsConsole then
+      WriteLn('images.save: readback failed');
+    Exit;
+  end;
+  try
+    RayLib.ExportImage(Img, PUTF8Char(UTF8String(FFileName)));
+    if IsConsole and not SysUtils.FileExists(FFileName) then
+      WriteLn('images.save: cannot write ' + FFileName);
+  finally
+    RayLib.UnloadImage(Img);
+  end;
+end;
+
+{ TSaveSpriteObject }
+
+constructor TSaveSpriteObject.Create(ASheet: TTyroCanvas; const AFileName,
+  AImageName: string; const AFrames: array of TSheetFrame);
+var
+  I: integer;
+begin
+  inherited Create(ASheet);
+  FFileName := AFileName;
+  FImageName := AImageName;
+  SetLength(FFrames, Length(AFrames));
+  for I := 0 to High(AFrames) do
+    FFrames[I] := AFrames[I];
+end;
+
+procedure TSaveSpriteObject.DoExecute;
+var
+  I: integer;
+  Img: TImage;
+  Rec: TRectangle;
+  Writer: array of TSpriteAtlasWriteFrame;
+begin
+  Img := SheetToImage(Canvas);
+  if Img.Data = nil then
+  begin
+    if IsConsole then
+      WriteLn('images.savesprite: readback failed');
+    Exit;
+  end;
+  try
+    SetLength(Writer, Length(FFrames));
+    for I := 0 to High(FFrames) do
+    begin
+      Rec := TRectangle.Create(FFrames[I].X, FFrames[I].Y,
+        FFrames[I].W, FFrames[I].H);
+      Writer[I].Name := FFrames[I].Name;
+      Writer[I].DurationMs := FFrames[I].DurationMs;
+      Writer[I].Image := RayLib.ImageFromImage(Img, Rec);
+    end;
+    if IsConsole and not SaveSpriteAtlas(FFileName, Writer, FImageName) then
+      WriteLn('images.savesprite: cannot write ' + FFileName);
+    for I := 0 to High(Writer) do
+      RayLib.UnloadImage(Writer[I].Image);
+  finally
+    RayLib.UnloadImage(Img);
+  end;
 end;
 
 { TDrawSpriteObject }
