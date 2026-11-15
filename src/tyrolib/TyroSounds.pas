@@ -292,6 +292,8 @@ function Fire_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Boing_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Siren_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Bubble_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Choo_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+function Train_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Kick_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function Snare_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
 function HiHat_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
@@ -1976,6 +1978,74 @@ begin
   else if Result < -1.0 then Result := -1.0;
 end;
 
+// Steam locomotive whistle: the classic two-tone horn - the fundamental
+// plus a second voice a wide third above (SecondRatio) - breathing a little
+// steam on top. The pitch sags a few percent as the pressure runs out
+// (closed-form phase integral, so the glide is smooth), the hiss fades
+// faster than the body, and a fast soft attack keeps it click-safe at any
+// note length. Low notes are a big station horn, high notes a hand-organ
+// toot (music.sound('Choo', 300, 400)).
+function Choo_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  SecondRatio = 1.33;  //the horn's second voice
+  SecLevel = 0.55;
+  SagDepth = 0.05;     //fractional pitch droop while the blast lasts
+  SagTau = 0.12;
+  AttackRate = 350;
+  BodyTau = 0.22;      //whistle body length
+  HissLevel = 0.22;
+  HissTau = 0.10;      //steam breath fades first
+var
+  t, Phase, Env, Hiss: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  //f(t) = F * (1 - SagDepth * (1 - exp(-t/SagTau))), integrated in closed
+  //form: Phase = 2*Pi*F * (t - SagDepth * (t - SagTau * (1 - e^(-t/SagTau))))
+  Phase := 2 * Pi * Frequency *
+    (t - SagDepth * (t - SagTau * (1 - Exp(-t / SagTau))));
+  Env := (1 - Exp(-t * AttackRate)) * Exp(-t / BodyTau);
+  Hiss := HashNoise(Index) * Exp(-t / HissTau) * HissLevel;
+  Result := (Sin(Phase) + Sin(Phase * SecondRatio) * SecLevel) * Env + Hiss;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
+// A walking steam train: one chuff per beat, Frequency beats per second
+// (3 = easing out of the station, 8 = running free). Each beat fires a low
+// piston thump that alternates deep/shallow like rod bearings, followed by
+// a short steam puff; the whole curve is exactly periodic with period
+// 1/Frequency, so sound.loopPlay('Train', 5) runs seamlessly as long as
+// the ride lasts and loopPitch gears the chuffs up and down.
+function Train_Waveform(Index, SampleRate: Integer; Frequency: Single): Single;
+const
+  ThumpTau = 0.10;     //piston thump length
+  PuffTau = 0.045;     //steam hiss behind each thump
+  PuffLevel = 0.30;
+var
+  t, Period, u, Beat: Double;
+begin
+  if (Frequency <= 0) or (SampleRate <= 0) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  t := Index / SampleRate;
+  Period := 1 / Frequency;
+  Beat := Floor(t / Period);
+  u := t - Beat * Period;                        //time inside this chuff
+  //alternate 58 / 72 Hz bearing thumps
+  Result := Sin(2 * Pi * (58 + 14 * (Beat - 2 * Floor(Beat / 2))) * u) *
+              Exp(-u / ThumpTau) * 0.9
+          + HashNoise(Index) * Exp(-u / PuffTau) * PuffLevel;
+  if Result > 1.0 then Result := 1.0
+  else if Result < -1.0 then Result := -1.0;
+end;
+
 // Bass drum: a sine whose pitch drops from ~3x the tuned note down to it in
 // the first 30 ms (the classic "boom"), plus a short noise click for the
 // beater attack. Frequency is the drum pitch (a 60 Hz note is a deep kick,
@@ -2492,6 +2562,8 @@ initialization
 
   Waveforms.Add('Plane', @PlaneNoise_Waveform);
   Waveforms.Add('Engine', @Engine_Waveform);
+  Waveforms.Add('Choo', @Choo_Waveform); //two-tone steam whistle with hiss
+  Waveforms.Add('Train', @Train_Waveform); //walking locomotive chuffs, loopable
   Waveforms.Add('Pew', @Pew_Waveform); //missile launch chirp
   Waveforms.Add('Explode', @Explode_Waveform); //enemy explosion rumble
   Waveforms.Add('Fire', @Fire_Waveform); //crackling fire bed, loopable
