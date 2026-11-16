@@ -6,11 +6,14 @@ This is a simple game engine for kids and noobs, using RayLib and Lua for enduse
 
 * Big task split it to subtasks, for not lose the whole quota on one big task, and can continue with next task next day if runout of quota
 * Read documents in `help` folder
+* Do not use pcall in lua, most functions are queue to the engine
 
 ### Games
 
 * If the task is a game, use Sprites as possible, add any features that needed it in Tyro project, make it smooth and perfect game
 * Use `update(dt)` and `draw()` functions callback; `cycle` is removed/legacy
+* Do not forget to make splash loading screen
+* Use for creating assets lua/tyro from game not python, as possible, add the feature in Tyro Engine if needed
 
 ## Compile
 
