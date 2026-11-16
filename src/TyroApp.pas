@@ -293,6 +293,9 @@ end;
 //* own parameters. When the parsed positional is not an existing file or
 //* folder, walk the command line and take the first positional that names one;
 //* the remaining parameters stay visible to the script as `args`.
+//* A relative name is tried twice: as the shell typed it (against the process
+//* folder) and then against the workspace, since a conf workpath= line moves
+//* the workspace but the file the user points at still lives where they stand.
 function FindScriptOnCommandLine: string;
 var
   i: Integer;
@@ -304,11 +307,15 @@ begin
     S := ParamStr(i);
     if (S <> '') and not CharInSet(S[1], ['-', '/']) then
     begin
-      S := CorrectPath(ExpandToPath(S, Res.WorkPath));
-      if SysUtils.FileExists(S) or SysUtils.DirectoryExists(S) then
-        Exit(S);
+      Result := CorrectPath(ExpandFileName(S));
+      if SysUtils.FileExists(Result) or SysUtils.DirectoryExists(Result) then
+        Exit;
+      Result := CorrectPath(ExpandToPath(S, Res.WorkPath));
+      if SysUtils.FileExists(Result) or SysUtils.DirectoryExists(Result) then
+        Exit;
     end;
   end;
+  Result := '';
 end;
 
 //* Packs the game given by --fuse together with the engine files listed in
@@ -407,6 +414,12 @@ begin
   Engine.World.Title := Title;
 
   ScriptFile := CorrectPath(ExpandToPath(Arguments.ReadString(''), Res.WorkPath)); //File come without switch name
+  //same rule as FindScriptOnCommandLine: a relative script name first lives
+  //where the shell stands, the workspace is only the second guess.
+  if (ScriptFile <> '') and not SysUtils.FileExists(ScriptFile)
+    and not SysUtils.DirectoryExists(ScriptFile) then
+    if SysUtils.FileExists(Arguments.ReadString('')) or SysUtils.DirectoryExists(Arguments.ReadString('')) then
+      ScriptFile := CorrectPath(ExpandFileName(Arguments.ReadString('')));
 
   //The parser keeps only the last valueless positional argument, so a script
   //followed by its own parameters ("tyro game.lua red") loses its name. When

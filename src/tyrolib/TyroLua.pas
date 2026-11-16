@@ -60,6 +60,7 @@ type
     procedure Init; override;
     function Clear_func(L: Plua_State): integer; cdecl;
     function Text_func(L: Plua_State): integer; cdecl;
+    function TextCenter_func(L: Plua_State): integer; cdecl;
     function Circle_func(L: Plua_State): integer; cdecl;
     function Triangle_func(L: Plua_State): integer; cdecl;
     function Rectangle_func(L: Plua_State): integer; cdecl;
@@ -260,6 +261,12 @@ type
   { TLuaSound }
 
   TLuaSound = class(TTyroLuaObject)
+  protected
+    //sound.muted = true/false - the engine-wide silence switch (the SoundMuted
+    //global in TyroSounds); music.play/music.mml/music.sound and sound.* all
+    //drop their start request quietly while it is true.
+    function Setter(L: PLua_State): integer; override;
+    function Getter(L: PLua_State): integer; override;
   public
     function Beep_func(L: Plua_State): integer; cdecl; deprecated; //TODO move to Sound
     //Cache the file to play any time, faster
@@ -690,6 +697,16 @@ type
     function Pressed_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaQueue }
+
+  // queue.depth / queue.holds / ... : a read-only window on the engine's
+  // drawing queue counters (TQueueStats in TyroEngines), so a script can wait
+  // for its queued commands to run: while queue.depth > 0 do sleep(1) end.
+  TLuaQueue = class(TTyroLuaObject)
+  protected
+    function Getter(L: Plua_State): integer; override;
+  end;
+
   { TLuaKeyboard }
 
   // keyboard.pressed(key) is the press edge, keyboard.down(key) is held
@@ -714,6 +731,31 @@ type
     function Axes_func(L: Plua_State): integer; cdecl;
     function Vibrate_func(L: Plua_State): integer; cdecl;
     function Mappings_func(L: Plua_State): integer; cdecl;
+  end;
+
+  { TLuaGame }
+
+  //Global `game` table: the shared gameplay helpers every kid's game repeats.
+  //Every function is a thin binding on the matching TTyroEngine method (see
+  //TyroEngines.pas), so the logic lives in the engine and this class only
+  //translates to and from Lua.
+  TLuaGame = class(TTyroLuaObject)
+  public
+    function PausePressed_func(L: Plua_State): integer; cdecl;
+    function StartPressed_func(L: Plua_State): integer; cdecl;
+    function FirePressed_func(L: Plua_State): integer; cdecl;
+    function FireDown_func(L: Plua_State): integer; cdecl;
+    function Clamp_func(L: Plua_State): integer; cdecl;
+    function Lerp_func(L: Plua_State): integer; cdecl;
+    function Sign_func(L: Plua_State): integer; cdecl;
+    function Dist_func(L: Plua_State): integer; cdecl;
+    function Aabb_func(L: Plua_State): integer; cdecl;
+    //game.rng(seed) -> a callable table; see RngCall_func for the call shape.
+    function Rng_func(L: Plua_State): integer; cdecl;
+    //__call metamethod of the tables Rng_func hands out.
+    function RngCall_func(L: Plua_State): integer; cdecl;
+    function HiLoad_func(L: Plua_State): integer; cdecl;
+    function HiSave_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaScript }
@@ -752,6 +794,8 @@ type
     Mouse: TLuaMouse;
     Keyboard: TLuaKeyboard;
     Gamepad: TLuaGamepad;
+    Game: TLuaGame;
+    QueueStats: TLuaQueue;
     //Owns every TLuaFile handed out by openfile(); freed after Lua.Close,
     //because the Lua closures hold pointers into those objects
     Files: TList;
@@ -1531,6 +1575,9 @@ begin
     if L.IsNumber(-1) then
       SetMusicVolume(L.ToNumber(-1));
   end;
+  if field = 'muted' then
+    //music.muted is an alias of sound.muted: one switch for the whole engine.
+    SoundMuted := L.ToBoolean(-1);
 end;
 
 function TLuaMusic.Getter(L: PLua_State): integer;
@@ -1542,6 +1589,38 @@ begin
   if field = 'volume' then
   begin
     L.PushNumber(GetMusicVolume);
+    Result := 1;
+  end;
+  if field = 'muted' then
+  begin
+    L.PushBoolean(SoundMuted);
+    Result := 1;
+  end;
+end;
+
+{ TLuaSound }
+
+function TLuaSound.Setter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'muted' then
+    //sound.muted = true - silence every following play request, music and
+    //sound alike (the playback entry points in TyroSounds check SoundMuted).
+    SoundMuted := L.ToBoolean(-1);
+end;
+
+function TLuaSound.Getter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'muted' then
+  begin
+    L.PushBoolean(SoundMuted);
     Result := 1;
   end;
 end;
@@ -1761,6 +1840,7 @@ begin
   begin
     State.Register(Name, 'clear', Self, Self.Clear_func);
     State.Register(Name, 'text', Self, Self.Text_func);
+    State.Register(Name, 'text_center', Self, Self.TextCenter_func);
     State.Register(Name, 'circle', Self, Self.Circle_func);
     State.Register(Name, 'triangle', Self, Self.Triangle_func);
     State.Register(Name, 'rectangle', Self, Self.Rectangle_func);
@@ -1950,6 +2030,8 @@ begin
   Mouse := TLuaMouse.Create('mouse', Self);
   Keyboard := TLuaKeyboard.Create('keyboard', Self);
   Gamepad := TLuaGamepad.Create('gamepad', Self);
+  Game := TLuaGame.Create('game', Self);
+  QueueStats := TLuaQueue.Create('queue', Self);
 
   Files := TList.Create; //of TLuaFile, freed in Destroy
 
@@ -2070,6 +2152,22 @@ begin
   Lua.State.Register('joystick', 'rumble', Gamepad, Gamepad.Vibrate_func);
   Lua.State.Register('joystick', 'mappings', Gamepad, Gamepad.Mappings_func);
   Lua.State.Register('joystick', Gamepad); //Should be last one
+
+  //game: the shared gameplay helpers (button pairs, math, seeded rng, best
+  //scores); the implementations are TTyroEngine methods.
+  Lua.State.Register('game', 'pause_pressed', Game, Game.PausePressed_func);
+  Lua.State.Register('game', 'start_pressed', Game, Game.StartPressed_func);
+  Lua.State.Register('game', 'fire_pressed', Game, Game.FirePressed_func);
+  Lua.State.Register('game', 'fire_down', Game, Game.FireDown_func);
+  Lua.State.Register('game', 'clamp', Game, Game.Clamp_func);
+  Lua.State.Register('game', 'lerp', Game, Game.Lerp_func);
+  Lua.State.Register('game', 'sign', Game, Game.Sign_func);
+  Lua.State.Register('game', 'dist', Game, Game.Dist_func);
+  Lua.State.Register('game', 'aabb', Game, Game.Aabb_func);
+  Lua.State.Register('game', 'rng', Game, Game.Rng_func);
+  Lua.State.Register('game', 'hi_load', Game, Game.HiLoad_func);
+  Lua.State.Register('game', 'hi_save', Game, Game.HiSave_func);
+  Lua.State.Register('game', Game); //Should be last one
 
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
@@ -2227,6 +2325,10 @@ begin
   Lua.State.Register('collision', 'pump', Collision, Collision.Pump_func);
   Lua.State.Register('collision', Collision); // should be last — wires getter/setter metamethods
 
+  // queue: read-only counters over the drawing queue (see TQueueStats), e.g.
+  // "while queue.depth > 0 do sleep(1) end" waits for the queued commands to run.
+  Lua.State.Register('queue', QueueStats); //should be last one for queue
+
   Lua.State.BeginTable;
   for i := 0 to Length(Colors.Colors) - 1 do
     Lua.State.Register(Colors.Colors[i].Name, ColorToInt(Colors.Colors[i].Color));
@@ -2271,9 +2373,11 @@ begin
     FreeAndNil(Files);
   end;
   FreeAndNil(Shader);
+  FreeAndNil(Game);
   FreeAndNil(Gamepad);
   FreeAndNil(Keyboard);
   FreeAndNil(Mouse);
+  FreeAndNil(QueueStats);
   FreeAndNil(Collision);
   FreeAndNil(Output);
   FreeAndNil(Controls);
@@ -2537,6 +2641,25 @@ begin
   Result := 0;
 end;
 
+// canvas.text_center(y, s): draw s on the same line as text() but centred
+// sideways on this sheet (a canvas/screen/world's width, or the sheet of
+// images.new). Measured with Res.Font, exactly like textwidth(), so titles
+// and game-over banners no longer need the (width - textwidth(s)) / 2 dance.
+function TLuaCustomCanvas.TextCenter_func(L: Plua_State): integer; cdecl;
+var
+  x, y: integer;
+  s: string;
+  w: Integer;
+begin
+  y := round(L.ToNumber(1));
+  s := L.ToString(2);
+  w := Round(RayLib.MeasureTextEx(Res.Font.Data,
+    PUTF8Char(UTF8String(s)), Res.Font.Height, 0).x);
+  x := (Canvas.Width - w) div 2;
+  FScript.AddQueueObject(TDrawTextObject.Create(Canvas, x, y, s));
+  Result := 0;
+end;
+
 function TLuaCustomCanvas.Circle_func(L: Plua_State): integer; cdecl;
 var
   c: integer;
@@ -2707,7 +2830,7 @@ begin
     x2 := round(L.ToNumber(3));
     y2 := round(L.ToNumber(4));
     //Optional 5th argument is a per-call thickness; with none the canvas pen
-    //size set through canvas.pensize applies.
+    //size set through canvas.pen applies.
     w := 0;
     if c >= 5 then
       w := round(L.ToNumber(5));
@@ -3462,6 +3585,41 @@ begin
   end;
 end;
 
+{ TLuaQueue }
+
+function TLuaQueue.Getter(L: Plua_State): integer;
+var
+  field: string;
+  Stats: TQueueStats;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  Stats := Default(TQueueStats);
+  if Engine <> nil then
+    Stats := Engine.QueueStats;
+  if field = 'depth' then
+    L.PushInteger(Stats.Depth)
+  else if field = 'holds' then
+    L.PushInteger(Stats.Holds)
+  else if field = 'frames' then
+    L.PushInteger(Stats.Frames)
+  else if field = 'drainms' then
+    L.PushNumber(Stats.DrainMs)
+  else if field = 'lastgap' then
+    L.PushInteger(Stats.LastGap)
+  else if field = 'maxgap' then
+    L.PushInteger(Stats.MaxGap)
+  else if field = 'limit' then
+    L.PushInteger(Stats.Limit)
+  else if field = 'waits' then
+    L.PushInteger(Stats.Waits)
+  else if field = 'blocked' then
+    L.PushInteger(Stats.Blocked)
+  else
+    Exit;
+  Result := 1;
+end;
+
 function TLuaMouse.Pressed_func(L: Plua_State): integer; cdecl;
 var
   s: string;
@@ -3637,6 +3795,149 @@ function TLuaGamepad.Mappings_func(L: Plua_State): integer; cdecl;
 begin
   // gamepad.mappings(text) - add SDL/GLFW gamepad mappings, nonzero on success
   L.PushNumber(TyroInput.SetGamepadMappings(L.ToString(1)));
+  Result := 1;
+end;
+
+{ TLuaGame }
+
+function TLuaGame.PausePressed_func(L: Plua_State): integer; cdecl;
+begin
+  //game.pause_pressed() - true once when p (keyboard) or start/menu (pad) is pressed
+  L.PushBoolean(Engine.PausePressed);
+  Result := 1;
+end;
+
+function TLuaGame.StartPressed_func(L: Plua_State): integer; cdecl;
+begin
+  //game.start_pressed() - true once on space/enter or start/menu/a/x/fire
+  L.PushBoolean(Engine.StartPressed);
+  Result := 1;
+end;
+
+function TLuaGame.FirePressed_func(L: Plua_State): integer; cdecl;
+begin
+  //game.fire_pressed() - true once on space/x or a/x/b/y/rb/rt/fire/trigger
+  L.PushBoolean(Engine.FirePressed);
+  Result := 1;
+end;
+
+function TLuaGame.FireDown_func(L: Plua_State): integer; cdecl;
+begin
+  //game.fire_down() - true every frame while any fire button is held
+  L.PushBoolean(Engine.FireDown);
+  Result := 1;
+end;
+
+function TLuaGame.Clamp_func(L: Plua_State): integer; cdecl;
+begin
+  //game.clamp(v, lo, hi)
+  L.PushNumber(Engine.ClampValue(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3)));
+  Result := 1;
+end;
+
+function TLuaGame.Lerp_func(L: Plua_State): integer; cdecl;
+begin
+  //game.lerp(a, b, t)
+  L.PushNumber(Engine.LerpValue(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3)));
+  Result := 1;
+end;
+
+function TLuaGame.Sign_func(L: Plua_State): integer; cdecl;
+begin
+  //game.sign(v) -> -1, 0 or 1
+  L.PushInteger(Engine.SignValue(L.ToNumber(1)));
+  Result := 1;
+end;
+
+function TLuaGame.Dist_func(L: Plua_State): integer; cdecl;
+begin
+  //game.dist(x1, y1, x2, y2) - straight-line distance between two points
+  L.PushNumber(Engine.PointsDist(L.ToNumber(1), L.ToNumber(2),
+    L.ToNumber(3), L.ToNumber(4)));
+  Result := 1;
+end;
+
+function TLuaGame.Aabb_func(L: Plua_State): integer; cdecl;
+begin
+  //game.aabb(x1, y1, w1, h1, x2, y2, w2, h2) - do two boxes overlap?
+  //(x, y is each box's top-left corner)
+  L.PushBoolean(Engine.BoxesOverlap(L.ToNumber(1), L.ToNumber(2),
+    L.ToNumber(3), L.ToNumber(4), L.ToNumber(5), L.ToNumber(6),
+    L.ToNumber(7), L.ToNumber(8)));
+  Result := 1;
+end;
+
+//__call of the table game.rng(seed) hands out: the generator state lives in
+//the raw field 's', so this one plain method is the whole object. The table
+//itself arrives as arg 1, the call arguments start at 2.
+function TLuaGame.RngCall_func(L: Plua_State): integer; cdecl;
+var
+  State: Int64;
+  Norm, Lo, Hi: Double;
+  c: Integer;
+begin
+  L.GetField(1, 's');
+  State := L.ToInt64(-1);
+  L.Pop(1);
+  Norm := Engine.RngNext(State);
+  L.PushInteger(State);
+  L.SetField(1, 's');
+  c := L.ArgsCount;
+  if c <= 1 then
+    L.PushNumber(Norm) //r() -> 0 .. <1
+  else
+  begin
+    Lo := 1;           //r(n) -> 1 .. n
+    Hi := L.ToNumber(2);
+    if c > 2 then
+    begin
+      Lo := Hi;        //r(a, b) -> a .. b
+      Hi := L.ToNumber(3);
+    end;
+    L.PushInteger(Trunc(Lo + Norm * (Hi - Lo + 1)));
+  end;
+  Result := 1;
+end;
+
+function TLuaGame.Rng_func(L: Plua_State): integer; cdecl;
+var
+  Seed: Int64;
+begin
+  //game.rng(seed) -> a repeatable random function, like the global rand() but
+  //private: r() is 0..<1, r(n) is 1..n, r(a, b) is a..b. Two runs with the
+  //same seed produce the same sequence.
+  if L.ArgsCount >= 1 then
+    Seed := L.ToInt64(1)
+  else
+    Seed := 12345;
+  L.NewTable; //[rng]
+  L.PushInteger(Seed);
+  L.SetField(-2, 's');
+  L.NewTable; //[rng, meta]
+  L.RegisterMeta('__call', RngCall_func);
+  L.SetMetaTable(-2); //rng.metatable = meta
+  Result := 1;
+end;
+
+function TLuaGame.HiLoad_func(L: Plua_State): integer; cdecl;
+var
+  ADefault: Int64;
+begin
+  //game.hi_load("cave.hi" [, default]) - the best score kept in a small text
+  //file next to the game; default (0) when the file is missing or unreadable.
+  ADefault := 0;
+  if L.ArgsCount >= 2 then
+    ADefault := L.ToInteger(2);
+  L.PushInteger(Engine.LoadHighScore(L.ToString(1), ADefault));
+  Result := 1;
+end;
+
+function TLuaGame.HiSave_func(L: Plua_State): integer; cdecl;
+begin
+  //game.hi_save("cave.hi", score) - writes only when score is a new best and
+  //answers the best either way, so `hi = game.hi_save("cave.hi", score)` is
+  //all a game needs.
+  L.PushInteger(Engine.SaveHighScore(L.ToString(1), L.ToInteger(2)));
   Result := 1;
 end;
 
@@ -4668,6 +4969,7 @@ begin
     end;
     Lua.State.RegisterMethod('clear', Self.Clear_func);
     Lua.State.RegisterMethod('text', Self.Text_func);
+    Lua.State.RegisterMethod('text_center', Self.TextCenter_func);
     Lua.State.RegisterMethod('circle', Self.Circle_func);
     Lua.State.RegisterMethod('triangle', Self.Triangle_func);
     Lua.State.RegisterMethod('rectangle', Self.Rectangle_func);

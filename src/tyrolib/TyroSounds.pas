@@ -221,6 +221,14 @@ var
   WaveForms: TWaveForms = nil;
   SoundCache: TTyroFileSounds = nil;
 
+  //The one mute switch: sound.muted on the Lua side (music.muted reads the
+  //same flag). While true every playback request goes silent - PlayMML,
+  //PlayWaveform (music.sound/beep), PlaySoundFile (sound.play) and StartLoop
+  //all drop the start quietly, so music uses it just like sound does.
+  //It gates the START of playback only: a sound that is already playing
+  //finishes its way out.
+  SoundMuted: Boolean = False;
+
 //music.mml(): play a chiptune song, one string per voice channel. With
 //Loop = true (music.mml(song1, song2, ..., true)) every channel rewinds at
 //its own end and the tune repeats until music.stop() ends it.
@@ -611,6 +619,8 @@ begin
   //ignored instead of raising, so a typo in a game script cannot kill the run.
   if (AFileName = '') or not SysUtils.FileExists(AFileName) then
     Exit;
+  if SoundMuted then
+    Exit;
   if PlayingWaveforms = nil then
     Exit;
   RayLibSound.Open;
@@ -823,6 +833,8 @@ var
 begin
   if Length(Song) = 0 then
     Exit;
+  if SoundMuted then
+    Exit;
   if PlayingMelodies = nil then
     Exit;
   Melody := TRayMelody.Create;
@@ -860,6 +872,8 @@ var
   Wave: TTyroRayWave;
 begin
   if (Duration <= 0) or (Freq < 0) or not Assigned(Proc) then
+    Exit;
+  if SoundMuted then
     Exit;
   if PlayingWaveforms = nil then
     Exit;
@@ -1154,6 +1168,8 @@ var
 begin
   //Replace any current voice outright (a retrigger is allowed to click).
   FreeAndNil(LoopSound);
+  if SoundMuted then
+    Exit; //the request still retires the old voice, but starts nothing
   Loop := TTyroLoopSound.Create(Proc, Frequency, Volume);
   if Loop.Valid then
     LoopSound := Loop

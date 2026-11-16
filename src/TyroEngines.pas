@@ -409,6 +409,44 @@ type
     function GetScriptPaused: Boolean;
     //* True while a Lua pause() has frozen the scene (see BeginScriptPause).
     property ScriptPaused: Boolean read GetScriptPaused;
+
+    //The game.* helpers: the arcade button pairs and the small math and
+    //high-score chores that every kid's game repeats. They live here so the
+    //Lua 'game' table stays a thin binding (see TLuaGame in TyroLua).
+    //* True once, on the press edge of a pause button: keyboard "p", or
+    //* gamepad "start"/"menu" on any pad.
+    function PausePressed: Boolean;
+    //* True once, on the press edge of a confirm button: keyboard "space" or
+    //* "enter", or gamepad "start"/"menu"/"a"/"x"/"fire".
+    function StartPressed: Boolean;
+    //* True once, on the press edge of a fire button: keyboard "space" or
+    //* "x", or gamepad "a"/"x"/"b"/"y"/"rb"/"rt"/"fire"/"trigger".
+    function FirePressed: Boolean;
+    //* Like FirePressed but true every frame while the button stays held.
+    function FireDown: Boolean;
+    //* Reads the integer kept in AFileName (a plain text file resolved against
+    //* the workspace, so it sits next to the game), or ADefault when the file
+    //* does not exist or does not hold a number. Backs game.hi_load().
+    function LoadHighScore(const AFileName: string; ADefault: Int64): Int64;
+    //* Stores AScore in AFileName only when it beats the stored value and
+    //* returns the best score, creating the file when it is missing. When the
+    //* path lands outside the workspace the score is not written and AScore
+    //* is returned as-is. Backs game.hi_save().
+    function SaveHighScore(const AFileName: string; AScore: Int64): Int64;
+    //* One step of the small linear congruential generator behind game.rng():
+    //* advances AState (keep it in the caller, e.g. a Lua table field) and
+    //* returns the new value scaled to 0..<1.
+    function RngNext(var AState: Int64): Double;
+    //* game.clamp(): keeps V inside the Lo..Hi range.
+    function ClampValue(V, Lo, Hi: Double): Double;
+    //* game.lerp(): the point T (0..1) of the way from A to B.
+    function LerpValue(A, B, T: Double): Double;
+    //* game.sign(): -1, 0 or 1 for the sign of V.
+    function SignValue(V: Double): Integer;
+    //* game.dist(): straight-line distance between (X1,Y1) and (X2,Y2).
+    function PointsDist(X1, Y1, X2, Y2: Double): Double;
+    //* game.aabb(): whether two boxes given as (x, y, width, height) overlap.
+    function BoxesOverlap(X1, Y1, W1, H1, X2, Y2, W2, H2: Double): Boolean;
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
     ScriptSource: string; //Shout pass to Thread to run it
@@ -1126,6 +1164,170 @@ begin
   finally
     Lock.Leave;
   end;
+end;
+
+{ TTyroEngine.game helpers - the Lua 'game' table is a thin binding on these }
+
+function TTyroEngine.PausePressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('p')
+    or TyroInput.IsGamepadPressed('start')
+    or TyroInput.IsGamepadPressed('menu');
+end;
+
+function TTyroEngine.StartPressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('space')
+    or TyroInput.IsKeyPressed('enter')
+    or TyroInput.IsGamepadPressed('start')
+    or TyroInput.IsGamepadPressed('menu')
+    or TyroInput.IsGamepadPressed('a')
+    or TyroInput.IsGamepadPressed('x')
+    or TyroInput.IsGamepadPressed('fire');
+end;
+
+function TTyroEngine.FirePressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('space')
+    or TyroInput.IsKeyPressed('x')
+    or TyroInput.IsGamepadPressed('a')
+    or TyroInput.IsGamepadPressed('x')
+    or TyroInput.IsGamepadPressed('b')
+    or TyroInput.IsGamepadPressed('y')
+    or TyroInput.IsGamepadPressed('rb')
+    or TyroInput.IsGamepadPressed('rt')
+    or TyroInput.IsGamepadPressed('fire')
+    or TyroInput.IsGamepadPressed('trigger');
+end;
+
+function TTyroEngine.FireDown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('space')
+    or TyroInput.IsKeyDown('x')
+    or TyroInput.IsGamepadDown('a')
+    or TyroInput.IsGamepadDown('x')
+    or TyroInput.IsGamepadDown('b')
+    or TyroInput.IsGamepadDown('y')
+    or TyroInput.IsGamepadDown('rb')
+    or TyroInput.IsGamepadDown('rt')
+    or TyroInput.IsGamepadDown('fire')
+    or TyroInput.IsGamepadDown('trigger');
+end;
+
+//A high-score file lives next to the game: relative names are resolved
+//against the script folder (Res.WorkPath, same helper the engine uses for its
+//own paths) and a rooted name is taken as it stands; either way the result
+//must stay inside it, so a script cannot use these helpers to touch
+//arbitrary files. '' when the name is unusable.
+function HighScorePath(const AFileName: string): string;
+begin
+  Result := '';
+  if (AFileName = '') or (Res = nil) then
+    Exit;
+  Result := ExpandToPath(AFileName, Res.WorkPath);
+  if not Res.IsPathInsideWorkspace(Result) then
+    Result := '';
+end;
+
+function TTyroEngine.LoadHighScore(const AFileName: string; ADefault: Int64): Int64;
+var
+  Full: string;
+  F: TextFile;
+  Line: string;
+begin
+  Result := ADefault;
+  Full := HighScorePath(AFileName);
+  if (Full = '') or not SysUtils.FileExists(Full) then
+    Exit;
+  //The board is one number on the first line; anything else reads as missing.
+  AssignFile(F, Full);
+  try
+    Reset(F);
+  except
+    Exit;
+  end;
+  try
+    if not EOF(F) then
+      ReadLn(F, Line);
+  finally
+    CloseFile(F);
+  end;
+  if not TryStrToInt64(Trim(Line), Result) then
+    Result := ADefault;
+end;
+
+function TTyroEngine.SaveHighScore(const AFileName: string; AScore: Int64): Int64;
+var
+  Full: string;
+  Best: Int64;
+  F: TextFile;
+begin
+  Full := HighScorePath(AFileName);
+  if Full = '' then
+    Exit(AScore); //cannot write outside the workspace: report, do not store
+  Best := LoadHighScore(AFileName, Low(Int64));
+  if (Best <> Low(Int64)) and (Best >= AScore) then
+    Exit(Best); //the board already holds a better score
+  AssignFile(F, Full);
+  try
+    Rewrite(F);
+    try
+      WriteLn(F, AScore);
+    finally
+      CloseFile(F);
+    end;
+  except
+    //best effort, like play(): a failed write never breaks the game
+  end;
+  Result := AScore;
+end;
+
+function TTyroEngine.RngNext(var AState: Int64): Double;
+begin
+  //Borland's classic LCG: cheap, good enough for level layouts and effects,
+  //and repeating exactly for a given seed, unlike the global rand().
+  AState := (AState * 1103515245 + 12345) and $7FFFFFFF;
+  Result := AState / 2147483648.0;
+end;
+
+function TTyroEngine.ClampValue(V, Lo, Hi: Double): Double;
+begin
+  if V < Lo then
+    Result := Lo
+  else if V > Hi then
+    Result := Hi
+  else
+    Result := V;
+end;
+
+function TTyroEngine.LerpValue(A, B, T: Double): Double;
+begin
+  Result := A + (B - A) * T;
+end;
+
+function TTyroEngine.SignValue(V: Double): Integer;
+begin
+  if V > 0 then
+    Result := 1
+  else if V < 0 then
+    Result := -1
+  else
+    Result := 0;
+end;
+
+function TTyroEngine.PointsDist(X1, Y1, X2, Y2: Double): Double;
+var
+  DX, DY: Double;
+begin
+  DX := X2 - X1;
+  DY := Y2 - Y1;
+  Result := Sqrt(DX * DX + DY * DY);
+end;
+
+function TTyroEngine.BoxesOverlap(X1, Y1, W1, H1, X2, Y2, W2, H2: Double): Boolean;
+begin
+  Result := (X1 < X2 + W2) and (X2 < X1 + W1) and
+            (Y1 < Y2 + H2) and (Y2 < Y1 + H1);
 end;
 
 procedure TTyroEngine.DrawQueueStats;

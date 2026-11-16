@@ -94,7 +94,7 @@ with a radial gradient (inner colour at the centre, outer at the edge);
 their colors take the same `colors.*` values as `canvas.color` and default to
 the current color when omitted. Set the color with `canvas.color = colors.red`
 (and `canvas.backcolor` / `canvas.clear()` for the background).
-`canvas.pensize` (alias `canvas.linewidth`) sets the
+`canvas.pen` sets the
 thickness of lines and of rectangle/triangle outlines; `canvas.line` also takes
 a per-call thickness. `textwidth(s)` and `textheight()` measure the built-in
 font, and `canvas.width` / `canvas.height` report the canvas size.
@@ -221,6 +221,29 @@ own lines override it for the same GUID. `gamepad.mappings(text)` does the same
 from a script. A GUID copied from an SDL 2.0.5+ controller database (the form
 that carries a `crc:` field) is converted automatically, so its line can be
 pasted unchanged.
+
+# Game Helper (`game.*`)
+
+The chores every game re-writes live in one table, backed by engine methods.
+Full notes in [`help/game.md`](help/game.md).
+
+```lua
+game.clamp(v, lo, hi)   game.lerp(a, b, t)   game.sign(v)
+game.dist(x1, y1, x2, y2)
+game.aabb(x1, y1, w1, h1, x2, y2, w2, h2)   -- do two boxes overlap?
+
+game.pause_pressed()  game.start_pressed()  game.fire_pressed()
+game.fire_down()     -- keyboard OR gamepad, the usual arcade buttons
+
+local hi = game.hi_load("cave.hi", 0)             -- best score from a small
+hi = game.hi_save("cave.hi", score)               -- text file next to the game
+
+local r = game.rng(42)   -- repeatable random: r() 0..1, r(n) 1..n, r(a,b) a..b
+```
+
+`sound.muted = true` is the one silence switch: while it is on, every
+following play request from `music.*` and `sound.*` goes quiet
+(`music.muted` is the same flag).
 
 # Files
 
@@ -1096,101 +1119,35 @@ details.
 
 ## Measuring the queue (queue.*)
 
-The engine exposes read-only counters to help diagnose the "black box, then the
-text" flicker, where a frame is presented with only part of a drawing body.
-
-These counters are diagnostics only, and are compiled only in debug builds (the
-`diagnose` conditional tracks the debug switch). A release build reports 0 for
-the diagnostic-only ones; `queue.consumed`, `queue.depth`, `queue.holds` and
-`queue.limit` always stay live.
-
-The same fields can be watched live, without a script, by pressing `CTRL`+`F10`:
-the engine draws a compact panel in the window's top-left corner, showing every
-counter below (plus the current `fps`) and refreshed each frame. Press it again
-to hide the panel. Only the counters above the `diagnose` line are populated in
-a release build.
+The engine exposes read-only counters over the drawing queue to help diagnose
+the "black box, then the text" flicker. A script on the worker thread keeps
+queueing draw commands while the main loop drains them once per frame; when a
+drain pass stops at the per-frame time budget with commands still waiting, the
+frame is drawn with only part of the batch.
 
 | Field | Description |
 |-------|-------------|
-| `queue.consumed` | Drawing commands executed since the engine started (grows on every drain) |
-| `queue.passes` | `ProcessQueue` passes that executed at least one command |
-| `queue.deferred` | Passes stopped at the frame time budget while more commands were still queued (each one drew a partial batch) |
 | `queue.depth` | Commands waiting in the queue right now |
-| `queue.max` | Largest backlog seen at the start of a pass (a high-water mark) |
 | `queue.holds` | Open `enter()` calls (the hold depth) |
-| `queue.frames` | Drawing frames presented since the engine started |
-| `queue.drainms` | Duration of the most recent drain pass, in milliseconds |
-| `queue.lastgap` | Milliseconds between the last two queued commands (no yield in between) |
-| `queue.maxgap` | Largest such gap of the run: the script stalled between two queue calls |
 
-Because the script builds a body while the main loop drains the queue on its own
-thread, a frame boundary can fall in the middle of a body. The script can catch
-it right after the body returns:
+The table also answers the old diagnostic names - `frames`, `drainms`,
+`lastgap`, `maxgap`, `limit`, `waits`, `blocked` - which currently report 0.
+
+The everyday use is waiting for queued commands to run, so a drawing getter
+answers what the matching setter was set to:
 
 ```lua
-function draw()
-    local before = queue.consumed       -- queue is empty here
-    enter()                             -- or queue the body bare
-    n = draw_body()
-    leave()
-    local mid = queue.consumed - before -- drained while the body was built
-    -- 0 < mid < n  ->  a frame showed only part of the body (the flicker)
+canvas.rectangle(10, 10, 64, 40, true)
+while queue.depth > 0 do
+  sleep(1)      -- let the main loop execute the queued commands
 end
 ```
 
-The same trick with `millis()` times how long the body takes to queue:
+The same view, plus the current `fps`, can be watched without a script by
+pressing `CTRL`+`F10`: the engine draws a compact panel in the window's
+top-left corner each frame. Press it again to hide the panel.
 
-```lua
-local t0 = millis()
-n = draw_body()
-print("body queued in " .. (millis() - t0) .. " ms")
-```
-
-Grouping makes the body land in one drawing frame, but it cannot fix the script
-itself taking a long time between two commands (a `radio.station` getter that
-blocks on a lock the network thread holds, file I/O, ...). The engine stamps
-every queued command with its enqueue time, so `queue.maxgap` reports the
-largest time the script spent between two consecutive queue calls with no yield
-in between — exactly the gap between a `rectangle()` and the `text()` that is
-meant to cover it:
-
-```lua
-canvas.rectangle(0, 0, 640, 70, true)   -- opaque black box
--- radio.station blocks here for a second. The queue is held, so nothing is
--- drawn yet and the frame freezes instead of showing a partial body.
-canvas.text(8, 8, "Station : " .. radio.station)
-print("stall between box and text: " .. queue.maxgap .. " ms")
-```
-
-Wait times that *are* yields (`sleep()`, `pause()`, `console.read()`) reset the
-baseline, and so does the start of each engine-driven frame, so `maxgap` does not
-count frame waits: a small `maxgap` with a black-only header means the metadata
-itself is empty (buffering/reconnect), not a rendering race.
-
-To be told when a stall happens, watch the gap from the script (used by
-`demos/radio.tyro`). The first gap that clears the limit is printed to the
-console; a new report needs a gap a full limit above the last one reported, so
-drift never spams:
-
-```lua
-local gap_warned = 0
-local function gapwatch(aLimitMS)
-  local g = queue.maxgap
-  if g > aLimitMS and g >= gap_warned + aLimitMS then
-    gap_warned = g
-    println("GAP: " .. g .. " ms between two queued commands"
-      .. " (limit " .. aLimitMS .. " ms, lastgap " .. queue.lastgap .. " ms)")
-  end
-  return g
-end
-
-function draw()
-    -- ...draw the body...
-    gapwatch(250)   -- >250 ms stall? the console says so
-end
-```
-
-Wrapping the body in `enter()`/`leave()` holds the queue, so the main loop
+Wrapping a body in `enter()`/`leave()` holds the queue, so the main loop
 cannot drain mid-body and no partial frame can appear.
 
 # Examples

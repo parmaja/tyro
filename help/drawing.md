@@ -242,6 +242,7 @@ you learn on one works on the others:
 | `x.backcolor` | the color `x.clear()` uses |
 | `x.pen` | line thickness |
 | `x.text(px, py, s)` | draw text |
+| `x.text_center(py, s)` | draw text centred sideways on this layer |
 | `x.rectangle(px, py, w, h, fill)` | draw a rectangle |
 | `x.circle(px, py, r, fill)` | draw a circle |
 | `x.image(px, py, file [, scale])` | paint a picture from a file |
@@ -252,6 +253,12 @@ you learn on one works on the others:
 | `x.gradient.rectH(...)`, `x.gradient.rectV(...)`, `x.gradient.circle(...)` | gradient fills |
 
 *(replace `x` with `canvas`, `world` or `screen`)*
+
+`x.text_center(py, s)` measures the string with the game's own font (the same
+measuring `textwidth()` uses) and draws it centered on the layer's width - no
+more hand-writing `(width - textwidth(s)) / 2` for titles and game-over
+banners. The pen color works as usual, so `screen.color = colors.white` before
+it still picks the ink. `images.new` sheets carry it too.
 
 `x.image(px, py, file [, scale])` paints a PNG onto that same layer: `(px, py)`
 is the picture's **top-left corner** (like text and rectangles), and `scale`

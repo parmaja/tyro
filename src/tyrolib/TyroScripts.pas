@@ -1178,6 +1178,8 @@ end;
 
 procedure TPlayMusicFileObject.DoExecute;
 begin
+  if SoundMuted then
+    Exit; //sound.muted silences music files too
   RayLibSound.PlayMusicFile(FileName);
 end;
 

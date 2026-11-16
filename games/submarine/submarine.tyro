@@ -51,9 +51,7 @@ end
 math.randomseed(math.floor(millis() % 1000000))
 
 -- ---- tiny helpers -----------------------------------------------------
-local function clamp(v, lo, hi)
-  if v < lo then return lo elseif v > hi then return hi else return v end
-end
+local clamp = game.clamp
 
 local function rnd(a, b)
   return a + (b - a) * math.random()
@@ -1145,7 +1143,7 @@ end
 
 local function center_text(y, s, c)
   if c then canvas.color = c end
-  canvas.text(W / 2 - textwidth(s) / 2, y, s)
+  canvas.text_center(y, s)
   canvas.color = colors.white
 end
 

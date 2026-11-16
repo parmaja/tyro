@@ -28,15 +28,9 @@ local CY = H * 0.5
 sound.loopPlay("Engine", 70, 0.35)
 
 -- ---- helpers ---------------------------------------------------------
-local function clamp(v, lo, hi)
-  if v < lo then return lo elseif v > hi then return hi else return v end
-end
+local clamp = game.clamp
 
-local function rgba(r, g, b, a)
-  a = a or 255
-  return r + g * 256 + b * 65536 + a * 16777216
-end
-
+-- (rgba() is an engine global, no need to write it at home)
 local COL_BG      = rgba(2, 4, 12, 255)
 local COL_STAR    = rgba(230, 235, 255, 255)
 local COL_DIM     = rgba(120, 130, 170, 200)
