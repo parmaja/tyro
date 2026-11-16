@@ -30,6 +30,27 @@ With an engine-driven script — one that defines `update`/`draw` (see
 returns, so a bare `--exit` ends the run right away, before the callbacks get
 to run. Use `--exit:N` to let such a script play for *N* seconds.
 
+## Script arguments
+
+Every parameter after `tyro.exe` is handed to the running script as the global
+`args` table — a 1-based array of strings, including the script name and the
+engine switches:
+
+```
+bin\tyro.exe game.lua red 42 --console
+```
+
+```lua
+-- args == { "game.lua", "red", "42", "--console" }
+for i = 1, #args do
+    print(i .. ": " .. args[i])
+end
+```
+
+Extra words after the script (`red 42` above) do not confuse the loader: the
+first parameter that names an existing file or folder is the one that runs.
+Per-sprite scripts (`on_update`/`on_draw` files) see the same `args`.
+
 ### Exit statuses
 
 | Status | Meaning |

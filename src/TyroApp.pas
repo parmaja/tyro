@@ -288,6 +288,29 @@ begin
   end;
 end;
 
+//* The mini library parser keeps only the last valueless positional argument,
+//* so "tyro game.lua red 2" would lose the script name when a game takes its
+//* own parameters. When the parsed positional is not an existing file or
+//* folder, walk the command line and take the first positional that names one;
+//* the remaining parameters stay visible to the script as `args`.
+function FindScriptOnCommandLine: string;
+var
+  i: Integer;
+  S: string;
+begin
+  Result := '';
+  for i := 1 to ParamCount do
+  begin
+    S := ParamStr(i);
+    if (S <> '') and not CharInSet(S[1], ['-', '/']) then
+    begin
+      S := CorrectPath(ExpandToPath(S, Res.WorkPath));
+      if SysUtils.FileExists(S) or SysUtils.DirectoryExists(S) then
+        Exit(S);
+    end;
+  end;
+end;
+
 //* Packs the game given by --fuse together with the engine files listed in
 //* release.conf (next to tyro.exe) into the target zip, reports to the
 //* console and sets a failing exit code when the package was not written.
@@ -384,6 +407,14 @@ begin
   Engine.World.Title := Title;
 
   ScriptFile := CorrectPath(ExpandToPath(Arguments.ReadString(''), Res.WorkPath)); //File come without switch name
+
+  //The parser keeps only the last valueless positional argument, so a script
+  //followed by its own parameters ("tyro game.lua red") loses its name. When
+  //the parsed value is not an existing file/folder, take the first positional
+  //that is; the rest stay visible to the script as `args`.
+  if (ScriptFile = '') or (not SysUtils.FileExists(ScriptFile) and not SysUtils.DirectoryExists(ScriptFile)) then
+    if FindScriptOnCommandLine <> '' then
+      ScriptFile := FindScriptOnCommandLine;
 
   if (ScriptFile <> '') and (SysUtils.FileExists(ScriptFile) or SysUtils.DirectoryExists(ScriptFile)) then
     Engine.ScriptFile := ScriptFile;

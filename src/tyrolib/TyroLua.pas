@@ -1887,6 +1887,28 @@ begin
   Result := 0;
 end;
 
+// Build the global `args` table: the command line parameters the engine was
+// started with, tyro.exe excluded (Res.Args). It is a plain 1-based Lua array
+// of strings, so `tyro game.lua fast` gives args == {"game.lua", "fast"} and
+// scripts can count them with #args. Shared by the engine script and the
+// per-sprite states so `args` reads the same everywhere.
+procedure PushArgsGlobal(L: PLua_State);
+var
+  i: Integer;
+begin
+  lua_createtable(L, 0, 0);
+  if Res <> nil then
+  begin
+    for i := 0 to Res.Args.Count - 1 do
+    begin
+      lua_pushinteger(L, i + 1);
+      lua_pushstring(L, PUTF8Char(UTF8String(Res.Args[i])));
+      lua_rawset(L, -3);
+    end;
+  end;
+  lua_setglobal(L, 'args');
+end;
+
 procedure TLuaScript.Init;
 var
   i: integer;
@@ -1894,6 +1916,7 @@ begin
   inherited;
   Lua.Init;
   Lua.State.RegisterGlobal('version', TyroVersion);
+  PushArgsGlobal(Lua.State);
   Lua.State.RegisterGlobal('log', @log_func);
   Lua.State.RegisterGlobal('sleep', @sleep_func);
   //pause(ms): like sleep(), but also freezes the scene (physics/sprites/controls)
@@ -8623,6 +8646,7 @@ begin
   FLua.State.RegisterGlobal('println', FScript.Console.PrintLn_func);
   FLua.State.RegisterGlobal('rgba', FScript.Rgba_func);
   FLua.State.RegisterGlobal('rgb', FScript.Rgba_func);
+  PushArgsGlobal(FLua.State);
 end;
 
 procedure TLuaSpriteScript.BuildColors;

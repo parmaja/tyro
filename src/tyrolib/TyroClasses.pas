@@ -543,6 +543,9 @@ type
     WorkPath: utf8string;
     AppPath: utf8string;
     AppName: utf8string;
+    //The raw command line parameters, without the executable (tyro.exe).
+    //Exposed to scripts as the global `args` table; see TLuaScript.Init.
+    Args: TStringList;
     function GuessFileName(const FileName: string; InDirectory: string = ''): string;
     function IsPathInside(const AFileName, ARoot: string): Boolean;
     function IsPathInsideWorkspace(const AFileName: string): Boolean;
@@ -1493,11 +1496,17 @@ begin
 end;
 
 constructor TTyroResources.Create;
+var
+  i: Integer;
 begin
   inherited;
   AppPath:= IncludePathDelimiter(ExtractFilePath(ParamStr(0)));
   AppName := ChangeFileExt(ExtractFileName(ParamStr(0)), '');
   WorkPath := GetCurrentDir;
+  //Keep the raw command line (tyro.exe excluded) so scripts can read `args`.
+  Args := TStringList.Create;
+  for i := 1 to ParamCount do
+    Args.Add(ParamStr(i));
   Config := TConfFile.Create;
   Theme := TTyroTheme.Create;
   Font := TRayFont.Create;
