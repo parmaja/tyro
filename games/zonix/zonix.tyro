@@ -27,7 +27,7 @@
 local D = require("zonix_data")
 
 window.show(960, 540)
-local W, H = canvas.width, canvas.height
+local W, H = screen.width, screen.height
 
 -- Sound manager with mute toggle and safe fallback to TyroSounds wavetables (no pcall needed)
 local muted = false
@@ -1019,23 +1019,26 @@ function update(dt)
   end
 end
 
--- Draw Loop: Playfield Canvas, Grid, Claimed Territory, HUD & Overlays
+-- Draw Loop: Playfield World (shakes with sprites), Screen HUD (fixed glass)
 function draw()
   local cfg = D.LEVELS[level] or D.LEVELS[#D.LEVELS]
 
-  -- 1. Background Fill
-  canvas.color = rgba(cfg.bg_color[1], cfg.bg_color[2], cfg.bg_color[3], 255)
-  canvas.rectangle(0, 0, W, H, true)
+  -- The screen glass remembers last frame's paint: wipe it blank every frame
+  screen.clear('blank')
+
+  -- 1. Background Fill (world page, behind everything)
+  world.color = rgba(cfg.bg_color[1], cfg.bg_color[2], cfg.bg_color[3], 255)
+  world.rectangle(0, 0, W, H, true)
 
   -- 2. Playfield Grid (Void)
-  canvas.color = rgba(cfg.land_fill[1] / 3, cfg.land_fill[2] / 3, cfg.land_fill[3] / 3, 160)
+  world.color = rgba(cfg.land_fill[1] / 3, cfg.land_fill[2] / 3, cfg.land_fill[3] / 3, 160)
   for gx = 0, D.COLS, 8 do
     local px = D.FIELD_X + gx * D.CELL_SIZE
-    canvas.line(px, D.FIELD_Y, px, D.FIELD_Y + D.FIELD_H)
+    world.line(px, D.FIELD_Y, px, D.FIELD_Y + D.FIELD_H)
   end
   for gy = 0, D.ROWS, 8 do
     local py = D.FIELD_Y + gy * D.CELL_SIZE
-    canvas.line(D.FIELD_X, py, D.FIELD_X + D.FIELD_W, py)
+    world.line(D.FIELD_X, py, D.FIELD_X + D.FIELD_W, py)
   end
 
   -- 2b. Dynamic Light Casting around Quantum Orbs (Radius Size x2)
@@ -1056,7 +1059,7 @@ function draw()
         outer_col = rgba(0, 230, 255, 0)
       end
 
-      canvas.gradient.circle(math.floor(e.x), math.floor(e.y), light_r, inner_col, outer_col)
+      world.gradient.circle(math.floor(e.x), math.floor(e.y), light_r, inner_col, outer_col)
     end
   end
 
@@ -1075,8 +1078,8 @@ function draw()
         if span_start >= 0 then
           local px = D.FIELD_X + span_start * D.CELL_SIZE
           local pw = (gx - span_start) * D.CELL_SIZE
-          canvas.color = land_col
-          canvas.rectangle(px, py, pw, D.CELL_SIZE, true)
+          world.color = land_col
+          world.rectangle(px, py, pw, D.CELL_SIZE, true)
           span_start = -1
         end
       end
@@ -1084,57 +1087,57 @@ function draw()
     if span_start >= 0 then
       local px = D.FIELD_X + span_start * D.CELL_SIZE
       local pw = (D.COLS - span_start) * D.CELL_SIZE
-      canvas.color = land_col
-      canvas.rectangle(px, py, pw, D.CELL_SIZE, true)
+      world.color = land_col
+      world.rectangle(px, py, pw, D.CELL_SIZE, true)
     end
   end
 
   -- Outer border neon highlight
-  canvas.color = border_col
-  canvas.rectangle(D.FIELD_X - 1, D.FIELD_Y - 1, D.FIELD_W + 2, D.FIELD_H + 2, false)
+  world.color = border_col
+  world.rectangle(D.FIELD_X - 1, D.FIELD_Y - 1, D.FIELD_W + 2, D.FIELD_H + 2, false)
 
   -- 4. Active Cutting Trail (laser beam)
   if #trail > 0 then
     local pulse_alpha = 180 + math.floor(math.sin(trail_pulse) * 60)
-    canvas.color = rgba(255, 120, 40, pulse_alpha)
+    world.color = rgba(255, 120, 40, pulse_alpha)
     for _, pt in ipairs(trail) do
       local px, py = D.grid_to_pixel(pt.gx, pt.gy)
-      canvas.rectangle(px + 1, py + 1, D.CELL_SIZE - 2, D.CELL_SIZE - 2, true)
+      world.rectangle(px + 1, py + 1, D.CELL_SIZE - 2, D.CELL_SIZE - 2, true)
     end
-    canvas.color = rgba(255, 240, 150, 255)
+    world.color = rgba(255, 240, 150, 255)
     for _, pt in ipairs(trail) do
       local px, py = D.grid_to_pixel(pt.gx, pt.gy)
-      canvas.rectangle(px + 3, py + 3, D.CELL_SIZE - 6, D.CELL_SIZE - 6, true)
+      world.rectangle(px + 3, py + 3, D.CELL_SIZE - 6, D.CELL_SIZE - 6, true)
     end
   end
 
   -- 5. Floating Score Texts
   for _, f in ipairs(floating_texts) do
-    canvas.color = f.color
-    canvas.alpha = math.floor(255 * (f.life / f.max_life))
-    canvas.text(f.x - textwidth(f.text) / 2, f.y, f.text)
+    world.color = f.color
+    world.alpha = math.floor(255 * (f.life / f.max_life))
+    world.text(f.x - textwidth(f.text) / 2, f.y, f.text)
   end
-  canvas.alpha = 255
+  world.alpha = 255
 
-  -- 6. TOP ARCADE HUD BAR
+  -- 6. TOP ARCADE HUD BAR (screen glass: never shakes, always on top)
   local y0 = 10
-  canvas.color = colors.white
-  canvas.text(D.FIELD_X, y0, "SCORE " .. string.format("%06d", score))
-  canvas.color = colors.silver
-  canvas.text(D.FIELD_X + 220, y0, "HI " .. string.format("%06d", highscore))
-  canvas.color = colors.gold
-  canvas.text(D.FIELD_X + 410, y0, "LVL " .. level .. " - " .. cfg.name)
-  canvas.color = (time_left < 15 and ((math.floor(state_timer * 4) % 2 == 0) and colors.red or colors.yellow)) or colors.white
-  canvas.text(D.FIELD_X + 760, y0, "TIME " .. string.format("%02d", math.ceil(time_left)))
+  screen.color = colors.white
+  screen.text(D.FIELD_X, y0, "SCORE " .. string.format("%06d", score))
+  screen.color = colors.silver
+  screen.text(D.FIELD_X + 220, y0, "HI " .. string.format("%06d", highscore))
+  screen.color = colors.gold
+  screen.text(D.FIELD_X + 410, y0, "LVL " .. level .. " - " .. cfg.name)
+  screen.color = (time_left < 15 and ((math.floor(state_timer * 4) % 2 == 0) and colors.red or colors.yellow)) or colors.white
+  screen.text(D.FIELD_X + 760, y0, "TIME " .. string.format("%02d", math.ceil(time_left)))
 
   -- Lives Indicators (Cutter Icons)
   for i = 1, lives do
     local lx = D.FIELD_X + (i - 1) * 24
     local ly = y0 + 22
-    canvas.color = colors.cyan
-    canvas.triangle(lx + 14, ly + 6, lx + 2, ly, lx + 2, ly + 12)
-    canvas.color = colors.white
-    canvas.rectangle(lx + 4, ly + 4, 4, 4, true)
+    screen.color = colors.cyan
+    screen.triangle(lx + 14, ly + 6, lx + 2, ly, lx + 2, ly + 12)
+    screen.color = colors.white
+    screen.rectangle(lx + 4, ly + 4, 4, 4, true)
   end
 
   -- Territory Progress Bar
@@ -1142,38 +1145,39 @@ function draw()
   local by = y0 + 24
   local bw = 460
   local bh = 10
-  canvas.color = colors.darkgray
-  canvas.rectangle(bx - 1, by - 1, bw + 2, bh + 2, true)
+  screen.color = colors.darkgray
+  screen.rectangle(bx - 1, by - 1, bw + 2, bh + 2, true)
 
   local cur_w = math.floor(bw * math.min(1.0, claimed_pct / 100.0))
-  canvas.color = claimed_pct >= cfg.target and colors.lime or colors.cyan
-  canvas.rectangle(bx, by, cur_w, bh, true)
+  screen.color = claimed_pct >= cfg.target and colors.lime or colors.cyan
+  screen.rectangle(bx, by, cur_w, bh, true)
 
   -- Target line marker
   local tx = bx + math.floor(bw * (cfg.target / 100.0))
-  canvas.color = colors.red
-  canvas.line(tx, by - 2, tx, by + bh + 2)
+  screen.color = colors.red
+  screen.line(tx, by - 2, tx, by + bh + 2)
 
-  canvas.color = colors.white
-  canvas.text(bx + bw + 12, by - 2, string.format("CLAIM %04.1f%% / %d%%", claimed_pct, cfg.target))
+  screen.color = colors.white
+  screen.text(bx + bw + 12, by - 2, string.format("CLAIM %04.1f%% / %d%%", claimed_pct, cfg.target))
 
   -- 7. OVERLAY PANELS
   local function center_text(cy, txt, col)
-    canvas.color = col or colors.white
-    canvas.text(W / 2 - textwidth(txt) / 2, cy, txt)
+    screen.color = col or colors.white
+    screen.text(W / 2 - textwidth(txt) / 2, cy, txt)
   end
 
   if state == "title" then
-    canvas.color = colors.black
-    canvas.alpha = 200
-    canvas.rectangle(0, 0, W, H, true)
-    canvas.alpha = 255
+    -- Veil and light pools on the world page: below the showcase sprites
+    world.color = colors.black
+    world.alpha = 200
+    world.rectangle(0, 0, W, H, true)
+    world.alpha = 255
 
     -- Title showcase 2x light pools under orbs
     local sc_pulse = 1.0 + 0.15 * math.sin(trail_pulse * 0.7)
-    canvas.gradient.circle(W / 2 - 200, H / 2 + 25, math.floor(22 * sc_pulse), rgba(0, 230, 255, 140), rgba(0, 230, 255, 0))
-    canvas.gradient.circle(W / 2 - 100, H / 2 + 25, math.floor(20 * sc_pulse), rgba(255, 50, 70, 140), rgba(255, 50, 70, 0))
-    canvas.gradient.circle(W / 2,       H / 2 + 25, math.floor(32 * sc_pulse), rgba(255, 200, 30, 160), rgba(255, 200, 30, 0))
+    world.gradient.circle(W / 2 - 200, H / 2 + 25, math.floor(22 * sc_pulse), rgba(0, 230, 255, 140), rgba(0, 230, 255, 0))
+    world.gradient.circle(W / 2 - 100, H / 2 + 25, math.floor(20 * sc_pulse), rgba(255, 50, 70, 140), rgba(255, 50, 70, 0))
+    world.gradient.circle(W / 2,       H / 2 + 25, math.floor(32 * sc_pulse), rgba(255, 200, 30, 160), rgba(255, 200, 30, 0))
 
     center_text(H / 2 - 165, "Z O N I X", colors.cyan)
     center_text(H / 2 - 140, "CYBER TERRITORIAL CONQUEST", colors.yellow)
@@ -1181,38 +1185,38 @@ function draw()
     center_text(H / 2 - 35, "Claim " .. cfg.target .. "% to breach each cyber sector.", colors.aqua)
 
     -- Showcase Sprite Labels
-    canvas.color = colors.silver
-    canvas.text(W / 2 - 215, H / 2 + 50, "ORB")
-    canvas.text(W / 2 - 125, H / 2 + 50, "SEEKER")
-    canvas.text(W / 2 - 25,  H / 2 + 50, "PULSAR")
-    canvas.text(W / 2 + 75,  H / 2 + 50, "SPARK")
-    canvas.text(W / 2 + 180, H / 2 + 50, "POWER")
+    screen.color = colors.silver
+    screen.text(W / 2 - 215, H / 2 + 50, "ORB")
+    screen.text(W / 2 - 125, H / 2 + 50, "SEEKER")
+    screen.text(W / 2 - 25,  H / 2 + 50, "PULSAR")
+    screen.text(W / 2 + 75,  H / 2 + 50, "SPARK")
+    screen.text(W / 2 + 180, H / 2 + 50, "POWER")
 
     center_text(H / 2 + 90, "PRESS SPACE OR ENTER TO START", colors.lime)
     center_text(H / 2 + 120, "ARROWS/WASD move   SPACE boost   P pause   M mute", colors.silver)
     center_text(H / 2 + 145, "HI-SCORE " .. highscore, colors.gold)
   elseif state == "ready" then
-    canvas.color = colors.black
-    canvas.alpha = 140
-    canvas.rectangle(0, H / 2 - 50, W, 100, true)
-    canvas.alpha = 255
+    screen.color = colors.black
+    screen.alpha = 140
+    screen.rectangle(0, H / 2 - 50, W, 100, true)
+    screen.alpha = 255
     center_text(H / 2 - 35, "SECTOR " .. level .. ": " .. cfg.name, colors.gold)
     center_text(H / 2 - 10, "Target Capture: " .. cfg.target .. "%", colors.aqua)
     center_text(H / 2 + 15, "GET READY!", colors.yellow)
   elseif state == "level_clear" then
-    canvas.color = colors.black
-    canvas.alpha = 160
-    canvas.rectangle(0, H / 2 - 60, W, 120, true)
-    canvas.alpha = 255
+    screen.color = colors.black
+    screen.alpha = 160
+    screen.rectangle(0, H / 2 - 60, W, 120, true)
+    screen.alpha = 255
     center_text(H / 2 - 45, "SECTOR COMPLETE!", colors.lime)
     center_text(H / 2 - 20, string.format("Final Territory: %.1f%%", claimed_pct), colors.white)
     center_text(H / 2 + 5, "Time Bonus +" .. (math.floor(time_left) * 100), colors.gold)
     center_text(H / 2 + 30, "Breaching Next Sector...", colors.cyan)
   elseif state == "over" then
-    canvas.color = colors.black
-    canvas.alpha = 175
-    canvas.rectangle(0, H / 2 - 60, W, 120, true)
-    canvas.alpha = 255
+    screen.color = colors.black
+    screen.alpha = 175
+    screen.rectangle(0, H / 2 - 60, W, 120, true)
+    screen.alpha = 255
     center_text(H / 2 - 45, "GAME OVER", colors.red)
     center_text(H / 2 - 20, "Final Score: " .. string.format("%06d", score), colors.white)
     if score >= highscore and score > 0 then
@@ -1220,10 +1224,10 @@ function draw()
     end
     center_text(H / 2 + 30, "Press Space to Return", colors.silver)
   elseif state == "paused" then
-    canvas.color = colors.black
-    canvas.alpha = 140
-    canvas.rectangle(0, H / 2 - 30, W, 60, true)
-    canvas.alpha = 255
+    screen.color = colors.black
+    screen.alpha = 140
+    screen.rectangle(0, H / 2 - 30, W, 60, true)
+    screen.alpha = 255
     center_text(H / 2 - 10, "PAUSED - PRESS P TO RESUME", colors.yellow)
   end
 end
