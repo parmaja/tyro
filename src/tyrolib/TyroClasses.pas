@@ -30,6 +30,10 @@ const
   cTyroDefaultFont = 'spleen-8x16.bdf';
   clFrenchSkyBlue: TRGBAColor = (Red: $77; Green: $B5; Blue: $FE; Alpha: $FF);
   clCornflowerBlue: TRGBAColor = (Red: $5d; Green: $9f; Blue: $f9; Alpha: $FF);
+  clTeal: TRGBAColor = (Red: 0; Green: 128; Blue: 128; Alpha: $FF);
+  clNavy: TRGBAColor = (Red: 0; Green: 0; Blue: 128; Alpha: $FF);
+  clOlive: TRGBAColor = (Red: 128; Green: 128; Blue: 0; Alpha: $FF);
+  clCyan: TRGBAColor = (Red: 0; Green: 255; Blue: 255; Alpha: $FF);
 
   cMainMargin = 0;
   cDefaultWindowWidth = 640;
@@ -705,8 +709,20 @@ begin
     Result := clDarkbrown
   else if SameText(Value, 'beige') then
     Result := clBeige
-  else if SameText(Value, 'magenta') then
+  else if SameText(Value, 'magenta') or SameText(Value, 'fuchsia') then
     Result := clMagenta
+  else if SameText(Value, 'teal') then
+    Result := clTeal
+  else if SameText(Value, 'navy') then
+    Result := clNavy
+  else if SameText(Value, 'olive') then
+    Result := clOlive
+  else if SameText(Value, 'cyan') or SameText(Value, 'aqua') then
+    Result := clCyan
+  else if SameText(Value, 'silver') then
+    Result := clLightgray
+  else if SameText(Value, 'blank') or SameText(Value, 'transparent') then
+    Result := clBlank
   else if SameText(Value, 'raywhite') then
     Result := clRayWhite;
 end;

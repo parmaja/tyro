@@ -95,6 +95,13 @@ type
     procedure DoExecute; override;
   end;
 
+  { TClearOutputObject }
+
+  TClearOutputObject = class(TQueueObject)
+  public
+    procedure DoExecute; override;
+  end;
+
   { TReadConsoleObject }
 
   TReadConsoleObject = class(TQueueObject)
@@ -972,6 +979,13 @@ end;
 procedure THideOutputObject.DoExecute;
 begin
   Engine.Output.Hide;
+end;
+
+{ TClearOutputObject }
+
+procedure TClearOutputObject.DoExecute;
+begin
+  Engine.Output.Clear;
 end;
 
 { TReadConsoleObject }

@@ -2268,6 +2268,11 @@ procedure TTyroEngine.HideFileList;
 begin
   FFileList.Hide;
   //Return keyboard focus (and a read prompt) to the console when it is shown.
+  if Console.Visible then
+  begin
+    Console.Focused := True;
+    StartConsoleRead;
+  end;
 end;
 
 procedure TTyroEngine.ToggleFileList;
@@ -3258,9 +3263,13 @@ begin
   if Result then
   begin
     Exec := TExecuteCommand.Create;
-    Exec.Command := Command;
-    Exec.Params := Params;
-    Exec.Execute
+    try
+      Exec.Command := Command;
+      Exec.Params := Params;
+      Exec.Execute;
+    finally
+      Exec.Free;
+    end;
   end;
 end;
 

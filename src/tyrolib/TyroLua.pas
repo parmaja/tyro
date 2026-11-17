@@ -1714,16 +1714,17 @@ begin
   AddColor('gold', clGold);
   AddColor('orange', clOrange);
   AddColor('pink', clPink);
-  AddColor('olive', clDarkgreen);
+  AddColor('olive', clOlive);
   AddColor('lime', clLime);
   AddColor('green', clGreen);
   AddColor('darkgreen', clDarkgreen);
-  AddColor('aqua', clSkyBlue);
+  AddColor('aqua', clCyan);
+  AddColor('cyan', clCyan);
   AddColor('skyblue', clSkyBlue);
-  AddColor('teal', clBrown);
+  AddColor('teal', clTeal);
   AddColor('blue', clBlue);
   AddColor('darkblue', clDarkblue);
-  AddColor('navy', clViolet);
+  AddColor('navy', clNavy);
   AddColor('purple', clPurple);
   AddColor('violet', clViolet);
   AddColor('darkpurple', clDarkpurple);
@@ -2087,9 +2088,9 @@ begin
   //  sound.stop()
   Lua.State.Register('sound', 'load', Sound, Sound.Load_func);
   Lua.State.Register('sound', 'unload', Sound, Sound.Unload_func);
-  Lua.State.Register('sount', 'beep', Sound, Sound.Beep_func);
+  Lua.State.Register('sound', 'beep', Sound, Sound.Beep_func);
   Lua.State.Register('sound', 'play', Sound, Sound.Play_func);
-  Lua.State.Register('sound', 'noise', Music, Sound.Noise_func);
+  Lua.State.Register('sound', 'noise', Sound, Sound.Noise_func);
   Lua.State.Register('sound', 'loopPlay', Sound, Sound.LoopPlay_func);
   Lua.State.Register('sound', 'loopPitch', Sound, Sound.LoopPitch_func);
   Lua.State.Register('sound', 'loopVolume', Sound, Sound.LoopVolume_func);
@@ -2176,7 +2177,7 @@ begin
   Lua.State.RegisterGlobal('screenshot', Screenshot_func);
   Lua.State.RegisterGlobal('exit', Exit_func);
   Lua.State.RegisterGlobal('clock', Clock_func);
-  Lua.State.RegisterGlobal('time', Time_func);
+  Lua.State.RegisterGlobal('now', Time_func);
   Lua.State.RegisterGlobal('textwidth', TextWidth_func);
   Lua.State.RegisterGlobal('textheight', TextHeight_func);
   Lua.State.RegisterGlobal('rgba', Rgba_func);
@@ -2388,6 +2389,9 @@ begin
   FreeAndNil(Images);
   FreeAndNil(Parallaxes);
   FreeAndNil(Parallax);
+  FreeAndNil(Particles);
+  FreeAndNil(Models);
+  FreeAndNil(Model);
   FreeAndNil(Tiles);
   FreeAndNil(Tile);
   FreeAndNil(Spectrum);
@@ -2399,6 +2403,7 @@ begin
   FreeAndNil(Console);
   FreeAndNil(Window);
   FreeAndNil(World);
+  FreeAndNil(Screen);
   FreeAndNil(Canvas);
   inherited;
 end;
@@ -3084,7 +3089,7 @@ end;
 
 function TLuaOutput.Clear_func(L: Plua_State): integer; cdecl;
 begin
-  Engine.Output.Clear;
+  FScript.AddQueueObject(TClearOutputObject.Create);
   Result := 0;
 end;
 
