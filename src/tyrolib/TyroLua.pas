@@ -37,9 +37,10 @@ type
   private
     FName: string;
     FScript: TLuaScript;
+    FLastHintField: string;
   protected
     procedure Created; virtual;
-  protected
+    function Getter(L: PLua_State): integer; override;
   public
     constructor Create(const AName: string; AScript: TLuaScript); virtual;
     procedure AfterConstruction; override;
@@ -1653,6 +1654,76 @@ begin
   inherited;
 end;
 
+function EditDistance(const A, B: string): Integer;
+var
+  LA, LB, I, J, Cost: Integer;
+  D: array of array of Integer;
+begin
+  LA := Length(A);
+  LB := Length(B);
+  SetLength(D, LA + 1, LB + 1);
+  for I := 0 to LA do
+    D[I][0] := I;
+  for J := 0 to LB do
+    D[0][J] := J;
+  for I := 1 to LA do
+    for J := 1 to LB do
+    begin
+      if UpCase(A[I]) = UpCase(B[J]) then
+        Cost := 0
+      else
+        Cost := 1;
+      D[I][J] := D[I - 1][J] + 1;
+      if D[I][J - 1] + 1 < D[I][J] then
+        D[I][J] := D[I][J - 1] + 1;
+      if D[I - 1][J - 1] + Cost < D[I][J] then
+        D[I][J] := D[I - 1][J - 1] + Cost;
+    end;
+  Result := D[LA][LB];
+end;
+
+function TTyroLuaObject.Getter(L: PLua_State): integer;
+var
+  Field, Cand, Best: string;
+  BestDist, Dist: Integer;
+begin
+  Result := inherited Getter(L);
+  if (Result = 0) and (FName <> '') and (lua_type(L, 2) = LUA_TSTRING) and lua_istable(L, 1) then
+  begin
+    Field := L.ToString(2);
+    if (Field = '') or (Field[1] = '_') or (Field = FLastHintField) then
+      Exit;
+    Best := '';
+    BestDist := 3;
+    lua_pushnil(L);
+    while lua_next(L, 1) <> 0 do
+    begin
+      lua_pop(L, 1); //pop value, keep key
+      if lua_type(L, -1) = LUA_TSTRING then
+      begin
+        Cand := L.ToString(-1);
+        if (Cand <> '') and (Cand[1] <> '_') then
+        begin
+          Dist := EditDistance(Field, Cand);
+          //Also catch common prefixes like "rect" -> "rectangle"
+          if (Length(Field) >= 3) and (Pos(LowerCase(Field), LowerCase(Cand)) = 1) and (Dist > 1) then
+            Dist := 1;
+          if Dist < BestDist then
+          begin
+            BestDist := Dist;
+            Best := Cand;
+          end;
+        end;
+      end;
+    end;
+    if Best <> '' then
+    begin
+      FLastHintField := Field;
+      Log.WriteLn(Format('Hint: Unknown "%s.%s" - did you mean "%s.%s"?', [FName, Field, FName, Best]));
+    end;
+  end;
+end;
+
 { TLuaColors }
 
 function TLuaColors.Setter(L: PLua_State): integer;
@@ -1687,6 +1758,8 @@ begin
       Result := 1;
     end;
   end;
+  if Result = 0 then
+    Result := inherited;
 end;
 
 procedure TLuaColors.AddColor(AName: string; AColor: TColor);
@@ -2416,6 +2489,8 @@ begin
     FLastError := S;
   if IsConsole then
     WriteLn(S);
+  if (Engine <> nil) and (GetCurrentThreadId = MainThreadID) then
+    Engine.ReportScriptError(S);
 end;
 
 procedure TLuaScript.Run;

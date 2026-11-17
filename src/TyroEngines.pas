@@ -191,6 +191,7 @@ type
     procedure Stop_Command(Params: TStrings);
     procedure Edit_Command(Params: TStrings);
     procedure Sprite_Command(Params: TStrings);
+    procedure New_Command(Params: TStrings);
 
     procedure EditorClosed(Sender: TObject);
     procedure EditorSave(Sender: TObject);
@@ -249,6 +250,9 @@ type
     FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
     FPresentedFrame: Boolean;
     FScriptFailed: Boolean;
+    FLastErrorRaw: string;
+    FLastErrorLine: Integer;
+    FLastErrorMsg: string;
     //* Command line lifecycle (see AutoLifecycle): --exit ends the session
     //* after FExitAfterSeconds, a bare --exit once the main script thread
     //* finished, and --screenshot captures the screen after
@@ -509,6 +513,7 @@ type
     procedure ToggleSpriteEditor;
 
     procedure LogWrite(Msg: string);
+    procedure ReportScriptError(const AError: string);
 
     //* Fetch a URL over HTTP/HTTPS and return the response body as text.
     //* The request runs on the calling thread (the script worker), so a script
@@ -1480,6 +1485,7 @@ begin
     //The chunk raised: surface the failure for the --exit CLI lifecycle, then
     //dispose the state.
     FScriptFailed := True;
+    ReportScriptError(AScript.LastError);
     FPendingDispose := True;
     Exit;
   end;
@@ -2338,6 +2344,10 @@ begin
   StopScriptRun;
   Editor.FileName := ScriptFile;
   Editor.LoadSource(ScriptSource);
+  Editor.ErrorLine := FLastErrorLine;
+  Editor.ErrorMessage := FLastErrorMsg;
+  if FLastErrorLine > 0 then
+    Editor.GotoLine(FLastErrorLine);
   Editor.BoundsRect := Rect(0, 0, World.Width, World.Height);
   Editor.Margin := 10;
   Editor.BackColor := clBlack;
@@ -2411,6 +2421,69 @@ begin
   //Output.Writeln(Trim(Msg));
 end;
 
+function ParseLuaErrorLine(const AError: string; out ALine: Integer; out ACleanMsg: string): Boolean;
+var
+  I, J, NumStart: Integer;
+begin
+  Result := False;
+  ALine := 0;
+  ACleanMsg := Trim(AError);
+  for I := 1 to Length(AError) - 2 do
+  begin
+    if AError[I] = ':' then
+    begin
+      NumStart := I + 1;
+      J := NumStart;
+      while (J <= Length(AError)) and (AError[J] >= '0') and (AError[J] <= '9') do
+        Inc(J);
+      if (J > NumStart) and (J <= Length(AError)) and (AError[J] = ':') then
+      begin
+        ALine := StrToIntDef(Copy(AError, NumStart, J - NumStart), 0);
+        if ALine > 0 then
+        begin
+          ACleanMsg := Trim(Copy(AError, J + 1, MaxInt));
+          Result := True;
+          Exit;
+        end;
+      end;
+    end;
+  end;
+end;
+
+procedure TTyroEngine.ReportScriptError(const AError: string);
+var
+  ALine: Integer;
+  ACleanMsg: string;
+begin
+  if AError = '' then
+    Exit;
+  FScriptFailed := True;
+  if AError = FLastErrorRaw then
+    Exit;
+  FLastErrorRaw := AError;
+  if ParseLuaErrorLine(AError, ALine, ACleanMsg) then
+  begin
+    FLastErrorLine := ALine;
+    FLastErrorMsg := ACleanMsg;
+  end
+  else
+  begin
+    FLastErrorLine := 0;
+    FLastErrorMsg := Trim(AError);
+  end;
+  if Editor <> nil then
+  begin
+    Editor.ErrorLine := FLastErrorLine;
+    Editor.ErrorMessage := FLastErrorMsg;
+  end;
+  if Console <> nil then
+  begin
+    Console.Writeln('Error: ' + AError);
+    if FLastErrorLine > 0 then
+      Console.Writeln(Format('  -> Line %d: %s (Press F2 to edit)', [FLastErrorLine, FLastErrorMsg]));
+  end;
+end;
+
 function TTyroEngine.HttpGet(const AUrl: string; out ABody: string; out AError: string): Boolean;
 var
   Client: TmnHttpClient;
@@ -2458,30 +2531,158 @@ begin
   Editor.SaveSource(ScriptSource);
   if ScriptFile = '' then
   begin
-    //Text typed at the console has no file behind it, so there is nowhere to
-    //write it. The buffer still reached the script, which is what a run uses.
-    Log.WriteLn('The script has no file name, so it was not saved to disk');
-    Exit;
+    ScriptFile := IncludePathDelimiter(Res.WorkPath) + 'main.tyro';
+    Editor.FileName := ScriptFile;
+    World.Title := ScriptFile;
   end;
   try
     SaveFileUTF8String(ScriptFile, ScriptSource);
     Log.WriteLn('Saved ' + ScriptFile);
+    Editor.SetStatusMessage('Saved ' + ExtractFileName(ScriptFile));
   except
     on E: Exception do
+    begin
       Log.WriteLn('Could not save ' + ScriptFile + ': ' + E.Message);
+      Editor.SetStatusMessage('Save failed: ' + E.Message);
+    end;
   end;
 end;
 
 procedure TTyroEngine.Edit_Command(Params: TStrings);
+var
+  aFile: string;
 begin
   //"edit player.sprite" and "edit player.png" open the sprite editor on that
-  //file; everything else keeps opening the script editor as before.
+  //file; everything else opens the script editor.
   if (Params.Count > 0) and IsSpriteDocument(Params[0]) then
   begin
     ShowSpriteEditor(Params[0]);
     Exit;
   end;
+  if Params.Count > 0 then
+  begin
+    aFile := Params[0];
+    if ExtractFilePath(aFile) = '' then
+      aFile := IncludePathDelimiter(Res.WorkPath) + aFile;
+    if ExtractFileExt(aFile) = '' then
+      aFile := aFile + '.tyro';
+    ScriptFile := aFile;
+    World.Title := ScriptFile;
+    if SysUtils.FileExists(aFile) then
+      ScriptSource := mnUtils.LoadFileString(aFile)
+    else
+      ScriptSource := '';
+  end;
   ShowEditor;
+end;
+
+procedure TTyroEngine.New_Command(Params: TStrings);
+var
+  Kind, aFile: string;
+begin
+  Kind := 'game';
+  aFile := '';
+  if Params.Count >= 1 then
+  begin
+    if SameText(Params[0], 'game') or SameText(Params[0], 'draw') or SameText(Params[0], 'sprite') then
+    begin
+      Kind := LowerCase(Params[0]);
+      if Params.Count >= 2 then
+        aFile := Params[1];
+    end
+    else
+    begin
+      aFile := Params[0];
+      if Params.Count >= 2 then
+        Kind := LowerCase(Params[1]);
+    end;
+  end;
+
+  if aFile <> '' then
+  begin
+    if ExtractFilePath(aFile) = '' then
+      aFile := IncludePathDelimiter(Res.WorkPath) + aFile;
+    if ExtractFileExt(aFile) = '' then
+      aFile := aFile + '.tyro';
+    ScriptFile := aFile;
+    World.Title := ScriptFile;
+  end
+  else if ScriptFile = '' then
+  begin
+    ScriptFile := IncludePathDelimiter(Res.WorkPath) + 'main.tyro';
+    World.Title := ScriptFile;
+  end;
+
+  if Kind = 'draw' then
+    ScriptSource :=
+      '-- Starter Drawing Script (Press F5 to run, F2 to edit)' + sLineBreak +
+      'window.show(640, 480)' + sLineBreak +
+      'world.backcolor = "skyblue"' + sLineBreak +
+      '' + sLineBreak +
+      'canvas.color = "gold"' + sLineBreak +
+      'canvas.circle(320, 200, 60, true)' + sLineBreak +
+      '' + sLineBreak +
+      'canvas.color = "navy"' + sLineBreak +
+      'canvas.text_center(320, "Hello Tyro!")' + sLineBreak
+  else if Kind = 'sprite' then
+    ScriptSource :=
+      '-- Starter Sprite Game (Press F5 to run, F2 to edit)' + sLineBreak +
+      'window.show(640, 480)' + sLineBreak +
+      'world.backcolor = "navy"' + sLineBreak +
+      '' + sLineBreak +
+      '-- Paint a 32x32 player ship onto an image sheet' + sLineBreak +
+      'local sheet = images.new(32, 32)' + sLineBreak +
+      'sheet.color = "cyan"' + sLineBreak +
+      'sheet.triangle(16, 2, 2, 30, 30, 30, true)' + sLineBreak +
+      '' + sLineBreak +
+      'player = sprites.new("player")' + sLineBreak +
+      'player:fromimage(sheet)' + sLineBreak +
+      'player.x = 320' + sLineBreak +
+      'player.y = 240' + sLineBreak +
+      'local speed = 220' + sLineBreak +
+      '' + sLineBreak +
+      'function update(dt)' + sLineBreak +
+      '  if keyboard.down("left")  then player.x = player.x - speed * dt end' + sLineBreak +
+      '  if keyboard.down("right") then player.x = player.x + speed * dt end' + sLineBreak +
+      '  if keyboard.down("up")    then player.y = player.y - speed * dt end' + sLineBreak +
+      '  if keyboard.down("down")  then player.y = player.y + speed * dt end' + sLineBreak +
+      'end' + sLineBreak +
+      '' + sLineBreak +
+      'function draw()' + sLineBreak +
+      '  screen.clear("blank")' + sLineBreak +
+      '  screen.color = "white"' + sLineBreak +
+      '  screen.text(10, 10, "Use Arrow Keys to fly!")' + sLineBreak +
+      'end' + sLineBreak
+  else
+    ScriptSource :=
+      '-- Starter Game Loop (Press F5 to run, F2 to edit)' + sLineBreak +
+      'window.show(640, 480)' + sLineBreak +
+      'world.backcolor = "darkblue"' + sLineBreak +
+      '' + sLineBreak +
+      'local x, y = 320, 240' + sLineBreak +
+      'local speed = 200' + sLineBreak +
+      '' + sLineBreak +
+      'function update(dt)' + sLineBreak +
+      '  if keyboard.down("left")  then x = x - speed * dt end' + sLineBreak +
+      '  if keyboard.down("right") then x = x + speed * dt end' + sLineBreak +
+      '  if keyboard.down("up")    then y = y - speed * dt end' + sLineBreak +
+      '  if keyboard.down("down")  then y = y + speed * dt end' + sLineBreak +
+      '  x = game.clamp(x, 20, 620)' + sLineBreak +
+      '  y = game.clamp(y, 20, 460)' + sLineBreak +
+      'end' + sLineBreak +
+      '' + sLineBreak +
+      'function draw()' + sLineBreak +
+      '  world.color = "gold"' + sLineBreak +
+      '  world.circle(x, y, 20, true)' + sLineBreak +
+      '' + sLineBreak +
+      '  screen.clear("blank")' + sLineBreak +
+      '  screen.color = "white"' + sLineBreak +
+      '  screen.text(10, 10, "Arrow keys to move | F2: Edit | F5: Run")' + sLineBreak +
+      'end' + sLineBreak;
+
+  HideConsole;
+  ShowEditor;
+  Editor.SetStatusMessage('Created ' + Kind + ' template (Press F5 to run, Ctrl+S to save)');
 end;
 
 procedure TTyroEngine.Sprite_Command(Params: TStrings);
@@ -2607,8 +2808,28 @@ begin
   ClearScriptModels;
   ClearScriptParticles;
   Clear;
+  FLastErrorRaw := '';
+  FLastErrorLine := 0;
+  FLastErrorMsg := '';
+  if Editor <> nil then
+  begin
+    Editor.ErrorLine := 0;
+    Editor.ErrorMessage := '';
+  end;
+  if World <> nil then
+    World.TimeScale := 1;
+  if Board <> nil then
+    Board.SetEffect('');
+  StopMML;
+  StopLoop;
+  if RadioPlayer <> nil then
+    RadioPlayer.Stop;
+  if (ScriptFile = '') and (Trim(ScriptSource) = '') then
+    Exit;
   //A song the finished run left playing belongs to that run, not to the next one.
   aScriptType := ScriptTypes.FindByExtension(ExtractFileExt(ScriptFile));
+  if (aScriptType = nil) and (ScriptFile = '') then
+    aScriptType := ScriptTypes.FindByExtension('.tyro');
   if (aScriptType <> nil) then
   begin
     aScript := aScriptType.ScriptClass.Create(ScriptSource);
@@ -2893,13 +3114,14 @@ var
 begin
   Commands.Add('help', ['?'], Help_Command, 'Show help');
   Commands.Add('list', ['ls'], Dir_Command, 'Show current directory');
-  Commands.Add('clear', ['cls'], Clear_Command, 'List files in current directory');
+  Commands.Add('clear', ['cls'], Clear_Command, 'Clear console screen');
   Commands.Add('exit', ['quit', 'q'], Exit_Command, 'Hide console and stop');
   Commands.Add('stop', [], Stop_Command, 'Stop current script');
   Commands.Add('load', [], Load_Command, 'Load script name from current directory (F4 to pick)');
   Commands.Add('save', [], Save_Command, 'Save script name to current directory');
   Commands.Add('state', [], State_Command, 'State of current directory');
   Commands.Add('run', [], Run_Command, 'Run current loaded script');
+  Commands.Add('new', [], New_Command, 'New starter script: new [game|draw|sprite] [name]');
   Commands.Add('edit', [], Edit_Command, 'Edit a script, .png or .sprite (F2)');
   Commands.Add('sprite', [], Sprite_Command, 'Open the sprite editor (F3)');
   Console.CommandNames.Clear;

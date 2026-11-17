@@ -28,6 +28,7 @@ const
   cEditorCaretBlink = 0.5;
 
   cEditorCaretLineColor = $FF141414;  //subtle highlight for the caret line
+  cEditorErrorLineColor = $FF241448;  //crimson highlight for a line with a Lua error
 
 type
   TEditorCloseEvent = procedure(Sender: TObject) of object;
@@ -70,6 +71,10 @@ type
     FUndo: TStringList;
     FRedo: TStringList;
     FFileName: string;
+    FErrorLine: Integer;
+    FErrorMessage: string;
+    FStatusMessage: string;
+    FStatusTimer: Double;
     FOnClose: TEditorCloseEvent;
     FOnSave: TEditorSaveEvent;
     function GetLineCount: Integer;
@@ -158,9 +163,13 @@ type
     procedure LoadSource(ASource: string); overload;
     procedure SaveSource(ASource: TStringList); overload;
     procedure SaveSource(var ASource: string); overload;
+    procedure GotoLine(ALine: Integer);
+    procedure SetStatusMessage(const AMsg: string; ADuration: Double = 3.0);
     procedure Close;
 
     property FileName: string read FFileName write FFileName;
+    property ErrorLine: Integer read FErrorLine write FErrorLine;
+    property ErrorMessage: string read FErrorMessage write FErrorMessage;
     property Modified: Boolean read FModified;
     {* Overwrite mode: a typed character replaces the one under the caret
      instead of pushing the text to the right of it. The Insert key toggles
@@ -787,6 +796,8 @@ end;
 procedure TyroEditor.ModifyDone;
 begin
   FModified := True;
+  FErrorLine := 0;
+  FErrorMessage := '';
   RebuildRuns;
   ScrollCaretVisible;
   Invalidate;
@@ -1254,13 +1265,14 @@ end;
 
 function TyroEditor.IsApiName(const AWord: string): Boolean;
 const
-  Words: array[0..53] of string = ('version', 'log', 'sleep', 'pause', 'print', 'println',
+  Words: array[0..73] of string = ('version', 'log', 'sleep', 'pause', 'print', 'println',
     'mouse', 'keyboard', 'gamepad', 'pressed', 'down', 'axis', 'available', 'name', 'mappings', 'frametime',
-    'time', 'rand', 'window', 'console', 'canvas', 'shader', 'font', 'music', 'sound',
-    'sprites', 'buttons', 'new', 'find', 'caption', 'border', 'clear', 'text',
-    'circle', 'rectangle', 'image', 'line', 'point', 'load', 'save', 'show', 'read', 'play',
+    'time', 'now', 'rand', 'window', 'console', 'canvas', 'screen', 'world', 'shader', 'font', 'music', 'sound',
+    'sprite', 'sprites', 'buttons', 'controls', 'new', 'find', 'caption', 'border', 'clear', 'text', 'text_center',
+    'circle', 'rectangle', 'triangle', 'image', 'line', 'point', 'load', 'save', 'show', 'read', 'play',
     'beep', 'sound', 'mml', 'hide', 'spectrum', 'shake', 'midi', 'resume',
-    'models', 'particles', 'emit');
+    'model', 'models', 'particles', 'emit', 'tile', 'tiles', 'parallax', 'game',
+    'colors', 'collision', 'radio', 'output', 'update', 'draw', 'rgba', 'rgb');
 var
   I: Integer;
 begin
@@ -1290,6 +1302,10 @@ begin
   FTopLine := 0;
   FLeftCol := 0;
   FModified := False;
+  FErrorLine := 0;
+  FErrorMessage := '';
+  FStatusMessage := '';
+  FStatusTimer := 0;
   ClearSelection;   //the caret is at the start of the buffer, and so is the anchor
   FUndo.Clear;
   FRedo.Clear;
@@ -1566,7 +1582,10 @@ begin
   x := aGutterWidth - Length(Gov) * FCharWidth - 2;
   if x < 0 then
     x := 0;
-  ACanvas.DrawText(x, aY, Gov, clDarkGray);
+  if (FErrorLine > 0) and (ALine = FErrorLine - 1) then
+    ACanvas.DrawText(x, aY, Gov, clRed)
+  else
+    ACanvas.DrawText(x, aY, Gov, clDarkGray);
 
   //draw text runs clipped to the visible range
   Runs := FRuns[ALine];
@@ -1620,8 +1639,8 @@ end;
 
 procedure TyroEditor.DrawStatus(ACanvas: TTyroCanvas);
 var
-  tx, rx: string;
-  sbY: Integer;
+  tx, rx, msg: string;
+  sbY, rightX, maxMsgCols: Integer;
   Mode: string;
 begin
   sbY := ClientRect.Height - GetStatusHeight;
@@ -1639,14 +1658,31 @@ begin
   else
     Mode := 'INS';
   if IsSelecting then
-    rx := Format('%s   Ln %d, Col %d   %d sel   [F2/Esc: close]',
+    rx := Format('%s  Ln %d, Col %d  %d sel  [F5:Run Ctrl+S:Save F2/Esc:Close]',
       [Mode, FCaretLine + 1, FCaretCol + 1, SelectionLength])
   else
-    rx := Format('%s   Ln %d, Col %d   [F2/Esc: close]', [Mode, FCaretLine + 1, FCaretCol + 1]);
+    rx := Format('%s  Ln %d, Col %d  [F5:Run Ctrl+S:Save F2/Esc:Close]', [Mode, FCaretLine + 1, FCaretCol + 1]);
   if (csHScroll in Style) or (csVScroll in Style) then
-    ACanvas.DrawText(ClientRect.Width - UTF8Length(rx) * FCharWidth - cScrollSize, sbY, rx, clLightgray)
+    rightX := ClientRect.Width - UTF8Length(rx) * FCharWidth - cScrollSize
   else
-    ACanvas.DrawText(ClientRect.Width - UTF8Length(rx) * FCharWidth, sbY, rx, clLightgray);
+    rightX := ClientRect.Width - UTF8Length(rx) * FCharWidth;
+  ACanvas.DrawText(rightX, sbY, rx, clLightgray);
+
+  //Optional status toast (e.g. "Saved main.tyro") or active Lua error summary
+  maxMsgCols := (rightX - (UTF8Length(tx) + 2) * FCharWidth) div FCharWidth;
+  if maxMsgCols > 4 then
+  begin
+    if (FStatusTimer > 0) and (FStatusMessage <> '') then
+    begin
+      msg := Copy(FStatusMessage, 1, maxMsgCols);
+      ACanvas.DrawText((UTF8Length(tx) + 2) * FCharWidth, sbY, msg, clLime);
+    end
+    else if (FErrorLine > 0) and (FErrorMessage <> '') then
+    begin
+      msg := Copy(Format('Err Ln %d: %s', [FErrorLine, FErrorMessage]), 1, maxMsgCols);
+      ACanvas.DrawText((UTF8Length(tx) + 2) * FCharWidth, sbY, msg, clOrange);
+    end;
+  end;
 end;
 
 procedure TyroEditor.DrawCaret(ACanvas: TTyroCanvas);
@@ -1694,6 +1730,14 @@ begin
       ACanvas.FillRectangle(0, Y, ClientRect.Width, FCharHeight, TColor.CreateRGBA(cEditorCaretLineColor));
   end;
 
+  //error line highlight
+  if (FErrorLine > 0) and (FErrorLine - 1 >= FTopLine) and (FErrorLine - 1 < FLines.Count) then
+  begin
+    Y := (FErrorLine - 1 - FTopLine) * FCharHeight;
+    if Y + FCharHeight <= ClientRect.Height - GetStatusHeight then
+      ACanvas.FillRectangle(0, Y, ClientRect.Width, FCharHeight, TColor.CreateRGBA(cEditorErrorLineColor));
+  end;
+
   Y := 0;
   for I := FTopLine to FLines.Count - 1 do
   begin
@@ -1721,6 +1765,15 @@ begin
     FCaretTimer := FCaretTimer + RayLib.GetFrameTime();
     if FCaretTimer >= cEditorCaretBlink then
       FCaretTimer := FCaretTimer - cEditorCaretBlink;
+    if FStatusTimer > 0 then
+    begin
+      FStatusTimer := FStatusTimer - RayLib.GetFrameTime();
+      if FStatusTimer <= 0 then
+      begin
+        FStatusTimer := 0;
+        FStatusMessage := '';
+      end;
+    end;
     FCaretDim := Sin(FCaretTimer / cEditorCaretBlink * 2 * Pi);
     FCaretDim := 0.3 + (FCaretDim + 1) / 2 * 0.7;
     FCaretVisible := True;
@@ -1973,8 +2026,28 @@ end;
 
 procedure TyroEditor.SaveSource(var ASource: string);
 begin
-  ASource := FLines.Text;;
+  ASource := FLines.Text;
   FModified := False;
+  Invalidate;
+end;
+
+procedure TyroEditor.GotoLine(ALine: Integer);
+begin
+  if FLines.Count = 0 then
+    Exit;
+  if ALine < 1 then
+    ALine := 1
+  else if ALine > FLines.Count then
+    ALine := FLines.Count;
+  ClearSelection;
+  SetCaret(ALine - 1, 0);
+  Invalidate;
+end;
+
+procedure TyroEditor.SetStatusMessage(const AMsg: string; ADuration: Double);
+begin
+  FStatusMessage := AMsg;
+  FStatusTimer := ADuration;
   Invalidate;
 end;
 
