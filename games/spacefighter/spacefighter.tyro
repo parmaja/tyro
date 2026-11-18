@@ -25,9 +25,7 @@ local FOV = 420.0
 local MAX_Z = 2200.0
 
 -- ---- Math & Helpers --------------------------------------------------
-local function clamp(v, lo, hi)
-  if v < lo then return lo elseif v > hi then return hi else return v end
-end
+-- (clamp() is an engine global, no need to write it at home)
 
 local function rgba(r, g, b, a)
   a = a or 255

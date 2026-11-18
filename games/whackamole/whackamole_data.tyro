@@ -164,31 +164,21 @@ end
 
 -- ---- High score file ----------------------------------------------------
 
+-- The engine's `score` board keeps the file; the helpers are grabbed here
+-- so a game shadowing the global `score` can never break this module.
 local HI_FILE = "whackamole.hi"
 local HI_DEFAULT = 0
+local hi_load, hi_save = score.hi_load, score.hi_save
 
 function M.load_high_score()
-  local f = openfile(HI_FILE, "r")
-  if not f then return HI_DEFAULT end
-  local line = f:read("l")
-  f:close()
-  local score = tonumber(line)
-  if score and score > 0 then
-    return math.floor(score)
-  end
-  return HI_DEFAULT
+  return hi_load(HI_FILE, HI_DEFAULT)
 end
 
 -- Writes the new best when score beats the stored one; returns the best.
-function M.save_high_score(score)
+function M.save_high_score(new_score)
   local cur = M.load_high_score()
-  if score > cur then
-    local f = openfile(HI_FILE, "w")
-    if f then
-      f:write(tostring(score) .. "\n")
-      f:close()
-    end
-    return score
+  if new_score > cur then
+    return hi_save(HI_FILE, new_score)
   end
   return cur
 end

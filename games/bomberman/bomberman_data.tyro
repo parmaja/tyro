@@ -42,15 +42,10 @@ M.HIDDEN_CHANCES = {
 -- Power-up frames inside powerup.sprite: F, B, speed, shield
 M.PU_FRAME = { flame = 0, bomb = 1, speed = 2, shield = 3 }
 
--- ---- Deterministic RNG (LCG, reproducible for tests) -----------------
-function M.new_rng(seed)
-  local state = (seed or 12345) % 2147483647
-  if state <= 0 then state = state + 2147483646 end
-  return function()
-    state = (state * 16807) % 2147483647
-    return (state - 1) / 2147483646
-  end
-end
+-- ---- Deterministic RNG ------------------------------------------------
+-- The engine's seeded rng(): same seed, same stream, exactly what the
+-- layout tests want to reproduce.
+M.new_rng = rng
 
 -- ---- Board helpers -----------------------------------------------------
 function M.in_bounds(gx, gy)
@@ -243,10 +238,7 @@ function M.box_free(grid, px, py)
   return true
 end
 
-function M.clamp(v, lo, hi)
-  if v < lo then return lo end
-  if v > hi then return hi end
-  return v
-end
+-- The engine's global helpers, exported under M for the callers.
+M.clamp = clamp
 
 return M

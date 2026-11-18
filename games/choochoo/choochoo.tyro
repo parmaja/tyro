@@ -34,23 +34,8 @@ local RAILFRAME = { straight = 7, curve = 9, junction = 13, cross = 17,
 local LEVEL_TIME = { 60, 75, 80, 75, 95 }   -- departure clock per level
 
 -- ---- high score: the ledger in the station office -------------------------
-local highscore = 0
-local function load_high()
-  local f = openfile("choochoo.hi", "r")
-  if f then
-    local s = f:read("*a")
-    f:close()
-    if s then highscore = tonumber(s) or 0 end
-  end
-end
-local function save_high()
-  local f = openfile("choochoo.hi", "w")
-  if f then
-    f:write(tostring(highscore))
-    f:close()
-  end
-end
-load_high()
+-- one call to the engine's `score` board; 0 suits the first run.
+local highscore = score.hi_load("choochoo.hi", 0)
 
 -- ---- floating station announcements (bomberman's combat text, polite edit)
 local floats = {}
@@ -326,8 +311,7 @@ local function depart()
                score = pts, rails = D.rail_count(board),
                time = math.max(0, math.floor(clock_left)) }
     if pts > highscore then
-      highscore = pts
-      save_high()
+      highscore = score.hi_save("choochoo.hi", pts)
       result.record = true
     end
     sfx("whistle")

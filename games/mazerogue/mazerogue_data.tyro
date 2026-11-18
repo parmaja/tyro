@@ -161,9 +161,8 @@ function M.update_sight_memory(e, can_see_player, player_x, player_y, dt)
 end
 
 -- ---- Math & Collision Helpers ----------------------------------------
-function M.clamp(v, lo, hi)
-  if v < lo then return lo elseif v > hi then return hi else return v end
-end
+-- The engine's global clamp, exported under M for the callers.
+M.clamp = clamp
 
 function M.distance(x1, y1, x2, y2)
   local dx = x2 - x1
@@ -192,17 +191,9 @@ function M.calculate_aoe_damage(dist, max_radius, max_damage)
   return math.floor(max_damage * frac)
 end
 
--- Simple deterministic Pseudo-Random Number Generator for reproducible tests
-function M.new_rng(seed)
-  local s = seed or 12345
-  return function(min, max)
-    s = (s * 1103515245 + 12345) % 2147483648
-    local norm = s / 2147483648
-    if not min then return norm end
-    if not max then return math.floor(norm * min) + 1 end
-    return math.floor(norm * (max - min + 1)) + min
-  end
-end
+-- Simple deterministic pseudo-random generator for reproducible tests:
+-- the engine's seeded rng(), same seed same stream.
+M.new_rng = rng
 
 -- ---- Procedural Maze Generator ---------------------------------------
 -- Generates a grid of size (cols x rows) with carved rooms and maze corridors.

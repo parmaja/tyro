@@ -430,26 +430,26 @@ type
     function FireDown: Boolean;
     //* Reads the integer kept in AFileName (a plain text file resolved against
     //* the workspace, so it sits next to the game), or ADefault when the file
-    //* does not exist or does not hold a number. Backs game.hi_load().
+    //* does not exist or does not hold a number. Backs score.hi_load().
     function LoadHighScore(const AFileName: string; ADefault: Int64): Int64;
     //* Stores AScore in AFileName only when it beats the stored value and
     //* returns the best score, creating the file when it is missing. When the
     //* path lands outside the workspace the score is not written and AScore
-    //* is returned as-is. Backs game.hi_save().
+    //* is returned as-is. Backs score.hi_save().
     function SaveHighScore(const AFileName: string; AScore: Int64): Int64;
-    //* One step of the small linear congruential generator behind game.rng():
+    //* One step of the small linear congruential generator behind rng():
     //* advances AState (keep it in the caller, e.g. a Lua table field) and
     //* returns the new value scaled to 0..<1.
     function RngNext(var AState: Int64): Double;
-    //* game.clamp(): keeps V inside the Lo..Hi range.
+    //* clamp(): keeps V inside the Lo..Hi range.
     function ClampValue(V, Lo, Hi: Double): Double;
-    //* game.lerp(): the point T (0..1) of the way from A to B.
+    //* lerp(): the point T (0..1) of the way from A to B.
     function LerpValue(A, B, T: Double): Double;
-    //* game.sign(): -1, 0 or 1 for the sign of V.
+    //* sign(): -1, 0 or 1 for the sign of V.
     function SignValue(V: Double): Integer;
-    //* game.dist(): straight-line distance between (X1,Y1) and (X2,Y2).
+    //* dist(): straight-line distance between (X1,Y1) and (X2,Y2).
     function PointsDist(X1, Y1, X2, Y2: Double): Double;
-    //* game.aabb(): whether two boxes given as (x, y, width, height) overlap.
+    //* aabb(): whether two boxes given as (x, y, width, height) overlap.
     function BoxesOverlap(X1, Y1, W1, H1, X2, Y2, W2, H2: Double): Boolean;
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
@@ -2667,8 +2667,8 @@ begin
       '  if keyboard.down("right") then x = x + speed * dt end' + sLineBreak +
       '  if keyboard.down("up")    then y = y - speed * dt end' + sLineBreak +
       '  if keyboard.down("down")  then y = y + speed * dt end' + sLineBreak +
-      '  x = game.clamp(x, 20, 620)' + sLineBreak +
-      '  y = game.clamp(y, 20, 460)' + sLineBreak +
+      '  x = clamp(x, 20, 620)' + sLineBreak +
+      '  y = clamp(y, 20, 460)' + sLineBreak +
       'end' + sLineBreak +
       '' + sLineBreak +
       'function draw()' + sLineBreak +

@@ -50,30 +50,15 @@ end
 -- Game State
 local state = "title" -- "title", "ready", "play", "captured", "dying", "level_clear", "over"
 local level = 1
+-- Highscore persistence - the engine's `score` board keeps the file. The
+-- helpers are grabbed before the run's own `score` counter shadows it.
+local hi_load, hi_save = score.hi_load, score.hi_save
 local lives = 3
 local score = 0
-local highscore = 10000
+local highscore = hi_load("zonix.hi", 10000)
 local claimed_pct = 0.0
 local time_left = 90.0
 local state_timer = 0.0
-
--- Highscore persistence
-local function load_high()
-  local f = openfile("zonix.hi", "r")
-  if f then
-    local s = f:read("*a")
-    f:close()
-    if s then highscore = tonumber(s) or highscore end
-  end
-end
-local function save_high()
-  local f = openfile("zonix.hi", "w")
-  if f then
-    f:write(tostring(highscore))
-    f:close()
-  end
-end
-load_high()
 
 -- Grid & Trail State
 local grid = D.create_grid()
@@ -505,8 +490,7 @@ local function kill_player(cause)
     state_timer = 3.0
     play_sfx("over", 0.9)
     if score > highscore then
-      highscore = score
-      save_high()
+      highscore = hi_save("zonix.hi", score)
     end
   else
     state = "dying"

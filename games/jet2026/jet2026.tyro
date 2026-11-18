@@ -50,9 +50,7 @@ local W = world.width
 local H = world.height
 
 -- ---- helpers ---------------------------------------------------------
-local function clamp(v, lo, hi)
-  if v < lo then return lo elseif v > hi then return hi else return v end
-end
+-- (clamp() is an engine global, no need to write it at home)
 
 -- fold any angle into [-180, 180]
 local function norm_deg(a)

@@ -165,11 +165,7 @@ local msg, msgTimer, flash, spawnTimer, bubbleTimer
 local levelTimer, cardTimer, overTimer
 local nextLife, oxygenAlarm, bossFlash, diverTimer
 
-local function clamp(v, lo, hi)
-  if v < lo then return lo end
-  if v > hi then return hi end
-  return v
-end
+-- (clamp() is an engine global, no need to write it at home)
 
 -- ---- explosions & bubbles --------------------------------------------
 local function add_boom(x, y, big)

@@ -142,11 +142,8 @@ M.CAM_IN = 18
 -- Small pure helpers
 -- ---------------------------------------------------------------------
 
-function M.clamp(v, lo, hi)
-  if v < lo then return lo end
-  if v > hi then return hi end
-  return v
-end
+-- The engine's global clamp, exported under M for the callers.
+M.clamp = clamp
 
 -- Wrap an angle to [-pi, pi).
 function M.wrapPi(a)
@@ -176,13 +173,8 @@ end
 
 -- A tiny deterministic generator: same seed, same loop, lap after lap -
 -- the way the arcade original is the same course every time you ride it.
-function M.rng(seed)
-  local s = seed % 2147483648
-  return function()
-    s = (s * 1103515245 + 12345) % 2147483648
-    return s / 2147483648
-  end
-end
+-- The engine's seeded rng() runs the very same LCG, so alias it.
+M.rng = rng
 
 function M.layout(seed)
   local rnd = M.rng(seed)
@@ -284,30 +276,22 @@ end
 -- High-score file
 -- ---------------------------------------------------------------------
 
+-- The engine's `score` board keeps the file; the helpers are grabbed here
+-- because the game later keeps its own points in a global named `score`.
 local HI_FILE = "torustrooper.hi"
+local HI_DEFAULT = 10000
+local hi_load, hi_save = score.hi_load, score.hi_save
 
 function M.load_high_score()
-  local f = openfile(HI_FILE, "r")
-  if not f then return 10000 end
-  local line = f:read("l")
-  f:close()
-  local score = tonumber(line)
-  if score and score > 0 then
-    return math.floor(score)
-  end
-  return 10000
+  return hi_load(HI_FILE, HI_DEFAULT)
 end
 
-function M.save_high_score(score)
-  score = math.floor(score)
+-- Writes the new best when it beats the board (the default ghost included);
+-- returns the best.
+function M.save_high_score(new_score)
   local cur = M.load_high_score()
-  if score > cur then
-    local f = openfile(HI_FILE, "w")
-    if f then
-      f:write(tostring(score) .. "\n")
-      f:close()
-    end
-    return score
+  if new_score > cur then
+    return hi_save(HI_FILE, new_score)
   end
   return cur
 end

@@ -48,24 +48,10 @@ local function play_sfx(name, vol)
   end
 end
 
--- High score persistence
-local highscore = 5000
-local function load_high()
-  local f = openfile("bomberman.hi", "r")
-  if f then
-    local s = f:read("*a")
-    f:close()
-    if s then highscore = tonumber(s) or highscore end
-  end
-end
-local function save_high()
-  local f = openfile("bomberman.hi", "w")
-  if f then
-    f:write(tostring(highscore))
-    f:close()
-  end
-end
-load_high()
+-- High score persistence - the engine's `score` board keeps the file. The
+-- helpers are grabbed before this game's own `score` counter exists.
+local hi_load, hi_save = score.hi_load, score.hi_save
+local highscore = hi_load("bomberman.hi", 5000)
 
 -- ---- Screen transform (world px -> screen px) ------------------------
 local function sx(wx) return OX + wx * SCALE end
@@ -329,8 +315,7 @@ local function kill_player()
   state_timer = lives > 0 and 1.2 or 0
   if state == "over" then
     if score > highscore then
-      highscore = score
-      save_high()
+      highscore = hi_save("bomberman.hi", score)
     end
     if sp_player then sp_player.visible = false sp_player:hide() end
   end

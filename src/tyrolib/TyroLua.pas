@@ -759,7 +759,7 @@ type
     function Sign_func(L: Plua_State): integer; cdecl;
     function Dist_func(L: Plua_State): integer; cdecl;
     function Aabb_func(L: Plua_State): integer; cdecl;
-    //game.rng(seed) -> a callable table; see RngCall_func for the call shape.
+    //rng(seed) -> a callable table; see RngCall_func for the call shape.
     function Rng_func(L: Plua_State): integer; cdecl;
     //__call metamethod of the tables Rng_func hands out.
     function RngCall_func(L: Plua_State): integer; cdecl;
@@ -2235,21 +2235,17 @@ begin
   Lua.State.Register('joystick', 'mappings', Gamepad, Gamepad.Mappings_func);
   Lua.State.Register('joystick', Gamepad); //Should be last one
 
-  //game: the shared gameplay helpers (button pairs, math, seeded rng, best
-  //scores); the implementations are TTyroEngine methods.
+  //game: the shared gameplay button pairs; the implementations are TTyroEngine
+  //methods.
   Lua.State.Register('game', 'pause_pressed', Game, Game.PausePressed_func);
   Lua.State.Register('game', 'start_pressed', Game, Game.StartPressed_func);
   Lua.State.Register('game', 'fire_pressed', Game, Game.FirePressed_func);
   Lua.State.Register('game', 'fire_down', Game, Game.FireDown_func);
-  Lua.State.Register('game', 'clamp', Game, Game.Clamp_func);
-  Lua.State.Register('game', 'lerp', Game, Game.Lerp_func);
-  Lua.State.Register('game', 'sign', Game, Game.Sign_func);
-  Lua.State.Register('game', 'dist', Game, Game.Dist_func);
-  Lua.State.Register('game', 'aabb', Game, Game.Aabb_func);
-  Lua.State.Register('game', 'rng', Game, Game.Rng_func);
-  Lua.State.Register('game', 'hi_load', Game, Game.HiLoad_func);
-  Lua.State.Register('game', 'hi_save', Game, Game.HiSave_func);
   Lua.State.Register('game', Game); //Should be last one
+
+  //score: the best scores kept in one small text file per game.
+  Lua.State.Register('score', 'hi_load', Game, Game.HiLoad_func);
+  Lua.State.Register('score', 'hi_save', Game, Game.HiSave_func);
 
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
@@ -2263,6 +2259,14 @@ begin
   Lua.State.RegisterGlobal('textheight', TextHeight_func);
   Lua.State.RegisterGlobal('rgba', Rgba_func);
   Lua.State.RegisterGlobal('rgb', Rgba_func);
+
+  //math helpers and the seeded rng: plain globals, no table to reach for
+  Lua.State.RegisterGlobal('clamp', Game.Clamp_func);
+  Lua.State.RegisterGlobal('lerp', Game.Lerp_func);
+  Lua.State.RegisterGlobal('sign', Game.Sign_func);
+  Lua.State.RegisterGlobal('dist', Game.Dist_func);
+  Lua.State.RegisterGlobal('aabb', Game.Aabb_func);
+  Lua.State.RegisterGlobal('rng', Game.Rng_func);
 
   //enter/leave: hold the drawing queue so the commands queued in between are
   //all drawn at one drawing cycle instead of being spread over frames
@@ -3924,28 +3928,28 @@ end;
 
 function TLuaGame.Clamp_func(L: Plua_State): integer; cdecl;
 begin
-  //game.clamp(v, lo, hi)
+  //clamp(v, lo, hi)
   L.PushNumber(Engine.ClampValue(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3)));
   Result := 1;
 end;
 
 function TLuaGame.Lerp_func(L: Plua_State): integer; cdecl;
 begin
-  //game.lerp(a, b, t)
+  //lerp(a, b, t)
   L.PushNumber(Engine.LerpValue(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3)));
   Result := 1;
 end;
 
 function TLuaGame.Sign_func(L: Plua_State): integer; cdecl;
 begin
-  //game.sign(v) -> -1, 0 or 1
+  //sign(v) -> -1, 0 or 1
   L.PushInteger(Engine.SignValue(L.ToNumber(1)));
   Result := 1;
 end;
 
 function TLuaGame.Dist_func(L: Plua_State): integer; cdecl;
 begin
-  //game.dist(x1, y1, x2, y2) - straight-line distance between two points
+  //dist(x1, y1, x2, y2) - straight-line distance between two points
   L.PushNumber(Engine.PointsDist(L.ToNumber(1), L.ToNumber(2),
     L.ToNumber(3), L.ToNumber(4)));
   Result := 1;
@@ -3953,7 +3957,7 @@ end;
 
 function TLuaGame.Aabb_func(L: Plua_State): integer; cdecl;
 begin
-  //game.aabb(x1, y1, w1, h1, x2, y2, w2, h2) - do two boxes overlap?
+  //aabb(x1, y1, w1, h1, x2, y2, w2, h2) - do two boxes overlap?
   //(x, y is each box's top-left corner)
   L.PushBoolean(Engine.BoxesOverlap(L.ToNumber(1), L.ToNumber(2),
     L.ToNumber(3), L.ToNumber(4), L.ToNumber(5), L.ToNumber(6),
@@ -3961,7 +3965,7 @@ begin
   Result := 1;
 end;
 
-//__call of the table game.rng(seed) hands out: the generator state lives in
+//__call of the table rng(seed) hands out: the generator state lives in
 //the raw field 's', so this one plain method is the whole object. The table
 //itself arrives as arg 1, the call arguments start at 2.
 function TLuaGame.RngCall_func(L: Plua_State): integer; cdecl;
@@ -3997,7 +4001,7 @@ function TLuaGame.Rng_func(L: Plua_State): integer; cdecl;
 var
   Seed: Int64;
 begin
-  //game.rng(seed) -> a repeatable random function, like the global rand() but
+  //rng(seed) -> a repeatable random function, like the global rand() but
   //private: r() is 0..<1, r(n) is 1..n, r(a, b) is a..b. Two runs with the
   //same seed produce the same sequence.
   if L.ArgsCount >= 1 then
@@ -4017,7 +4021,7 @@ function TLuaGame.HiLoad_func(L: Plua_State): integer; cdecl;
 var
   ADefault: Int64;
 begin
-  //game.hi_load("cave.hi" [, default]) - the best score kept in a small text
+  //score.hi_load("cave.hi" [, default]) - the best score kept in a small text
   //file next to the game; default (0) when the file is missing or unreadable.
   ADefault := 0;
   if L.ArgsCount >= 2 then
@@ -4028,10 +4032,11 @@ end;
 
 function TLuaGame.HiSave_func(L: Plua_State): integer; cdecl;
 begin
-  //game.hi_save("cave.hi", score) - writes only when score is a new best and
-  //answers the best either way, so `hi = game.hi_save("cave.hi", score)` is
-  //all a game needs.
-  L.PushInteger(Engine.SaveHighScore(L.ToString(1), L.ToInteger(2)));
+  //score.hi_save("cave.hi", score) - writes only when score is a new best and
+  //answers the best either way, so `hi = score.hi_save("cave.hi", score)` is
+  //all a game needs. Fractional scores are truncated, so `hi_save(file, 987.6)`
+  //is not silently dropped to 0.
+  L.PushInteger(Engine.SaveHighScore(L.ToString(1), Trunc(L.ToNumber(2))));
   Result := 1;
 end;
 

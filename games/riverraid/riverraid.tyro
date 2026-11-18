@@ -29,9 +29,6 @@ world.backcolor = colors.darkgreen      -- the land color fills the page behind 
 local W = world.width
 local H = world.height
 
--- ---- helpers ---------------------------------------------------------
-local clamp = game.clamp
-
 -- ---- joystick / gamepad -----------------------------------------------
 -- The sticks give analog steering and throttle. A dead zone keeps
 -- stick drift from nudging the plane, and movement past it is rescaled so

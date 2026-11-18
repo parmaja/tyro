@@ -101,45 +101,32 @@ M.MML_THEME_BASS =
   "d d d d d d d d f f f f f f f f " ..
   "g g g g g g g g a a a a a4 r4"
 
--- High Score File Management
+-- High Score File Management - the engine's `score` board keeps the file,
+-- 25000 is the ghost to beat on a fresh machine. The helpers are grabbed
+-- here so a game shadowing the global `score` can never break this module.
 local HI_FILE = "neonrunner.hi"
+local HI_DEFAULT = 25000
+local hi_load, hi_save = score.hi_load, score.hi_save
 
 function M.load_high_score()
-  local f = openfile(HI_FILE, "r")
-  if not f then return 25000 end
-  local line = f:read("l")
-  f:close()
-  local score = tonumber(line)
-  if score and score > 0 then
-    return score
-  end
-  return 25000
+  return hi_load(HI_FILE, HI_DEFAULT)
 end
 
-function M.save_high_score(score)
+-- Writes the new best when score beats the stored one (the default ghost
+-- included); returns the best.
+function M.save_high_score(new_score)
   local cur = M.load_high_score()
-  if score > cur then
-    local f = openfile(HI_FILE, "w")
-    if f then
-      f:write(tostring(score) .. "\n")
-      f:close()
-    end
-    return score
+  if new_score > cur then
+    return hi_save(HI_FILE, new_score)
   end
   return cur
 end
 
--- Helper: Clamp
-function M.clamp(val, min, max)
-  if val < min then return min end
-  if val > max then return max end
-  return val
-end
+-- Helper: Clamp - the engine's globals, exported under M for the callers.
+M.clamp = clamp
 
 -- Helper: Smooth Lerp
-function M.lerp(a, b, t)
-  return a + (b - a) * t
-end
+M.lerp = lerp
 
 -- Helper: Bounding Box AABB Collision Check
 function M.check_aabb(x1, y1, w1, h1, x2, y2, w2, h2)

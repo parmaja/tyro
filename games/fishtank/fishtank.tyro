@@ -50,9 +50,7 @@ local BUBBLER_Y   = H - 44
 local SAND_Y      = H - 58
 
 -- ---- tiny helpers ----------------------------------------------------
-local function clamp(v, lo, hi)
-  if v < lo then return lo elseif v > hi then return hi else return v end
-end
+-- (clamp() is an engine global, no need to write it at home)
 
 local function rnd(a, b)
   return a + (b - a) * math.random()

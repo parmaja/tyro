@@ -27,10 +27,7 @@ local CY = H * 0.5
 -- ambient engine drone, retuned with speed
 sound.loopPlay("Engine", 70, 0.35)
 
--- ---- helpers ---------------------------------------------------------
-local clamp = game.clamp
-
--- (rgba() is an engine global, no need to write it at home)
+-- (rgba() and clamp() are engine globals, no need to write them at home)
 local COL_BG      = rgba(2, 4, 12, 255)
 local COL_STAR    = rgba(230, 235, 255, 255)
 local COL_DIM     = rgba(120, 130, 170, 200)

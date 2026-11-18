@@ -51,7 +51,7 @@ end
 math.randomseed(math.floor(millis() % 1000000))
 
 -- ---- tiny helpers -----------------------------------------------------
-local clamp = game.clamp
+-- (clamp() is an engine global, no need to write it at home)
 
 local function rnd(a, b)
   return a + (b - a) * math.random()
@@ -318,15 +318,10 @@ local subdir = 1
 local invuln = 0
 local fireCd = 0
 
-local highscore = 0
-do
-  local f = openfile("highscore.txt", "r")
-  if f then
-    local s = f:read("l") or "0"
-    f:close()
-    highscore = tonumber((s:match("%d+"))) or 0
-  end
-end
+-- best score: the engine's `score` board keeps highscore.txt for us. The
+-- helpers are grabbed while the global `score` is still the engine's table.
+local hi_load, hi_save = score.hi_load, score.hi_save
+local highscore = hi_load("highscore.txt", 0)
 
 -- director timers
 local tShark, tJelly, tMine, tPatrol, tChest, tDiver = 2, 10, 6, 20, 12, 1.5
@@ -420,12 +415,7 @@ local function set_state(s)
     stop_theme()
     engine(false)
     if not attract and score > highscore then
-      highscore = score
-      local f = openfile("highscore.txt", "w")
-      if f then
-        f:write(tostring(score) .. "\n")
-        f:close()
-      end
+      highscore = hi_save("highscore.txt", score)
     end
   end
 end

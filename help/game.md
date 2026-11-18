@@ -2,28 +2,29 @@
 
 Every game re-types the same few lines: keep a number inside a range, load
 last week's best score, answer P with the keyboard *and* the gamepad, and go
-quiet when the player says MUTE. These live in the engine now, in one small
-table called `game` - no files to require, nothing to copy between projects.
+quiet when the player says MUTE. These live in the engine now - no files to
+require, nothing to copy between projects. The math helpers are plain globals,
+the best scores live in a `score` table and the button pairs in `game`.
 
 ```lua
-game.clamp(v, lo, hi)          -- keep v inside lo..hi
-game.lerp(a, b, t)             -- the point t (0..1) of the way from a to b
-game.sign(v)                   -- -1, 0 or 1
-game.dist(x1, y1, x2, y2)      -- straight-line distance between two points
-game.aabb(x1, y1, w1, h1,      -- do two boxes overlap? (x, y is each
-        x2, y2, w2, h2)        --   box's top-left corner)
+clamp(v, lo, hi)               -- keep v inside lo..hi
+lerp(a, b, t)                  -- the point t (0..1) of the way from a to b
+sign(v)                        -- -1, 0 or 1
+dist(x1, y1, x2, y2)           -- straight-line distance between two points
+aabb(x1, y1, w1, h1,           -- do two boxes overlap? (x, y is each
+     x2, y2, w2, h2)           --   box's top-left corner)
 ```
 
 ```lua
 -- best scores: one small text file per game, kept in the game's own folder
-local hi = game.hi_load("cave.hi", 0)
-hi = game.hi_save("cave.hi", score)   -- writes only when score beats hi,
-                                      -- and answers the best either way
+local hi = score.hi_load("cave.hi", 0)
+hi = score.hi_save("cave.hi", score)   -- writes only when score beats hi,
+                                       -- and answers the best either way
 ```
 
 ```lua
 -- repeatable random, like the engine's rand() but private to you
-local r = game.rng(42)      -- two runs with the same seed make the same map
+local r = rng(42)           -- two runs with the same seed make the same map
 r()      -> 0 .. <1         -- a raw fraction
 r(6)     -> 1 .. 6          -- one die
 r(2, 5)  -> 2 .. 5          -- inside a range
@@ -74,6 +75,7 @@ end
 ## Where it lives
 
 The functions are methods of `TTyroEngine` (src/TyroEngines.pas); TyroLua only
-binds them to the `game` table, so games, demos and the editor all see the
-same behaviour. The mute flag is the `SoundMuted` global in TyroSounds.pas,
-checked at every playback entry point.
+binds them - the math helpers and `rng` as globals, the best scores under
+`score`, the button pairs under the `game` table - so games, demos and the
+editor all see the same behaviour. The mute flag is the `SoundMuted` global in
+TyroSounds.pas, checked at every playback entry point.
