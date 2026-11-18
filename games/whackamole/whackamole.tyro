@@ -538,7 +538,7 @@ function update(dt)
     end
   end
 
-  if (keyboard.pressed("space") or keyboard.pressed("enter")) and state ~= "play" then
+  if game.start_pressed() and state ~= "play" then
     start_play()
   end
 
@@ -753,7 +753,7 @@ function update(dt)
   if splashing then
     splash_t = splash_t + dt
     if keyboard.pressed("escape") then exit() end
-    if keyboard.pressed("space") or keyboard.pressed("enter")
+    if game.start_pressed()
         or mouse.pressed("left") then
       splash_t = SPLASH_HOLD                      -- any key skips the splash
     end

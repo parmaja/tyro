@@ -999,12 +999,11 @@ local function human_input()
   if keyboard.down("right") or keyboard.down("d") then dx = dx + 1 end
   if keyboard.down("up") or keyboard.down("w") then dy = dy - 1 end
   if keyboard.down("down") or keyboard.down("s") then dy = dy + 1 end
-  if keyboard.down("space") or keyboard.down("enter") then fire = true end
+  if game.fire_down() then fire = true end
   if gamepad.available() then
     local ax, ay = gamepad.axis("leftx"), gamepad.axis("lefty")
     if math.abs(ax) > 0.25 then dx = dx + ax end
     if math.abs(ay) > 0.25 then dy = dy + ay end
-    if gamepad.down("a") or gamepad.down("b") then fire = true end
   end
   return dx, dy, fire
 end
@@ -1014,8 +1013,7 @@ local function step_state(dt)
   stime = stime + dt
 
   if state == "title" then
-    if keyboard.pressed("space") or keyboard.pressed("enter")
-       or gamepad.pressed("start") or gamepad.pressed("a") then
+    if game.start_pressed() then
       start_game()
     elseif attract and stime > 3 then
       start_game()
@@ -1050,8 +1048,7 @@ local function step_state(dt)
       place(subSpr, subx, suby)
     end
   elseif state == "over" then
-    if (stime > 1.2 and (keyboard.pressed("space") or keyboard.pressed("enter")
-        or gamepad.pressed("start"))) or (attract and stime > 5) then
+    if (stime > 1.2 and game.start_pressed()) or (attract and stime > 5) then
       set_state("title")
     end
   end
@@ -1063,7 +1060,7 @@ function update(dt)
   time0 = time0 + dt
 
   if keyboard.pressed("escape") then exit() end
-  if keyboard.pressed("p") and state == "play" then
+  if game.pause_pressed() and state == "play" then
     paused = not paused
   end
   if keyboard.pressed("m") then

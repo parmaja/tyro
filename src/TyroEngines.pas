@@ -428,6 +428,39 @@ type
     function FirePressed: Boolean;
     //* Like FirePressed but true every frame while the button stays held.
     function FireDown: Boolean;
+    //* True once, on the press edge of gamepad "a" (or keyboard "space").
+    function APressed: Boolean;
+    //* Like APressed but true every frame while the button stays held.
+    function ADown: Boolean;
+    //* True once, on the press edge of gamepad "b" (or keyboard "x").
+    function BPressed: Boolean;
+    //* Like BPressed but true every frame while the button stays held.
+    function BDown: Boolean;
+    //* True once, on the press edge of gamepad "x" (or keyboard "c").
+    function XPressed: Boolean;
+    //* Like XPressed but true every frame while the button stays held.
+    function XDown: Boolean;
+    //* True once, on the press edge of gamepad "y" (or keyboard "v").
+    function YPressed: Boolean;
+    //* Like YPressed but true every frame while the button stays held.
+    function YDown: Boolean;
+    //* True once, on the press edge of a left bumper: gamepad "lb" or "lt",
+    //* or keyboard "z" (the classic bomb key).
+    function LPressed: Boolean;
+    //* Like LPressed but true every frame while the button stays held.
+    function LDown: Boolean;
+    //* True once, on the press edge of a right bumper: gamepad "rb" or "rt",
+    //* or keyboard "b".
+    function RPressed: Boolean;
+    //* Like RPressed but true every frame while the button stays held.
+    function RDown: Boolean;
+    //* True once, on the press edge of gamepad "select"/"back" or keyboard
+    //* "tab" - maps and options screens.
+    function SelectPressed: Boolean;
+    //* Like SelectPressed but true every frame while the button stays held.
+    function SelectDown: Boolean;
+    //* Like StartPressed but true every frame while the button stays held.
+    function StartDown: Boolean;
     //* Reads the integer kept in AFileName (a plain text file resolved against
     //* the workspace, so it sits next to the game), or ADefault when the file
     //* does not exist or does not hold a number. Backs score.hi_load().
@@ -1217,6 +1250,107 @@ begin
     or TyroInput.IsGamepadDown('rt')
     or TyroInput.IsGamepadDown('fire')
     or TyroInput.IsGamepadDown('trigger');
+end;
+
+function TTyroEngine.APressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('space')
+    or TyroInput.IsGamepadPressed('a');
+end;
+
+function TTyroEngine.ADown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('space')
+    or TyroInput.IsGamepadDown('a');
+end;
+
+function TTyroEngine.BPressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('x')
+    or TyroInput.IsGamepadPressed('b');
+end;
+
+function TTyroEngine.BDown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('x')
+    or TyroInput.IsGamepadDown('b');
+end;
+
+function TTyroEngine.XPressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('c')
+    or TyroInput.IsGamepadPressed('x');
+end;
+
+function TTyroEngine.XDown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('c')
+    or TyroInput.IsGamepadDown('x');
+end;
+
+function TTyroEngine.YPressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('v')
+    or TyroInput.IsGamepadPressed('y');
+end;
+
+function TTyroEngine.YDown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('v')
+    or TyroInput.IsGamepadDown('y');
+end;
+
+function TTyroEngine.LPressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('z')
+    or TyroInput.IsGamepadPressed('lb')
+    or TyroInput.IsGamepadPressed('lt');
+end;
+
+function TTyroEngine.LDown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('z')
+    or TyroInput.IsGamepadDown('lb')
+    or TyroInput.IsGamepadDown('lt');
+end;
+
+function TTyroEngine.RPressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('b')
+    or TyroInput.IsGamepadPressed('rb')
+    or TyroInput.IsGamepadPressed('rt');
+end;
+
+function TTyroEngine.RDown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('b')
+    or TyroInput.IsGamepadDown('rb')
+    or TyroInput.IsGamepadDown('rt');
+end;
+
+function TTyroEngine.SelectPressed: Boolean;
+begin
+  Result := TyroInput.IsKeyPressed('tab')
+    or TyroInput.IsGamepadPressed('select')
+    or TyroInput.IsGamepadPressed('back');
+end;
+
+function TTyroEngine.SelectDown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('tab')
+    or TyroInput.IsGamepadDown('select')
+    or TyroInput.IsGamepadDown('back');
+end;
+
+function TTyroEngine.StartDown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('space')
+    or TyroInput.IsKeyDown('enter')
+    or TyroInput.IsGamepadDown('start')
+    or TyroInput.IsGamepadDown('menu')
+    or TyroInput.IsGamepadDown('a')
+    or TyroInput.IsGamepadDown('x')
+    or TyroInput.IsGamepadDown('fire');
 end;
 
 //A high-score file lives next to the game: relative names are resolved

@@ -71,40 +71,14 @@ local function pad_axis(name)
   return sign * ((math.abs(v) - PAD_DEAD) / (1 - PAD_DEAD))
 end
 
-local function is_fire_pressed()
-  return keyboard.pressed("space") or keyboard.pressed("x")
-      or gamepad.pressed("a") or gamepad.pressed("x")
-      or gamepad.pressed("b") or gamepad.pressed("y")
-      or gamepad.pressed("rb") or gamepad.pressed("rt")
-      or gamepad.pressed("fire") or gamepad.pressed("trigger")
-end
-
-local function is_fire_down()
-  return keyboard.down("space") or keyboard.down("x")
-      or gamepad.down("a") or gamepad.down("x")
-      or gamepad.down("b") or gamepad.down("y")
-      or gamepad.down("rb") or gamepad.down("rt")
-      or gamepad.down("fire") or gamepad.down("trigger")
-end
-
+-- The arcade pairs are engine defaults now: keyboard or pad, one call each.
+local is_fire_pressed = game.fire_pressed
+local is_fire_down = game.fire_down
 -- The jets' guns bark harmlessly at steel: the warships only take bombs.
--- Z on the keyboard, the left bumpers on a pad.
-local function is_bomb_pressed()
-  return keyboard.pressed("z")
-      or gamepad.pressed("lb") or gamepad.pressed("lt")
-end
-
-local function is_start_pressed()
-  return keyboard.pressed("space") or keyboard.pressed("enter")
-      or gamepad.pressed("start") or gamepad.pressed("menu")
-      or gamepad.pressed("a") or gamepad.pressed("x")
-      or gamepad.pressed("fire")
-end
-
-local function is_pause_pressed()
-  return keyboard.pressed("p")
-      or gamepad.pressed("start") or gamepad.pressed("menu")
-end
+-- Z on the keyboard, the left bumpers on a pad - game.l_pressed().
+local is_bomb_pressed = game.l_pressed
+local is_start_pressed = game.start_pressed
+local is_pause_pressed = game.pause_pressed
 
 -- ---- sound helpers ---------------------------------------------------
 local function beep(freq, ms)   music.sound(freq, ms) end
@@ -1719,7 +1693,7 @@ function update(dt)
   end
 
   if keyboard.pressed("escape") then exit() end
-  if (gamepad.pressed("back") or gamepad.pressed("select"))
+  if game.select_pressed()
       and (state == "ready" or state == "over" or state == "pause") then
     exit()
   end

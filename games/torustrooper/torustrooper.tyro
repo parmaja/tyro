@@ -569,20 +569,20 @@ function update(dt)
     local a = clock * 0.12
     world.camera(520 * math.cos(a), -520 * math.sin(a), 260,
       0, 0, 0, 0, 0, 1)
-    if keyboard.pressed("space") or gamepad.pressed("start") or gamepad.pressed("a") then
+    if game.start_pressed() then
       start_play()
     end
     return
   end
 
   if state == "over" then
-    if keyboard.pressed("space") or gamepad.pressed("start") or gamepad.pressed("a") then
+    if game.start_pressed() then
       start_play()
     end
     return
   end
 
-  if keyboard.pressed("p") then
+  if game.pause_pressed() then
     paused = not paused
     if drone then sound.loopVolume(paused and 0 or (muted and 0 or 1)) end
   end

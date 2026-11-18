@@ -1373,7 +1373,7 @@ function update(dt)
 
   -- Input handling for Title & Game Over
   if state == "title" then
-    if keyboard.pressed("space") or keyboard.pressed("enter") or mouse.pressed("left") then
+    if game.start_pressed() or mouse.pressed("left") then
       reset_game()
     end
   elseif state == "gameover" then
@@ -1394,7 +1394,7 @@ function update(dt)
         table.remove(texts, i)
       end
     end
-    if keyboard.pressed("space") or keyboard.pressed("enter") or keyboard.pressed("r") then
+    if game.start_pressed() or keyboard.pressed("r") then
       reset_game()
     end
   elseif state == "play" then

@@ -234,7 +234,10 @@ dist(x1, y1, x2, y2)
 aabb(x1, y1, w1, h1, x2, y2, w2, h2)   -- do two boxes overlap?
 
 game.pause_pressed()  game.start_pressed()  game.fire_pressed()
-game.fire_down()     -- keyboard OR gamepad, the usual arcade buttons
+game.a_pressed()  game.b_pressed()  game.x_pressed()  game.y_pressed()
+game.l_pressed()  game.r_pressed()  game.select_pressed()
+game.fire_down() ...  -- hold versions: *_down for every pair above;
+                      -- keyboard OR gamepad, the usual arcade buttons
 
 local hi = score.hi_load("cave.hi", 0)         -- best score from a small
 hi = score.hi_save("cave.hi", score)           -- text file next to the game

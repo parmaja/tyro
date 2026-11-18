@@ -375,7 +375,7 @@ function update(dt)
   if splashing then
     splash_t = splash_t + dt
     if keyboard.pressed("escape") then exit() end
-    if keyboard.pressed("space") or keyboard.pressed("enter")
+    if game.start_pressed()
         or mouse.pressed("left") then
       splash_t = SPLASH_HOLD
     end
@@ -393,7 +393,7 @@ function update(dt)
 
   if state == "title" then
     if keyboard.pressed("escape") then exit() end
-    if keyboard.pressed("space") or keyboard.pressed("enter")
+    if game.start_pressed()
         or mouse.pressed("left") then
       start_level(1)
     end
@@ -401,7 +401,7 @@ function update(dt)
   end
 
   if state == "run" then
-    if keyboard.pressed("space") or keyboard.pressed("escape") then
+    if game.a_pressed() or keyboard.pressed("escape") then
       sfx("roll_stop")
       state = "score"
       return
@@ -474,7 +474,7 @@ function update(dt)
       start_level(level)
     elseif keyboard.pressed("n") then
       start_level(level % #D.LEVELS + 1)
-    elseif keyboard.pressed("space") then
+    elseif game.start_pressed() then
       start_level(level % #D.LEVELS + 1)
     end
     return
@@ -487,7 +487,7 @@ function update(dt)
     if muted then sound.loopStop() end
   end
   if keyboard.pressed("n") then start_level(level % #D.LEVELS + 1) return end
-  if keyboard.pressed("space") then depart() return end
+  if game.start_pressed() then depart() return end
   if keyboard.pressed("r") then
     sel_rot = (sel_rot + 1) % D.rot_count(sel)
     sfx("rotate")

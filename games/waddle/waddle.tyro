@@ -235,7 +235,7 @@ function update(dt)
   if keyboard.pressed("escape") then exit() end
   if keyboard.pressed("r") then reset_level() end
 
-  if (keyboard.pressed("space") or keyboard.pressed("enter")) and not released then
+  if game.start_pressed() and not released then
     released = true
     crowd:release(CROWD_SIZE)
   end

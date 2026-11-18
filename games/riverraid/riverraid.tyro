@@ -767,7 +767,8 @@ function update(dt)
   if dt > 0.06 then dt = 0.06 end
 
   if keyboard.pressed("escape") then exit() end
-  if (gamepad.pressed("back") or gamepad.pressed("select")) and (state == "ready" or state == "over" or state == "pause") then
+  if game.select_pressed()
+      and (state == "ready" or state == "over" or state == "pause") then
     exit()
   end
 

@@ -40,16 +40,25 @@ its own check, these are only the shared defaults.
 | `game.pause_pressed()` | p | start, menu |
 | `game.start_pressed()` | space, enter | start, menu, a, x, fire |
 | `game.fire_pressed()` | space, x | a, x, b, y, rb, rt, fire, trigger |
-| `game.fire_down()` | hold version of `fire_pressed` | |
+| `game.a_pressed()` | space | a |
+| `game.b_pressed()` | x | b |
+| `game.x_pressed()` | c | x |
+| `game.y_pressed()` | v | y |
+| `game.l_pressed()` | z | lb, lt |
+| `game.r_pressed()` | b | rb, rt |
+| `game.select_pressed()` | tab | select, back |
+| `*_down()` | hold version of the `*_pressed` call | |
 
 The `*_pressed` calls are true once, on the frame the button is pressed - use
-them for menus and shots. `game.fire_down()` is true every frame the button
-stays held - good for auto-fire.
+them for menus and shots. The `*_down` calls (`fire_down`, `a_down`, `b_down`,
+`x_down`, `y_down`, `l_down`, `r_down`, `start_down`, `select_down`) are true
+every frame the button stays held - good for auto-fire and throttles.
 
 ```lua
 function update(dt)
   if game.pause_pressed() then paused = not paused end
   if game.fire_pressed() then shoot() end
+  if game.l_pressed() then drop_bomb() end
 end
 ```
 

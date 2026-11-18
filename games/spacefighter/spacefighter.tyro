@@ -425,12 +425,12 @@ function update(dt)
 
   -- State machine handlers
   if state == "title" then
-    if keyboard.pressed("space") or keyboard.pressed("enter") then
+    if game.start_pressed() then
       reset_game()
     end
     return
   elseif state == "gameover" or state == "victory" then
-    if keyboard.pressed("r") or keyboard.pressed("space") or keyboard.pressed("enter") then
+    if keyboard.pressed("r") or game.start_pressed() then
       reset_game()
     end
     return
