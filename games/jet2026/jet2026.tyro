@@ -872,10 +872,9 @@ local function make_ships()
   ships = {}
   for i = 1, #SHIP_DEFS do
     local d = SHIP_DEFS[i]
-    -- the dot form for sprites: the colon form currently misreports the file
-    -- (see the same note in games/waddle/waddle.tyro)
-    local spr = sprites.new("ship_" .. d.kind)
-    spr.load(d.tex)
+    -- Pluto class syntax: `new Sprite(name, file)` creates the sprite and
+    -- loads its texture in one step (the old sprites.new + spr.load pair)
+    local spr = new Sprite("ship_" .. d.kind, d.tex)
     spr.layer = SHIP_LAYER
     spr.scale = d.scale
     spr.hide()

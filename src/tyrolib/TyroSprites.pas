@@ -163,6 +163,7 @@ type
     function GetWidth(Handle: integer): integer;
     function GetHeight(Handle: integer): integer;
     function GetName(Handle: integer): string;
+    procedure SetName(Handle: integer; const AName: string);
 
     // Animation: installs a set of frames (one texture per animation frame)
     // onto a sprite, replacing whatever texture/frames it had. The textures
@@ -517,6 +518,19 @@ begin
   try
     if FItems.TryGetValue(Handle, Sprite) then
       Result := Sprite.Name;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetName(Handle: integer; const AName: string);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Name := AName;
   finally
     FLock.Leave;
   end;

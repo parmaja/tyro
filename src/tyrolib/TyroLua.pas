@@ -352,6 +352,10 @@ type
     function Setter(L: Plua_State): integer; override;
   public
     function RegisterSprite(AHandle: Integer): Integer;
+    function PushExisting(L: Plua_State; AHandle: Integer): Integer;
+    procedure InitSpriteTable(L: Plua_State; AIdx: Integer; AHandle: Integer; const AName: string = '');
+    procedure PushClass(L: Plua_State);
+    function Construct_func(L: Plua_State): integer; cdecl;
     function Load_func(L: Plua_State): integer; cdecl;
     function FromImage_func(L: Plua_State): integer; cdecl;
     function LoadScript_func(L: Plua_State): integer; cdecl;
@@ -435,6 +439,10 @@ type
     function Setter(L: Plua_State): integer; override;
   public
     function RegisterModel(AHandle: Integer): Integer;
+    function PushExisting(L: Plua_State; AHandle: Integer): Integer;
+    procedure InitModelTable(L: Plua_State; AIdx: Integer; AHandle: Integer; const AName: string = '');
+    procedure PushClass(L: Plua_State);
+    function Construct_func(L: Plua_State): integer; cdecl;
     //model:load(file) -> load (or replace) the mesh from a GLB/glTF/OBJ file
     function Load_func(L: Plua_State): integer; cdecl;
     //model:move(x, y [, z])
@@ -2291,6 +2299,9 @@ begin
   Lua.State.Register('sprites', 'find', Self, Sprites.Find_func);
   // Set __call in the Sprites metatable so Sprites("name") works; Lua passes the table as arg 1
   Lua.State.Register('sprites', '__call', Self, Sprites.Call_func, True);
+  // Pluto class for `new Sprite([name [, file]])` and `class MySprite extends Sprite`
+  Sprite.PushClass(Lua.State);
+  lua_setglobal(Lua.State, 'Sprite');
 
   // Paint sheets: images.new(w, h) makes a small canvas the script draws on
   // itself (no file); sprite:fromimage(sheet) turns those pixels into a sprite
@@ -2321,6 +2332,9 @@ begin
   Lua.State.Register('models', 'torus', Self, Models.Torus_func);
   Lua.State.Register('models', 'find', Self, Models.Find_func);
   Lua.State.Register('models', '__call', Self, Models.Call_func, True);
+  // Pluto class for `new Model([name [, file]])` and `class MyModel extends Model`
+  Model.PushClass(Lua.State);
+  lua_setglobal(Lua.State, 'Model');
 
   // Particle sparks: particles.emit(x, y [, count] [, options]) throws a burst
   // of sparks at a screen pixel and the engine steps and draws it until the
@@ -4935,52 +4949,265 @@ end;
 
 { Sprites }
 
-function TLuaSprite.RegisterSprite(AHandle: integer): integer;
+// First script argument of a sprite method. A dot call on a registered sprite
+// table (spr.load(...)) injects the sprite table as argument 1, so the script's
+// arguments start at 2. A colon call on a registered sprite table (spr:load(...))
+// passes the receiver again as argument 2, so the script's arguments start at 3.
+// A Pluto class method call (spr:load(...) on a `new Sprite` or subclass instance)
+// is not table-injected, so slot 1 is the receiver and arguments start at 2.
+function SpriteArgBase(L: Plua_State): Integer;
+begin
+  if (L.ArgsCount >= 2) and L.IsTable(1) and L.IsTable(2) and
+    lua_rawequal(L, 1, 2) then
+    Result := 3
+  else
+    Result := 2;
+end;
+
+// Copy the string-keyed fields from the class table at ASrcIdx onto the
+// instance at AAbsIdx. Metamethod-like names ('__...') are skipped, and a
+// field the instance already carries raw is kept, so engine-bound methods
+// always win over same-named class fields and internal calls stay intact.
+procedure LuaCopyClassFields(L: Plua_State; AAbsIdx, ASrcIdx: Integer);
 var
-  base: integer;
+  s: PChar;
+begin
+  lua_pushnil(L);
+  while lua_next(L, ASrcIdx) <> 0 do
+  begin
+    // stack: [..., key, val]
+    if lua_type(L, -2) = LUA_TSTRING then
+    begin
+      s := PChar(lua_tostring(L, -2));
+      if (s <> nil) and not ((s[0] = '_') and (s[1] = '_')) then
+      begin
+        lua_pushvalue(L, -2); // key
+        lua_rawget(L, AAbsIdx);
+        if lua_isnil(L, -1) then
+        begin
+          lua_pop(L, 1);
+          lua_pushvalue(L, -2); // key
+          lua_pushvalue(L, -2); // val
+          lua_rawset(L, AAbsIdx);
+        end
+        else
+          lua_pop(L, 1);
+      end;
+    end;
+    lua_pop(L, 1); // pop val, keep key for the next lua_next
+  end;
+end;
+
+// Populate the table at AIdx with the sprite's __handle, __name, bound methods,
+// property metatable, and registry entry. Used by both RegisterSprite (for
+// sprites.new) and Construct_func (for Pluto's `new Sprite` / `extends Sprite`).
+// When AIdx is a Pluto subclass instance (`class Ship extends Sprite`), its old
+// metatable is remembered; after the property metatable is installed, the whole
+// class chain (metatable.__index = the class, and up to four levels) is copied
+// raw onto the instance, so subclass methods and fields stay callable.
+procedure TLuaSprite.InitSpriteTable(L: Plua_State; AIdx: Integer; AHandle: Integer; const AName: string);
+var
+  absIdx, depth: Integer;
+begin
+  absIdx := lua_absindex(L, AIdx);
+
+  // A Pluto instance carries a class metatable; keep it alive on the stack
+  // while the property metatable replaces it, then copy from it at the end.
+  // A plain table (sprites.new path) has none, so push a nil sentinel and the
+  // walk below simply stops.
+  if lua_getmetatable(L, absIdx) = 0 then
+    lua_pushnil(L);
+
+  // Push duplicate at top of stack because L.Register() expects the target table
+  // at -1 and -2.
+  L.PushValue(absIdx);
+  L.PushValue(absIdx); //[sprite, sprite]
+
+  L.PushInteger(AHandle);
+  L.SetField(-2, '__handle'); //sprite.__handle = AHandle
+  if AName <> '' then
+  begin
+    L.PushString(AName);
+    L.SetField(-2, '__name');
+  end;
+
+  // methods receive the sprite table injected as argument 1, so both spr.load()
+  // and spr:load() work identically
+  L.Register('load', Load_func);
+  L.Register('fromimage', FromImage_func);
+  L.Register('loadscript', LoadScript_func);
+  L.Register('show', Show_func);
+  L.Register('hide', Hide_func);
+  L.Register('move', Move_func);
+  L.Register('width', Width_func);
+  L.Register('height', Height_func);
+  L.Register('play', Play_func);
+  L.Register('stop', Stop_func);
+  L.Register('pause', Stop_func);
+  L.Register('action', Action_func);
+  L.Register('framecount', FrameCount_func);
+
+  // metatable with property getter/setter (no table injection, Lua passes the
+  // table as arg 1)
+  L.NewTable; //[sprite, sprite, meta]
+  L.RegisterMeta('__index', __getter);
+  L.RegisterMeta('__newindex', __setter);
+  L.SetMetaTable(-2); //sprite.metatable = meta
+
+  // remember this sprite table so collision.pump() can find it by handle
+  if AHandle > cSpriteInvalid then
+  begin
+    L.PushValue(-1); // duplicate the sprite table
+    lua_rawseti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + AHandle);
+  end;
+
+  L.Pop(2); // pop the two working duplicates, the old metatable stays on top
+
+  // walk the old class chain and copy its fields onto the instance
+  depth := 0;
+  while (depth < 4) and lua_istable(L, -1) do
+  begin
+    LuaCopyClassFields(L, absIdx, lua_absindex(L, -1));
+    lua_pushliteral(L, PUTF8Char('__index'));
+    lua_rawget(L, -2);
+    lua_remove(L, -2); // drop the current table, keep its chain target
+    Inc(depth);
+  end;
+  lua_pop(L, 1); // pop the chain end (nil or non-table)
+end;
+
+// Push the global `Sprite` class table onto the stack so scripts can use Pluto's
+// `new Sprite([name [, file]])` or `class MySprite extends Sprite`.
+// Note: no `new` field on purpose. Pluto's `new T(...)` prefers a raw (even
+// inherited) `T.new` over `T.__construct`, so a `new` field here would swallow
+// both `new Sprite(...)` and `new Subclass(...)` and skip the file argument.
+procedure TLuaSprite.PushClass(L: Plua_State);
+begin
+  L.NewTable; //[Sprite]
+  L.RegisterMeta('__construct', Construct_func);
+  L.RegisterMeta('find', Script.Sprites.Find_func);
+  L.RegisterMeta('puff', Script.Sprites.Puff_func);
+  L.RegisterMeta('blob', Script.Sprites.Blob_func);
+  // Make `Sprite("name")` callable as a shortcut for `sprites("name")`
+  L.NewTable; //[Sprite, meta]
+  L.RegisterMeta('__call', Script.Sprites.Call_func);
+  L.SetMetaTable(-2);
+end;
+
+// Pluto constructor: `new Sprite([name [, file [, script]]])`
+// Also supports `new Sprite("ship.png")`: if only one string argument is given
+// and it carries an image/sprite extension (.png, .aseprite, .ase, .sprite,
+// .bmp, .jpg, .jpeg, .gif), it is treated as the texture file to load immediately
+// and its base name becomes the sprite name.
+function TLuaSprite.Construct_func(L: Plua_State): integer; cdecl;
+var
+  b: Integer;
+  aArg1, aName, aFile, aScriptFile, ext: string;
+  handle: Integer;
+  CreateObj: TCreateSpriteObject;
+  LoadObj: TLoadSpriteObject;
+  ScriptObj: TLoadSpriteScriptObject;
+begin
+  Result := 0;
+  if not L.IsTable(1) then
+    Exit;
+  // Pluto calls __construct as `__construct(self, ...)`, and subclasses may
+  // also reach it through `super(...)`, so the script arguments start at 2.
+  // If slot 2 is a table too (a `super(parent, self, ...)` layout), the base
+  // table is slot 2.
+  if (L.ArgsCount >= 2) and L.IsTable(2) then
+    b := 3
+  else
+    b := 2;
+
+  aName := '';
+  aFile := '';
+  aScriptFile := '';
+  if (L.ArgsCount >= b) and L.IsString(b) then
+  begin
+    aArg1 := L.ToString(b);
+    if (L.ArgsCount >= b + 1) and L.IsString(b + 1) then
+    begin
+      aName := aArg1;
+      aFile := L.ToString(b + 1);
+      if (L.ArgsCount >= b + 2) and L.IsString(b + 2) then
+        aScriptFile := L.ToString(b + 2);
+    end
+    else
+    begin
+      ext := LowerCase(ExtractFileExt(aArg1));
+      if (ext = '.png') or (ext = '.aseprite') or (ext = '.ase') or
+         (ext = '.sprite') or (ext = '.bmp') or (ext = '.jpg') or
+         (ext = '.jpeg') or (ext = '.gif') then
+      begin
+        aFile := aArg1;
+        aName := ChangeFileExt(ExtractFileName(aArg1), '');
+      end
+      else
+        aName := aArg1;
+    end;
+  end;
+
+  CreateObj := TCreateSpriteObject.Create(aName);
+  try
+    CreateObj.Run(Script.Thread);
+    handle := CreateObj.HandleResult;
+  finally
+    CreateObj.Free;
+  end;
+  if handle <= cSpriteInvalid then
+    handle := -1;
+
+  InitSpriteTable(L, b - 1, handle, aName);
+
+  if (aFile <> '') and (handle > cSpriteInvalid) then
+  begin
+    aFile := Res.GuessFileName(aFile);
+    LoadObj := TLoadSpriteObject.Create(aFile, aName, handle);
+    try
+      LoadObj.Run(Script.Thread);
+      handle := LoadObj.HandleResult;
+      if handle > cSpriteInvalid then
+      begin
+        L.PushString('__handle');
+        L.PushInteger(handle);
+        lua_rawset(L, b - 1);
+        L.PushValue(b - 1);
+        lua_rawseti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + handle);
+        if aScriptFile <> '' then
+        begin
+          ScriptObj := TLoadSpriteScriptObject.Create(Script, handle, aScriptFile);
+          FScript.AddQueueObject(ScriptObj);
+        end;
+      end
+      else
+        Script.DoError('Sprite not loaded: ' + aFile);
+    finally
+      LoadObj.Free;
+    end;
+  end;
+end;
+
+function TLuaSprite.RegisterSprite(AHandle: integer): integer;
 begin
   with Script do
   begin
     Lua.State.BeginTable; //[sprite]
-    base := Lua.State.ArgsCount; //index of the sprite table
-
-    //keep a duplicate, the -2/-3 addressing in Register() hits the sprite table
-    Lua.State.PushValue(-1); //[sprite, sprite]
-
-    Lua.State.PushInteger(AHandle);
-    Lua.State.SetField(-2, '__handle'); //sprite.__handle = AHandle
-
-    //methods receive the sprite table injected as argument 1
-    Lua.State.Register('load', Load_func);
-    Lua.State.Register('fromimage', FromImage_func);
-    Lua.State.Register('loadscript', LoadScript_func);
-    Lua.State.Register('show', Show_func);
-    Lua.State.Register('hide', Hide_func);
-    Lua.State.Register('move', Move_func);
-    Lua.State.Register('width', Width_func);
-    Lua.State.Register('height', Height_func);
-    Lua.State.Register('play', Play_func);
-    Lua.State.Register('stop', Stop_func);
-    Lua.State.Register('pause', Stop_func);
-    Lua.State.Register('action', Action_func);
-    Lua.State.Register('framecount', FrameCount_func);
-
-    //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
-    Lua.State.NewTable; //[sprite, sprite, meta]
-    Lua.State.RegisterMeta('__index', __getter);
-    Lua.State.RegisterMeta('__newindex', __setter);
-    Lua.State.SetMetaTable(-2); //sprite.metatable = meta
-
-    // remember this sprite table so collision.pump() can find it by handle
-    if AHandle > cSpriteInvalid then
-    begin
-      Lua.State.PushValue(-1); // duplicate the sprite table
-      lua_rawseti(Lua.State, LUA_REGISTRYINDEX, cSpriteRegistryBase + AHandle);
-    end;
-
-    Lua.State.Remove(base); //drop the first reference, keep one on the stack
+    InitSpriteTable(Lua.State, -1, AHandle);
     Result := 1;
   end;
+end;
+
+// Push the sprite table already registered for AHandle from the handle
+// registry, or build a new one when no script table exists yet. find/call
+// use this so every lookup of a sprite returns the very same table.
+function TLuaSprite.PushExisting(L: Plua_State; AHandle: Integer): Integer;
+begin
+  lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + AHandle);
+  if lua_istable(L, -1) then
+    Exit(1);
+  L.Pop(1);
+  Result := RegisterSprite(AHandle);
 end;
 
 // Sprites.new("name"?) -> creates a new sprite object, returns it on Lua stack
@@ -5423,10 +5650,12 @@ begin
   aName := L.ToString(1);
   handle := Engine.Sprites.FindByName(aName);
   if handle > cSpriteInvalid then
-    Script.Sprite.RegisterSprite(handle)
+    Result := Script.Sprite.PushExisting(L, handle)
   else
+  begin
     L.PushNil;
-  Result := 1;
+    Result := 1;
+  end;
 end;
 
 // Sprites("name") -> __call metamethod, same as Sprites.find
@@ -5438,10 +5667,12 @@ begin
   aName := L.ToString(2); // first arg after table self
   handle := Engine.Sprites.FindByName(aName);
   if handle > cSpriteInvalid then
-    Script.Sprite.RegisterSprite(handle)
+    Result := Script.Sprite.PushExisting(L, handle)
   else
+  begin
     L.PushNil;
-  Result := 1;
+    Result := 1;
+  end;
 end;
 
 //__handle must be read raw: the 'controls' and 'sprites' tables carry no
@@ -6861,14 +7092,16 @@ begin
 end;
 function TLuaSprite.Load_func(L: Plua_State): integer; cdecl;
 var
+  b: integer;
   aFile, aName, aScriptFile: string;
   handle: integer;
   LoadObj: TLoadSpriteObject;
   ScriptObj: TLoadSpriteScriptObject;
 begin
-  aFile := Res.GuessFileName(L.ToString(2));
-  if L.ArgsCount >= 3 then
-    aScriptFile := L.ToString(3);
+  b := SpriteArgBase(L);
+  aFile := Res.GuessFileName(L.ToString(b));
+  if L.ArgsCount >= b + 1 then
+    aScriptFile := L.ToString(b + 1);
   L.GetField(1, '__name');
   if L.IsString(-1) then
     aName := L.ToString(-1)
@@ -6912,10 +7145,12 @@ end;
 // one sheet can dress any number of sprites.
 function TLuaSprite.FromImage_func(L: Plua_State): integer;
 var
+  b: Integer;
   aName: string;
   handle, idx: Integer;
   Sheet: TLuaImage;
 begin
+  b := SpriteArgBase(L);
   L.GetField(1, '__name');
   if L.IsString(-1) then
     aName := L.ToString(-1)
@@ -6923,12 +7158,12 @@ begin
     aName := '';
   L.Pop(1);
   handle := GetSpriteHandle(L, 1);
-  if not L.IsTable(2) then
+  if not L.IsTable(b) then
   begin
     Script.DoError('sprite:fromimage: needs a paint sheet from images.new()');
     Exit(0);
   end;
-  L.GetField(2, '__sheet');
+  L.GetField(b, '__sheet');
   if L.IsInteger(-1) then
     idx := L.PopInteger
   else
@@ -6939,7 +7174,7 @@ begin
   Sheet := Script.Images.Items[idx];
   if Sheet = nil then
   begin
-    Script.DoError('sprite:fromimage: ''' + L.ToString(2) + ''' is not a paint sheet');
+    Script.DoError('sprite:fromimage: ''' + L.ToString(b) + ''' is not a paint sheet');
     Exit(0);
   end;
   //Queued, not Run(): the sheet's draw commands live in the same queue and
@@ -6951,12 +7186,13 @@ end;
 // sprite:loadscript("file.tyro") -> compile & attach a per-sprite script (Engine thread)
 function TLuaSprite.LoadScript_func(L: Plua_State): integer; cdecl;
 var
-  handle: integer;
+  b, handle: integer;
   aScriptFile: string;
   ScriptObj: TLoadSpriteScriptObject;
 begin
+  b := SpriteArgBase(L);
   handle := GetSpriteHandle(L, 1);
-  aScriptFile := L.ToString(2);
+  aScriptFile := L.ToString(b);
   if (handle > cSpriteInvalid) and (aScriptFile <> '') then
   begin
     ScriptObj := TLoadSpriteScriptObject.Create(Script, handle, aScriptFile);
@@ -6987,11 +7223,12 @@ end;
 
 function TLuaSprite.Move_func(L: Plua_State): integer; cdecl;
 var
-  handle: integer;
+  b, handle: integer;
   x, y: single;
 begin
-  x := L.ToNumber(2);
-  y := L.ToNumber(3);
+  b := SpriteArgBase(L);
+  x := L.ToNumber(b);
+  y := L.ToNumber(b + 1);
   handle := GetSpriteHandle(L, 1);
   if handle > cSpriteInvalid then
     Engine.Sprites.SetPosition(handle, x, y);
@@ -7020,25 +7257,26 @@ end;
 // per-frame durations stored in the .aseprite file; 0 (or omitted) keeps them.
 function TLuaSprite.Play_func(L: Plua_State): integer; cdecl;
 var
-  handle: integer;
+  b, handle: integer;
 begin
+  b := SpriteArgBase(L);
   handle := GetSpriteHandle(L, 1);
   if handle > cSpriteInvalid then
   begin
-    if L.ArgsCount >= 2 then
+    if L.ArgsCount >= b then
     begin
-      if L.IsString(2) then
+      if L.IsString(b) then
       begin
         //sprite:play("walk") selects that named action and starts it;
         //sprite:play("walk", 12) also overrides its frame rate.
-        Engine.Sprites.SetAction(handle, L.ToString(2));
-        if L.ArgsCount >= 3 then
-          Engine.Sprites.SetAnimSpeed(handle, L.ToNumber(3));
+        Engine.Sprites.SetAction(handle, L.ToString(b));
+        if L.ArgsCount >= b + 1 then
+          Engine.Sprites.SetAnimSpeed(handle, L.ToNumber(b + 1));
       end
       else
       begin
         //sprite:play(12) keeps the old meaning: speed for the current sequence.
-        Engine.Sprites.SetAnimSpeed(handle, L.ToNumber(2));
+        Engine.Sprites.SetAnimSpeed(handle, L.ToNumber(b));
         Engine.Sprites.RestartAnim(handle);
       end;
     end
@@ -7053,13 +7291,14 @@ end;
 // sprite:action("walk") -> select it and rewind, returns true/false
 function TLuaSprite.Action_func(L: Plua_State): integer; cdecl;
 var
-  handle: integer;
+  b, handle: integer;
 begin
+  b := SpriteArgBase(L);
   handle := GetSpriteHandle(L, 1);
-  if L.ArgsCount >= 2 then
+  if L.ArgsCount >= b then
   begin
     if handle > cSpriteInvalid then
-      L.PushBoolean(Engine.Sprites.SetAction(handle, L.ToString(2)))
+      L.PushBoolean(Engine.Sprites.SetAction(handle, L.ToString(b)))
     else
       L.PushBoolean(False);
   end
@@ -7260,6 +7499,11 @@ begin
         L.PushInteger(Engine.Sprites.GetHeight(handle));
       end;
       Result := 1;
+    end
+    else if field = 'name' then
+    begin
+      L.PushString(Engine.Sprites.GetName(handle));
+      Result := 1;
     end;
   end;
   if Result = 0 then
@@ -7395,6 +7639,13 @@ begin
   else if (field = 'shaderValue') or (field = 'shader_value') then
   begin
     Engine.Sprites.SetShaderValue(handle, L.ToNumber(3));
+  end
+  else if field = 'name' then
+  begin
+    Engine.Sprites.SetName(handle, L.ToString(3));
+    L.PushString('__name');
+    L.PushValue(3);
+    lua_rawset(L, 1);
   end
   {else if (field = 'width') or (field = 'height') then
   begin
@@ -7878,49 +8129,163 @@ begin
     Result := 2;
 end;
 
+// Populate the table at AIdx with the model's __handle, __name, bound methods,
+// property metatable, and registry entry. Used by both RegisterModel (for
+// models.new) and Construct_func (for Pluto's `new Model` / `extends Model`).
+procedure TLuaModel.InitModelTable(L: Plua_State; AIdx: Integer; AHandle: Integer; const AName: string);
+var
+  absIdx, depth: Integer;
+begin
+  absIdx := lua_absindex(L, AIdx);
+
+  // Keep a Pluto class metatable alive on the stack while the property
+  // metatable replaces it; a plain table (models.new path) gets a nil sentinel.
+  if lua_getmetatable(L, absIdx) = 0 then
+    lua_pushnil(L);
+
+  L.PushValue(absIdx);
+  L.PushValue(absIdx); //[model, model]
+
+  L.PushInteger(AHandle);
+  L.SetField(-2, '__handle');
+  if AName <> '' then
+  begin
+    L.PushString(AName);
+    L.SetField(-2, '__name');
+  end;
+
+  L.Register('load', Load_func);
+  L.Register('move', Move_func);
+  L.Register('show', Show_func);
+  L.Register('hide', Hide_func);
+  L.Register('play', Play_func);
+  L.Register('stop', Stop_func);
+  L.Register('face', Face_func);
+
+  L.NewTable; //[model, model, meta]
+  L.RegisterMeta('__index', __getter);
+  L.RegisterMeta('__newindex', __setter);
+  L.SetMetaTable(-2);
+
+  if AHandle > cModel3DInvalid then
+  begin
+    L.PushValue(-1);
+    lua_rawseti(L, LUA_REGISTRYINDEX, cModelRegistryBase + AHandle);
+  end;
+
+  L.Pop(2); // pop the two working duplicates, the old metatable stays on top
+
+  // walk the old class chain and copy its fields onto the instance
+  depth := 0;
+  while (depth < 4) and lua_istable(L, -1) do
+  begin
+    LuaCopyClassFields(L, absIdx, lua_absindex(L, -1));
+    lua_pushliteral(L, PUTF8Char('__index'));
+    lua_rawget(L, -2);
+    lua_remove(L, -2); // drop the current table, keep its chain target
+    Inc(depth);
+  end;
+  lua_pop(L, 1); // pop the chain end (nil or non-table)
+end;
+
+procedure TLuaModel.PushClass(L: Plua_State);
+begin
+  L.NewTable; //[Model]
+  L.RegisterMeta('__construct', Construct_func);
+  L.RegisterMeta('sphere', Script.Models.Sphere_func);
+  L.RegisterMeta('box', Script.Models.Box_func);
+  L.RegisterMeta('cylinder', Script.Models.Cylinder_func);
+  L.RegisterMeta('cone', Script.Models.Cone_func);
+  L.RegisterMeta('torus', Script.Models.Torus_func);
+  L.RegisterMeta('find', Script.Models.Find_func);
+  L.NewTable; //[Model, meta]
+  L.RegisterMeta('__call', Script.Models.Call_func);
+  L.SetMetaTable(-2);
+end;
+
+// Pluto constructor: `new Model([name [, file]])` or `new Model("jet.glb")`
+function TLuaModel.Construct_func(L: Plua_State): integer; cdecl;
+var
+  b: Integer;
+  aArg1, aName, aFile, ext: string;
+  handle: Integer;
+  LoadObj: TLoadModelObject;
+begin
+  Result := 0;
+  if not L.IsTable(1) then
+    Exit;
+  if (L.ArgsCount >= 2) and L.IsTable(2) then
+    b := 3
+  else
+    b := 2;
+
+  aName := '';
+  aFile := '';
+  if (L.ArgsCount >= b) and L.IsString(b) then
+  begin
+    aArg1 := L.ToString(b);
+    if (L.ArgsCount >= b + 1) and L.IsString(b + 1) then
+    begin
+      aName := aArg1;
+      aFile := L.ToString(b + 1);
+    end
+    else
+    begin
+      ext := LowerCase(ExtractFileExt(aArg1));
+      if (ext = '.glb') or (ext = '.gltf') or (ext = '.obj') or
+         (ext = '.iqm') or (ext = '.m3d') or (ext = '.vox') then
+      begin
+        aFile := aArg1;
+        aName := ChangeFileExt(ExtractFileName(aArg1), '');
+      end
+      else
+        aName := aArg1;
+    end;
+  end;
+
+  handle := Engine.Models.AddEmpty(aName);
+  if handle <= cModel3DInvalid then
+    handle := cModel3DInvalid;
+
+  InitModelTable(L, b - 1, handle, aName);
+
+  if (aFile <> '') and (handle > cModel3DInvalid) then
+  begin
+    aFile := Res.GuessFileName(aFile);
+    LoadObj := TLoadModelObject.Create(handle, aFile);
+    try
+      LoadObj.Run(Script.Thread);
+      if not LoadObj.HandleResult then
+        Script.DoError('Model not loaded: ' + aFile);
+    finally
+      LoadObj.Free;
+    end;
+  end;
+end;
+
 // Build a model table bound to AHandle and leave it on the Lua stack. Mirrors
 // TLuaTile.RegisterTile: the methods are plain table fields receiving the table
 // as argument 1, the properties resolve through the metatable getter/setter.
 function TLuaModel.RegisterModel(AHandle: integer): integer;
-var
-  base: integer;
 begin
   with Script do
   begin
     Lua.State.BeginTable; //[model]
-    base := Lua.State.ArgsCount; //index of the model table
-
-    //keep a duplicate, the -3 addressing in Register() hits the model table
-    Lua.State.PushValue(-1); //[model, model]
-
-    Lua.State.PushInteger(AHandle);
-    Lua.State.SetField(-2, '__handle'); //model.__handle = AHandle
-
-    //methods receive the model table injected as argument 1
-    Lua.State.Register('load', Load_func);
-    Lua.State.Register('move', Move_func);
-    Lua.State.Register('show', Show_func);
-    Lua.State.Register('hide', Hide_func);
-    Lua.State.Register('play', Play_func);
-    Lua.State.Register('stop', Stop_func);
-    Lua.State.Register('face', Face_func);
-
-    //metatable with property getter/setter (no table injection, Lua passes the table as arg 1)
-    Lua.State.NewTable; //[model, model, meta]
-    Lua.State.RegisterMeta('__index', __getter);
-    Lua.State.RegisterMeta('__newindex', __setter);
-    Lua.State.SetMetaTable(-2); //model.metatable = meta
-
-    // remember this model table so it can be found by handle
-    if AHandle > cModel3DInvalid then
-    begin
-      Lua.State.PushValue(-1); // duplicate the model table
-      lua_rawseti(Lua.State, LUA_REGISTRYINDEX, cModelRegistryBase + AHandle);
-    end;
-
-    Lua.State.Remove(base); //drop the first reference, keep one on the stack
+    InitModelTable(Lua.State, -1, AHandle);
     Result := 1;
   end;
+end;
+
+// Push the model table already registered for AHandle from the handle
+// registry, or build a new one. find/call use this so every lookup of a
+// model returns the very same table.
+function TLuaModel.PushExisting(L: Plua_State; AHandle: Integer): Integer;
+begin
+  lua_rawgeti(L, LUA_REGISTRYINDEX, cModelRegistryBase + AHandle);
+  if lua_istable(L, -1) then
+    Exit(1);
+  L.Pop(1);
+  Result := RegisterModel(AHandle);
 end;
 
 // model.load(file) -> load (or replace) the mesh from a GLB/glTF/OBJ file.
@@ -8522,10 +8887,12 @@ begin
   aName := L.ToString(1);
   handle := Engine.Models.FindByName(aName);
   if handle > cModel3DInvalid then
-    Script.Model.RegisterModel(handle)
+    Result := Script.Model.PushExisting(L, handle)
   else
+  begin
     L.PushNil;
-  Result := 1;
+    Result := 1;
+  end;
 end;
 
 // models("name") -> __call metamethod, same as models.find
@@ -8537,10 +8904,12 @@ begin
   aName := L.ToString(2); // first arg after table self
   handle := Engine.Models.FindByName(aName);
   if handle > cModel3DInvalid then
-    Script.Model.RegisterModel(handle)
+    Result := Script.Model.PushExisting(L, handle)
   else
+  begin
     L.PushNil;
-  Result := 1;
+    Result := 1;
+  end;
 end;
 
 { TLuaParticles }
