@@ -31,6 +31,22 @@ uses
 type
   TLuaScript = class;
 
+  { TLuaTimer }
+
+  // One after()/every() timer. FnRef is the Lua registry reference of the
+  // callback; Due and Interval ride the scene clock the engine feeds the
+  // pump in EngineUpdate, so world.timescale stretches a timer with the
+  // rest of the scene and pause() sleeps it with update().
+  TLuaTimer = class
+  public
+    Id: Integer;
+    Due: Double;     // scene-clock milliseconds it fires at
+    Interval: Double; // the period in ms (every), 0 for a one-shot (after)
+    Periodic: Boolean;
+    FnRef: Integer;
+    Dead: Boolean;
+  end;
+
   { TTyroLuaObject }
 
   TTyroLuaObject = class abstract(TLuaObject)
@@ -857,6 +873,17 @@ type
     //Owns every TLuaFile handed out by openfile(); freed after Lua.Close,
     //because the Lua closures hold pointers into those objects
     Files: TList;
+    //Scene timers handed out by after()/every() (TLuaTimer), swept inside
+    //the engine-driven frame. The registry refs die with the Lua state, so
+    //Destroy releases the list only.
+    Timers: TList; //of TLuaTimer
+    //The scene clock in milliseconds: only the stretched engine steps
+    //advance it, so timers sleep through pause() and crawl with the scene.
+    TimerClock: Double;
+    TimerNextId: Integer;
+    function NewTimer(L: Plua_State; AMs: Double; APeriodic: Boolean): Integer;
+    procedure PumpTimers(ADeltaTime: Double);
+    function HasTimers: Boolean;
     procedure DoError(S: string);
     procedure Run; override;
     //Look up the global AName and pcall it on the main thread. AArgs arguments
@@ -880,6 +907,15 @@ type
     function TextWidth_func(L: Plua_State): integer; cdecl;
     function TextHeight_func(L: Plua_State): integer; cdecl;
     function Rgba_func(L: Plua_State): integer; cdecl;
+
+    //scene timers
+    //after(ms, fn) / every(ms, fn) -> a timer id, cancel(id) -> true when a
+    //timer was stopped. The callbacks run inside the engine-driven frame,
+    //the same beat that calls update(); while the top-level chunk is still
+    //running there is no such beat, so nothing fires before it returns.
+    function After_func(L: Plua_State): integer; cdecl;
+    function Every_func(L: Plua_State): integer; cdecl;
+    function Cancel_func(L: Plua_State): integer; cdecl;
 
     //file access
 
@@ -2263,6 +2299,9 @@ begin
   Camera := TLuaCamera.Create('camera', Self);
 
   Files := TList.Create; //of TLuaFile, freed in Destroy
+  Timers := TList.Create; //of TLuaTimer, freed in Destroy
+  TimerClock := 0;
+  TimerNextId := 1; //timer id 0 stays invalid, so cancel(0) always answers false
 
   //window
   Lua.State.Register('window', 'show', Window, Window.Show_func);
@@ -2423,6 +2462,13 @@ begin
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
   Lua.State.RegisterGlobal('millis', Millis_func);
+  //scene timers: after(ms, fn) fires once, every(ms, fn) repeats; both hand
+  //back a timer id that cancel(id) stops. The callbacks run in the
+  //engine-driven frame, on the scene clock (timescale-stretched, paused by
+  //pause()).
+  Lua.State.RegisterGlobal('after', After_func);
+  Lua.State.RegisterGlobal('every', Every_func);
+  Lua.State.RegisterGlobal('cancel', Cancel_func);
   Lua.State.RegisterGlobal('rand', RandomValue_func);
   Lua.State.RegisterGlobal('screenshot', Screenshot_func);
   Lua.State.RegisterGlobal('exit', Exit_func);
@@ -2637,6 +2683,17 @@ begin
     end;
     FreeAndNil(Files);
   end;
+  //The timers go with the state: their registry refs died when Lua.Close
+  //shut it down, so only the list items need releasing here.
+  if Timers <> nil then
+  begin
+    while Timers.Count > 0 do
+    begin
+      TLuaTimer(Timers[Timers.Count - 1]).Free;
+      Timers.Delete(Timers.Count - 1);
+    end;
+    FreeAndNil(Timers);
+  end;
   FreeAndNil(Shader);
   FreeAndNil(Game);
   FreeAndNil(Gamepad);
@@ -2727,17 +2784,23 @@ begin
 end;
 
 // The engine takes over only when the returned script defines at least one of
-// the frame callbacks. A script that never returns keeps its worker thread and
-// never reaches this point.
+// the frame callbacks, or armed a timer - an `after(...)` with no update() is
+// a scene too, and its callback needs the same engine-driven beat.
 function TLuaScript.HasEngineCallbacks: Boolean;
 begin
   Result := (Lua.State <> nil) and
-    (Lua.State.FunctionExists('update') or Lua.State.FunctionExists('draw'));
+    (Lua.State.FunctionExists('update') or Lua.State.FunctionExists('draw') or HasTimers);
 end;
 
 procedure TLuaScript.EngineUpdate(ADeltaTime: Double);
 begin
   if Lua.State = nil then
+    Exit;
+  //The timer beat rides the stretched frame time: fire everything that is
+  //due first, so a callback's marks show in the very frame that answers it.
+  PumpTimers(ADeltaTime);
+  //a timer callback may have called exit(); do not step into a stopped state.
+  if Stopped then
     Exit;
   Lua.State.PushNumber(ADeltaTime);
   CallGlobal('update', 1);
@@ -2748,6 +2811,164 @@ begin
   if Lua.State = nil then
     Exit;
   CallGlobal('draw', 0);
+end;
+
+// True while at least one after()/every() timer still waits. A script that
+// armed one has a scene the engine must keep stepping (HasEngineCallbacks),
+// and once the list drains the run simply stays driven like an update() one.
+function TLuaScript.HasTimers: Boolean;
+begin
+  Result := (Timers <> nil) and (Timers.Count > 0);
+end;
+
+// Shared body of after() and every(): take (ms, fn) and hand back the timer
+// id, or -1 when the call does not carry a function to run. The due point
+// rides the scene clock, so a timer armed while the top-level chunk still
+// runs counts from the moment the engine takes the frame loop over.
+function TLuaScript.NewTimer(L: Plua_State; AMs: Double; APeriodic: Boolean): Integer;
+var
+  T: TLuaTimer;
+begin
+  Result := -1;
+  if (Timers = nil) or (Lua.State = nil) then
+    Exit;
+  if not lua_isfunction(L, 2) then
+    Exit;
+  if AMs < 0 then
+    AMs := 0;
+  if APeriodic and (AMs < 1) then
+    AMs := 1; //every(0) would fire on every frame - one millisecond is its floor
+  T := TLuaTimer.Create;
+  T.Id := TimerNextId;
+  Inc(TimerNextId);
+  T.Interval := AMs;
+  T.Periodic := APeriodic;
+  T.Dead := False;
+  T.Due := TimerClock + AMs;
+  lua_pushvalue(L, 2);
+  T.FnRef := luaL_ref(L, LUA_REGISTRYINDEX);
+  Timers.Add(T);
+  Result := T.Id;
+end;
+
+//The timer beat: advance the scene clock, fire everything that is due, and
+//sweep the dead. Callbacks may arm and cancel timers while they run, so the
+//due list is a snapshot taken before the first call and every callback
+//re-checks Dead. An every() re-arms from now, so a frame that slept (lag, a
+//pause) costs one tick, never a burst of them.
+procedure TLuaScript.PumpTimers(ADeltaTime: Double);
+var
+  I, N: Integer;
+  T: TLuaTimer;
+  Due: array of TLuaTimer;
+  Msg: string;
+begin
+  if Timers = nil then
+    Exit;
+  TimerClock := TimerClock + ADeltaTime * 1000;
+  if Timers.Count = 0 then
+    Exit;
+  SetLength(Due, 0);
+  for I := 0 to Timers.Count - 1 do
+  begin
+    T := TLuaTimer(Timers[I]);
+    if (not T.Dead) and (TimerClock >= T.Due) then
+    begin
+      if T.Periodic then
+        //re-arm from now: a frame that slept (lag, a pause) costs one tick,
+        //never a burst of them
+        T.Due := TimerClock + T.Interval;
+      N := Length(Due);
+      SetLength(Due, N + 1);
+      Due[N] := T;
+    end;
+  end;
+  for I := 0 to High(Due) do
+  begin
+    T := Due[I];
+    if T.Dead then
+      Continue; //an earlier callback this very beat cancelled it
+    lua_rawgeti(Lua.State, LUA_REGISTRYINDEX, T.FnRef);
+    if lua_pcall(Lua.State, 0, 0, 0) <> LUA_OK then
+    begin
+      Msg := string(UTF8String(lua_tostring(Lua.State, -1)));
+      lua_pop(Lua.State, 1);
+      DoError('timer: ' + Msg);
+    end;
+    if not T.Periodic then
+      T.Dead := True; //a one-shot leaves the world the moment it answers
+    if Stopped then
+      Break; //the callback called exit()
+  end;
+  //sweep: dead timers leave the list, and their registry refs with them, so
+  //a cancelled or answered callback's function is released at once.
+  for I := Timers.Count - 1 downto 0 do
+  begin
+    T := TLuaTimer(Timers[I]);
+    if T.Dead then
+    begin
+      if Lua.State <> nil then
+        luaL_unref(Lua.State, LUA_REGISTRYINDEX, T.FnRef);
+      Timers.Delete(I);
+      T.Free;
+    end;
+  end;
+end;
+
+// after(ms, fn) -> timer id
+// One shot: fn runs once, ms of scene time later. world.timescale stretches
+// the wait with the rest of the scene and pause() sleeps it; the id feeds
+// cancel() to unscrew the shot before it fires.
+function TLuaScript.After_func(L: Plua_State): integer; cdecl;
+var
+  Id: Integer;
+begin
+  Id := NewTimer(L, L.ToNumber(1), False);
+  if Id >= 0 then
+    L.PushInteger(Id)
+  else
+    L.PushNil;
+  Result := 1;
+end;
+
+// every(ms, fn) -> timer id
+// The repeating sibling: fn runs again and again, ms of scene time apart,
+// until cancel(id) or the run ends. Like after(), the wait rides the scene
+// clock, so slow motion thins the ticks out and a long frame costs one
+// tick, not a burst.
+function TLuaScript.Every_func(L: Plua_State): integer; cdecl;
+var
+  Id: Integer;
+begin
+  Id := NewTimer(L, L.ToNumber(1), True);
+  if Id >= 0 then
+    L.PushInteger(Id)
+  else
+    L.PushNil;
+  Result := 1;
+end;
+
+// cancel(id) -> true when a waiting timer was stopped, false when the id is
+// unknown or already answered. The callback never runs again afterwards.
+function TLuaScript.Cancel_func(L: Plua_State): integer; cdecl;
+var
+  I, Id: Integer;
+  T: TLuaTimer;
+begin
+  Result := 1;
+  Id := L.ToInteger(1);
+  if Timers <> nil then
+    for I := 0 to Timers.Count - 1 do
+    begin
+      T := TLuaTimer(Timers[I]);
+      if (T.Id = Id) and (not T.Dead) then
+      begin
+        T.Dead := True; //the pump's sweep releases the reference
+        L.PushBoolean(True);
+        Exit;
+      end;
+    end;
+  L.PushBoolean(False);
 end;
 
 // Runs a single console line on the persistent Lua state (same globals as the

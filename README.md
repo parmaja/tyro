@@ -1075,6 +1075,9 @@ for a control that is not an `image`.
 | `time()` | `number` (seconds) | Elapsed time since the window was created |
 | `millis()` | `number` (ms) | High-resolution monotonic clock in milliseconds (the same timer the frame budget uses); fine enough to time a drawing body |
 | `rand(min, max)` | `integer` | Random integer in [min, max] |
+| `after(ms, fn)` | `number` (id) | One shot: run `fn` once, `ms` of scene time later (see [Scene timers](#scene-timers-afterfn--everyfn)) |
+| `every(ms, fn)` | `number` (id) | Repeat: run `fn` every `ms` of scene time until `cancel(id)` or the run ends |
+| `cancel(id)` | `boolean` | Stop a waiting `after`/`every`; `true` when one was stopped, `false` for an id already answered or unknown |
 
 ## Game loop: `update(dt)` / `draw()`
 
@@ -1125,6 +1128,44 @@ Because only the engine callbacks touch the state after the hand-off — the
 loader thread stops before the engine takes over — the two models are
 interchangeable and never race. See [docs/engine-loop.md](docs/engine-loop.md)
 for the details.
+
+A script that armed an `after()`/`every()` timer counts as a scene too: a
+pending timer keeps the engine driving the frame even with no `update()` or
+`draw()` defined, so `after(3000, exit)` alone is a whole (three second) run.
+
+## Scene timers: `after(fn)` / `every(fn)`
+
+Callbacks on the engine's own beat — no `while` loop, no `sleep()` pacing:
+
+```lua
+window.show(640, 480)
+
+local bomb = sprites.puff("bomb", 32)
+bomb:move(320, 240)
+
+after(2000, function()           -- one shot: two seconds of scene time
+  bomb.visible = false
+  particles.emit(320, 240, 40)
+end)
+
+local ticks = 0
+local id = every(500, function() -- the countdown ticks, four a second
+  ticks = ticks + 1
+  if ticks == 4 then cancel(id) end
+end)
+```
+
+The waits ride the **scene clock**, not the wall clock: `world.timescale`
+stretches them with the rest of the scene, `pause(ms)` sleeps them, and while
+the top-level chunk is still running there is no engine beat yet — a timer
+armed there counts from the moment the engine takes the frame loop over. The
+callbacks run at the head of the engine's beat — before `update()` — and they
+may draw, move sprites and call `exit()` like any engine code, so a callback's
+marks show in the very frame that answers it. An `every()` that misses its
+moment while the scene lags
+costs one tick, never a burst; its floor is one millisecond. A timer is a
+timer on one scene — an answered `after` and everything of a finished run are
+gone with it, and a stale `cancel(id)` simply answers `false`.
 
 Use `pause(ms)` instead of `sleep(ms)` for a still hold: it also freezes the
 scene (physics, sprites, controls) for the duration while music/radio keep
