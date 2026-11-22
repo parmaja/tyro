@@ -84,14 +84,19 @@ Games feel dead without tweening; today every game in `games/` hand-rolls it.
       mouse leash catches the ball; `tests/joint_test.tyro` grew the
       stretch checks (27 total)
 
-## P5 — Save it (persistence API)
+## P5 — Save it (persistence API) — ✅ done 2026-11-22
 
 `savejson/loadjson` exist but a kid must invent the file name and shape.
 
-- [ ] `save("score", 120)` / `load("score")` — key/value sugar writing one
-      `save.json` per game folder
-- [ ] `save("hiscores", {..})` — any JSON-able value
-- [ ] Keep the per-game `score.hi` convention (`score.hi_save`) working
+- [x] `save("score", 120)` / `load("score")` — key/value sugar writing one
+      `save.json` per game folder; every call hits the disk at once, and a
+      key is dropped by leaving its value out (or handing it `nil`)
+- [x] `save("hiscores", {..})` — any JSON-able value (functions and sprites
+      answer `nil` + a message, never an error)
+- [x] Keep the per-game `score.hi` convention (`score.hi_save`) working —
+      verified side by side in the tests; `savejson` rewriting the page is
+      noticed, a hand-broken `save.json` starts an empty page
+- [x] `tests/save_test.tyro` (27 checks) and [`help/save.md`](../help/save.md)
 
 ## P6 — Touch & a second platform
 

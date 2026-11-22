@@ -5,7 +5,8 @@
 --  physics queue sings through on("collision"), the target pops with a
 --  tween, and the score travels as your own event: emit("scored", 10).
 --  SPACE respawns the board - and unhooks the blinking help line with
---  off(id), the whole bus story in one small toy.
+--  off(id), the whole bus story in one small toy. The best score survives
+--  the closing of the window with save("events_best", ..) / load(..).
 --
 --  Run: bin\tyro.exe demos/events_demo.tyro
 --======================================================================
@@ -16,6 +17,7 @@ world.backcolor = rgb(24, 26, 40)
 collision.gravityy = 0
 
 local score = 0
+local best = load("events_best") or 0   -- P5: remember what the mouse earned
 local hud = { lift = 0 }
 local gone = 0
 local PALETTE = {
@@ -83,6 +85,10 @@ end)
 -- The game's own events: nothing knows who listens, and nobody must.
 on("scored", function(pts)
   score = score + pts
+  if score > best then
+    best = score
+    save("events_best", best)   -- one line, and the record survives
+  end
   tween.killall(hud)
   tween.from(hud, "lift", 12, 0, 220, "quadout")
 end)
@@ -114,6 +120,8 @@ function draw()
   screen.clear("blank")
   screen.color = colors.white
   screen.text(8, 452 - hud.lift, "SCORE " .. score)
+  screen.color = rgb(150, 160, 190, 190)
+  screen.text(140, 452, "BEST " .. best)   -- loaded from save.json at startup
   screen.color = rgb(180, 200, 255, 140 + math.floor(100 * math.sin(blink / 12)))
   if help_id ~= 0 then
     screen.text(150, 30, "move the mouse - SPACE for a new board")

@@ -307,6 +307,11 @@ local save = loadjson("progress.json")   -- nil + a message when it is not there
 | `savejson(value, name)` | Write the JSON text of a value (`json_encode`) into a workspace file; returns `true`, or `nil` plus a message |
 | `loadjson(name)` | Read a workspace file and parse it (`json_decode`); returns the value, or `nil` plus a message |
 
+And when a file name is one thought too many, `save("score", 120)` /
+`load("score")` keep key/value pairs in one automatic `save.json` next to the
+script — see [Remembering between runs](#remembering-between-runs-save--load)
+below and [`help/save.md`](help/save.md).
+
 See `tests/test_openfile.tyro` for a runnable check of all of it.
 
 # Network
@@ -1366,6 +1371,26 @@ hook.x, hook.y = 320, 80
 ball = sprites.blob("ball", 44)
 ball.x, ball.y = 420, 80           -- 100 px to the side
 collision.joint(hook, ball)        -- ...and it swings
+```
+
+## Remembering between runs: `save()` / `load()`
+
+One name, one value, no file to invent: `save("best", 4200)` keeps it in
+`save.json` next to the script, and `load("best")` finds it back — `nil` on
+the first run, the value after that. Numbers, text, booleans and whole tables
+all fit; leaving the value out deletes the key, and every call hits the disk
+at once, so a closed window never loses a score. `savejson`/`loadjson` stay
+the do-it-yourself pair for your own file names, and the `score.hi_save`
+champion files keep working beside them. Notes in
+[`help/save.md`](help/save.md).
+
+```lua
+best = load("best") or 0
+if score > best then
+  best = score
+  save("best", best)          -- written now, not on exit
+end
+canvas.text(8, 8, "best: " .. best)
 ```
 
 ## Grouping drawing with enter() / leave()

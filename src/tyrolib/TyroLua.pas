@@ -1043,6 +1043,10 @@ type
     //top of json_encode/json_decode, with openfile's workspace rules.
     function SaveJson_func(L: Plua_State): integer; cdecl;
     function LoadJson_func(L: Plua_State): integer; cdecl;
+    procedure GetSaveDoc(L: Plua_State);
+    procedure InvalidateSaveCache(L: Plua_State; const AResolved: string);
+    function Save_func(L: Plua_State): integer; cdecl;
+    function Load_func(L: Plua_State): integer; cdecl;
 
    public
     procedure Init; override;
@@ -1077,6 +1081,13 @@ const
   cRequireCache = 'tyro.require.cache';
 
 implementation
+
+//Stable addresses for the Lua registry: the per-game save.json cache (see
+//GetSaveDoc). The document lives under SaveDocKey, the mtime it was read at
+//under SaveAgeKey.
+var
+  SaveDocKey: Integer;
+  SaveAgeKey: Integer;
 
 //Handler kinds for the event bus (TLuaHandler.Kind) and the names the engine
 //itself emits: the reserved on() spellings listed in help/events.md.
@@ -2661,6 +2672,10 @@ begin
   //file, loadjson("file") reads it back: a table saved is a table found again.
   Lua.State.RegisterGlobal('savejson', SaveJson_func);
   Lua.State.RegisterGlobal('loadjson', LoadJson_func);
+  //save("score", 120) / load("score"): the key/value pair over one save.json
+  //in the game's folder - persistence without inventing file names.
+  Lua.State.RegisterGlobal('save', Save_func);
+  Lua.State.RegisterGlobal('load', Load_func);
 
   //require(name) is the stock loader's replacement: the Lua one is removed in
   //TLua.Init along with dofile/loadfile/package, and this one reads only from
@@ -6804,6 +6819,7 @@ begin
   end;
   try
     SaveFileUTF8String(Resolved, UTF8String(aJson));
+    InvalidateSaveCache(L, Resolved); // the page moved: the cache is history
   except
     on E: Exception do
     begin
@@ -6875,6 +6891,173 @@ begin
   finally
     Root.Free;
   end;
+end;
+
+//The per-game save.json as a Lua table living in the registry under two
+//sentinel addresses (SaveDocKey, SaveAgeKey): the document and the mtime
+//stamp it was read at (-1 = no file, -2 = stale on purpose). The pair stays
+//alive across script reloads, which is what makes `load("score")` answer the
+//value `save("score", ...)` wrote even after F5. An absent or corrupted
+//document starts as an empty page. A mtime that moved while no one was
+//looking - a hand-edited file, an editor writing the same name - drops the
+//cache on the next read; FPC's FileAge carries only two-second granularity,
+//so a FAST foreign write is caught instead by InvalidateSaveCache, which
+//savejson calls when its file is our page. Leaves the document on the
+//stack; Save_func refreshes the stamp after its own write.
+procedure TLuaScript.GetSaveDoc(L: Plua_State);
+var
+  FileName, Text: string;
+  Root: TDON_Value;
+  Age: Int64;
+  HasDoc: Boolean;
+begin
+  FileName := IncludePathDelimiter(Res.WorkPath) + 'save.json';
+  // the cached document and the mtime it was read at
+  HasDoc := lua_rawgetp(L, LUA_REGISTRYINDEX, @SaveDocKey) = LUA_TTABLE;
+  Age := -2;
+  if lua_rawgetp(L, LUA_REGISTRYINDEX, @SaveAgeKey) = LUA_TNUMBER then
+    Age := lua_tointeger(L, -1);
+  lua_pop(L, 1); // stamp
+  if HasDoc and (Age = FileAge(FileName)) then
+    Exit; // the document on the stack is fresh (-2 matches nothing: rebuild)
+  if HasDoc then
+    lua_pop(L, 1); // stale (or deliberately invalidated) document
+  // (Re)build: the JSON object in the file, or an empty page. The read is
+  // done here rather than through LoadJson_func because that helper reads its
+  // file name at absolute index 1, which belongs to the calling script.
+  HasDoc := False;
+  Age := -1; // "no file" is a stamp of its own
+  if SysUtils.FileExists(FileName) then
+  begin
+    Age := FileAge(FileName);
+    Root := nil;
+    try
+      try
+        Text := LoadFileString(FileName); // UTF-8, BOM dropped
+        Root := JsonParseValueString(Text);
+        if Root is TDON_Object then
+        begin
+          PushDonValue(L, Root); // a fresh table of data, no aliases
+          HasDoc := True;
+        end;
+      except
+        on E: Exception do
+          ; // a broken page starts empty: a first run and a bad file are kin
+      end;
+    finally
+      Root.Free;
+    end;
+  end;
+  if not HasDoc then
+    lua_newtable(L);
+  lua_pushvalue(L, -1); // keep a copy: publishing pops the stack slot
+  lua_rawsetp(L, LUA_REGISTRYINDEX, @SaveDocKey); // publish the document
+  lua_pushinteger(L, Age);
+  lua_rawsetp(L, LUA_REGISTRYINDEX, @SaveAgeKey); // and its stamp
+end;
+
+//InvalidateSaveCache: called by savejson/loadjson when the file they touched
+//IS the save page. Reading tells us nothing new and writing changes the
+//truth, so in both cases a cached document must not look fresh anymore: the
+//stamp becomes -2, which no real mtime matches.
+procedure TLuaScript.InvalidateSaveCache(L: Plua_State; const AResolved: string);
+begin
+  if (L = nil) or (AResolved = '') then
+    Exit;
+  if SameFileName(AResolved,
+    ExpandFileName(IncludePathDelimiter(Res.WorkPath) + 'save.json')) then
+  begin
+    lua_pushinteger(L, -2);
+    lua_rawsetp(L, LUA_REGISTRYINDEX, @SaveAgeKey);
+  end;
+end;
+
+//save("score", 120) / save("hiscores", {..}) -> true | nil, err
+//Keeps a key in the game's own save.json, the file behind load(). The value
+//is anything json_encode takes: numbers, text, booleans, tables, null. Omit
+//the value, or pass nil, and the key is dropped. Each call writes the file
+//at once, so closing the window - or crashing - never loses a score.
+function TLuaScript.Save_func(L: Plua_State): integer; cdecl;
+var
+  FileName, Key, Json, Err: string;
+  Wrote: Boolean;
+begin
+  // an empty name would be skipped by the encoder, so refuse it here
+  if (not L.IsString(1)) or (L.ToString(1) = '') then
+  begin
+    L.PushNil;
+    L.PushString('save: the first argument must be a name');
+    Exit(2);
+  end;
+  Key := L.ToString(1);
+  if (L.ArgsCount >= 2) and (lua_type(L, 2) <> LUA_TNIL) then
+  begin
+    // probe the value once: a function is not JSON and never lands on disk
+    if not LuaValueToJson(L, 2, Json, Err) then
+    begin
+      L.PushNil;
+      L.PushString('save: ' + Err);
+      Exit(2);
+    end;
+  end;
+  try
+    GetSaveDoc(L);
+    lua_replace(L, 1); // the document at index 1, whatever else was on the stack
+    if L.ArgsCount >= 2 then
+      L.PushValue(2) // even a bare nil: setfield then deletes the key
+    else
+      lua_pushnil(L);
+    lua_setfield(L, 1, PUTF8Char(UTF8String(Key)));
+    FileName := IncludePathDelimiter(Res.WorkPath) + 'save.json';
+    Wrote := False;
+    try
+      if not LuaValueToJson(L, 1, Json, Err) then
+        raise Exception.Create(Err);
+      SaveFileUTF8String(FileName, UTF8String(Json));
+      Wrote := True;
+    except
+      on E: Exception do
+        Err := E.Message;
+    end;
+  finally
+    lua_settop(L, 0);
+  end;
+  if not Wrote then
+  begin
+    L.PushNil;
+    L.PushString('save: ' + Err);
+    Exit(2);
+  end;
+  // our own write must not look like a foreign edit to the next call
+  lua_pushinteger(L, FileAge(FileName));
+  lua_rawsetp(L, LUA_REGISTRYINDEX, @SaveAgeKey);
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+//load("score") -> value | nil
+//The mirror of save: answers what the key holds, or nil when the game never
+//saved it. A missing or broken save.json is a page of empty keys, not an
+//error: a first run and a hand-hacked file both just start fresh.
+function TLuaScript.Load_func(L: Plua_State): integer; cdecl;
+var
+  Key: string;
+begin
+  if (not L.IsString(1)) or (L.ToString(1) = '') then
+  begin
+    L.PushNil;
+    L.PushString('load: the first argument must be a name');
+    Exit(2);
+  end;
+  Key := L.ToString(1);
+  GetSaveDoc(L);
+  lua_replace(L, 1); // the document takes the key's slot
+  if lua_getfield(L, 1, PUTF8Char(UTF8String(Key))) = LUA_TNIL then
+    lua_settop(L, 0)
+  else
+    lua_replace(L, 1);
+  lua_settop(L, 1);
+  Result := 1;
 end;
 
 function TLuaConsole.Read_func(L: Plua_State): integer; cdecl;
