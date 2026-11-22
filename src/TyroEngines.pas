@@ -1775,6 +1775,9 @@ begin
   Models := TModels3D.Create;
   Particles := TParticles.Create;
   Physics := TPhysics.Create(Sprites);
+  //The space reads the tile store too: a map that asks for collide = true
+  //gets its solid cells as static walls in the physics Step.
+  Physics.Tiles := Tiles;
   Parallaxes := TParallaxes.Create;
   Commands := TConsoleCommands.Create();
   RegisterCommands;

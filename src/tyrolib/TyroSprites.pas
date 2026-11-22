@@ -37,6 +37,12 @@ type
     Friction: single;
     Bouncy: single;
     Radius: single;
+    // Sensor bodies only report touches, never push; Group/Category/Mask
+    // mirror chipmunk's cpShapeFilter (see TSprites.SetSensor).
+    Sensor: Boolean;
+    Group: Cardinal;
+    Category: Cardinal;
+    Mask: Cardinal;
     VX: single;      // velocity, px/s (dynamic bodies; set by script or written back)
     VY: single;
   end;
@@ -59,6 +65,14 @@ type
     Friction: single;
     Bouncy: single;
     Radius: single;
+    // Sensor: report touches without pushing. Group/Category/Mask: the
+    // cpShapeFilter parts - shapes sharing a non-zero Group never touch,
+    // and two shapes touch only when each Category bit lives in the
+    // other's Mask (both default to "everything").
+    Sensor: boolean;
+    Group: Cardinal;
+    Category: Cardinal;
+    Mask: Cardinal;
     VX: single;      // linear velocity in px/s (applied to a dynamic body each step)
     VY: single;
     Script: ISpriteScript;
@@ -209,6 +223,12 @@ type
     procedure SetFriction(Handle: integer; AFriction: single);
     procedure SetBouncy(Handle: integer; ABouncy: single);
     procedure SetRadius(Handle: integer; ARadius: single);
+    // Sensor/filter knobs (see TSprite): read back what the last step was
+    // given, exactly like the other physics setters.
+    procedure SetSensor(Handle: integer; ASensor: boolean);
+    procedure SetGroup(Handle: integer; AGroup: Cardinal);
+    procedure SetCategory(Handle: integer; ACategory: Cardinal);
+    procedure SetMask(Handle: integer; AMask: Cardinal);
     // Velocity of a dynamic body in px/s. A script write sets the body velocity
     // for the next physics step; after each step TPhysics writes the simulated
     // velocity back here, so a plain read reports the current motion.
@@ -221,6 +241,10 @@ type
     function GetFriction(Handle: integer): single;
     function GetBouncy(Handle: integer): single;
     function GetRadius(Handle: integer): single;
+    function GetSensor(Handle: integer): boolean;
+    function GetGroup(Handle: integer): Cardinal;
+    function GetCategory(Handle: integer): Cardinal;
+    function GetMask(Handle: integer): Cardinal;
 
     // Collects handles of colliding sprites (used by TPhysics before stepping)
     procedure GetCollideList(var AHandles: TArray<Integer>);
@@ -444,6 +468,10 @@ begin
   Friction := 0.5;
   Bouncy := 0.0;
   Radius := 0.0;
+  Sensor := False;
+  Group := 0;
+  Category := $FFFFFFFF;
+  Mask := $FFFFFFFF;
   VX := 0.0;
   VY := 0.0;
   Script := nil;
@@ -1620,6 +1648,118 @@ begin
   end;
 end;
 
+procedure TSprites.SetSensor(Handle: integer; ASensor: boolean);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Sensor := ASensor;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetGroup(Handle: integer; AGroup: Cardinal);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Group := AGroup;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetCategory(Handle: integer; ACategory: Cardinal);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Category := ACategory;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TSprites.SetMask(Handle: integer; AMask: Cardinal);
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Sprite.Mask := AMask;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetSensor(Handle: integer): boolean;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Sensor
+    else
+      Result := False;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetGroup(Handle: integer): Cardinal;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Group
+    else
+      Result := 0;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetCategory(Handle: integer): Cardinal;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Category
+    else
+      Result := $FFFFFFFF;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.GetMask(Handle: integer): Cardinal;
+var
+  Sprite: TSprite;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+      Result := Sprite.Mask
+    else
+      Result := $FFFFFFFF;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 procedure TSprites.SetVelocity(Handle: integer; AVelocityX, AVelocityY: single);
 var
   Sprite: TSprite;
@@ -1801,6 +1941,10 @@ begin
       AState.Friction := Sprite.Friction;
       AState.Bouncy := Sprite.Bouncy;
       AState.Radius := Sprite.Radius;
+      AState.Sensor := Sprite.Sensor;
+      AState.Group := Sprite.Group;
+      AState.Category := Sprite.Category;
+      AState.Mask := Sprite.Mask;
       AState.VX := Sprite.VX;
       AState.VY := Sprite.VY;
       Result := True;

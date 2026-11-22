@@ -8003,6 +8003,26 @@ begin
       L.PushNumber(Engine.Sprites.GetRadius(handle));
       Result := 1;
     end
+    else if field = 'sensor' then
+    begin
+      L.PushBoolean(Engine.Sprites.GetSensor(handle));
+      Result := 1;
+    end
+    else if field = 'group' then
+    begin
+      L.PushInteger(Engine.Sprites.GetGroup(handle));
+      Result := 1;
+    end
+    else if field = 'category' then
+    begin
+      L.PushInteger(Engine.Sprites.GetCategory(handle));
+      Result := 1;
+    end
+    else if field = 'mask' then
+    begin
+      L.PushInteger(Engine.Sprites.GetMask(handle));
+      Result := 1;
+    end
     else if field = 'vx' then
     begin
       L.PushNumber(Engine.Sprites.GetVelocityX(handle));
@@ -8182,6 +8202,22 @@ begin
   else if field = 'radius' then
   begin
     Engine.Sprites.SetRadius(handle, L.ToNumber(3));
+  end
+  else if field = 'sensor' then
+  begin
+    Engine.Sprites.SetSensor(handle, L.ToBoolean(3));
+  end
+  else if field = 'group' then
+  begin
+    Engine.Sprites.SetGroup(handle, Cardinal(L.ToInteger(3)));
+  end
+  else if field = 'category' then
+  begin
+    Engine.Sprites.SetCategory(handle, Cardinal(L.ToInteger(3)));
+  end
+  else if field = 'mask' then
+  begin
+    Engine.Sprites.SetMask(handle, Cardinal(L.ToInteger(3)));
   end
   else if field = 'vx' then
   begin
@@ -8567,8 +8603,8 @@ begin
 end;
 
 // map.__index: read properties cols, rows, width, height, tilewidth,
-// tileheight, columns, spacing, margin, visible, x, y, scale, name; unknown
-// keys raw-read from the map table.
+// tileheight, columns, spacing, margin, visible, x, y, scale, name, collide;
+// unknown keys raw-read from the map table.
 function TLuaTile.Getter(L: Plua_State): integer;
 var
   handle: integer;
@@ -8649,6 +8685,11 @@ begin
     begin
       L.PushString(Engine.Tiles.GetName(handle));
       Result := 1;
+    end
+    else if field = 'collide' then
+    begin
+      L.PushBoolean(Engine.Tiles.GetCollide(handle));
+      Result := 1;
     end;
   end;
   if Result = 0 then
@@ -8660,8 +8701,8 @@ begin
   end;
 end;
 
-// map.__newindex: write properties visible, x, y, scale, name; unknown keys
-// raw-stored in the map table.
+// map.__newindex: write properties visible, x, y, scale, name, collide; unknown
+// keys raw-stored in the map table.
 function TLuaTile.Setter(L: Plua_State): integer;
 var
   handle: integer;
@@ -8697,6 +8738,10 @@ begin
   else if field = 'name' then
   begin
     Engine.Tiles.SetName(handle, L.ToString(3));
+  end
+  else if field = 'collide' then
+  begin
+    Engine.Tiles.SetCollide(handle, L.ToBoolean(3));
   end
   else
   begin

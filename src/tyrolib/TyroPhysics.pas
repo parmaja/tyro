@@ -7,10 +7,11 @@ unit TyroPhysics;
 interface
 
 uses
-  Classes, SysUtils, Math, SyncObjs, Generics.Collections,
+  Classes, SysUtils, Math, SyncObjs, Types, Generics.Collections,
   mnClasses,
+  RayLib,
   chipmunk,
-  TyroSprites;
+  TyroSprites, TyroTiles;
 
 type
   TContactState = (
@@ -32,6 +33,22 @@ type
     ShapeB: Single; // box: height (scaled)
   end;
 
+  { The wall set one colliding tilemap owns in the space: one static body
+    per solid cell (a body's position is its box's centre, so each cell is
+    its own shape), plus the signature the boxes were built from. The
+    bodies carry no userData, so OnCollision drops their events: the walls
+    push, they never report - a sprite's on_collide still fires against
+    other sprites the same as ever. }
+  TTileCollider = class
+  public
+    Body: cpBody;
+    Shapes: TList<cpShape>;
+    Version: Integer; // the map's DataVersion the boxes came from
+    AX: Single;       // the map's x/y/scale they stand at
+    AY: Single;
+    AScale: Single;
+  end;
+
   { TPhysics: Chipmunk2D world, driven by the engine's main thread.
     Sprite config/positions are read from TSprites (thread-safe store).
     Collision events are buffered here and drained by the script thread
@@ -51,6 +68,10 @@ type
     FGravityX: cpFloat;
     FGravityY: cpFloat;
     FGravityDirty: Boolean;
+    // Tilemap walls (map.collide): the store to read, and one wall set per
+    // map that opted in. Main thread only, like the rest of the space.
+    FTiles: TTiles;
+    FMapColliders: TDictionary<Integer, TTileCollider>;
     procedure OnCollision(A, B: cpBody; AState: TContactState);
     function FindBody(Handle: Integer): cpBody;
     function FindShape(Handle: Integer): cpShape;
@@ -61,6 +82,13 @@ type
     procedure RemoveBody(Handle: Integer);
     procedure UpdateConfig(Handle: Integer; const AState: TSpritePhysicsState);
     function AddBody(Handle: Integer; const AState: TSpritePhysicsState): cpBody;
+    // Main-thread only (no locking): drop one map's wall set with its bodies
+    procedure RemoveMapCollider(Handle: Integer);
+    // Main-thread only (no locking), assumes FSpace <> nil: bring the tile
+    // walls up to date - maps that stopped colliding lose their set, maps
+    // whose signature (grid, solidity, or the map's own x/y/scale) changed
+    // are rebuilt from the store's solid boxes.
+    procedure SyncTileMaps;
   public
     constructor Create(ASprites: TSprites);
     destructor Destroy; override;
@@ -79,6 +107,9 @@ type
     // Script thread: drain pending collision events into AEvents (up to its capacity)
     procedure Poll(var AEvents: array of TCollisionEvent; out ACount: Integer);
     function BodyCount: Integer;
+    // The tilemap store the walls (map.collide) are read from; the engine
+    // hands it over once at startup. Without it the space only knows sprites.
+    property Tiles: TTiles read FTiles write FTiles;
   end;
 
 implementation
@@ -136,6 +167,8 @@ begin
   FGravityX := 0;
   FGravityY := 980;
   FGravityDirty := True;
+  FTiles := nil;
+  FMapColliders := TDictionary<Integer, TTileCollider>.Create;
   FSpace := nil;
   try
     InitPhysicsLibrary;
@@ -172,6 +205,7 @@ begin
     cpSpaceFree(FSpace);
     FSpace := nil;
   end;
+  FMapColliders.Free;
   FreeAndNil(FEvents);
   FreeAndNil(FScriptedEvents);
   FreeAndNil(FHandleToBody);
@@ -250,16 +284,118 @@ var
   Handle: Integer;
   Keys: TList<Integer>;
 begin
-  if FSpace = nil then
-    Exit;
   Keys := TList<Integer>.Create;
   try
-    for Handle in FHandleToBody.Keys do
-      Keys.Add(Handle);
-    for Handle in Keys do
-      RemoveBody(Handle);
+    if FSpace <> nil then
+    begin
+      for Handle in FHandleToBody.Keys do
+        Keys.Add(Handle);
+      for Handle in Keys do
+        RemoveBody(Handle);
+    end;
   finally
     Keys.Free;
+  end;
+  //The tile walls ride the same teardown: a rerun's ResetPhysics leaves an
+  //empty space, and the next Step rebuilds the sets from the store.
+  for Handle in FMapColliders.Keys.ToArray do
+    RemoveMapCollider(Handle);
+end;
+
+procedure TPhysics.RemoveMapCollider(Handle: Integer);
+var
+  Col: TTileCollider;
+  Shape: cpShape;
+begin
+  if not FMapColliders.TryGetValue(Handle, Col) then
+    Exit;
+  for Shape in Col.Shapes do
+  begin
+    if FSpace <> nil then
+      cpSpaceRemoveShape(FSpace, Shape);
+    cpShapeFree(Shape);
+  end;
+  Col.Shapes.Free;
+  if (FSpace <> nil) and (Col.Body <> nil) then
+    cpSpaceRemoveBody(FSpace, Col.Body);
+  if Col.Body <> nil then
+    cpBodyFree(Col.Body);
+  Col.Free;
+  FMapColliders.Remove(Handle);
+end;
+
+//The tile walls' beat, just before cpSpaceStep: the sprites' positions were
+//already synced above, so the walls stand where the board paints when the
+//solver runs. A map's signature is (DataVersion, x, y, scale): any grid
+//write, solidity flip or transform lands on the next step as a rebuild -
+//one static body per solid cell, silent to the event queues.
+procedure TPhysics.SyncTileMaps;
+var
+  Maps: TArray<Integer>;
+  Handle, Version, I, J: Integer;
+  X, Y, Scale: Single;
+  Col: TTileCollider;
+  Boxes: TArray<TRectangle>;
+  Sh: cpShape;
+  Needs: Boolean;
+begin
+  if (FSpace = nil) or (FTiles = nil) then
+    Exit;
+  FTiles.GetCollideMapList(Maps);
+  //maps that left the list (collide off or freed) lose their wall set
+  if FMapColliders.Count > 0 then
+  begin
+    for Handle in FMapColliders.Keys.ToArray do
+    begin
+      Needs := False;
+      for I := 0 to Length(Maps) - 1 do
+        if Maps[I] = Handle then
+        begin
+          Needs := True;
+          Break;
+        end;
+      if not Needs then
+        RemoveMapCollider(Handle);
+    end;
+  end;
+  for I := 0 to Length(Maps) - 1 do
+  begin
+    Handle := Maps[I];
+    if not FTiles.GetTileMapSignature(Handle, Version, X, Y, Scale) then
+    begin
+      RemoveMapCollider(Handle); //the map is gone
+      Continue;
+    end;
+    if FMapColliders.TryGetValue(Handle, Col) then
+    begin
+      if (Col.Version = Version) and SameFloat(Col.AX, X) and
+        SameFloat(Col.AY, Y) and SameFloat(Col.AScale, Scale) then
+        Continue; //nothing moved since the last build
+      RemoveMapCollider(Handle);
+    end;
+    FTiles.CollectSolidBoxes(Handle, Boxes);
+    Col := TTileCollider.Create;
+    Col.Shapes := TList<cpShape>.Create;
+    Col.Version := Version;
+    Col.AX := X;
+    Col.AY := Y;
+    Col.AScale := Scale;
+    Col.Body := nil;
+    for J := 0 to High(Boxes) do
+    begin
+      //One static body per cell: cpBoxShapeNew centres its box on the body,
+      //and the relative-offset sibling is not part of the binding. The cell
+      //centre is the body position; the shape rides it at rest.
+      Col.Body := cpBodyNewStatic;
+      cpBodySetPosition(Col.Body,
+        cpv(Boxes[J].X + Boxes[J].Width * 0.5,
+            Boxes[J].Y + Boxes[J].Height * 0.5));
+      cpSpaceAddBody(FSpace, Col.Body);
+      Sh := cpBoxShapeNew(Col.Body, Boxes[J].Width, Boxes[J].Height, 0);
+      Col.Shapes.Add(Sh);
+      cpSpaceAddShape(FSpace, Sh);
+    end;
+    FMapColliders.Add(Handle, Col);
   end;
 end;
 
@@ -287,6 +423,11 @@ begin
   begin
     cpShapeSetFriction(Shape, AState.Friction);
     cpShapeSetElasticity(Shape, AState.Bouncy);
+    //The touch knobs ride the same every-frame refresh as friction: a
+    //sensor or filter change lands on the next step without rebuilding the
+    //shape, and a body that just joined carries the defaults anyway.
+    cpShapeSetSensor(Shape, cpBool(Ord(AState.Sensor)));
+    cpShapeSetFilter(Shape, cpShapeFilterNew(AState.Group, AState.Category, AState.Mask));
   end;
 end;
 
@@ -336,6 +477,8 @@ begin
     Shape := cpBoxShapeNew(Body, W, H, 0);
   cpShapeSetFriction(Shape, AState.Friction);
   cpShapeSetElasticity(Shape, AState.Bouncy);
+  cpShapeSetSensor(Shape, cpBool(Ord(AState.Sensor)));
+  cpShapeSetFilter(Shape, cpShapeFilterNew(AState.Group, AState.Category, AState.Mask));
   cpSpaceAddBody(FSpace, Body);
   cpSpaceAddShape(FSpace, Shape);
   FHandleToBody.Add(Handle, Body);
@@ -521,6 +664,10 @@ begin
     end;
 
 // 5) advance the simulation
+  //The tile walls answer for the board before the solver runs: a map whose
+  //grid or transform moved since the last step is rebuilt here, so the
+  //sprites step against the walls the picture shows.
+  SyncTileMaps;
   if IsDebug then
     WriteLn('DBG preStep');
   cpSpaceStep(FSpace, ADt);

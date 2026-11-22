@@ -58,6 +58,13 @@ type
     Rows: Integer;      // map height in tiles
     Data: TArray<Integer>; // Cols*Rows tile ids, row-major, 0 = empty
     Solid: TDictionary<Integer, Boolean>; // tile ids treated as solid walls
+    // Physics walls: when set, every solid cell also becomes a static shape
+    // in the chipmunk space (TPhysics owns the rebuild). Colliders stand at
+    // the map's own x/y/scale - the same numbers the `tiles` properties keep.
+    Collide: Boolean;
+    // Counts every grid or solidity change, so TPhysics knows when its
+    // boxes of one map have gone stale.
+    DataVersion: Integer;
     X: Single;          // last drawn position
     Y: Single;
     Scale: Single;
@@ -138,6 +145,18 @@ type
     // True when the cell is outside the map or holds a tile marked solid.
     function SolidAt(Handle: integer; ACol, ARow: integer): boolean;
 
+    // Physics walls (map.collide): the store half of the tile colliders.
+    // GetCollideMapList hands the maps that opted in, and CollectSolidBoxes
+    // the world rectangle of every solid cell - TPhysics turns those into
+    // static bodies, and only asks again when the signature it read here
+    // changed (a grid write, a solidity flip, or the map's own transform).
+    procedure SetCollide(Handle: integer; ACollide: boolean);
+    function GetCollide(Handle: integer): boolean;
+    procedure GetCollideMapList(out AHandles: TArray<Integer>);
+    function GetTileMapSignature(Handle: integer; out ADataVersion: Integer;
+      out AX, AY, AScale: Single): boolean;
+    procedure CollectSolidBoxes(Handle: integer; out ABoxes: TArray<TRectangle>);
+
     // Draw a snapshot of one map (taken by Capture on the script thread) on the
     // main thread, inside Board.BeginDraw/EndDraw. The grid is read from the
     // snapshot, never from the live map, so a script update cannot tear the draw.
@@ -205,6 +224,8 @@ begin
   Rows := 0;
   Data := nil;
   Solid := TDictionary<Integer, Boolean>.Create;
+  Collide := False;
+  DataVersion := 0;
   X := 0;
   Y := 0;
   Scale := 1.0;
@@ -360,6 +381,9 @@ begin
       if Map.Columns < 1 then
         Map.Columns := 1;
     end;
+    //The tileset geometry just moved under the colliders - same tile ids can
+    //now paint different-sized cells, so the boxes are stale from now on.
+    Inc(Map.DataVersion);
     Result := True;
   finally
     FLock.Leave;
@@ -676,6 +700,7 @@ begin
     for r := 0 to CopyRows - 1 do
       for c := 0 to CopyCols - 1 do
         Map.Data[r * ACols + c] := Old[r * OldCols + c];
+    Inc(Map.DataVersion);
   finally
     FLock.Leave;
   end;
@@ -692,6 +717,7 @@ begin
       Exit;
     for i := 0 to Length(Map.Data) - 1 do
       Map.Data[i] := ATile;
+    Inc(Map.DataVersion);
   finally
     FLock.Leave;
   end;
@@ -715,7 +741,11 @@ begin
       Exit;
     idx := ARow * Map.Cols + ACol;
     if (idx >= 0) and (idx < Length(Map.Data)) then
+    begin
+      if Map.Data[idx] <> ATile then
+        Inc(Map.DataVersion);
       Map.Data[idx] := ATile;
+    end;
   finally
     FLock.Leave;
   end;
@@ -782,6 +812,7 @@ begin
       Map.Solid.AddOrSetValue(ATile, True)
     else
       Map.Solid.Remove(ATile);
+    Inc(Map.DataVersion);
   finally
     FLock.Leave;
   end;
@@ -820,6 +851,137 @@ begin
     if (idx < 0) or (idx >= Length(Map.Data)) then
       Exit;
     Result := Map.Solid.TryGetValue(Map.Data[idx], v);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TTiles.SetCollide(Handle: integer; ACollide: boolean);
+var
+  Map: TTileMap;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Map) then
+      Map.Collide := ACollide;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TTiles.GetCollide(Handle: integer): boolean;
+var
+  Map: TTileMap;
+begin
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Map) then
+      Result := Map.Collide
+    else
+      Result := False;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TTiles.GetCollideMapList(out AHandles: TArray<Integer>);
+var
+  Map: TTileMap;
+  N: Integer;
+begin
+  AHandles := nil;
+  FLock.Enter;
+  try
+    //Same one-pass fill GetCollideList uses for the sprites: the store
+    //cannot change while the lock is held, so the array is trimmed at the end.
+    SetLength(AHandles, FItems.Count);
+    N := 0;
+    for Map in FItems.Values do
+      if (Map <> nil) and Map.Collide then
+      begin
+        AHandles[N] := Map.Handle;
+        Inc(N);
+      end;
+    SetLength(AHandles, N);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TTiles.GetTileMapSignature(Handle: integer; out ADataVersion: Integer;
+  out AX, AY, AScale: Single): boolean;
+var
+  Map: TTileMap;
+begin
+  Result := False;
+  ADataVersion := 0;
+  AX := 0;
+  AY := 0;
+  AScale := 1;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Map) then
+    begin
+      ADataVersion := Map.DataVersion;
+      AX := Map.X;
+      AY := Map.Y;
+      AScale := Map.Scale;
+      Result := True;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+//The wall boxes of a map: one rectangle per solid cell, placed exactly like
+//DrawMap paints it - the map's own x/y plus the scaled grid. Spacing and
+//margin only live inside the tileset sheet, the drawn cell is TileWidth x
+//TileHeight. (A map with no tileset still answers: the colliders follow the
+//grid numbers, not the picture.)
+procedure TTiles.CollectSolidBoxes(Handle: integer; out ABoxes: TArray<TRectangle>);
+var
+  Map: TTileMap;
+  Tw, Th, OX, OY: Single;
+  Col, Row, Idx, Tile: Integer;
+  v: Boolean;
+  N: Integer;
+begin
+  ABoxes := nil;
+  FLock.Enter;
+  try
+    if not FItems.TryGetValue(Handle, Map) then
+      Exit;
+    if (Map.Cols <= 0) or (Map.Rows <= 0) then
+      Exit;
+    Tw := Map.TileWidth;
+    Th := Map.TileHeight;
+    if Tw <= 0 then
+      Tw := 16;
+    if Th <= 0 then
+      Th := 16;
+    if Map.Scale > 0 then
+    begin
+      Tw := Tw * Map.Scale;
+      Th := Th * Map.Scale;
+    end;
+    OX := Map.X;
+    OY := Map.Y;
+    SetLength(ABoxes, Map.Cols * Map.Rows);
+    N := 0;
+    for Row := 0 to Map.Rows - 1 do
+      for Col := 0 to Map.Cols - 1 do
+      begin
+        Idx := Row * Map.Cols + Col;
+        if (idx < 0) or (idx >= Length(Map.Data)) then
+          Continue;
+        Tile := Map.Data[Idx];
+        if (Tile > 0) and Map.Solid.TryGetValue(Tile, v) then
+        begin
+          ABoxes[N] := RectangleOf(OX + Col * Tw, OY + Row * Th, Tw, Th);
+          Inc(N);
+        end;
+      end;
+    SetLength(ABoxes, N);
   finally
     FLock.Leave;
   end;
