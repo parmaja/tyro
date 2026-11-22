@@ -201,6 +201,30 @@ while true do
  end
  ```
 
+## Touch
+
+| API | Description | Examples |
+|----------|-------------|----------|
+| `touch.x`, `touch.y` | Where the pen is: the first finger, or the cursor on a desktop | — |
+| `touch.count` | Contacts on the glass right now (0..8) | — |
+| `touch.down` / `touch.up` | True while something touches / while nothing does | — |
+| `touch.pressed` / `touch.released` | True once on the frame a contact arrives / leaves | — |
+| `touch.mouse` | True while the mouse is standing in for a finger | — |
+| `touch.point(i)` | The i-th contact (from 1), answers `x, y` or `nil` | `for i = 1, touch.count do` |
+
+On a desktop the mouse stands in as one contact while its left button is
+held, so one script answers a tap and a click alike. `on("touch", fn)` fires
+`(x, y)` on the press beat. Notes in [`help/touch.md`](help/touch.md).
+
+```lua
+window.show()
+function update(dt)
+    if touch.pressed then
+        canvas.circle(touch.x, touch.y, 8, true)   -- tap or left click
+    end
+end
+```
+
 ## Gamepad
 
 | API | Description | Examples |

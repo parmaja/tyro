@@ -102,8 +102,13 @@ Games feel dead without tweening; today every game in `games/` hand-rolls it.
 
 Kids live on tablets; Tyro is effectively Windows-only.
 
-- [ ] `touch.x / touch.y / touch.down / touch.count / touch.pressed` over
-      raylib's touch input (also maps mouse on desktop, so scripts stay uniform)
+- [x] `touch.x / touch.y / touch.count / touch.down / touch.pressed /
+      touch.released / touch.mouse` fields over raylib's touch input, plus
+      `touch.point(i)` for extra fingers — the mouse stands in as one contact
+      on desktop, so scripts stay uniform; `on("touch", fn)` fires `(x, y)`
+      on the press beat (`tests/test_touch_frame.lpr` 33 checks,
+      `tests/touch_test.tyro`, [`help/touch.md`](../help/touch.md))
+- [ ] `touch.dragged` / simple gestures (tap vs swipe) over the raw frames
 - [ ] Linux build parity (FPC already targets it; raylib.so packaging)
 - [ ] Stretch: Android build (this is where the P1 export pipeline pays off)
 

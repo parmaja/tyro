@@ -737,6 +737,10 @@ begin
     end
     else
     begin
+      //The touch frame is stepped before anything reads it, so the script's
+      //update(), the on("touch") bindings and a polling script thread all see
+      //the same set of fingers and the same press/release edge this frame.
+      TyroInput.TouchStep;
       // Engine-driven mode: the top-level chunk returned but the script defined
       // update()/draw(), so run them here on the main thread. They queue their
       // drawing commands like any script code, and the ProcessQueue pass below

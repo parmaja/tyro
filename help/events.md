@@ -43,6 +43,7 @@ fire-and-forget, no `update()` needed:
 | --- | --- | --- |
 | a key - `on("space", fn)`, `on("w", fn)`... | the frame that key was pressed (every name `keyboard.pressed` knows) | nothing |
 | `on("mouse.left", fn)` (`"mouse.right"`, `"mouse.middle"`) | the frame that button was pressed | nothing |
+| `on("touch", fn)` | the frame a finger (or the mouse) lands on the glass | `(x, y)` |
 | `on("update", fn)` | every frame, before the global `update()` | the `dt` |
 | `on("draw", fn)` | every paint, after the global `draw()` | nothing |
 | `on("collision", fn)` | every physics contact event | `(a, b, "enter"/"leave")` |

@@ -1,0 +1,99 @@
+--======================================================================
+--  Touch demo - the touch table, fingers and mouse alike
+--======================================================================
+--  Tap the screen (or click and hold) and every contact paints a dot;
+--  arriving contacts ring out as ripples with tween juice. On a desktop
+--  the mouse stands in for a finger, so the same toy plays everywhere -
+--  the HUD even tells you which machine you are on. Multi-touch: try two
+--  fingers, the walk over touch.point(i) catches both.
+--
+--  Run: bin\tyro.exe demos/touch_demo.tyro
+--======================================================================
+
+window.show(640, 480)
+world.title = "Touch Demo"
+world.backcolor = rgb(18, 22, 34)
+
+local PALETTE = {
+  rgb(255, 120, 130), rgb(120, 235, 170), rgb(255, 205, 110),
+  rgb(160, 160, 255), rgb(110, 220, 240),
+}
+
+-- Ripples: a small pool of engine-made blobs, each tweened outward.
+local pool = {}
+for i = 1, 16 do
+  local s = sprites.blob("ripple" .. i, 64)
+  s.visible = false
+  pool[i] = s
+end
+local ring = 1
+local taps = 0
+
+local function ripple(x, y)
+  local s = pool[ring]
+  ring = ring % #pool + 1
+  tween.killall(s)
+  s.visible = true
+  s.tint = PALETTE[1 + (ring % #PALETTE)]
+  s.x, s.y = x, y
+  s.scale = 0.25
+  s.alpha = 230
+  tween.to(s, "scale", 1.4, 380, "quadout")
+  tween.to(s, "alpha", 0, 380, "quadin")
+end
+
+-- Dots: one per possible contact, glued to the fingers every frame.
+local dots = {}
+for i = 1, 8 do
+  local d = sprites.blob("dot" .. i, 32)
+  d.tint = rgb(240, 245, 255, 235)
+  d.visible = false
+  dots[i] = d
+end
+
+on("touch", function(x, y)
+  -- the bus beat: (x, y) is where the newest contact landed
+  taps = taps + 1
+  music.sound("bubble", 340 + (taps % 8) * 70, 70)
+end)
+
+function update(dt)
+  if touch.pressed then
+    -- every contact that arrived this frame gets a ring
+    for i = 1, touch.count do
+      local x, y = touch.point(i)
+      ripple(x, y)
+    end
+  end
+  for i = 1, 8 do
+    local d = dots[i]
+    if i <= touch.count then
+      local x, y = touch.point(i)
+      d.visible = true
+      d.x, d.y = x, y
+    else
+      d.visible = false
+    end
+  end
+end
+
+function draw()
+  screen.clear("blank")
+  screen.color = colors.white
+  screen.text(8, 452, "taps " .. taps)
+  screen.color = rgb(150, 160, 190)
+  screen.text(140, 452, "contacts " .. touch.count)
+  screen.color = rgb(180, 200, 255, 170)
+  if touch.mouse then
+    screen.text(8, 8, "mouse standing in - hold the left button, or SPACE")
+  else
+    screen.text(8, 8, "fingers on the glass - two at once!")
+  end
+end
+
+on("space", function()
+  -- the mouse cannot hold two buttons at once; SPACE fakes a second finger
+  ripple(rand(80, 560), rand(80, 400))
+  taps = taps + 1
+  music.sound("bubble", 700, 60)
+end)

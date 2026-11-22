@@ -811,6 +811,19 @@ type
     function Up_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaTouch }
+
+  // touch.x / touch.y / touch.count / touch.down / touch.up / touch.pressed /
+  // touch.released read the frame the engine stepped this beat; touch.point(i)
+  // walks the fingers. On a desktop the mouse stands in for a finger, so one
+  // script runs on both a window and a tablet.
+  TLuaTouch = class(TTyroLuaObject)
+  protected
+    function Getter(L: Plua_State): integer; override;
+  public
+    function Point_func(L: Plua_State): integer; cdecl;
+  end;
+
   { TLuaQueue }
 
   // queue.depth / queue.holds / ... : a read-only window on the engine's
@@ -924,6 +937,7 @@ type
     Shader: TLuaShader;
     Spectrum: TLuaSpectrum;
     Mouse: TLuaMouse;
+    Touch: TLuaTouch;
     Keyboard: TLuaKeyboard;
     Gamepad: TLuaGamepad;
     Game: TLuaGame;
@@ -1095,10 +1109,12 @@ const
   cHandlerUser = 0;   // only a script emit() runs it
   cHandlerKey = 1;    // on("space"): the engine's beat polls that key
   cHandlerMouse = 2;  // on("mouse.left"): ... and that mouse button
+  cHandlerTouch = 3;  // on("touch"): the beat a finger (or the mouse) lands
   cEventUpdate = 'update'; // every frame, with the dt
   cEventDraw = 'draw';     // every paint
   cEventCollision = 'collision'; // from the physics queue: (a, b, state)
   cEventJointStretch = 'joint_stretch'; // a slide hit or left its max: (a, b, "taut"/"slack")
+  cEventTouch = 'touch'; // a finger (or the mouse) landed: (x, y)
 
 //global functions
 function sleep_func(L: Plua_State): integer; cdecl;
@@ -2431,6 +2447,7 @@ begin
   Collision := TLuaCollision.Create('collision', Self);
   Shader := TLuaShader.Create('shader', Self);
   Mouse := TLuaMouse.Create('mouse', Self);
+  Touch := TLuaTouch.Create('touch', Self);
   Keyboard := TLuaKeyboard.Create('keyboard', Self);
   Gamepad := TLuaGamepad.Create('gamepad', Self);
   Game := TLuaGame.Create('game', Self);
@@ -2534,6 +2551,11 @@ begin
   Lua.State.Register('mouse', 'released', Mouse, Mouse.Released_func);
   Lua.State.Register('mouse', 'up', Mouse, Mouse.Up_func);
   Lua.State.Register('mouse', Mouse); //Should be last one
+  //touch: touch.x / touch.y / touch.count / touch.down / touch.pressed are
+  //fields of the frame the engine stepped; touch.point(i) walks the fingers.
+  //On a desktop the mouse stands in, so the same script works on a tablet.
+  Lua.State.Register('touch', 'point', Touch, Touch.Point_func);
+  Lua.State.Register('touch', Touch); //Should be last one
 
   //keyboard: keyboard.pressed("space") / keyboard.down("a") / keyboard.released / keyboard.up
   Lua.State.Register('keyboard', 'pressed', Keyboard, Keyboard.Pressed_func);
@@ -3860,9 +3882,11 @@ end;
 //ids keeps a handler that binds or unhooks one from disturbing this beat.
 procedure TLuaScript.PumpInputs;
 var
-  I, N, Id: Integer;
-  H: TLuaHandler;
+  I, J, N, Id: Integer;
+  H, H2: TLuaHandler;
   Live: array of Integer;
+  Frame: TyroInput.TTouchFrame;
+  TouchRead: Boolean;
 begin
   if (Handlers = nil) or (Lua.State = nil) then
     Exit;
@@ -3877,11 +3901,25 @@ begin
       Inc(N);
     end;
   end;
+  TouchRead := False;
   for I := 0 to N - 1 do
   begin
     H := FindHandler(Live[I]);
     if H = nil then
       Continue;
+    //One beat serves a name once: Dispatch runs every listener hooked to it,
+    //so a second handler on the same key, button or finger must not make the
+    //whole group run twice.
+    J := 0;
+    while J < I do
+    begin
+      H2 := FindHandler(Live[J]);
+      if (H2 <> nil) and (H2.Name = H.Name) then
+        Break;
+      Inc(J);
+    end;
+    if J < I then
+      Continue; //an earlier entry this beat already carried this name
     case H.Kind of
       cHandlerKey:
         if TyroInput.IsKeyPressed(H.Name) then
@@ -3889,6 +3927,22 @@ begin
       cHandlerMouse:
         if TyroInput.IsMouseButtonPressed(H.Btn) then
           Dispatch(H.Name, Lua.State, 0, 0);
+      cHandlerTouch:
+        begin
+          if not TouchRead then
+          begin
+            Frame := TyroInput.TouchFrame; //one read per beat, shared by the beat
+            TouchRead := True;
+          end;
+          if Frame.Pressed then
+          begin
+            //on("touch", fn) hears (x, y): where the finger (or the mouse) landed
+            Lua.State.PushInteger(Frame.X);
+            Lua.State.PushInteger(Frame.Y);
+            Dispatch(H.Name, Lua.State, lua_gettop(Lua.State) - 1, 2);
+            lua_pop(Lua.State, 2);
+          end;
+        end;
     end;
     if Stopped then
       Exit; //a binding called exit(); the sweep waits for the next dispatch
@@ -3938,6 +3992,8 @@ begin
   begin
     if KeyNameToEnum(H.Name) <> KEY_NULL then
       H.Kind := cHandlerKey
+    else if H.Name = cEventTouch then
+      H.Kind := cHandlerTouch // on("touch", fn): the beat a finger lands
     else if Copy(H.Name, 1, 6) = 'mouse.' then
     begin
       Btn := Copy(H.Name, 7, MaxInt);
@@ -5191,6 +5247,62 @@ begin
     s := 'left';
   L.PushBoolean(TyroInput.IsMouseButtonUp(s));
   Result := 1;
+end;
+
+{ TLuaTouch }
+
+//Every field answers the frame the engine stepped at the top of this beat, so
+//polling twice in one frame answers the same thing, and the numbers agree with
+//each other. On a tablet those frames are raylib's own points; on a desktop
+//the mouse stands in for a finger, which is what lets one script run on both.
+function TLuaTouch.Getter(L: Plua_State): integer;
+var
+  Field: string;
+  Frame: TyroInput.TTouchFrame;
+begin
+  Result := 0;
+  Field := L.ToString(2);
+  Frame := TyroInput.TouchFrame;
+  if Field = 'x' then
+    L.PushInteger(Frame.X)
+  else if Field = 'y' then
+    L.PushInteger(Frame.Y)
+  else if Field = 'count' then
+    L.PushInteger(Frame.Count)
+  else if Field = 'down' then
+    L.PushBoolean(Frame.Down)
+  else if Field = 'up' then
+    L.PushBoolean(not Frame.Down)
+  else if Field = 'pressed' then
+    L.PushBoolean(Frame.Pressed)
+  else if Field = 'released' then
+    L.PushBoolean(Frame.Released)
+  else if Field = 'mouse' then
+    L.PushBoolean(Frame.FromMouse) // the cursor is standing in for a finger
+  else
+    Exit;
+  Result := 1;
+end;
+
+//touch.point(i) -> x, y | nil
+//The i-th contact of this frame, counted from 1 in the order the glass felt
+//them. Out of range (or nothing touching) answers nil, so a walk over the
+//fingers is a plain `for i = 1, touch.count do`.
+function TLuaTouch.Point_func(L: Plua_State): integer; cdecl;
+var
+  I: Integer;
+  Frame: TyroInput.TTouchFrame;
+begin
+  I := L.ToInteger(1);
+  Frame := TyroInput.TouchFrame;
+  if (I < 1) or (I > Frame.Count) then
+  begin
+    L.PushNil;
+    Exit(1);
+  end;
+  L.PushInteger(Frame.Points[I - 1].X);
+  L.PushInteger(Frame.Points[I - 1].Y);
+  Result := 2;
 end;
 
 { TLuaKeyboard }

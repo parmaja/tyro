@@ -106,6 +106,60 @@ procedure GamepadVibrate(LeftMotor, RightMotor, Duration: Single; Gamepad: Integ
   reports success, not how many lines matched a connected controller. }
 function SetGamepadMappings(const Mappings: string): Integer;
 
+{ --- Touch (P6) ---
+
+  RayLib reports real fingers only; a desktop has a mouse instead. To keep one
+  shape of script everywhere, Tyro keeps a per-frame touch frame: the points
+  raylib reported, or - when nothing touched and this is a mouse platform - the
+  mouse standing in as one contact. The frame is stepped once per engine frame
+  on the main thread and read by the script thread as a copy, so a script
+  polling touch.pressed twice in one frame sees the same edge twice, like the
+  keyboard's own per-frame flags. }
+
+const
+  cMaxTouchPoints = 8;   // raylib tracks 10; eight fingers is a game, a piano is another day
+
+type
+  TTouchPoint = record
+    X, Y: Integer;   // window pixels, the same space mouse.x / mouse.y use
+    Id: Integer;     // the driver's finger number; -1 for the mouse stand-in
+  end;
+
+  { What the device layer saw this frame, before any of Tyro's rules apply.
+    TouchStep fills it from RayLib; a test fills it by hand. }
+  TTouchSource = record
+    Count: Integer;     // fingers the driver reports (0..cMaxTouchPoints)
+    Points: array[0..cMaxTouchPoints - 1] of TTouchPoint;
+    MouseAvailable: Boolean;  // a desktop with a pointer: the mouse may stand in
+    MouseDown: Boolean;
+    MouseX, MouseY: Integer;
+  end;
+
+  TTouchFrame = record
+    Count: Integer;     // contacts on the glass right now (0..cMaxTouchPoints)
+    Points: array[0..cMaxTouchPoints - 1] of TTouchPoint; // by touch order
+    X, Y: Integer;      // the first contact, or where the last one left off
+    Down: Boolean;      // Count > 0
+    Pressed: Boolean;   // a contact arrived this frame
+    Released: Boolean;  // a contact left this frame
+    FromMouse: Boolean; // the mouse is standing in (no real finger reported)
+  end;
+
+{ One frame of the touch machine, as a pure step: what the device saw goes in
+  with the frame the previous step published, and the finished frame comes out
+  - the edges are the difference between the two. TouchStep feeds it the live
+  values; a test can feed it anything. }
+function TouchMakeFrame(const ASource: TTouchSource; const APrev: TTouchFrame): TTouchFrame;
+
+{ The engine calls this once per frame on the main thread. }
+procedure TouchStep;
+
+{ A copy of the last stepped frame. Safe from any thread. }
+function TouchFrame: TTouchFrame;
+
+{ Forget the contacts: the next frame starts with nothing on the glass. }
+procedure TouchReset;
+
 { --- Frame timing --- }
 
 { Seconds elapsed since the last frame was drawn }
@@ -117,6 +171,9 @@ function TotalTime: Double;
 function RandomValue(Min, Max: Integer): Integer;
 
 implementation
+
+uses
+  mnClasses; // TmnCriticalSection, guarding the touch frame between threads
 
 function KeyNameToEnum(const Name: string): TKeyboardKey;
 var
@@ -610,9 +667,125 @@ begin
   Result := RayLib.GetTime;
 end;
 
+var
+  TouchLock: TmnCriticalSection;   // guards TouchCurrent: main thread writes, scripts read
+  TouchCurrent: TTouchFrame;       // the frame TouchStep last published
+
 function RandomValue(Min, Max: Integer): Integer;
 begin
   Result := RayLib.GetRandomValue(Min, Max);
 end;
+
+{ --- Touch --- }
+
+function TouchMakeFrame(const ASource: TTouchSource; const APrev: TTouchFrame): TTouchFrame;
+var
+  I: Integer;
+begin
+  Result := Default(TTouchFrame);
+  Result.Count := ASource.Count;
+  if Result.Count > cMaxTouchPoints then
+    Result.Count := cMaxTouchPoints;
+  if Result.Count < 0 then
+    Result.Count := 0;
+  for I := 0 to Result.Count - 1 do
+    Result.Points[I] := ASource.Points[I];
+  if Result.Count > 0 then
+  begin
+    // a finger is the pen, and the first one leads
+    Result.X := Result.Points[0].X;
+    Result.Y := Result.Points[0].Y;
+  end
+  else if ASource.MouseAvailable then
+  begin
+    // Nothing on the glass, but there is a pointer: on a desktop the mouse
+    // stands in, so a script never has to ask which machine it is running on.
+    Result.FromMouse := True;
+    Result.X := ASource.MouseX;
+    Result.Y := ASource.MouseY;
+    if ASource.MouseDown then
+    begin
+      Result.Count := 1;
+      Result.Points[0].X := ASource.MouseX;
+      Result.Points[0].Y := ASource.MouseY;
+      Result.Points[0].Id := -1; // -1: the cursor, not a finger
+    end;
+  end
+  else
+  begin
+    // a tablet with nothing touching: the pen stays where the finger left it
+    Result.X := APrev.X;
+    Result.Y := APrev.Y;
+  end;
+  Result.Down := Result.Count > 0;
+  Result.Pressed := Result.Count > APrev.Count; // someone arrived
+  Result.Released := Result.Count < APrev.Count; // someone left
+end;
+
+procedure TouchStep;
+var
+  Source: TTouchSource;
+  Frame: TTouchFrame;
+  Prev: TTouchFrame;
+  I, Raw: Integer;
+  P: TVector2;
+begin
+  Source := Default(TTouchSource);
+  if RayLib.IsWindowReady then
+  begin
+    Raw := RayLib.GetTouchPointCount;
+    if Raw > cMaxTouchPoints then
+      Raw := cMaxTouchPoints;
+    if Raw > 0 then
+    begin
+      Source.Count := Raw;
+      for I := 0 to Raw - 1 do
+      begin
+        P := RayLib.GetTouchPosition(I);
+        Source.Points[I].X := Round(P.X);
+        Source.Points[I].Y := Round(P.Y);
+        Source.Points[I].Id := RayLib.GetTouchPointId(I);
+      end;
+    end;
+    Source.MouseAvailable := True;
+    Source.MouseDown := IsMouseButtonDown('left');
+    Source.MouseX := MouseX;
+    Source.MouseY := MouseY;
+  end;
+  TouchLock.Enter;
+  try
+    Prev := TouchCurrent;
+    Frame := TouchMakeFrame(Source, Prev);
+    TouchCurrent := Frame;
+  finally
+    TouchLock.Leave;
+  end;
+end;
+
+function TouchFrame: TTouchFrame;
+begin
+  TouchLock.Enter;
+  try
+    Result := TouchCurrent;
+  finally
+    TouchLock.Leave;
+  end;
+end;
+
+procedure TouchReset;
+begin
+  TouchLock.Enter;
+  try
+    TouchCurrent := Default(TTouchFrame);
+  finally
+    TouchLock.Leave;
+  end;
+end;
+
+initialization
+  TouchLock := TmnCriticalSection.Create;
+
+finalization
+  TouchLock.Free;
 
 end.
