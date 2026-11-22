@@ -368,6 +368,7 @@ type
     function Stop_func(L: Plua_State): integer; cdecl;
     function Action_func(L: Plua_State): integer; cdecl;
     function FrameCount_func(L: Plua_State): integer; cdecl;
+    function Free_func(L: Plua_State): integer; cdecl;
   end;
 
   TLuaSprites = class(TTyroLuaObject)
@@ -457,6 +458,9 @@ type
     //model:face(x,y,z [, upx,upy,upz]) -> aim the model's own +y at a world
     //point and lean its +z toward an up direction; no args clears the aim.
     function Face_func(L: Plua_State): integer; cdecl;
+    //model:free() (alias destroy) -> unload the model now and drop it from
+    //the draw pass; the table stops addressing anything afterwards.
+    function Free_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaModels }
@@ -5261,6 +5265,8 @@ begin
   L.Register('pause', Stop_func);
   L.Register('action', Action_func);
   L.Register('framecount', FrameCount_func);
+  L.Register('free', Free_func);
+  L.Register('destroy', Free_func);
 
   // metatable with property getter/setter (no table injection, Lua passes the
   // table as arg 1)
@@ -7545,6 +7551,39 @@ begin
   Result := 1;
 end;
 
+// sprite:free() (alias destroy) -> drop the sprite now: its textures, name,
+// script hook and draw entry are gone. The handle is never reused, so this
+// table simply stops addressing anything: reads answer 0/false and writes do
+// nothing. Returns true when a sprite was freed.
+function TLuaSprite.Free_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+  FreeObj: TFreeSpriteObject;
+begin
+  Result := 0;
+  handle := GetSpriteHandle(L, 1);
+  if handle > cSpriteInvalid then
+  begin
+    // Drop the registry entry first: collision events and every name lookup
+    // stop at once, even if a frame passes before the release runs.
+    L.PushNil;
+    lua_rawseti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + handle);
+    FreeObj := TFreeSpriteObject.Create(handle);
+    try
+      FreeObj.Run(Script.Thread);
+      L.PushBoolean(FreeObj.Removed);
+    finally
+      FreeObj.Free;
+    end;
+    Result := 1;
+  end
+  else
+  begin
+    L.PushBoolean(False);
+    Result := 1;
+  end;
+end;
+
 // Sprite __index: read properties x, y, angle, scale, visible + physics keys; unknown keys raw-read from the sprite table
 function TLuaSprite.Getter(L: Plua_State): integer;
 var
@@ -8376,6 +8415,8 @@ begin
   L.Register('play', Play_func);
   L.Register('stop', Stop_func);
   L.Register('face', Face_func);
+  L.Register('free', Free_func);
+  L.Register('destroy', Free_func);
 
   L.NewTable; //[model, model, meta]
   L.RegisterMeta('__index', __getter);
@@ -8653,6 +8694,39 @@ begin
       Engine.Models.ClearFace(handle);
   end;
   Result := 0;
+end;
+
+// model:free() (alias destroy) -> unload the model now: its mesh, textures and
+// draw entry are gone. The handle is never reused, so this table simply stops
+// addressing anything: reads answer 0 and writes do nothing. Returns true when
+// a model was freed.
+function TLuaModel.Free_func(L: Plua_State): integer; cdecl;
+var
+  handle: integer;
+  FreeObj: TFreeModelObject;
+begin
+  Result := 0;
+  handle := GetModelHandle(L, 1);
+  if handle > cModel3DInvalid then
+  begin
+    // Drop the name-registry entry first so the global alias of a named model
+    // resolves to a fresh table only after a real rebuild.
+    L.PushNil;
+    lua_rawseti(L, LUA_REGISTRYINDEX, cModelRegistryBase + handle);
+    FreeObj := TFreeModelObject.Create(handle);
+    try
+      FreeObj.Run(Script.Thread);
+      L.PushBoolean(FreeObj.Removed);
+    finally
+      FreeObj.Free;
+    end;
+    Result := 1;
+  end
+  else
+  begin
+    L.PushBoolean(False);
+    Result := 1;
+  end;
 end;
 
 function TLuaModel.Getter(L: Plua_State): integer;

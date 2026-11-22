@@ -409,6 +409,7 @@ positioned with `move` or by setting `x`/`y` properties.
 | `sprite:play([fps])` | Restart and play the animation. `fps` overrides the per-frame timings stored in the file (0 or omitted keeps them — needed because Aseprite files often have ~1 ms delays). |
 | `sprite:stop()` | Freeze the animation on the current frame (aliased by `sprite:pause()`). |
 | `sprite:framecount()` | Number of frames in the loaded `.aseprite`/`.sprite` animation. |
+| `sprite:free()` | Drop the sprite now: its textures, name, physics body and script hook are released and the sprite stops drawing (aliased by `sprite:destroy()`). The old table simply stops addressing anything — reads answer `0`/`false`, writes do nothing — so freed bullets never need pooling. |
 
 ## Sprite Properties
 
@@ -600,6 +601,7 @@ directory and the workspace, like sprites.
 | `model:face(tx, ty, tz[, ux, uy, uz])` | Point the model's own +y axis — its nose, wherever `model.nose` says it lives — at the target `tx,ty,tz`; with the optional up vector, its own +z leans toward it. Aim once and fly; `angle`/`roll`/`tilt` still add small trims on top. (Meaningful under the free camera; see below.) |
 | `model:play([what])` | Start a skeletal animation by name or index (`model:play("Walk")`); with no argument it replays the last clip (or the file's first). Returns whether a clip was found. The engine poses the bones every frame while it plays. |
 | `model:stop()` | Stop the skeletal animation, keeping the current pose. |
+| `model:free()` | Unload the model now: its mesh, textures and draw entry are gone (aliased by `model:destroy()`). Like a freed sprite, the old table stops addressing anything. |
 
 ## Model Properties
 

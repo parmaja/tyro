@@ -367,6 +367,10 @@ type
     destructor Destroy; override;
     //* Unload every model and empty the store (an engine rerun does this).
     procedure Clear;
+    //* Unload one model now (model:free()). The mesh buffers and textures go
+    //* with it, so this only runs on the main thread (see TFreeModelObject).
+    //* Handles are not reused: a stale model table simply stops resolving.
+    function Remove(Handle: integer): boolean;
     // Add a mesh-less model, returns a handle
     function AddEmpty(const AName: string = ''): integer;
     // Generate one of the built-in shapes into an existing handle (main
@@ -562,6 +566,21 @@ type
       A, B, C: Single);
     procedure DoExecute; override;
     property HandleResult: boolean read FResult;
+  end;
+
+  { TFreeModelObject }
+
+  { Frees one model (model:free) on the main thread, where its mesh buffers
+    and textures can be unloaded. The script thread waits (Run synchronizes),
+    so after the call the model is really gone from the draw pass. }
+  TFreeModelObject = class(TQueueObject)
+  private
+    FHandle: integer;
+    FRemoved: boolean;
+  public
+    constructor Create(AHandle: integer);
+    procedure DoExecute; override;
+    property Removed: boolean read FRemoved;
   end;
 
 implementation
@@ -1450,6 +1469,24 @@ begin
     FreeShadowMaterial;
     FreeShadowSheet;
     FreeBlurPass;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TModels3D.Remove(Handle: integer): boolean;
+var
+  Item: TModel3D;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Item) then
+    begin
+      FItems.Remove(Handle);
+      Item.Free; //unloads mesh and textures: main thread, GL context alive
+      Result := True;
+    end;
   finally
     FLock.Leave;
   end;
@@ -3680,6 +3717,21 @@ procedure TShapeModelObject.DoExecute;
 begin
   if Engine.Models <> nil then
     FResult := Engine.Models.BuildShape(FHandle, FShape, FA, FB, FC);
+end;
+
+{ TFreeModelObject }
+
+constructor TFreeModelObject.Create(AHandle: integer);
+begin
+  inherited Create;
+  FHandle := AHandle;
+  FRemoved := False;
+end;
+
+procedure TFreeModelObject.DoExecute;
+begin
+  if Engine.Models <> nil then
+    FRemoved := Engine.Models.Remove(FHandle);
 end;
 
 end.

@@ -123,6 +123,12 @@ type
     //* run behind). Handles are not reused, so a handle a script still holds can
     //* never address a sprite of a later run.
     procedure Clear;
+    //* Free one sprite now: its GPU textures are unloaded and it leaves the
+    //* store (sprite:free()). Like Clear the textures go only on the main
+    //* thread, so scripts call this through TFreeSpriteObject. The handle is
+    //* never reused, so a stale Lua table or physics body simply stops
+    //* resolving. Returns False for an unknown handle.
+    function Remove(Handle: integer): boolean;
     // Add a loaded texture to the store, returns a handle
     function Add(ATexture: TTexture2D; const AName: string = ''): integer;
     // Add a texture-less sprite (script-only markers, etc.), returns a handle
@@ -257,6 +263,22 @@ type
     constructor Create(const AName: string);
     procedure DoExecute; override;
     property HandleResult: integer read FHandleResult;
+  end;
+
+  { TFreeSpriteObject }
+
+  { Frees one sprite (sprite:free) on the main thread, where its GPU textures
+    can be unloaded. The script thread waits (Run synchronizes), so after the
+    call the sprite is really gone: drawing, lookups and the script hooks all
+    stop at once. TPhysics drops the body on the next step. }
+  TFreeSpriteObject = class(TQueueObject)
+  private
+    FHandle: integer;
+    FRemoved: boolean;
+  public
+    constructor Create(AHandle: integer);
+    procedure DoExecute; override;
+    property Removed: boolean read FRemoved;
   end;
 
   { TPuffSpriteObject }
@@ -494,6 +516,25 @@ begin
       Sprite.Free;
     end;
     FItems.Clear;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TSprites.Remove(Handle: integer): boolean;
+var
+  Sprite: TSprite;
+begin
+  Result := False;
+  FLock.Enter;
+  try
+    if FItems.TryGetValue(Handle, Sprite) then
+    begin
+      FreeSpriteFrames(Sprite);
+      FItems.Remove(Handle);
+      Sprite.Free; //drops the script hook with the object
+      Result := True;
+    end;
   finally
     FLock.Leave;
   end;
@@ -2124,6 +2165,20 @@ end;
 procedure TCreateSpriteObject.DoExecute;
 begin
   FHandleResult := Engine.Sprites.AddEmpty(FName);
+end;
+
+{ TFreeSpriteObject }
+
+constructor TFreeSpriteObject.Create(AHandle: integer);
+begin
+  inherited Create;
+  FHandle := AHandle;
+  FRemoved := False;
+end;
+
+procedure TFreeSpriteObject.DoExecute;
+begin
+  FRemoved := Engine.Sprites.Remove(FHandle);
 end;
 
 { TPuffSpriteObject }
