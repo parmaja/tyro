@@ -1272,6 +1272,42 @@ pause(1000)                       -- the text stays on screen, the scene is stil
 canvas.text(10, 30, "Back!")
 ```
 
+## Tweens: `tween()` — animation without the math
+
+A tween glides one numeric property from where it stands to a value, over
+milliseconds, with an easing curve — the engine writes every frame in
+between. Sprites, controls and plain tables all work as the subject (a HUD
+counter that jumps on a score is a plain-table tween), and the glides ride
+the **scene clock** exactly like `after()`: stretched by `world.timescale`,
+asleep during `pause()`.
+
+```lua
+window.show(640, 480)
+local cat = sprites.blob("cat", 96)
+cat.x, cat.y, cat.tint = 80, 240, rgb(140, 220, 160)
+
+-- the punch pattern: write 0 at once, spring up to 1
+tween.from(cat, "scale", 0, 1, 320, "backout")
+-- glide to a new spot, overshoot and settle; a done callback runs on landing
+tween(cat, "x", 460, 600, "outback", function(sp)
+  music.sound("boing", 500, 80)
+end)
+
+local hud = { lift = 0 }          -- your own tables are fine subjects too
+tween.from(hud, "lift", 12, 0, 200, "quadout")
+```
+
+`tween` is one callable table: `tween(obj, prop, to, ms [, easing [, done]])`
+plus `tween.to` / `tween.from` / `tween.kill(id)` / `tween.killall(obj)` /
+`tween.count()`. Easings are `sine` `quad` `cubic` `expo` `back` `elastic`
+`bounce` each with `in` / `out` / `inout` (either word order works), the
+aliases `smooth` / `snap` / `wobble`, and `linear`; leaving the name out
+gives a plain decelerating glide, and every curve lands on the target value
+exactly. A bad argument answers `nil` + a message instead of an error. A
+script with *only* tweens still gets the engine frame loop, like the timer
+ones. Full notes in [`help/tween.md`](help/tween.md), and every moving thing
+in [`games/bubblepop/`](games/bubblepop/) is one of these calls.
+
 ## Grouping drawing with enter() / leave()
 
 `enter()` locks the processing queue: the drawing commands the script queues

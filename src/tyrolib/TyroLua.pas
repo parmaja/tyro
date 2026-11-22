@@ -47,6 +47,28 @@ type
     Dead: Boolean;
   end;
 
+  { TLuaTween }
+
+  // One tween() property glide. SubjRef and DoneRef are Lua registry
+  // references; every frame's value goes back through the subject's
+  // __newindex, so a sprite property rides the very same path a script
+  // write takes. Elapsed rides the scene clock the engine feeds the pump
+  // in EngineUpdate, so world.timescale stretches a tween with the rest
+  // of the scene and pause() sleeps it, exactly like TLuaTimer.
+  TLuaTween = class
+  public
+    Id: Integer;
+    SubjRef: Integer;  // registry reference of the table being tweened
+    Prop: string;      // field/property written back every frame
+    From: Double;      // value at tween start
+    Target: Double;    // value the glide lands on
+    Duration: Double;  // scene-clock ms the glide takes
+    Elapsed: Double;   // scene-clock ms progressed so far
+    Easing: Integer;   // curve index, see TweenEase
+    DoneRef: Integer;  // finish callback ref, LUA_NOREF when there is none
+    Dead: Boolean;
+  end;
+
   { TTyroLuaObject }
 
   TTyroLuaObject = class abstract(TLuaObject)
@@ -881,9 +903,21 @@ type
     //advance it, so timers sleep through pause() and crawl with the scene.
     TimerClock: Double;
     TimerNextId: Integer;
+    //Tween glides handed out by tween()/tween.from() (TLuaTween), swept in
+    //the same engine-driven beat as the timers; each tween carries its own
+    //elapsed time, so no shared clock is needed. The registry refs die with
+    //the Lua state, so Destroy releases the list only.
+    Tweens: TList; //of TLuaTween
+    TweenNextId: Integer;
     function NewTimer(L: Plua_State; AMs: Double; APeriodic: Boolean): Integer;
     procedure PumpTimers(ADeltaTime: Double);
     function HasTimers: Boolean;
+    procedure PumpTweens(ADeltaTime: Double);
+    function HasTweens: Boolean;
+    //Assembles the callable `tween` table (tween(...), tween.to/from/kill/
+    //killall/count) on the current state from the __tween_* helpers and
+    //hides the raw names again. Runs right after they are registered.
+    procedure TweenPrelude;
     procedure DoError(S: string);
     procedure Run; override;
     //Look up the global AName and pcall it on the main thread. AArgs arguments
@@ -916,6 +950,22 @@ type
     function After_func(L: Plua_State): integer; cdecl;
     function Every_func(L: Plua_State): integer; cdecl;
     function Cancel_func(L: Plua_State): integer; cdecl;
+
+    //juice tweens
+    //tween(obj, prop, value, ms [, easing [, done]]) -> tween id, the same
+    //kind of id: tween.kill(id) stops a glide, tween.killall(obj) stops all
+    //of one subject's. tween.from() spells the start value out instead of
+    //reading it. The glides step inside the engine-driven frame, the beat
+    //that calls update(), on the scene clock.
+    function Tween_func(L: Plua_State): integer; cdecl;
+    function TweenFrom_func(L: Plua_State): integer; cdecl;
+    function TweenKill_func(L: Plua_State): integer; cdecl;
+    function TweenKillAll_func(L: Plua_State): integer; cdecl;
+    function TweenCount_func(L: Plua_State): integer; cdecl;
+    //Shared body of the two arming calls; AHasFrom picks tween.from's
+    //spelling (obj, prop, from, to, ms ...) over tween()'s (obj, prop,
+    //to, ms ...). Returns the new id, or -1 with (nil, reason) pushed.
+    function PushTween(L: Plua_State; AHasFrom: Boolean): Integer;
 
     //file access
 
@@ -2308,6 +2358,8 @@ begin
   Timers := TList.Create; //of TLuaTimer, freed in Destroy
   TimerClock := 0;
   TimerNextId := 1; //timer id 0 stays invalid, so cancel(0) always answers false
+  Tweens := TList.Create; //of TLuaTween, freed in Destroy
+  TweenNextId := 1; //tween id 0 stays invalid, so tween.kill(0) always answers false
 
   //window
   Lua.State.Register('window', 'show', Window, Window.Show_func);
@@ -2475,6 +2527,16 @@ begin
   Lua.State.RegisterGlobal('after', After_func);
   Lua.State.RegisterGlobal('every', Every_func);
   Lua.State.RegisterGlobal('cancel', Cancel_func);
+  //juice tweens: the raw helpers assemble into the callable table `tween`
+  //through a tiny prelude, so both spellings work:
+  //   tween(player, "x", 300, 400, "outback")
+  //   tween.from(scorelabel, "scale", 1.4, 1, 150, "out")
+  Lua.State.RegisterGlobal('__tween_to', Tween_func);
+  Lua.State.RegisterGlobal('__tween_from', TweenFrom_func);
+  Lua.State.RegisterGlobal('__tween_kill', TweenKill_func);
+  Lua.State.RegisterGlobal('__tween_killall', TweenKillAll_func);
+  Lua.State.RegisterGlobal('__tween_count', TweenCount_func);
+  TweenPrelude;
   Lua.State.RegisterGlobal('rand', RandomValue_func);
   Lua.State.RegisterGlobal('screenshot', Screenshot_func);
   Lua.State.RegisterGlobal('exit', Exit_func);
@@ -2706,6 +2768,16 @@ begin
     end;
     FreeAndNil(Timers);
   end;
+  //The tweens leave the same way: their refs died with the state.
+  if Tweens <> nil then
+  begin
+    while Tweens.Count > 0 do
+    begin
+      TLuaTween(Tweens[Tweens.Count - 1]).Free;
+      Tweens.Delete(Tweens.Count - 1);
+    end;
+    FreeAndNil(Tweens);
+  end;
   FreeAndNil(Shader);
   FreeAndNil(Game);
   FreeAndNil(Gamepad);
@@ -2801,7 +2873,8 @@ end;
 function TLuaScript.HasEngineCallbacks: Boolean;
 begin
   Result := (Lua.State <> nil) and
-    (Lua.State.FunctionExists('update') or Lua.State.FunctionExists('draw') or HasTimers);
+    (Lua.State.FunctionExists('update') or Lua.State.FunctionExists('draw')
+     or HasTimers or HasTweens);
 end;
 
 procedure TLuaScript.EngineUpdate(ADeltaTime: Double);
@@ -2811,6 +2884,9 @@ begin
   //The timer beat rides the stretched frame time: fire everything that is
   //due first, so a callback's marks show in the very frame that answers it.
   PumpTimers(ADeltaTime);
+  //glides step on the same beat, so a done callback can arm the next tween
+  //and see its first value in the very next frame.
+  PumpTweens(ADeltaTime);
   //a timer callback may have called exit(); do not step into a stopped state.
   if Stopped then
     Exit;
@@ -2981,6 +3057,550 @@ begin
       end;
     end;
   L.PushBoolean(False);
+end;
+
+{ ---- juice tweens ---- }
+
+// Easing curve kinds: a tween's curve is base * 3 + direction. The names a
+// script passes are folded onto these by ParseEasing.
+const
+  cEaseSine = 0;   cEaseQuad = 1;   cEaseCubic = 2;  cEaseExpo = 3;
+  cEaseBack = 4;   cEaseElastic = 5; cEaseBounce = 6;
+  cEaseIn = 0;     cEaseOut = 1;    cEaseInOut = 2;
+  cEaseLinear = 21; //the only base without directions
+
+// One bounce for progress t in [0..1]: the classic falling-ball polynomial,
+// used for bounce-out directly and reflected for bounce-in.
+function EaseBounceOut(t: Double): Double;
+const
+  n1 = 7.5625;
+  d1 = 2.75;
+begin
+  if t < 1 / d1 then
+    Result := n1 * t * t
+  else if t < 2 / d1 then
+  begin
+    t := t - 1.5 / d1;
+    Result := n1 * t * t + 0.75;
+  end
+  else if t < 2.5 / d1 then
+  begin
+    t := t - 2.25 / d1;
+    Result := n1 * t * t + 0.9375;
+  end
+  else
+  begin
+    t := t - 2.625 / d1;
+    Result := n1 * t * t + 0.984375;
+  end;
+end;
+
+// 2 raised to e, without pulling Math into this unit (the expo and elastic
+// curves are built on it).
+function EasePow2(e: Double): Double;
+begin
+  Result := Exp(e * 0.6931471805599453);
+end;
+
+// The eased value for progress t in [0..1] on one curve: the standard Penner
+// set, mirrored for in/out and stitched in the middle for inout. The ends are
+// exact: TweenEase(kind, 0) = 0 and TweenEase(kind, 1) = 1 for every curve,
+// so a glide always lands where the script said it would.
+function TweenEase(AKind: Integer; t: Double): Double;
+const
+  cPi = 3.141592653589793;
+  sBack = 1.70158;
+  sBack2 = 2.5949095; // the back-inout overshoot
+  c4 = 2 * cPi / 3;   // elastic period 0.3
+  c5 = 2 * cPi / 4.5; // elastic-inout period 0.45
+var
+  b, d: Integer;
+  p, q: Double;
+begin
+  if AKind = cEaseLinear then
+    Exit(t);
+  if t <= 0 then
+    Exit(0);
+  if t >= 1 then
+    Exit(1);
+  b := AKind div 3;
+  d := AKind mod 3;
+  Result := 0;
+  case b of
+    cEaseSine:
+      case d of
+        cEaseIn: Result := 1 - Cos(t * cPi / 2);
+        cEaseOut: Result := Sin(t * cPi / 2);
+      else Result := -(Cos(cPi * t) - 1) / 2;
+      end;
+    cEaseQuad:
+      case d of
+        cEaseIn: Result := t * t;
+        cEaseOut: Result := 1 - (1 - t) * (1 - t);
+      else
+        if t < 0.5 then
+          Result := 2 * t * t
+        else
+          Result := 1 - Sqr(-2 * t + 2) / 2;
+      end;
+    cEaseCubic:
+      case d of
+        cEaseIn: Result := t * t * t;
+        cEaseOut: Result := 1 + Sqr(t - 1) * (t - 1);
+      else
+        if t < 0.5 then
+          Result := 4 * t * t * t
+        else
+        begin
+          p := -2 * t + 2;
+          Result := 1 + p * p * p / 2;
+        end;
+      end;
+    cEaseExpo:
+      case d of
+        cEaseIn: Result := EasePow2(10 * t - 10);
+        cEaseOut: Result := 1 - EasePow2(-10 * t);
+      else
+        if t < 0.5 then
+          Result := EasePow2(20 * t - 10) / 2
+        else
+          Result := (2 - EasePow2(-20 * t + 10)) / 2;
+      end;
+    cEaseBack:
+      case d of
+        cEaseIn: Result := t * t * ((sBack + 1) * t - sBack);
+        cEaseOut:
+        begin
+          p := t - 1;
+          Result := 1 + p * p * ((sBack + 1) * p + sBack);
+        end;
+      else
+        p := 2 * t;
+        if t < 0.5 then
+          Result := p * p * ((sBack2 + 1) * p - sBack2) / 2
+        else
+        begin
+          q := p - 2;
+          Result := (q * q * ((sBack2 + 1) * q + sBack2) + 2) / 2;
+        end;
+      end;
+    cEaseElastic:
+      case d of
+        cEaseIn: Result := -EasePow2(10 * t - 10) * Sin((t * 10 - 10.75) * c4);
+        cEaseOut: Result := EasePow2(-10 * t) * Sin((t * 10 - 0.75) * c4) + 1;
+      else
+        if t < 0.5 then
+          Result := EasePow2(20 * t - 10) * Sin((20 * t - 11.125) * c5) / 2
+        else
+          Result := EasePow2(-20 * t + 10) * Sin((20 * t - 11.125) * c5) / 2 + 1;
+      end;
+    cEaseBounce:
+      case d of
+        cEaseIn: Result := 1 - EaseBounceOut(1 - t);
+        cEaseOut: Result := EaseBounceOut(t);
+      else
+        if t < 0.5 then
+          Result := (1 - EaseBounceOut(1 - 2 * t)) * 0.5
+        else
+          Result := (1 + EaseBounceOut(2 * t - 1)) * 0.5;
+      end;
+  end;
+end;
+
+// Fold an easing name onto a curve kind. Base + direction in either order,
+// case and separators ignored: "backout", "outback" and "BACK_OUT" all pick
+// the back/out curve. Bases: sine quad cubic expo back elastic bounce. The
+// friendly aliases: "smooth" is the gentle sine in-out, "snap" the back-out
+// overshoot, "wobble" the elastic settle. A bare base means its out curve,
+// "linear"/"none" glide straight, and anything unknown lands on quad-out -
+// the plain decelerating glide a tween gets when the name is left out.
+function ParseEasing(const AName: string): Integer;
+const
+  cBases: array[0..6] of string =
+    ('sine', 'quad', 'cubic', 'expo', 'back', 'elastic', 'bounce');
+  cDirs: array[0..2] of string = ('inout', 'out', 'in'); //longest first
+  cDirKind: array[0..2] of Integer = (cEaseInOut, cEaseOut, cEaseIn);
+  function FindBase(const A: string): Integer;
+  var K: Integer;
+  begin
+    for K := 0 to High(cBases) do
+      if cBases[K] = A then
+        Exit(K);
+    Result := -1;
+  end;
+var
+  s, x, base: string;
+  I, K, d, b: Integer;
+begin
+  x := '';
+  for I := 1 to Length(AName) do
+    if not ((AName[I] = '_') or (AName[I] = '-') or (AName[I] = ' ')) then
+      x := x + LowerCase(AName[I]);
+  s := x;
+  if (s = '') or (s = 'linear') or (s = 'none') then
+    Exit(cEaseLinear);
+  if s = 'smooth' then
+    Exit(cEaseSine * 3 + cEaseInOut);
+  if s = 'snap' then
+    Exit(cEaseBack * 3 + cEaseOut);
+  if s = 'wobble' then
+    Exit(cEaseElastic * 3 + cEaseOut);
+  base := s;
+  d := -1;
+  for I := 0 to 2 do //direction at the end: "backinout", "backout", "backin"
+    if (Length(s) > Length(cDirs[I]))
+      and (Copy(s, Length(s) - Length(cDirs[I]) + 1, Length(cDirs[I])) = cDirs[I]) then
+    begin
+      d := cDirKind[I];
+      base := Copy(s, 1, Length(s) - Length(cDirs[I]));
+      Break;
+    end;
+  b := FindBase(base);
+  if (b < 0) and (d >= 0) then
+  begin //direction at the front instead: "outback", "inoutback", "inback"
+    base := s;
+    d := -1;
+    for I := 0 to 2 do
+      if (Length(s) > Length(cDirs[I]))
+        and (Copy(s, 1, Length(cDirs[I])) = cDirs[I]) then
+      begin
+        d := cDirKind[I];
+        base := Copy(s, Length(cDirs[I]) + 1, MaxInt);
+        Break;
+      end;
+    b := FindBase(base);
+  end;
+  if b < 0 then
+    Exit(cEaseQuad * 3 + cEaseOut); //unknown name: the plain glide
+  if d < 0 then
+    d := cEaseOut; //a bare base eases out
+  Result := b * 3 + d;
+end;
+
+// Shared body of tween() and tween.from(); only where the start value comes
+// from differs. tween() reads the property as it stands, through the
+// subject's __index, so a sprite answers with its live engine value;
+// tween.from() takes the start value as an argument and writes it once, at
+// once - the punch pattern: set big now, glide back over ms. The subject and
+// an optional finish callback are kept in the Lua registry for the life of
+// the glide. On success the id is returned; on bad arguments -1 is returned
+// and (nil, reason) already sits on L for the caller to hand back, so a kid
+// can print(tween(spr, 'x', 'big', 300)) and learn what was wrong.
+function TLuaScript.PushTween(L: Plua_State; AHasFrom: Boolean): Integer;
+var
+  T: TLuaTween;
+  ITo, IMs, IEasing, IDone: Integer;
+  FromV, ToV: Double;
+  PropName: string;
+begin
+  Result := -1;
+  if (Tweens = nil) or (Lua.State = nil) then
+  begin
+    L.PushNil;
+    L.PushString('tween: not running inside a script');
+    Exit;
+  end;
+  if not lua_istable(L, 1) then
+  begin
+    L.PushNil;
+    L.PushString('tween: the first argument is the thing to move, a sprite or your own table');
+    Exit;
+  end;
+  if not lua_isstring(L, 2) then
+  begin
+    L.PushNil;
+    L.PushString('tween: the second argument is the property name, like "x"');
+    Exit;
+  end;
+  PropName := L.ToString(2);
+  ITo := 3 + Ord(AHasFrom); //from: (obj, prop, from, to, ms ...) - to: (obj, prop, to, ms ...)
+  IMs := ITo + 1;
+  IEasing := IMs + 1;
+  IDone := IEasing + 1;
+  if AHasFrom and not lua_isnumber(L, 3) then
+  begin
+    L.PushNil;
+    L.PushString('tween.from: the start value must be a number');
+    Exit;
+  end;
+  if not lua_isnumber(L, ITo) then
+  begin
+    L.PushNil;
+    L.PushString('tween: the target value must be a number');
+    Exit;
+  end;
+  if not lua_isnumber(L, IMs) then
+  begin
+    L.PushNil;
+    L.PushString('tween: the duration is milliseconds, a number like 300');
+    Exit;
+  end;
+  if (not lua_isnoneornil(L, IDone)) and (not lua_isfunction(L, IDone)) then
+  begin
+    L.PushNil;
+    L.PushString('tween: the last argument must be a function to run when it lands, or nothing');
+    Exit;
+  end;
+  ToV := L.ToNumber(ITo);
+  if AHasFrom then
+    FromV := L.ToNumber(3)
+  else
+  begin //read the property now - __index answers for sprites, raw fields for tables
+    L.PushString(PropName);
+    if (lua_gettable(L, 1) <> LUA_TNUMBER) then
+    begin
+      lua_pop(L, 1);
+      L.PushNil;
+      L.PushString('tween: ' + PropName + ' has no number to glide from - give it a value first or use tween.from');
+      Exit;
+    end;
+    FromV := lua_tonumber(L, -1);
+    lua_pop(L, 1);
+  end;
+  T := TLuaTween.Create;
+  T.Id := TweenNextId;
+  Inc(TweenNextId);
+  lua_pushvalue(L, 1);
+  T.SubjRef := luaL_ref(L, LUA_REGISTRYINDEX);
+  T.Prop := PropName;
+  T.From := FromV;
+  T.Target := ToV;
+  T.Duration := L.ToNumber(IMs);
+  if T.Duration < 1 then
+    T.Duration := 1; //a zero-length glide still lands, on the next beat
+  T.Elapsed := 0;
+  if lua_isstring(L, IEasing) then
+    T.Easing := ParseEasing(L.ToString(IEasing))
+  else
+    T.Easing := cEaseQuad * 3 + cEaseOut; //the name left out: the plain glide
+  if lua_isfunction(L, IDone) then
+  begin
+    lua_pushvalue(L, IDone);
+    T.DoneRef := luaL_ref(L, LUA_REGISTRYINDEX);
+  end
+  else
+    T.DoneRef := LUA_NOREF;
+  T.Dead := False;
+  Tweens.Add(T);
+  if AHasFrom then
+  begin //the punch: the start value lands before the glide begins
+    L.PushNumber(FromV);
+    lua_setfield(L, 1, PUTF8Char(UTF8String(PropName)));
+  end;
+  Result := T.Id;
+end;
+
+// The tween beat: advance every glide, write each value back through the
+// subject's __newindex (the very path a script's `spr.x = v` takes), and let
+// finished glides answer with their callback - after every value landed, so
+// a handler sees the whole finished world, like the timer pump. Callbacks
+// may kill or arm tweens while they run; the sweep at the end only frees
+// tweens no callback still needs, and releases their registry refs.
+procedure TLuaScript.PumpTweens(ADeltaTime: Double);
+var
+  I, ND: Integer;
+  T: TLuaTween;
+  Done: array of TLuaTween;
+  V, P: Double;
+  Msg: string;
+begin
+  if (Tweens = nil) or (Tweens.Count = 0) or (Lua.State = nil) then
+    Exit;
+  ND := 0;
+  SetLength(Done, Tweens.Count);
+  for I := 0 to Tweens.Count - 1 do
+  begin
+    T := TLuaTween(Tweens[I]);
+    if T.Dead then
+      Continue; //a callback earlier in this beat killed it
+    //the engine feeds the beat in seconds, the glide counts milliseconds
+    T.Elapsed := T.Elapsed + ADeltaTime * 1000;
+    if T.Elapsed >= T.Duration then
+      P := 1
+    else if T.Elapsed <= 0 then
+      P := 0
+    else
+      P := T.Elapsed / T.Duration;
+    if P >= 1 then
+      V := T.Target //land exact: no easing curve may leave the value adrift
+    else
+      V := T.From + (T.Target - T.From) * TweenEase(T.Easing, P);
+    lua_rawgeti(Lua.State, LUA_REGISTRYINDEX, T.SubjRef);
+    lua_pushnumber(Lua.State, V);
+    lua_setfield(Lua.State, -2, PUTF8Char(UTF8String(T.Prop)));
+    lua_pop(Lua.State, 1);
+    if (P >= 1) and (not T.Dead) then
+    begin
+      T.Dead := True; //a finished glide leaves the world the moment it lands
+      if T.DoneRef <> LUA_NOREF then
+      begin
+        Done[ND] := T;
+        Inc(ND);
+      end;
+    end;
+  end;
+  for I := 0 to ND - 1 do
+  begin
+    T := Done[I];
+    lua_rawgeti(Lua.State, LUA_REGISTRYINDEX, T.DoneRef);
+    lua_rawgeti(Lua.State, LUA_REGISTRYINDEX, T.SubjRef); //the handler meets its subject
+    if lua_pcall(Lua.State, 1, 0, 0) <> LUA_OK then
+    begin
+      Msg := string(UTF8String(lua_tostring(Lua.State, -1)));
+      lua_pop(Lua.State, 1);
+      DoError('tween: ' + Msg);
+    end;
+    luaL_unref(Lua.State, LUA_REGISTRYINDEX, T.DoneRef);
+    T.DoneRef := LUA_NOREF;
+    if Stopped then
+      Break; //the callback called exit()
+  end;
+  //sweep: dead glides leave the list, and their subject refs with them.
+  for I := Tweens.Count - 1 downto 0 do
+  begin
+    T := TLuaTween(Tweens[I]);
+    if T.Dead then
+    begin
+      if Lua.State <> nil then
+      begin
+        luaL_unref(Lua.State, LUA_REGISTRYINDEX, T.SubjRef);
+        if T.DoneRef <> LUA_NOREF then
+          luaL_unref(Lua.State, LUA_REGISTRYINDEX, T.DoneRef);
+      end;
+      Tweens.Delete(I);
+      T.Free;
+    end;
+  end;
+end;
+
+// True while at least one glide is still moving; a script that armed one has
+// a scene the engine must keep stepping, the same way HasTimers keeps an
+// after()-only script alive.
+function TLuaScript.HasTweens: Boolean;
+begin
+  Result := (Tweens <> nil) and (Tweens.Count > 0);
+end;
+
+// The small Lua bootstrap behind the tween table: `tween(...)` finds its
+// __call and forwards to tween.to, and the raw __tween_* helper names are
+// hidden again so the globals keep the one name.
+procedure TLuaScript.TweenPrelude;
+var
+  Msg: string;
+begin
+  if Lua.State = nil then
+    Exit;
+  if not Lua.State.RunString(
+    'tween = setmetatable({'
+    + 'to = __tween_to, from = __tween_from, kill = __tween_kill, '
+    + 'killall = __tween_killall, count = __tween_count}, '
+    + '{__call = function(self, ...) return self.to(...) end}); '
+    + '__tween_to = nil __tween_from = nil __tween_kill = nil '
+    + '__tween_killall = nil __tween_count = nil ', Msg) then
+    DoError('tween prelude: ' + Msg);
+end;
+
+// tween(obj, prop, value, ms [, easing [, done]]) -> tween id
+// Glide one numeric property - a sprite's x, y, angle, scale, alpha ..., a
+// control's, or any field of your own table - from where it stands to the
+// value, in ms of scene time. Easing names: linear plus sine/quad/cubic/expo/
+// back/elastic/bounce each with in/out/inout, and the aliases smooth, snap,
+// wobble; leaving the name out gives the plain decelerating glide. done runs
+// when it lands. The id feeds tween.kill().
+function TLuaScript.Tween_func(L: Plua_State): integer; cdecl;
+var
+  Id: Integer;
+begin
+  Id := PushTween(L, False);
+  if Id >= 0 then
+  begin
+    L.PushInteger(Id);
+    Result := 1;
+  end
+  else
+    Result := 2; //PushTween left (nil, reason) on the stack
+end;
+
+// tween.from(obj, prop, startValue, endValue, ms [, easing [, done]]) -> id
+// The spelling for punches and flashes: startValue is written at once and
+// the glide runs from it to endValue - a number that was already there never
+// has to be read back, and a field the subject does not have yet is fine.
+function TLuaScript.TweenFrom_func(L: Plua_State): integer; cdecl;
+var
+  Id: Integer;
+begin
+  Id := PushTween(L, True);
+  if Id >= 0 then
+  begin
+    L.PushInteger(Id);
+    Result := 1;
+  end
+  else
+    Result := 2; //PushTween left (nil, reason) on the stack
+end;
+
+// tween.kill(id) -> true when a gliding tween was stopped, false when the id
+// is unknown or already landed. The property stays where the glide left it.
+function TLuaScript.TweenKill_func(L: Plua_State): integer; cdecl;
+var
+  I, Id: Integer;
+  T: TLuaTween;
+begin
+  Result := 1;
+  Id := L.ToInteger(1);
+  if Tweens <> nil then
+    for I := 0 to Tweens.Count - 1 do
+    begin
+      T := TLuaTween(Tweens[I]);
+      if (T.Id = Id) and (not T.Dead) then
+      begin
+        T.Dead := True; //the pump's sweep releases the references
+        L.PushBoolean(True);
+        Exit;
+      end;
+    end;
+  L.PushBoolean(False);
+end;
+
+// tween.killall(obj) -> how many glides on that exact subject were stopped.
+// Before a respawn, so an old glide cannot drag the new state around.
+function TLuaScript.TweenKillAll_func(L: Plua_State): integer; cdecl;
+var
+  I, N: Integer;
+  T: TLuaTween;
+begin
+  N := 0;
+  if (Tweens <> nil) and (Lua.State <> nil) then
+    for I := 0 to Tweens.Count - 1 do
+    begin
+      T := TLuaTween(Tweens[I]);
+      if T.Dead then
+        Continue;
+      lua_rawgeti(Lua.State, LUA_REGISTRYINDEX, T.SubjRef);
+      if lua_rawequal(Lua.State, -1, 1) then
+      begin
+        T.Dead := True;
+        Inc(N);
+      end;
+      lua_pop(Lua.State, 1);
+    end;
+  L.PushInteger(N);
+  Result := 1;
+end;
+
+// tween.count() -> how many glides are still moving (Ctrl+F10 sees it too).
+function TLuaScript.TweenCount_func(L: Plua_State): integer; cdecl;
+var
+  I, N: Integer;
+  T: TLuaTween;
+begin
+  N := 0;
+  if Tweens <> nil then
+    for I := 0 to Tweens.Count - 1 do
+      if not TLuaTween(Tweens[I]).Dead then
+        Inc(N);
+  L.PushInteger(N);
+  Result := 1;
 end;
 
 // Runs a single console line on the persistent Lua state (same globals as the

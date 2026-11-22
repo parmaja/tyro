@@ -1,0 +1,319 @@
+--======================================================================
+--  BUBBLE POP - the juice demo: every bit of motion is a tween() glide.
+--======================================================================
+--  Bubbles punch up from the sea floor, drift for the surface, and you
+--  pop them before they escape. Small bubbles are worth more. Three
+--  escapes and the sea closes.
+--
+--  This game is the showcase for the tween API (docs/ROADMAP.md P3):
+--    tween.from(b, "scale", 0, s, 320, "backout")   -- the entrance punch
+--    tween(b, "y", -70, rise, "linear")             -- the long rise
+--    tween.from(b, "alpha", 230, 0, 180, ... )      -- the pop-away fade
+--  plus score lift, red miss-flash, HUD snaps and the sliding title -
+--  no hand-rolled easing anywhere.
+--
+--  Keys:
+--    LEFT MOUSE      pop a bubble
+--    SPACE           start / restart
+--    R               restart a round any time
+--    ESC             exit
+--======================================================================
+
+window.show(640, 480)
+world.title = "Bubble Pop"
+world.backcolor = rgb(16, 40, 84)
+
+local W, H = 640, 480
+-- `dbg` (first CLI word after the script): slow the splash to 4.5 s so
+-- --screenshot can catch it, and echo state changes to the console.
+local BPOP_DEBUG = args and args[2] == "dbg"
+local SPLASH_HOLD = BPOP_DEBUG and 4.5 or 2.0
+local HI_FILE = "bubblepop.hi"
+local PALETTE = {
+  rgb(120, 190, 255), rgb(160, 230, 200), rgb(240, 200, 120),
+  rgb(235, 140, 150), rgb(200, 160, 240),
+}
+
+-- ---- HUD juice state: plain tables the tweens write, draw() reads ------
+local hud   = { lift = 0 }     -- score text jumps on a pop and settles
+local lives = { r = 9 }        -- life bubbles swell on a miss
+local flash = { a = 0 }        -- red full-screen flash alpha, 0 normally
+local title = { tx = -260 }    -- splash title slides in
+local intro = { a = 0 }        -- subtitle fade-in alpha
+local over  = { oy = 60 }      -- game-over card slides up into place
+
+-- ---- Game state ---------------------------------------------------------
+local state = "splash"         -- splash | play | over
+local splashing = true
+local splash_t = 0
+-- NOTE: `points`, not `score` - the engine's global `score` table owns that
+-- name (score.hi_load / score.hi_save).
+local points, best, misses, combo = 0, 0, 0, 0
+local spawn_wait = 0
+local wave = 0
+
+best = score.hi_load(HI_FILE, 0)
+
+-- The bubble pool: engine-baked blob sprites, tinted per spawn. Every
+-- field with a dot below that the engine does not know (b.alive, b.s0...)
+-- is stored right on the sprite table - scripts and tweens share it.
+local bubbles = {}
+for i = 1, 14 do
+  local b = sprites.blob("bubble" .. i, 96)
+  b.visible = false
+  b.alive = false
+  bubbles[i] = b
+end
+
+local function randf(a, b) return a + math.random() * (b - a) end
+
+-- ---- Bubble lifecycle ---------------------------------------------------
+local function launch(b)
+  local s = randf(0.45, 1.0)
+  b.s0 = s
+  b.alive = true
+  b.base_x = randf(60, W - 60)
+  b.phase = randf(0, 6.283)
+  b.wob = randf(10, 26)
+  b.tint = PALETTE[math.random(#PALETTE)]
+  tween.killall(b)                      -- a reused sprite sheds old glides
+  b.x, b.y = b.base_x, H + 60
+  b.alpha = 210
+  b.scale = s
+  b.visible = true
+  -- the entrance: squash flat at the floor, spring up to full size
+  tween.from(b, "scale", 0, s, 340, "backout")
+  -- the long rise; the tween ends at -70 and the update() miss-check takes over
+  local rise = math.max(2600, randf(5200, 8000) - wave * 90)
+  tween(b, "y", -70, rise, "linear")
+  wave = wave + 1
+end
+
+local function pop(b)
+  b.alive = false
+  local pts = math.max(10, math.floor(52 * (1.05 - b.s0)))
+  points = points + pts
+  combo = combo + 1
+  -- the pop: a fat overshoot, a fade with a snap at the start, sparks, shake
+  tween.killall(b)
+  tween.from(b, "scale", b.s0 * 1.25, b.s0 * 1.75, 170, "quadout")
+  tween.from(b, "alpha", 240, 0, 200, "quadin", function(sp)
+    sp.visible = false
+  end)
+  particles.emit(b.x, b.y, 14, {
+    color = colors.white, speed = 180, life = 420,
+    size = 3, gravity = 520, spread = 360,
+  })
+  world.shake(70, 3)
+  music.sound("bubble", 430 + (1 - b.s0) * 900, 80)
+  -- the score lifts and settles back
+  tween.killall(hud)
+  tween.from(hud, "lift", 10, 0, 200, "quadout")
+  if combo >= 3 then music.sound("boing", 700 + combo * 40, 60) end
+end
+
+local function escape(b)
+  b.alive = false
+  tween.killall(b)
+  b.visible = false
+  misses = misses + 1
+  combo = 0
+  music.sound("boing", 150, 180)
+  world.shake(120, 5)
+  -- the red flash bleeds over the sea, the life bubbles wince
+  tween.killall(flash)
+  tween.from(flash, "a", 90, 0, 420, "quadout")
+  tween.killall(lives)
+  tween.from(lives, "r", 15, 9, 260, "snap")
+  if misses >= 3 then
+    state = "over"
+    -- the sea closes: no bubble keeps rising over the card
+    for _, other in ipairs(bubbles) do
+      if other.alive then
+        other.alive = false
+        tween.killall(other)
+        other.visible = false
+      end
+    end
+    if points > best then
+      best = score.hi_save(HI_FILE, points)
+    end
+    over.oy = 60
+    tween(over, "oy", 0, 420, "backout")   -- the card slides up
+  end
+end
+
+local function start_play()
+  for _, b in ipairs(bubbles) do
+    tween.killall(b)
+    b.alive = false
+    b.visible = false
+  end
+  state = "play"
+  points, misses, combo, wave = 0, 0, 0, 0
+  spawn_wait = 0
+end
+
+-- ---- Frame loop ---------------------------------------------------------
+local function in_bubble(b)
+  local dx, dy = mouse.x - b.x, mouse.y - b.y
+  return dx * dx + dy * dy <= (b.s0 * 48 + 10) * (b.s0 * 48 + 10)
+end
+
+local t_all = 0
+function update(dt)
+  t_all = t_all + dt
+  if keyboard.pressed("escape") then exit() end
+
+  if state == "splash" then
+    splash_t = splash_t + dt
+    if keyboard.pressed("space") or mouse.pressed("left") then
+      splashing = true
+      splash_t = SPLASH_HOLD
+    end
+    if splash_t >= SPLASH_HOLD and splashing then
+      splashing = false
+      start_play()
+    end
+    return
+  end
+
+  if keyboard.pressed("r") then start_play() end
+
+  if state == "over" then
+    if keyboard.pressed("space") then start_play() end
+    return
+  end
+
+  -- spawning: steady drumbeat, tightening with the wave
+  spawn_wait = spawn_wait - dt
+  if spawn_wait <= 0 then
+    for _, b in ipairs(bubbles) do
+      if not b.alive then launch(b); break end
+    end
+    spawn_wait = math.max(0.45, 1.15 - wave * 0.02)
+  end
+
+  for _, b in ipairs(bubbles) do
+    if b.alive then
+      -- sway is hand-written (a sine, not a tween) to show both styles
+      b.x = b.base_x + math.sin(t_all * 1.6 + b.phase) * b.wob
+      if b.y <= -62 then escape(b) end
+    end
+  end
+
+  if mouse.pressed("left") then
+    for _, b in ipairs(bubbles) do
+      if b.alive and in_bubble(b) then pop(b); break end
+    end
+  end
+end
+
+-- Splash and game-over get their own one-shot entrances when entered.
+local splash_armed = false
+local function arm_splash()
+  if splash_armed then return end
+  splash_armed = true
+  local cx = W / 2 - textwidth("BUBBLE POP") / 2
+  tween.from(title, "tx", -260, cx, 700, "backout")
+  tween.from(intro, "a", 0, 220, 900, "quadin")
+end
+
+local last_drawn = "?"
+local first_drawn = false
+function draw()
+  if BPOP_DEBUG and (not first_drawn or last_drawn ~= state) then
+    first_drawn = true
+    print("DRAW state=" .. state .. " t=" .. t_all)
+  end
+  last_drawn = state
+  screen.clear("blank")
+  arm_splash()
+
+  if state == "splash" then
+    -- lazy drifting rings behind the title, pure canvas
+    screen.pen = 2
+    for i = 1, 7 do
+      local cx = (i * 97 + t_all * 26) % (W + 80) - 40
+      local cy = 90 + i * 52 + math.sin(t_all + i) * 14
+      screen.color = rgb(70, 130, 220, 150)
+      screen.circle(cx, cy, 22 + i * 3, false)
+    end
+    screen.pen = 1
+    screen.color = colors.white
+    screen.text(title.tx, 190, "BUBBLE POP")
+    screen.color = rgb(180, 220, 255, intro.a)
+    screen.text(title.tx, 224, "small ones pay best")
+    if splash_t > 1.2 then
+      screen.color = rgb(120, 240, 160, 200)
+      screen.text(W / 2 - textwidth("press SPACE or click") / 2, 300, "press SPACE or click")
+    end
+    return
+  end
+
+  -- the sea floor glow
+  screen.color = rgb(24, 56, 110, 120)
+  screen.rectangle(0, H - 26, W, 26, true)
+
+  -- life bubbles, top-left
+  for i = 1, 3 - misses do
+    screen.color = rgb(140, 200, 255, 230)
+    screen.circle(24 + (i - 1) * 30, 22, lives.r, true)
+    screen.color = colors.white
+    screen.circle(20 + (i - 1) * 30, 18, lives.r * 0.35, true)
+  end
+
+  -- score + combo
+  screen.color = colors.white
+  screen.text(8, H - 26 - hud.lift, "SCORE " .. points)
+  screen.color = rgb(180, 210, 250, 200)
+  screen.text(W - 8 - textwidth("BEST " .. best), H - 26, "BEST " .. best)
+  if combo >= 3 then
+    screen.color = colors.yellow
+    screen.text(W / 2 - textwidth("COMBO x" .. combo) / 2, 60, "COMBO x" .. combo)
+  end
+
+  -- the miss flash, straight from the tween's alpha
+  if flash.a > 0 then
+    screen.color = rgb(210, 60, 60, math.floor(flash.a))
+    screen.rectangle(0, 0, W, H, true)
+  end
+
+  if state == "over" then
+    screen.color = rgb(10, 24, 52, 210)
+    screen.rectangle(W / 2 - 210, 140 + over.oy, 420, 180, true)
+    screen.color = colors.white
+    screen.text(W / 2 - textwidth("THE SEA CLOSES") / 2, 170 + over.oy, "THE SEA CLOSES")
+    screen.text(W / 2 - textwidth("you popped " .. points .. " points") / 2,
+                210 + over.oy, "you popped " .. points .. " points")
+    screen.color = colors.yellow
+    screen.text(W / 2 - textwidth("best " .. best) / 2, 244 + over.oy, "best " .. best)
+    screen.color = colors.lime
+    screen.text(W / 2 - textwidth("SPACE for one more dive") / 2,
+                286 + over.oy, "SPACE for one more dive")
+  end
+end
+
+-- Test hook: `tyro games/bubblepop/bubblepop.tyro test` starts a round at
+-- once, launches one bubble, pops it through pop() a moment later and prints
+-- the juice state - so --exit + --screenshot can verify the whole tween
+-- pipeline (punch, fade-done callback, lift, hi score) without a real click.
+if args and args[2] == "test" then
+  start_play()
+  after(300, function()
+    launch(bubbles[1])
+    after(600, function()
+      pop(bubbles[1])
+      print("BP t0:   count=" .. tween.count() .. " visible=" .. tostring(bubbles[1].visible))
+      after(250, function()
+        print("BP t250: count=" .. tween.count() .. " visible=" .. tostring(bubbles[1].visible))
+      end)
+      after(500, function()
+        print("BP t500: points=" .. points .. " count=" .. tween.count()
+            .. " visible=" .. tostring(bubbles[1].visible))
+        escape(bubbles[2]); escape(bubbles[3]); escape(bubbles[4])
+        print("BP test: state=" .. state .. " best=" .. best)
+      end)
+    end)
+  end)
+end
