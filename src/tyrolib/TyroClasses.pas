@@ -451,6 +451,14 @@ type
     FShakeTime, FShakeDuration: Double;
     FShakePower: Integer;
     FShakeX, FShakeY: Integer;
+    // 2D world camera (the Lua `camera` table): the world point that lands
+    // on the window origin and the scale everything is painted at. The whole
+    // world pass - board, parallax, sprites, sprite scripts, models, sparks -
+    // rides it; the screen canvas and the controls stay fixed like the HUD
+    // they carry. A rerun puts it back at (0,0) zoom 1.
+    FCameraX, FCameraY: Single;
+    FCameraZoom: Single;
+    procedure SetCameraZoom(AValue: Single);
     procedure SetBackColor(AValue: TColor);
     function GetShaking: Boolean;
     // Getters/setters for Engine access
@@ -487,6 +495,15 @@ type
     property Enabled: Boolean read FEnabled write FEnabled;
     property ShakeX: Integer read GetShakeX;
     property ShakeY: Integer read GetShakeY;
+
+    // 2D camera: the world point parked on the window origin, and the zoom
+    // (clamped 0.05..32; 1 keeps the classic pixel-perfect mapping).
+    property CameraX: Single read FCameraX write FCameraX;
+    property CameraY: Single read FCameraY write FCameraY;
+    property CameraZoom: Single read FCameraZoom write SetCameraZoom;
+    // Put the camera back home (an engine rerun does this with the rest of
+    // the run's state).
+    procedure ResetCamera;
   end;
 
   TTyroResource = class(TmnNamedObject)
@@ -1399,6 +1416,7 @@ begin
   FOpaque := True;
   FEnabled := True;
   FTimescale := 1;
+  FCameraZoom := 1;
   FWidth := cDefaultWindowWidth;
   FHeight := cDefaultWindowHeight;
   FBackColor := Res.Theme.World.BackColor;
@@ -1453,6 +1471,24 @@ begin
   FShakeDuration := 0;
   FShakeX := 0;
   FShakeY := 0;
+end;
+
+procedure TTyroWorld.SetCameraZoom(AValue: Single);
+begin
+  //Never inverted, never invisible, never absurd: the same spirit as the
+  //timescale clamp. 1 is the classic one-pixel world.
+  if AValue < 0.05 then
+    AValue := 0.05
+  else if AValue > 32 then
+    AValue := 32;
+  FCameraZoom := AValue;
+end;
+
+procedure TTyroWorld.ResetCamera;
+begin
+  FCameraX := 0;
+  FCameraY := 0;
+  FCameraZoom := 1;
 end;
 
 function TTyroWorld.UpdateShake(ADeltaTime: Double): Boolean;

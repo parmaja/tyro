@@ -784,9 +784,16 @@ begin
           //canvas (the loading splash over the background) reaches the window.
           if World.Enabled then
           begin
-            Camera2D.Target := Vector2Of(0, 0);
+            //The 2D world camera (the Lua `camera` table): the world point
+            //parked on the window origin and the zoom it is painted at. Every
+            //layer inside the Mode2D pass - parallax, board, sprites, sprite
+            //scripts - rides it for free; the models and sparks passes get
+            //the same numbers handed down so the whole world moves as one.
+            //The screen canvas and the controls stay outside, as the HUD they
+            //carry.
+            Camera2D.Target := Vector2Of(World.CameraX, World.CameraY);
             Camera2D.Offset := Vector2Of(Window.Margin, Window.Margin);
-            Camera2D.Zoom := 1;
+            Camera2D.Zoom := World.CameraZoom;
             Camera2D.Rotation := 0;
 
             //A running shake (accident/error feedback) jitters the world camera,
@@ -800,7 +807,8 @@ begin
             //canvas covers them (their shade too). The default layer 0 never
             //comes here, so a world that does not opt in draws as ever.
             if (Models <> nil) and Models.HasUnder then
-              Models.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, Screen.Width, Screen.Height, True);
+              Models.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, Screen.Width, Screen.Height, True,
+                Camera2D.Target.X, Camera2D.Target.Y, Camera2D.Zoom);
 
             RayLib.BeginMode2D(Camera2D);
 
@@ -830,7 +838,8 @@ begin
             //exhaust flame riding at its own tail. They take the same
             //margin/shake offset as everything else on this frame.
             if (Particles <> nil) and Particles.HasUnder then
-              Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, True);
+              Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, True,
+                Camera2D.Target.X, Camera2D.Target.Y, Camera2D.Zoom);
 
             //The 3D models ride above the 2D scene but below the controls, so the
             //pass sits between EndMode2D and the control tree. Camera2D.Offset is
@@ -838,7 +847,8 @@ begin
             //shakes together; the camera inside Draw maps it onto the models.
             if (Models <> nil) and Models.HasTop then
               Models.Draw(Camera2D.Offset.X, Camera2D.Offset.Y,
-                RayLib.GetScreenWidth, RayLib.GetScreenHeight, False);
+                RayLib.GetScreenWidth, RayLib.GetScreenHeight, False,
+                Camera2D.Target.X, Camera2D.Target.Y, Camera2D.Zoom);
 
             //The top sprite band (layer >= cLayerTop3D) rides over the 3D pass:
             //the same 2D camera hands the sprites their margin/shake offset
@@ -860,7 +870,8 @@ begin
             //sprites that made it; they take the same margin/shake offset the
             //models got and shake together with them.
             if (Particles <> nil) and Particles.HasTop then
-              Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, False);
+              Particles.Draw(Camera2D.Offset.X, Camera2D.Offset.Y, False,
+                Camera2D.Target.X, Camera2D.Target.Y, Camera2D.Zoom);
 
             if Window <> nil then
               Window.Paint;
@@ -2951,7 +2962,11 @@ begin
     Editor.ErrorMessage := '';
   end;
   if World <> nil then
+  begin
     World.TimeScale := 1;
+    //the camera too: every run parks its own eye on its own world
+    World.ResetCamera;
+  end;
   if Board <> nil then
     Board.SetEffect('');
   StopMML;

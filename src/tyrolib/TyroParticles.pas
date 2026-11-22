@@ -116,8 +116,11 @@ type
     // Draw one layer of sparks (main thread). ABelow3D picks the layer by the
     // spark's layer (see cLayerTop3D): True takes the ones below the 3D model
     // pass, False the ones lifted over it. AX/AY are the Camera2D offset so the
-    // sparks shake with the world like the models do.
-    procedure Draw(AX, AY: single; ABelow3D: Boolean = False);
+    // sparks shake with the world like the models do. ATargetX/ATargetY/AZoom
+    // are the 2D camera (the Lua `camera` table): a spark lives in world space,
+    // so the pass maps it to the screen exactly like the Mode2D layers do.
+    procedure Draw(AX, AY: single; ABelow3D: Boolean = False;
+      ATargetX: single = 0; ATargetY: single = 0; AZoom: Single = 1);
     // True when at least one alive spark rides this side of the 3D pass
     // (by its layer, see Draw), so the caller can skip an empty layer.
     function HasUnder: boolean; // some spark burns below the models
@@ -287,7 +290,8 @@ end;
 //dot instead of a vanishing smear. Only the sparks of the requested layer are
 //drawn; ABelow3D picks below-the-model (True, the 2D-world side) or
 //over-the-model (False) - the same cLayerTop3D split the sprites answer to.
-procedure TParticles.Draw(AX, AY: single; ABelow3D: Boolean);
+procedure TParticles.Draw(AX, AY: single; ABelow3D: Boolean;
+  ATargetX, ATargetY: single; AZoom: Single);
 var
   I: Integer;
   P: TParticle;
@@ -304,8 +308,11 @@ begin
       Remain := P.Life / P.TTL;
       Col := P.Color;
       Col.RGBA.Alpha := Byte(Round(P.Color.RGBA.Alpha * Remain));
-      RayLib.DrawCircleV(Vector2Of(P.X + AX, P.Y + AY),
-        P.Size * (0.35 + 0.65 * Remain), Col);
+      //The spark's world point onto the screen under the 2D camera, and its
+      //size with the zoom: a panned or zoomed scene carries the sparks too.
+      RayLib.DrawCircleV(
+        Vector2Of((P.X - ATargetX) * AZoom + AX, (P.Y - ATargetY) * AZoom + AY),
+        P.Size * (0.35 + 0.65 * Remain) * AZoom, Col);
     end;
   finally
     FLock.Leave;

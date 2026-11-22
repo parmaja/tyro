@@ -212,6 +212,27 @@ type
     function PointLight_func(L: Plua_State): integer; cdecl;
   end;
 
+  { TLuaCamera }
+
+  // The 2D world camera, the Lua `camera` table. camera.x/camera.y is the
+  // world point parked on the window's top-left corner (0 = the classic
+  // world origin), and camera.zoom scales the picture around that eye point
+  //(clamped 0.05..32; 1 keeps the pixel-perfect mapping). The whole world
+  //pass rides it - the board, parallax, sprites, models and sparks - while
+  //the screen canvas, the controls and the console stay glued to the window
+  //like the HUD they carry.
+  TLuaCamera = class(TTyroLuaObject)
+  protected
+    function Getter(L: PLua_State): integer; override;
+    function Setter(L: PLua_State): integer; override;
+  public
+    //camera.to_world(sx, sy) -> wx, wy: a window pixel (mouse.x, mouse.y)
+    //back into the world the camera looks at.
+    function ToWorld_func(L: Plua_State): integer; cdecl;
+    //camera.to_screen(wx, wy) -> sx, sy: a world point onto the window.
+    function ToScreen_func(L: Plua_State): integer; cdecl;
+  end;
+
   { TLuaFont }
 
   TLuaFont = class(TTyroLuaObject)
@@ -832,6 +853,7 @@ type
     Gamepad: TLuaGamepad;
     Game: TLuaGame;
     QueueStats: TLuaQueue;
+    Camera: TLuaCamera;
     //Owns every TLuaFile handed out by openfile(); freed after Lua.Close,
     //because the Lua closures hold pointers into those objects
     Files: TList;
@@ -1577,6 +1599,103 @@ begin
     Range, C.RGBA.Red / 255, C.RGBA.Green / 255, C.RGBA.Blue / 255);
 end;
 
+{ TLuaCamera }
+
+//The pixel of the window the world is painted from on this frame: the margin,
+//or the shake jitter while a shake runs - the exact rule the engine's draw
+//loop hands Camera2D.Offset, so to_world/to_screen and the picture agree.
+procedure CameraScreenOffset(out AOffX, AOffY: Single);
+begin
+  if Engine.World.Shaking then
+  begin
+    AOffX := Engine.World.ShakeX;
+    AOffY := Engine.World.ShakeY;
+  end
+  else
+  begin
+    AOffX := Engine.Window.Margin;
+    AOffY := Engine.Window.Margin;
+  end;
+end;
+
+function TLuaCamera.Getter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'x' then
+  begin
+    L.PushNumber(Engine.World.CameraX);
+    Result := 1;
+  end
+  else if field = 'y' then
+  begin
+    L.PushNumber(Engine.World.CameraY);
+    Result := 1;
+  end
+  else if field = 'zoom' then
+  begin
+    L.PushNumber(Engine.World.CameraZoom);
+    Result := 1;
+  end;
+end;
+
+function TLuaCamera.Setter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'x' then
+  begin
+    Engine.World.CameraX := L.ToNumber(-1);
+    Result := 1;
+  end
+  else if field = 'y' then
+  begin
+    Engine.World.CameraY := L.ToNumber(-1);
+    Result := 1;
+  end
+  else if field = 'zoom' then
+  begin
+    //The store clamps it (0.05..32), so a wild number still lands on a
+    //usable eye.
+    Engine.World.CameraZoom := L.ToNumber(-1);
+    Result := 1;
+  end;
+  if Result = 0 then
+    Result := inherited;
+end;
+
+// camera.to_world(sx, sy) -> wx, wy
+// A window pixel (mouse.x, mouse.y) back into the world: undo the margin or
+// shake, divide by the zoom, and step out from the eye point.
+function TLuaCamera.ToWorld_func(L: Plua_State): integer; cdecl;
+var
+  OffX, OffY, Zoom: Single;
+begin
+  CameraScreenOffset(OffX, OffY);
+  Zoom := Engine.World.CameraZoom;
+  L.PushNumber((L.ToNumber(1) - OffX) / Zoom + Engine.World.CameraX);
+  L.PushNumber((L.ToNumber(2) - OffY) / Zoom + Engine.World.CameraY);
+  Result := 2;
+end;
+
+// camera.to_screen(wx, wy) -> sx, sy
+// The way round: a world point onto the window, e.g. to hang a control or a
+// screen-canvas marker on a world position.
+function TLuaCamera.ToScreen_func(L: Plua_State): integer; cdecl;
+var
+  OffX, OffY, Zoom: Single;
+begin
+  CameraScreenOffset(OffX, OffY);
+  Zoom := Engine.World.CameraZoom;
+  L.PushNumber((L.ToNumber(1) - Engine.World.CameraX) * Zoom + OffX);
+  L.PushNumber((L.ToNumber(2) - Engine.World.CameraY) * Zoom + OffY);
+  Result := 2;
+end;
+
 { TLuaFont }
 
 function TLuaFont.Setter(L: PLua_State): integer;
@@ -2141,6 +2260,7 @@ begin
   Gamepad := TLuaGamepad.Create('gamepad', Self);
   Game := TLuaGame.Create('game', Self);
   QueueStats := TLuaQueue.Create('queue', Self);
+  Camera := TLuaCamera.Create('camera', Self);
 
   Files := TList.Create; //of TLuaFile, freed in Destroy
 
@@ -2151,6 +2271,12 @@ begin
   //world
   Lua.State.RegisterGlobal('shake', World.Shake_func);//deprecated
   World.Init;
+
+  //2D world camera: camera.x / camera.y / camera.zoom are fields,
+  //camera.to_world / camera.to_screen map window pixels and world points
+  Lua.State.Register('camera', 'to_world', Camera, Camera.ToWorld_func);
+  Lua.State.Register('camera', 'to_screen', Camera, Camera.ToScreen_func);
+  Lua.State.Register('camera', Camera); //Should be last one
 
   //global functions
   Lua.State.RegisterGlobal('print', Console.Print_func);

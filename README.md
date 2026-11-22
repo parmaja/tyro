@@ -776,6 +776,43 @@ the wall cost both. The course is one fixed layout, so every lap teaches
 the next — and every model in it (track, liner, ribs, gates, ship) is an
 engine-generated shape. See `games/torustrooper/README.md`.
 
+# 2D Camera
+
+The world has a roving eye of its own: the `camera` table. `camera.x`/`camera.y`
+is the world point parked on the window's top-left corner, and `camera.zoom`
+magnifies the picture around it. The defaults — `(0, 0)` at zoom `1` — paint
+the world exactly as ever, so a game that never touches the camera never
+notices it exists. Everything in the world pass rides it: the board, the
+parallax, the sprites, the 3D models and the sparks all move as one picture,
+while the screen canvas, the controls and the console stay glued to the
+window — the HUD they carry.
+
+| API | Description |
+|----------|-------------|
+| `camera.x` / `camera.y` | The world point parked on the window origin (read/write, default `0`). A side-scroller keeps its hero near the middle by steering the eye: `camera.x = hero.x - window.width / 2`. |
+| `camera.zoom` | The picture's scale, clamped to `0.05..32` (default `1` — the classic pixel-perfect mapping). |
+| `camera.to_world(sx, sy)` | → `wx, wy`: a window pixel (`mouse.x`, `mouse.y`) back into the world — the same math the draw uses, so a click lands exactly where it looks. |
+| `camera.to_screen(wx, wy)` | → `sx, sy`: a world point onto the window — the way to hang a HUD marker or a control on a world position. |
+
+The zoom stretches positions and model sizes; the depth axis and the ground
+plane the model shadows fall on stay as they are — an ortho picture magnifies,
+it does not pull the world nearer. The free camera (`world.camera`) owns its
+own eye and ignores these numbers, exactly like it ignores the margin and
+the shake.
+
+```lua
+window.show(640, 480)
+local hero = sprites.puff("hero", 32)
+
+function update(dt)
+  hero:move(hero.x + 80 * dt, hero.y)
+  -- the eye chases the hero, easing so the ride stays smooth
+  local k = math.min(1, 4 * dt)
+  camera.x = camera.x + (hero.x - window.width / 2 - camera.x) * k
+  camera.y = camera.y + (hero.y - window.height / 2 - camera.y) * k
+end
+```
+
 # Shader Effects
 
 Post-processing screen shaders are controlled with the `shader` table. They are

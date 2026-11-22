@@ -340,7 +340,8 @@ type
     //into the world and the light flattens it onto the sea. The caller closes
     //the matrix it opened here.
     procedure PushShadowPose(AItem: TModel3D; const AProjection: TMatrix;
-      AX, AY: Single; AWidth, AHeight: Integer);
+      AX, AY: Single; AWidth, AHeight: Integer;
+      ATargetX, ATargetY: Single; AZoom: Single);
     //Wipes the sheet and inks it with the silhouette of every body on this
     //pass (AUnder: layer < 0 or not) whose own alpha is ATintAlpha
     //(255 = the ordinary, solid bodies, inked all together; a see-through body
@@ -348,7 +349,7 @@ type
     //True when it inked anything, which is when the sheet is worth laying.
     function InkShadowSheet(const ACam: TCamera3D; const AProjection: TMatrix;
       AX, AY: Single; AWidth, AHeight: Integer; ATintAlpha: Byte;
-      AUnder: Boolean): Boolean;
+      AUnder: Boolean; ATargetX, ATargetY: Single; AZoom: Single): Boolean;
     //Lays the inked sheet over the world: one coat of ink, under every model.
     procedure LayShadowSheet(AAlpha: Integer);
     //True when the blur shader and its second sheet stand ready at the
@@ -526,8 +527,15 @@ type
     // shake); AWidth/AHeight are the screen size in pixels. AUnder picks the
     // side of the 2D world this pass draws (see Layer): True only the
     // layer < 0 bodies, drawn before the 2D world so it covers them; False
-    // (the default) the rest, riding over it as ever.
-    procedure Draw(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean = False);
+    // (the default) the rest, riding over it as ever. ATargetX/ATargetY/
+    // AZoom are the 2D camera's world point and zoom (the Lua `camera`
+    // table): the top-down pass maps the world through them so the models
+    // move with the sprites, while the free camera looks at the raw 3D
+    // world and ignores them. The depth axis and the ground plane the shade
+    // falls on stay unscaled - zoom pans and magnifies the picture, it does
+    // not push the bodies farther away.
+    procedure Draw(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean = False;
+      ATargetX: single = 0; ATargetY: single = 0; AZoom: Single = 1);
 
     property Count: integer read GetCount;
     property Items[Index: Integer]: TModel3D read GetItems; default;
@@ -942,28 +950,34 @@ end;
 //mesh is flattened along the light ray onto the sea, and the body's own
 //transform under it decides which part of the mesh that is.
 procedure TModels3D.PushShadowPose(AItem: TModel3D; const AProjection: TMatrix;
-  AX, AY: Single; AWidth, AHeight: Integer);
+  AX, AY: Single; AWidth, AHeight: Integer;
+  ATargetX, ATargetY: Single; AZoom: Single);
 var
   S: Single;
   Pos: TVector3;
   FaceM: TMatrix;
 begin
-  S := AItem.Scale;
+  S := AItem.Scale * AZoom;
   if S = 0 then
     S := 1;
   RayLib.rlPushMatrix;
   RayLib.rlMultMatrixf(@AProjection);
   //The same screen-pixel anchor the models get, so the shade belongs to the
   //body that casts it: x runs right, y runs down (so it becomes -z), and the
-  //body's own Z depth rides along the world y axis.
-  Pos := Vector3Of(AItem.X + AX - AWidth * 0.5, AItem.Z,
-    AHeight * 0.5 - (AItem.Y + AY));
+  //body's own Z depth rides along the world y axis. The 2D camera maps the
+  //world point onto that anchor, exactly like the models do.
+  Pos := Vector3Of((AItem.X - ATargetX) * AZoom + AX - AWidth * 0.5, AItem.Z,
+    AHeight * 0.5 - ((AItem.Y - ATargetY) * AZoom + AY));
   RayLib.rlTranslatef(Pos.X, Pos.Y, Pos.Z);
   //The body's full pose from the pass, cast-shadow parts included: the shade
   //is the drawn silhouette flattened, so facing and axis fix ride along.
   if AItem.HasFace then
   begin
-    FaceM := FaceMatrixOf(Pos, AItem.FaceTo, AItem.FaceUp);
+    //The aim rides the camera too: the screen parts of the target stretch
+    //with the zoom around the eye point (the free camera never comes here).
+    FaceM := FaceMatrixOf(Pos,
+      Vector3Of((AItem.FaceTo.X - ATargetX) * AZoom, AItem.FaceTo.Y,
+        (AItem.FaceTo.Z - ATargetY) * AZoom), AItem.FaceUp);
     RayLib.rlMultMatrixf(@FaceM);
   end;
   RayLib.rlRotatef(AItem.Angle, 0, 1, 0);
@@ -984,7 +998,8 @@ end;
 //colour, and only the stroke that lays it brings the alpha.
 function TModels3D.InkShadowSheet(const ACam: TCamera3D;
   const AProjection: TMatrix; AX, AY: Single; AWidth, AHeight: Integer;
-  ATintAlpha: Byte; AUnder: Boolean): Boolean;
+  ATintAlpha: Byte; AUnder: Boolean;
+  ATargetX, ATargetY: Single; AZoom: Single): Boolean;
 var
   Item: TModel3D;
   Ink: TColor;
@@ -1025,7 +1040,8 @@ begin
             Continue;
           if Item.Tint.RGBA.Alpha <> ATintAlpha then
             Continue;
-          PushShadowPose(Item, AProjection, AX, AY, AWidth, AHeight);
+          PushShadowPose(Item, AProjection, AX, AY, AWidth, AHeight,
+            ATargetX, ATargetY, AZoom);
           DrawShadowMeshes(Item.Model, Ink);
           RayLib.rlPopMatrix;
           Result := True;
@@ -3325,7 +3341,8 @@ begin
   Result := HasSide(False);
 end;
 
-procedure TModels3D.Draw(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean);
+procedure TModels3D.Draw(AX, AY: single; AWidth, AHeight: Integer; AUnder: boolean;
+  ATargetX, ATargetY: single; AZoom: Single);
 const
   //Distance of the eye above the pixel plane. The ortho frustum clips at
   //0.01..1000, so this leaves the models room for a +/-399 depth range.
@@ -3455,7 +3472,8 @@ begin
     begin
       //The solid bodies share one sheet: their shade is the same shade, so one
       //stroke of it covers all of them.
-      if InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight, 255, AUnder) then
+      if InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight, 255, AUnder,
+        ATargetX, ATargetY, AZoom) then
       begin
         if (FSoftness > 0) and BlurPassReady then
           BlurShadowSheet;
@@ -3475,7 +3493,7 @@ begin
         ItemAlpha := Round(Alpha * Item.Tint.RGBA.Alpha / 255);
         if (ItemAlpha > 0)
           and InkShadowSheet(Cam, ShadowM, AX, AY, AWidth, AHeight,
-            Item.Tint.RGBA.Alpha, AUnder) then
+            Item.Tint.RGBA.Alpha, AUnder, ATargetX, ATargetY, AZoom) then
         begin
           if (FSoftness > 0) and BlurPassReady then
             BlurShadowSheet;
@@ -3568,16 +3586,19 @@ begin
           Continue;
         //Screen-pixel anchor under the ortho eye: x runs right, y runs down
         //(so it becomes -z), and the model's Z depth rides along the world y
-        //axis into the screen. Under the free eye the three are simply the
-        //model's world coordinates - the same x-right/y-into/z-up space the
-        //top-down pass already lives in, only with a perspective eye on it.
+        //axis into the screen. The 2D camera (the Lua `camera` table) maps
+        //the world onto that anchor: the eye point lands where the old world
+        //origin sat, and the zoom magnifies around it. Under the free eye the
+        //three are simply the model's world coordinates - the same x-right/
+        //y-into/z-up space the top-down pass already lives in, only with a
+        //perspective eye on it.
         if FFreeCam then
           One.Pos := Vector3Of(Item.X, Item.Y, Item.Z)
         else
         begin
-          One.Pos.X := Item.X + AX - AWidth * 0.5;
+          One.Pos.X := (Item.X - ATargetX) * AZoom + AX - AWidth * 0.5;
           One.Pos.Y := Item.Z;                          //depth (bigger = farther)
-          One.Pos.Z := AHeight * 0.5 - (Item.Y + AY);   //pixel y, screen down
+          One.Pos.Z := AHeight * 0.5 - ((Item.Y - ATargetY) * AZoom + AY);
         end;
         //How far down the sight line the body stands - the same measure the
         //depth test judges by, so the glass sorts the way it covers.
@@ -3615,6 +3636,10 @@ begin
         if LitNow then WearLight(Item)
         else WearOwn(Item);
         S := Item.Scale;
+        //The 2D camera's zoom magnifies the body with the rest of the world
+        //(the free eye keeps its raw 3D size).
+        if (not FFreeCam) then
+          S := S * AZoom;
         //Zero would flatten the body away to nothing, but a negative scale is
         //kept on purpose: it mirrors the mesh, and with the winding it flips
         //the facing - the trick that lets one solid wear an inside-out skin.
@@ -3632,7 +3657,16 @@ begin
         //the model's own frame: Angle spins it along its own line of sight).
         if Item.HasFace then
         begin
-          FaceM := FaceMatrixOf(Pos, Item.FaceTo, Item.FaceUp);
+          //Under the top-down eye the aim rides the camera like the body: the
+          //screen parts of the target stretch with the zoom around the eye
+          //point (their difference with the anchor is what sets the pose, so
+          //the pass's constants fall out and a still camera aims as ever).
+          if FFreeCam then
+            FaceM := FaceMatrixOf(Pos, Item.FaceTo, Item.FaceUp)
+          else
+            FaceM := FaceMatrixOf(Pos,
+              Vector3Of((Item.FaceTo.X - ATargetX) * AZoom, Item.FaceTo.Y,
+                (Item.FaceTo.Z - ATargetY) * AZoom), Item.FaceUp);
           RayLib.rlMultMatrixf(@FaceM);
         end;
         //Spin around the view axis (world y), then roll around the model's own

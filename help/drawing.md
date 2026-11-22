@@ -181,6 +181,27 @@ function draw()
 end
 ```
 
+### camera - scrolling and zooming 🎥
+
+The camera does not only shake - it also travels. The `camera` table parks a
+world point on the window's top-left corner (`camera.x`, `camera.y`) and
+magnifies the picture around it (`camera.zoom`, `0.05`..`32`, default `1`).
+
+```lua
+function update(dt)
+  hero:move(hero.x + 80 * dt, hero.y)
+  -- keep the hero near the middle: the eye chases him
+  camera.x = hero.x - window.width / 2
+  camera.y = hero.y - window.height / 2
+end
+```
+
+Everything in the world rides the camera - the canvas, the sprites, the 3D
+models - while `screen` and the controls stay glued to the window, the HUD
+they are. A click gives window pixels, so translate it before asking what was
+under the pointer: `local wx, wy = camera.to_world(mouse.x, mouse.y)`, and
+`camera.to_screen(wx, wy)` finds where a world point shows on the window.
+
 ---
 
 ## screen - the Fixed Glass on Top ⭐
@@ -218,9 +239,10 @@ end
 
 ## What Moves, What Stays?
 
-While a `world.shake()` is running, or when a shader effect is on:
+While a `world.shake()` is running, the `camera` is panned or zoomed, or a
+shader effect is on:
 
-| Layer | Shakes with the camera? | Affected by `shader.effect`? | On top of sprites? |
+| Layer | Moves with the camera (shake, `camera.x/y/zoom`)? | Affected by `shader.effect`? | On top of sprites? |
 | --- | --- | --- | --- |
 | `world` drawing | yes | no (it's behind) | no |
 | `canvas` drawing | yes | yes (it carries the effect) | no (sprites cover it) |
