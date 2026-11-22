@@ -76,6 +76,15 @@ type
     Damping: cpFloat;         // rotator: how quickly the turn settles
     MaxForce: cpFloat;        // 0 = the solver may pull as hard as it must
     Constraint: cpConstraint; // nil while the joint still waits for its bodies
+    WasTaut: Boolean;         // slide: the last beat's verdict, for the edges
+  end;
+
+  { One rope edge the solver just crossed: the pair and whether the leash
+    has now snapped taut or gone slack. The engine beat forwards these to
+    on("joint_stretch"), like the collision queue forwards contacts. }
+  TJointEvent = record
+    HandleA, HandleB: Integer;
+    Taut: Boolean;
   end;
 
   { TPhysics: Chipmunk2D world, driven by the engine's main thread.
@@ -110,6 +119,11 @@ type
     FJointIds: TDictionary<Integer, Integer>; // live ids; the script thread
                                               // asks it "is that joint alive?"
     FJointNextId: Integer;
+    // The taut/slack edges the slides crossed since the last beat. Step
+    // writes and the engine beat drains - both on the main thread - so this
+    // queue needs no lock (unlike the collision events, no script-thread
+    // pump reads it).
+    FStretchEvents: TList<TJointEvent>;
     procedure OnCollision(A, B: cpBody; AState: TContactState);
     function FindBody(Handle: Integer): cpBody;
     function FindShape(Handle: Integer): cpShape;
@@ -131,6 +145,10 @@ type
     // Main-thread only (from RemoveBody): every joint touching this sprite
     // leaves now - its body is about to disappear under the constraint.
     procedure RemoveJointsOfHandle(AHandle: Integer);
+    // Main-thread only (Step, after the solve): every live slide measures
+    // its anchors, and a beat that crosses the taut edge lands one event in
+    // FStretchEvents. Pins and motors never stretch - they hold by design.
+    procedure CheckStretch;
     // Main-thread only (no locking): drop one map's wall set with its bodies
     procedure RemoveMapCollider(Handle: Integer);
     // Main-thread only (no locking), assumes FSpace <> nil: bring the tile
@@ -166,6 +184,10 @@ type
     function FreeJoint(AId: Integer): Boolean;
     function ClearJoints: Integer;
     function JointCount: Integer;
+    // Main-thread only (the engine beat): drain the taut/slack edges so they
+    // can reach on("joint_stretch"). Like the collision queue, up to the
+    // buffer's room, and the drained ones leave for good.
+    procedure PollStretch(var AEvents: array of TJointEvent; out ACount: Integer);
     // The tilemap store the walls (map.collide) are read from; the engine
     // hands it over once at startup. Without it the space only knows sprites.
     property Tiles: TTiles read FTiles write FTiles;
@@ -233,6 +255,7 @@ begin
   FJointRemoves := TList<Integer>.Create;
   FJointIds := TDictionary<Integer, Integer>.Create;
   FJointNextId := 1; // joint id 0 stays invalid, so joint_free(0) always answers false
+  FStretchEvents := TList<TJointEvent>.Create;
   FSpace := nil;
   try
     InitPhysicsLibrary;
@@ -273,6 +296,7 @@ begin
     FSpace := nil;
   end;
   FMapColliders.Free;
+  FStretchEvents.Free;
   FJointIds.Free;
   FJointRemoves.Free;
   FJointRequests.Free;
@@ -400,6 +424,7 @@ begin
     end;
     FJointIds.Clear;
     FJointRemoves.Clear;
+    FStretchEvents.Clear;
   finally
     FLock.Leave;
   end;
@@ -680,6 +705,73 @@ begin
   finally
     FLock.Leave;
   end;
+end;
+
+procedure TPhysics.CheckStretch;
+const
+  cTautEpsilon = 1.0; // px of slack the solver always leaves at the cap
+var
+  I: Integer;
+  J: TJoint;
+  BodyA, BodyB: cpBody;
+  PosA, PosB: cpVect;
+  RA, RB, AX, AY, BX, BY, D: cpFloat;
+  Taut: Boolean;
+  Ev: TJointEvent;
+begin
+  // Only the slides stretch: a pin holds its rod and a rotator its angle,
+  // so both are "already taut" every beat and would say nothing new.
+  if FJoints.Count = 0 then
+    Exit;
+  // A run that never drives the engine beat never drains here: the buffer
+  // keeps its recent history instead of growing forever.
+  if FStretchEvents.Count > 1024 then
+    FStretchEvents.Clear;
+  for I := 0 to FJoints.Count - 1 do
+  begin
+    J := FJoints[I];
+    if (J.Kind <> jkSlide) or (J.Constraint = nil) then
+      Continue;
+    BodyA := FindBody(J.HandleA);
+    BodyB := FindBody(J.HandleB);
+    if (BodyA = nil) or (BodyB = nil) then
+      Continue;
+    // the anchor points where the solver left them, turned by each body
+    PosA := cpBodyGetPosition(BodyA);
+    RA := cpBodyGetAngle(BodyA);
+    AX := PosA.x + J.AnchorA.x * Cos(RA) - J.AnchorA.y * Sin(RA);
+    AY := PosA.y + J.AnchorA.x * Sin(RA) + J.AnchorA.y * Cos(RA);
+    PosB := cpBodyGetPosition(BodyB);
+    RB := cpBodyGetAngle(BodyB);
+    BX := PosB.x + J.AnchorB.x * Cos(RB) - J.AnchorB.y * Sin(RB);
+    BY := PosB.y + J.AnchorB.x * Sin(RB) + J.AnchorB.y * Cos(RB);
+    D := Sqrt((BX - AX) * (BX - AX) + (BY - AY) * (BY - AY));
+    Taut := D >= J.Max - cTautEpsilon;
+    if Taut <> J.WasTaut then
+    begin
+      J.WasTaut := Taut;
+      Ev.HandleA := J.HandleA;
+      Ev.HandleB := J.HandleB;
+      Ev.Taut := Taut;
+      FStretchEvents.Add(Ev);
+    end;
+  end;
+end;
+
+procedure TPhysics.PollStretch(var AEvents: array of TJointEvent; out ACount: Integer);
+var
+  I, Max: Integer;
+begin
+  ACount := 0;
+  Max := Length(AEvents);
+  if Max > FStretchEvents.Count then
+    Max := FStretchEvents.Count;
+  for I := 0 to Max - 1 do
+  begin
+    AEvents[I] := FStretchEvents[0];
+    FStretchEvents.Delete(0);
+  end;
+  ACount := Max;
 end;
 
 //The tile walls' beat, just before cpSpaceStep: the sprites' positions were
@@ -1051,6 +1143,10 @@ begin
       Vel := cpBodyGetVelocity(Body);
       FSprites.SetVelocity(Dyn[I], Vel.x, Vel.y);
     end;
+
+    // 7) the ropes report: a leash that just snapped taut (or let go) has
+    // its edge queued for the engine beat's on("joint_stretch").
+    CheckStretch;
   finally
     Dyn.Free;
     Keys.Free;

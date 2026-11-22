@@ -1349,7 +1349,10 @@ lets `b` turn between `min` and `max` degrees. Both sprites are switched to
 = bolt, kinematic = hand, dynamic = swing). `joint_free(id)` cuts one,
 `joints()` counts the book, `joints_clear()` empties it — and a joint also
 leaves the moment one of its sprites loses its body (freed, `collide` off,
-or a shape/kind rebuild). Anchors (`ax, ay / bx, by`) attach anywhere on the
+or a shape/kind rebuild). When a slide catches what it holds, the event bus
+carries the snap: `on("joint_stretch", fn)` hears `(a, b, "taut"/"slack")` —
+edges only, ready for a rope sound or a squash tween. Anchors (`ax, ay /
+bx, by`) attach anywhere on the
 sprites and rotate with them. Full notes in
 [`help/joints.md`](help/joints.md);
 [`demos/joints_demo.tyro`](demos/joints_demo.tyro) swings a pendulum wave,

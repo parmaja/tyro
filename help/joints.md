@@ -81,5 +81,28 @@ the moment both bodies exist — `joints()` counts those already armed, and
 *damped spring*, so a strong push (or a light `strength`) makes it springy
 on purpose: that is the wobble of a hand-cranked thing, not a bug.
 
+## When a Rope Snaps Taut
+
+A slide joint feels the world and says so on the event bus: the moment it
+reaches its `max` it reports `"taut"`, and the moment the gap shrinks back
+inside it, `"slack"` — edges only, never a every-frame drip.
+
+```lua
+on("joint_stretch", function(a, b, state)
+  if state == "taut" then
+    music.sound("bubble", 260, 60)        -- the rope goes "boing"
+    tween.from(pet, "scale", 1.3, 1, 200, "quadout")
+  end
+end)
+```
+
+The handler hears every slide in the game as `(spriteA, spriteB, state)`,
+so it reads like `on("collision")` — check which pair it names before
+answering. Pins, rotators and limits never report: they hold their promise
+every beat, so they have nothing new to say. It is the same bus as
+everything else ([`help/events.md`](events.md)), and a game nobody listens
+in costs nothing — the engine drains the whispers unread.
+
 To see all of it swinging — pendulum wave, mouse leash and a gearless
-motor — run [`demos/joints_demo.tyro`](../demos/joints_demo.tyro).
+motor, with the leash blooping when it catches — run
+[`demos/joints_demo.tyro`](../demos/joints_demo.tyro).

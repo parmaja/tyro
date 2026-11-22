@@ -782,6 +782,11 @@ type
     //also reaches the bus as (spriteA, spriteB, state) besides the two
     //per-sprite onCollide handlers. Returns the number of events drained.
     function PumpEvents: Integer;
+    //The stretch beat: drains the taut/slack edges the slide joints crossed
+    //in the last Step and forwards them to on("joint_stretch") as
+    //(spriteA, spriteB, "taut"/"slack"). Drained even when nobody listens,
+    //so the physics buffer never fills; returns the number dispatched.
+    function PumpStretch: Integer;
     // The joint family - see help/joints.md. joint(a, b, opts) binds two
     // sprites with a pin/slide/rotator/limit; joint_free(id) drops one,
     // joints() counts the book and joints_clear() empties it.
@@ -1082,6 +1087,7 @@ const
   cEventUpdate = 'update'; // every frame, with the dt
   cEventDraw = 'draw';     // every paint
   cEventCollision = 'collision'; // from the physics queue: (a, b, state)
+  cEventJointStretch = 'joint_stretch'; // a slide hit or left its max: (a, b, "taut"/"slack")
 
 //global functions
 function sleep_func(L: Plua_State): integer; cdecl;
@@ -2986,6 +2992,11 @@ begin
   //first and finds nothing when the bus already carried the events).
   if (Collision <> nil) and (HandlerCountNamed(cEventCollision) > 0) then
     Collision.PumpEvents;
+  //ropes sing on the same beat: on("joint_stretch", fn) hears every slide
+  //that snapped taut or let go, as (a, b, "taut"/"slack"). The drain runs
+  //whether or not a listener exists, so the physics buffer never fills.
+  if Collision <> nil then
+    Collision.PumpStretch;
   //fire-and-forget input bindings: on("space", fn) answers on the press beat
   PumpInputs;
   //a timer callback may have called exit(); do not step into a stopped state.
@@ -11745,6 +11756,42 @@ begin
       Script.Dispatch(cEventCollision, L, Base + 1, 3);
       lua_pop(L, 3);
     end;
+    Inc(Result);
+  end;
+end;
+
+//The stretch beat, run by EngineUpdate every frame. The drain happens even
+//when the bus is deaf - an unlistened snap is history, not a backlog - and
+//when somebody does listen, each edge arrives as (spriteA, spriteB, state)
+//exactly like the collision events do.
+function TLuaCollision.PumpStretch: Integer;
+var
+  Evs: array[0..255] of TJointEvent;
+  ACount: Integer;
+  I: Integer;
+  L: Plua_State;
+  Base: Integer;
+begin
+  Result := 0;
+  if (Engine.Physics = nil) or (Script = nil) or (Script.Lua.State = nil) then
+    Exit;
+  L := Script.Lua.State;
+  Engine.Physics.PollStretch(Evs, ACount);
+  if (ACount = 0) or (Script.HandlerCountNamed(cEventJointStretch) = 0) then
+    Exit; // drained either way; nobody to tell
+  for I := 0 to ACount - 1 do
+  begin
+    Base := lua_gettop(L);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + Evs[I].HandleA);
+    if not lua_istable(L, -1) then begin lua_pop(L, 1); L.PushNil; end;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + Evs[I].HandleB);
+    if not lua_istable(L, -1) then begin lua_pop(L, 1); L.PushNil; end;
+    if Evs[I].Taut then
+      L.PushString('taut')
+    else
+      L.PushString('slack');
+    Script.Dispatch(cEventJointStretch, L, Base + 1, 3);
+    lua_pop(L, 3);
     Inc(Result);
   end;
 end;

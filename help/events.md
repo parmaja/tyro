@@ -46,6 +46,7 @@ fire-and-forget, no `update()` needed:
 | `on("update", fn)` | every frame, before the global `update()` | the `dt` |
 | `on("draw", fn)` | every paint, after the global `draw()` | nothing |
 | `on("collision", fn)` | every physics contact event | `(a, b, "enter"/"leave")` |
+| `on("joint_stretch", fn)` | a slide joint snaps taut at its `max`, or goes slack again | `(a, b, "taut"/"slack")` |
 
 ```lua
 on("space", function()

@@ -67,15 +67,22 @@ Games feel dead without tweening; today every game in `games/` hand-rolls it.
 - [x] Demo: `demos/events_demo.tyro` (bus + tween juice); API test:
       `tests/event_test.tyro` (15 checks)
 
-## P4b — Joints (split from P4) — ✅ done 2026-11-22 (stretch feedback split to P4c)
+## P4b — Joints (split from P4) — ✅ done 2026-11-22
 
 - [x] Chipmunk **joints** exposed: `collision.joint(a, b, opts)` — pin /
       slide / rotator / limit; `joint_free` / `joints` / `joints_clear`;
       auto-cleanup when a sprite leaves the physics world
 - [x] Demo: `demos/joints_demo.tyro` (pendulum wave + mouse leash + motor);
-      API test: `tests/joint_test.tyro` (24 checks)
-- [ ] `on("joint_stretch", fn)` style feedback once joints can pull → P4c
-      (needs a per-frame measure on the engine beat; parked deliberately)
+      API test: `tests/joint_test.tyro` (27 checks)
+
+## P4c — When a rope snaps taut (split from P4b) — ✅ done 2026-11-22
+
+- [x] `on("joint_stretch", fn)` — every slide measures its anchors after
+      the solve and reports the **edges**: `(a, b, "taut"/"slack")`; the
+      engine drains the queue each beat even when the bus is deaf
+- [x] Demo juice wired: `joints_demo.tyro` bloops and squashes when the
+      mouse leash catches the ball; `tests/joint_test.tyro` grew the
+      stretch checks (27 total)
 
 ## P5 — Save it (persistence API)
 

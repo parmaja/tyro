@@ -81,6 +81,16 @@ on("update", function()
   dial.angle = dial.angle + 2
 end)
 
+-- The leash speaks when it catches the ball: a bloop and a little squash,
+-- straight off the on("joint_stretch") bus.
+on("joint_stretch", function(a, b, state)
+  if state == "taut" then
+    music.sound("bubble", 260, 60)
+    tween.killall(pet)
+    tween.from(pet, "scale", 1.3, 1, 200, "quadout")
+  end
+end)
+
 -- SPACE: drop every joint and string the board again from the start.
 on("space", function()
   collision.joints_clear()
