@@ -29,7 +29,7 @@ canvas.color = colors.black
 canvas.clear()
 
 -- the loaded atlas, played in the middle of the screen
-walk = Sprites.new("walk")
+walk = sprites.new("walk")
 walk.load("sprite_sheet.sprite")
 walk.x = 380
 walk.y = 200
@@ -38,7 +38,7 @@ walk:play(8)
 -- a row of still copies, one per atlas frame, so every frame is visible
 local strip = {}
 for i = 0, walk.frames - 1 do
-  local s = Sprites.new()
+  local s = sprites.new()
   s.load("sprite_sheet.sprite")
   s.scale = 1
   s.x = 110 + i * 90

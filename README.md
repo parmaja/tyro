@@ -283,7 +283,6 @@ translates `\n` to `\r\n` on the way out and back on the way in.
 | `f:read([what])` | `"l"` a line, `"L"` a line keeping its newline, `"a"` what is left, `"n"` the next number, or a byte count. Returns `nil` at the end of the file. |
 | `f:write(...)` | Write the arguments, returns `f` so calls chain. A leading number writes only that many bytes of the string after it. |
 | `f:lines()` | Iterate the lines that are left: `for line in f:lines() do ... end` |
-| `f:flush()` | Push anything buffered to the disk, returns `f` so calls chain |
 | `f:close()` | Close the handle and return `true`; further reads and writes report the file as closed |
 
 The name is expanded before it is checked, so `..`, a drive-relative form or a
@@ -402,19 +401,19 @@ See `demos/terminal_demo.tyro` and `demos/console_read_demo.tyro` for examples.
 
 # Sprites
 
-The `Sprites` system manages textured images ("sprites") that the engine draws
-every frame. Each sprite is created with `Sprites.new`, loaded with `load`, and
+The `sprites` system manages textured images ("sprites") that the engine draws
+every frame. Each sprite is created with `sprites.new`, loaded with `load`, and
 positioned with `move` or by setting `x`/`y` properties.
 
 ## Creating & Loading
 
 | Function | Description |
 |----------|-------------|
-| `Sprites.new("name"?)` | Create a new sprite. Optional name registers it for lookup. |
-| `Sprites.puff("name"? [, size] [, count])` | Create a sprite carrying an **engine-built soft puff texture** (no file, like `models.sphere`): a solid core with a feathered, lumpy rim — the arcade building block for clouds and smoke. `size` is the texture in pixels (default 128). `count` above 1 builds that many puffs in one hop and returns a table of them, named `name1..nameN`. Stack a few with jittered position/scale/alpha and their soft edges fuse into one fluffy mass. |
-| `Sprites.blob("name"? [, size] [, count])` | The **crisp-rim twin** of `Sprites.puff`: the same lumpy, wobbled silhouette, but the alpha cuts off at the coast within a pixel instead of feathering — an organic shape with a sharp edge (islands, rocks, hard-edged decor that must not look fluffy). Same `size`/`count`/batch behaviour as `Sprites.puff`. |
-| `Sprites("name")` | Look up a sprite by name (returns the sprite object or `nil`). |
-| `Sprites.find("name")` | Same as above. |
+| `sprites.new("name"?)` | Create a new sprite. Optional name registers it for lookup. |
+| `sprites.puff("name"? [, size] [, count])` | Create a sprite carrying an **engine-built soft puff texture** (no file, like `models.sphere`): a solid core with a feathered, lumpy rim — the arcade building block for clouds and smoke. `size` is the texture in pixels (default 128). `count` above 1 builds that many puffs in one hop and returns a table of them, named `name1..nameN`. Stack a few with jittered position/scale/alpha and their soft edges fuse into one fluffy mass. |
+| `sprites.blob("name"? [, size] [, count])` | The **crisp-rim twin** of `sprites.puff`: the same lumpy, wobbled silhouette, but the alpha cuts off at the coast within a pixel instead of feathering — an organic shape with a sharp edge (islands, rocks, hard-edged decor that must not look fluffy). Same `size`/`count`/batch behaviour as `sprites.puff`. |
+| `sprites("name")` | Look up a sprite by name (returns the sprite object or `nil`). |
+| `sprites.find("name")` | Same as above. |
 
 ## Sprite Methods
 
@@ -466,19 +465,19 @@ window.show(640, 480)
 canvas.color(colors.black)
 canvas.clear()
 
-mysprite1 = Sprites.new("player")
+mysprite1 = sprites.new("player")
 mysprite1.load("richard-say.png")
 mysprite1.show()
 mysprite1.move(100, 200)
 
-mysprite2 = Sprites.new()
+mysprite2 = sprites.new()
 mysprite2.load("richard-say.png")
 mysprite2.move(300, 100)
 mysprite2.angle = 45
 mysprite2.scale = 0.5
 
 -- Look up by name
-local p = Sprites("player")
+local p = sprites("player")
 println("Sprite size: " .. p.width() .. "x" .. p.height())
 
 local a = 0
@@ -759,7 +758,7 @@ end
 
 `games/jet2026/jet2026.tyro` is a 1942-style scrolling shooter built this
 way: one GLB jet reused through a pool for the player and every enemy,
-tinted and rotated per role. Its clouds are stacks of `Sprites.puff`
+tinted and rotated per role. Its clouds are stacks of `sprites.puff`
 sprites (one batch per cloud), their soft edges fusing into fluff, and the
 sea is a live one: `sea.frag` rolls swells, sun glitter and drifting crests
 over the board's blue pixels, masked so islands and bullets keep their
@@ -885,7 +884,7 @@ window — the HUD they carry.
 
 | API | Description |
 |----------|-------------|
-| `camera.x` / `camera.y` | The world point parked on the window origin (read/write, default `0`). A side-scroller keeps its hero near the middle by steering the eye: `camera.x = hero.x - window.width / 2`. |
+| `camera.x` / `camera.y` | The world point parked on the window origin (read/write, default `0`). A side-scroller keeps its hero near the middle by steering the eye: `camera.x = hero.x - canvas.width / 2`. |
 | `camera.zoom` | The picture's scale, clamped to `0.05..32` (default `1` — the classic pixel-perfect mapping). |
 | `camera.to_world(sx, sy)` | → `wx, wy`: a window pixel (`mouse.x`, `mouse.y`) back into the world — the same math the draw uses, so a click lands exactly where it looks. |
 | `camera.to_screen(wx, wy)` | → `sx, sy`: a world point onto the window — the way to hang a HUD marker or a control on a world position. |
@@ -904,8 +903,8 @@ function update(dt)
   hero:move(hero.x + 80 * dt, hero.y)
   -- the eye chases the hero, easing so the ride stays smooth
   local k = math.min(1, 4 * dt)
-  camera.x = camera.x + (hero.x - window.width / 2 - camera.x) * k
-  camera.y = camera.y + (hero.y - window.height / 2 - camera.y) * k
+  camera.x = camera.x + (hero.x - canvas.width / 2 - camera.x) * k
+  camera.y = camera.y + (hero.y - canvas.height / 2 - camera.y) * k
 end
 ```
 
@@ -1353,6 +1352,8 @@ tyro demos/<name>.tyro
 | `demos/bounce_demo.tyro` | Engine-driven `update(dt)` / `draw()` loop — a ball moves once per frame |
 | `demos/enter_leave_demo.tyro` | Grouped drawing with `enter()` / `leave()` — a batch of draw calls lands in one drawing frame |
 | `demos/sprites_demo.tyro` | Sprites system: load, show, hide, move, rotate, scale, named access |
+| `demos/sprites_script.tyro` | Per-sprite scripts: `sprite:load(img, script)` / `sprite:loadscript()` — `on_update`, `on_draw`, `on_collide` |
+| `demos/collision.tyro` | Rigid-body physics: dynamic/static bodies, gravity, `sprite.onCollide`, `collision.pump()` |
 | `demos/controls.tyro` | Generic buttons, labels, checkboxes, edits, and panels |
 | `demos/controls_align.tyro` | Nested controls: a left-docked panel with top- and bottom-docked buttons |
 | `demos/aseprites_demo.tyro` | Aseprite animations: load `.aseprite` files (all frames as textures), `play(fps)`, `stop`, `looping`, per-frame stepping — idle/walk/run showcase |
@@ -1362,7 +1363,6 @@ tyro demos/<name>.tyro
 | `demos/terminal_demo.tyro` | Built-in terminal commands: dir, list, clear, help, exit |
 | `demos/console_read_demo.tyro` | Interactive console.read() — prompt the user for input from Lua |
 | `demos/music_demo.tyro` | Sound effects (music.sound, music.noise) and MML melodies (music.mml) |
-| `demos/test.tyro` | Circle animation with random colors |
 | `demos/colors_bar.tyro` | Full color palette display |
 | `demos/multiply.tyro` | Drawing + MML sound |
 | `demos/text.tyro` | Multi-language text rendering |

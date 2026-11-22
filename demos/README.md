@@ -26,7 +26,24 @@ tyro demos/pong.tyro
 | `animated_demo.tyro` | Animation loop with random colors and sleep() timing |
 | `bounce_demo.tyro` | Per-frame `update(dt)` / `draw()` callbacks — one drawing per raylib frame |
 | `enter_leave_demo.tyro` | Group drawing with `enter()` / `leave()` — every command queued in between is drawn at one drawing frame |
-| `test.tyro` | Circle animation demo with random sizes and colors |
+| `circles.tyro` | Circles in random palette colors, scattered over the window |
+| `rects.tyro` | Colored rectangles: the filled and outlined forms of `canvas.rectangle` |
+| `sin.tyro` | A sine wave drawn with points and lines, animated across frames |
+
+### Sprites
+
+| File | Feature |
+|------|---------|
+| `sprites_demo.tyro` | The sprite API: create, load a texture, show/hide, move, rotate, scale, named lookup |
+| `move_sprite.tyro` | One sprite crossing the screen in exactly 10 seconds, at 60 FPS |
+| `sprites_script.tyro` | Per-sprite Lua "brains": `sprite:load(img, script)` and `sprite:loadscript()` attach a script whose `on_update` / `on_draw` / `on_collide` the engine calls each frame (`ball.tyro` and `marks.tyro` are the attached scripts) |
+
+### Physics
+
+| File | Feature |
+|------|---------|
+| `collision.tyro` | Rigid bodies: dynamic/static boxes and circles, gravity, `sprite.onCollide(other, state)`, `collision.pump()` |
+| `min.tyro` | A physics world at its smallest: one static ground sprite |
 
 ### Animation
 
@@ -40,6 +57,8 @@ tyro demos/pong.tyro
 | File | Feature |
 |------|---------|
 | `print.tyro` | console.show(), print(), println() |
+| `console.tyro` | Console placement and style: `console.align`, `console.margin`, `console.borderColor` |
+| `output.tyro` | The `output` control: print/println/log mirrored into a window panel (the console still gets them too) |
 | `console_demo.tyro` | Console output: print, println, log |
 | `terminal_demo.tyro` | Built-in terminal commands: dir, list, clear, help, exit |
 | `console_read_demo.tyro` | Interactive console.read() — prompt the user for input from Lua |
@@ -49,6 +68,8 @@ tyro demos/pong.tyro
 | File | Feature |
 |------|---------|
 | `music_demo.tyro` | music.sound() tones, music.noise() (white/pitched) and music.mml() melodies |
+| `music.tyro` | A two-voice MML score: the Pink Panther theme as `music.mml(melody, harmony)` |
+| `sound.tyro` | One-shot `music.sound` tones with a `pause()` hold between them |
 | `multiply.tyro` | Drawing + MML sound effects |
 | `midi_demo.tyro` | Standard MIDI File playback (`midi.play`, `pause`, `resume`, `stop`) with the position, tempo and spectrum of the song |
 | `spectrum_demo.tyro` | Internet radio + live stereo spectrum analyzer (`spectrum.show`, `spectrum.bars`) |
@@ -84,7 +105,7 @@ tyro demos/pong.tyro
 | File | Feature |
 |------|---------|
 | `../tests/test_openfile.tyro` | `openfile` smoke test: text and binary reads, numbers, append, `f:lines()`, chained writes and the names that are refused for leaving the workspace. Results land in `openfile_out.txt`. |
-| `rawio_test.tyro` | Minimal `openfile` write with `flush()` in between |
+| `rawio_test.tyro` | Minimal `openfile` write: the text handle and its newline translation |
 | `diag_sprite.tyro` | `openfile` used as the log file for a sprite load diagnosis |
 
 ## Running

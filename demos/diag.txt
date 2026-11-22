@@ -1,1 +1,6 @@
 step1 start
+step2 window shown
+step3 sprite created table: 0000000005E6F0E0
+step4 load ok=true err=nil
+step5 width=170 height=204 visible=true
+step6 done

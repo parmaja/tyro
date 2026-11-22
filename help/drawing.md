@@ -191,8 +191,8 @@ magnifies the picture around it (`camera.zoom`, `0.05`..`32`, default `1`).
 function update(dt)
   hero:move(hero.x + 80 * dt, hero.y)
   -- keep the hero near the middle: the eye chases him
-  camera.x = hero.x - window.width / 2
-  camera.y = hero.y - window.height / 2
+  camera.x = hero.x - canvas.width / 2
+  camera.y = hero.y - canvas.height / 2
 end
 ```
 

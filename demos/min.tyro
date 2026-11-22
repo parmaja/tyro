@@ -1,5 +1,5 @@
 window.show(320, 240)
-ground = Sprites.new("ground")
+ground = sprites.new("ground")
 ground.load("ground.png")
 ground.visible = false
 ground.kind = "static"

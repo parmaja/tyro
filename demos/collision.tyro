@@ -16,7 +16,7 @@ console.show()
 collision.gravityy = 980          -- fall down (Y-down screen coords)
 
 -- ---- Scene: static walls and floor ------------------------------------
-ground = Sprites.new("ground")    -- floor: 640 x 32 static box
+ground = sprites.new("ground")    -- floor: 640 x 32 static box
 ground.load("ground.png")
 ground.visible = false
 ground.kind = "static"
@@ -24,7 +24,7 @@ ground.collide = true
 ground.x = 320
 ground.y = 470
 
-lwall = Sprites.new("leftwall")   -- wall: 10 x 300 static box
+lwall = sprites.new("leftwall")   -- wall: 10 x 300 static box
 lwall.load("wall.png")
 lwall.visible = false
 lwall.kind = "static"
@@ -32,7 +32,7 @@ lwall.collide = true
 lwall.x = 5
 lwall.y = 280
 
-rwall = Sprites.new("rightwall")
+rwall = sprites.new("rightwall")
 rwall.load("wall.png")
 rwall.visible = false
 rwall.kind = "static"
@@ -41,7 +41,7 @@ rwall.x = 635
 rwall.y = 280
 
 -- ---- Dynamic balls -----------------------------------------------------
-ball1 = Sprites.new("ball1")      -- 64x64 texture, circle body r=20
+ball1 = sprites.new("ball1")      -- 64x64 texture, circle body r=20
 ball1.load("ball.png")
 ball1.visible = false
 ball1.kind = "dynamic"
@@ -53,7 +53,7 @@ ball1.friction = 0.3
 ball1.x = 180
 ball1.y = 80
 
-ball2 = Sprites.new("ball2")      -- heavier + bouncier circle r=18
+ball2 = sprites.new("ball2")      -- heavier + bouncier circle r=18
 ball2.load("ball.png")
 ball2.visible = false
 ball2.kind = "dynamic"

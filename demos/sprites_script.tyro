@@ -17,7 +17,7 @@ console.show()
 collision.gravityy = 980
 
 -- Static ground the ball bounces on
-ground = Sprites.new("ground")
+ground = sprites.new("ground")
 ground.load("ground.png")
 ground.visible = false
 ground.kind = "static"
@@ -27,7 +27,7 @@ ground.x = 320
 ground.y = 470
 
 -- A bouncing ball driven entirely by ball.tyro
-ball = Sprites.new("ball")
+ball = sprites.new("ball")
 ball.load("ball.png", "ball.tyro")
 ball.kind = "dynamic"
 ball.collide = true
@@ -39,7 +39,7 @@ ball.x = 320
 ball.y = 60
 
 -- Runtime-attached script; no texture, just a rotating marker over the ground
-marks = Sprites.new("marks")
+marks = sprites.new("marks")
 marks.loadscript("marks.tyro")
 marks.x = 160
 marks.y = 240

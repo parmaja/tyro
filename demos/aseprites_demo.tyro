@@ -29,26 +29,26 @@ canvas.color = colors.black
 canvas.clear()
 
 -- three showcase sprites, one per animation, so all are visible at once
-idleS = Sprites.new("idle")
+idleS = sprites.new("idle")
 idleS.load("aseprites/16x32 Idle.aseprite")
 idleS.x = 110
 idleS.y = 150
 idleS:play(7)
 
-walkS = Sprites.new("walk")
+walkS = sprites.new("walk")
 walkS.load("aseprites/16x32 Walk.aseprite")
 walkS.x = 400
 walkS.y = 150
 walkS:play(10)
 
-runS = Sprites.new("run")
+runS = sprites.new("run")
 runS.load("aseprites/16x32 Run.aseprite")
 runS.x = 690
 runS.y = 150
 runS:play(14)
 
 -- the controllable hero
-hero = Sprites.new("hero")
+hero = sprites.new("hero")
 hero.load("aseprites/16x32 Idle.aseprite")
 hero.x = 384
 hero.y = 336
