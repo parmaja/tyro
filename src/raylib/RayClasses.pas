@@ -202,6 +202,51 @@ var
 
 { TRayFont }
 
+{ A file that is not TrueType data does not fail in raylib: LoadFontEx hands
+  back its built-in tiny ASCII default font, valid and unrelated to the file.
+  So a corrupt or lying .ttf would silently shrink a game's text. The sfnt
+  version tag is checked here for the extensions that promise one; everything
+  else (a bare .fnt, an extension-less name) stays raylib's business. }
+function TrueTypeHeaderMatches(const FileName: string): Boolean;
+var
+  Stream: TFileStream;
+  Tag: array[0..3] of Byte;
+  Ext: string;
+
+  function IsText(const S: string): Boolean;
+  var
+    I: Integer;
+  begin
+    for I := 1 to 4 do
+      if Tag[I - 1] <> Ord(S[I]) then
+        Exit(False);
+    Result := True;
+  end;
+
+begin
+  Result := True;
+  Ext := LowerCase(ExtractFileExt(FileName));
+  if (Ext <> '.ttf') and (Ext <> '.otf') and (Ext <> '.ttc') then
+    Exit;
+  Result := False;
+  try
+    Stream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyNone);
+    try
+      if Stream.Size < 4 then
+        Exit;
+      Stream.ReadBuffer(Tag, 4);
+    finally
+      Stream.Free;
+    end;
+    Result := ((Tag[0] = 0) and (Tag[1] = 1) and (Tag[2] = 0) and (Tag[3] = 0)) //version 1.0
+      or IsText('true') or IsText('typ1')
+      or IsText('OTTO') //OpenType CFF saved as .ttf is legal
+      or ((Ext = '.ttc') and IsText('ttcf'));
+  except
+    Result := False;
+  end;
+end;
+
 procedure TRayFont.Loaded;
 var
   charSize: TVector2;
@@ -251,20 +296,28 @@ begin
 end;
 
 procedure TRayFont.LoadFromFile(FileName: string; FontSize: Integer);
+var
+  NewData: TFont;
 begin
   if SameText(ExtractFileExt(FileName), '.bdf') then //while RayLib doesn't load it (idk why)
     LoadFromBDF(FileName, FontSize)
   else if SysUtils.FileExists(FileName) then
   begin
-    Unload;
+    //Load first, commit after: a font file that exists but fails to parse
+    //must not leave the script without the font it was drawing with. The
+    //size=0 branch spells the UTF-8 cast the same way the next line does,
+    //because a bare PUTF8Char(string) is only a pointer cast in Delphi.
+    if not TrueTypeHeaderMatches(FileName) then
+      raise Exception.Create('Fail to load font: ' + FileName);
     if FontSize = 0 then
-      Data := RayLib.LoadFont(PUTF8Char(FileName))
+      NewData := RayLib.LoadFont(PUTF8Char(UTF8String(FileName)))
     else
-      Data := RayLib.LoadFontEx(PUTF8Char(UTF8String(FileName)), FontSize, nil, 0); //BUG fontsize = 16 in matrix game
+      NewData := RayLib.LoadFontEx(PUTF8Char(UTF8String(FileName)), FontSize, nil, 0);
+    if not IsFontValid(NewData) then
+      raise Exception.Create('Fail to load font: ' + FileName);
+    Unload;
+    Data := NewData;
     RefCount := False;
-    if Data.Texture.ID <= 2 then
-      Log.WriteLn('Fail to load font: ' + FileName);
-    //GenTextureMipmaps(Data.texture);
     SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
     Loaded;
   end
@@ -275,22 +328,28 @@ end;
 procedure TRayFont.LoadFromString(const DataString: rawbytestring; FontSize: Integer);
 var
   img: TImage;
+  NewData: TFont;
 begin
-  Unload;
   img := LoadImageFromMemory('.png', PByte(DataString), Length(DataString));
   try
     if img.Data = nil then
       raise Exception.Create('Unable to decode font image');
     ImageAlphaPremultiply(img);
-    Data := LoadFontFromImage(img, clMagenta, cFirstChar);
-    RefCount := False;
-    if not IsFontValid(Data) then
+    NewData := LoadFontFromImage(img, clMagenta, cFirstChar);
+    if not IsFontValid(NewData) then
+    begin
+      UnloadFont(NewData); //a valid-but-rejected atlas still owns its texture
       raise Exception.Create('Unable to load font from image');
-    SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
+    end;
   finally
     if img.Data <> nil then
       UnloadImage(img);
   end;
+  //Only now the old font leaves: a bad image cannot blank a running scene.
+  Unload;
+  Data := NewData;
+  RefCount := False;
+  SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
   Loaded;
   //Height := Height * 2;
   //Width := Width * 2;
@@ -310,48 +369,52 @@ var
   BDF: TBDF;
   img: TImage;
   Stream: TMemoryStream;
+  NewData: TFont;
 begin
-  Unload;
   //Codepoints := nil;
-  if SysUtils.FileExists(FileName) then
-  begin
-    BDF := TBDF.Create;
+  if not SysUtils.FileExists(FileName) then
+    raise Exception.Create('Font file not exists ' + FileName);
+  BDF := TBDF.Create;
+  try
+    BDF.LoadFromFile(FileName);
+    Stream := BDF.EncodeToPNG;
     try
-      BDF.LoadFromFile(FileName);
-      Stream := BDF.EncodeToPNG;
+      Stream.Position:= 0;
+      //Stream.SaveToFile('c:\temp\1.png');
+      //Stream.Position:= 0;
+
+      if FontSize = 0 then
+        FontSize := BDF.Height;
+
+      img := LoadImageFromMemory('.png', Stream.Memory, Stream.Size);
       try
-        Stream.Position:= 0;
-        //Stream.SaveToFile('c:\temp\1.png');
-        //Stream.Position:= 0;
-
-        if FontSize = 0 then
-          FontSize := BDF.Height;
-
-        img := LoadImageFromMemory('.png', Stream.Memory, Stream.Size);
-        try
-          if img.Data = nil then
-            raise Exception.Create('Unable to decode BDF font image');
-          //ImageAlphaPremultiply(img);
-          Data := LoadFontFromImage(img, clMagenta, cFirstChar);
-          RefCount := False;
-          if not IsFontValid(Data) then
-            raise Exception.Create('Unable to load BDF font image');
-          SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
-        finally
-          if img.Data <> nil then
-            UnloadImage(img);
+        if img.Data = nil then
+          raise Exception.Create('Unable to decode BDF font image');
+        //ImageAlphaPremultiply(img);
+        NewData := LoadFontFromImage(img, clMagenta, cFirstChar);
+        if not IsFontValid(NewData) then
+        begin
+          UnloadFont(NewData);
+          raise Exception.Create('Unable to load BDF font image');
         end;
-        Loaded;
-        Log.WriteLn('Font loaded: ' + FileName);
       finally
-        Stream.Free;
+        if img.Data <> nil then
+          UnloadImage(img);
       end;
     finally
-      BDF.Free;
+      Stream.Free;
     end;
-  end
-  else
-    raise Exception.Create('Font file not exists ' + FileName);
+  finally
+    BDF.Free;
+  end;
+  //The parsed font is in hand: only now the old one leaves, so a broken BDF
+  //cannot blank a scene that is still drawing.
+  Unload;
+  Data := NewData;
+  RefCount := False;
+  SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
+  Loaded;
+  Log.WriteLn('Font loaded: ' + FileName);
 end;
 
 { TRayAudio }
