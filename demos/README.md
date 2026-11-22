@@ -134,4 +134,4 @@ tyro --console demos/pong.tyro
 
 ## Script API Reference
 
-See the main [README.md](../README.md) for the full API documentation.
+See the [Tyro documentation](../docs/README.md) for the full API reference.

@@ -144,8 +144,9 @@ Loading tilemaps works; authoring one means hand-writing data.
 
 - [ ] "Make 5 games" official tutorial course in `help/` (each lesson is one
       short script that grows per chapter)
-- [ ] Split README.md into a real docs site (it is 75 KB today — great
-      reference, terrible onboarding)
+- [x] Split README.md into a real docs site: the API reference now lives in
+      `docs/` (16 topic pages with a start-here index at `docs/README.md`);
+      the root README is a short landing page
 - [ ] Game gallery: `tyro --export` bundles should be droppable into one folder
       others can run
 
