@@ -1308,6 +1308,36 @@ script with *only* tweens still gets the engine frame loop, like the timer
 ones. Full notes in [`help/tween.md`](help/tween.md), and every moving thing
 in [`games/bubblepop/`](games/bubblepop/) is one of these calls.
 
+## Events: `on()` / `emit()` — signals between friends
+
+The mini event bus shares the frame beat with timers and tweens: `on(name, fn)`
+hooks a listener, `emit(name, ...)` runs them all (answering **how many** ran —
+`0` when nobody listens), and `off(id)` unhooks. Names are case-free. The
+engine emits some names itself, so those bindings are fire-and-forget: a key
+name (`on("space", fn)`) or `on("mouse.left", fn)` fires on the press beat;
+`on("update", fn)` runs every frame with the `dt`; `on("draw", fn)` runs every
+paint; and `on("collision", fn)` hears the physics queue as `(a, b,
+"enter"/"leave")` — beside the classic per-sprite `onCollide` fields and a
+manual `collision.pump()`, which all keep working. A listener's error is
+reported with the event's name and marks the run failed like any script error;
+an `emit` in progress is a snapshot (see [`help/events.md`](help/events.md)).
+
+```lua
+on("space", function()          -- no update() poll needed
+  jump()
+end)
+
+on("collision", function(a, b, state)
+  if state == "enter" then
+    pop(a)
+    emit("scored", 10)          -- your own event: emit answers who listened
+  end
+end)
+```
+
+A runnable walk-through of the whole bus — engine names, custom events and
+`off()` — lives in [`demos/events_demo.tyro`](demos/events_demo.tyro).
+
 ## Grouping drawing with enter() / leave()
 
 `enter()` locks the processing queue: the drawing commands the script queues

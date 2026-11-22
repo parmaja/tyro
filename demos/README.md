@@ -45,6 +45,12 @@ tyro demos/pong.tyro
 | `collision.tyro` | Rigid bodies: dynamic/static boxes and circles, gravity, `sprite.onCollide(other, state)`, `collision.pump()` |
 | `min.tyro` | A physics world at its smallest: one static ground sprite |
 
+### Events & Tweens
+
+| File | Feature |
+|------|---------|
+| `events_demo.tyro` | The event bus end to end: `on("update")`, `on("space")`, `on("collision")`, custom `emit`/`off` — with `tween()` juice on every hit |
+
 ### Animation
 
 | File | Feature |

@@ -1,0 +1,135 @@
+--======================================================================
+--  Events demo - the on()/emit() bus, with tween juice on top
+--======================================================================
+--  A puck chases your mouse (on("update")); touch a bright target and the
+--  physics queue sings through on("collision"), the target pops with a
+--  tween, and the score travels as your own event: emit("scored", 10).
+--  SPACE respawns the board - and unhooks the blinking help line with
+--  off(id), the whole bus story in one small toy.
+--
+--  Run: bin\tyro.exe demos/events_demo.tyro
+--======================================================================
+
+window.show(640, 480)
+world.title = "Events Demo"
+world.backcolor = rgb(24, 26, 40)
+collision.gravityy = 0
+
+local score = 0
+local hud = { lift = 0 }
+local gone = 0
+local PALETTE = {
+  rgb(255, 120, 130), rgb(120, 235, 170), rgb(255, 205, 110),
+  rgb(160, 160, 255), rgb(110, 220, 240),
+}
+
+-- The puck: a kinematic ball the frame loop drags toward the mouse.
+local puck = sprites.blob("puck", 64)
+puck.tint = rgb(90, 100, 130)
+puck.collide = true
+puck.kind = "kinematic"
+puck.radius = 22
+puck.x, puck.y = 80, 420
+
+on("update", function()
+  -- the frame beat without writing a global update(): the bus is the loop
+  puck.x = puck.x + (mouse.x - puck.x) * 0.12
+  puck.y = puck.y + (mouse.y - puck.y) * 0.12
+end)
+
+-- Targets: plain sprites, static bodies; the bus hears them being touched.
+local targets = {}
+local function spawn_targets()
+  gone = 0
+  for i = 1, 5 do
+    local t = targets[i]
+    if t == nil then
+      t = sprites.blob("target" .. i, 48)
+      t.collide = true
+      t.kind = "dynamic"      -- floats in place (gravity is off) and answers
+      t.radius = 20           -- the puck's touch with a real physics event
+      targets[i] = t
+    end
+    tween.killall(t)
+    t.visible = true
+    t.alpha = 235
+    t.tint = PALETTE[i]
+    t.x = rand(70, 570)
+    t.y = rand(70, 410)
+    -- a small roll call, one pop after the other
+    after(i * 120, function()
+      tween.from(t, "scale", 0, 1, 300, "backout")
+    end)
+  end
+end
+
+-- The physics queue arrives as one bus event for the whole game.
+on("collision", function(a, b, state)
+  if state ~= "enter" then return end
+  local t
+  if a ~= puck then t = a elseif b ~= puck then t = b end
+  if t == nil or not t.visible then return end
+  t.visible = false
+  gone = gone + 1
+  tween.killall(t)
+  tween.from(t, "scale", 1, 1.6, 180, "quadout")
+  tween.from(t, "alpha", 235, 0, 200, "quadin")
+  particles.emit(t.x, t.y, 12, { color = 'yellow', speed = 160, life = 400, gravity = 300 })
+  music.sound("bubble", 500 + gone * 90, 80)
+  emit("scored", 10)
+  if gone == 5 then emit("cleared") end
+end)
+
+-- The game's own events: nothing knows who listens, and nobody must.
+on("scored", function(pts)
+  score = score + pts
+  tween.killall(hud)
+  tween.from(hud, "lift", 12, 0, 220, "quadout")
+end)
+
+on("cleared", function()
+  world.shake(250, 8)
+  music.mml("o4 t120 g >b >d >g")
+end)
+
+-- SPACE: new board - and a first taste of off(): the blinking help line
+-- unhooks itself the moment the player knows the drill.
+local help_id = 0
+on("space", function()
+  score = 0
+  spawn_targets()
+  if help_id ~= 0 then
+    off(help_id)
+    help_id = 0
+  end
+end)
+
+-- The blink rides the frame beat too; its id leaves on the first SPACE.
+local blink = 0
+help_id = on("update", function()
+  blink = blink + 1
+end)
+
+function draw()
+  screen.clear("blank")
+  screen.color = colors.white
+  screen.text(8, 452 - hud.lift, "SCORE " .. score)
+  screen.color = rgb(180, 200, 255, 140 + math.floor(100 * math.sin(blink / 12)))
+  if help_id ~= 0 then
+    screen.text(150, 30, "move the mouse - SPACE for a new board")
+  end
+  if gone == 5 then
+    screen.color = colors.yellow
+    screen.text(240, 230, "clean sweep!")
+  end
+end
+
+on("draw", function()
+  -- a second painter on the same beat: the bus has room for everyone
+  if score >= 30 then
+    screen.color = rgb(120, 255, 160, 200)
+    screen.text(520, 452, "hot!")
+  end
+end)
+
+spawn_targets()

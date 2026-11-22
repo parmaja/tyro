@@ -56,15 +56,22 @@ Games feel dead without tweening; today every game in `games/` hand-rolls it.
 - [x] Small demo game using only the juice API (`games/bubblepop`)
 - [ ] Later: `tween.color` (ARGB glide) and `tween.path(points, ms)`
 
-## P4 — Events, not polling (mini signal system)
+## P4 — Events, not polling (mini signal system) — ✅ done 2026-11-22 (joints split out to P4b)
 
-- [ ] `on("hit", fn)` / `emit("hit", a, b)` — a tiny event bus riding the same
-      queue as timers
-- [ ] Physics collision events through it (`on("collision", fn)` with the two
-      sprites)
-- [ ] Chipmunk **joints** exposed (`joint(a, b, opts)`) — no joints means no
-      Angry Birds / ragdoll
-- [ ] Fire-and-forget input binds: `on("space", fn)` next to `keyboard.pressed`
+- [x] `on(name, fn)` / `emit(name, ...)` / `off(id)` — a tiny event bus on the
+      same beat as timers/tweens; `emit` answers how many listened
+- [x] Physics collision events through it: `on("collision", fn)` with
+      `(a, b, "enter"/"leave")`, beside the classic `onCollide`/`pump()`
+- [x] Fire-and-forget input binds: `on("space", fn)`, `on("mouse.left", fn)`
+      — plus `on("update", fn)` / `on("draw", fn)` scene listeners
+- [x] Demo: `demos/events_demo.tyro` (bus + tween juice); API test:
+      `tests/event_test.tyro` (15 checks)
+
+## P4b — Joints (split from P4, next physics session)
+
+- [ ] Chipmunk **joints** exposed: `joint(a, b, opts)` — pin/slide/rotator —
+      no joints means no Angry Birds / ragdoll / swinging chains
+- [ ] `on("joint_stretch", fn)` style feedback once joints can pull
 
 ## P5 — Save it (persistence API)
 

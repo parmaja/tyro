@@ -69,6 +69,25 @@ type
     Dead: Boolean;
   end;
 
+  { TLuaHandler }
+
+  // One on() subscription. FnRef is the Lua registry reference of the
+  // callback. Kind decides whose word carries it: hkUser fires only when a
+  // script emit()s the name; hkKey/hkMouse fire when the engine's beat sees
+  // that key/button pressed (the on("space") binding); and the reserved
+  // names "update", "draw" and "collision" are fired by the engine itself,
+  // "update" every beat and "collision" from every drained physics event.
+  // Names are kept lowercase: the bus does not care about case.
+  TLuaHandler = class
+  public
+    Id: Integer;
+    Name: string;    // event name, normalized lowercase
+    Btn: string;     // mouse-button part of "mouse.x" names (hkMouse only)
+    FnRef: Integer;
+    Kind: Integer;
+    Dead: Boolean;
+  end;
+
   { TTyroLuaObject }
 
   TTyroLuaObject = class abstract(TLuaObject)
@@ -757,6 +776,11 @@ type
   public
     // collision.pump() drains the queue and fires sprite.onCollide(other, state)
     function Pump_func(L: Plua_State): integer; cdecl;
+    //The drain on the engine's beat: when the script listens with
+    //on("collision", fn), the frame pump calls this itself, so every event
+    //also reaches the bus as (spriteA, spriteB, state) besides the two
+    //per-sprite onCollide handlers. Returns the number of events drained.
+    function PumpEvents: Integer;
   end;
 
   { TLuaMouse }
@@ -909,6 +933,13 @@ type
     //the Lua state, so Destroy releases the list only.
     Tweens: TList; //of TLuaTween
     TweenNextId: Integer;
+    //Event bus handed out by on()/off()/emit() (TLuaHandler). User events
+    //run when the script emits them; the engine fires the reserved names:
+    //key/mouse bindings and "update" ride the frame beat, "collision" comes
+    //from the drained physics queue. Refs die with the state, so Destroy
+    //releases the list only.
+    Handlers: TList; //of TLuaHandler
+    HandlerNextId: Integer;
     function NewTimer(L: Plua_State; AMs: Double; APeriodic: Boolean): Integer;
     procedure PumpTimers(ADeltaTime: Double);
     function HasTimers: Boolean;
@@ -918,6 +949,16 @@ type
     //killall/count) on the current state from the __tween_* helpers and
     //hides the raw names again. Runs right after they are registered.
     procedure TweenPrelude;
+    function HasHandlers: Boolean;
+    function HandlerCountNamed(const AName: string): Integer;
+    function FindHandler(AId: Integer): TLuaHandler;
+    procedure SweepHandlers;
+    //Runs every live handler of AName with the ACount values sitting on the
+    //stack from AFirst up (they stay put: each handler gets its own copy).
+    //Returns how many ran; errors land in DoError with the event's name.
+    function Dispatch(const AName: string; L: Plua_State; AFirst, ACount: Integer): Integer;
+    //Fires the hkKey/hkMouse bindings whose key/button was pressed this frame.
+    procedure PumpInputs;
     procedure DoError(S: string);
     procedure Run; override;
     //Look up the global AName and pcall it on the main thread. AArgs arguments
@@ -966,6 +1007,13 @@ type
     //spelling (obj, prop, from, to, ms ...) over tween()'s (obj, prop,
     //to, ms ...). Returns the new id, or -1 with (nil, reason) pushed.
     function PushTween(L: Plua_State; AHasFrom: Boolean): Integer;
+
+    //event bus
+    //on(name, fn) -> handler id; off(id) -> true when a live handler was
+    //unhooked; emit(name, ...) runs the handlers and answers how many fired.
+    function On_func(L: Plua_State): integer; cdecl;
+    function Off_func(L: Plua_State): integer; cdecl;
+    function Emit_func(L: Plua_State): integer; cdecl;
 
     //file access
 
@@ -1016,6 +1064,16 @@ const
   cRequireCache = 'tyro.require.cache';
 
 implementation
+
+//Handler kinds for the event bus (TLuaHandler.Kind) and the names the engine
+//itself emits: the reserved on() spellings listed in help/events.md.
+const
+  cHandlerUser = 0;   // only a script emit() runs it
+  cHandlerKey = 1;    // on("space"): the engine's beat polls that key
+  cHandlerMouse = 2;  // on("mouse.left"): ... and that mouse button
+  cEventUpdate = 'update'; // every frame, with the dt
+  cEventDraw = 'draw';     // every paint
+  cEventCollision = 'collision'; // from the physics queue: (a, b, state)
 
 //global functions
 function sleep_func(L: Plua_State): integer; cdecl;
@@ -2360,6 +2418,8 @@ begin
   TimerNextId := 1; //timer id 0 stays invalid, so cancel(0) always answers false
   Tweens := TList.Create; //of TLuaTween, freed in Destroy
   TweenNextId := 1; //tween id 0 stays invalid, so tween.kill(0) always answers false
+  Handlers := TList.Create; //of TLuaHandler, freed in Destroy
+  HandlerNextId := 1; //handler id 0 stays invalid, so off(0) always answers false
 
   //window
   Lua.State.Register('window', 'show', Window, Window.Show_func);
@@ -2537,6 +2597,14 @@ begin
   Lua.State.RegisterGlobal('__tween_killall', TweenKillAll_func);
   Lua.State.RegisterGlobal('__tween_count', TweenCount_func);
   TweenPrelude;
+  //event bus: on(name, fn) hooks a callback, emit(name, ...) runs them all,
+  //off(id) unhooks one. Names that spell a key ("space", "w") or a mouse
+  //button ("mouse.left") are polled by the engine itself; the reserved names
+  //"update", "draw" and "collision" fire from the frame beat and the physics
+  //queue. See help/events.md.
+  Lua.State.RegisterGlobal('on', On_func);
+  Lua.State.RegisterGlobal('off', Off_func);
+  Lua.State.RegisterGlobal('emit', Emit_func);
   Lua.State.RegisterGlobal('rand', RandomValue_func);
   Lua.State.RegisterGlobal('screenshot', Screenshot_func);
   Lua.State.RegisterGlobal('exit', Exit_func);
@@ -2778,6 +2846,16 @@ begin
     end;
     FreeAndNil(Tweens);
   end;
+  //The bus handlers leave with the state too, refs and all.
+  if Handlers <> nil then
+  begin
+    while Handlers.Count > 0 do
+    begin
+      TLuaHandler(Handlers[Handlers.Count - 1]).Free;
+      Handlers.Delete(Handlers.Count - 1);
+    end;
+    FreeAndNil(Handlers);
+  end;
   FreeAndNil(Shader);
   FreeAndNil(Game);
   FreeAndNil(Gamepad);
@@ -2874,7 +2952,7 @@ function TLuaScript.HasEngineCallbacks: Boolean;
 begin
   Result := (Lua.State <> nil) and
     (Lua.State.FunctionExists('update') or Lua.State.FunctionExists('draw')
-     or HasTimers or HasTweens);
+     or HasTimers or HasTweens or HasHandlers);
 end;
 
 procedure TLuaScript.EngineUpdate(ADeltaTime: Double);
@@ -2887,10 +2965,23 @@ begin
   //glides step on the same beat, so a done callback can arm the next tween
   //and see its first value in the very next frame.
   PumpTweens(ADeltaTime);
+  //a script that listens with on("collision") gets the physics queue drained
+  //into the bus; collision.pump() in a script still works (it just drains
+  //first and finds nothing when the bus already carried the events).
+  if (Collision <> nil) and (HandlerCountNamed(cEventCollision) > 0) then
+    Collision.PumpEvents;
+  //fire-and-forget input bindings: on("space", fn) answers on the press beat
+  PumpInputs;
   //a timer callback may have called exit(); do not step into a stopped state.
   if Stopped then
     Exit;
   Lua.State.PushNumber(ADeltaTime);
+  //on("update", fn) handlers ride the same delta the global update() gets;
+  //the pushed dt stays on the stack for CallGlobal to consume.
+  if HandlerCountNamed(cEventUpdate) > 0 then
+    Dispatch(cEventUpdate, Lua.State, lua_gettop(Lua.State), 1);
+  if Stopped then
+    Exit; //an update handler may have called exit()
   CallGlobal('update', 1);
 end;
 
@@ -2899,6 +2990,9 @@ begin
   if Lua.State = nil then
     Exit;
   CallGlobal('draw', 0);
+  //on("draw", fn) listeners paint after the global draw(), same beat
+  if HandlerCountNamed(cEventDraw) > 0 then
+    Dispatch(cEventDraw, Lua.State, 0, 0);
 end;
 
 // True while at least one after()/every() timer still waits. A script that
@@ -3600,6 +3694,265 @@ begin
       if not TLuaTween(Tweens[I]).Dead then
         Inc(N);
   L.PushInteger(N);
+  Result := 1;
+end;
+
+{ ---- event bus ---- }
+
+//True while at least one on() handler is hooked: a script that bound a key
+//or an on("update") listener has a scene the engine must keep stepping, the
+//same way HasTimers keeps an after()-only script alive.
+function TLuaScript.HasHandlers: Boolean;
+begin
+  Result := (Handlers <> nil) and (Handlers.Count > 0);
+end;
+
+//How many live handlers listen to this exact (lowercase) name.
+function TLuaScript.HandlerCountNamed(const AName: string): Integer;
+var
+  I: Integer;
+  H: TLuaHandler;
+begin
+  Result := 0;
+  if Handlers <> nil then
+    for I := 0 to Handlers.Count - 1 do
+    begin
+      H := TLuaHandler(Handlers[I]);
+      if (not H.Dead) and (H.Name = AName) then
+        Inc(Result);
+    end;
+end;
+
+//The live handler carrying this id, or nil. Handlers are looked up by id
+//(never by pointer) across dispatches, so a sweep running inside a nested
+//emit can free one while an outer loop still holds its id.
+function TLuaScript.FindHandler(AId: Integer): TLuaHandler;
+var
+  I: Integer;
+  H: TLuaHandler;
+begin
+  Result := nil;
+  if (Handlers = nil) or (AId = 0) then
+    Exit;
+  for I := 0 to Handlers.Count - 1 do
+  begin
+    H := TLuaHandler(Handlers[I]);
+    if (H.Id = AId) and (not H.Dead) then
+      Exit(H);
+  end;
+end;
+
+//off()'d and answered handlers leave the list here, with their refs. Called
+//at the end of every dispatch and by off(); the run's Destroy takes the rest.
+procedure TLuaScript.SweepHandlers;
+var
+  I: Integer;
+  H: TLuaHandler;
+begin
+  if Handlers = nil then
+    Exit;
+  for I := Handlers.Count - 1 downto 0 do
+  begin
+    H := TLuaHandler(Handlers[I]);
+    if H.Dead then
+    begin
+      if Lua.State <> nil then
+        luaL_unref(Lua.State, LUA_REGISTRYINDEX, H.FnRef);
+      Handlers.Delete(I);
+      H.Free;
+    end;
+  end;
+end;
+
+//Run every live handler of AName with a copy of the ACount values stacked
+//from AFirst up. Handlers armed or off()'d by an earlier handler still obey
+//this beat's snapshot: newly armed ones start answering from the next emit,
+//off()'d ones do not run again even mid-dispatch (their ids are re-checked
+//against the live list before every call). A handler's error is reported
+//with the event's name and the next one runs anyway.
+function TLuaScript.Dispatch(const AName: string; L: Plua_State; AFirst, ACount: Integer): Integer;
+var
+  I, J, N, Id: Integer;
+  H: TLuaHandler;
+  Live: array of Integer;
+  Msg: string;
+begin
+  Result := 0;
+  if (Handlers = nil) or (Lua.State = nil) then
+    Exit;
+  N := 0;
+  SetLength(Live, Handlers.Count);
+  for I := 0 to Handlers.Count - 1 do
+  begin
+    H := TLuaHandler(Handlers[I]);
+    if (not H.Dead) and (H.Name = AName) then
+    begin
+      Live[N] := H.Id;
+      Inc(N);
+    end;
+  end;
+  for I := 0 to N - 1 do
+  begin
+    H := FindHandler(Live[I]); //nil when a nested sweep already freed it
+    if H = nil then
+      Continue;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, H.FnRef);
+    for J := 0 to ACount - 1 do
+      lua_pushvalue(L, AFirst + J);
+    if lua_pcall(L, ACount, 0, 0) <> LUA_OK then
+    begin
+      Msg := string(UTF8String(lua_tostring(L, -1)));
+      lua_pop(L, 1);
+      DoError('on "' + AName + '": ' + Msg);
+    end;
+    Inc(Result);
+    if Stopped then
+      Break; //a handler called exit()
+  end;
+  SweepHandlers;
+end;
+
+//The input beat: every hkKey/hkMouse binding whose key or button made its
+//press edge this frame runs now - exactly what keyboard.pressed would have
+//answered in update(), without writing the update() poll. The snapshot of
+//ids keeps a handler that binds or unhooks one from disturbing this beat.
+procedure TLuaScript.PumpInputs;
+var
+  I, N, Id: Integer;
+  H: TLuaHandler;
+  Live: array of Integer;
+begin
+  if (Handlers = nil) or (Lua.State = nil) then
+    Exit;
+  N := 0;
+  SetLength(Live, Handlers.Count);
+  for I := 0 to Handlers.Count - 1 do
+  begin
+    H := TLuaHandler(Handlers[I]);
+    if (not H.Dead) and (H.Kind <> cHandlerUser) then
+    begin
+      Live[N] := H.Id;
+      Inc(N);
+    end;
+  end;
+  for I := 0 to N - 1 do
+  begin
+    H := FindHandler(Live[I]);
+    if H = nil then
+      Continue;
+    case H.Kind of
+      cHandlerKey:
+        if TyroInput.IsKeyPressed(H.Name) then
+          Dispatch(H.Name, Lua.State, 0, 0);
+      cHandlerMouse:
+        if TyroInput.IsMouseButtonPressed(H.Btn) then
+          Dispatch(H.Name, Lua.State, 0, 0);
+    end;
+    if Stopped then
+      Exit; //a binding called exit(); the sweep waits for the next dispatch
+  end;
+end;
+
+// on(name, fn) -> handler id
+// Hook a callback to a name. emit("name", ...) runs every handler hooked to
+// it, in hooking order, passing the extra values straight through. Some names
+// the engine itself emits: a key name (on("space", fn), on("w", fn)) and
+// "mouse.left" / "mouse.right" / "mouse.middle" fire on the press beat;
+// "collision" hears the physics queue as (a, b, "enter"/"leave"); "update"
+// runs every frame with the dt, "draw" every paint. Keys here are shortcuts,
+// not locks: the same press can also be polled by keyboard.pressed("space")
+// in update(), and both see it. Names ignore case. Avoid F1..F8, the editor's
+// own keys - they reach those too.
+function TLuaScript.On_func(L: Plua_State): integer; cdecl;
+var
+  H: TLuaHandler;
+  Btn: string;
+  Button: RayLib.TMouseButton;
+begin
+  if (Handlers = nil) or (Lua.State = nil) then
+  begin
+    L.PushNil;
+    L.PushString('on: not running inside a script');
+    Exit(2);
+  end;
+  if not lua_isstring(L, 1) then
+  begin
+    L.PushNil;
+    L.PushString('on: the first argument is the event name, like "hit" or "space"');
+    Exit(2);
+  end;
+  if not lua_isfunction(L, 2) then
+  begin
+    L.PushNil;
+    L.PushString('on: the second argument is the function to run');
+    Exit(2);
+  end;
+  H := TLuaHandler.Create;
+  H.Id := HandlerNextId;
+  Inc(HandlerNextId);
+  H.Name := LowerCase(L.ToString(1));
+  H.Kind := cHandlerUser;
+  if (H.Name <> cEventUpdate) and (H.Name <> cEventDraw) and (H.Name <> cEventCollision) then
+  begin
+    if KeyNameToEnum(H.Name) <> KEY_NULL then
+      H.Kind := cHandlerKey
+    else if Copy(H.Name, 1, 6) = 'mouse.' then
+    begin
+      Btn := Copy(H.Name, 7, MaxInt);
+      if TryMouseButtonNameToEnum(Btn, Button) then
+      begin
+        H.Kind := cHandlerMouse;
+        H.Btn := Btn;
+      end;
+    end;
+  end;
+  lua_pushvalue(L, 2);
+  H.FnRef := luaL_ref(L, LUA_REGISTRYINDEX);
+  H.Dead := False;
+  Handlers.Add(H);
+  L.PushInteger(H.Id);
+  Result := 1;
+end;
+
+// off(id) -> true when a live handler was unhooked, false for an unknown or
+// already-gone id. An off()'d callback never runs again, even mid-dispatch.
+function TLuaScript.Off_func(L: Plua_State): integer; cdecl;
+var
+  H: TLuaHandler;
+begin
+  Result := 1;
+  H := FindHandler(L.ToInteger(1));
+  if H <> nil then
+  begin
+    H.Dead := True;
+    L.PushBoolean(True);
+    if Lua.State <> nil then
+      SweepHandlers;
+  end
+  else
+    L.PushBoolean(False);
+end;
+
+// emit(name, ...) -> number of handlers that ran
+// The script's own turn: every on(name) handler runs now, in hook order,
+// with the extra values as arguments. Returns 0 (not an error) when nothing
+// listens, so games can fire optional hooks: if emit("boss_hit", dmg) == 0
+// then nobody was watching.
+function TLuaScript.Emit_func(L: Plua_State): integer; cdecl;
+var
+  Name: string;
+begin
+  if not lua_isstring(L, 1) then
+  begin
+    L.PushNil;
+    L.PushString('emit: the first argument is the event name');
+    Exit(2);
+  end;
+  Name := LowerCase(L.ToString(1));
+  if lua_gettop(L) > 1 then
+    L.PushInteger(Dispatch(Name, L, 2, lua_gettop(L) - 1))
+  else
+    L.PushInteger(Dispatch(Name, L, 0, 0));
   Result := 1;
 end;
 
@@ -11331,29 +11684,50 @@ end;
 
 // collision.pump() -> number of events dispatched; fires onCollide handlers for both sides
 function TLuaCollision.Pump_func(L: Plua_State): integer; cdecl;
+begin
+  L.PushInteger(PumpEvents);
+  Result := 1;
+end;
+
+//Shared drain: every physics event goes to both sprites' onCollide handlers,
+//and - while the script listens - to every on("collision") bus handler as
+//(spriteA, spriteB, state). The bus route runs after the two per-sprite
+//callbacks, so a listener never sees an event before the sprites themselves.
+function TLuaCollision.PumpEvents: Integer;
 var
   Evs: array[0..1023] of TCollisionEvent;
   ACount: Integer;
   I: Integer;
   ev: TCollisionEvent;
+  L: Plua_State;
+  Base: Integer;
+  State: string;
 begin
   Result := 0;
-  if Engine.Physics = nil then
+  if (Engine.Physics = nil) or (Script = nil) or (Script.Lua.State = nil) then
     Exit;
+  L := Script.Lua.State;
   ACount := 0;
   Engine.Physics.Poll(Evs, ACount);
   for I := 0 to ACount - 1 do
   begin
     ev := Evs[I];
     if ev.State = csBegin then
-    begin
-      FireEvent(L, ev.HandleA, ev.HandleB, 'enter');
-      FireEvent(L, ev.HandleB, ev.HandleA, 'enter');
-    end
+      State := 'enter'
     else
+      State := 'leave';
+    FireEvent(L, ev.HandleA, ev.HandleB, State);
+    FireEvent(L, ev.HandleB, ev.HandleA, State);
+    if Script.HandlerCountNamed(cEventCollision) > 0 then
     begin
-      FireEvent(L, ev.HandleA, ev.HandleB, 'leave');
-      FireEvent(L, ev.HandleB, ev.HandleA, 'leave');
+      Base := lua_gettop(L);
+      lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + ev.HandleA);
+      if not lua_istable(L, -1) then begin lua_pop(L, 1); L.PushNil; end;
+      lua_rawgeti(L, LUA_REGISTRYINDEX, cSpriteRegistryBase + ev.HandleB);
+      if not lua_istable(L, -1) then begin lua_pop(L, 1); L.PushNil; end;
+      L.PushString(State);
+      Script.Dispatch(cEventCollision, L, Base + 1, 3);
+      lua_pop(L, 3);
     end;
     Inc(Result);
   end;
