@@ -23,6 +23,7 @@ uses
   Classes, SysUtils, Types, Generics.Collections,
   LuaAPI, LuaClasses,
   RayLib, RayClasses, //remove it
+  chipmunk, //cpVect for the joint anchors
   mnUtils, mnLogs, mnClasses, mnDON,
   TyroScripts, TyroSounds, TyroClasses, Melodies, TyroSprites, TyroTiles, TyroModels, TyroParticles, TyroPhysics, TyroParallax,
   TyroControls, TyroEngines, TyroInput,
@@ -781,6 +782,13 @@ type
     //also reaches the bus as (spriteA, spriteB, state) besides the two
     //per-sprite onCollide handlers. Returns the number of events drained.
     function PumpEvents: Integer;
+    // The joint family - see help/joints.md. joint(a, b, opts) binds two
+    // sprites with a pin/slide/rotator/limit; joint_free(id) drops one,
+    // joints() counts the book and joints_clear() empties it.
+    function Joint_func(L: Plua_State): integer; cdecl;
+    function JointFree_func(L: Plua_State): integer; cdecl;
+    function Joints_func(L: Plua_State): integer; cdecl;
+    function JointsClear_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaMouse }
@@ -2776,6 +2784,14 @@ begin
   Lua.State.Register('output', Output); //should be last one
   // Collision system: collision.pump() drains events and fires sprite.onCollide(other, state)
   Lua.State.Register('collision', 'pump', Collision, Collision.Pump_func);
+  // Joints: collision.joint(a, b, opts) ties two sprites with a pin/slide/
+  // rotator/limit, collision.joint_free(id) drops one again. The sprites get
+  // collide = true on the way in - a rope tied to a non-physical sprite holds
+  // nothing. See help/joints.md.
+  Lua.State.Register('collision', 'joint', Collision, Collision.Joint_func);
+  Lua.State.Register('collision', 'joint_free', Collision, Collision.JointFree_func);
+  Lua.State.Register('collision', 'joints', Collision, Collision.Joints_func);
+  Lua.State.Register('collision', 'joints_clear', Collision, Collision.JointsClear_func);
   Lua.State.Register('collision', Collision); // should be last — wires getter/setter metamethods
 
   // queue: read-only counters over the drawing queue (see TQueueStats), e.g.
@@ -11731,6 +11747,220 @@ begin
     end;
     Inc(Result);
   end;
+end;
+
+// Read one numeric field of the opts table at ATable, leaving the stack as
+// it was. Answers false (and keeps AVal) when the field is absent.
+function TLuaCollision.Joint_func(L: Plua_State): integer; cdecl;
+
+  function OptNum(ATable: Integer; const AName: string; var AVal: cpFloat): Boolean;
+  var
+    F: UTF8String;
+  begin
+    F := UTF8String(AName);
+    lua_getfield(L, ATable, PUTF8Char(F));
+    Result := lua_isnumber(L, -1);
+    if Result then
+      AVal := lua_tonumber(L, -1);
+    lua_pop(L, 1);
+  end;
+
+var
+  HA, HB: Integer;
+  Kind: string;
+  K: TJointKind;
+  StateA, StateB: TSpritePhysicsState;
+  Ax, Ay, Bx, By, Dist, MinV, MaxV, AngleDeg, Strength, Damping: cpFloat;
+  HasMin, HasMax, HasStrength: Boolean;
+  RadA, WAX, WAY, WBX, WBY, AnchorDist: cpFloat;
+begin
+  if (Engine = nil) or (Engine.Physics = nil) then
+  begin
+    L.PushNil;
+    L.PushString('joint: physics are not running');
+    Exit(2);
+  end;
+  if (not lua_istable(L, 1)) or (not lua_istable(L, 2)) then
+  begin
+    L.PushNil;
+    L.PushString('joint: the first two arguments are the sprites to join');
+    Exit(2);
+  end;
+  HA := GetSpriteHandle(L, 1);
+  HB := GetSpriteHandle(L, 2);
+  if (HA <= cSpriteInvalid) or (HB <= cSpriteInvalid) then
+  begin
+    L.PushNil;
+    L.PushString('joint: the first two arguments are the sprites to join');
+    Exit(2);
+  end;
+  if HA = HB then
+  begin
+    L.PushNil;
+    L.PushString('joint: a sprite cannot be joined to itself');
+    Exit(2);
+  end;
+  Kind := 'pin';
+  if lua_istable(L, 3) then
+  begin
+    lua_getfield(L, 3, PUTF8Char(UTF8String('kind')));
+    if lua_isstring(L, -1) then
+      Kind := LowerCase(L.ToString(-1));
+    lua_pop(L, 1);
+  end;
+  if Kind = 'pin' then
+    K := jkPin
+  else if (Kind = 'slide') or (Kind = 'rope') or (Kind = 'leash') then
+    K := jkSlide
+  else if (Kind = 'rotator') or (Kind = 'motor') then
+    K := jkRotator
+  else if (Kind = 'limit') or (Kind = 'hinge') then
+    K := jkAngleLimit
+  else
+  begin
+    L.PushNil;
+    L.PushString('joint: kind must be "pin", "slide", "rotator" or "limit"');
+    Exit(2);
+  end;
+  // Defaults chosen per kind below; a motor that pulls with no strength is
+  // no motor, so the rotator starts stronger than the pull cap of the rest.
+  Ax := 0; Ay := 0; Bx := 0; By := 0;
+  Dist := -1; MinV := 0; MaxV := 0; AngleDeg := 0;
+  Strength := 0; Damping := 30;
+  if K = jkRotator then
+    Strength := 300;
+  HasMin := False; HasMax := False; HasStrength := False;
+  if lua_istable(L, 3) then
+  begin
+    OptNum(3, 'ax', Ax);
+    OptNum(3, 'ay', Ay);
+    OptNum(3, 'bx', Bx);
+    OptNum(3, 'by', By);
+    if not OptNum(3, 'length', Dist) then
+      OptNum(3, 'dist', Dist);
+    HasMin := OptNum(3, 'min', MinV);
+    HasMax := OptNum(3, 'max', MaxV);
+    OptNum(3, 'angle', AngleDeg);
+    HasStrength := OptNum(3, 'strength', Strength);
+    OptNum(3, 'damping', Damping);
+  end;
+  if not Engine.Sprites.GetPhysicsState(HA, StateA)
+    or not Engine.Sprites.GetPhysicsState(HB, StateB) then
+  begin
+    L.PushNil;
+    L.PushString('joint: one of the sprites is gone');
+    Exit(2);
+  end;
+  // The gap the joint is armed with, measured between the two anchor points
+  // where they actually stand - local offsets turned by each sprite's angle.
+  RadA := StateA.Angle * Pi / 180;
+  WAX := StateA.X + Ax * Cos(RadA) - Ay * Sin(RadA);
+  WAY := StateA.Y + Ax * Sin(RadA) + Ay * Cos(RadA);
+  RadA := StateB.Angle * Pi / 180;
+  WBX := StateB.X + Bx * Cos(RadA) - By * Sin(RadA);
+  WBY := StateB.Y + Bx * Sin(RadA) + By * Cos(RadA);
+  AnchorDist := Sqrt((WBX - WAX) * (WBX - WAX) + (WBY - WAY) * (WBY - WAY));
+  case K of
+    jkPin:
+    begin
+      if Dist < 0 then
+        Dist := AnchorDist; // "as far apart as they are right now"
+      MinV := 0; MaxV := 0; Damping := 0;
+    end;
+    jkSlide:
+    begin
+      if not HasMax then
+        MaxV := AnchorDist; // a leash to where the partner stands today
+      if not HasMin then
+        MinV := 0;
+      Dist := -1; Damping := 0;
+      if MinV < 0 then
+      begin
+        L.PushNil;
+        L.PushString('joint: slide min cannot be negative');
+        Exit(2);
+      end;
+      if MaxV < MinV then
+      begin
+        L.PushNil;
+        L.PushString('joint: slide needs max at least min');
+        Exit(2);
+      end;
+    end;
+    jkRotator:
+    begin
+      // Strength is the spring here; the pull cap does not apply to it.
+      // 7.0.3's rotary spring drives (a - b) toward its rest angle, so the
+      // script's "b turns +angle" goes in negated. (The limit joint reads
+      // (b - a) - there the degrees transfer as they are.)
+      Dist := -1; MinV := 0; MaxV := 0;
+      AngleDeg := -AngleDeg * Pi / 180;
+      if (not HasStrength) or (Strength <= 0) then
+        Strength := 300;
+      if Damping < 0 then
+        Damping := 30;
+    end;
+  else
+    // jkAngleLimit: degrees in, radians down; the pull cap is 'strength'.
+    if not HasMin then
+      MinV := -180;
+    if not HasMax then
+      MaxV := 180;
+    Dist := -1; Damping := 0;
+    if MaxV <= MinV then
+    begin
+      L.PushNil;
+      L.PushString('joint: limit needs max above min');
+      Exit(2);
+    end;
+    MinV := MinV * Pi / 180;
+    MaxV := MaxV * Pi / 180;
+    AngleDeg := 0;
+  end;
+  // A joint needs two physical sprites: tie the rope to a sprite that does
+  // not ride the world and it holds nothing, so the join switches them on.
+  Engine.Sprites.SetCollide(HA, True);
+  Engine.Sprites.SetCollide(HB, True);
+  if K = jkRotator then
+    // strength was the spring's own; the pull cap stays the solver's choice
+    L.PushInteger(Engine.Physics.AddJoint(K, HA, HB, cpv(Ax, Ay), cpv(Bx, By),
+      Dist, MinV, MaxV, AngleDeg, Strength, Damping, 0))
+  else
+    // for the rest strength is the pull cap, and stiffness/damping are unused
+    L.PushInteger(Engine.Physics.AddJoint(K, HA, HB, cpv(Ax, Ay), cpv(Bx, By),
+      Dist, MinV, MaxV, 0, 0, 0, Strength));
+  Result := 1;
+end;
+
+// collision.joint_free(id) -> true when that joint left the book (or leaves
+// it on the next beat - a still-waiting one is dropped straight away).
+function TLuaCollision.JointFree_func(L: Plua_State): integer; cdecl;
+begin
+  if (Engine <> nil) and (Engine.Physics <> nil) then
+    L.PushBoolean(Engine.Physics.FreeJoint(L.ToInteger(1)))
+  else
+    L.PushBoolean(False);
+  Result := 1;
+end;
+
+// collision.joints() -> how many joints the script armed (waiting ones too).
+function TLuaCollision.Joints_func(L: Plua_State): integer; cdecl;
+begin
+  if (Engine <> nil) and (Engine.Physics <> nil) then
+    L.PushInteger(Engine.Physics.JointCount)
+  else
+    L.PushInteger(0);
+  Result := 1;
+end;
+
+// collision.joints_clear() -> how many joints were on the book; all leave.
+function TLuaCollision.JointsClear_func(L: Plua_State): integer; cdecl;
+begin
+  if (Engine <> nil) and (Engine.Physics <> nil) then
+    L.PushInteger(Engine.Physics.ClearJoints)
+  else
+    L.PushInteger(0);
+  Result := 1;
 end;
 
 initialization

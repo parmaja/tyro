@@ -167,6 +167,39 @@ var
   cpCircleShapeGetRadius: function(const shape: cpShape): cpFloat; cdecl = nil;
   cpBoxShapeNew: function(body: cpBody; width: cpFloat; height: cpFloat; radius: cpFloat): cpShape; cdecl = nil;
 
+// -- Constraint (joints) --
+// The joints Tyro exposes: pin (a rigid rod between two anchors), slide (a
+// leash that keeps the anchors between min and max) and rotator (a motor:
+// turns body b toward a rest angle beside a). 7.0.3 has no plain rotary
+// joint - the motor role goes to the damped rotary spring, and the passive
+// angle clamp (rotary limit) rides along for free.
+var
+  cpSpaceAddConstraint: function(space: cpSpace; constraint: cpConstraint): cpConstraint; cdecl = nil;
+  cpSpaceRemoveConstraint: procedure(space: cpSpace; constraint: cpConstraint); cdecl = nil;
+  cpConstraintGetMaxForce: function(const constraint: cpConstraint): cpFloat; cdecl = nil;
+  cpConstraintSetMaxForce: procedure(constraint: cpConstraint; maxForce: cpFloat); cdecl = nil;
+  cpConstraintFree: procedure(constraint: cpConstraint); cdecl = nil;
+  cpPinJointNew: function(a, b: cpBody; anchorA, anchorB: cpVect): cpConstraint; cdecl = nil;
+  cpPinJointGetDist: function(const constraint: cpConstraint): cpFloat; cdecl = nil;
+  cpPinJointSetDist: procedure(constraint: cpConstraint; dist: cpFloat); cdecl = nil;
+  cpSlideJointNew: function(a, b: cpBody; anchorA, anchorB: cpVect; min, max: cpFloat): cpConstraint; cdecl = nil;
+  cpSlideJointGetMin: function(const constraint: cpConstraint): cpFloat; cdecl = nil;
+  cpSlideJointSetMin: procedure(constraint: cpConstraint; min: cpFloat); cdecl = nil;
+  cpSlideJointGetMax: function(const constraint: cpConstraint): cpFloat; cdecl = nil;
+  cpSlideJointSetMax: procedure(constraint: cpConstraint; max: cpFloat); cdecl = nil;
+  cpDampedRotarySpringNew: function(a, b: cpBody; restAngle, stiffness, damping: cpFloat): cpConstraint; cdecl = nil;
+  cpDampedRotarySpringGetRestAngle: function(const constraint: cpConstraint): cpFloat; cdecl = nil;
+  cpDampedRotarySpringSetRestAngle: procedure(constraint: cpConstraint; restAngle: cpFloat); cdecl = nil;
+  cpDampedRotarySpringGetStiffness: function(const constraint: cpConstraint): cpFloat; cdecl = nil;
+  cpDampedRotarySpringSetStiffness: procedure(constraint: cpConstraint; stiffness: cpFloat); cdecl = nil;
+  cpDampedRotarySpringGetDamping: function(const constraint: cpConstraint): cpFloat; cdecl = nil;
+  cpDampedRotarySpringSetDamping: procedure(constraint: cpConstraint; damping: cpFloat); cdecl = nil;
+  cpRotaryLimitJointNew: function(a, b: cpBody; min, max: cpFloat): cpConstraint; cdecl = nil;
+  cpRotaryLimitJointGetMin: function(const constraint: cpConstraint): cpFloat; cdecl = nil;
+  cpRotaryLimitJointSetMin: procedure(constraint: cpConstraint; min: cpFloat); cdecl = nil;
+  cpRotaryLimitJointGetMax: function(const constraint: cpConstraint): cpFloat; cdecl = nil;
+  cpRotaryLimitJointSetMax: procedure(constraint: cpConstraint; max: cpFloat); cdecl = nil;
+
 // -- Moments / areas --
 var
   cpMomentForCircle: function(m: cpFloat; r1: cpFloat; r2: cpFloat; offset: cpVect): cpFloat; cdecl = nil;
@@ -388,6 +421,32 @@ begin
   GetAddress(@cpCircleShapeGetOffset, 'cpCircleShapeGetOffset');
   GetAddress(@cpCircleShapeGetRadius, 'cpCircleShapeGetRadius');
   GetAddress(@cpBoxShapeNew, 'cpBoxShapeNew');
+
+  GetAddress(@cpSpaceAddConstraint, 'cpSpaceAddConstraint');
+  GetAddress(@cpSpaceRemoveConstraint, 'cpSpaceRemoveConstraint');
+  GetAddress(@cpConstraintGetMaxForce, 'cpConstraintGetMaxForce');
+  GetAddress(@cpConstraintSetMaxForce, 'cpConstraintSetMaxForce');
+  GetAddress(@cpConstraintFree, 'cpConstraintFree');
+  GetAddress(@cpPinJointNew, 'cpPinJointNew');
+  GetAddress(@cpPinJointGetDist, 'cpPinJointGetDist');
+  GetAddress(@cpPinJointSetDist, 'cpPinJointSetDist');
+  GetAddress(@cpSlideJointNew, 'cpSlideJointNew');
+  GetAddress(@cpSlideJointGetMin, 'cpSlideJointGetMin');
+  GetAddress(@cpSlideJointSetMin, 'cpSlideJointSetMin');
+  GetAddress(@cpSlideJointGetMax, 'cpSlideJointGetMax');
+  GetAddress(@cpSlideJointSetMax, 'cpSlideJointSetMax');
+  GetAddress(@cpDampedRotarySpringNew, 'cpDampedRotarySpringNew');
+  GetAddress(@cpDampedRotarySpringGetRestAngle, 'cpDampedRotarySpringGetRestAngle');
+  GetAddress(@cpDampedRotarySpringSetRestAngle, 'cpDampedRotarySpringSetRestAngle');
+  GetAddress(@cpDampedRotarySpringGetStiffness, 'cpDampedRotarySpringGetStiffness');
+  GetAddress(@cpDampedRotarySpringSetStiffness, 'cpDampedRotarySpringSetStiffness');
+  GetAddress(@cpDampedRotarySpringGetDamping, 'cpDampedRotarySpringGetDamping');
+  GetAddress(@cpDampedRotarySpringSetDamping, 'cpDampedRotarySpringSetDamping');
+  GetAddress(@cpRotaryLimitJointNew, 'cpRotaryLimitJointNew');
+  GetAddress(@cpRotaryLimitJointGetMin, 'cpRotaryLimitJointGetMin');
+  GetAddress(@cpRotaryLimitJointSetMin, 'cpRotaryLimitJointSetMin');
+  GetAddress(@cpRotaryLimitJointGetMax, 'cpRotaryLimitJointGetMax');
+  GetAddress(@cpRotaryLimitJointSetMax, 'cpRotaryLimitJointSetMax');
 
   GetAddress(@cpMomentForCircle, 'cpMomentForCircle');
   GetAddress(@cpMomentForBox, 'cpMomentForBox');

@@ -1338,6 +1338,33 @@ end)
 A runnable walk-through of the whole bus — engine names, custom events and
 `off()` — lives in [`demos/events_demo.tyro`](demos/events_demo.tyro).
 
+## Joints: `collision.joint()` — ropes, rods and motors
+
+Connect two sprites and let the solver keep the promise: a **pin** is a
+rigid rod (`collision.joint(anchor, ball)` — a pendulum), a **slide** is a
+leash that never stretches past `max`, a **rotator** is a spring motor
+turning `b` toward `angle` beside `a`, and a **limit** is a gate that only
+lets `b` turn between `min` and `max` degrees. Both sprites are switched to
+`collide = true` on the way in; `kind` does the rest of the design (static
+= bolt, kinematic = hand, dynamic = swing). `joint_free(id)` cuts one,
+`joints()` counts the book, `joints_clear()` empties it — and a joint also
+leaves the moment one of its sprites loses its body (freed, `collide` off,
+or a shape/kind rebuild). Anchors (`ax, ay / bx, by`) attach anywhere on the
+sprites and rotate with them. Full notes in
+[`help/joints.md`](help/joints.md);
+[`demos/joints_demo.tyro`](demos/joints_demo.tyro) swings a pendulum wave,
+a mouse-leashed ball and a gearless motor at once.
+
+```lua
+hook = sprites.blob("hook", 32)    -- the bolt in the ceiling
+hook.kind = "static"
+hook.x, hook.y = 320, 80
+
+ball = sprites.blob("ball", 44)
+ball.x, ball.y = 420, 80           -- 100 px to the side
+collision.joint(hook, ball)        -- ...and it swings
+```
+
 ## Grouping drawing with enter() / leave()
 
 `enter()` locks the processing queue: the drawing commands the script queues

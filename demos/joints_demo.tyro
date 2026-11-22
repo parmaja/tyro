@@ -1,0 +1,131 @@
+--======================================================================
+--  Joints demo - pin, slide, rotator: Tyro's physics string & motor
+--======================================================================
+--  Six pendulums of different lengths swing together and drift out of
+--  step - the classic pendulum wave - each held by a collision.joint pin.
+--  The amber ball rides a slide leash on your mouse: it always chases,
+--  never outruns its rope. In the corner a kinematic dial turns and a
+--  rotator makes the orange hand chase it - a motor without gears.
+--  SPACE re-strings the whole board.
+--
+--  Run: bin\tyro.exe demos/joints_demo.tyro
+--======================================================================
+
+window.show(720, 480)
+world.title = "Joints Demo"
+world.backcolor = rgb(22, 24, 38)
+collision.gravityy = 900
+
+local PALETTE = {
+  rgb(255, 120, 130), rgb(120, 235, 170), rgb(255, 205, 110),
+  rgb(160, 160, 255), rgb(110, 220, 240), rgb(250, 150, 220),
+}
+local ropes = {}      -- {anchor, ball} pairs, drawn as lines
+local hud = { lift = 0 }
+local function rope_len(i) return 110 + i * 26 end
+
+-- ---- the pendulum wave: pins from a row of static anchors -------------
+for i = 1, 6 do
+  local a = sprites.blob("pa" .. i, 28)
+  a.kind = "static"
+  a.tint = rgb(120, 128, 150)
+  a.x = 60 + (i - 1) * 96
+  a.y = 56
+
+  local b = sprites.blob("pb" .. i, 44)
+  b.tint = PALETTE[i]
+  b.x = a.x + rope_len(i)                       -- start pulled aside
+  b.y = a.y
+  ropes[i] = { a, b }
+end
+-- the joints come after the sprites stand where the swing starts: a pin
+-- with no length keeps the distance it was armed with.
+for i = 1, 6 do
+  collision.joint(ropes[i][1], ropes[i][2])
+end
+
+-- ---- the leashed ball: a slide on a kinematic anchor at the mouse -----
+local hand = sprites.blob("hand", 24)
+hand.kind = "kinematic"
+hand.tint = rgb(90, 100, 130)
+hand.x, hand.y = 620, 300
+local pet = sprites.blob("pet", 48)
+pet.tint = rgb(255, 190, 90)
+pet.x, pet.y = 620, 380
+collision.joint(hand, pet, { kind = "slide", min = 26, max = 84 })
+
+-- ---- the corner motor: a pivot pins the hands to one shaft, and a
+-- ---- rotator makes the orange hand chase the grey dial - no gears.
+local dial = sprites.blob("dial", 32)
+dial.kind = "kinematic"
+dial.tint = rgb(140, 148, 170)
+dial.x, dial.y = 656, 424
+local spinner = sprites.blob("spinner", 44)
+spinner.tint = rgb(255, 150, 90)
+spinner.x, spinner.y = 656, 424
+
+local function string_the_motor()
+  collision.joint(dial, spinner)   -- no length, same spot: a pivot
+  collision.joint(dial, spinner, { kind = "rotator", angle = 0, strength = 700, damping = 220 })
+end
+string_the_motor()
+
+on("update", function()
+  -- the hand follows the mouse; the leash does the rest of the chasing.
+  -- A mouse nobody has touched sits at (0,0) - leave the hand at home then.
+  if (mouse.x > 0) or (mouse.y > 0) then
+    hand.x = mouse.x
+    hand.y = mouse.y
+  end
+  -- and the dial turns: the rotator pulls the orange hand along with it
+  dial.angle = dial.angle + 2
+end)
+
+-- SPACE: drop every joint and string the board again from the start.
+on("space", function()
+  collision.joints_clear()
+  for i = 1, 6 do
+    local a, b = ropes[i][1], ropes[i][2]
+    b.x = a.x + rope_len(i)
+    b.y = a.y
+    -- a dynamic sprite's body ignores teleports, so the wave restarts by
+    -- rebuilding it: collide off drops the body, on gives it back fresh.
+    b.collide = false
+    after(30, function()
+      b.collide = true
+      collision.joint(a, b)
+    end)
+  end
+  collision.joint(hand, pet, { kind = "slide", min = 26, max = 84 })
+  string_the_motor()
+  tween.killall(hud)
+  tween.from(hud, "lift", 10, 0, 260, "quadout")
+  music.sound("bubble", 620, 70)
+end)
+
+function draw()
+  screen.clear("blank")
+  -- the ropes: a line from each anchor down to the ball it holds
+  screen.color = rgb(200, 205, 220, 130)
+  for i = 1, 6 do
+    screen.line(ropes[i][1].x, ropes[i][1].y, ropes[i][2].x, ropes[i][2].y)
+  end
+  screen.color = rgb(255, 220, 150, 150)
+  screen.line(hand.x, hand.y, pet.x, pet.y)
+
+  -- the two hands of the motor, drawn along their angles
+  local ra
+  screen.color = rgb(205, 210, 225)
+  ra = math.rad(dial.angle)
+  screen.line(dial.x, dial.y, dial.x + math.cos(ra) * 22, dial.y + math.sin(ra) * 22)
+  screen.color = rgb(255, 170, 100)
+  ra = math.rad(spinner.angle)
+  screen.line(spinner.x, spinner.y, spinner.x + math.cos(ra) * 34, spinner.y + math.sin(ra) * 34)
+
+  screen.color = colors.white
+  screen.text(8, 456 - hud.lift, "pins hold the ropes - the amber ball rides its leash on your mouse")
+  screen.color = rgb(180, 200, 255, 160)
+  screen.text(8, 12, "SPACE strings the board again")
+  screen.color = rgb(150, 160, 190, 150)
+  screen.text(540, 12, "joints: " .. collision.joints())
+end

@@ -43,6 +43,7 @@ tyro demos/pong.tyro
 | File | Feature |
 |------|---------|
 | `collision.tyro` | Rigid bodies: dynamic/static boxes and circles, gravity, `sprite.onCollide(other, state)`, `collision.pump()` |
+| `joints_demo.tyro` | `collision.joint` end to end: a six-bar pendulum wave on pins, a ball on a mouse leash (slide), a gearless motor (rotator) — SPACE re-strings the board |
 | `min.tyro` | A physics world at its smallest: one static ground sprite |
 
 ### Events & Tweens

@@ -49,6 +49,35 @@ type
     AScale: Single;
   end;
 
+  { The joint kinds Lua's collision.joint hands out: pin is the rigid rod,
+    slide the leash, rotator the motor (a damped rotary spring) and limit
+    the passive angle clamp (a rotary limit joint). }
+  TJointKind = (jkPin, jkSlide, jkRotator, jkAngleLimit);
+
+  { TJoint: one script-made joint between two sprites. The record is born
+    on the script thread as a request (Constraint = nil) and lives in
+    FJointRequests until the main thread's Step finds bodies for both
+    sprites - which happens once they carry collide = true - and hooks the
+    Chipmunk constraint onto the space. A joint leaves with the first sprite
+    that loses its body, and rebuilding a sprite (its shape or kind changes)
+    rebuilds the body, so that drops its joints too. Dist/Min/Max are pixels,
+    Angle/Stiffness-facing angles radians: collision.joint converts degrees. }
+  TJoint = class
+  public
+    Id: Integer;
+    Kind: TJointKind;
+    HandleA, HandleB: Integer;
+    AnchorA, AnchorB: cpVect; // sprite-local px, the point each body holds onto
+    Dist: cpFloat;            // pin: the rod length
+    Min: cpFloat;             // slide: closest / limit: min angle
+    Max: cpFloat;             // slide: furthest  / limit: max angle
+    Angle: cpFloat;           // rotator: the rest angle b holds beside a
+    Stiffness: cpFloat;       // rotator: how hard the motor turns
+    Damping: cpFloat;         // rotator: how quickly the turn settles
+    MaxForce: cpFloat;        // 0 = the solver may pull as hard as it must
+    Constraint: cpConstraint; // nil while the joint still waits for its bodies
+  end;
+
   { TPhysics: Chipmunk2D world, driven by the engine's main thread.
     Sprite config/positions are read from TSprites (thread-safe store).
     Collision events are buffered here and drained by the script thread
@@ -72,6 +101,15 @@ type
     // map that opted in. Main thread only, like the rest of the space.
     FTiles: TTiles;
     FMapColliders: TDictionary<Integer, TTileCollider>;
+    // Joints (collision.joint). The script thread only ever touches the
+    // lists below behind FLock; the Chipmunk side (the space) is built and
+    // torn down by the main thread's Step, like the gravity request.
+    FJoints: TList<TJoint>;         // the ones the space already carries
+    FJointRequests: TList<TJoint>;  // born here, waiting for both bodies
+    FJointRemoves: TList<Integer>;  // free()/clear() ids, dropped next Step
+    FJointIds: TDictionary<Integer, Integer>; // live ids; the script thread
+                                              // asks it "is that joint alive?"
+    FJointNextId: Integer;
     procedure OnCollision(A, B: cpBody; AState: TContactState);
     function FindBody(Handle: Integer): cpBody;
     function FindShape(Handle: Integer): cpShape;
@@ -82,6 +120,17 @@ type
     procedure RemoveBody(Handle: Integer);
     procedure UpdateConfig(Handle: Integer; const AState: TSpritePhysicsState);
     function AddBody(Handle: Integer; const AState: TSpritePhysicsState): cpBody;
+    // Main-thread only (no locking): build the Chipmunk constraint of one
+    // request, or nil when the space refuses it. The request's numbers are
+    // already final (collision.joint resolved the defaults).
+    function MakeConstraint(const J: TJoint; BodyA, BodyB: cpBody): cpConstraint;
+    // Main-thread only (locks): the Step's two joint chores - drop the
+    // free()/clear() ids, then try to give every waiting joint its bodies.
+    procedure ApplyJointRemovals;
+    procedure ApplyJointRequests;
+    // Main-thread only (from RemoveBody): every joint touching this sprite
+    // leaves now - its body is about to disappear under the constraint.
+    procedure RemoveJointsOfHandle(AHandle: Integer);
     // Main-thread only (no locking): drop one map's wall set with its bodies
     procedure RemoveMapCollider(Handle: Integer);
     // Main-thread only (no locking), assumes FSpace <> nil: bring the tile
@@ -107,6 +156,16 @@ type
     // Script thread: drain pending collision events into AEvents (up to its capacity)
     procedure Poll(var AEvents: array of TCollisionEvent; out ACount: Integer);
     function BodyCount: Integer;
+    // Joints for collision.joint in Lua. Add/Free/Clear/Count are safe from
+    // the script thread: they only move the lists behind FLock, and the main
+    // thread's Step does the Chipmunk side. AddJoint answers the id right
+    // away, so even a still-waiting joint can be freed the beat it was armed.
+    function AddJoint(AKind: TJointKind; AHandleA, AHandleB: Integer;
+      const AAnchorA, AAnchorB: cpVect;
+      ADist, AMin, AMax, AAngle, AStiffness, ADamping, AMaxForce: cpFloat): Integer;
+    function FreeJoint(AId: Integer): Boolean;
+    function ClearJoints: Integer;
+    function JointCount: Integer;
     // The tilemap store the walls (map.collide) are read from; the engine
     // hands it over once at startup. Without it the space only knows sprites.
     property Tiles: TTiles read FTiles write FTiles;
@@ -169,6 +228,11 @@ begin
   FGravityDirty := True;
   FTiles := nil;
   FMapColliders := TDictionary<Integer, TTileCollider>.Create;
+  FJoints := TList<TJoint>.Create;
+  FJointRequests := TList<TJoint>.Create;
+  FJointRemoves := TList<Integer>.Create;
+  FJointIds := TDictionary<Integer, Integer>.Create;
+  FJointNextId := 1; // joint id 0 stays invalid, so joint_free(0) always answers false
   FSpace := nil;
   try
     InitPhysicsLibrary;
@@ -199,13 +263,20 @@ end;
 
 destructor TPhysics.Destroy;
 begin
+  //RemoveAll runs even when the library never loaded: the joint requests a
+  //script armed without a space still own their records, and so does every
+  //list below. The space's own teardown happens only when there is one.
+  RemoveAll;
   if FSpace <> nil then
   begin
-    RemoveAll;
     cpSpaceFree(FSpace);
     FSpace := nil;
   end;
   FMapColliders.Free;
+  FJointIds.Free;
+  FJointRemoves.Free;
+  FJointRequests.Free;
+  FJoints.Free;
   FreeAndNil(FEvents);
   FreeAndNil(FScriptedEvents);
   FreeAndNil(FHandleToBody);
@@ -264,6 +335,11 @@ var
   Body: cpBody;
   Shape: cpShape;
 begin
+  //The joints go first: RemoveBody is about to take the body out from under
+  //whatever the space still pulls on, and a constraint with a freed body is
+  //a crash at the next solve. A waiting request on this sprite leaves too -
+  //collide off means no body, no joint.
+  RemoveJointsOfHandle(Handle);
   if FHandleToBody.TryGetValue(Handle, Body) then
   begin
     if FHandleToShape.TryGetValue(Handle, Shape) then
@@ -281,7 +357,8 @@ end;
 
 procedure TPhysics.RemoveAll;
 var
-  Handle: Integer;
+  Handle, I: Integer;
+  J: TJoint;
   Keys: TList<Integer>;
 begin
   Keys := TList<Integer>.Create;
@@ -300,6 +377,32 @@ begin
   //empty space, and the next Step rebuilds the sets from the store.
   for Handle in FMapColliders.Keys.ToArray do
     RemoveMapCollider(Handle);
+  //The joints leave with the world, live ones and waiting requests alike -
+  //a rerun's scripts re-arm theirs, and id lookups start from an empty book.
+  FLock.Enter;
+  try
+    for I := FJoints.Count - 1 downto 0 do
+    begin
+      J := FJoints[I];
+      if J.Constraint <> nil then
+      begin
+        if FSpace <> nil then
+          cpSpaceRemoveConstraint(FSpace, J.Constraint);
+        cpConstraintFree(J.Constraint);
+      end;
+      J.Free;
+      FJoints.Delete(I);
+    end;
+    for I := FJointRequests.Count - 1 downto 0 do
+    begin
+      FJointRequests[I].Free;
+      FJointRequests.Delete(I);
+    end;
+    FJointIds.Clear;
+    FJointRemoves.Clear;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TPhysics.RemoveMapCollider(Handle: Integer);
@@ -322,6 +425,261 @@ begin
     cpBodyFree(Col.Body);
   Col.Free;
   FMapColliders.Remove(Handle);
+end;
+
+{ ---- joints: the collision.joint family behind the Lua door ---- }
+
+function TPhysics.AddJoint(AKind: TJointKind; AHandleA, AHandleB: Integer;
+  const AAnchorA, AAnchorB: cpVect;
+  ADist, AMin, AMax, AAngle, AStiffness, ADamping, AMaxForce: cpFloat): Integer;
+var
+  J: TJoint;
+begin
+  //Safe from the script thread: the id is booked here, the space work waits
+  //for the main thread's Step - which gives the joint its constraint once
+  //both sprites carry a body.
+  J := TJoint.Create;
+  J.Kind := AKind;
+  J.HandleA := AHandleA;
+  J.HandleB := AHandleB;
+  J.AnchorA := AAnchorA;
+  J.AnchorB := AAnchorB;
+  J.Dist := ADist;
+  J.Min := AMin;
+  J.Max := AMax;
+  J.Angle := AAngle;
+  J.Stiffness := AStiffness;
+  J.Damping := ADamping;
+  J.MaxForce := AMaxForce;
+  J.Constraint := nil;
+  FLock.Enter;
+  try
+    J.Id := FJointNextId;
+    Inc(FJointNextId);
+    FJointRequests.Add(J);
+    Result := J.Id;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TPhysics.FreeJoint(AId: Integer): Boolean;
+var
+  I: Integer;
+begin
+  //The id may sit in the waiting list (no bodies yet) or in the space. Both
+  //roads end at FJointRemoves, which the next Step digs - a request that is
+  //not in the space yet simply leaves the lists; a live one has its
+  //constraint unhooked there. Freeing twice answers false.
+  Result := False;
+  if AId = 0 then
+    Exit;
+  FLock.Enter;
+  try
+    if FJointRemoves.IndexOf(AId) >= 0 then
+      Exit; // already on its way out - freeing twice answers false
+    if FJointIds.ContainsKey(AId) then
+    begin
+      FJointRemoves.Add(AId);
+      Result := True;
+    end
+    else
+    begin
+      for I := 0 to FJointRequests.Count - 1 do
+        if FJointRequests[I].Id = AId then
+        begin
+          FJointRemoves.Add(AId);
+          Result := True;
+          Break;
+        end;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TPhysics.ClearJoints: Integer;
+var
+  Id, I: Integer;
+begin
+  // The live ids join the removal list - the next Step digs them out of the
+  // space - but the book is emptied right here: from this beat joints()
+  // reads 0 and joint_free() of those ids answers false. A waiting request
+  // never reached the space, so it is dropped on the spot.
+  FLock.Enter;
+  try
+    Result := FJointIds.Count + FJointRequests.Count;
+    for Id in FJointIds.Keys do
+      FJointRemoves.Add(Id);
+    FJointIds.Clear;
+    for I := FJointRequests.Count - 1 downto 0 do
+    begin
+      FJointRequests[I].Free;
+      FJointRequests.Delete(I);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TPhysics.JointCount: Integer;
+begin
+  //Safe from the script thread: waiting requests count too - the script
+  //armed them, so for its purposes they exist.
+  FLock.Enter;
+  try
+    Result := FJointIds.Count + FJointRequests.Count;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TPhysics.MakeConstraint(const J: TJoint; BodyA, BodyB: cpBody): cpConstraint;
+begin
+  case J.Kind of
+    jkPin:
+    begin
+      //7.0.3 pins the anchor distance as it stands at creation; a script
+      //that named a length overwrites it. Dist < 0 = "keep what it is".
+      Result := cpPinJointNew(BodyA, BodyB, J.AnchorA, J.AnchorB);
+      if (Result <> nil) and (J.Dist >= 0) then
+        cpPinJointSetDist(Result, J.Dist);
+    end;
+    jkSlide:
+      Result := cpSlideJointNew(BodyA, BodyB, J.AnchorA, J.AnchorB, J.Min, J.Max);
+    jkRotator:
+      Result := cpDampedRotarySpringNew(BodyA, BodyB, J.Angle, J.Stiffness, J.Damping);
+  else
+    Result := cpRotaryLimitJointNew(BodyA, BodyB, J.Min, J.Max);
+  end;
+  if (Result <> nil) and (J.MaxForce > 0) then
+    cpConstraintSetMaxForce(Result, J.MaxForce);
+end;
+
+procedure TPhysics.ApplyJointRemovals;
+var
+  I, K, Id: Integer;
+  J: TJoint;
+begin
+  if FJointRemoves.Count = 0 then
+    Exit;
+  FLock.Enter;
+  try
+    for I := 0 to FJointRemoves.Count - 1 do
+    begin
+      Id := FJointRemoves[I];
+      for K := FJoints.Count - 1 downto 0 do
+        if FJoints[K].Id = Id then
+        begin
+          J := FJoints[K];
+          if J.Constraint <> nil then
+          begin
+            if FSpace <> nil then
+              cpSpaceRemoveConstraint(FSpace, J.Constraint);
+            cpConstraintFree(J.Constraint);
+            J.Constraint := nil;
+          end;
+          FJoints.Delete(K);
+          J.Free;
+        end;
+      for K := FJointRequests.Count - 1 downto 0 do
+        if FJointRequests[K].Id = Id then
+        begin
+          FJointRequests[K].Free;
+          FJointRequests.Delete(K);
+        end;
+      FJointIds.Remove(Id);
+    end;
+    FJointRemoves.Clear;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TPhysics.ApplyJointRequests;
+var
+  I: Integer;
+  J: TJoint;
+  BodyA, BodyB: cpBody;
+  StateA, StateB: TSpritePhysicsState;
+begin
+  if (FSpace = nil) or (FJointRequests.Count = 0) then
+    Exit;
+  FLock.Enter;
+  try
+    I := FJointRequests.Count - 1;
+    while I >= 0 do
+    begin
+      J := FJointRequests[I];
+      if (not FSprites.GetPhysicsState(J.HandleA, StateA))
+        or (not FSprites.GetPhysicsState(J.HandleB, StateB)) then
+      begin
+        //one of the sprites is gone before the joint could land
+        FJointRequests.Delete(I);
+        J.Free;
+      end
+      else
+      begin
+        BodyA := FindBody(J.HandleA);
+        BodyB := FindBody(J.HandleB);
+        if (BodyA <> nil) and (BodyB <> nil) then
+        begin
+          J.Constraint := MakeConstraint(J, BodyA, BodyB);
+          if J.Constraint <> nil then
+          begin
+            cpSpaceAddConstraint(FSpace, J.Constraint);
+            FJointIds.Add(J.Id, 0);
+            FJointRequests.Delete(I);
+            FJoints.Add(J);
+          end;
+        end;
+        //a sprite that is not physical yet keeps the request waiting: the
+        //joints land the beat their bodies appear, and collision.joint has
+        //already switched both sprites to collide, so that is the next one.
+      end;
+      Dec(I);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TPhysics.RemoveJointsOfHandle(AHandle: Integer);
+var
+  I: Integer;
+  J: TJoint;
+begin
+  FLock.Enter;
+  try
+    for I := FJoints.Count - 1 downto 0 do
+    begin
+      J := FJoints[I];
+      if (J.HandleA = AHandle) or (J.HandleB = AHandle) then
+      begin
+        if J.Constraint <> nil then
+        begin
+          if FSpace <> nil then
+            cpSpaceRemoveConstraint(FSpace, J.Constraint);
+          cpConstraintFree(J.Constraint);
+          J.Constraint := nil;
+        end;
+        FJointIds.Remove(J.Id);
+        FJoints.Delete(I);
+        J.Free;
+      end;
+    end;
+    for I := FJointRequests.Count - 1 downto 0 do
+    begin
+      J := FJointRequests[I];
+      if (J.HandleA = AHandle) or (J.HandleB = AHandle) then
+      begin
+        FJointRequests.Delete(I);
+        J.Free;
+      end;
+    end;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 //The tile walls' beat, just before cpSpaceStep: the sprites' positions were
@@ -580,6 +938,9 @@ begin
   finally
     FLock.Leave;
   end;
+  //free()/clear() dig their joints out of the space before anything looks
+  //at the bodies they hung on.
+  ApplyJointRemovals;
   if IsDebug then
     WriteLn('DBG phase1-collect');
   Dyn := TList<Integer>.Create;
@@ -664,6 +1025,10 @@ begin
     end;
 
 // 5) advance the simulation
+  //The joints land now: every body the sprites asked for stands in the space
+  //since phase 3, so a waiting request whose pair is complete gets its
+  //constraint before the solver ever runs.
+  ApplyJointRequests;
   //The tile walls answer for the board before the solver runs: a map whose
   //grid or transform moved since the last step is rebuilt here, so the
   //sprites step against the walls the picture shows.
