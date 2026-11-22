@@ -114,10 +114,22 @@ Kids live on tablets; Tyro is effectively Windows-only.
 
 ## P7 — Real text (Unicode / RTL / TTF)
 
-- [ ] TTF font loading path (raylib `LoadFont`) selectable per script:
-      `canvas.font("arial.ttf", 24)`
+- [x] Font handles and a font book (P7a): `font.load(name[, size[, codepage]])`
+      answers an id (cached — same spec, same id, atlas baked once),
+      `font.use(id)` / `font.free(id)` / `font.current()`, `font.glyphs`
+      reports the bake; codepages `'ansi'`, `'arabic'`/`'cp864'` (the glyph
+      set minibidi's shaped forms live in), `'everything'`
+      (`tests/font_test.tyro` 24 checks, `tests/test_font_bake.lpr`,
+      [`help/fonts.md`](../help/fonts.md))
+- [ ] `canvas.font("name.ttf", size)` sugar over `font.load` + `font.use`
 - [ ] RTL text layout + Arabic shaping — Godot does it, no kid-engine does;
-      a differentiator for the home market
+      a differentiator for the home market (minibidi + the `'arabic'`
+      codepage are the halves that already work)
+- [ ] Fix the script string pipeline: `L.ToString` folds UTF-8 through the
+      system ANSI codepage, so non-ASCII text becomes `?`/best-fit before
+      raylib ever sees it — Arabic drawing waits on this
+- [ ] `'everything'` bakes raise EInvalidOp out of raylib's loader on big
+      TTFs (old font survives, script continues) — needs its own session
 - [ ] Keep pixel fonts as the default so retro scripts are untouched
 
 ## P8 — Tilemap painter (F6?)

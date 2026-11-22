@@ -293,12 +293,18 @@ type
 
   { TLuaFont }
 
+  // font.load(name[, size[, codepage]]) -> id   (cached; see help/fonts.md)
+  // font.use(id) / font.free(id) / font.current()
+  // font.height is the height of the font in use.
   TLuaFont = class(TTyroLuaObject)
   protected
     function Setter(L: PLua_State): integer; override;
     function Getter(L: PLua_State): integer; override;
   public
     function Load_func(L: Plua_State): integer; cdecl;
+    function Use_func(L: Plua_State): integer; cdecl;
+    function Free_func(L: Plua_State): integer; cdecl;
+    function Current_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaColors }
@@ -1904,6 +1910,13 @@ begin
   begin
     L.PushInteger(Res.Font.Height);
     Result := 1;
+  end
+  else if field = 'glyphs' then
+  begin
+    //how many glyphs the font in use actually baked — what a codepage
+    //('arabic' smaller, 'everything' huge) chose.
+    L.PushInteger(Res.Font.Data.GlyphCount);
+    Result := 1;
   end;
 end;
 
@@ -2497,7 +2510,13 @@ begin
   Lua.State.Register('shader', Shader); //Should be last one
 
   //font
+  //font: font.load returns an id, the font list caches it; font.use(id)
+  //activates a cached font, font.free(id) releases one, font.current()
+  //answers the id in use. codepage picks the glyph set ('arabic'/'cp864').
   Lua.State.Register('font', 'load', Font, Font.Load_func);
+  Lua.State.Register('font', 'use', Font, Font.Use_func);
+  Lua.State.Register('font', 'free', Font, Font.Free_func);
+  Lua.State.Register('font', 'current', Font, Font.Current_func);
   Lua.State.Register('font', Font); //Should be last one
 
   //music
@@ -7202,20 +7221,97 @@ begin
   end;
 end;
 
+//font.load(name[, size[, codepage]]) -> id
+//Reserves (or reuses) an entry in the font book and queues its load, then
+//answers the id right away — the atlas itself bakes on the main thread, in
+//queue order, exactly as before. Loading the same source twice answers the
+//same id and never bakes the atlas twice. The old bare `font.load(name)`
+//keeps working: the return value is simply unused, and the font is made
+//active just as it always was.
 function TLuaFont.Load_func(L: Plua_State): integer; cdecl;
 var
   aFile: string;
   aSize: integer;
+  aCodePage: string;
+  Shell: TRayFont;
 begin
   aFile := L.ToString(1);
   // Load font from current directory (ScriptPath or WorkSpace)
   aFile := Res.GuessFileName(aFile, Res.WorkPath);
+  aCodePage := '';
   if L.IsNumber(2) then
     aSize := L.ToInteger(2) //LoadFontEx
   else
+  begin
     aSize := 0; //LoadFont
-   FScript.AddQueueObject(TLoadFontObject.Create(aFile, aSize));
-   Result := 0;
+    // size omitted: a second argument can only be the codepage
+    if L.ArgsCount >= 2 then
+      aCodePage := L.ToString(2);
+  end;
+  if L.ArgsCount >= 3 then
+    aCodePage := L.ToString(3);
+  Shell := Res.FontShell(aFile, aSize, aCodePage);
+  FScript.AddQueueObject(TLoadFontObject.Create(Shell.FontId));
+  L.PushInteger(Shell.FontId);
+  Result := 1;
+end;
+
+//font.use(id) -> true | nil, msg
+//Makes a book entry the active font from the next queue beat. The draw
+//commands read the active font when the queue runs, so a script can write
+//font.use(title) then canvas.text(...) in one beat and get the right font.
+function TLuaFont.Use_func(L: Plua_State): integer; cdecl;
+var
+  aId: Integer;
+begin
+  aId := L.ToInteger(1);
+  if Res.Fonts.Item(aId) = nil then
+  begin
+    L.PushNil;
+    L.PushString('font.use: no font with id ' + IntToStr(aId));
+    Exit(2);
+  end;
+  FScript.AddQueueObject(TUseFontObject.Create(aId));
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+//font.free(id) -> true | nil, msg
+//Releases a cached font's atlas. The one in use must be switched away first
+//(font.use(other) or font.load of another) — freeing it under the renderer
+//would blank the scene mid-frame.
+function TLuaFont.Free_func(L: Plua_State): integer; cdecl;
+var
+  aId: Integer;
+  Shell: TRayFont;
+begin
+  aId := L.ToInteger(1);
+  Shell := Res.Fonts.Item(aId);
+  if Shell = nil then
+  begin
+    L.PushNil;
+    L.PushString('font.free: no font with id ' + IntToStr(aId));
+    Exit(2);
+  end;
+  if Res.Font = Shell then
+  begin
+    L.PushNil;
+    L.PushString('font.free: font ' + IntToStr(aId) + ' is the one in use, switch with font.use() first');
+    Exit(2);
+  end;
+  FScript.AddQueueObject(TFreeFontObject.Create(aId));
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+//font.current() -> id  (the font text commands draw with right now)
+function TLuaFont.Current_func(L: Plua_State): integer; cdecl;
+begin
+  if Res.Font = nil then
+    L.PushInteger(0)
+  else
+    L.PushInteger(Res.Font.FontId);
+  Result := 1;
 end;
 
 { Sprites }

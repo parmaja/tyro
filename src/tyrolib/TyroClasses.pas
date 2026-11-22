@@ -552,6 +552,28 @@ type
     constructor Create;
   end;
 
+  { TTyroFontBook }
+
+  //The one owner of every loaded font (TRayFont). The font scripts draw with
+  //is TTyroResources.Font, borrowed from here, so a font the script is not
+  //drawing with can be freed any time, and a cached one is reused by
+  //FindOrAdd instead of baked into the GPU twice. Ids are handed out once
+  //and never reused, which makes them safe handles to keep in a script.
+  TTyroFontBook = class
+  private
+    FList: TList;          //of TRayFont, owns them
+    FLock: TmnCriticalSection; //the script thread reserves, the main thread loads
+    FNextId: Integer;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Add(AFont: TRayFont): Integer; //assigns and answers AFont.FontId
+    function Item(AId: Integer): TRayFont;  //nil when gone
+    function Find(const ASourceName: string; ASourceSize: Integer; const ACodePage: string): TRayFont;
+    procedure Remove(AId: Integer);         //frees the entry
+    function Count: Integer;
+  end;
+
   { TTyroResources }
 
   TTyroResources = class(TmnNamedObjectList<TTyroResource>)
@@ -559,7 +581,10 @@ type
     procedure LoadConfig;
   public
     Theme: TTyroTheme;
+    //The font the text commands draw with. Borrowed from Fonts — the book
+    //owns every entry, this slot only points at one of them.
     Font: TRayFont;
+    Fonts: TTyroFontBook;
     Config: TConfFile;
     WorkPath: utf8string;
     AppPath: utf8string;
@@ -573,6 +598,15 @@ type
     function Find(const ResName, ResType: string): TTyroResource; overload;
     procedure Load; virtual;
     procedure Add(const ResName, ResType: string; const ResData: rawbytestring); overload;
+    //The font story behind font.load / font.use / font.free: FontShell
+    //finds or reserves a list entry for a source (never loads, safe to call
+    //from the script thread); FontLoadShell bakes a reserved entry on the
+    //main thread and raises on a bad file; FontUse makes one the active
+    //font. A font.load therefore never discards what it replaces — the book
+    //keeps every entry until font.free says otherwise.
+    function FontShell(const AName: string; ASize: Integer; const ACodePage: string): TRayFont;
+    procedure FontLoadShell(AShell: TRayFont);
+    procedure FontUse(AShell: TRayFont);
     constructor Create; virtual;
     destructor Destroy; override;
   end;
@@ -1547,6 +1581,107 @@ begin
   Add(TTyroResource.Create(ResName, ResType, ResData));
 end;
 
+{ TTyroFontBook }
+
+constructor TTyroFontBook.Create;
+begin
+  inherited Create;
+  FList := TList.Create;
+  FLock := TmnCriticalSection.Create;
+  FNextId := 1; //id 0 stays "no font", so font.use(0) always answers honestly
+end;
+
+destructor TTyroFontBook.Destroy;
+var
+  I: Integer;
+begin
+  for I := FList.Count - 1 downto 0 do
+    TRayFont(FList[I]).Free;
+  FList.Free;
+  FLock.Free;
+  inherited Destroy;
+end;
+
+function TTyroFontBook.Add(AFont: TRayFont): Integer;
+begin
+  FLock.Enter;
+  try
+    AFont.FontId := FNextId;
+    Inc(FNextId);
+    Result := AFont.FontId;
+    FList.Add(AFont);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TTyroFontBook.Item(AId: Integer): TRayFont;
+var
+  I: Integer;
+begin
+  Result := nil;
+  if AId <= 0 then
+    Exit;
+  FLock.Enter;
+  try
+    for I := 0 to FList.Count - 1 do
+      if TRayFont(FList[I]).FontId = AId then
+        Exit(TRayFont(FList[I]));
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TTyroFontBook.Find(const ASourceName: string; ASourceSize: Integer; const ACodePage: string): TRayFont;
+var
+  I: Integer;
+  F: TRayFont;
+begin
+  Result := nil;
+  FLock.Enter;
+  try
+    for I := 0 to FList.Count - 1 do
+    begin
+      F := TRayFont(FList[I]);
+      if SameFileName(F.SourceName, ASourceName) and (F.SourceSize = ASourceSize) and
+        SameText(F.SourceCodePage, ACodePage) then
+        Exit(F);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TTyroFontBook.Remove(AId: Integer);
+var
+  I: Integer;
+begin
+  FLock.Enter;
+  try
+    for I := 0 to FList.Count - 1 do
+      if TRayFont(FList[I]).FontId = AId then
+      begin
+        TRayFont(FList[I]).Free;
+        FList.Delete(I);
+        Exit;
+      end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TTyroFontBook.Count: Integer;
+begin
+  FLock.Enter;
+  try
+    Result := FList.Count;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+{ TTyroResources }
+
 constructor TTyroResources.Create;
 var
   i: Integer;
@@ -1561,19 +1696,57 @@ begin
     Args.Add(ParamStr(i));
   Config := TConfFile.Create;
   Theme := TTyroTheme.Create;
-  Font := TRayFont.Create;
+  Fonts := TTyroFontBook.Create;
+  Font := TRayFont.Create; //the startup slot; Load bakes it in place
+  Fonts.Add(Font);         //so a game can always come back: font.use(font.current())
   {$include 'tyrofont.inc'}
   LoadConfig;
 end;
 
 destructor TTyroResources.Destroy;
 begin
-  FreeAndNil(Font);
+  Font := nil;          //borrowed; the book owns and frees it
+  FreeAndNil(Fonts);
   FreeAndNil(Theme);
   FreeAndNil(Config);
   if Res = Self then
     Res := nil;
   inherited;
+end;
+
+function TTyroResources.FontShell(const AName: string; ASize: Integer; const ACodePage: string): TRayFont;
+var
+  aPage: string;
+begin
+  //Find or reserve: the answer is always in the book, but a fresh one is
+  //only a promise — Ready turns on when FontLoadShell has baked it.
+  //The codepage is canonicalized first so 'cp864' finds the 'arabic' entry.
+  aPage := NormalizeCodePage(ACodePage);
+  Result := Fonts.Find(AName, ASize, aPage);
+  if Result = nil then
+  begin
+    Result := TRayFont.Create;
+    Result.SourceName := AName;
+    Result.SourceSize := ASize;
+    Result.SourceCodePage := aPage;
+    Fonts.Add(Result);
+  end;
+end;
+
+procedure TTyroResources.FontLoadShell(AShell: TRayFont);
+begin
+  if (AShell = nil) or AShell.Ready then
+    Exit; //already baked, or already gone: the queue can race a font.free
+  AShell.LoadFromFile(AShell.SourceName, AShell.SourceSize, AShell.SourceCodePage);
+end;
+
+procedure TTyroResources.FontUse(AShell: TRayFont);
+begin
+  if AShell = nil then
+    raise Exception.Create('font: no such font (freed already?)');
+  if not AShell.Ready then
+    raise Exception.Create('font.use: "' + AShell.SourceName + '" did not load');
+  Font := AShell; //the book keeps owning it; the slot only borrows
 end;
 
 procedure TTyroResources.LoadConfig;

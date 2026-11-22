@@ -3208,6 +3208,7 @@ var
   i: Integer;
   FilePath: string;
   Ext: string;
+  aFont: TRayFont;
 begin
   if not RayLib.IsWindowReady then
     Exit;
@@ -3252,7 +3253,11 @@ begin
       begin
         // Try to load font from BDF file
         try
-          Res.Font.LoadFromFile(FilePath, 0);
+          //through the font book, so the dropped font gets an id like every
+          //other and the entry in use is never rewritten in place
+          aFont := Res.FontShell(FilePath, 0, '');
+          Res.FontLoadShell(aFont);
+          Res.FontUse(aFont);
           // Update UI components with new font if available
           if (Console <> nil) then
           begin

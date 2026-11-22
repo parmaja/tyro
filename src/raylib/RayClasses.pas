@@ -165,6 +165,10 @@ type
     procedure PlayMusicFile(FileName: utf8string);
   end;
 
+  //The glyph set a codepage name asks raylib to bake: array of Unicode
+  //values. See NormalizeCodePage/BuildCodePoints in the implementation.
+  TFontCodePoints = array of Integer;
+
   { TRayFont }
 
   TRayFont = class(TRayObject)
@@ -176,9 +180,18 @@ type
     Width: Integer;
     Height: Integer;
     Scale: Integer;
+    // Identity for the resource font list: a repeated load of the same
+    // source (file, size, codepage) reuses one baked font. Ready turns on
+    // only once the atlas is really loaded, and FontId is the number a
+    // script keeps as its handle.
+    FontId: Integer;
+    SourceName: string;
+    SourceSize: Integer;
+    SourceCodePage: string;
+    Ready: Boolean;
     constructor Create;
     destructor Destroy; override;
-    procedure LoadFromFile(FileName: string; FontSize: Integer);
+    procedure LoadFromFile(FileName: string; FontSize: Integer; const ACodePage: string = '');
     procedure LoadFromString(const DataString: rawbytestring; FontSize: Integer);
     procedure LoadFromBDF(FileName: utf8string; FontSize: Integer = 0);
     procedure LoadFromMemory(FileType: utf8string; const FontData: Pointer; DataSize: Integer; FontSize: Integer; Codepoints: PInteger = nil; CodepointsCount: Integer = 0);
@@ -195,7 +208,17 @@ function MouseY: Integer;
 
 function OffsetRectangle(const ARectangle: TRectangle; OffsetX, OffsetY: Single): TRectangle; overload;
 
+// 'cp864'/'ARABIC'/... all fold to one lowercase name so the font book can
+// cache by codepage; '' stays '' (raylib's own default set).
+function NormalizeCodePage(const ACodePage: string): string;
+// The Unicode values to bake for a codepage; answers False for '' (use
+// raylib's default). Unknown names raise.
+function BuildCodePoints(const ACodePage: string; out Points: TFontCodePoints): Boolean;
+
 implementation
+
+uses
+  ucp864; //the CP864 table behind the 'arabic' codepage
 
 var
   FAudioDeviceInitialized: Integer = 0;
@@ -247,6 +270,77 @@ begin
   end;
 end;
 
+{ Every spelling of a codepage lands on one cache key: 'cp864' is just how
+  DOS names the Arabic set, and the book must not bake the same atlas twice
+  under two aliases. Case is folded too. '' stays '' (raylib's default set). }
+function NormalizeCodePage(const ACodePage: string): string;
+begin
+  Result := LowerCase(ACodePage);
+  if Result = 'cp864' then
+    Result := 'arabic';
+  if Result = 'cp1252' then
+    Result := 'ansi';
+end;
+
+{ The codepoint set a named codepage promises, as raylib wants it: an array
+  of Unicode values to bake. '' means "raylib's own default" (the printable
+  ASCII, 95 glyphs — small but Latin-only). 'ansi' adds Latin-1,
+  'arabic' bakes exactly the characters CP864 can carry — which is
+  ASCII plus the shaped forms minibidi emits — so Arabic games fit in a
+  small atlas. Unknown names raise: a typo must not silently mean ASCII. }
+function BuildCodePoints(const ACodePage: string; out Points: TFontCodePoints): Boolean;
+
+  procedure AddPoint(var List: TFontCodePoints; AValue: Integer);
+  var
+    I: Integer;
+  begin
+    for I := 0 to High(List) do
+      if List[I] = AValue then
+        Exit;
+    SetLength(List, Length(List) + 1);
+    List[High(List)] := AValue;
+  end;
+
+var
+  B, C: Integer;
+  W: WideChar;
+  Name: string;
+begin
+  Name := NormalizeCodePage(ACodePage);
+  Result := Name <> '';
+  SetLength(Points, 0);
+  if not Result then
+    Exit;
+  for B := $20 to $7E do //printable ASCII rides every codepage
+    AddPoint(Points, B);
+  if (Name = 'ansi') or (Name = 'cp1252') then
+  begin
+    for B := $A0 to $FF do
+      AddPoint(Points, B);
+  end
+  else if Name = 'arabic' then
+  begin
+    //Every glyph CP864 spells, at its true Unicode value: a shaped string
+    //from minibidi stays UTF-8 and draws from this same atlas.
+    for B := $20 to $FF do
+    begin
+      cp864_mbtowc(AnsiChar(B), W);
+      C := Ord(W);
+      if (C <> 0) and (C <> $FFFD) then
+        AddPoint(Points, C);
+    end;
+  end
+  else if Name = 'everything' then
+  begin
+    for B := $20 to $D7FF do
+      AddPoint(Points, B);
+    for B := $E000 to $FFFF do
+      AddPoint(Points, B);
+  end
+  else
+    raise Exception.Create('Unknown font codepage: ' + ACodePage);
+end;
+
 procedure TRayFont.Loaded;
 var
   charSize: TVector2;
@@ -282,6 +376,7 @@ begin
   Unload;
   Data := GetFontDefault();
   RefCount := True;
+  Ready := True;
   Loaded;
 end;
 
@@ -291,13 +386,16 @@ begin
     RayLib.UnloadFont(Data);
   Data := Default(TFont);
   RefCount := False;
+  Ready := False;
   Width := 0;
   Height := 0;
 end;
 
-procedure TRayFont.LoadFromFile(FileName: string; FontSize: Integer);
+procedure TRayFont.LoadFromFile(FileName: string; FontSize: Integer; const ACodePage: string);
 var
   NewData: TFont;
+  Points: TFontCodePoints;
+  HasPoints: Boolean;
 begin
   if SameText(ExtractFileExt(FileName), '.bdf') then //while RayLib doesn't load it (idk why)
     LoadFromBDF(FileName, FontSize)
@@ -309,16 +407,30 @@ begin
     //because a bare PUTF8Char(string) is only a pointer cast in Delphi.
     if not TrueTypeHeaderMatches(FileName) then
       raise Exception.Create('Fail to load font: ' + FileName);
+    HasPoints := BuildCodePoints(ACodePage, Points);
+    if HasPoints and (Length(Points) = 0) then
+      raise Exception.Create('Font codepage carries no glyphs: ' + ACodePage);
     if FontSize = 0 then
       NewData := RayLib.LoadFont(PUTF8Char(UTF8String(FileName)))
+    else if HasPoints then
+      NewData := RayLib.LoadFontEx(PUTF8Char(UTF8String(FileName)), FontSize, @Points[0], Length(Points))
     else
       NewData := RayLib.LoadFontEx(PUTF8Char(UTF8String(FileName)), FontSize, nil, 0);
     if not IsFontValid(NewData) then
       raise Exception.Create('Fail to load font: ' + FileName);
+    //A huge request ('everything' at a big size) can outbake the atlas:
+    //raylib hands back an empty shell, and dividing by its zero BaseSize
+    //later would be an EInvalidOp from the queue. Fail as a font instead.
+    if (NewData.GlyphCount <= 0) or (NewData.BaseSize <= 0) then
+      raise Exception.Create('Font is too big for one atlas at this size: ' + ACodePage);
     Unload;
     Data := NewData;
     RefCount := False;
     SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
+    SourceName := FileName;
+    SourceSize := FontSize;
+    SourceCodePage := NormalizeCodePage(ACodePage);
+    Ready := True;
     Loaded;
   end
   else
@@ -350,6 +462,7 @@ begin
   Data := NewData;
   RefCount := False;
   SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
+  Ready := True;
   Loaded;
   //Height := Height * 2;
   //Width := Width * 2;
@@ -360,6 +473,7 @@ begin
   Unload;
   Data := LoadFontFromMemory(PUTF8Char(FileType), FontData, DataSize, FontSize, Codepoints, CodepointsCount);
   RefCount := False;
+  Ready := True;
   SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
   Loaded;
 end;
@@ -413,6 +527,7 @@ begin
   Data := NewData;
   RefCount := False;
   SetTextureFilter(Data.texture, TEXTURE_FILTER_POINT);
+  Ready := True;
   Loaded;
   Log.WriteLn('Font loaded: ' + FileName);
 end;

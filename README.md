@@ -99,6 +99,15 @@ thickness of lines and of rectangle/triangle outlines; `canvas.line` also takes
 a per-call thickness. `textwidth(s)` and `textheight()` measure the built-in
 font, and `canvas.width` / `canvas.height` report the canvas size.
 
+`id = font.load("name.ttf" [, size [, codepage]])` loads a font and answers its
+id — the engine's font book caches it, so the same file and size always answer
+the same id and bake only once. `font.use(id)` switches the text-drawing font
+to a cached one (`font.current()` answers the id in use), `font.free(id)` throws
+one away, and `font.height` / `font.glyphs` describe the active font. The
+codepage picks the glyph set: `'ansi'`, `'arabic'` (alias `'cp864'`, the shapes
+Arabic needs), or `'everything'`; the default is raylib's small ASCII set.
+Notes in [`help/fonts.md`](help/fonts.md).
+
 `canvas.test(ms)` is a **diagnostic** draw: it draws a marker rectangle and then
 spends about *ms* milliseconds on the main thread, emulating a single draw call
 slower than a frame. It exists to check that a body grouped with `enter()` /

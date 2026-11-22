@@ -641,11 +641,35 @@ type
 
    { TLoadFontObject }
 
+   //Bakes a reserved book entry (its shell was made by font.load on the
+   //script thread) and activates it. Carries the font id, not the shell:
+   //a queued font.free may have taken the entry away before this runs.
    TLoadFontObject = class(TQueueObject)
    public
-     FileName: string;
-     FontSize: Integer;
-     constructor Create(AFileName: string; AFontSize: Integer = cFontSize);
+     FontId: Integer;
+     constructor Create(AFontId: Integer);
+     procedure DoExecute; override;
+   end;
+
+   { TUseFontObject }
+
+   //font.use(id): activate a book entry on the main thread, in the same
+   //queue order as the text commands that will draw with it.
+   TUseFontObject = class(TQueueObject)
+   public
+     FontId: Integer;
+     constructor Create(AFontId: Integer);
+     procedure DoExecute; override;
+   end;
+
+   { TFreeFontObject }
+
+   //font.free(id): release a book entry — never the one being drawn with,
+   //which must be switched away first.
+   TFreeFontObject = class(TQueueObject)
+   public
+     FontId: Integer;
+     constructor Create(AFontId: Integer);
      procedure DoExecute; override;
    end;
 
@@ -1078,16 +1102,52 @@ end;
 
 { TLoadFontObject }
 
-constructor TLoadFontObject.Create(AFileName: string; AFontSize: Integer);
+constructor TLoadFontObject.Create(AFontId: Integer);
 begin
   inherited Create;
-  FileName := AFileName;
-  FontSize := AFontSize;
+  FontId := AFontId;
 end;
 
 procedure TLoadFontObject.DoExecute;
+var
+  Shell: TRayFont;
 begin
-  Res.Font.LoadFromFile(FileName, FontSize);
+  Shell := Res.Fonts.Item(FontId); //nil when a font.free beat us to it
+  Res.FontLoadShell(Shell);
+  Res.FontUse(Shell);
+end;
+
+{ TUseFontObject }
+
+constructor TUseFontObject.Create(AFontId: Integer);
+begin
+  inherited Create;
+  FontId := AFontId;
+end;
+
+procedure TUseFontObject.DoExecute;
+begin
+  Res.FontUse(Res.Fonts.Item(FontId)); //raises with a clear message if gone
+end;
+
+{ TFreeFontObject }
+
+constructor TFreeFontObject.Create(AFontId: Integer);
+begin
+  inherited Create;
+  FontId := AFontId;
+end;
+
+procedure TFreeFontObject.DoExecute;
+var
+  Shell: TRayFont;
+begin
+  Shell := Res.Fonts.Item(FontId);
+  if Shell = nil then
+    raise Exception.Create('font.free: no font with id ' + IntToStr(FontId));
+  if Res.Font = Shell then
+    raise Exception.Create('font.free: font ' + IntToStr(FontId) + ' is the one in use — switch with font.use() first');
+  Res.Fonts.Remove(FontId);
 end;
 
 { TSetEffectObject }
