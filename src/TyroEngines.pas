@@ -554,6 +554,13 @@ type
     //* Returns False and fills AError when the request fails. Backs the Lua
     //* global http_get(url).
     function HttpGet(const AUrl: string; out ABody: string; out AError: string): Boolean;
+    //* POST a request body to a URL and read the answer back as a string.
+    //* AContentType goes out as the Content-Type header (empty sends none).
+    //* Same thread rules as HttpGet: one client per call, the caller blocks
+    //* while the render loop keeps drawing. Backs the Lua global
+    //* http_post(url, body [, content_type]).
+    function HttpPost(const AUrl, AData, AContentType: string;
+      out ABody: string; out AError: string): Boolean;
 
     property CanvasLock: TmnCriticalSection read FCanvasLock;
     property Options: TTyroEngineOptions read FOptions write FOptions;
@@ -2653,6 +2660,58 @@ begin
       Client.ConnectTimeout := 10000;
       Client.ReadTimeout := 15000;
       Client.GetString(UTF8String(AUrl), ABody);
+      Result := True;
+    except
+      on E: Exception do
+      begin
+        ABody := '';
+        AError := E.Message;
+      end;
+    end;
+  finally
+    Client.Free;
+  end;
+end;
+
+function TTyroEngine.HttpPost(const AUrl, AData, AContentType: string;
+  out ABody: string; out AError: string): Boolean;
+var
+  Client: TmnHttpClient;
+  Data, Resp: TBytes;
+  m: TMemoryStream;
+begin
+  //One client per call, same as HttpGet: TmnHttpClient owns a socket, so a
+  //shared instance would need locking between the script and main threads.
+  Result := False;
+  ABody := '';
+  AError := '';
+  Client := TmnHttpClient.Create;
+  try
+    try
+      //The answer rides the same rule as HttpGet: ask for no compression so
+      //a deflate-picking server cannot hand back bytes the JSON parser
+      //rejects. The request body itself always goes out plain.
+      Client.Request.Use.AcceptCompressing := ovNo;
+      Client.ConnectTimeout := 10000;
+      Client.ReadTimeout := 15000;
+      if AContentType <> '' then
+        Client.Request.PutHeader('Content-Type', AContentType);
+      Data := TEncoding.UTF8.GetBytes(AData);
+      if not Client.Post(UTF8String(AUrl), PByte(Data), Length(Data)) then
+      begin
+        AError := 'could not post to ' + AUrl;
+        Exit;
+      end;
+      m := TMemoryStream.Create;
+      try
+        Client.ReceiveStream(m);
+        SetLength(Resp, m.Size);
+        if m.Size <> 0 then
+          Move(PByte(m.Memory)^, Resp[0], m.Size);
+        ABody := TEncoding.UTF8.GetString(Resp);
+      finally
+        m.Free;
+      end;
       Result := True;
     except
       on E: Exception do

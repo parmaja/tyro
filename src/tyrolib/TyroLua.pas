@@ -20,7 +20,7 @@
 interface
 
 uses
-  Classes, SysUtils, Types,
+  Classes, SysUtils, Types, Generics.Collections,
   LuaAPI, LuaClasses,
   RayLib, RayClasses, //remove it
   mnUtils, mnLogs, mnClasses, mnDON,
@@ -925,7 +925,13 @@ type
     //network & json
 
     function HttpGet_func(L: Plua_State): integer; cdecl;
+    function HttpPost_func(L: Plua_State): integer; cdecl;
     function JsonDecode_func(L: Plua_State): integer; cdecl;
+    function JsonEncode_func(L: Plua_State): integer; cdecl;
+    //savejson(value, "file") / loadjson("file"): the table-to-file pair on
+    //top of json_encode/json_decode, with openfile's workspace rules.
+    function SaveJson_func(L: Plua_State): integer; cdecl;
+    function LoadJson_func(L: Plua_State): integer; cdecl;
 
    public
     procedure Init; override;
@@ -2504,7 +2510,13 @@ begin
   //null->nil); together they let a script talk to web APIs, e.g.
   //local t = json_decode(http_get("https://api.open-meteo.com/v1/forecast?..."))
   Lua.State.RegisterGlobal('http_get', HttpGet_func);
+  Lua.State.RegisterGlobal('http_post', HttpPost_func);
   Lua.State.RegisterGlobal('json_decode', JsonDecode_func);
+  Lua.State.RegisterGlobal('json_encode', JsonEncode_func);
+  //savejson(value, "file") writes the JSON text of a value into a workspace
+  //file, loadjson("file") reads it back: a table saved is a table found again.
+  Lua.State.RegisterGlobal('savejson', SaveJson_func);
+  Lua.State.RegisterGlobal('loadjson', LoadJson_func);
 
   //require(name) is the stock loader's replacement: the Lua one is removed in
   //TLua.Init along with dofile/loadfile/package, and this one reads only from
@@ -5432,6 +5444,231 @@ begin
     L.PushString(AValue.AsString);
 end;
 
+const
+  cJsonMaxDepth = 128;
+
+//Append S to AOut as a JSON string member: quoted, with the escapes JSON
+//requires. Bytes above $7F ride along untouched: Lua strings are UTF-8 and
+//UTF-8 is valid JSON, so accents and glyphs survive the round trip.
+procedure JsonAppendEscaped(var AOut: string; const S: string);
+var
+  i: Integer;
+  c: Char;
+begin
+  AOut := AOut + '"';
+  for i := 1 to Length(S) do
+  begin
+    c := S[i];
+    case c of
+      '"': AOut := AOut + '\"';
+      '\': AOut := AOut + '\\';
+      #8: AOut := AOut + '\b';
+      #12: AOut := AOut + '\f';
+      #10: AOut := AOut + '\n';
+      #13: AOut := AOut + '\r';
+      #9: AOut := AOut + '\t';
+    else
+      if c < ' ' then
+        AOut := AOut + Format('\u%.4x', [Ord(c)])
+      else
+        AOut := AOut + c;
+    end;
+  end;
+  AOut := AOut + '"';
+end;
+
+//One Lua number as JSON text. Integers print plain; a float always uses a
+//dot as the decimal separator, whatever the machine's locale says. JSON has
+//no room for NaN or infinity, so those become null (like JSON.stringify).
+function JsonNumberText(L: Plua_State; AIdx: Integer): string;
+var
+  v: Double;
+  aSettings: TFormatSettings;
+begin
+  if lua_isinteger(L, AIdx) then
+    Exit(IntToStr(lua_tointeger(L, AIdx)));
+  v := lua_tonumber(L, AIdx);
+  if (v <> v) or ((v <> 0) and (v = v + v)) then
+    Exit('null'); //NaN, +Inf, -Inf
+  aSettings := DefaultFormatSettings;
+  aSettings.DecimalSeparator := '.';
+  aSettings.ThousandSeparator := ',';
+  Result := FloatToStr(v, aSettings);
+end;
+
+//Encode the Lua value at AIdx as JSON text, appended to AOut. A sequence of
+//1..n members becomes an array, everything else an object with the keys as
+//member names (numbers and booleans are quoted into names; keys of no JSON
+//name are skipped). nil answers null, and inside a table functions and
+//userdata are skipped rather than refused - a save file with a stray
+//callback in it still writes. AVisited guards a table that holds itself.
+//Returns False with a message when the value cannot be written.
+function EncodeJsonValue(L: Plua_State; AIdx: Integer; var AOut: string;
+  AVisited: TList<Pointer>; ADepth: Integer; out AError: string): Boolean;
+var
+  i, n, count, tt, absIdx: Integer;
+  p: Pointer;
+  IsArray, IsNil, first: Boolean;
+  key: string;
+begin
+  Result := False;
+  if ADepth > cJsonMaxDepth then
+  begin
+    AError := 'nested over ' + IntToStr(cJsonMaxDepth) + ' levels deep';
+    Exit;
+  end;
+  if AIdx < 0 then
+    absIdx := lua_gettop(L) + AIdx + 1
+  else
+    absIdx := AIdx;
+  tt := lua_type(L, absIdx);
+  case tt of
+    LUA_TNONE, LUA_TNIL:
+      AOut := AOut + 'null';
+    LUA_TBOOLEAN:
+      if lua_toboolean(L, absIdx) then
+        AOut := AOut + 'true'
+      else
+        AOut := AOut + 'false';
+    LUA_TNUMBER:
+      AOut := AOut + JsonNumberText(L, absIdx);
+    LUA_TSTRING:
+      JsonAppendEscaped(AOut, L.ToString(absIdx));
+    LUA_TTABLE:
+    begin
+      p := lua_topointer(L, absIdx);
+      if AVisited.IndexOf(p) >= 0 then
+      begin
+        AError := 'circular reference';
+        Exit;
+      end;
+      AVisited.Add(p);
+      try
+        //A plain 1..n sequence is an array; a hole, or any key riding
+        //beside the sequence, makes the whole table an object instead.
+        n := Integer(lua_rawlen(L, absIdx));
+        IsArray := n > 0;
+        if IsArray then
+          for i := 1 to n do
+          begin
+            lua_rawgeti(L, absIdx, i);
+            IsNil := lua_isnil(L, -1);
+            lua_pop(L, 1);
+            if IsNil then
+            begin
+              IsArray := False;
+              Break;
+            end;
+          end;
+        if IsArray then
+        begin
+          count := 0;
+          lua_pushnil(L);
+          while lua_next(L, absIdx) <> 0 do
+          begin
+            Inc(count);
+            lua_pop(L, 1);
+          end;
+          if count <> n then
+            IsArray := False;
+        end;
+        if IsArray then
+        begin
+          AOut := AOut + '[';
+          for i := 1 to n do
+          begin
+            if i > 1 then
+              AOut := AOut + ',';
+            lua_rawgeti(L, absIdx, i);
+            try
+              tt := lua_type(L, -1);
+              if (tt = LUA_TFUNCTION) or (tt = LUA_TUSERDATA) or (tt = LUA_TTHREAD) then
+                AOut := AOut + 'null' //a hole the script left, as JSON sees it
+              else if not EncodeJsonValue(L, -1, AOut, AVisited, ADepth + 1, AError) then
+                Exit;
+            finally
+              lua_pop(L, 1);
+            end;
+          end;
+          AOut := AOut + ']';
+        end
+        else
+        begin
+          AOut := AOut + '{';
+          first := True;
+          lua_pushnil(L); //the first key
+          while lua_next(L, absIdx) <> 0 do
+          begin
+            //key at -2, value at -1
+            key := '';
+            case lua_type(L, -2) of
+              LUA_TSTRING:
+                key := L.ToString(-2);
+              LUA_TNUMBER:
+                key := JsonNumberText(L, -2);
+              LUA_TBOOLEAN:
+                if lua_toboolean(L, -2) then
+                  key := 'true'
+                else
+                  key := 'false';
+            end;
+            if key <> '' then
+            begin
+              tt := lua_type(L, -1);
+              if (tt = LUA_TFUNCTION) or (tt = LUA_TUSERDATA) or (tt = LUA_TTHREAD) then
+                key := '' //members without a JSON value are left out
+              else
+              begin
+                if first then
+                  first := False
+                else
+                  AOut := AOut + ',';
+                JsonAppendEscaped(AOut, key);
+                AOut := AOut + ':';
+                if not EncodeJsonValue(L, -1, AOut, AVisited, ADepth + 1, AError) then
+                  Exit;
+              end;
+            end;
+            lua_pop(L, 1); //pop the value, keep the key for the next lua_next
+          end;
+          AOut := AOut + '}';
+        end;
+      finally
+        AVisited.Remove(p);
+      end;
+    end;
+  else
+    AError := 'cannot encode ' + string(lua_typename(L, tt));
+    Exit;
+  end;
+  Result := True;
+end;
+
+//Encode the value at AIdx as a full JSON document, guarding the top-level
+//types a document cannot be (a function is not JSON). Shared by json_encode,
+//savejson and the table body of http_post.
+function LuaValueToJson(L: Plua_State; AIdx: Integer; out AJson: string;
+  out AError: string): Boolean;
+var
+  Visited: TList<Pointer>;
+  tt: Integer;
+begin
+  AJson := '';
+  tt := lua_type(L, AIdx);
+  if (tt = LUA_TFUNCTION) or (tt = LUA_TUSERDATA) or (tt = LUA_TTHREAD) or
+    (tt = LUA_TLIGHTUSERDATA) then
+  begin
+    AError := 'cannot encode ' + string(lua_typename(L, tt));
+    Exit(False);
+  end;
+  Visited := TList<Pointer>.Create;
+  try
+    Result := EncodeJsonValue(L, AIdx, AJson, Visited, 0, AError);
+  finally
+    Visited.Free;
+  end;
+end;
+
 //json_decode(text) -> value | nil, err
 //Parses a JSON document (the answer of a web API, a file, ...) into the
 //matching Lua value; see PushDonValue for the mapping. On invalid input it
@@ -5457,6 +5694,179 @@ begin
       begin
         L.PushNil;
         L.PushString('json_decode: ' + E.Message);
+        Exit(2);
+      end;
+    end;
+    PushDonValue(L, Root);
+    Result := 1;
+  finally
+    Root.Free;
+  end;
+end;
+
+//json_encode(value) -> json text | nil, err
+//The mirror of json_decode: a 1..n sequence becomes an array, any other
+//table an object keyed by its member names, numbers/booleans/strings their
+//JSON twins and nil null. Functions and userdata are skipped inside a table
+//but refused at the top level, and a table that holds itself answers nil
+//plus a message - like the other helpers, it never raises.
+function TLuaScript.JsonEncode_func(L: Plua_State): integer; cdecl;
+var
+  aJson, aError: string;
+begin
+  if not LuaValueToJson(L, 1, aJson, aError) then
+  begin
+    L.PushNil;
+    L.PushString('json_encode: ' + aError);
+    Exit(2);
+  end;
+  L.PushString(aJson);
+  Result := 1;
+end;
+
+//http_post(url, body [, content_type]) -> response text | nil, err
+//The request runs on the script thread, like http_get. The body is a string
+//or a table: a table is encoded with json_encode and defaults to
+//application/json, a plain string defaults to text/plain. Without a body
+//the request posts nothing.
+function TLuaScript.HttpPost_func(L: Plua_State): integer; cdecl;
+var
+  aUrl, aData, aResp, aError, aType: string;
+begin
+  if not L.IsString(1) then
+  begin
+    L.PushNil;
+    L.PushString('http_post: missing url');
+    Exit(2);
+  end;
+  aUrl := L.ToString(1);
+  aData := '';
+  aType := 'application/json';
+  if L.ArgsCount >= 2 then
+  begin
+    if L.IsString(2) then
+    begin
+      aData := L.ToString(2);
+      aType := 'text/plain; charset=utf-8';
+    end
+    else
+    begin
+      //a table (or number/boolean/nil): the JSON text of it
+      if not LuaValueToJson(L, 2, aData, aError) then
+      begin
+        L.PushNil;
+        L.PushString('http_post: ' + aError);
+        Exit(2);
+      end;
+    end;
+  end;
+  if (L.ArgsCount >= 3) and L.IsString(3) then
+    aType := L.ToString(3);
+  aResp := '';
+  aError := 'http_post: engine is not running';
+  if (Engine = nil) or not Engine.HttpPost(aUrl, aData, aType, aResp, aError) then
+  begin
+    L.PushNil;
+    L.PushString(aError);
+    Exit(2);
+  end;
+  L.PushString(aResp);
+  Result := 1;
+end;
+
+//savejson(value, "file") -> true | nil, err
+//Write the JSON text of a value into a workspace file - the same name rules
+//openfile applies, so a path that walks outside the workspace is refused.
+//Returns nil plus a message for an unencodable value or a failed write.
+function TLuaScript.SaveJson_func(L: Plua_State): integer; cdecl;
+var
+  aName, aJson, aError, Resolved: string;
+begin
+  if not LuaValueToJson(L, 1, aJson, aError) then
+  begin
+    L.PushNil;
+    L.PushString('savejson: ' + aError);
+    Exit(2);
+  end;
+  if (L.ArgsCount < 2) or (not L.IsString(2)) or (L.ToString(2) = '') then
+  begin
+    L.PushNil;
+    L.PushString('savejson: missing file name');
+    Exit(2);
+  end;
+  aName := L.ToString(2);
+  Resolved := ResolveAndValidatePath(aName, Res.WorkPath);
+  if Resolved = '' then
+  begin
+    L.PushNil;
+    L.PushString('savejson: ''' + aName + ''' resolves outside the workspace');
+    Exit(2);
+  end;
+  try
+    SaveFileUTF8String(Resolved, UTF8String(aJson));
+  except
+    on E: Exception do
+    begin
+      L.PushNil;
+      L.PushString('savejson: ' + E.Message);
+      Exit(2);
+    end;
+  end;
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+//loadjson("file") -> value | nil, err
+//Read a workspace file and parse it with json_decode's rules. The pair of
+//savejson: a table saved is a table found again. Answers nil plus a message
+//for a name outside the workspace, a missing file or invalid JSON.
+function TLuaScript.LoadJson_func(L: Plua_State): integer; cdecl;
+var
+  aName, Resolved, aText: string;
+  Root: TDON_Value;
+begin
+  if (not L.IsString(1)) or (L.ToString(1) = '') then
+  begin
+    L.PushNil;
+    L.PushString('loadjson: missing file name');
+    Exit(2);
+  end;
+  aName := L.ToString(1);
+  Resolved := ResolveAndValidatePath(aName, Res.WorkPath);
+  if Resolved = '' then
+  begin
+    L.PushNil;
+    L.PushString('loadjson: ''' + aName + ''' resolves outside the workspace');
+    Exit(2);
+  end;
+  //RayLib's FileExists (the raylib one) shadows SysUtils' in this unit.
+  if not SysUtils.FileExists(Resolved) then
+  begin
+    L.PushNil;
+    L.PushString('loadjson: file not found: ' + aName);
+    Exit(2);
+  end;
+  try
+    //LoadFileString reads UTF-8 and drops a BOM, which a JSON parser
+    //counts as text, not as a byte-order mark.
+    aText := LoadFileString(Resolved);
+  except
+    on E: Exception do
+    begin
+      L.PushNil;
+      L.PushString('loadjson: ' + E.Message);
+      Exit(2);
+    end;
+  end;
+  Root := nil;
+  try
+    try
+      Root := JsonParseValueString(aText);
+    except
+      on E: Exception do
+      begin
+        L.PushNil;
+        L.PushString('loadjson: ' + E.Message);
         Exit(2);
       end;
     end;
