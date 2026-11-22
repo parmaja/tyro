@@ -62,9 +62,17 @@ function TryGamepadAxisNameToEnum(const Name: string; out Axis: TGamepadAxis): B
 
 function IsKeyPressed(const KeyName: string): Boolean;
 function IsKeyDown(const KeyName: string): Boolean;
+function IsKeyReleased(const KeyName: string): Boolean;
+function IsKeyUp(const KeyName: string): Boolean;
 function MouseX: Integer;
 function MouseY: Integer;
 function IsMouseButtonPressed(const ButtonName: string): Boolean;
+function IsMouseButtonDown(const ButtonName: string): Boolean;
+function IsMouseButtonReleased(const ButtonName: string): Boolean;
+function IsMouseButtonUp(const ButtonName: string): Boolean;
+{ Wheel movement since the last frame, in scroll steps (usually +/-1, fractions
+  on high-resolution mice). 0 when nothing scrolled. }
+function MouseWheelMove: Single;
 
 { --- Gamepad / Joystick queries (Gamepad: player index 0..3, or -1 for any connected) --- }
 
@@ -266,6 +274,16 @@ begin
   Result := RayLib.IsKeyDown(KeyNameToEnum(KeyName));
 end;
 
+function IsKeyReleased(const KeyName: string): Boolean;
+begin
+  Result := RayLib.IsKeyReleased(KeyNameToEnum(KeyName));
+end;
+
+function IsKeyUp(const KeyName: string): Boolean;
+begin
+  Result := RayLib.IsKeyUp(KeyNameToEnum(KeyName));
+end;
+
 function MouseX: Integer;
 begin
   Result := RayLib.GetMouseX;
@@ -282,6 +300,35 @@ var
 begin
   Result := TryMouseButtonNameToEnum(ButtonName, Button) and
     RayLib.IsMouseButtonPressed(Button);
+end;
+
+function IsMouseButtonDown(const ButtonName: string): Boolean;
+var
+  Button: TMouseButton;
+begin
+  Result := TryMouseButtonNameToEnum(ButtonName, Button) and
+    RayLib.IsMouseButtonDown(Button);
+end;
+
+function IsMouseButtonReleased(const ButtonName: string): Boolean;
+var
+  Button: TMouseButton;
+begin
+  Result := TryMouseButtonNameToEnum(ButtonName, Button) and
+    RayLib.IsMouseButtonReleased(Button);
+end;
+
+function IsMouseButtonUp(const ButtonName: string): Boolean;
+var
+  Button: TMouseButton;
+begin
+  Result := TryMouseButtonNameToEnum(ButtonName, Button) and
+    RayLib.IsMouseButtonUp(Button);
+end;
+
+function MouseWheelMove: Single;
+begin
+  Result := RayLib.GetMouseWheelMove;
 end;
 
 function GamepadAvailable(Gamepad: Integer): Boolean;

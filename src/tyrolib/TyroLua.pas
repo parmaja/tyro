@@ -698,12 +698,17 @@ type
 
   { TLuaMouse }
 
-  // mouse.x / mouse.y are read-only fields; mouse.pressed(button) is a method
+  // mouse.x / mouse.y / mouse.wheel are read-only fields; mouse.pressed(button)
+  // is the press edge, mouse.down(button) is held, mouse.released(button) is
+  // the release edge and mouse.up(button) is not-held
   TLuaMouse = class(TTyroLuaObject)
   protected
     function Getter(L: Plua_State): integer; override;
   public
     function Pressed_func(L: Plua_State): integer; cdecl;
+    function Down_func(L: Plua_State): integer; cdecl;
+    function Released_func(L: Plua_State): integer; cdecl;
+    function Up_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaQueue }
@@ -718,11 +723,14 @@ type
 
   { TLuaKeyboard }
 
-  // keyboard.pressed(key) is the press edge, keyboard.down(key) is held
+  // keyboard.pressed(key) is the press edge, keyboard.down(key) is held,
+  // keyboard.released(key) is the release edge and keyboard.up(key) is not-held
   TLuaKeyboard = class(TTyroLuaObject)
   public
     function Pressed_func(L: Plua_State): integer; cdecl;
     function Down_func(L: Plua_State): integer; cdecl;
+    function Released_func(L: Plua_State): integer; cdecl;
+    function Up_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaGamepad }
@@ -2208,13 +2216,18 @@ begin
   Lua.State.Register('spectrum', Spectrum); //Should be last one
 
   //input & timing (input tables + global functions)
-  //mouse: mouse.x / mouse.y are fields, mouse.pressed("left") is the button edge
+  //mouse: mouse.x / mouse.y / mouse.wheel are fields, mouse.pressed("left") is the button edge
   Lua.State.Register('mouse', 'pressed', Mouse, Mouse.Pressed_func);
+  Lua.State.Register('mouse', 'down', Mouse, Mouse.Down_func);
+  Lua.State.Register('mouse', 'released', Mouse, Mouse.Released_func);
+  Lua.State.Register('mouse', 'up', Mouse, Mouse.Up_func);
   Lua.State.Register('mouse', Mouse); //Should be last one
 
-  //keyboard: keyboard.pressed("space") / keyboard.down("a")
+  //keyboard: keyboard.pressed("space") / keyboard.down("a") / keyboard.released / keyboard.up
   Lua.State.Register('keyboard', 'pressed', Keyboard, Keyboard.Pressed_func);
   Lua.State.Register('keyboard', 'down', Keyboard, Keyboard.Down_func);
+  Lua.State.Register('keyboard', 'released', Keyboard, Keyboard.Released_func);
+  Lua.State.Register('keyboard', 'up', Keyboard, Keyboard.Up_func);
   Lua.State.Register('keyboard', Keyboard); //Should be last one
 
   //gamepad: gamepad.pressed("a" [, gamepad]) / gamepad.down / gamepad.released / gamepad.up
@@ -3710,6 +3723,12 @@ begin
   begin
     L.PushInteger(TyroInput.MouseY);
     Result := 1;
+  end
+  else if field = 'wheel' then
+  begin
+    // mouse.wheel - wheel movement this frame in scroll steps (0 = no scroll)
+    L.PushNumber(TyroInput.MouseWheelMove);
+    Result := 1;
   end;
 end;
 
@@ -3760,6 +3779,42 @@ begin
   Result := 1;
 end;
 
+function TLuaMouse.Down_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+begin
+  // mouse.down(["left"]) - true every frame while the button is held
+  s := L.ToString(1);
+  if s = '' then
+    s := 'left';
+  L.PushBoolean(TyroInput.IsMouseButtonDown(s));
+  Result := 1;
+end;
+
+function TLuaMouse.Released_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+begin
+  // mouse.released(["left"]) - true once on the release edge
+  s := L.ToString(1);
+  if s = '' then
+    s := 'left';
+  L.PushBoolean(TyroInput.IsMouseButtonReleased(s));
+  Result := 1;
+end;
+
+function TLuaMouse.Up_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+begin
+  // mouse.up(["left"]) - true while the button is not held
+  s := L.ToString(1);
+  if s = '' then
+    s := 'left';
+  L.PushBoolean(TyroInput.IsMouseButtonUp(s));
+  Result := 1;
+end;
+
 { TLuaKeyboard }
 
 function TLuaKeyboard.Pressed_func(L: Plua_State): integer; cdecl;
@@ -3779,6 +3834,26 @@ begin
   // keyboard.down("a") - true every frame while held
   s := L.ToString(1);
   L.PushBoolean(TyroInput.IsKeyDown(s));
+  Result := 1;
+end;
+
+function TLuaKeyboard.Released_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+begin
+  // keyboard.released("space") - true once on the release edge
+  s := L.ToString(1);
+  L.PushBoolean(TyroInput.IsKeyReleased(s));
+  Result := 1;
+end;
+
+function TLuaKeyboard.Up_func(L: Plua_State): integer; cdecl;
+var
+  s: string;
+begin
+  // keyboard.up("a") - true while the key is not held
+  s := L.ToString(1);
+  L.PushBoolean(TyroInput.IsKeyUp(s));
   Result := 1;
 end;
 

@@ -140,6 +140,8 @@ they work identically in Lua and PascalScript.
 |----------|-------------|----------|
 | `keyboard.pressed(key)` | True once when the key transitions from released to pressed | `"space"`, `"w"`, `"f1"` |
 | `keyboard.down(key)` | True every frame while the key is held | `"ctrl"`, `"up"`, `"a"` |
+| `keyboard.released(key)` | True once on the frame the key is released | `"space"`, `"a"` |
+| `keyboard.up(key)` | True every frame while the key is not held | `"a"`, `"shift"` |
 
 Supported key names: letters `a`-`z`, digits `0`-`9`, `space`, `enter`, `tab`,
 `escape`, `backspace`, `delete`, `insert`, `up`, `down`, `left`, `right`,
@@ -183,7 +185,11 @@ end
 |----------|-------------|----------|
 | `mouse.x` | Current mouse X position | — |
 | `mouse.y` | Current mouse Y position | — |
+| `mouse.wheel` | Wheel movement this frame, in scroll steps (usually `+1`/`-1`, `0` when nothing scrolled) | — |
 | `mouse.pressed([button])` | True once when a mouse button is pressed (default `"left"`) | `"left"`, `"right"`, `"middle"` |
+| `mouse.down([button])` | True every frame while the button is held — what drag needs | `"left"` |
+| `mouse.released([button])` | True once on the frame a button is released | `"left"` |
+| `mouse.up([button])` | True every frame while the button is not held | `"left"` |
 
 ```lua
 window.show()
