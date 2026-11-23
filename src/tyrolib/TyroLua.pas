@@ -10138,7 +10138,10 @@ begin
     Lua.State.SetField(-2, '__handle'); //map.__handle = AHandle
 
     //methods receive the map table injected as argument 1
-    Lua.State.Register('load', Load_func);
+    //Self.Load_func on purpose: inside `with Script do' a bare Load_func would
+    //silently bind TLuaScript.Load_func (the global load() persistence call),
+    //not the tileset loader.
+    Lua.State.Register('load', Self.Load_func);
     Lua.State.Register('resize', Resize_func);
     Lua.State.Register('fill', Fill_func);
     Lua.State.Register('clear', Clear_func);
