@@ -6348,14 +6348,17 @@ begin
 end;
 
 //file:lines() -> an iterator over the lines that are left, so "for line in
-//f:lines()" works. What remains is read once into FLines and handed out one line
-//per step; a second call replaces the pending iterator, like the io library.
+//f:lines()" works. Lines are streamed in small chunks: the old version read
+//the whole remainder into one AnsiString, which could spike memory when a kid
+//pointed it at a large file. A second call replaces the pending iterator.
 function TLuaFile.Lines_func(L: Plua_State): integer; cdecl;
+const
+  cLineChunk = 65536;
+  cMaxLines = 100000;
+  cMaxLineLen = 1024 * 1024;
 var
-  Buf: AnsiString;
-  LineStr: AnsiString;
-  Start, I, Len, idx: Integer;
-  base: Integer;
+  Buf, Pending, LineStr: AnsiString;
+  I, Got, idx, base: Integer;
 begin
   if not FIsOpen then
   begin
@@ -6369,34 +6372,38 @@ begin
     FLines.Clear;
   FLinesPos := 0;
 
-  //Take what is left in one go and cut it into lines by hand; TextString would
-  //stop at a #0 byte and lose the rest of a binary file.
-  Buf := '';
-  Len := FStream.Size - FStream.Position;
-  SetLength(Buf, Len);
-  if Len > 0 then
-    FStream.ReadBuffer(Buf[1], Len);
-
-  Start := 1;
-  for I := 1 to Len do
-    if Buf[I] = #10 then
-    begin
-      //Content runs Start..I-1, so the length is I - Start. The trailing #13
-      //of a CRLF file is stripped below, which keeps CRLF and LF both correct.
-      LineStr := Copy(Buf, Start, I - Start);
-      if (LineStr <> '') and (LineStr[Length(LineStr)] = #13) then
-        Delete(LineStr, Length(LineStr), 1);
-      FLines.Add(LineStr);
-      Start := I + 1;
-    end;
-  //a last line without a trailing newline still counts
-  if Start <= Len then
+  SetLength(Buf, cLineChunk);
+  Pending := '';
+  while (FStream.Position < FStream.Size) and (FLines.Count < cMaxLines) do
   begin
-    LineStr := Copy(Buf, Start, Len - Start + 1);
-    if (LineStr <> '') and (LineStr[Length(LineStr)] = #13) then
-      Delete(LineStr, Length(LineStr), 1);
-    FLines.Add(LineStr);
+    Got := FStream.Read(Buf[1], cLineChunk);
+    if Got <= 0 then
+      Break;
+    for I := 1 to Got do
+      if Buf[I] = #10 then
+      begin
+        LineStr := Pending;
+        //Strip the #13 of a CRLF pair so both line endings read the same.
+        if (LineStr <> '') and (LineStr[Length(LineStr)] = #13) then
+          Delete(LineStr, Length(LineStr), 1);
+        FLines.Add(LineStr);
+        Pending := '';
+        if FLines.Count >= cMaxLines then
+          Break;
+      end
+      else if Length(Pending) < cMaxLineLen then
+        Pending := Pending + Buf[I];
   end;
+  //A last line without a trailing newline still counts.
+  if (Pending <> '') and (FLines.Count < cMaxLines) then
+  begin
+    if Pending[Length(Pending)] = #13 then
+      Delete(Pending, Length(Pending), 1);
+    FLines.Add(Pending);
+  end;
+  if ((FStream.Position < FStream.Size) or (FLines.Count >= cMaxLines)) and
+     (Engine <> nil) then
+    Engine.Notice(Format('Hint: file:lines() stopped at %d lines', [cMaxLines]));
 
   //Return the same three values the io library does: the step function, the
   //state handed back on every step, and the control variable. Lua takes the top
@@ -6618,9 +6625,19 @@ begin
     L.PushString(aMsg);
     Exit(2);
   end;
-  //the stock require calls the chunk with the module name as its argument
+  //The stock require calls the chunk with the module name as its argument.
+  //Use pcall: a module that calls error() must not longjmp past these managed
+  //Pascal locals (aName, Resolved, aMsg); return nil + message like the loader.
   lua_pushstring(L, PUTF8Char(UTF8String(aName))); //[chunk, name]
-  lua_call(L, 1, 1); //[value]
+  if lua_pcall(L, 1, 1, 0) <> LUA_OK then //[error]
+  begin
+    aMsg := 'require: ' + aName + ': ' + L.ToString(-1);
+    L.Pop(1);
+    L.PushNil;
+    L.PushString(aMsg);
+    Exit(2);
+  end;
+  //[value]
 
   if lua_isnil(L, -1) then
     //a module that returns nothing runs again on the next require, as before
@@ -6650,11 +6667,25 @@ begin
     L.PushString('http_get: missing url');
     Exit(2);
   end;
+  if StopScriptRequested then
+  begin
+    L.PushNil;
+    L.PushString('http_get: stopped');
+    Exit(2);
+  end;
   aError := 'http_get: engine is not running';
   if (Engine = nil) or not Engine.HttpGet(L.ToString(1), aBody, aError) then
   begin
     L.PushNil;
     L.PushString(aError);
+    Exit(2);
+  end;
+  //The socket call itself has a bounded 10 s connect / 15 s read timeout;
+  //once it returns, F5 must win over delivering a stale response.
+  if StopScriptRequested then
+  begin
+    L.PushNil;
+    L.PushString('http_get: stopped');
     Exit(2);
   end;
   L.PushString(aBody);
@@ -7022,12 +7053,24 @@ begin
   end;
   if (L.ArgsCount >= 3) and L.IsString(3) then
     aType := L.ToString(3);
+  if StopScriptRequested then
+  begin
+    L.PushNil;
+    L.PushString('http_post: stopped');
+    Exit(2);
+  end;
   aResp := '';
   aError := 'http_post: engine is not running';
   if (Engine = nil) or not Engine.HttpPost(aUrl, aData, aType, aResp, aError) then
   begin
     L.PushNil;
     L.PushString(aError);
+    Exit(2);
+  end;
+  if StopScriptRequested then
+  begin
+    L.PushNil;
+    L.PushString('http_post: stopped');
     Exit(2);
   end;
   L.PushString(aResp);
@@ -7322,9 +7365,14 @@ begin
       // Run the DoExecute on the Engine thread via Synchronize.
       // The object is NOT freed by the engine; we free it here.
       Reader.Run(Script.Thread);
-      //TThread.Synchronize(ScriptThread, procedure begin sleep(1000) end);
-      // Wait for user to press Enter (signaled from Engine thread callback)
-      if Reader.Wait then
+      //Wait in short slices so F5 / stop can end a script that is waiting
+      //for input instead of freezing on an un-signalled event.
+      while not Reader.Wait(100) do
+        if StopScriptRequested then
+          Break;
+      if StopScriptRequested then
+        L.PushString('')
+      else
         // Push the result string to Lua
         L.PushString(Reader.ResultString);
       Result := 1;
@@ -7364,6 +7412,17 @@ begin
   end;
   if L.ArgsCount >= 3 then
     aCodePage := L.ToString(3);
+  //A huge size makes raylib bake an enormous glyph atlas (and can raise
+  //EInvalidOp). Keep it in a sane range before it reaches the loader.
+  if (aSize <> 0) and ((aSize < 1) or (aSize > 256)) then
+  begin
+    if aSize < 1 then
+      aSize := 1
+    else
+      aSize := 256;
+    if Engine <> nil then
+      Engine.Notice(Format('Hint: font size is out of range; using %d', [aSize]));
+  end;
   Shell := Res.FontShell(aFile, aSize, aCodePage);
   FScript.AddQueueObject(TLoadFontObject.Create(Shell.FontId));
   L.PushInteger(Shell.FontId);

@@ -270,6 +270,8 @@ type
     FLastErrorRaw: string;
     FLastErrorLine: Integer;
     FLastErrorMsg: string;
+    FErrorBaseMsg: string; //first line of the current error, for repeat counts
+    FErrorRepeat: Integer;
     //* Command line lifecycle (see AutoLifecycle): --exit ends the session
     //* after FExitAfterSeconds, a bare --exit once the main script thread
     //* finished, and --screenshot captures the screen after
@@ -1195,8 +1197,7 @@ begin
         except
           on E: Exception do
           begin
-            if IsConsole then
-              WriteLn('EX-QUEUE: ' + ClassName+ ', ' + E.ClassName + ', ' + E.Message);
+            Notice('EX-QUEUE: ' + ClassName + ', ' + E.ClassName + ', ' + E.Message);
             //A failing queue object must not leak, abort the rest of the queue,
             //or leave the canvas half-drawn (EndDraw below still runs); log and
             //move on to the next queued object.
@@ -2702,18 +2703,28 @@ begin
     Exit;
   Include(FScriptState, ssFailed);
   if AError = FLastErrorRaw then
+  begin
+    //Same failure from the next frame: keep the banner honest instead of
+    //de-duplicating the error into silence.
+    Inc(FErrorRepeat);
+    FLastErrorMsg := FErrorBaseMsg + Format(' (still failing x%d)', [FErrorRepeat]);
+    if Editor <> nil then
+      Editor.ErrorMessage := FLastErrorMsg;
     Exit;
+  end;
   FLastErrorRaw := AError;
   if ParseLuaErrorLine(AError, ALine, ACleanMsg) then
   begin
     FLastErrorLine := ALine;
-    FLastErrorMsg := ACleanMsg;
+    FLastErrorMsg := StringReplace(ACleanMsg, #10, ' ', [rfReplaceAll]);
   end
   else
   begin
     FLastErrorLine := 0;
-    FLastErrorMsg := Trim(AError);
+    FLastErrorMsg := StringReplace(Trim(AError), #10, ' ', [rfReplaceAll]);
   end;
+  FErrorBaseMsg := FLastErrorMsg;
+  FErrorRepeat := 1;
   if Editor <> nil then
   begin
     Editor.ErrorLine := FLastErrorLine;
@@ -2730,7 +2741,7 @@ begin
   //default, with the two keys that actually help a kid recover.
   if Output <> nil then
   begin
-    Output.Writeln('ERROR: ' + ACleanMsg);
+    Output.Writeln('ERROR: ' + FLastErrorMsg);
     if FLastErrorLine > 0 then
       Output.Writeln(Format('  at line %d', [FLastErrorLine]));
     Output.Writeln('  Press F2 to edit, F5 to run again.');
@@ -3118,6 +3129,8 @@ begin
   FLastErrorRaw := '';
   FLastErrorLine := 0;
   FLastErrorMsg := '';
+  FErrorBaseMsg := '';
+  FErrorRepeat := 0;
   if Editor <> nil then
   begin
     Editor.ErrorLine := 0;

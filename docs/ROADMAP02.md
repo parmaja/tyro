@@ -60,8 +60,11 @@ split big tasks into subtasks).
 - [x] Added `tests/roadmap02_p0_api_test.tyro` (17 checks, including negative
       checks that the retired spellings stay absent) and its golden
       `roadmap02_p0_api_out.txt`; both pass with exit 0.
-- [ ] Still to do: fold the new checks into a single documented test runner
-      (see P2 hygiene) so the whole suite is repeatable, not just this file.
+- [x] One runner for all P0 checks:
+      `powershell -ExecutionPolicy Bypass -File tests\run_roadmap02.ps1` from
+      the repo root. It checks exit codes for 10 scripts plus the banner
+      screenshot command; all 10 passed after the final rebuild. The runner
+      lives in `tests/`, which is gitignored, so it stays untracked on disk.
 
 ### P0-2 — Errors and asset failures are invisible in a GUI session
 
@@ -85,22 +88,17 @@ split big tasks into subtasks).
       shaders simply leave the game running without that effect.
 - [x] **P0-2 complete.** The remaining banner/placeholder items in the older
       [`ROADMAP.md`](ROADMAP.md) P2 are now covered here.
-- [ ] Show the console or a red in-window error card on script failure;
-      route engine hints to the visible Output panel; keep "Press F2 to edit"
-      actionable.
-- [ ] Missing image: `WriteLn('Image not loaded: …')` plus an empty cached
-      texture, no placeholder (`TyroClasses.pas:1901-1927`, `:1066-1068`).
-      Missing sprite: console-only (`TyroSprites.pas:2520-2527`,
-      `TyroLua.pas:9502-9504`). Add a friendly placeholder and a plain-language
-      "put the file next to your script" message.
-- [ ] No stack trace: `luaL_traceback` is declared (`LuaAPI.pas:547,868`) but
-      never used. `ParseLuaErrorLine` takes the first `:digits:` in the message
-      (`TyroEngines.pas:2590-2605`), so a string containing `:12:` can highlight
-      the wrong line.
-- [ ] Queued-work exceptions are logged only when a console exists
-      (`TyroEngines.pas:1163-1174`).
-- [ ] Repeated callback errors are de-duplicated into silence
-      (`TyroEngines.pas:2620-2621`); show a "still failing ×N" count.
+- [x] Error card + visible hints: red banner, Output mirror and "F2 to edit,
+      F5 to run again" are all in place (slices 1–3).
+- [x] Missing image/sprite get a magenta/black checker; sounds and shaders
+      report a plain-language "put the file next to your script" message.
+- [x] `TLuaHelper.RunString` now compiles with a fixed `@tyro_script` chunk
+      name (so `:12:` in a string cannot fool the line parser) and appends
+      `luaL_traceback`; the banner shows a one-line summary.
+- [x] Queued-work exceptions go through `Notice` (visible Output panel) instead
+      of `WriteLn` gated on `IsConsole`.
+- [x] Repeated identical callback errors now update the banner with
+      "(still failing xN)" instead of disappearing into de-duplication.
 
 ### P0-3 — Bare `--exit` hangs when the script errors — ✅ done 2026-11-26
 
@@ -131,10 +129,12 @@ split big tasks into subtasks).
       also caps duration at 10 s as a last line of defence for direct callers.
 - [x] Verified with `tests/roadmap02_p0_sound_test.tyro`: four absurd durations
       clamp with hints and exit 0; `demos/sound.tyro` still exits 0.
-- [ ] Still open: `font.load` size (`TyroLua.pas:7242-7251`), `file:lines()`
-      whole-file reads (`TyroLua.pas:6260-6264`), and `require`'s unprotected
-      `lua_call` (`TyroLua.pas:6509`, an `error()` in a module longjmps past
-      managed Pascal locals).
+- [x] `font.load` size is clamped to 1..256 with a hint; `file:lines()` now
+      streams 64 KB chunks (100k-line / 1 MB-per-line caps) instead of reading
+      the whole remainder; `require` uses `lua_pcall` and returns `nil, msg`
+      when a module calls `error()`, instead of longjmpping past managed locals.
+- [x] Verified with `tests/roadmap02_p0_robustness_test.tyro` (3 checks), the
+      24-check `font_test.tyro`, and `test_openfile.tyro`.
 
 ### P0-5 — F5 / Stop cannot interrupt every loop — ✅ done 2026-11-26
 
@@ -149,10 +149,12 @@ split big tasks into subtasks).
 - [x] Verified with `tests/roadmap02_p0_watchdog_test.tyro` (infinite `update`
       loop aborts with a "took too long" message, `--exit:5` ends the process),
       plus `demos/animated_demo.tyro` and `demos/bounce_demo.tyro` still exit 0.
-- [ ] Known limits (follow-up, not P0): `http_get`/`http_post` and
-      `console.read()` are single blocking C calls; F5 can only act after they
-      return (the built-in 10 s connect / 15 s read bounds still apply).
-      There is still no global break key; `Ctrl+C` is copy in the terminal.
+- [x] `http_get` / `http_post` check `StopScriptRequested` before and after
+      the socket call (bounded by the built-in 10 s connect / 15 s read
+      timeouts), and `console.read()` waits in 100 ms slices so F5 can end a
+      waiting script. No infinite block remains reachable from a kid script.
+- [ ] Follow-up (not P0): a global break key for a script blocked inside a
+      single native call; `Ctrl+C` is still copy in the terminal.
 
 ---
 
