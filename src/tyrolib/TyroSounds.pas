@@ -414,6 +414,13 @@ var
 begin
   if (Duration <= 0) or (SampleRate <= 0) or not Assigned(Proc) then
     Exit;
+  //Last line of defence: Wave.FrameCount is a Cardinal and the allocation is
+  //FrameCount * SizeOf(SmallInt). A script that hands us an absurd duration
+  //must wrap the count or try to allocate gigabytes. Ten seconds at 44.1 kHz
+  //is already far beyond any game effect. The Lua bindings clamp earlier and
+  //tell the player what happened; this guards direct engine callers too.
+  if Duration > 10.0 then
+    Duration := 10.0;
   Wave := Default(TWave);
   Wave.FrameCount := Round(Duration * SampleRate);
   Wave.SampleRate := SampleRate; // By default 44100 Hz

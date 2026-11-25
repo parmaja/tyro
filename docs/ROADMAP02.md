@@ -100,19 +100,22 @@ split big tasks into subtasks).
 - [x] Verified: failing script exits 1, `test_cli_exit_script.tyro` exits 0,
       engine-driven `demos/bounce_demo.tyro` still exits 0 with bare `--exit`.
 
-### P0-4 — One line of kid code can kill the engine, silently
+### P0-4 — One line of kid code can kill the engine, silently — ✅ done 2026-11-26
 
-- [ ] `sound.play(440, 2000000000)` passes an unbounded millisecond value
-      (`TyroLua.pas:4855-4861`) → `Round(Duration * SampleRate)` into a 32-bit
-      `Cardinal` → multi-GB `MemAlloc` (`TyroSounds.pas:418-428`,
-      `RayLib.pas:507-509`). The exception is swallowed by `EX-QUEUE` when no
-      console is open (`TyroEngines.pas:1163-1174`).
-- [ ] Clamp sound duration the way `images.new` already clamps size
-      (`TyroLua.pas:7710-7717`); same treatment for `font.load` size
-      (`TyroLua.pas:7242-7251`) and `file:lines()` whole-file reads
-      (`TyroLua.pas:6260-6264`).
-- [ ] `require` uses unprotected `lua_call` (`TyroLua.pas:6509`): an `error()`
-      in a required module longjmps past managed Pascal locals.
+- [x] `sound.play(440, 2000000000)` used to pass an unbounded millisecond value
+      → `Round(Duration * SampleRate)` into a 32-bit `Cardinal` → multi-GB
+      `MemAlloc`; the resulting exception was swallowed by `EX-QUEUE` when no
+      console was open.
+- [x] All Lua-facing sound durations (`music.beep`, `music.sound`,
+      `sound.beep`, `sound.noise`, `sound.play`) now go through
+      `ClampSoundPeriod` (10 s max) with a plain hint. `TTyroRayWave.Generate`
+      also caps duration at 10 s as a last line of defence for direct callers.
+- [x] Verified with `tests/roadmap02_p0_sound_test.tyro`: four absurd durations
+      clamp with hints and exit 0; `demos/sound.tyro` still exits 0.
+- [ ] Still open: `font.load` size (`TyroLua.pas:7242-7251`), `file:lines()`
+      whole-file reads (`TyroLua.pas:6260-6264`), and `require`'s unprotected
+      `lua_call` (`TyroLua.pas:6509`, an `error()` in a module longjmps past
+      managed Pascal locals).
 
 ### P0-5 — F5 / Stop cannot interrupt every loop
 

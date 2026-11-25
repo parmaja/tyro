@@ -4683,6 +4683,24 @@ begin
   Result := 0;
 end;
 
+//A duration passed from Lua is milliseconds; the waveform generator allocates
+//SampleRate * Seconds samples, so an outrageous value must never reach it.
+//Ten seconds is already far longer than any game effect needs.
+const
+  cMaxSoundPeriodMs = 10000;
+
+function ClampSoundPeriod(APeriod: Integer): Integer;
+begin
+  if APeriod > cMaxSoundPeriodMs then
+  begin
+    Log.WriteLn(Format('Hint: sound duration %d ms is too long; using %d ms',
+      [APeriod, cMaxSoundPeriodMs]));
+    Result := cMaxSoundPeriodMs;
+  end
+  else
+    Result := APeriod;
+end;
+
 { TLuaMusic }
 
 function TLuaMusic.Beep_func(L: Plua_State): integer; cdecl;
@@ -4696,7 +4714,7 @@ begin
   end
   else
     Period := 500;
-  FScript.AddQueueObject(TBeepObject.Create(Period));
+  FScript.AddQueueObject(TBeepObject.Create(ClampSoundPeriod(Period)));
   Result := 0;
 end;
 
@@ -4770,7 +4788,7 @@ begin
     else
       Period := 500;
   end;
-  Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
+  Script.AddQueueObject(TPlaySoundObject.Create(Freq, ClampSoundPeriod(Period), WaveName));
   Result := 0;
 end;
 
@@ -4785,13 +4803,13 @@ begin
   begin
     Freq := 0;
     Period := round(L.ToNumber(1));
-    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
+    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, ClampSoundPeriod(Period)));
   end
   else
   begin
     Freq := round(L.ToNumber(1));
     Period := round(L.ToNumber(2));
-    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, Period));
+    FScript.AddQueueObject(TPlayNoiseObject.Create(Freq, ClampSoundPeriod(Period)));
   end;
   Result := 0;
 end;
@@ -4807,7 +4825,7 @@ begin
   end
   else
     Period := 500;
-  FScript.AddQueueObject(TBeepObject.Create(Period));
+  FScript.AddQueueObject(TBeepObject.Create(ClampSoundPeriod(Period)));
   Result := 0;
 end;
 
@@ -4859,7 +4877,7 @@ begin
             Period := 500;
           if Period <= 0 then
             Period := 500;
-          Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, ''));
+          Script.AddQueueObject(TPlaySoundObject.Create(Freq, ClampSoundPeriod(Period), ''));
           Success := True;
         end;
       end
@@ -4901,7 +4919,7 @@ begin
               Period := 500;
             if (WaveForms = nil) or (WaveForms.Find(WaveName) <> nil) then
             begin
-              Script.AddQueueObject(TPlaySoundObject.Create(Freq, Period, WaveName));
+              Script.AddQueueObject(TPlaySoundObject.Create(Freq, ClampSoundPeriod(Period), WaveName));
               Success := True;
             end;
           end;
