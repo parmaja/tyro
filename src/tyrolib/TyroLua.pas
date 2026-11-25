@@ -878,6 +878,7 @@ type
   TLuaGame = class(TTyroLuaObject)
   public
     function PausePressed_func(L: Plua_State): integer; cdecl;
+    function PauseDown_func(L: Plua_State): integer; cdecl;
     function StartPressed_func(L: Plua_State): integer; cdecl;
     function FirePressed_func(L: Plua_State): integer; cdecl;
     function FireDown_func(L: Plua_State): integer; cdecl;
@@ -1063,10 +1064,10 @@ type
     //top of json_encode/json_decode, with openfile's workspace rules.
     function SaveJson_func(L: Plua_State): integer; cdecl;
     function LoadJson_func(L: Plua_State): integer; cdecl;
-    procedure GetSaveDoc(L: Plua_State);
-    procedure InvalidateSaveCache(L: Plua_State; const AResolved: string);
     function Save_func(L: Plua_State): integer; cdecl;
     function Load_func(L: Plua_State): integer; cdecl;
+    procedure GetSaveDoc(L: Plua_State);
+    procedure InvalidateSaveCache(L: Plua_State; const AResolved: string);
 
    public
     procedure Init; override;
@@ -2619,6 +2620,7 @@ begin
   //game: the shared gameplay button pairs; the implementations are TTyroEngine
   //methods.
   Lua.State.Register('game', 'pause_pressed', Game, Game.PausePressed_func);
+  Lua.State.Register('game', 'pause_down', Game, Game.PauseDown_func);
   Lua.State.Register('game', 'start_pressed', Game, Game.StartPressed_func);
   Lua.State.Register('game', 'fire_pressed', Game, Game.FirePressed_func);
   Lua.State.Register('game', 'fire_down', Game, Game.FireDown_func);
@@ -2817,9 +2819,9 @@ begin
   Lua.State.Register('controls', 'align', Controls, Controls.Align_func);
   Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
   //caption/text: both spellings work on a caption control, and text also
-  //covers an edit; btn.caption and btn.text are the field spellings of both
-{ TODO
-  //No derived properties method should not accessed by controls
+  //covers an edit; btn.caption and btn.text are the field spellings of both.
+  //Keep the table forms too: docs, demos and existing scripts use them, and
+  //they are thin wrappers around the same queued operations as the fields.
   Lua.State.Register('controls', 'caption', Controls, Controls.Caption_func);
   Lua.State.Register('controls', 'text', Controls, Controls.Text_func);
   Lua.State.Register('controls', 'checked', Controls, Controls.Checked_func);
@@ -2835,7 +2837,6 @@ begin
   Lua.State.Register('controls', 'itemindex', Controls, Controls.ItemIndex_func);
   //image control: load the texture an image shows (img.load(...) is the same)
   Lua.State.Register('controls', 'load', Controls, Controls.LoadImage_func);
-}
   Lua.State.Register('controls', Controls); //should be last one
 
   //output (catches print/println/log)
@@ -2977,7 +2978,7 @@ begin
     FLastError := S;
   if IsConsole then
     WriteLn(S);
-  if (Engine <> nil) and (GetCurrentThreadId = MainThreadID) then
+  if (Engine <> nil) and (TThread.Current.ThreadID = MainThreadID) then
     Engine.ReportScriptError(S);
 end;
 
@@ -5519,6 +5520,13 @@ begin
   Result := 1;
 end;
 
+function TLuaGame.PauseDown_func(L: Plua_State): integer; cdecl;
+begin
+  //game.pause_down() - true every frame while p or a pad start/menu is held
+  L.PushBoolean(Engine.PauseDown);
+  Result := 1;
+end;
+
 function TLuaGame.StartPressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.start_pressed() - true once on space/enter or start/menu/a/x/fire
@@ -6636,7 +6644,7 @@ begin
   v := lua_tonumber(L, AIdx);
   if (v <> v) or ((v <> 0) and (v = v + v)) then
     Exit('null'); //NaN, +Inf, -Inf
-  aSettings := DefaultFormatSettings;
+  aSettings := FormatSettings;
   aSettings.DecimalSeparator := '.';
   aSettings.ThousandSeparator := ',';
   Result := FloatToStr(v, aSettings);

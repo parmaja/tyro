@@ -108,7 +108,7 @@ slower than a frame. It exists to check that a body grouped with `enter()` /
 normal scripts do not need it.
 
 For sound, `music.beep()`, `music.sound(freq, ms)` or `music.sound(wave, freq,
-ms)`, `music.noise(ms)` (white) / `music.noise(freq, ms)` (pitched) and
+ms)`, `sound.noise(ms)` (white) / `sound.noise(freq, ms)` (pitched) and
 `music.mml(...)` play one-shot effects and tunes. The `music.volume` property
 (0..1) sets the level of the `music.mml` **melodies only** - one-shot sounds
 and loops keep their own volume - and reading it returns the current level.

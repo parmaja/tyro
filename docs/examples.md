@@ -27,11 +27,11 @@ tyro demos/<name>.tyro
 | `demos/console_demo.tyro` | Console output: print, println, log |
 | `demos/terminal_demo.tyro` | Built-in terminal commands: dir, list, clear, help, exit |
 | `demos/console_read_demo.tyro` | Interactive console.read() — prompt the user for input from Lua |
-| `demos/music_demo.tyro` | Sound effects (music.sound, music.noise) and MML melodies (music.mml) |
+| `demos/music_demo.tyro` | Sound effects (music.sound, sound.noise) and MML melodies (music.mml) |
 | `demos/colors_bar.tyro` | Full color palette display |
 | `demos/multiply.tyro` | Drawing + MML sound |
 | `demos/text.tyro` | Multi-language text rendering |
 | `demos/shader_demo.tyro` | Post-processing shaders: water, glow, gray, sepia, invert, vignette, pixelate |
-| `demos/shake_demo.tyro` | Screen shake: `shake(ms, power)` / `window.shake(ms, power)` — the world jolts like an accident or an error |
+| `demos/shake_demo.tyro` | Screen shake: `world.shake(ms, power)` / `shake(ms, power)` — the world jolts like an accident or an error |
 | `demos/torus_demo.tyro` | Free camera: ride the inside of a generated torus loop, boost hoops feed your speed, a chase eye rolls with the tube — `world.camera` / `models.torus` |
 

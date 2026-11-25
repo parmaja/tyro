@@ -420,6 +420,8 @@ type
     //* True once, on the press edge of a pause button: keyboard "p", or
     //* gamepad "start"/"menu" on any pad.
     function PausePressed: Boolean;
+    //* Like PausePressed but true every frame while the button stays held.
+    function PauseDown: Boolean;
     //* True once, on the press edge of a confirm button: keyboard "space" or
     //* "enter", or gamepad "start"/"menu"/"a"/"x"/"fire".
     function StartPressed: Boolean;
@@ -1233,6 +1235,13 @@ begin
   Result := TyroInput.IsKeyPressed('p')
     or TyroInput.IsGamepadPressed('start')
     or TyroInput.IsGamepadPressed('menu');
+end;
+
+function TTyroEngine.PauseDown: Boolean;
+begin
+  Result := TyroInput.IsKeyDown('p')
+    or TyroInput.IsGamepadDown('start')
+    or TyroInput.IsGamepadDown('menu');
 end;
 
 function TTyroEngine.StartPressed: Boolean;

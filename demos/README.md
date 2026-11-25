@@ -74,7 +74,7 @@ tyro demos/pong.tyro
 
 | File | Feature |
 |------|---------|
-| `music_demo.tyro` | music.sound() tones, music.noise() (white/pitched) and music.mml() melodies |
+| `music_demo.tyro` | music.sound() tones, sound.noise() (white/pitched) and music.mml() melodies |
 | `music.tyro` | A two-voice MML score: the Pink Panther theme as `music.mml(melody, harmony)` |
 | `sound.tyro` | One-shot `music.sound` tones with a `pause()` hold between them |
 | `multiply.tyro` | Drawing + MML sound effects |
@@ -86,7 +86,7 @@ tyro demos/pong.tyro
 | File | Feature |
 |------|---------|
 | `shader_demo.tyro` | Post-processing shaders: `shader.effect`, `shader.value`, `shader.area` and `shader.load("custom.frag")` |
-| `shake_demo.tyro` | Screen shake: `shake(ms, power)` / `window.shake(ms, power)`, `window.shaking` — the world jolts and fades out, like an accident or an error |
+| `shake_demo.tyro` | Screen shake: `world.shake(ms, power)` / `shake(ms, power)`, `world.shaking` — the world jolts and fades out, like an accident or an error |
 
 ### Input
 

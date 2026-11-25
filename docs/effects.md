@@ -124,9 +124,9 @@ window.
 
 | Function | Description |
 |----------|-------------|
-| `shake(ms [, power])` | Shake the world for *ms* milliseconds; `power` is the maximum offset in pixels (10 by default) |
-| `window.shake(ms [, power])` | The same function on the `window` table |
-| `window.shaking` | Read-only boolean — `true` while a shake is still running |
+| `world.shake(ms [, power])` | Shake the world for *ms* milliseconds; `power` is the maximum offset in pixels (10 by default) |
+| `world.shaking` | Read-only boolean — `true` while a shake is still running |
+| `shake(ms [, power])` | Deprecated global spelling of `world.shake` |
 | `shake(0)` | Stop a running shake |
 
 A new call restarts the shake, so a longer or harder one simply wins. See
@@ -140,7 +140,7 @@ shake(800, 40)
 
 function update(dt)
     if keyboard.pressed("space") then
-        window.shake(400)  -- 400ms with the default power
+        world.shake(400)   -- 400ms with the default power
     end
 end
 

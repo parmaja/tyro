@@ -50,8 +50,8 @@ its own check, these are only the shared defaults.
 | `*_down()` | hold version of the `*_pressed` call | |
 
 The `*_pressed` calls are true once, on the frame the button is pressed - use
-them for menus and shots. The `*_down` calls (`fire_down`, `a_down`, `b_down`,
-`x_down`, `y_down`, `l_down`, `r_down`, `start_down`, `select_down`) are true
+them for menus and shots. The `*_down` calls (`pause_down`, `fire_down`, `a_down`,
+`b_down`, `x_down`, `y_down`, `l_down`, `r_down`, `start_down`, `select_down`) are true
 every frame the button stays held - good for auto-fire and throttles.
 
 ```lua
