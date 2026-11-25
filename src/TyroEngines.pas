@@ -42,8 +42,8 @@ uses
   TyroSpriteEditor, SpriteAtlas;
 
 const
-  TyroVersion: Double = 0.1;
-  TyroVersionString = '0.1';
+  TyroVersion: Double = 0.8;
+  TyroVersionString = '0.8';
 
   sPromptChar: UTF8string = '>';
   sPromptDOT: UTF8string = '*';

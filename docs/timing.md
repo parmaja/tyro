@@ -257,7 +257,7 @@ end
 
 `enter()`/`leave()` nest (they count up and down), and a script that stops or
 errors between them is released automatically so the next run never inherits a
-frozen queue. See [docs/atomic.md](atomic.md) for the commit-watermark
+frozen queue. See [the engine loop](engine-loop.md) for the commit-watermark
 details.
 
 ## Measuring the queue (queue.*)

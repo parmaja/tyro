@@ -22,7 +22,7 @@ sounds, and the physics.
 | --- | --- |
 | [Getting started](getting-started.md) | command line, script arguments, first example |
 | [Input](input.md) | `keyboard.*`, `mouse.*`, `touch.*`, `gamepad.*` |
-| [Game helper](game.md) | `game.*` — score, lives, game-over glue |
+| [Game helper](game.md) | `game.*` button pairs, `score.*` high scores, math helpers |
 | [Files](files.md) | `openfile`, the workspace and its paths |
 | [Network](network.md) | `http.*`, `json.*` |
 | [Console](console.md) | the built-in terminal and its commands |
@@ -32,7 +32,7 @@ sounds, and the physics.
 | [3D models](models.md) | loading models, lights and shadows |
 | [Cameras](cameras.md) | the free 3D camera and the 2D camera |
 | [Shader effects & screen shake](effects.md) | built-in shader presets, custom shaders, `shake.*` |
-| [Controls](controls.md) | in-window buttons, sliders, labels, images |
+| [Controls](controls.md) | in-window buttons, labels, checkboxes, edits, lists, images |
 | [Timing](timing.md) | `update`/`draw`, `after`/`every`, `tween`, `on`/`emit`, `collision.joint`, `save`/`load`, `enter`/`leave`, `queue.*` |
 | [Examples](examples.md) | what to read in `demos/` |
 | [Threading & lifecycle](threading.md) | the script thread, the queue, how objects die |
@@ -46,5 +46,7 @@ why they work the way they do: [drawing](../help/drawing.md),
 [MML music](../help/mml.md), [particles](../help/particles.md),
 [save](../help/save.md), [touch](../help/touch.md), [tween](../help/tween.md).
 
-Engine internals live beside this index: [the engine loop](engine-loop.md),
-[atomic drawing](atomic.md), and the [roadmap](ROADMAP.md) of what is coming.
+Engine internals live beside this index: [the engine loop](engine-loop.md)
+(which also covers `enter()`/`leave()` grouping), the [roadmap](ROADMAP.md),
+and the newer [ROADMAP02.md](ROADMAP02.md) with the kid-facing gaps closed in
+November.

@@ -27,7 +27,13 @@ local answer = http_post("https://api.example.com/scores", { name = "ana", score
 
 `json_decode` answers `nil` plus a message for a bare top-level number or
 boolean (`"42"`, `"false"`) — the underlying parser reads objects, arrays and
-strings. See `games/weather/weather.tyro` for a full app built on both
-functions, `tests/test_http_json.tyro` and `tests/test_json_http.tyro` for
-runnable checks (the live POST skips itself when the network is dark).
+strings. `tests/test_http_json.tyro` and `tests/test_json_http.tyro` are
+runnable checks for both functions (the live POST skips itself when the network
+is dark).
+
+For streaming audio, `radio.play(url)` starts an internet radio station and
+`radio.pause()` / `radio.resume()` / `radio.stop()` control it; `radio.title`
+and `radio.bitrate` describe the stream. `spectrum.show(...)` and
+`spectrum.bars(...)` draw a live analyser of the playing audio. Both tables are
+registered by the engine and share the workspace-safe script thread.
 

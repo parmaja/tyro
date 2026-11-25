@@ -104,8 +104,10 @@ Notes in [`help/fonts.md`](../help/fonts.md).
 `canvas.test(ms)` is a **diagnostic** draw: it draws a marker rectangle and then
 spends about *ms* milliseconds on the main thread, emulating a single draw call
 slower than a frame. It exists to check that a body grouped with `enter()` /
-`leave()` is still drawn as one group (see [docs/atomic.md](atomic.md));
-normal scripts do not need it.
+`leave()` is still drawn as one group (see
+[the engine loop](engine-loop.md));
+normal scripts do not need it. Grouping commands with `enter()` / `leave()` is
+covered in [the engine loop](engine-loop.md).
 
 For sound, `music.beep()`, `music.sound(freq, ms)` or `music.sound(wave, freq,
 ms)`, `sound.noise(ms)` (white) / `sound.noise(freq, ms)` (pitched) and

@@ -67,7 +67,7 @@ tyro demos/pong.tyro
 | `console.tyro` | Console placement and style: `console.align`, `console.margin`, `console.borderColor` |
 | `output.tyro` | The `output` control: print/println/log mirrored into a window panel (the console still gets them too) |
 | `console_demo.tyro` | Console output: print, println, log |
-| `terminal_demo.tyro` | Built-in terminal commands: dir, list, clear, help, exit |
+| `terminal_demo.tyro` | Built-in terminal commands: list, clear, help, new, sprite, run, exit |
 | `console_read_demo.tyro` | Interactive console.read() — prompt the user for input from Lua |
 
 ### Sound & Music
@@ -78,8 +78,6 @@ tyro demos/pong.tyro
 | `music.tyro` | A two-voice MML score: the Pink Panther theme as `music.mml(melody, harmony)` |
 | `sound.tyro` | One-shot `music.sound` tones with a `pause()` hold between them |
 | `multiply.tyro` | Drawing + MML sound effects |
-| `midi_demo.tyro` | Standard MIDI File playback (`midi.play`, `pause`, `resume`, `stop`) with the position, tempo and spectrum of the song |
-| `spectrum_demo.tyro` | Internet radio + live stereo spectrum analyzer (`spectrum.show`, `spectrum.bars`) |
 
 ### Effects
 

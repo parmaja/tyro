@@ -84,6 +84,6 @@ while true do
 end
 ```
 
-See `games/dungeon/dungeon.tyro` for a small game built on this API (a static
-terrain map plus a second map used as an entity overlay).
+See `tests/test_tiles.tyro` and `demos/tile.png` for runnable examples of this
+API (a static terrain map plus a second map used as an entity overlay).
 

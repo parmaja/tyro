@@ -27,14 +27,14 @@ These work while the engine is running, whatever has the keyboard focus:
 | Key | Description |
 |-----|-------------|
 | `F1` | Toggle the keyboard shortcuts help panel (lists every shortcut below) |
-| `F2` | Toggle the script editor. Opening it stops the script; closing it (also with `ESC`) saves the edited source back to the script and runs it |
+| `F2` | Toggle the script editor. Opening it stops the script; closing it (also with `ESC`) copies the edited buffer back to the in-memory source. Press `F5` to run it |
 | `F3` | Toggle the sprite editor |
 | `F4` | Toggle the script picker (`*.tyro` and `*.lua`) |
 | `F5` | Rerun the loaded script on a new script thread |
 | `F7` | Toggle the output panel |
 | `F8` | Toggle the console |
 | `CTRL`+`F10` | Toggle the queue/frame statistics panel in the top-left corner |
-| `CTRL`+`S` | In the editor: save the source back and rerun the script |
+| `CTRL`+`S` | In the editor: write the source to the script file (then `F5` to run) |
 
 The script that is edited and rerun is the one loaded with `load` or picked with
 `F4`; every run gets a fresh copy of its source, so the editor never changes a
@@ -105,8 +105,16 @@ end
 | `gamepad.name([gamepad])` | The pad's name, or empty when there is no pad | — |
 | `gamepad.pressed(button [, gamepad])` | True once when a pad button transitions to pressed | `"a"`, `"start"`, `"dpad_up"` |
 | `gamepad.down(button [, gamepad])` | True every frame while a pad button is held | `"a"`, `"lb"`, `"dpad_left"` |
+| `gamepad.released(button [, gamepad])` | True once on the release edge | `"a"` |
+| `gamepad.up(button [, gamepad])` | True while the button is not held | `"a"` |
 | `gamepad.axis(axis [, gamepad])` | Axis value in -1..1 (0 without a pad) | `"leftx"`, `"lefty"`, `"rightx"`, `"righty"`, `"ltrigger"`, `"rtrigger"` |
+| `gamepad.axes([gamepad])` | All axis values as a table | — |
+| `gamepad.count()` | Number of connected pads | — |
+| `gamepad.vibrate(left, right [, duration [, gamepad]])`, `gamepad.rumble(...)` | Rumble motors (0..1); duration defaults to 0.1 s | — |
 | `gamepad.mappings(text)` | Add gamepad mappings in SDL/GLFW format; returns nonzero when accepted | — |
+
+Every `gamepad.*` call also works as `joystick.*` — the two tables are aliases,
+so flight-stick scripts can use whichever name reads better.
 
 Supported button names: `a`, `b`, `x`, `y`, `lb`, `rb`, `lt`, `rt`, `start`,
 `select`, `guide`, `lstick`, `rstick`, `dpad_up`, `dpad_down`, `dpad_left`,

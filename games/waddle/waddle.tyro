@@ -23,9 +23,9 @@
 --  the whole puzzle. crowd.tyro holds the rules the crowd plays by and
 --  tests/test_waddle_crowd.tyro proves them.
 --
---  Note: the engine's sprite and tile handles want the dot form of their
---  methods (sp.load("f.png")); the colon form currently reports the file as
---  not loaded, so every call below is spelled with a dot.
+--  Both spellings work for sprite/tile methods: sp.load("f.png") and
+--  sp:load("f.png") are equivalent. This game uses the dot form throughout
+--  for consistency; it is not a workaround for an engine limitation.
 --======================================================================
 
 local Terrain = require("terrain")

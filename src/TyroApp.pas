@@ -371,7 +371,7 @@ begin
   RunConsole := RunConsole or IsConsole;
   if RunConsole then
   begin
-    WriteLn('Tyro version 0.1');
+    WriteLn('Tyro version ' + TyroVersionString);
     InstallConsoleLog;
   end;
 

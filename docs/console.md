@@ -16,14 +16,16 @@ The following commands are built in:
 | `run` | Run the loaded script (like `F5`; reruns it when it is already running) |
 | `stop` | Stop the running script |
 | `state` | Show which script is loaded and whether it is running |
+| `new [game\|draw\|sprite] [name]` | Create a starter script in the editor |
 | `edit` | Open the script editor (like `F2`) |
+| `sprite` | Open the sprite editor (like `F3`) |
 | `exit`, `quit` | Hide the console and stop the engine |
 | `ESC` | Hide the console (keybinding) |
 
 Example:
 ```
-tyro demos/terminal_demo.lua
-# then type "dir" at the console prompt
+tyro demos/terminal_demo.tyro
+# then type "list" at the console prompt
 ```
 
 Holding a key auto-repeats it at the prompt: typed characters, `BACKSPACE`,

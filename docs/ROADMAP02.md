@@ -162,30 +162,28 @@ split big tasks into subtasks).
 
 ### P1-1 — Docs drift
 
-- [ ] `docs/input.md:30,37` promise that closing F2 or Ctrl+S saves **and
-      reruns**; the rerun call is commented out (`TyroEngines.pas:2526`) and
-      `EditorSave` only writes the file (`:2737-2760`). Decide: implement the
-      rerun or fix the docs.
-- [ ] `docs/console.md:26` teaches `dir`, which is not registered; the real
-      commands `new` and `sprite` are undocumented (`TyroEngines.pas:3344,3346`).
-- [ ] `docs/README.md:35` claims sliders; `controls.new` has none
-      (`TyroLua.pas:8615-8617`).
-- [ ] `docs/README.md:25` calls `game.*` "score, lives, game-over glue"; it is
-      only button polling (`TyroLua.pas:2621-2644`).
-- [ ] Undocumented implemented APIs: `gamepad.released/up/count/axes/vibrate/
-      rumble`, the whole `joystick.*` alias table (`TyroLua.pas:2592-2617`),
-      `radio.*`, `spectrum.*` (`:2554-2564`).
+- [x] Fixed `docs/input.md`: closing F2 copies the buffer to the in-memory
+      source, Ctrl+S writes the file, and F5 reruns — matching the code.
+- [x] `docs/console.md` now uses `list` instead of `dir` and documents the real
+      `new` / `sprite` commands; `demos/README.md` lists them too.
+- [x] Removed the phantom "sliders" claim from `docs/README.md:35`, and fixed
+      the `game.*` description to button pairs + `score.*` high scores.
+- [x] Documented the missing APIs in `docs/input.md` (gamepad released/up/
+      count/axes/vibrate/rumble and the `joystick.*` alias) and `docs/network.md`
+      (`radio.*` / `spectrum.*`).
+- [ ] Follow-up (not P1-critical): an in-app API reference with examples; the
+      `help` console command still lists commands only.
 
 ### P1-2 — Broken references
 
-- [ ] `docs/atomic.md` linked from `docs/README.md:50`,
-      `docs/getting-started.md:107`, `docs/timing.md:260` — file absent.
-- [ ] `docs/network.md:30` → `games/weather/weather.tyro` (folder absent but
-      still in `games/games.conf:10`).
-- [ ] `docs/tilemaps.md:87` → `games/dungeon/dungeon.tyro` (same, `games.conf:4`).
-- [ ] `demos/README.md:81-82` → `midi_demo.tyro`, `spectrum_demo.tyro` absent;
-      no `midi.*` API is registered at all.
-- [ ] `docs/console.md:25` → `terminal_demo.lua`; the real file is `.tyro`.
+- [x] All three dead `atomic.md` links now point to `engine-loop.md`, which
+      owns the `enter()`/`leave()` grouping section.
+- [x] Removed the missing `games/weather` and `games/dungeon` references from
+      `docs/network.md`, `docs/tilemaps.md` and `games/games.conf`.
+- [x] Removed the nonexistent `midi_demo.tyro` / `spectrum_demo.tyro` rows from
+      `demos/README.md`; no `midi.*` API exists.
+- [x] `terminal_demo.lua` → `terminal_demo.tyro` in `docs/console.md`.
+- [x] Verified: no broken relative links remain in `docs/` or `help/`.
 
 ### P1-3 — Onboarding
 
@@ -198,10 +196,10 @@ split big tasks into subtasks).
       `sleep(16)` and frame-count-based speed (`pong.tyro:18,49-145`) instead of
       the `dt`-scaled loop taught in `docs/timing.md`. Nine demos use
       `while true do`.
-- [ ] `demos/diag_sprite.tyro:12` uses `pcall` — against AGENTS.md.
-- [ ] `games/waddle/waddle.tyro:26-28` claims the colon form is broken and
-      teaches dot-only calls; the engine supports both (`TyroLua.pas:7320-7332,
-      10108-10119`).
+- [x] `demos/diag_sprite.tyro` no longer uses `pcall`; engine calls report
+      their own failures, as AGENTS.md requires.
+- [x] Corrected the stale comment in `games/waddle/waddle.tyro`: both dot and
+      colon spellings work.
 
 ### P1-4 — Kid-level helpers still missing
 
@@ -239,8 +237,9 @@ split big tasks into subtasks).
       `music.noise` / `window.shake` spellings now live in
       `tests/roadmap02_p0_api_test.tyro`. No test checks that doc links or
       demo-index files exist.
-- [ ] Version mismatch: CLI prints `Tyro version 0.1` (`TyroApp.pas:374`) while
-      `version.conf` says `0.8`.
+- [x] Version mismatch fixed: `TyroVersion`/`TyroVersionString` are `0.8`,
+      the CLI prints the constant instead of a hard-coded `0.1`, and the Lua
+      global `version` now reports 0.8 too.
 - [ ] Asset creation still depends on Python: 11 games ship `make_assets.py`
       despite AGENTS.md preferring Lua/Tyro asset creation. F3 cannot export
       PNG/atlas; no asset browser ([`ROADMAP.md`](ROADMAP.md) P8).
