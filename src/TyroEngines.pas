@@ -2660,6 +2660,16 @@ begin
     if FLastErrorLine > 0 then
       Console.Writeln(Format('  -> Line %d: %s (Press F2 to edit)', [FLastErrorLine, FLastErrorMsg]));
   end;
+  //The console is hidden until F8, so in a normal GUI run the message above
+  //is invisible. Mirror the first failure into Output, which is visible by
+  //default, with the two keys that actually help a kid recover.
+  if Output <> nil then
+  begin
+    Output.Writeln('ERROR: ' + ACleanMsg);
+    if FLastErrorLine > 0 then
+      Output.Writeln(Format('  at line %d', [FLastErrorLine]));
+    Output.Writeln('  Press F2 to edit, F5 to run again.');
+  end;
 end;
 
 function TTyroEngine.HttpGet(const AUrl: string; out ABody: string; out AError: string): Boolean;

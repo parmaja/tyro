@@ -65,12 +65,14 @@ split big tasks into subtasks).
 
 ### P0-2 — Errors and asset failures are invisible in a GUI session
 
-- [ ] `ReportScriptError` writes only to `Console.Writeln`
-      (`TyroEngines.pas:2638-2643`) while the console is created hidden
-      (`:1742`). Typo hints go to the same sink via `Engine.LogWrite`
-      (`:3648-3651`); `print()` goes to the visible Output panel, so a kid sees
-      their own output but never the engine's error. No in-window banner exists
-      (still open in [`ROADMAP.md`](ROADMAP.md) P2).
+- [x] First slice (2026-11-26): `ReportScriptError` now mirrors the message,
+      line number and "Press F2 to edit, F5 to run again" into the visible
+      `Output` panel as well as the hidden console. A kid in a normal GUI run
+      can see the failure without opening F8.
+- [ ] Still open: typo hints still go only to the hidden console via
+      `Engine.LogWrite` (`TyroEngines.pas:3648-3651`); no red in-window banner
+      (still open in [`ROADMAP.md`](ROADMAP.md) P2); missing assets still draw
+      nothing instead of a placeholder.
 - [ ] Show the console or a red in-window error card on script failure;
       route engine hints to the visible Output panel; keep "Press F2 to edit"
       actionable.
