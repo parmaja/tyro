@@ -52,6 +52,9 @@ var
   // Debug switch: when True, DBG messages are written to the console.
   // Off by default (globals are zero-initialized) to keep the output clean.
   IsDebug: Boolean = False;
+  //* Set by StopScriptRun so script-side blocking calls (sleep/pause) can
+  //* return early when the player presses F5 or the engine stops the run.
+  StopScriptRequested: Boolean = False;
 
 type
 
@@ -3111,6 +3114,7 @@ begin
   ClearScriptParticles;
   Clear;
   FScriptState := [];
+  StopScriptRequested := False;
   FLastErrorRaw := '';
   FLastErrorLine := 0;
   FLastErrorMsg := '';
@@ -3277,6 +3281,7 @@ end;
 //so a following run starts from a clean slate.
 procedure TTyroEngine.StopScriptRun;
 begin
+  StopScriptRequested := True;
   CancelWaiting;
   StopScriptThread;
   Lock.Enter;

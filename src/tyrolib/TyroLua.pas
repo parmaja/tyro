@@ -1110,6 +1110,49 @@ var
   SaveDocKey: Integer;
   SaveAgeKey: Integer;
 
+//A runaway update()/draw() runs on the main thread, so F5 (polled by
+//ProcessInput) can never reach it. Install a temporary count hook around each
+//callback and abort Lua after a few seconds of one callback body.
+const
+  cCallbackTimeoutMs = 3000;
+
+var
+  GCallbackDeadline: QWord = 0;
+  GCallbackTimedOut: Boolean = False;
+  GCallbackOldHook: lua_Hook = nil;
+  GCallbackOldMask: Integer = 0;
+  GCallbackOldCount: Integer = 0;
+
+procedure CallbackWatchHook(L: Plua_State; ar: Plua_Debug); cdecl;
+begin
+  //ar is supplied by Lua; the deadline, not the line, decides the abort.
+  if (GCallbackDeadline <> 0) and (GetTickCount64 > GCallbackDeadline) then
+  begin
+    GCallbackTimedOut := True;
+    luaL_error(L, PUTF8Char('Callback took too long - possible infinite loop'));
+  end;
+  //Keep the state-termination check the script's original hook performs.
+  if Assigned(GCallbackOldHook) then
+    GCallbackOldHook(L, ar);
+end;
+
+procedure BeginCallbackWatch(L: Plua_State);
+begin
+  GCallbackOldHook := lua_gethook(L);
+  GCallbackOldMask := lua_gethookmask(L);
+  GCallbackOldCount := lua_gethookcount(L);
+  GCallbackTimedOut := False;
+  GCallbackDeadline := GetTickCount64 + cCallbackTimeoutMs;
+  lua_sethook(L, @CallbackWatchHook, LUA_MASKCOUNT, 100);
+end;
+
+procedure EndCallbackWatch(L: Plua_State);
+begin
+  lua_sethook(L, GCallbackOldHook, GCallbackOldMask, GCallbackOldCount);
+  GCallbackDeadline := 0;
+  GCallbackOldHook := nil;
+end;
+
 //Handler kinds for the event bus (TLuaHandler.Kind) and the names the engine
 //itself emits: the reserved on() spellings listed in help/events.md.
 const
@@ -1123,6 +1166,25 @@ const
   cEventJointStretch = 'joint_stretch'; // a slide hit or left its max: (a, b, "taut"/"slack")
   cEventTouch = 'touch'; // a finger (or the mouse) landed: (x, y)
 
+//A raw sleep() cannot be interrupted: the Lua count hook only runs between
+//bytecodes, not while a C call blocks. Sleep in small steps and watch the
+//engine's stop flag so F5 can end a script that is waiting.
+procedure InterruptibleSleep(AMs: Int64);
+const
+  cStep = 20;
+var
+  Step: Integer;
+begin
+  while (AMs > 0) and not StopScriptRequested do
+  begin
+    Step := cStep;
+    if AMs < Step then
+      Step := AMs;
+    sleep(Step);
+    Dec(AMs, Step);
+  end;
+end;
+
 //global functions
 function sleep_func(L: Plua_State): integer; cdecl;
 var
@@ -1133,7 +1195,7 @@ begin
   n := Round(L.ToNumber(1));
   //sleep() is a yield point: drop the enqueue baseline so the wait itself is
   //not reported as a stall between two queued commands.
-  sleep(n);
+  InterruptibleSleep(n);
   Result := 0;
 end;
 
@@ -1150,7 +1212,7 @@ begin
   if Engine <> nil then
     Engine.BeginScriptPause;
   try
-    sleep(n);
+    InterruptibleSleep(n);
   finally
     if Engine <> nil then
       Engine.EndScriptPause;
@@ -2995,6 +3057,7 @@ begin
   if Lua.State = nil then
     Exit;
   Lua.SetReady;
+  GCallbackTimedOut := False;
   //Publish the failure state for the CLI --exit lifecycle: the worker thread
   //reads this after the run and the Engine loop surfaces it as the exit code.
   FLastError := '';
@@ -3043,6 +3106,8 @@ procedure TLuaScript.EngineUpdate(ADeltaTime: Double);
 begin
   if Lua.State = nil then
     Exit;
+  BeginCallbackWatch(Lua.State);
+  try
   //The timer beat rides the stretched frame time: fire everything that is
   //due first, so a callback's marks show in the very frame that answers it.
   PumpTimers(ADeltaTime);
@@ -3072,16 +3137,34 @@ begin
   if Stopped then
     Exit; //an update handler may have called exit()
   CallGlobal('update', 1);
+  finally
+    EndCallbackWatch(Lua.State);
+    if GCallbackTimedOut then
+    begin
+      DoError('update() took too long - possible infinite loop; stopping the run');
+      Stop;
+    end;
+  end;
 end;
 
 procedure TLuaScript.EngineDraw;
 begin
   if Lua.State = nil then
     Exit;
-  CallGlobal('draw', 0);
-  //on("draw", fn) listeners paint after the global draw(), same beat
-  if HandlerCountNamed(cEventDraw) > 0 then
-    Dispatch(cEventDraw, Lua.State, 0, 0);
+  BeginCallbackWatch(Lua.State);
+  try
+    CallGlobal('draw', 0);
+    //on("draw", fn) listeners paint after the global draw(), same beat
+    if HandlerCountNamed(cEventDraw) > 0 then
+      Dispatch(cEventDraw, Lua.State, 0, 0);
+  finally
+    EndCallbackWatch(Lua.State);
+    if GCallbackTimedOut then
+    begin
+      DoError('draw() took too long - possible infinite loop; stopping the run');
+      Stop;
+    end;
+  end;
 end;
 
 // True while at least one after()/every() timer still waits. A script that

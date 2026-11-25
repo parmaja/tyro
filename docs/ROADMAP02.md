@@ -136,21 +136,23 @@ split big tasks into subtasks).
       `lua_call` (`TyroLua.pas:6509`, an `error()` in a module longjmps past
       managed Pascal locals).
 
-### P0-5 — F5 / Stop cannot interrupt every loop
+### P0-5 — F5 / Stop cannot interrupt every loop — ✅ done 2026-11-26
 
-- [ ] The hook only runs on Lua bytecode. It cannot stop `while true` inside
-      main-thread `update()`/`draw()` (`TyroEngines.pas:749-763`), where
-      `ProcessInput` (and F5 itself) is never polled.
-- [ ] It cannot interrupt blocking C calls: `sleep` / `pause`
-      (`TyroLua.pas:1126-1157`), `http_get` / `http_post` (10 s connect / 15 s
-      read, `TyroEngines.pas:2664-2665,2699-2700`), `console.read()`
-      (`TyroLua.pas:7205-7216`).
-- [ ] `StopScriptThread` blocks the main thread with
-      `while not FScriptThread.Completed do CheckSynchronize(10)` + `WaitFor`
-      (`TyroEngines.pas:1620-1622`), so the window appears hung. `Ctrl+C` is
-      copy in the terminal (`TyroTerminal.pas:1388-1394`), not break.
-- [ ] Add a deadline/cancel token for native calls and an engine-level break
-      key that reaches the main-thread callbacks.
+- [x] Main-thread callbacks now run under a temporary 3-second count hook
+      (`CallbackWatchHook` in `TyroLua.pas`). `while true` inside `update()` or
+      `draw()` raises a Lua error, reports it in the Output panel and stops the
+      run, so the window stays responsive. The original termination hook is
+      chained and restored afterwards.
+- [x] `sleep()` / `pause()` now sleep in 20 ms steps and watch
+      `StopScriptRequested`, so F5 / `stop` ends a waiting script instead of
+      blocking until the full duration expires.
+- [x] Verified with `tests/roadmap02_p0_watchdog_test.tyro` (infinite `update`
+      loop aborts with a "took too long" message, `--exit:5` ends the process),
+      plus `demos/animated_demo.tyro` and `demos/bounce_demo.tyro` still exit 0.
+- [ ] Known limits (follow-up, not P0): `http_get`/`http_post` and
+      `console.read()` are single blocking C calls; F5 can only act after they
+      return (the built-in 10 s connect / 15 s read bounds still apply).
+      There is still no global break key; `Ctrl+C` is copy in the terminal.
 
 ---
 
