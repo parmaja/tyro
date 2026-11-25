@@ -150,9 +150,9 @@ EditViewName=c:\program files (x86)\embarcadero\studio\37.0\SOURCE\RTL\SYS\Syste
 
 [ClosedView_RDpcbGFiXHBhc2NhbFx0eXJvXHNyY1x0eXJvbGliXFR5cm9MdWEucGFz]
 Module=D:\lab\pascal\tyro\src\tyrolib\TyroLua.pas
-CursorX=7
-CursorY=4765
-TopLine=4755
+CursorX=35
+CursorY=2980
+TopLine=2970
 LeftCol=1
 Elisions=
 Bookmarks=
@@ -290,9 +290,9 @@ EditViewName=c:\program files (x86)\embarcadero\studio\37.0\source\rtl\common\Sy
 
 [ClosedView_RDpcbGFiXHBhc2NhbFx0eXJvXHNyY1x0eXJvbGliXFR5cm9TcHJpdGVzLnBhcw==]
 Module=D:\lab\pascal\tyro\src\tyrolib\TyroSprites.pas
-CursorX=1
-CursorY=1
-TopLine=1
+CursorX=30
+CursorY=325
+TopLine=315
 LeftCol=1
 Elisions=
 Bookmarks=

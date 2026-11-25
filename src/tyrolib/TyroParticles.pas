@@ -141,7 +141,7 @@ begin
   //Sparks are decoration, but two runs that explode the same jet should not
   //spray the identical pattern; seed the jitter from the clock. Zero would
   //lock a xorshift at zero, so nudge it into play.
-  FRand := Cardinal(GetTickCount64 and $7FFFFFFF) or $5F3759DF;
+  FRand := Cardinal(TThread.GetTickCount64 and $7FFFFFFF) or $5F3759DF;
 end;
 
 //xorshift32: a handful of bit ops, good enough for a spark's jitter, and it

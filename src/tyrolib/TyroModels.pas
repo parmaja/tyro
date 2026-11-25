@@ -72,6 +72,7 @@ unit TyroModels;
 {$mode delphi}
 {$ENDIF}
 {$H+}{$M+}
+{$POINTERMATH ON}
 
 interface
 

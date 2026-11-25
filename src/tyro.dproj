@@ -115,7 +115,6 @@
         <VerInfo_Locale>1033</VerInfo_Locale>
         <Debugger_DebugSourcePath>D:\lab\pascal\tyro\src\tyrolib\;$(Debugger_DebugSourcePath)</Debugger_DebugSourcePath>
         <DCC_DUPLICATE_CTOR_DTOR>false</DCC_DUPLICATE_CTOR_DTOR>
-        <Debugger_RunParams>D:\lab\pascal\tyro\games\mazerogue\img\enemy_kamikaze.sprite</Debugger_RunParams>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
