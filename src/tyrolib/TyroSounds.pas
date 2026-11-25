@@ -319,6 +319,9 @@ function Missile_Waveform(Index, SampleRate: Integer; Frequency: Single): Single
 
 implementation
 
+uses
+  TyroClasses; //for OnAssetMissing (interface of TyroClasses uses this unit)
+
 var
   PlayingMelodies: TList = nil;
   PlayingWaveforms: TList = nil;
@@ -577,8 +580,14 @@ begin
     Exit;
   //Same forgiving contract as PlaySoundFile: a missing or undecodable file is
   //ignored and the caller gets nil instead of an exception.
-  if (AFileName = '') or not SysUtils.FileExists(AFileName) then
+  if AFileName = '' then
     Exit;
+  if not SysUtils.FileExists(AFileName) then
+  begin
+    if Assigned(OnAssetMissing) then
+      OnAssetMissing('Sound not found: ' + AFileName + ' - put the file next to your script.');
+    Exit;
+  end;
   RayLibSound.Open;
   Item := TTyroFileSound.CreateFromFile(AFileName);
   if not Item.Valid then
@@ -624,8 +633,14 @@ var
 begin
   //Same forgiving contract as PlayWaveform: a missing or undecodable file is
   //ignored instead of raising, so a typo in a game script cannot kill the run.
-  if (AFileName = '') or not SysUtils.FileExists(AFileName) then
+  if AFileName = '' then
     Exit;
+  if not SysUtils.FileExists(AFileName) then
+  begin
+    if Assigned(OnAssetMissing) then
+      OnAssetMissing('Sound not found: ' + AFileName + ' - put the file next to your script.');
+    Exit;
+  end;
   if SoundMuted then
     Exit;
   if PlayingWaveforms = nil then

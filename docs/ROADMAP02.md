@@ -77,8 +77,14 @@ split big tasks into subtasks).
       cache it, so one absent PNG neither blanks the game nor logs every frame.
       Verified with `tests/roadmap02_p0_feedback_test.tyro` (unknown member +
       missing image) — exits 0.
-- [ ] Still open: red in-window error banner and sprite/shader/sound missing
-      placeholders (still open in [`ROADMAP.md`](ROADMAP.md) P2).
+- [x] Third slice (2026-11-26): `DrawErrorBanner` paints a red strip at the
+      bottom of the window while the last failure is unfixed (cleared on rerun).
+      Verified with `tests/roadmap02_p0_banner_test.tyro` + `--screenshot:1`.
+- [x] Missing sprites get the same magenta/black checker (sprite-owned texture),
+      missing sounds and shaders report through `OnAssetMissing`, and invalid
+      shaders simply leave the game running without that effect.
+- [x] **P0-2 complete.** The remaining banner/placeholder items in the older
+      [`ROADMAP.md`](ROADMAP.md) P2 are now covered here.
 - [ ] Show the console or a red in-window error card on script failure;
       route engine hints to the visible Output panel; keep "Press F2 to edit"
       actionable.

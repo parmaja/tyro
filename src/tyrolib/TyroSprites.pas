@@ -322,12 +322,11 @@ type
     FSize: integer;
     FCount: integer;
     FHard: boolean;
-    FHandles: array of integer;
+    FHandles: TArray<integer>;
   protected
     procedure DoExecute; override;
   public
-    constructor Create(const AName: string; ASize, ACount: integer;
-      AHard: boolean = False);
+    constructor Create(const AName: string; ASize, ACount: integer; AHard: boolean = False);
     property Handles: TArray<integer> read FHandles;
   end;
 
@@ -453,6 +452,24 @@ implementation
 
 uses
   TyroEngines, Aseprites;
+
+//A fresh magenta/black checker for a sprite whose file is missing. Unlike
+//ImageStore's cached copy this one is owned by the sprite that receives it.
+function MissingSpriteTexture: TTexture2D;
+var
+  Img: TImage;
+begin
+  Result := Default(TTexture2D);
+  Img := RayLib.GenImageChecked(32, 32, 4, 4,
+    TColor.CreateRGBA($FFFF00FF), TColor.CreateRGBA($FF000000));
+  if RayLib.IsImageValid(Img) then
+  begin
+    Result := RayLib.LoadTextureFromImage(Img);
+    RayLib.UnloadImage(Img);
+    if not RayLib.IsTextureValid(Result) then
+      Result := Default(TTexture2D);
+  end;
+end;
 
 { TSprite }
 
@@ -1334,6 +1351,10 @@ begin
     RealFile := Res.GuessFileName(SName, Res.WorkPath);
     if SysUtils.FileExists(RealFile) then
       Sh := RayLib.LoadShader(nil, PUTF8Char(UTF8String(RealFile)));
+    if (Sh.ID = 0) or not RayLib.IsShaderValid(Sh) then
+      if Assigned(OnAssetMissing) then
+        OnAssetMissing('Shader not found or invalid: ' + SName +
+          ' - running without this effect.');
   end;
 
   if (Sh.ID <> 0) and RayLib.IsShaderValid(Sh) then
@@ -2475,7 +2496,18 @@ begin
     end;
   end
   else
+  begin
     aTexture := RayLib.LoadTexture(PUTF8Char(UTF8String(FFileName)));
+    if not RayLib.IsTextureValid(aTexture) then
+    begin
+      if Assigned(OnAssetMissing) then
+        OnAssetMissing('Sprite not loaded: ' + FFileName +
+          ' - put the file next to your script (showing a placeholder).')
+      else if IsConsole then
+        WriteLn('Sprite not loaded: ' + FFileName);
+      aTexture := MissingSpriteTexture;
+    end;
+  end;
 
   if aCount > 1 then
   begin

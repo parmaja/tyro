@@ -376,6 +376,9 @@ type
     //* screen. Called from the drawing cycle after DrawQueueStats, so it is the
     //* top-most layer.
     procedure DrawHelpPanel;
+    //* A red strip at the top of the window while the last script failure is
+    //* unfixed. Drawn last so no game layer can hide it; cleared on rerun.
+    procedure DrawErrorBanner;
 
     procedure LoadConfig;
     procedure Stop; //and wait
@@ -926,9 +929,11 @@ begin
           //Queue/frame statistics panel (Ctrl+F10), on top of the controls.
           if FShowQueueStats then
             DrawQueueStats;
-          //Keyboard shortcuts help panel (F1), the top-most layer.
+          //Keyboard shortcuts help panel (F1), then the error banner: the
+          //banner stays visible even while the help panel is open.
           if FShowHelp then
             DrawHelpPanel;
+          DrawErrorBanner;
         finally
           RayLib.EndDrawing;
           FPresentedFrame := True;
@@ -1612,6 +1617,26 @@ begin
       Vector2Of(x + cPad + cKeyCol * Res.Font.Width, y + cPad + (i + 1) * cLine),
       Res.Font.Height, 0, clWhite);
   end;
+end;
+
+procedure TTyroEngine.DrawErrorBanner;
+const
+  cPad = 10;
+var
+  Msg: UTF8String;
+  MaxChars, W, H: Integer;
+begin
+  if FLastErrorMsg = '' then
+    Exit;
+  W := RayLib.GetScreenWidth;
+  H := Res.Font.Height + cPad * 2;
+  //Bottom of the window: the Output panel's first lines live at the top, so
+  //the banner must not cover the very message it is summarising.
+  RayLib.DrawRectangle(0, RayLib.GetScreenHeight - H, W, H, clRed.ReplaceAlpha(220));
+  MaxChars := (W - cPad * 2) div Res.Font.Width;
+  Msg := UTF8String(Copy(FLastErrorMsg, 1, MaxChars));
+  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(Msg),
+    Vector2Of(cPad, RayLib.GetScreenHeight - H + cPad), Res.Font.Height, 0, clWhite);
 end;
 
 procedure TTyroEngine.Start;
