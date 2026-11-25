@@ -216,9 +216,14 @@ split big tasks into subtasks).
       `restart()` re-run from a clean window; `game.difficulty(1..10)` stores
       `game.level` and adjusts `world.timescale`. Tested in
       `tests/roadmap02_p1_pause_test.tyro` and `..._restart_test.tyro`.
-- [ ] Next P1-4 session: high-score *table* with sorting, game-state
-      undo/rewind, and a non-blocking "ask name" widget (`console.read()`
-      blocks and `edit` needs manual wiring).
+- [x] Added three `require`-able Lua helpers in `bin/assets/`: `scoreboard.lua`
+      (sorted top-N table with `top`/`add`/`best`), `state.lua` (snapshots and
+      undo/rewind for plain tables), and `ask.lua` (non-blocking edit+OK widget
+      that fires a callback through `on("update")`).
+- [x] Documented in `docs/game.md` and `help/game.md`; verified with
+      `tests/roadmap02_p1_helpers_test.tyro` (12 checks) and a screenshot of
+      the ask widget while the game keeps running.
+- [x] **P1-4 complete.**
 
 ### P1-5 — Editor and classroom
 

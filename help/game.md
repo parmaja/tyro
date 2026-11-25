@@ -62,6 +62,14 @@ function update(dt)
 end
 ```
 
+## Ready-made helpers
+
+`require("assets/scoreboard")` gives a sorted high-score table (`top`, `add`,
+`best`), `require("assets/state")` gives table snapshots and undo
+(`remember`, `undo`, `snapshot`, `restore`), and `require("assets/ask")` gives
+a non-blocking text input box with a callback. Details in
+[`docs/game.md`](../docs/game.md).
+
 ## Scenes, pause and restart
 
 `game.paused` (read/write) freezes `update()`, timers, tweens and physics while
