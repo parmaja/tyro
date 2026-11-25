@@ -250,6 +250,11 @@ type
     FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
     FPresentedFrame: Boolean;
     FScriptFailed: Boolean;
+    //* Latched by OnScriptFinished (worker -> main thread) before the worker
+    //* can be disposed. AutoLifecycle must not look at FScriptThread.Started/
+    //* Completed alone: the error path frees the thread after CheckSynchronize,
+    //* so a bare --exit could miss the completion and hang forever.
+    FScriptFinished: Boolean;
     FLastErrorRaw: string;
     FLastErrorLine: Integer;
     FLastErrorMsg: string;
@@ -1597,6 +1602,7 @@ end;
 procedure TTyroEngine.Start;
 begin
   FScriptFailed := False;
+  FScriptFinished := False;
   FWindowAutoShown := False;
   RunScriptThread;
 end;
@@ -1645,6 +1651,9 @@ begin
     Exit;
   if (FScriptThread = nil) or (FScriptThread.Script <> AScript) then
     Exit;
+  //Latch before any early exit: a failed run leaves here through the error
+  //branch below, and AutoLifecycle still has to see that it finished.
+  FScriptFinished := True;
   if AScript.LastError <> '' then
   begin
     //The chunk raised: surface the failure for the --exit CLI lifecycle, then
@@ -2365,10 +2374,11 @@ begin
     Exit(True);
   end;
 
-  //Bare --exit: Started excludes a thread that was never launched and Completed
-  //is published by the worker just before it exits, so this only fires for a
-  //script that really ran and finished.
-  if FExitAfterScript and (FScriptThread <> nil) and (FScriptThread.Started) and (FScriptThread.Completed) then
+  //Bare --exit: OnScriptFinished latches FScriptFinished on the main thread
+  //after CheckSynchronize has published the error (if any). Checking the
+  //worker's flags here used to race with the error path disposing that worker
+  //one line later, so a failing script never terminated the session.
+  if FExitAfterScript and FScriptFinished then
   begin
     Terminate;
     Exit(True);
@@ -3028,6 +3038,7 @@ begin
   ClearScriptModels;
   ClearScriptParticles;
   Clear;
+  FScriptFinished := False;
   FLastErrorRaw := '';
   FLastErrorLine := 0;
   FLastErrorMsg := '';

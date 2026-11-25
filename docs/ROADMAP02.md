@@ -88,16 +88,17 @@ split big tasks into subtasks).
 - [ ] Repeated callback errors are de-duplicated into silence
       (`TyroEngines.pas:2620-2621`); show a "still failing ×N" count.
 
-### P0-3 — Bare `--exit` hangs when the script errors
+### P0-3 — Bare `--exit` hangs when the script errors — ✅ done 2026-11-26
 
-- [ ] Reproduced: `bin\tyro.exe tests\syntax_error_audit.tyro --exit` never
-      exits (killed at 15 s); `--exit:2` exits 1 with a caret diagnostic.
+- [x] Reproduced: `bin\tyro.exe tests\syntax_error_audit.tyro --exit` never
+      exited (killed at 15 s); `--exit:2` exited 1 with a caret diagnostic.
       `docs/getting-started.md:51-52` promises exit status 1.
-- [ ] Likely race: `OnScriptFinished` sets `FPendingDispose` and the worker is
-      freed at `TyroEngines.pas:948-949` before `AutoLifecycle` can observe
-      `FScriptThread.Started and Completed` at `:2359-2365`. Latch a
-      "script finished" flag (or check `FScriptFailed`) in `AutoLifecycle`.
-- [ ] Add a CLI test for both `--exit` and `--exit:N` on a failing script.
+- [x] Fixed the race: `OnScriptFinished` now latches `FScriptFinished` before
+      any early exit (including the error branch), `AutoLifecycle` tests that
+      latch instead of `FScriptThread.Started and Completed`, and the latch is
+      reset in `Start` and `RunScriptThread` for reruns.
+- [x] Verified: failing script exits 1, `test_cli_exit_script.tyro` exits 0,
+      engine-driven `demos/bounce_demo.tyro` still exits 0 with bare `--exit`.
 
 ### P0-4 — One line of kid code can kill the engine, silently
 
