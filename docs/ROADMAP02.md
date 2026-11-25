@@ -101,6 +101,11 @@ split big tasks into subtasks).
       reset in `Start` and `RunScriptThread` for reruns.
 - [x] Verified: failing script exits 1, `test_cli_exit_script.tyro` exits 0,
       engine-driven `demos/bounce_demo.tyro` still exits 0 with bare `--exit`.
+- [x] Follow-up: the two flags are now one `TScriptState` set
+      (`ssStarted`, `ssFailed`, `ssFinished`) so a rerun clears them together
+      and a failure cannot be "failed but not finished" (enum members carry an
+      `ss` prefix because Pascal is case-insensitive and `scriptFailed` would
+      collide with the `ScriptFailed` property).
 
 ### P0-4 — One line of kid code can kill the engine, silently — ✅ done 2026-11-26
 

@@ -55,6 +55,13 @@ var
 
 type
 
+  { TScriptState }
+
+  //* One run of a script. Kept together so the lifecycle flags cannot drift
+  //* apart: a failed run is always a finished one, and a rerun clears all of
+  //* them at once.
+  TScriptState = set of (ssStarted, ssFailed, ssFinished);
+
   { TTyroConsoleLog }
 
   TTyroConsoleLog = class(TInterfacedPersistent, ILog)
@@ -213,6 +220,7 @@ type
     //* frame. Returns True when this call terminated the session, so the main
     //* loop can stop after the current frame.
     function AutoLifecycle: Boolean;
+    function GetScriptFailed: Boolean;
 
     procedure ShowFileList;
     procedure HideFileList;
@@ -249,12 +257,13 @@ type
     FWaitingQueueObject: TQueueObject; //the queue object a script thread is blocked waiting on
     FQueuedScreenshot: String; //filename requested by Lua screenshot(); captured after the next present
     FPresentedFrame: Boolean;
-    FScriptFailed: Boolean;
-    //* Latched by OnScriptFinished (worker -> main thread) before the worker
-    //* can be disposed. AutoLifecycle must not look at FScriptThread.Started/
-    //* Completed alone: the error path frees the thread after CheckSynchronize,
-    //* so a bare --exit could miss the completion and hang forever.
-    FScriptFinished: Boolean;
+    //* ssStarted: a worker was launched for the current run.
+    //* ssFinished: latched by OnScriptFinished (worker -> main thread)
+    //* before the worker can be disposed; AutoLifecycle must not look at
+    //* FScriptThread.Started/Completed alone because the error path frees the
+    //* thread after CheckSynchronize, so a bare --exit could hang forever.
+    //* ssFailed: the finished run raised a Lua error.
+    FScriptState: TScriptState;
     FLastErrorRaw: string;
     FLastErrorLine: Integer;
     FLastErrorMsg: string;
@@ -576,7 +585,7 @@ type
     //* True when the last run-and-exit script finished with a Lua error. Reset
     //* at the start of every run; only meaningful for the --exit/--execute CLI
     //* lifecycle where the main loop inspects it before releasing the worker.
-    property ScriptFailed: Boolean read FScriptFailed;
+    property ScriptFailed: Boolean read GetScriptFailed;
 
     //* --exit:N: end the session after N seconds of running (0 = never).
     property ExitAfterSeconds: Integer read FExitAfterSeconds write FExitAfterSeconds;
@@ -1601,8 +1610,7 @@ end;
 
 procedure TTyroEngine.Start;
 begin
-  FScriptFailed := False;
-  FScriptFinished := False;
+  FScriptState := [];
   FWindowAutoShown := False;
   RunScriptThread;
 end;
@@ -1636,6 +1644,7 @@ begin
     CheckSynchronize(10);
   FScriptThread.WaitFor;
   FreeAndNil(FScriptThread);
+  Exclude(FScriptState, ssStarted);
 end;
 
 //Runs on the main thread, queued by the worker (TTyroScriptThread.Execute) once
@@ -1653,12 +1662,12 @@ begin
     Exit;
   //Latch before any early exit: a failed run leaves here through the error
   //branch below, and AutoLifecycle still has to see that it finished.
-  FScriptFinished := True;
+  Include(FScriptState, ssFinished);
   if AScript.LastError <> '' then
   begin
     //The chunk raised: surface the failure for the --exit CLI lifecycle, then
     //dispose the state.
-    FScriptFailed := True;
+    Include(FScriptState, ssFailed);
     ReportScriptError(AScript.LastError);
     FPendingDispose := True;
     Exit;
@@ -2374,15 +2383,20 @@ begin
     Exit(True);
   end;
 
-  //Bare --exit: OnScriptFinished latches FScriptFinished on the main thread
-  //after CheckSynchronize has published the error (if any). Checking the
-  //worker's flags here used to race with the error path disposing that worker
-  //one line later, so a failing script never terminated the session.
-  if FExitAfterScript and FScriptFinished then
+  //Bare --exit: OnScriptFinished adds ssFinished on the main thread after
+  //CheckSynchronize has published the error (if any). Checking the worker's
+  //flags here used to race with the error path disposing that worker one line
+  //later, so a failing script never terminated the session.
+  if FExitAfterScript and (ssFinished in FScriptState) then
   begin
     Terminate;
     Exit(True);
   end;
+end;
+
+function TTyroEngine.GetScriptFailed: Boolean;
+begin
+  Result := ssFailed in FScriptState;
 end;
 
 procedure TTyroEngine.ShowConsole(AX, AY, AWidth, AHeight: Integer);
@@ -2635,7 +2649,7 @@ var
 begin
   if AError = '' then
     Exit;
-  FScriptFailed := True;
+  Include(FScriptState, ssFailed);
   if AError = FLastErrorRaw then
     Exit;
   FLastErrorRaw := AError;
@@ -3048,7 +3062,7 @@ begin
   ClearScriptModels;
   ClearScriptParticles;
   Clear;
-  FScriptFinished := False;
+  FScriptState := [];
   FLastErrorRaw := '';
   FLastErrorLine := 0;
   FLastErrorMsg := '';
@@ -3086,6 +3100,7 @@ begin
     {$endif}
     FScriptThread := TTyroScriptThread.Create(aScript);
     FScriptThread.Start;
+    Include(FScriptState, ssStarted);
   end
   else
     Log.WriteLn('Type of file not found: ' + ScriptFile);
