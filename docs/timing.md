@@ -2,6 +2,9 @@
 
 [<< Tyro docs index](README.md)
 
+For named menu/play/gameover states and the `game.paused` toggle, see
+[Scenes](scenes.md).
+
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `sleep(ms)` | — | Pause the script thread for *ms* milliseconds |

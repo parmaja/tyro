@@ -23,6 +23,7 @@ sounds, and the physics.
 | [Getting started](getting-started.md) | command line, script arguments, first example |
 | [Input](input.md) | `keyboard.*`, `mouse.*`, `touch.*`, `gamepad.*` |
 | [Game helper](game.md) | `game.*` button pairs, `score.*` high scores, math helpers |
+| [Scenes](scenes.md) | named menu/play/gameover states, pause/resume, restart, difficulty |
 | [Files](files.md) | `openfile`, the workspace and its paths |
 | [Network](network.md) | `http.*`, `json.*` |
 | [Console](console.md) | the built-in terminal and its commands |

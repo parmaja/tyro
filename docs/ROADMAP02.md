@@ -207,13 +207,18 @@ split big tasks into subtasks).
 
 ### P1-4 — Kid-level helpers still missing
 
-- [ ] Scenes: no `scene`, `goto`, or menu/play/gameover switch. Games hand-roll
-      it (`whackamole.tyro:523-527,736-766`, `bubblepop.tyro:46,128-155`).
-- [ ] Pause/resume toggle (only blocking `pause(ms)` exists), Lua-callable
-      `restart()`, difficulty helper, high-score *table* with sorting,
-      game-state undo/rewind.
-- [ ] Non-blocking "ask name" widget (`console.read()` blocks, `edit` needs
-      manual wiring).
+- [x] `scene.add/go/current/list/remove/clear` (2026-11-26) gives games named
+      menu/play/over states with enter/update/draw/leave callbacks. The current
+      scene is stepped by the engine without needing global callbacks.
+      Documented in `docs/scenes.md`; tested in `tests/roadmap02_p1_scene_test.tyro`.
+- [x] `game.paused` / `game.pause()` / `game.resume()` / `game.toggle_pause()`
+      freeze the scene but keep drawing; `game.restart()` and global
+      `restart()` re-run from a clean window; `game.difficulty(1..10)` stores
+      `game.level` and adjusts `world.timescale`. Tested in
+      `tests/roadmap02_p1_pause_test.tyro` and `..._restart_test.tyro`.
+- [ ] Next P1-4 session: high-score *table* with sorting, game-state
+      undo/rewind, and a non-blocking "ask name" widget (`console.read()`
+      blocks and `edit` needs manual wiring).
 
 ### P1-5 — Editor and classroom
 

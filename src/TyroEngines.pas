@@ -267,6 +267,12 @@ type
     //* thread after CheckSynchronize, so a bare --exit could hang forever.
     //* ssFailed: the finished run raised a Lua error.
     FScriptState: TScriptState;
+    //* Kid-level helpers (P1-4): a soft pause freezes the scene but keeps
+    //* drawing, restart requests are serviced at a safe point in the frame,
+    //* and level drives the difficulty multiplier.
+    FGamePaused: Boolean;
+    FRestartRequested: Boolean;
+    FGameLevel: Integer;
     FLastErrorRaw: string;
     FLastErrorLine: Integer;
     FLastErrorMsg: string;
@@ -551,6 +557,11 @@ type
 
     property Running: Boolean read GetRunning write SetRunning;
     property Active: Boolean read GetActive;
+    //* game.paused / game.level - see TLuaGame in TyroLua.
+    property GamePaused: Boolean read FGamePaused write FGamePaused;
+    property GameLevel: Integer read FGameLevel write FGameLevel;
+    procedure ToggleGamePause;
+    procedure RequestRestart;
     //* Show/hide the queue/frame statistics panel (also Ctrl+F10). See
     //* FShowQueueStats: the diagnostic counters read 0 outside debug builds.
     property ShowQueueStats: Boolean read FShowQueueStats write FShowQueueStats;
@@ -783,10 +794,13 @@ begin
           FPendingDispose := True
         else if not ScriptPaused then
         begin
+          //game.paused freezes the scene (timers, tweens, physics) but draw()
+          //still runs so the script can paint its own PAUSED overlay.
           //world.timescale (slow motion) stretches the frame time the script
           //sees, so update() and every timer inside it crawl together with
           //the physics, sprite animations and sparks stepped below.
-          FScriptThread.Script.EngineUpdate(RayLib.GetFrameTime() * TimeScale);
+          if not GamePaused then
+            FScriptThread.Script.EngineUpdate(RayLib.GetFrameTime() * TimeScale);
           //update() may have called exit(); do not call into a terminated state.
           if (not FScriptThread.Script.Stopped) and (not ScriptPaused) then
             FScriptThread.Script.EngineDraw;
@@ -797,6 +811,13 @@ begin
       // mode still owns a live graphics/audio context and must service accepted
       // script commands before --exit can shut it down.
       ProcessQueue;
+      //restart() from a script is serviced here, never from inside the queue
+      //drain (RunScriptThread clears the queue and would break iteration).
+      if FRestartRequested then
+      begin
+        FRestartRequested := False;
+        RunScriptThread;
+      end;
 
       Update;
       RayUpdates.Update;
@@ -1648,8 +1669,23 @@ end;
 procedure TTyroEngine.Start;
 begin
   FScriptState := [];
+  FGamePaused := False;
+  FRestartRequested := False;
+  FGameLevel := 1;
   FWindowAutoShown := False;
   RunScriptThread;
+end;
+
+procedure TTyroEngine.ToggleGamePause;
+begin
+  FGamePaused := not FGamePaused;
+end;
+
+procedure TTyroEngine.RequestRestart;
+begin
+  //The queue is being drained on this thread; restarting inline would clear
+  //it underneath ProcessQueue. Service the request between frames instead.
+  FRestartRequested := True;
 end;
 
 {function TTyroEngine.CloneScript(AScript: TTyroScript): TTyroScript;
@@ -3128,6 +3164,9 @@ begin
   Clear;
   FScriptState := [];
   StopScriptRequested := False;
+  FGamePaused := False;
+  FRestartRequested := False;
+  FGameLevel := 1;
   FLastErrorRaw := '';
   FLastErrorLine := 0;
   FLastErrorMsg := '';

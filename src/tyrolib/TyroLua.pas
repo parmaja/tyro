@@ -89,6 +89,20 @@ type
     Dead: Boolean;
   end;
 
+  { TLuaScene }
+
+  // One named scene registered through scene.add(name, opts). The four
+  // callbacks are registry refs so they survive until the state is closed;
+  // only the current scene's update/draw are stepped by the engine.
+  TLuaScene = class
+  public
+    Name: string;       // lowercase key
+    EnterRef: Integer;
+    UpdateRef: Integer;
+    DrawRef: Integer;
+    LeaveRef: Integer;
+  end;
+
   { TTyroLuaObject }
 
   TTyroLuaObject = class abstract(TLuaObject)
@@ -876,7 +890,16 @@ type
   //TyroEngines.pas), so the logic lives in the engine and this class only
   //translates to and from Lua.
   TLuaGame = class(TTyroLuaObject)
+  protected
+    function Getter(L: PLua_State): integer; override;
+    function Setter(L: PLua_State): integer; override;
   public
+    //game.paused / game.level are properties; the calls below are the verbs.
+    function TogglePause_func(L: Plua_State): integer; cdecl;
+    function PauseGame_func(L: Plua_State): integer; cdecl;
+    function ResumeGame_func(L: Plua_State): integer; cdecl;
+    function Restart_func(L: Plua_State): integer; cdecl;
+    function Difficulty_func(L: Plua_State): integer; cdecl;
     function PausePressed_func(L: Plua_State): integer; cdecl;
     function PauseDown_func(L: Plua_State): integer; cdecl;
     function StartPressed_func(L: Plua_State): integer; cdecl;
@@ -974,6 +997,10 @@ type
     //releases the list only.
     Handlers: TList; //of TLuaHandler
     HandlerNextId: Integer;
+    //scene.add/go/list: named menu/play/over states so games stop hand-rolling
+    //their own state machines. Refs die with the Lua state, like timers.
+    Scenes: TList; //of TLuaScene
+    CurrentScene: string;
     function NewTimer(L: Plua_State; AMs: Double; APeriodic: Boolean): Integer;
     procedure PumpTimers(ADeltaTime: Double);
     function HasTimers: Boolean;
@@ -999,6 +1026,11 @@ type
     //must already be on the stack (they are consumed); an absent or non-function
     //global just drains the stack and is ignored. Errors are reported via DoError.
     procedure CallGlobal(const AName: string; AArgs: Integer);
+    //pcall a callback held by a Lua registry ref. AFirst..AFirst+ACount-1
+    //are the arguments already on the stack; they are consumed by the call.
+    procedure CallRef(ARef: Integer; AFirst, ACount: Integer);
+    function FindScene(const AName: string): TLuaScene;
+    procedure ReleaseScene(AScene: TLuaScene);
   protected
 
     //input & timing
@@ -1009,6 +1041,12 @@ type
     function RandomValue_func(L: Plua_State): integer; cdecl;
     function Screenshot_func(L: Plua_State): integer; cdecl;
     function Exit_func(L: Plua_State): integer; cdecl;
+    function SceneAdd_func(L: Plua_State): integer; cdecl;
+    function SceneGo_func(L: Plua_State): integer; cdecl;
+    function SceneCurrent_func(L: Plua_State): integer; cdecl;
+    function SceneList_func(L: Plua_State): integer; cdecl;
+    function SceneRemove_func(L: Plua_State): integer; cdecl;
+    function SceneClear_func(L: Plua_State): integer; cdecl;
     function Clock_func(L: Plua_State): integer; cdecl;
     function Time_func(L: Plua_State): integer; cdecl;
     //Text metrics for the built-in font, e.g. to centre a label:
@@ -2542,7 +2580,9 @@ begin
   Tweens := TList.Create; //of TLuaTween, freed in Destroy
   TweenNextId := 1; //tween id 0 stays invalid, so tween.kill(0) always answers false
   Handlers := TList.Create; //of TLuaHandler, freed in Destroy
-  HandlerNextId := 1; //handler id 0 stays invalid, so off(0) always answers false
+  HandlerNextId := 1;
+  Scenes := TList.Create; //of TLuaScene, freed in Destroy
+  CurrentScene := ''; //handler id 0 stays invalid, so off(0) always answers false
 
   //window
   Lua.State.Register('window', 'show', Window, Window.Show_func);
@@ -2688,6 +2728,11 @@ begin
   //methods.
   Lua.State.Register('game', 'pause_pressed', Game, Game.PausePressed_func);
   Lua.State.Register('game', 'pause_down', Game, Game.PauseDown_func);
+  Lua.State.Register('game', 'pause', Game, Game.PauseGame_func);
+  Lua.State.Register('game', 'resume', Game, Game.ResumeGame_func);
+  Lua.State.Register('game', 'toggle_pause', Game, Game.TogglePause_func);
+  Lua.State.Register('game', 'restart', Game, Game.Restart_func);
+  Lua.State.Register('game', 'difficulty', Game, Game.Difficulty_func);
   Lua.State.Register('game', 'start_pressed', Game, Game.StartPressed_func);
   Lua.State.Register('game', 'fire_pressed', Game, Game.FirePressed_func);
   Lua.State.Register('game', 'fire_down', Game, Game.FireDown_func);
@@ -2707,6 +2752,17 @@ begin
   Lua.State.Register('game', 'select_down', Game, Game.SelectDown_func);
   Lua.State.Register('game', 'start_down', Game, Game.StartDown_func);
   Lua.State.Register('game', Game); //Should be last one
+
+  //scene: named menu/play/gameover states. add(name, opts) keeps four
+  //callbacks; go(name [, args]) runs leave/enter; the current scene's
+  //update(dt)/draw() ride the same engine beat as the global callbacks.
+  Lua.State.RegisterTable('scene');
+  Lua.State.Register('scene', 'add', Self, SceneAdd_func);
+  Lua.State.Register('scene', 'go', Self, SceneGo_func);
+  Lua.State.Register('scene', 'current', Self, SceneCurrent_func);
+  Lua.State.Register('scene', 'list', Self, SceneList_func);
+  Lua.State.Register('scene', 'remove', Self, SceneRemove_func);
+  Lua.State.Register('scene', 'clear', Self, SceneClear_func);
 
   //score: the best scores kept in one small text file per game.
   Lua.State.Register('score', 'hi_load', Game, Game.HiLoad_func);
@@ -2743,6 +2799,7 @@ begin
   Lua.State.RegisterGlobal('rand', RandomValue_func);
   Lua.State.RegisterGlobal('screenshot', Screenshot_func);
   Lua.State.RegisterGlobal('exit', Exit_func);
+  Lua.State.RegisterGlobal('restart', Game.Restart_func);
   Lua.State.RegisterGlobal('clock', Clock_func);
   Lua.State.RegisterGlobal('now', Time_func);
   Lua.State.RegisterGlobal('textwidth', TextWidth_func);
@@ -3002,6 +3059,16 @@ begin
     end;
     FreeAndNil(Handlers);
   end;
+  //Scenes die with the state too: their refs were released by Lua.Close.
+  if Scenes <> nil then
+  begin
+    while Scenes.Count > 0 do
+    begin
+      TLuaScene(Scenes[Scenes.Count - 1]).Free;
+      Scenes.Delete(Scenes.Count - 1);
+    end;
+    FreeAndNil(Scenes);
+  end;
   FreeAndNil(Shader);
   FreeAndNil(Game);
   FreeAndNil(Gamepad);
@@ -3092,6 +3159,36 @@ begin
     DoError(AName + ': ' + Msg);
 end;
 
+procedure TLuaScript.CallRef(ARef: Integer; AFirst, ACount: Integer);
+var
+  Msg: string;
+begin
+  if (ARef = LUA_NOREF) or (Lua.State = nil) then
+    Exit;
+  lua_rawgeti(Lua.State, LUA_REGISTRYINDEX, ARef); //[.. args.., fn]
+  lua_insert(Lua.State, AFirst); //[.., fn, args..]
+  if lua_pcall(Lua.State, ACount, 0, 0) <> LUA_OK then
+  begin
+    Msg := Lua.State.ToString(-1);
+    Lua.State.Pop(1);
+    DoError(Msg);
+  end;
+end;
+
+function TLuaScript.FindScene(const AName: string): TLuaScene;
+var
+  i: Integer;
+  Key: string;
+begin
+  Result := nil;
+  if Scenes = nil then
+    Exit;
+  Key := LowerCase(AName);
+  for i := 0 to Scenes.Count - 1 do
+    if TLuaScene(Scenes[i]).Name = Key then
+      Exit(TLuaScene(Scenes[i]));
+end;
+
 // The engine takes over only when the returned script defines at least one of
 // the frame callbacks, or armed a timer - an `after(...)` with no update() is
 // a scene too, and its callback needs the same engine-driven beat.
@@ -3099,10 +3196,13 @@ function TLuaScript.HasEngineCallbacks: Boolean;
 begin
   Result := (Lua.State <> nil) and
     (Lua.State.FunctionExists('update') or Lua.State.FunctionExists('draw')
-     or HasTimers or HasTweens or HasHandlers);
+     or HasTimers or HasTweens or HasHandlers
+     or ((Scenes <> nil) and (Scenes.Count > 0)));
 end;
 
 procedure TLuaScript.EngineUpdate(ADeltaTime: Double);
+var
+  S: TLuaScene;
 begin
   if Lua.State = nil then
     Exit;
@@ -3137,6 +3237,16 @@ begin
   if Stopped then
     Exit; //an update handler may have called exit()
   CallGlobal('update', 1);
+  //The current scene's update rides the same dt, after the global one.
+  if (not Stopped) and (Scenes <> nil) and (CurrentScene <> '') then
+  begin
+    S := FindScene(CurrentScene);
+    if S <> nil then
+    begin
+      Lua.State.PushNumber(ADeltaTime);
+      CallRef(S.UpdateRef, lua_gettop(Lua.State), 1);
+    end;
+  end;
   finally
     EndCallbackWatch(Lua.State);
     if GCallbackTimedOut then
@@ -3148,12 +3258,21 @@ begin
 end;
 
 procedure TLuaScript.EngineDraw;
+var
+  S: TLuaScene;
 begin
   if Lua.State = nil then
     Exit;
   BeginCallbackWatch(Lua.State);
   try
     CallGlobal('draw', 0);
+    //The current scene paints after the global draw, like on("draw").
+    if (Scenes <> nil) and (CurrentScene <> '') then
+    begin
+      S := FindScene(CurrentScene);
+      if S <> nil then
+        CallRef(S.DrawRef, lua_gettop(Lua.State) + 1, 0);
+    end;
     //on("draw", fn) listeners paint after the global draw(), same beat
     if HandlerCountNamed(cEventDraw) > 0 then
       Dispatch(cEventDraw, Lua.State, 0, 0);
@@ -5619,6 +5738,93 @@ end;
 
 { TLuaGame }
 
+function TLuaGame.Getter(L: PLua_State): integer;
+var
+  field: string;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'paused' then
+  begin
+    L.PushBoolean(Engine.GamePaused);
+    Result := 1;
+  end
+  else if field = 'level' then
+  begin
+    L.PushInteger(Engine.GameLevel);
+    Result := 1;
+  end;
+  if Result = 0 then
+    Result := inherited;
+end;
+
+function TLuaGame.Setter(L: PLua_State): integer;
+var
+  field: string;
+  n: Integer;
+begin
+  Result := 0;
+  field := L.ToString(2);
+  if field = 'paused' then
+  begin
+    Engine.GamePaused := L.ToBoolean(-1);
+    Result := 1;
+  end
+  else if field = 'level' then
+  begin
+    n := L.ToInteger(-1);
+    if n < 1 then n := 1;
+    if n > 10 then n := 10;
+    Engine.GameLevel := n;
+    Result := 1;
+  end;
+  if Result = 0 then
+    Result := inherited;
+end;
+
+function TLuaGame.TogglePause_func(L: Plua_State): integer; cdecl;
+begin
+  Engine.ToggleGamePause;
+  L.PushBoolean(Engine.GamePaused);
+  Result := 1;
+end;
+
+function TLuaGame.PauseGame_func(L: Plua_State): integer; cdecl;
+begin
+  Engine.GamePaused := True;
+  Result := 0;
+end;
+
+function TLuaGame.ResumeGame_func(L: Plua_State): integer; cdecl;
+begin
+  Engine.GamePaused := False;
+  Result := 0;
+end;
+
+function TLuaGame.Restart_func(L: Plua_State): integer; cdecl;
+begin
+  //Also available as the global restart() for kids who look for that name.
+  Engine.RequestRestart;
+  Result := 0;
+end;
+
+function TLuaGame.Difficulty_func(L: Plua_State): integer; cdecl;
+var
+  n: Integer;
+begin
+  if L.ArgsCount > 0 then
+  begin
+    n := L.ToInteger(1);
+    if n < 1 then n := 1;
+    if n > 10 then n := 10;
+    Engine.GameLevel := n;
+  end;
+  //One level is normal speed; higher levels crawl faster, lower never slow.
+  Engine.World.TimeScale := 1.0 + (Engine.GameLevel - 1) * 0.08;
+  L.PushInteger(Engine.GameLevel);
+  Result := 1;
+end;
+
 function TLuaGame.PausePressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.pause_pressed() - true once when p (keyboard) or start/menu (pad) is pressed
@@ -5909,6 +6115,159 @@ function TLuaScript.Exit_func(L: Plua_State): integer; cdecl;
 begin
   //Stop the script as soon as the current call finishes
   Stop;
+  Result := 0;
+end;
+
+procedure TLuaScript.ReleaseScene(AScene: TLuaScene);
+begin
+  if (AScene = nil) or (Lua.State = nil) then
+    Exit;
+  if AScene.EnterRef <> LUA_NOREF then
+    luaL_unref(Lua.State, LUA_REGISTRYINDEX, AScene.EnterRef);
+  if AScene.UpdateRef <> LUA_NOREF then
+    luaL_unref(Lua.State, LUA_REGISTRYINDEX, AScene.UpdateRef);
+  if AScene.DrawRef <> LUA_NOREF then
+    luaL_unref(Lua.State, LUA_REGISTRYINDEX, AScene.DrawRef);
+  if AScene.LeaveRef <> LUA_NOREF then
+    luaL_unref(Lua.State, LUA_REGISTRYINDEX, AScene.LeaveRef);
+  AScene.EnterRef := LUA_NOREF;
+  AScene.UpdateRef := LUA_NOREF;
+  AScene.DrawRef := LUA_NOREF;
+  AScene.LeaveRef := LUA_NOREF;
+end;
+
+function TLuaScript.SceneAdd_func(L: Plua_State): integer; cdecl;
+const
+  cFields: array[0..3] of string = ('enter', 'update', 'draw', 'leave');
+var
+  Name, Field: string;
+  S: TLuaScene;
+  Ref, j: Integer;
+begin
+  Name := LowerCase(L.ToString(1));
+  if (Name = '') or not L.IsTable(2) then
+  begin
+    L.PushBoolean(False);
+    Exit(1);
+  end;
+  S := FindScene(Name);
+  if S = nil then
+  begin
+    S := TLuaScene.Create;
+    S.Name := Name;
+    S.EnterRef := LUA_NOREF;
+    S.UpdateRef := LUA_NOREF;
+    S.DrawRef := LUA_NOREF;
+    S.LeaveRef := LUA_NOREF;
+    Scenes.Add(S);
+  end
+  else
+    ReleaseScene(S);
+  for j := 0 to High(cFields) do
+  begin
+    Field := cFields[j];
+    lua_getfield(L, 2, PUTF8Char(UTF8String(Field)));
+    if lua_isfunction(L, -1) then
+      Ref := luaL_ref(L, LUA_REGISTRYINDEX)
+    else
+    begin
+      lua_pop(L, 1);
+      Ref := LUA_NOREF;
+    end;
+    case j of
+      0: S.EnterRef := Ref;
+      1: S.UpdateRef := Ref;
+      2: S.DrawRef := Ref;
+      3: S.LeaveRef := Ref;
+    end;
+  end;
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaScript.SceneGo_func(L: Plua_State): integer; cdecl;
+var
+  S, Old: TLuaScene;
+  Top, Count: Integer;
+begin
+  S := FindScene(L.ToString(1));
+  if S = nil then
+  begin
+    L.PushBoolean(False);
+    Exit(1);
+  end;
+  Top := lua_gettop(L);
+  if CurrentScene <> '' then
+  begin
+    Old := FindScene(CurrentScene);
+    if Old <> nil then
+      CallRef(Old.LeaveRef, Top + 1, 0); //arguments stay untouched
+  end;
+  CurrentScene := S.Name;
+  Count := Top - 1;
+  if Count > 0 then
+    CallRef(S.EnterRef, 2, Count)
+  else
+    CallRef(S.EnterRef, Top + 1, 0);
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaScript.SceneCurrent_func(L: Plua_State): integer; cdecl;
+begin
+  L.PushString(CurrentScene);
+  Result := 1;
+end;
+
+function TLuaScript.SceneList_func(L: Plua_State): integer; cdecl;
+var
+  i: Integer;
+begin
+  L.BeginTable;
+  if Scenes <> nil then
+    for i := 0 to Scenes.Count - 1 do
+    begin
+      L.PushString(TLuaScene(Scenes[i]).Name);
+      lua_rawseti(L, -2, i + 1);
+    end;
+  Result := 1;
+end;
+
+function TLuaScript.SceneRemove_func(L: Plua_State): integer; cdecl;
+var
+  S: TLuaScene;
+begin
+  S := FindScene(L.ToString(1));
+  if S = nil then
+  begin
+    L.PushBoolean(False);
+    Exit(1);
+  end;
+  if CurrentScene = S.Name then
+    CurrentScene := '';
+  ReleaseScene(S);
+  Scenes.Remove(S);
+  S.Free;
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaScript.SceneClear_func(L: Plua_State): integer; cdecl;
+var
+  i: Integer;
+  S: TLuaScene;
+begin
+  if Scenes <> nil then
+  begin
+    for i := Scenes.Count - 1 downto 0 do
+    begin
+      S := TLuaScene(Scenes[i]);
+      ReleaseScene(S);
+      S.Free;
+    end;
+    Scenes.Clear;
+  end;
+  CurrentScene := '';
   Result := 0;
 end;
 

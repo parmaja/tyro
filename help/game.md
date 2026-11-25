@@ -62,6 +62,15 @@ function update(dt)
 end
 ```
 
+## Scenes, pause and restart
+
+`game.paused` (read/write) freezes `update()`, timers, tweens and physics while
+`draw()` keeps running, so a game can paint its own PAUSED overlay.
+`game.pause()`, `game.resume()` and `game.toggle_pause()` are the verb forms.
+`game.restart()` — or the shorter global `restart()` — re-runs the script from
+a clean window. `game.difficulty(1..10)` stores `game.level` and nudges
+`world.timescale`; see [`docs/scenes.md`](../docs/scenes.md) for scene switching.
+
 ## sound.muted - the one silence switch
 
 `sound.muted = true` (a MUTE key, an options menu) and every following play
