@@ -5,17 +5,30 @@ run with `tyro <script>`.
 
 ## Quick Start
 
+Start with `first_game.tyro`: it is short, uses the recommended
+`update(dt)` / `draw()` loop and needs no image files.
+
 ```
-tyro demos/pong.tyro
+tyro demos/first_game.tyro
 ```
 
+Add `test` after the script name to start a round immediately for
+`--screenshot:N`. For a step-by-step walkthrough, see
+[Getting started](../docs/getting-started.md).
+
 ## Demo Index
+
+### Start here
+
+| File | Feature |
+|------|---------|
+| `first_game.tyro` | A complete tiny game with sprites, score, sound and keyboard input, all driven by `update(dt)` / `draw()` |
 
 ### Showcase
 
 | File | Feature |
 |------|---------|
-| `pong.tyro` | Complete Pong game — drawing, input, AI, physics, sound, scoring |
+| `pong.tyro` | Classic Pong — the older `while true` + `sleep()` worker loop, kept as a complete example of that style |
 
 ### Drawing
 

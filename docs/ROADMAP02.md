@@ -187,15 +187,19 @@ split big tasks into subtasks).
 
 ### P1-3 — Onboarding
 
-- [ ] `new [game|draw|sprite]` templates exist (`TyroEngines.pas:2790-2897`)
-      but are invisible in docs and have no UI picker (F1 shows shortcuts only).
-- [ ] `docs/getting-started.md` opens with CLI switches and a million-iteration
-      draw loop; no step-by-step first game. "Make 5 games" is still unchecked
-      in [`ROADMAP.md`](ROADMAP.md) P9.
-- [ ] Quick-start points to `demos/pong.tyro`, which uses `while true` +
-      `sleep(16)` and frame-count-based speed (`pong.tyro:18,49-145`) instead of
-      the `dt`-scaled loop taught in `docs/timing.md`. Nine demos use
-      `while true do`.
+- [x] The hidden `new [game|draw|sprite]` command is now visible in the F1
+      help panel and in the `help` console output ("type `new game` ...").
+      No new key binding was added, so F2/F5 and the console flow stay intact.
+- [x] `docs/getting-started.md` now leads with a ten-minute, in-window path
+      (start → F8 `new game` → F2 edit → F5 run → F8 `save mygame`), followed
+      by a copy-paste `update(dt)`/`draw()` script. CLI switches are kept as a
+      reference section below.
+- [x] Added `demos/first_game.tyro`: a complete tiny game (blobs, score,
+      sound, keyboard) on the recommended loop, with a `test` argument for
+      `--screenshot`. Both `demos/README.md` and `docs/examples.md` now start
+      with it; pong is labelled as the older worker-loop style.
+- [ ] Follow-up: the full "Make 5 games" course in [`ROADMAP.md`](ROADMAP.md)
+      P9 and an in-app API reference with examples.
 - [x] `demos/diag_sprite.tyro` no longer uses `pcall`; engine calls report
       their own failures, as AGENTS.md requires.
 - [x] Corrected the stale comment in `games/waddle/waddle.tyro`: both dot and

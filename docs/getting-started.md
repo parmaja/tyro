@@ -1,13 +1,66 @@
-# Command Line
+# Getting Started
 
 [<< Tyro docs index](README.md)
+
+## Your first 10 minutes — no command line needed
+
+Tyro opens as **one window** with an editor, a console and the game screen in
+the same place. You do not need a project folder, an install or a terminal.
+
+1. **Start Tyro.** Double-click `tyro.exe`, or run `tyro` with no arguments.
+2. **Make a starter script.** Press `F8` to open the console, type
+   `new game` and press Enter. The script editor opens with a tiny game.
+3. **Edit it.** Press `F2` (or keep the editor open) and change the line
+   `local speed = 320` to `local speed = 500`.
+4. **Run it.** Press `F5`. Use the arrow keys to move. Press `F5` again any
+   time you change the code — every run starts from a clean window.
+5. **Keep it.** Press `F8`, type `save mygame` and press Enter. The file goes
+   next to the script; open it later with `load mygame` or `F4`.
+
+Press `F1` in the window to see all shortcuts. The console remembers commands:
+`list` shows files, `run` reruns, `stop` stops, `sprite` opens the sprite
+editor. Type `help` for the full list.
+
+### Copy-paste first game
+
+This is the same pattern as [`demos/first_game.tyro`](../demos/first_game.tyro):
+`window.show()` once, then `update(dt)` for movement and `draw()` for pictures.
+
+```lua
+window.show(640, 480)
+world.backcolor = "navy"
+
+local x = 320
+local speed = 200
+
+function update(dt)          -- dt is seconds since the last frame
+    if keyboard.down("left")  then x = x - speed * dt end
+    if keyboard.down("right") then x = x + speed * dt end
+end
+
+function draw()
+    screen.clear("blank")
+    screen.color = colors.gold
+    screen.circle(x, 240, 24, true)
+    screen.color = colors.white
+    screen.text(10, 10, "Arrow keys to move - F2 to edit, F5 to run")
+end
+```
+
+`update` and `draw` must be **globals** — do not write `local function update`.
+See [the engine loop](engine-loop.md) for how the callbacks are called and for
+`enter()` / `leave()` grouping.
+
+## Command line
+
+Once you are comfortable in the window, scripts can also be run directly:
 
 ```
 tyro [<script>] [--workpath=<dir>] [<options>]
 ```
 
-Running a `.tyro`/`.lua` file executes it in a graphical environment. Without a
-script argument Tyro starts an interactive console session.
+Running a `.tyro`/`.lua` file executes it in the graphical environment.
+Without a script argument Tyro starts an interactive console session.
 
 | Option | Description |
 |--------|-------------|
@@ -23,7 +76,7 @@ With an engine-driven script — one that defines `update`/`draw` (see
 returns, so a bare `--exit` ends the run right away, before the callbacks get
 to run. Use `--exit:N` to let such a script play for *N* seconds.
 
-## Script arguments
+### Script arguments
 
 Every parameter after `tyro.exe` is handed to the running script as the global
 `args` table — a 1-based array of strings, including the script name and the
@@ -51,35 +104,14 @@ Per-sprite scripts (`on_update`/`on_draw` files) see the same `args`.
 | `0` | Success (also `--help`/`--list`, and interactive sessions closed normally) |
 | `1` | Lua runtime error while running with `--exit` |
 
-# Lua Example
-
-```lua
-    canvas.text(10, 30, 'Printing text test')
-    i = 1000000
-    canvas.color = colors.black
-    canvas.line(0, 100, canvas.width, 100)
-
-    while i > 0 do
-        c = math.random(3, colors.count)
-        canvas.color = colors[c]
-        r = math.random(5, 20) --size of circle
-        x = math.random(640)
-        y = math.random(480)
-        canvas.circle(x, y, r, true)
-        r = math.random(5, 20) --size of circle
-        x = math.random(640)
-        y = math.random(480)
-        canvas.rectangle(x, y, r, r, true)
-        sleep(10)
-        i = i - 1
-    end
-```
+## Drawing cheat sheet
 
 The canvas primitives are `canvas.clear()`, `canvas.text(x, y, s)`,
 `canvas.rectangle(x, y, w, h [, fill])`, `canvas.circle(x, y, r [, fill])`,
 `canvas.image(x, y, file [, scale])`,
 `canvas.triangle(x1, y1, x2, y2, x3, y3 [, fill])`,
-`canvas.line(x1, y1, x2, y2 [, thickness])` and `canvas.point(x, y)`.
+`canvas.line(x1, y1, x2, y2 [, thickness])`, `canvas.point(x, y)` and
+`canvas.text_center(y, s)` (centres sideways on that sheet).
 `canvas.gradient.rectV(x, y, w, h [, startColor, endColor])` fills a rectangle with
 a top-to-bottom gradient, `canvas.gradient.rectH(...)` with a left-to-right one,
 and `canvas.gradient.circle(x, y, r [, innerColor, outerColor])` fills a circle
@@ -91,6 +123,8 @@ the current color when omitted. Set the color with `canvas.color = colors.red`
 thickness of lines and of rectangle/triangle outlines; `canvas.line` also takes
 a per-call thickness. `textwidth(s)` and `textheight()` measure the built-in
 font, and `canvas.width` / `canvas.height` report the canvas size.
+Grouping commands with `enter()` / `leave()` is covered in
+[the engine loop](engine-loop.md).
 
 `id = font.load("name.ttf" [, size [, codepage]])` loads a font and answers its
 id — the engine's font book caches it, so the same file and size always answer
@@ -104,10 +138,9 @@ Notes in [`help/fonts.md`](../help/fonts.md).
 `canvas.test(ms)` is a **diagnostic** draw: it draws a marker rectangle and then
 spends about *ms* milliseconds on the main thread, emulating a single draw call
 slower than a frame. It exists to check that a body grouped with `enter()` /
-`leave()` is still drawn as one group (see
-[the engine loop](engine-loop.md));
-normal scripts do not need it. Grouping commands with `enter()` / `leave()` is
-covered in [the engine loop](engine-loop.md).
+`leave()` is still drawn as one group; normal scripts do not need it.
+
+## Sound
 
 For sound, `music.beep()`, `music.sound(freq, ms)` or `music.sound(wave, freq,
 ms)`, `sound.noise(ms)` (white) / `sound.noise(freq, ms)` (pitched) and
@@ -131,4 +164,3 @@ of time and keep it cached (so the first `sound.play` is instant), and
 played as a cheap alias of the cached copy; a file that was never loaded is decoded
 on the spot and released once it finishes, so `sound.play` on its own does not keep
 anything cached.
-

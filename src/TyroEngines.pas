@@ -1578,7 +1578,7 @@ type
     Desc: string;
   end;
 const
-  cKeys: array[0..9] of THotkey = (
+  cKeys: array[0..11] of THotkey = (
     (Key: 'F1';       Desc: 'Show / hide this help'),
     (Key: 'F2';       Desc: 'Code editor'),
     (Key: 'F3';       Desc: 'Sprite editor'),
@@ -1586,8 +1586,10 @@ const
     (Key: 'F5';       Desc: 'Run the script'),
     (Key: 'F7';       Desc: 'Output panel'),
     (Key: 'F8';       Desc: 'Console'),
+    (Key: 'F8 > new'; Desc: 'Type "new game" for a starter script'),
+    (Key: 'F8 > save'; Desc: 'Type "save mygame" to keep your work'),
     (Key: 'Ctrl+F10'; Desc: 'Stats panel'),
-    (Key: 'Ctrl+S';   Desc: 'Save and run (in the editor)'),
+    (Key: 'Ctrl+S';   Desc: 'Save the file (then F5 to run)'),
     (Key: 'ESC';      Desc: 'Close the editor or file list'));
 var
   i: Integer;
@@ -3508,6 +3510,7 @@ procedure TTyroEngine.Help_Command(Params: TStrings);
 var
   Command: TConsoleCommand;
 begin
+  Console.Writeln('New to Tyro? Type "new game", then F2 to edit and F5 to run.');
   Console.Writeln('Available commands:');
   for Command in Commands do
     if Command.Note <> '' then

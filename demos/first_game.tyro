@@ -1,0 +1,114 @@
+--======================================================================
+--  FIRST GAME - copy this one when you start a new project.
+--======================================================================
+--  It is the short, modern version of a game: window.show() once, then
+--  update(dt) for movement and draw() for pictures. No image files: the
+--  ship and the stars are engine-baked blobs tinted from Lua.
+--
+--  Run:    bin\tyro.exe demos/first_game.tyro
+--  Keys:   LEFT / RIGHT arrow keys to catch stars
+--          SPACE to start again, ESC to quit
+--======================================================================
+
+window.show(640, 480)
+world.title = "First Game"
+world.backcolor = rgb(12, 20, 48)
+
+local W, H = world.width, world.height
+local speed = 320
+
+local ship = sprites.blob("first_ship", 56)
+ship.tint = colors.cyan
+ship.x, ship.y = W / 2, H - 50
+
+local stars = {}
+for i = 1, 8 do
+  local s = sprites.blob("first_star" .. i, 32)
+  s.tint = colors.gold
+  s.visible = false
+  stars[i] = { sprite = s, alive = false, fall = 0 }
+end
+
+local score, missed, playing, wait = 0, 0, false, 0
+
+local function start_game()
+  playing = true
+  score, missed, wait = 0, 0, 0
+  for i = 1, #stars do
+    stars[i].alive = false
+    stars[i].sprite.visible = false
+  end
+end
+
+-- `test` starts a round at once so --screenshot can capture the play state.
+if args and args[2] == "test" then
+  start_game()
+end
+
+local function drop_star()
+  for i = 1, #stars do
+    local st = stars[i]
+    if not st.alive then
+      st.sprite.x = math.random(30, W - 30)
+      st.sprite.y = -20
+      st.fall = math.random(90, 170) + score
+      st.alive = true
+      st.sprite.visible = true
+      return
+    end
+  end
+end
+
+function update(dt)
+  if keyboard.pressed("escape") then exit() end
+
+  if not playing then
+    if game.start_pressed() then start_game() end
+    return
+  end
+
+  -- dt is seconds since the last frame, so speed works on any computer.
+  if keyboard.down("left") then
+    ship.x = ship.x - speed * dt
+  end
+  if keyboard.down("right") then
+    ship.x = ship.x + speed * dt
+  end
+  ship.x = clamp(ship.x, 28, W - 28)
+
+  wait = wait - dt
+  if wait <= 0 then
+    drop_star()
+    wait = 0.35 + math.random() * 0.45
+  end
+
+  for i = 1, #stars do
+    local st = stars[i]
+    if st.alive then
+      st.sprite.y = st.sprite.y + st.fall * dt
+      if st.sprite.y > H + 20 then
+        st.alive = false
+        st.sprite.visible = false
+        missed = missed + 1
+        music.sound("Boing", 180, 120)
+        if missed >= 3 then playing = false end
+      elseif math.abs(st.sprite.x - ship.x) < 42 and
+             math.abs(st.sprite.y - ship.y) < 42 then
+        st.alive = false
+        st.sprite.visible = false
+        score = score + 10
+        music.sound("Coin", 880, 60)
+      end
+    end
+  end
+end
+
+function draw()
+  screen.clear("blank")
+  screen.color = colors.white
+  screen.text(10, 10, "Score: " .. score .. "    Missed: " .. missed .. "/3")
+  if not playing then
+    screen.text_center(H / 2 - 20, "FIRST GAME")
+    screen.text_center(H / 2 + 10, "SPACE to play - arrow keys to catch stars")
+  end
+end

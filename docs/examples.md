@@ -2,7 +2,10 @@
 
 [<< Tyro docs index](README.md)
 
-See [demos/README.md](../demos/README.md) for the full demo index.
+Start with `demos/first_game.tyro` — it is short, needs no image files and
+uses the recommended `update(dt)` / `draw()` loop. See
+[Getting started](getting-started.md) for a step-by-step walkthrough and
+[demos/README.md](../demos/README.md) for the full index.
 Run any demo with:
 
 ```
@@ -11,7 +14,8 @@ tyro demos/<name>.tyro
 
 | File | Feature |
 |------|---------|
-| `demos/pong.tyro` | Complete Pong game — drawing, keyboard input, AI, physics, collision, sound, scoring |
+| `demos/first_game.tyro` | **Start here:** a complete tiny game with sprites, score, sound and keyboard input, all on `update(dt)` / `draw()` |
+| `demos/pong.tyro` | Classic Pong in the older `while true` + `sleep()` worker-loop style |
 | `demos/basic_drawing.tyro` | All drawing primitives: rectangle, circle, line, point, text, colors |
 | `demos/animated_demo.tyro` | Animation loop with random colors and sleep timing |
 | `demos/bounce_demo.tyro` | Engine-driven `update(dt)` / `draw()` loop — a ball moves once per frame |
