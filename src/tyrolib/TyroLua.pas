@@ -2078,7 +2078,12 @@ begin
     if Best <> '' then
     begin
       FLastHintField := Field;
-      Log.WriteLn(Format('Hint: Unknown "%s.%s" - did you mean "%s.%s"?', [FName, Field, FName, Best]));
+      if Engine <> nil then
+        Engine.Notice(Format('Hint: Unknown "%s.%s" - did you mean "%s.%s"?',
+          [FName, Field, FName, Best]))
+      else
+        Log.WriteLn(Format('Hint: Unknown "%s.%s" - did you mean "%s.%s"?',
+          [FName, Field, FName, Best]));
     end;
   end;
 end;

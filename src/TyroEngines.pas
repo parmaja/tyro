@@ -554,6 +554,10 @@ type
     procedure HideConsole;
     procedure ToggleConsole;
     procedure ToggleOutput;
+    //* A plain-language hint shown in the visible Output panel (and recorded
+    //* in the console). Used for typo suggestions and missing assets, which
+    //* used to go only to the hidden terminal.
+    procedure Notice(const S: string);
     procedure ShowEditor;
     procedure HideEditor;
     procedure ToggleEditor;
@@ -619,6 +623,8 @@ implementation
 
 uses
   TyroRadio, TyroSpectrum, mnHttpClient, mnModules;
+
+procedure EngineAssetMissing(const S: string); forward;
 
 const
   //* "tyro player.sprite" opens a window with room for the editor's tool
@@ -1718,6 +1724,7 @@ constructor TTyroEngine.Create;
 begin
   inherited;
   RayLibrary.Load;
+  OnAssetMissing := @EngineAssetMissing;
   Res := TTyroResources.Create;
   FControlCapture := nil;
   FOptions := [];
@@ -2611,6 +2618,22 @@ procedure TTyroEngine.LogWrite(Msg: string);
 begin
   Console.Write(Msg);
   //Output.Writeln(Trim(Msg));
+end;
+
+procedure TTyroEngine.Notice(const S: string);
+begin
+  if S = '' then
+    Exit;
+  if Output <> nil then
+    Output.Writeln(S);
+  if Console <> nil then
+    Console.Writeln(S);
+end;
+
+procedure EngineAssetMissing(const S: string);
+begin
+  if Engine <> nil then
+    Engine.Notice(S);
 end;
 
 function ParseLuaErrorLine(const AError: string; out ALine: Integer; out ACleanMsg: string): Boolean;

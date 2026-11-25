@@ -69,10 +69,16 @@ split big tasks into subtasks).
       line number and "Press F2 to edit, F5 to run again" into the visible
       `Output` panel as well as the hidden console. A kid in a normal GUI run
       can see the failure without opening F8.
-- [ ] Still open: typo hints still go only to the hidden console via
-      `Engine.LogWrite` (`TyroEngines.pas:3648-3651`); no red in-window banner
-      (still open in [`ROADMAP.md`](ROADMAP.md) P2); missing assets still draw
-      nothing instead of a placeholder.
+- [x] Second slice (2026-11-26): added `TTyroEngine.Notice`, which writes to
+      the visible Output panel and the console. Typo hints ("did you mean")
+      and missing-asset messages now use it; `OnAssetMissing` lets
+      `TyroClasses` report a miss without depending on `TyroEngines`.
+- [x] Missing images now draw a 32×32 magenta/black checker placeholder and
+      cache it, so one absent PNG neither blanks the game nor logs every frame.
+      Verified with `tests/roadmap02_p0_feedback_test.tyro` (unknown member +
+      missing image) — exits 0.
+- [ ] Still open: red in-window error banner and sprite/shader/sound missing
+      placeholders (still open in [`ROADMAP.md`](ROADMAP.md) P2).
 - [ ] Show the console or a red in-window error card on script failure;
       route engine hints to the visible Output panel; keep "Press F2 to edit"
       actionable.

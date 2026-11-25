@@ -636,6 +636,9 @@ var
   Lock: TmnCriticalSection = nil;
   //The x.image() texture cache; owned by this unit's initialization section.
   ImageStore: TTyroImageStore = nil;
+  //Set by TTyroEngine so asset loaders can report a miss in the visible
+  //Output panel instead of only WriteLn into a console nobody opened.
+  OnAssetMissing: procedure(const S: string) = nil;
 
 const
   cFramePerSeconds: Integer = 60;
@@ -1901,7 +1904,7 @@ end;
 function TTyroImageStore.Texture(const AFileName: string): TTexture2D;
 var
   FileName: string;
-  Img: TImage;
+  Img, Placeholder: TImage;
 begin
   Result := Default(TTexture2D);
   if AFileName = '' then
@@ -1919,10 +1922,27 @@ begin
       Result := Default(TTexture2D);
   end
   else
-    WriteLn('Image not loaded: ' + AFileName);
+  begin
+    //A magenta/black checker is impossible to miss in a kid's game, and it
+    //keeps the game running so one missing PNG does not blank the screen.
+    if Assigned(OnAssetMissing) then
+      OnAssetMissing('Image not loaded: ' + AFileName +
+        ' - put the file next to your script (showing a placeholder).')
+    else
+      WriteLn('Image not loaded: ' + AFileName);
+    Placeholder := RayLib.GenImageChecked(32, 32, 4, 4,
+      TColor.CreateRGBA($FFFF00FF), TColor.CreateRGBA($FF000000));
+    if RayLib.IsImageValid(Placeholder) then
+    begin
+      Result := RayLib.LoadTextureFromImage(Placeholder);
+      if not RayLib.IsTextureValid(Result) then
+        Result := Default(TTexture2D);
+      RayLib.UnloadImage(Placeholder);
+    end;
+  end;
   RayLib.UnloadImage(Img);
-  // Even a failed file is kept (with an empty texture): the miss is then
-  // reported once instead of once per frame.
+  // Even a failed file is kept (with the placeholder texture): the miss is
+  // then reported once instead of once per frame.
   FItems.Add(FileName, Result);
 end;
 
