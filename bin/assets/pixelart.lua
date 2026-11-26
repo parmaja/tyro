@@ -65,4 +65,20 @@ function M.save(s, name)
   return images.save(s, name)
 end
 
+-- An animation atlas: one shared sheet with `count` frames of tw x th,
+-- saved as name.png plus name.sprite. drawFrame(sheet, index, offsetX)
+-- paints frame `index` starting at offsetX; frames are named f0, f1, ...
+function M.atlas(name, tw, th, count, duration, drawFrame)
+  local sheet = images.new(tw * count, th)
+  local frames = {}
+  for i = 0, count - 1 do
+    drawFrame(sheet, i, i * tw)
+    frames[i + 1] = {
+      image = sheet, name = "f" .. i,
+      x = i * tw, y = 0, w = tw, h = th, duration = duration,
+    }
+  end
+  return images.savesprite(name .. ".sprite", frames)
+end
+
 return M

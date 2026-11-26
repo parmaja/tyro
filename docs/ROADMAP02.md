@@ -269,8 +269,12 @@ split big tasks into subtasks).
       `games/defender/make_assets.lua` (18 PNGs) replace their Pillow scripts
       with Tyro drawing. Both verified with the `probe` argument, which was
       cleaned up without touching shipped art.
-- [ ] Remaining: 8 games still have Python generators (bomberman, breakout,
-      mazerogue, neonrunner, seaquest, submarine, waddle, zonix). F3 cannot
+- [x] Batch 2: `games/neonrunner/make_assets.lua` regenerates all six
+      `.sprite` atlases (player, traffic, items, hazards, shield, boom) via a
+      new `pixelart.atlas()` helper. Probe run produced six valid ZIPs with
+      PNG + JSON inside and was cleaned up.
+- [ ] Remaining: 7 games still have Python generators (bomberman, breakout,
+      mazerogue, seaquest, submarine, waddle, zonix). F3 cannot
       export PNG/atlas and there is no asset browser
       ([`ROADMAP.md`](ROADMAP.md) P8).
 
