@@ -265,8 +265,14 @@ split big tasks into subtasks).
       save) and `games/spacefighter/make_assets.lua`, which generates all 16
       PNGs with Tyro itself. Verified with the `probe` argument (16 files, no
       shipped art touched); `make_assets.py` is now reference-only there.
-- [ ] Remaining: 10 games still have Python generators. F3 cannot export
-      PNG/atlas and there is no asset browser ([`ROADMAP.md`](ROADMAP.md) P8).
+- [x] Batch 1 of migration: `games/birds/make_assets.lua` (7 PNGs) and
+      `games/defender/make_assets.lua` (18 PNGs) replace their Pillow scripts
+      with Tyro drawing. Both verified with the `probe` argument, which was
+      cleaned up without touching shipped art.
+- [ ] Remaining: 8 games still have Python generators (bomberman, breakout,
+      mazerogue, neonrunner, seaquest, submarine, waddle, zonix). F3 cannot
+      export PNG/atlas and there is no asset browser
+      ([`ROADMAP.md`](ROADMAP.md) P8).
 
 ## Not chasing (same as ROADMAP.md)
 

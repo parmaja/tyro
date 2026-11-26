@@ -46,6 +46,16 @@ function M.circle(s, x, y, r, color, fill)
   s.circle(x, y, r, fill == nil or fill)
 end
 
+-- A filled rectangle with a border, the shape most placeholder art uses.
+function M.box(s, x, y, w, h, fill, border)
+  s.color = fill
+  s.rectangle(x, y, w, h, true)
+  if border then
+    s.color = border
+    s.rectangle(x, y, w, h, false)
+  end
+end
+
 function M.line(s, x1, y1, x2, y2, color)
   s.color = color
   s.line(x1, y1, x2, y2)
