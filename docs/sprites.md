@@ -16,6 +16,30 @@ positioned with `move` or by setting `x`/`y` properties.
 | `sprites("name")` | Look up a sprite by name (returns the sprite object or `nil`). |
 | `sprites.find("name")` | Same as above. |
 
+## Drawing your own art
+
+`images.*` draws pixels into a memory sheet, then saves it as a PNG or a
+`.sprite` animation atlas. This is how the shipped games generate their art —
+no Python, Pillow or extra module needed.
+
+```lua
+local s = images.sheet(64, 48, colors.navy)  -- new w,h [, filled colour]
+images.rect(s, 0, 0, 20, 20, colors.red, true)
+images.circle(s, 40, 24, 12, colors.cyan, true)
+images.line(s, 0, 40, 60, 40, colors.white)
+images.box(s, 2, 2, 16, 16, colors.gold, colors.white) -- fill, border
+images.poly(s, { 40,2, 60,20, 40,38, 20,20 }, colors.green, colors.white)
+images.save(s, "ship.png")
+
+-- One shared sheet, count frames, f0..fN-1, saved as PNG + .sprite:
+images.atlas("hero", 32, 32, 6, 120, function(sheet, i, offsetX)
+  images.box(sheet, offsetX + 1, 1, 30, 30, colors.cyan, colors.white)
+end)
+```
+
+Colours may be a packed integer (`rgb(...)`) or a name (`"gold"`). A sprite
+can use a generated sheet with `sprite:fromimage(sheet)`.
+
 ## Sprite Methods
 
 | Method | Description |

@@ -2,73 +2,72 @@
 -- Run: bin\tyro.exe games/defender/make_assets.lua --exit:2
 -- Add "probe" to write probe_def_*.png without touching the shipped art.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
-local function save(name, sheet) px.save(sheet, prefix .. name) end
+local function save(name, sheet) images.save(sheet, prefix .. name) end
 
 local function ship()
-  local s = px.sheet(34, 14)
-  px.poly(s, { 33,7, 10,1, 2,4, 0,7, 2,10, 10,13 }, rgb(210,225,240), rgb(90,110,140))
-  px.poly(s, { 12,5, 24,6, 24,8, 12,9 }, rgb(60,130,220))
-  px.rect(s, 0,6, 6,3, rgb(255,200,90), true)
-  px.rect(s, 2,5, 5,1, rgb(255,240,180), true)
-  px.rect(s, 2,9, 5,1, rgb(255,240,180), true)
+  local s = images.sheet(34, 14)
+  images.poly(s, { 33,7, 10,1, 2,4, 0,7, 2,10, 10,13 }, rgb(210,225,240), rgb(90,110,140))
+  images.poly(s, { 12,5, 24,6, 24,8, 12,9 }, rgb(60,130,220))
+  images.rect(s, 0,6, 6,3, rgb(255,200,90), true)
+  images.rect(s, 2,5, 5,1, rgb(255,240,180), true)
+  images.rect(s, 2,9, 5,1, rgb(255,240,180), true)
   return s
 end
 
 local function lander()
-  local s = px.sheet(22, 18)
-  px.circle(s, 11,5, 6, rgb(120,200,120), true)
-  px.poly(s, { 0,9, 21,9, 17,14, 4,14 }, rgb(70,160,80), rgb(30,90,40))
-  px.rect(s, 3,15, 2,3, rgb(40,110,50), true)
-  px.rect(s, 17,15, 2,3, rgb(40,110,50), true)
+  local s = images.sheet(22, 18)
+  images.circle(s, 11,5, 6, rgb(120,200,120), true)
+  images.poly(s, { 0,9, 21,9, 17,14, 4,14 }, rgb(70,160,80), rgb(30,90,40))
+  images.rect(s, 3,15, 2,3, rgb(40,110,50), true)
+  images.rect(s, 17,15, 2,3, rgb(40,110,50), true)
   s.color = rgb(230,255,230); s.point(8,4); s.point(13,4)
   return s
 end
 
 local function mutant()
-  local s = px.sheet(22, 18)
-  px.circle(s, 11,7, 5, rgb(220,70,70), true)
-  px.poly(s, { 0,4, 6,7, 6,10, 0,13 }, rgb(170,40,40), rgb(110,20,20))
-  px.poly(s, { 21,4, 15,7, 15,10, 21,13 }, rgb(170,40,40), rgb(110,20,20))
+  local s = images.sheet(22, 18)
+  images.circle(s, 11,7, 5, rgb(220,70,70), true)
+  images.poly(s, { 0,4, 6,7, 6,10, 0,13 }, rgb(170,40,40), rgb(110,20,20))
+  images.poly(s, { 21,4, 15,7, 15,10, 21,13 }, rgb(170,40,40), rgb(110,20,20))
   s.color = rgb(255,230,120); s.point(8,6); s.point(13,6)
-  px.rect(s, 8,13, 6,3, rgb(150,100,60), true)
+  images.rect(s, 8,13, 6,3, rgb(150,100,60), true)
   return s
 end
 
 local function bomber()
-  local s = px.sheet(24, 16)
-  px.poly(s, { 23,8, 6,1, 0,5, 0,11, 6,15 }, rgb(170,110,210), rgb(90,50,130))
-  px.rect(s, 6,6, 9,5, rgb(110,60,160), true)
-  px.rect(s, 0,7, 5,3, rgb(255,190,90), true)
+  local s = images.sheet(24, 16)
+  images.poly(s, { 23,8, 6,1, 0,5, 0,11, 6,15 }, rgb(170,110,210), rgb(90,50,130))
+  images.rect(s, 6,6, 9,5, rgb(110,60,160), true)
+  images.rect(s, 0,7, 5,3, rgb(255,190,90), true)
   s.color = rgb(240,230,255); s.point(17,6); s.point(17,10)
   return s
 end
 
 local function pod()
-  local s = px.sheet(18, 18)
-  px.circle(s, 9,9, 9, rgb(230,200,70), true)
+  local s = images.sheet(18, 18)
+  images.circle(s, 9,9, 9, rgb(230,200,70), true)
   s.color = rgb(120,90,10)
   s.point(5,5); s.point(12,5); s.point(5,12); s.point(12,12); s.point(8,8)
   return s
 end
 
 local function swarmer()
-  local s = px.sheet(14, 10)
-  px.poly(s, { 13,5, 3,0, 0,3, 0,7, 3,10 }, rgb(180,240,140), rgb(80,150,60))
+  local s = images.sheet(14, 10)
+  images.poly(s, { 13,5, 3,0, 0,3, 0,7, 3,10 }, rgb(180,240,140), rgb(80,150,60))
   s.color = rgb(255,80,80); s.point(7,5)
   return s
 end
 
 local function human()
-  local s = px.sheet(10, 18)
-  px.circle(s, 5,3, 3, rgb(230,230,230), true)
-  px.rect(s, 2,6, 6,7, rgb(235,235,235), true)
-  px.rect(s, 2,6, 6,2, rgb(80,150,230), true)
-  px.rect(s, 1,7, 1,5, rgb(200,200,200), true)
-  px.rect(s, 8,7, 1,5, rgb(200,200,200), true)
-  px.rect(s, 2,13, 2,5, rgb(150,150,160), true)
-  px.rect(s, 6,13, 2,5, rgb(150,150,160), true)
+  local s = images.sheet(10, 18)
+  images.circle(s, 5,3, 3, rgb(230,230,230), true)
+  images.rect(s, 2,6, 6,7, rgb(235,235,235), true)
+  images.rect(s, 2,6, 6,2, rgb(80,150,230), true)
+  images.rect(s, 1,7, 1,5, rgb(200,200,200), true)
+  images.rect(s, 8,7, 1,5, rgb(200,200,200), true)
+  images.rect(s, 2,13, 2,5, rgb(150,150,160), true)
+  images.rect(s, 6,13, 2,5, rgb(150,150,160), true)
   s.color = rgb(60,60,70); s.point(3,2); s.point(6,2)
   return s
 end
@@ -81,26 +80,26 @@ save("def_pod.png", pod())
 save("def_swarmer.png", swarmer())
 save("def_human.png", human())
 
-local bullet = px.sheet(12, 4)
-px.rect(bullet, 0,1, 12,2, rgb(120,230,255), true)
-px.rect(bullet, 8,0, 4,4, rgb(240,255,255), true)
+local bullet = images.sheet(12, 4)
+images.rect(bullet, 0,1, 12,2, rgb(120,230,255), true)
+images.rect(bullet, 8,0, 4,4, rgb(240,255,255), true)
 save("def_bullet.png", bullet)
 
-local bomb = px.sheet(8, 8)
-px.circle(bomb, 4,4, 4, rgb(255,120,60), true)
+local bomb = images.sheet(8, 8)
+images.circle(bomb, 4,4, 4, rgb(255,120,60), true)
 bomb.color = rgb(255,230,180); bomb.point(3,3)
 save("def_bomb.png", bomb)
 
 for i = 0, 3 do
-  local f = px.sheet(32, 32)
+  local f = images.sheet(32, 32)
   local r = 5 + i * 4
-  px.circle(f, 16,16, r, i == 3 and rgb(255,120,40) or rgb(255, 240 - i*40, 80), false)
-  px.circle(f, 16,16, math.floor(r/2), rgb(255,160,60), true)
+  images.circle(f, 16,16, r, i == 3 and rgb(255,120,40) or rgb(255, 240 - i*40, 80), false)
+  images.circle(f, 16,16, math.floor(r/2), rgb(255,160,60), true)
   save("def_boom" .. i .. ".png", f)
 end
 
 -- Backgrounds: simple seamless-ish patterns, no external images.
-local stars = px.sheet(512, 512)
+local stars = images.sheet(512, 512)
 math.randomseed(1)
 for i = 1, 240 do
   local x, y = math.random(1, 510), math.random(1, 510)
@@ -110,18 +109,18 @@ for i = 1, 240 do
 end
 save("def_stars.png", stars)
 
-local nebula = px.sheet(512, 512)
+local nebula = images.sheet(512, 512)
 math.randomseed(2)
 local clouds = { rgb(60,40,110), rgb(40,70,120), rgb(90,40,90), rgb(30,90,110) }
 for i = 1, 26 do
   local cx, cy = math.random(0,512), math.random(0,512)
   local r = math.random(30,90)
-  px.circle(nebula, cx, cy, r, clouds[math.random(#clouds)], true)
+  images.circle(nebula, cx, cy, r, clouds[math.random(#clouds)], true)
 end
 save("def_nebula.png", nebula)
 
 local function ridge(h, base, amp, color)
-  local s = px.sheet(512, h)
+  local s = images.sheet(512, h)
   math.randomseed(base)
   s.color = color
   for x = 0, 511 do
@@ -136,16 +135,17 @@ end
 save("def_mountains.png", ridge(200, 170, 150, rgb(46,40,70)))
 save("def_hills.png", ridge(140, 110, 100, rgb(52,68,58)))
 
-local ground = px.sheet(512, 56, rgb(74,58,46))
+local ground = images.sheet(512, 56, rgb(74,58,46))
 math.randomseed(5)
 for i = 1, 2048 do
   local x, y = math.random(0,511), math.random(3,55)
   local d = math.random(-18,18)
   ground.color = rgb(74+d, 58+d, 46+d); ground.point(x,y)
 end
-px.rect(ground, 0,0, 512,3, rgb(120,96,66), true)
-px.rect(ground, 0,0, 512,1, rgb(156,128,88), true)
+images.rect(ground, 0,0, 512,3, rgb(120,96,66), true)
+images.rect(ground, 0,0, 512,1, rgb(156,128,88), true)
 save("def_ground.png", ground)
 
 print("Defender assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

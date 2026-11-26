@@ -2,7 +2,6 @@
 -- Run: bin\tyro.exe games/neonrunner/make_assets.lua --exit:2
 -- Add "probe" to write img/probe_*.sprite without touching shipped art.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 
 local CYAN = rgb(0,240,255)
@@ -17,11 +16,11 @@ local METAL = rgb(70,85,120)
 
 local function bike(s, i, ox)
   local shift = ({ 0,-1,1,-4,0,0 })[i+1]
-  px.poly(s, { ox+4,18+shift, ox+18,10+shift, ox+46,12+shift, ox+60,17,
+  images.poly(s, { ox+4,18+shift, ox+18,10+shift, ox+46,12+shift, ox+60,17,
     ox+46,23+shift, ox+18,25+shift }, CHASSIS, METAL)
-  px.poly(s, { ox+16,14+shift, ox+40,15+shift, ox+44,19, ox+16,21+shift }, CYAN)
+  images.poly(s, { ox+16,14+shift, ox+40,15+shift, ox+44,19, ox+16,21+shift }, CYAN)
   if i == 4 then
-    px.poly(s, { ox+2,17, ox+10,12, ox+10,22 }, YELLOW)
+    images.poly(s, { ox+2,17, ox+10,12, ox+10,22 }, YELLOW)
   end
   if i == 5 then
     s.color = MAGENTA
@@ -29,76 +28,77 @@ local function bike(s, i, ox)
     s.line(ox+32,10, ox+40,24)
   end
 end
-px.atlas("img/" .. prefix .. "player", 64, 32, 6, 100, bike)
+images.atlas("img/" .. prefix .. "player", 64, 32, 6, 100, bike)
 
 local function traffic(s, i, ox)
   if i == 0 then
-    px.poly(s, { ox+6,13, ox+22,8, ox+50,11, ox+58,16, ox+48,22, ox+20,24, ox+6,20 }, RED, MAGENTA)
+    images.poly(s, { ox+6,13, ox+22,8, ox+50,11, ox+58,16, ox+48,22, ox+20,24, ox+6,20 }, RED, MAGENTA)
   elseif i == 1 then
-    px.box(s, ox+2,7, 58,20, CHASSIS, METAL)
-    px.rect(s, ox+6,9, 16,8, CYAN, true)
+    images.box(s, ox+2,7, 58,20, CHASSIS, METAL)
+    images.rect(s, ox+6,9, 16,8, CYAN, true)
   elseif i == 2 then
-    px.circle(s, ox+32,16, 13, PURPLE, true)
-    px.rect(s, ox+20,12, 24,8, CYAN, true)
+    images.circle(s, ox+32,16, 13, PURPLE, true)
+    images.rect(s, ox+20,12, 24,8, CYAN, true)
   else
-    px.poly(s, { ox+2,16, ox+26,8, ox+60,16, ox+26,24 }, MAGENTA, CYAN)
+    images.poly(s, { ox+2,16, ox+26,8, ox+60,16, ox+26,24 }, MAGENTA, CYAN)
   end
   s.color = WHITE; s.point(ox+52, 15); s.point(ox+52, 18)
 end
-px.atlas("img/" .. prefix .. "traffic", 64, 32, 4, 100, traffic)
+images.atlas("img/" .. prefix .. "traffic", 64, 32, 4, 100, traffic)
 
 local function item(s, i, ox)
   local c = ({ GREEN, CYAN, CYAN, RED, YELLOW })[i+1]
   if i == 0 then
-    px.box(s, ox+8,8, 15,17, CHASSIS, GREEN)
-    px.rect(s, ox+23,12, 3,9, METAL, true)
+    images.box(s, ox+8,8, 15,17, CHASSIS, GREEN)
+    images.rect(s, ox+23,12, 3,9, METAL, true)
   elseif i == 1 then
-    px.box(s, ox+7,7, 18,18, CHASSIS, CYAN)
+    images.box(s, ox+7,7, 18,18, CHASSIS, CYAN)
     s.color = WHITE; s.line(ox+11,16, ox+21,16); s.line(ox+16,11, ox+16,21)
   elseif i == 2 then
-    px.circle(s, ox+16,16, 12, CYAN, true)
-    px.circle(s, ox+16,16, 6, CHASSIS, true)
+    images.circle(s, ox+16,16, 12, CYAN, true)
+    images.circle(s, ox+16,16, 6, CHASSIS, true)
   elseif i == 3 then
-    px.circle(s, ox+16,16, 11, RED, true)
+    images.circle(s, ox+16,16, 11, RED, true)
     s.color = YELLOW; s.line(ox+8,16, ox+24,16)
   else
-    px.poly(s, { ox+4,24, ox+16,8, ox+28,24 }, YELLOW, CYAN)
+    images.poly(s, { ox+4,24, ox+16,8, ox+28,24 }, YELLOW, CYAN)
   end
 end
-px.atlas("img/" .. prefix .. "items", 32, 32, 5, 100, item)
+images.atlas("img/" .. prefix .. "items", 32, 32, 5, 100, item)
 
 local function hazard(s, i, ox)
   if i == 0 then
-    px.box(s, ox+2,12, 28,14, CHASSIS, YELLOW)
+    images.box(s, ox+2,12, 28,14, CHASSIS, YELLOW)
     for x = 4, 28, 6 do s.color = YELLOW; s.line(ox+x,12, ox+x,26) end
   elseif i == 1 then
-    px.box(s, ox+12,4, 8,26, METAL, CYAN)
-    px.circle(s, ox+16,6, 4, RED, true)
+    images.box(s, ox+12,4, 8,26, METAL, CYAN)
+    images.circle(s, ox+16,6, 4, RED, true)
   else
-    px.poly(s, { ox+2,26, ox+8,10, ox+14,26, ox+20,10, ox+26,26 }, METAL, RED)
+    images.poly(s, { ox+2,26, ox+8,10, ox+14,26, ox+20,10, ox+26,26 }, METAL, RED)
   end
 end
-px.atlas("img/" .. prefix .. "hazards", 32, 32, 3, 100, hazard)
+images.atlas("img/" .. prefix .. "hazards", 32, 32, 3, 100, hazard)
 
 local function shield(s, i, ox)
   local r = 18 + i
-  px.circle(s, ox+36,24, r, CYAN, false)
-  px.circle(s, ox+36,24, r-5, PURPLE, false)
-  px.circle(s, ox+36,24, r-10, WHITE, false)
+  images.circle(s, ox+36,24, r, CYAN, false)
+  images.circle(s, ox+36,24, r-5, PURPLE, false)
+  images.circle(s, ox+36,24, r-10, WHITE, false)
 end
-px.atlas("img/" .. prefix .. "shield", 72, 48, 4, 80, shield)
+images.atlas("img/" .. prefix .. "shield", 72, 48, 4, 80, shield)
 
 local function boom(s, i, ox)
   local r = 8 + i * 3
-  px.circle(s, ox+24,24, r, i < 3 and MAGENTA or YELLOW, true)
-  px.circle(s, ox+24,24, math.floor(r/2), WHITE, true)
+  images.circle(s, ox+24,24, r, i < 3 and MAGENTA or YELLOW, true)
+  images.circle(s, ox+24,24, math.floor(r/2), WHITE, true)
   s.color = RED
   for k = 0, 7 do
     local a = k * math.pi / 4
     s.point(ox+24 + math.floor(math.cos(a)*r), 24 + math.floor(math.sin(a)*r))
   end
 end
-px.atlas("img/" .. prefix .. "boom", 48, 48, 6, 70, boom)
+images.atlas("img/" .. prefix .. "boom", 48, 48, 6, 70, boom)
 
 print("Neon Runner atlases generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

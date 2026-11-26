@@ -206,8 +206,17 @@ type
     constructor Create(const AName: string; AScript: TLuaScript); override;
     destructor Destroy; override;
     function New_func(L: Plua_State): integer; cdecl;
+    function Sheet_func(L: Plua_State): integer; cdecl;
     function Save_func(L: Plua_State): integer; cdecl;
     function SaveSprite_func(L: Plua_State): integer; cdecl;
+    //Colored drawing helpers for asset generators (the sheet's own methods
+    //take the current color through a separate property write).
+    function Rect_func(L: Plua_State): integer; cdecl;
+    function Circle_func(L: Plua_State): integer; cdecl;
+    function Line_func(L: Plua_State): integer; cdecl;
+    function Box_func(L: Plua_State): integer; cdecl;
+    function Poly_func(L: Plua_State): integer; cdecl;
+    function Atlas_func(L: Plua_State): integer; cdecl;
     //The paint sheet behind a table argument (a sheet made by images.new),
     //or nil when the argument is anything else.
     function SheetArg(L: Plua_State; AIndex: Integer): TLuaImage;
@@ -2893,8 +2902,15 @@ begin
   // triangle, line, point, text, clear.
   Lua.State.RegisterTable('images');
   Lua.State.Register('images', 'new', Self, Images.New_func);
+  Lua.State.Register('images', 'sheet', Self, Images.Sheet_func);
   Lua.State.Register('images', 'save', Self, Images.Save_func);
   Lua.State.Register('images', 'savesprite', Self, Images.SaveSprite_func);
+  Lua.State.Register('images', 'rect', Self, Images.Rect_func);
+  Lua.State.Register('images', 'circle', Self, Images.Circle_func);
+  Lua.State.Register('images', 'line', Self, Images.Line_func);
+  Lua.State.Register('images', 'box', Self, Images.Box_func);
+  Lua.State.Register('images', 'poly', Self, Images.Poly_func);
+  Lua.State.Register('images', 'atlas', Self, Images.Atlas_func);
 
   // Tilemap system: tiles.new(...) creates a map, tiles.find(name) finds one.
   // A map table (returned by tiles.new) carries map:load/resize/set/get/data/
@@ -8419,6 +8435,17 @@ begin
     Result := nil;
 end;
 
+//Accept a packed integer, a CSS name, or a "r,g,b[,a]" string.
+function ColorArg(L: Plua_State; AIndex: Integer): TColor;
+begin
+  if L.IsInteger(AIndex) then
+    Result := Int64ToColor(L.ToInt64(AIndex))
+  else if L.IsString(AIndex) then
+    Result := StrToColor(L.ToString(AIndex))
+  else
+    Result := IntToColor(L.ToInteger(AIndex));
+end;
+
 //images.new(width, height [, name]) -> a paint sheet the script draws on
 //itself, the way a `canvas`, but living only in memory: no PNG has to exist
 //before the game runs. sprite:fromimage(sheet) installs the pixels.
@@ -8462,6 +8489,276 @@ begin
     idx := FItems.Add(Sheet);
     //the table carries its raw __sheet index; fromimage() maps it back here
     Result := Sheet.RegisterImage(idx, aName); //[sheet]
+  finally
+    CreateObj.Free;
+  end;
+end;
+
+function TLuaImages.Sheet_func(L: Plua_State): integer; cdecl;
+var
+  aWidth, aHeight, idx: Integer;
+  Sheet: TLuaImage;
+  CreateObj: TCreateImageObject;
+begin
+  //images.sheet(w, h [, color]) = images.new + one filled rectangle.
+  if L.ArgsCount < 2 then
+  begin
+    L.PushNil;
+    L.PushString('images.sheet: needs a width and a height');
+    Exit(2);
+  end;
+  aWidth := L.ToInteger(1);
+  aHeight := L.ToInteger(2);
+  if (aWidth < 1) or (aHeight < 1) or (aWidth > 4096) or (aHeight > 4096) then
+  begin
+    L.PushNil;
+    L.PushString('images.sheet: width and height must be between 1 and 4096');
+    Exit(2);
+  end;
+  CreateObj := TCreateImageObject.Create(aWidth, aHeight);
+  try
+    CreateObj.Run(Script.Thread);
+    if CreateObj.Canvas = nil then
+    begin
+      L.PushNil;
+      L.PushString('images.sheet: could not create the paint sheet');
+      Exit(2);
+    end;
+    Sheet := TLuaImage.Create('', Script, CreateObj.Canvas);
+    idx := FItems.Add(Sheet);
+    Result := Sheet.RegisterImage(idx, '');
+    if L.ArgsCount >= 3 then
+    begin
+      FScript.AddQueueObject(TDrawSetColorObject.Create(Sheet.Sheet, ColorArg(L, 3)));
+      FScript.AddQueueObject(TDrawRectangleObject.Create(Sheet.Sheet, 0, 0, aWidth, aHeight, True));
+    end;
+  finally
+    CreateObj.Free;
+  end;
+end;
+
+function TLuaImages.Rect_func(L: Plua_State): integer; cdecl;
+var
+  Img: TLuaImage;
+  x, y, w, h: Integer;
+  Fill: Boolean;
+begin
+  Img := SheetArg(L, 1);
+  if Img = nil then
+  begin L.PushNil; L.PushString('images.rect: needs a sheet'); Exit(2); end;
+  x := L.ToInteger(2); y := L.ToInteger(3);
+  w := L.ToInteger(4); h := L.ToInteger(5);
+  Fill := True;
+  if L.ArgsCount >= 7 then
+    Fill := L.ToBoolean(7);
+  FScript.AddQueueObject(TDrawSetColorObject.Create(Img.Sheet, ColorArg(L, 6)));
+  FScript.AddQueueObject(TDrawRectangleObject.Create(Img.Sheet, x, y, w, h, Fill));
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaImages.Circle_func(L: Plua_State): integer; cdecl;
+var
+  Img: TLuaImage;
+  x, y, r: Integer;
+  Fill: Boolean;
+begin
+  Img := SheetArg(L, 1);
+  if Img = nil then
+  begin L.PushNil; L.PushString('images.circle: needs a sheet'); Exit(2); end;
+  x := L.ToInteger(2); y := L.ToInteger(3); r := L.ToInteger(4);
+  Fill := True;
+  if L.ArgsCount >= 6 then
+    Fill := L.ToBoolean(6);
+  FScript.AddQueueObject(TDrawSetColorObject.Create(Img.Sheet, ColorArg(L, 5)));
+  FScript.AddQueueObject(TDrawCircleObject.Create(Img.Sheet, x, y, r, Fill));
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaImages.Line_func(L: Plua_State): integer; cdecl;
+var
+  Img: TLuaImage;
+  x1, y1, x2, y2: Integer;
+begin
+  Img := SheetArg(L, 1);
+  if Img = nil then
+  begin L.PushNil; L.PushString('images.line: needs a sheet'); Exit(2); end;
+  x1 := L.ToInteger(2); y1 := L.ToInteger(3);
+  x2 := L.ToInteger(4); y2 := L.ToInteger(5);
+  FScript.AddQueueObject(TDrawSetColorObject.Create(Img.Sheet, ColorArg(L, 6)));
+  FScript.AddQueueObject(TDrawLineObject.Create(Img.Sheet, x1, y1, x2, y2));
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaImages.Box_func(L: Plua_State): integer; cdecl;
+var
+  Img: TLuaImage;
+  x, y, w, h: Integer;
+begin
+  Img := SheetArg(L, 1);
+  if Img = nil then
+  begin L.PushNil; L.PushString('images.box: needs a sheet'); Exit(2); end;
+  x := L.ToInteger(2); y := L.ToInteger(3);
+  w := L.ToInteger(4); h := L.ToInteger(5);
+  FScript.AddQueueObject(TDrawSetColorObject.Create(Img.Sheet, ColorArg(L, 6)));
+  FScript.AddQueueObject(TDrawRectangleObject.Create(Img.Sheet, x, y, w, h, True));
+  if L.ArgsCount >= 7 then
+  begin
+    FScript.AddQueueObject(TDrawSetColorObject.Create(Img.Sheet, ColorArg(L, 7)));
+    FScript.AddQueueObject(TDrawRectangleObject.Create(Img.Sheet, x, y, w, h, False));
+  end;
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaImages.Poly_func(L: Plua_State): integer; cdecl;
+var
+  Img: TLuaImage;
+  Pts: array of Integer;
+  I, N: Integer;
+begin
+  Img := SheetArg(L, 1);
+  if Img = nil then
+  begin L.PushNil; L.PushString('images.poly: needs a sheet'); Exit(2); end;
+  if not L.IsTable(2) then
+  begin L.PushNil; L.PushString('images.poly: needs a flat {x,y,...} table'); Exit(2); end;
+  SetLength(Pts, 0);
+  I := 1;
+  while True do
+  begin
+    lua_rawgeti(L, 2, I);
+    if not L.IsNumber(-1) then
+    begin
+      lua_pop(L, 1);
+      Break;
+    end;
+    N := Length(Pts);
+    SetLength(Pts, N + 1);
+    Pts[N] := L.ToInteger(-1);
+    lua_pop(L, 1);
+    Inc(I);
+  end;
+  if Length(Pts) < 6 then
+  begin L.PushNil; L.PushString('images.poly: needs at least 3 points'); Exit(2); end;
+  FScript.AddQueueObject(TDrawSetColorObject.Create(Img.Sheet, ColorArg(L, 3)));
+  I := 2;
+  while (I + 1) * 2 <= Length(Pts) do
+  begin
+    FScript.AddQueueObject(TDrawTriangleObject.Create(Img.Sheet,
+      Pts[0], Pts[1], Pts[(I-1)*2], Pts[(I-1)*2+1], Pts[I*2], Pts[I*2+1], True));
+    Inc(I);
+  end;
+  if (L.ArgsCount >= 4) and (not L.IsNil(4)) then
+  begin
+    FScript.AddQueueObject(TDrawSetColorObject.Create(Img.Sheet, ColorArg(L, 4)));
+    for I := 0 to (Length(Pts) div 2) - 1 do
+    begin
+      N := (I + 1) mod (Length(Pts) div 2);
+      FScript.AddQueueObject(TDrawLineObject.Create(Img.Sheet,
+        Pts[I*2], Pts[I*2+1], Pts[N*2], Pts[N*2+1]));
+    end;
+  end;
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaImages.Atlas_func(L: Plua_State): integer; cdecl;
+var
+  aName, aMsg: string;
+  aW, aH, aCount, I, SheetIdx, FramesIdx, Ref, SaveRes: Integer;
+  aDuration: Double;
+  Ok: Boolean;
+  Sheet: TLuaImage;
+  CreateObj: TCreateImageObject;
+begin
+  //images.atlas(name, tw, th, count, duration, fn) paints `count` frames onto
+  //one sheet with fn(sheet, index, offsetX), then saves PNG + .sprite.
+  if L.ArgsCount < 6 then
+  begin
+    L.PushNil;
+    L.PushString('images.atlas: needs name, tw, th, count, duration, fn');
+    Exit(2);
+  end;
+  aName := L.ToString(1);
+  aW := L.ToInteger(2);
+  aH := L.ToInteger(3);
+  aCount := L.ToInteger(4);
+  aDuration := L.ToNumber(5);
+  if (aName = '') or (aW < 1) or (aH < 1) or (aW * aCount > 4096) or
+     (aH > 4096) or (aCount < 1) or (aCount > 256) then
+  begin
+    L.PushNil;
+    L.PushString('images.atlas: invalid size, count or name');
+    Exit(2);
+  end;
+  CreateObj := TCreateImageObject.Create(aW * aCount, aH);
+  try
+    CreateObj.Run(Script.Thread);
+    if CreateObj.Canvas = nil then
+    begin
+      L.PushNil;
+      L.PushString('images.atlas: could not create the paint sheet');
+      Exit(2);
+    end;
+    Sheet := TLuaImage.Create('', Script, CreateObj.Canvas);
+    FItems.Add(Sheet);
+    Sheet.RegisterImage(FItems.Count - 1, ''); //[.., sheet]
+    SheetIdx := lua_gettop(L); //absolute index of the new sheet table
+    if not lua_isfunction(L, 6) then
+    begin
+      L.PushNil;
+      L.PushString('images.atlas: last argument must be a function');
+      Exit(2);
+    end;
+    lua_pushvalue(L, 6);
+    Ref := luaL_ref(L, LUA_REGISTRYINDEX);
+
+    for I := 0 to aCount - 1 do
+    begin
+      lua_pushvalue(L, SheetIdx);
+      lua_pushinteger(L, I);
+      lua_pushinteger(L, I * aW);
+      FScript.CallRef(Ref, lua_gettop(L) - 2, 3);
+    end;
+
+    lua_createtable(L, aCount, 0);
+    FramesIdx := lua_gettop(L);
+    for I := 0 to aCount - 1 do
+    begin
+      lua_createtable(L, 0, 6);
+      lua_pushvalue(L, SheetIdx);
+      lua_setfield(L, -2, 'image');
+      lua_pushstring(L, PUTF8Char('f' + IntToStr(I)));
+      lua_setfield(L, -2, 'name');
+      lua_pushinteger(L, I * aW); lua_setfield(L, -2, 'x');
+      lua_pushinteger(L, 0); lua_setfield(L, -2, 'y');
+      lua_pushinteger(L, aW); lua_setfield(L, -2, 'w');
+      lua_pushinteger(L, aH); lua_setfield(L, -2, 'h');
+      lua_pushnumber(L, aDuration); lua_setfield(L, -2, 'duration');
+      lua_rawseti(L, FramesIdx, I + 1);
+    end;
+    lua_pushvalue(L, FramesIdx);
+    lua_replace(L, 2); //SaveSprite_func reads its frame table from index 2
+    SaveRes := SaveSprite_func(L);
+    //A C function must leave exactly its result values on the stack; the
+    //helper pushed sheet/frame tables above the results.
+    if SaveRes = 1 then
+    begin
+      Ok := L.ToBoolean(-1);
+      lua_settop(L, 0);
+      L.PushBoolean(Ok);
+    end
+    else
+    begin
+      aMsg := L.ToString(-1);
+      lua_settop(L, 0);
+      L.PushNil;
+      L.PushString(aMsg);
+    end;
+    Result := SaveRes;
+    luaL_unref(L, LUA_REGISTRYINDEX, Ref);
   finally
     CreateObj.Free;
   end;

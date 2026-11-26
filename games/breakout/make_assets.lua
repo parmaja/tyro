@@ -2,7 +2,6 @@
 -- Run: bin\tyro.exe games/breakout/make_assets.lua --exit:2
 -- Add "probe" to write probe_* files without touching the shipped assets.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local IMG = "img/" .. prefix
 local SFX = "sfx/" .. prefix
@@ -15,26 +14,26 @@ local ROW = {
   rgb(60,170,255), rgb(185,90,255), rgb(150,160,175), rgb(100,110,125),
 }
 
-px.atlas(IMG .. "bricks", 50, 22, 8, 400, function(s, i, ox)
-  px.box(s, ox+1,1, 48,20, ROW[i+1], WHITE)
-  px.rect(s, ox+3,3, 44,3, WHITE, true)
+images.atlas(IMG .. "bricks", 50, 22, 8, 400, function(s, i, ox)
+  images.box(s, ox+1,1, 48,20, ROW[i+1], WHITE)
+  images.rect(s, ox+3,3, 44,3, WHITE, true)
 end)
 
 local power = { CYAN, rgb(255,210,70), rgb(120,255,150), rgb(255,100,180) }
-px.atlas(IMG .. "powerups", 22, 22, 4, 600, function(s, i, ox)
-  px.circle(s, ox+11,11, 9, power[i+1], true)
+images.atlas(IMG .. "powerups", 22, 22, 4, 600, function(s, i, ox)
+  images.circle(s, ox+11,11, 9, power[i+1], true)
   s.color = NAVY; s.point(ox+11,11)
 end)
 
-local paddle = px.sheet(96, 16)
-px.box(paddle, 0,0, 96,16, rgb(40,60,110), CYAN)
-px.rect(paddle, 4,3, 88,4, CYAN, true)
-px.save(paddle, IMG .. "paddle.png")
+local paddle = images.sheet(96, 16)
+images.box(paddle, 0,0, 96,16, rgb(40,60,110), CYAN)
+images.rect(paddle, 4,3, 88,4, CYAN, true)
+images.save(paddle, IMG .. "paddle.png")
 
-local ball = px.sheet(16, 16)
-px.circle(ball, 8,8, 7, WHITE, true)
-px.circle(ball, 8,8, 3, CYAN, true)
-px.save(ball, IMG .. "ball.png")
+local ball = images.sheet(16, 16)
+images.circle(ball, 8,8, 7, WHITE, true)
+images.circle(ball, 8,8, 3, CYAN, true)
+images.save(ball, IMG .. "ball.png")
 
 sound.generate(SFX .. "bounce.wav", 520, 70, "sine", 0.45)
 sound.generate(SFX .. "brick.wav", 780, 90, "square", 0.35)
@@ -42,3 +41,4 @@ sound.generate(SFX .. "break.wav", 300, 180, "sweep", 0.4)
 
 print("Breakout assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

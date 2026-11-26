@@ -2,7 +2,6 @@
 -- Run: bin\tyro.exe games/bomberman/make_assets.lua --exit:2
 -- Add "probe" to write img/probe_* files without touching the shipped art.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local P = "img/" .. prefix
 
@@ -13,39 +12,39 @@ local YELLOW = rgb(250,210,70)
 local GREEN = rgb(90,200,120)
 
 local function atlas(name, count, dur, draw)
-  px.atlas(P .. name, 32, 32, count, dur, draw)
+  images.atlas(P .. name, 32, 32, count, dur, draw)
 end
 
 local function bomber(s, i, ox)
   local lift = ({ 0,-1,0,1 })[i+1]
-  px.circle(s, ox+16, 20+lift, 10, WHITE, true)
-  px.circle(s, ox+16, 12+lift, 8, RED, true)
-  px.box(s, ox+8,4+lift, 16,8, RED, YELLOW)
+  images.circle(s, ox+16, 20+lift, 10, WHITE, true)
+  images.circle(s, ox+16, 12+lift, 8, RED, true)
+  images.box(s, ox+8,4+lift, 16,8, RED, YELLOW)
   s.color = NAVY; s.point(ox+13,13+lift); s.point(ox+19,13+lift)
-  px.line(s, ox+8,29, ox+6,31, NAVY)
-  px.line(s, ox+24,29, ox+26,31, NAVY)
+  images.line(s, ox+8,29, ox+6,31, NAVY)
+  images.line(s, ox+24,29, ox+26,31, NAVY)
 end
 atlas("bomber", 4, 130, bomber)
 
 local function balom(s, i, ox)
   local puff = i * 2
-  px.circle(s, ox+16,16, 6+puff, rgb(200,120,220), true)
-  px.circle(s, ox+13,13, 3, WHITE, true)
+  images.circle(s, ox+16,16, 6+puff, rgb(200,120,220), true)
+  images.circle(s, ox+13,13, 3, WHITE, true)
 end
 atlas("balom", 4, 160, balom)
 
 local function bomb(s, i, ox)
   local r = 9 + i
-  px.circle(s, ox+16,18, r, NAVY, true)
-  px.circle(s, ox+12,13, 3, WHITE, true)
-  px.line(s, ox+18,8, ox+22,3+i, YELLOW)
+  images.circle(s, ox+16,18, r, NAVY, true)
+  images.circle(s, ox+12,13, 3, WHITE, true)
+  images.line(s, ox+18,8, ox+22,3+i, YELLOW)
   s.color = RED; s.point(ox+23,2+i)
 end
 atlas("bomb", 4, 90, bomb)
 
 local function door(s, i, ox)
-  px.box(s, ox+4,2, 24,30, rgb(120,80,50), YELLOW)
-  if i == 1 then px.rect(s, ox+8,4, 16,26, NAVY, true) end
+  images.box(s, ox+4,2, 24,30, rgb(120,80,50), YELLOW)
+  if i == 1 then images.rect(s, ox+8,4, 16,26, NAVY, true) end
 end
 atlas("door", 2, 0, door)
 
@@ -53,9 +52,9 @@ local function flame(which)
   return function(s, i, ox)
     local r = 6 + i*3
     local c = which == "center" and YELLOW or rgb(255,140,50)
-    px.circle(s, ox+16,16, r, c, true)
+    images.circle(s, ox+16,16, r, c, true)
     if which == "tip" then
-      px.poly(s, { ox+16,16-r, ox+16+r,16, ox+16,16+r, ox+16-r,16 }, RED, WHITE)
+      images.poly(s, { ox+16,16-r, ox+16+r,16, ox+16,16+r, ox+16-r,16 }, RED, WHITE)
     end
   end
 end
@@ -65,21 +64,22 @@ atlas("flame_tip", 4, 70, flame("tip"))
 
 local function powerup(s, i, ox)
   local c = ({ RED, YELLOW, GREEN, rgb(120,180,255) })[i+1]
-  px.box(s, ox+6,6, 20,20, c, WHITE)
+  images.box(s, ox+6,6, 20,20, c, WHITE)
   s.color = NAVY
   if i == 0 then s.line(ox+10,16, ox+22,16) end
   if i == 1 then s.line(ox+16,10, ox+16,22) end
-  if i == 2 then px.circle(s, ox+16,16, 5, NAVY, true) end
+  if i == 2 then images.circle(s, ox+16,16, 5, NAVY, true) end
   if i == 3 then s.point(ox+16,16) end
 end
 atlas("powerup", 4, 0, powerup)
 
-local tiles = px.sheet(128, 32)
-px.rect(tiles, 0,0, 32,32, rgb(60,120,70), true)
-px.rect(tiles, 32,0, 32,32, rgb(150,140,130), true)
-px.rect(tiles, 64,0, 32,32, rgb(100,90,85), true)
-px.rect(tiles, 96,0, 32,32, rgb(200,170,100), true)
-px.save(tiles, P .. "tiles.png")
+local tiles = images.sheet(128, 32)
+images.rect(tiles, 0,0, 32,32, rgb(60,120,70), true)
+images.rect(tiles, 32,0, 32,32, rgb(150,140,130), true)
+images.rect(tiles, 64,0, 32,32, rgb(100,90,85), true)
+images.rect(tiles, 96,0, 32,32, rgb(200,170,100), true)
+images.save(tiles, P .. "tiles.png")
 
 print("Bomberman assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

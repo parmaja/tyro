@@ -2,14 +2,13 @@
 -- Run: bin\tyro.exe games/mazerogue/make_assets.lua --exit:2
 -- Add "probe" to write probe_* files without touching the shipped art.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local P = "img/" .. prefix
 
 local function atlas(name, tw, th, count, dur, draw)
-  px.atlas(P .. name, tw, th, count, dur, draw)
+  images.atlas(P .. name, tw, th, count, dur, draw)
 end
-local function save(name, sheet) px.save(sheet, prefix .. name) end
+local function save(name, sheet) images.save(sheet, prefix .. name) end
 
 local WHITE = rgb(255,255,255)
 local NAVY = rgb(20,24,44)
@@ -22,8 +21,8 @@ local GREEN = rgb(100,220,130)
 local function enemy(name, w, h, col, dur)
   atlas(name, w, h, 4, dur, function(s, i, ox)
     local lift = ({ 0,-2,0,2 })[i+1]
-    px.circle(s, ox+w/2, h/2+lift, math.min(w,h)/2-3, col, true)
-    px.circle(s, ox+w/2, h/2+lift, math.min(w,h)/5, NAVY, true)
+    images.circle(s, ox+w/2, h/2+lift, math.min(w,h)/2-3, col, true)
+    images.circle(s, ox+w/2, h/2+lift, math.min(w,h)/5, NAVY, true)
     s.color = WHITE; s.point(ox+w/2-4, h/2-3+lift); s.point(ox+w/2+4, h/2-3+lift)
   end)
 end
@@ -35,57 +34,58 @@ enemy("enemy_turret", 32,32, rgb(160,160,180), 140)
 
 atlas("explosion", 48,48,8,60,function(s,i,ox)
   local r = 8 + i*2
-  px.circle(s, ox+24,24, r, i<4 and GOLD or RED, true)
-  px.circle(s, ox+24,24, math.max(3,math.floor(r/2)), WHITE, true)
+  images.circle(s, ox+24,24, r, i<4 and GOLD or RED, true)
+  images.circle(s, ox+24,24, math.max(3,math.floor(r/2)), WHITE, true)
 end)
 
 atlas("gem",18,18,4,120,function(s,i,ox)
-  px.poly(s, { ox+9,1, ox+17,9, ox+9,17, ox+1,9 }, i%2==0 and CYAN or PURPLE, WHITE)
+  images.poly(s, { ox+9,1, ox+17,9, ox+9,17, ox+1,9 }, i%2==0 and CYAN or PURPLE, WHITE)
 end)
 
 atlas("grenade",16,16,4,90,function(s,i,ox)
-  px.circle(s, ox+8,9, 6, rgb(60,70,90), true)
-  px.line(s, ox+10,4, ox+13,1+i%2, GOLD)
+  images.circle(s, ox+8,9, 6, rgb(60,70,90), true)
+  images.line(s, ox+10,4, ox+13,1+i%2, GOLD)
 end)
 
 atlas("gunner",32,32,4,120,function(s,i,ox)
   local lift = ({0,-1,0,1})[i+1]
-  px.circle(s, ox+16,20+lift, 10, rgb(90,130,190), true)
-  px.circle(s, ox+16,11+lift, 7, WHITE, true)
-  px.rect(s, ox+6,10+lift, 20,4, NAVY, true)
+  images.circle(s, ox+16,20+lift, 10, rgb(90,130,190), true)
+  images.circle(s, ox+16,11+lift, 7, WHITE, true)
+  images.rect(s, ox+6,10+lift, 20,4, NAVY, true)
 end)
 
 atlas("stairs",36,36,4,150,function(s,i,ox)
-  px.box(s, ox+2,2, 32,32, rgb(90,70,50), GOLD)
-  for k=0,3 do px.rect(s, ox+4, 6+k*7, 28,3, i%2==0 and GOLD or WHITE, true) end
+  images.box(s, ox+2,2, 32,32, rgb(90,70,50), GOLD)
+  for k=0,3 do images.rect(s, ox+4, 6+k*7, 28,3, i%2==0 and GOLD or WHITE, true) end
 end)
 
 -- Static props.
 local function small(w,h,draw,name)
-  local s = px.sheet(w,h); draw(s); save(name,s)
+  local s = images.sheet(w,h); draw(s); save(name,s)
 end
 
-small(26,30,function(s) px.box(s,0,0,26,30,rgb(150,90,50),NAVY) end,"barrel.png")
-small(20,12,function(s) px.rect(s,0,4,20,4,CYAN,true) end,"bullet.png")
-small(18,12,function(s) px.rect(s,0,4,18,4,RED,true) end,"bullet_enemy.png")
-small(28,28,function(s) px.box(s,0,0,28,28,rgb(140,100,60),NAVY) end,"crate.png")
-small(24,24,function(s) px.circle(s,12,12,9,RED,false); px.circle(s,12,12,4,WHITE,false) end,"crosshair.png")
-small(16,16,function(s) px.circle(s,8,8,5,NAVY,true) end,"grenade_shadow.png")
-small(24,24,function(s) px.circle(s,12,12,6,GOLD,true) end,"muzzle.png")
-small(22,22,function(s) px.circle(s,11,11,8,GREEN,true) end,"pickup_grenade.png")
-small(22,22,function(s) px.box(s,4,4,14,14,RED,WHITE) end,"pickup_health.png")
-small(22,22,function(s) px.box(s,6,4,10,14,GOLD,WHITE) end,"pickup_key.png")
-small(22,22,function(s) px.circle(s,11,11,8,CYAN,true) end,"pickup_shield.png")
-small(24,14,function(s) px.rect(s,0,4,24,6,PURPLE,true) end,"plasma_big.png")
-small(32,32,function(s) px.circle(s,16,16,12,rgb(50,40,40),true) end,"scorch.png")
+small(26,30,function(s) images.box(s,0,0,26,30,rgb(150,90,50),NAVY) end,"barrel.png")
+small(20,12,function(s) images.rect(s,0,4,20,4,CYAN,true) end,"bullet.png")
+small(18,12,function(s) images.rect(s,0,4,18,4,RED,true) end,"bullet_enemy.png")
+small(28,28,function(s) images.box(s,0,0,28,28,rgb(140,100,60),NAVY) end,"crate.png")
+small(24,24,function(s) images.circle(s,12,12,9,RED,false); images.circle(s,12,12,4,WHITE,false) end,"crosshair.png")
+small(16,16,function(s) images.circle(s,8,8,5,NAVY,true) end,"grenade_shadow.png")
+small(24,24,function(s) images.circle(s,12,12,6,GOLD,true) end,"muzzle.png")
+small(22,22,function(s) images.circle(s,11,11,8,GREEN,true) end,"pickup_grenade.png")
+small(22,22,function(s) images.box(s,4,4,14,14,RED,WHITE) end,"pickup_health.png")
+small(22,22,function(s) images.box(s,6,4,10,14,GOLD,WHITE) end,"pickup_key.png")
+small(22,22,function(s) images.circle(s,11,11,8,CYAN,true) end,"pickup_shield.png")
+small(24,14,function(s) images.rect(s,0,4,24,6,PURPLE,true) end,"plasma_big.png")
+small(32,32,function(s) images.circle(s,16,16,12,rgb(50,40,40),true) end,"scorch.png")
 
-local tiles = px.sheet(256,64)
+local tiles = images.sheet(256,64)
 for i=0,7 do
   local c = ({ rgb(60,110,70), rgb(120,110,100), rgb(80,80,90), rgb(60,60,75),
     rgb(150,120,80), rgb(90,130,160), rgb(40,45,60), rgb(120,90,140) })[i+1]
-  px.rect(tiles, i*32,0, 32,64, c, true)
+  images.rect(tiles, i*32,0, 32,64, c, true)
 end
 save("tiles.png", tiles)
 
 print("Mazerogue assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

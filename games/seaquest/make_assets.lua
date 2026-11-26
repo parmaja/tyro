@@ -2,15 +2,14 @@
 -- Run: bin\tyro.exe games/seaquest/make_assets.lua --exit:2
 -- Add "probe" to write probe_* files without touching the shipped art.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local D = prefix
 
 local function atlas(name, tw, th, count, dur, draw)
-  px.atlas(D .. name, tw, th, count, dur, draw)
+  images.atlas(D .. name, tw, th, count, dur, draw)
 end
 local function save(name, sheet)
-  px.save(sheet, prefix .. name)
+  images.save(sheet, prefix .. name)
 end
 
 local YELLOW = rgb(244,206,66)
@@ -22,23 +21,23 @@ local ORANGE = rgb(255,158,60)
 local WHITE = rgb(255,253,236)
 
 local function sub(s, i, ox)
-  px.poly(s, { ox+2,6, ox+22,2, ox+29,6, ox+29,9, ox+22,13, ox+2,11 }, YELLOW, STEEL)
-  px.circle(s, ox+18,7, 3, CYAN, true)
-  px.rect(s, ox+1,5+i, 3,4, STEEL, true)
+  images.poly(s, { ox+2,6, ox+22,2, ox+29,6, ox+29,9, ox+22,13, ox+2,11 }, YELLOW, STEEL)
+  images.circle(s, ox+18,7, 3, CYAN, true)
+  images.rect(s, ox+1,5+i, 3,4, STEEL, true)
   s.color = WHITE; s.point(ox+10,5)
 end
 atlas("sq_sub", 30, 12, 3, 70, sub)
 
 local function shark(s, i, ox)
   local fin = i * 2
-  px.poly(s, { ox+1,5, ox+20,2, ox+29,5, ox+20,8, ox+1,8 }, rgb(150,162,178), STEEL)
-  px.poly(s, { ox+12,2, ox+18,2-fin, ox+20,3 }, STEEL)
+  images.poly(s, { ox+1,5, ox+20,2, ox+29,5, ox+20,8, ox+1,8 }, rgb(150,162,178), STEEL)
+  images.poly(s, { ox+12,2, ox+18,2-fin, ox+20,3 }, STEEL)
   s.color = rgb(12,12,20); s.point(ox+24,5)
 end
 atlas("sq_shark", 30, 10, 2, 230, shark)
 
 local function squid(s, i, ox)
-  px.circle(s, ox+8,5, 5, PINK, true)
+  images.circle(s, ox+8,5, 5, PINK, true)
   s.color = rgb(140,46,96)
   for k=0,3 do s.line(ox+4+k*2, 9, ox+3+k*2+i, 12) end
   s.color = rgb(12,12,20); s.point(ox+6,4); s.point(ox+10,4)
@@ -47,34 +46,34 @@ atlas("sq_squid", 16, 12, 2, 180, squid)
 
 local function eel(s, i, ox)
   local w = math.floor(i)
-  px.line(s, ox+1, 4+i, ox+10, 4+w, rgb(90,200,140))
-  px.line(s, ox+10, 4+w, ox+20, 4, rgb(90,200,140))
+  images.line(s, ox+1, 4+i, ox+10, 4+w, rgb(90,200,140))
+  images.line(s, ox+10, 4+w, ox+20, 4, rgb(90,200,140))
   s.color = RED; s.point(ox+20,4)
 end
 atlas("sq_eel", 22, 8, 2, 110, eel)
 
 local function patrol(s, i, ox)
-  px.poly(s, { ox+1,5, ox+22,2, ox+29,5, ox+22,8, ox+1,8 }, RED, STEEL)
-  px.rect(s, ox+8,3, 10,4, CYAN, true)
+  images.poly(s, { ox+1,5, ox+22,2, ox+29,5, ox+22,8, ox+1,8 }, RED, STEEL)
+  images.rect(s, ox+8,3, 10,4, CYAN, true)
 end
 atlas("sq_patrol", 30, 10, 2, 110, patrol)
 
 local function kraken(s, i, ox)
-  px.circle(s, ox+38,24, 24, ORANGE, true)
+  images.circle(s, ox+38,24, 24, ORANGE, true)
   for k=0,5 do
     local a = k * math.pi / 3 + i * 0.08
     local x = ox+38 + math.floor(math.cos(a)*30)
     local y = 24 + math.floor(math.sin(a)*26)
-    px.line(s, ox+38,24, x,y, rgb(168,74,20))
+    images.line(s, ox+38,24, x,y, rgb(168,74,20))
   end
   s.color = rgb(12,12,20); s.point(ox+30,18); s.point(ox+46,18)
 end
 atlas("sq_kraken", 76, 56, 4, 200, kraken)
 
 local function diver(s, i, ox)
-  px.circle(s, ox+6,4, 4, rgb(238,222,190), true)
-  px.rect(s, ox+2,7, 9,7, rgb(60,96,214), true)
-  px.rect(s, ox+11,7, 2,5, YELLOW, true)
+  images.circle(s, ox+6,4, 4, rgb(238,222,190), true)
+  images.rect(s, ox+2,7, 9,7, rgb(60,96,214), true)
+  images.rect(s, ox+11,7, 2,5, YELLOW, true)
   s.line(s, ox+2,14+i, ox+1,14)
   s.line(s, ox+10,14+i, ox+11,14)
 end
@@ -82,25 +81,25 @@ atlas("sq_diver", 13, 14, 2, 260, diver)
 
 local function boom(s, i, ox)
   local r = 5 + i * 3
-  px.circle(s, ox+17,17, r, ORANGE, true)
-  px.circle(s, ox+17,17, math.max(2,math.floor(r/2)), YELLOW, true)
+  images.circle(s, ox+17,17, r, ORANGE, true)
+  images.circle(s, ox+17,17, math.max(2,math.floor(r/2)), YELLOW, true)
 end
 atlas("sq_boom", 34, 34, 5, 45, boom)
 
-local torpedo = px.sheet(16, 6)
-px.poly(torpedo, { 0,3, 12,1, 16,3, 12,5 }, STEEL, WHITE)
+local torpedo = images.sheet(16, 6)
+images.poly(torpedo, { 0,3, 12,1, 16,3, 12,5 }, STEEL, WHITE)
 save("sq_torpedo.png", torpedo)
 
-local torpedo_e = px.sheet(16, 6)
-px.poly(torpedo_e, { 0,3, 12,1, 16,3, 12,5 }, RED, WHITE)
+local torpedo_e = images.sheet(16, 6)
+images.poly(torpedo_e, { 0,3, 12,1, 16,3, 12,5 }, RED, WHITE)
 save("sq_torpedo_e.png", torpedo_e)
 
-local bubble = px.sheet(6, 6)
-px.circle(bubble, 3,3, 2, CYAN, false)
+local bubble = images.sheet(6, 6)
+images.circle(bubble, 3,3, 2, CYAN, false)
 save("sq_bubble.png", bubble)
 
-local pearl = px.sheet(8, 8)
-px.circle(pearl, 4,4, 3, WHITE, true)
+local pearl = images.sheet(8, 8)
+images.circle(pearl, 4,4, 3, WHITE, true)
 save("sq_pearl.png", pearl)
 
 -- Eight parallax levels: a sky band, two water bands and a simple seabed.
@@ -115,20 +114,21 @@ local levels = {
   { rgb(46,30,56),    rgb(26,14,44),   rgb(10,4,22),   rgb(58,40,56) },
 }
 for i, c in ipairs(levels) do
-  local bg = px.sheet(640, 540, c[1])
-  px.rect(bg, 0,62, 640,200, c[2], true)
-  px.rect(bg, 0,262, 640,278, c[3], true)
+  local bg = images.sheet(640, 540, c[1])
+  images.rect(bg, 0,62, 640,200, c[2], true)
+  images.rect(bg, 0,262, 640,278, c[3], true)
   save("sq_bg" .. i .. ".png", bg)
 
-  local flr = px.sheet(640, 150, c[4])
-  px.rect(flr, 0,0, 640,4, rgb(40,110,80), true)
+  local flr = images.sheet(640, 150, c[4])
+  images.rect(flr, 0,0, 640,4, rgb(40,110,80), true)
   math.randomseed(i*7+3)
   for k = 1, 14 do
     local x = math.random(0,620)
-    px.line(flr, x,60, x+math.random(-10,10), 20, rgb(96,176,92))
+    images.line(flr, x,60, x+math.random(-10,10), 20, rgb(96,176,92))
   end
   save("sq_flr" .. i .. ".png", flr)
 end
 
 print("Seaquest assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

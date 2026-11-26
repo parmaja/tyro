@@ -2,7 +2,6 @@
 -- Run: bin\tyro.exe games/submarine/make_assets.lua --exit:2
 -- Add "probe" to write probe_* files without touching the shipped assets.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local IMG = "img/" .. prefix
 local SFX = "sfx/" .. prefix
@@ -14,67 +13,67 @@ local CYAN = rgb(128,220,255)
 local RED = rgb(214,40,40)
 local GREEN = rgb(96,176,92)
 
-local function atlas(name,tw,th,count,dur,draw) px.atlas(IMG..name,tw,th,count,dur,draw) end
-local function save(name,s) px.save(s, IMG..name) end
+local function atlas(name,tw,th,count,dur,draw) images.atlas(IMG..name,tw,th,count,dur,draw) end
+local function save(name,s) images.save(s, IMG..name) end
 
 atlas("sub",48,20,4,120,function(s,i,ox)
   local bubble = i % 2
-  px.poly(s, { ox+2,10, ox+30,4, ox+47,10, ox+30,16, ox+2,15 }, YELLOW, WHITE)
-  px.circle(s, ox+30,10, 4, CYAN, true)
-  px.circle(s, ox+44-bubble*3, 10-bubble*2, 2, WHITE, true)
+  images.poly(s, { ox+2,10, ox+30,4, ox+47,10, ox+30,16, ox+2,15 }, YELLOW, WHITE)
+  images.circle(s, ox+30,10, 4, CYAN, true)
+  images.circle(s, ox+44-bubble*3, 10-bubble*2, 2, WHITE, true)
 end)
 
 atlas("shark",44,20,3,120,function(s,i,ox)
   local lift = ({0,-2,2})[i+1]
-  px.poly(s, { ox+1,10, ox+30,6+lift, ox+43,10, ox+30,15+lift, ox+1,14 }, rgb(150,162,178), WHITE)
-  px.poly(s, { ox+18,6+lift, ox+24,1+lift, ox+26,7+lift }, rgb(150,162,178), WHITE)
+  images.poly(s, { ox+1,10, ox+30,6+lift, ox+43,10, ox+30,15+lift, ox+1,14 }, rgb(150,162,178), WHITE)
+  images.poly(s, { ox+18,6+lift, ox+24,1+lift, ox+26,7+lift }, rgb(150,162,178), WHITE)
   s.color = NAVY; s.point(ox+36,10)
 end)
 
 atlas("patrol",54,20,2,120,function(s,i,ox)
-  px.poly(s, { ox+1,10, ox+40,5, ox+53,10, ox+40,15, ox+1,14 }, RED, WHITE)
-  px.rect(s, ox+16,7, 18,6, CYAN, true)
+  images.poly(s, { ox+1,10, ox+40,5, ox+53,10, ox+40,15, ox+1,14 }, RED, WHITE)
+  images.rect(s, ox+16,7, 18,6, CYAN, true)
 end)
 
 atlas("diver",22,14,3,120,function(s,i,ox)
-  px.circle(s, ox+6,5, 4, rgb(238,222,190), true)
-  px.rect(s, ox+2,8, 10,5, rgb(60,96,214), true)
-  px.line(s, ox+12,10, ox+20,10+i, YELLOW)
+  images.circle(s, ox+6,5, 4, rgb(238,222,190), true)
+  images.rect(s, ox+2,8, 10,5, rgb(60,96,214), true)
+  images.line(s, ox+12,10, ox+20,10+i, YELLOW)
 end)
 
 atlas("jelly",18,24,3,120,function(s,i,ox)
   local h = 7+i
-  px.circle(s, ox+9,h, 7, rgb(200,140,240), true)
-  for k=0,3 do px.line(s, ox+4+k*3, h+6, ox+4+k*3, 22, rgb(200,140,240)) end
+  images.circle(s, ox+9,h, 7, rgb(200,140,240), true)
+  for k=0,3 do images.line(s, ox+4+k*3, h+6, ox+4+k*3, 22, rgb(200,140,240)) end
 end)
 
 atlas("mine",18,18,2,120,function(s,i,ox)
-  px.circle(s, ox+9,9, 7, NAVY, true)
-  px.line(s, ox+9,3, ox+11+i,1, RED)
+  images.circle(s, ox+9,9, 7, NAVY, true)
+  images.line(s, ox+9,3, ox+11+i,1, RED)
   s.color = RED; s.point(ox+11+i,1)
 end)
 
 atlas("seaweed",16,36,3,120,function(s,i,ox)
   local sway = (i-1)*3
-  px.line(s, ox+8,35, ox+8+sway, 4, GREEN)
-  px.line(s, ox+8,35, ox+8-sway, 12, GREEN)
+  images.line(s, ox+8,35, ox+8+sway, 4, GREEN)
+  images.line(s, ox+8,35, ox+8-sway, 12, GREEN)
 end)
 
 atlas("boom",32,32,6,120,function(s,i,ox)
   local r = 5+i*3
-  px.circle(s, ox+16,16, r, i<3 and YELLOW or RED, true)
-  px.circle(s, ox+16,16, math.max(2,math.floor(r/2)), WHITE, true)
+  images.circle(s, ox+16,16, r, i<3 and YELLOW or RED, true)
+  images.circle(s, ox+16,16, math.max(2,math.floor(r/2)), WHITE, true)
 end)
 
 local function small(w,h,draw,name)
-  local s = px.sheet(w,h); draw(s); save(name,s)
+  local s = images.sheet(w,h); draw(s); save(name,s)
 end
 
-small(16,5,function(s) px.poly(s,{0,2,12,0,16,2,12,5},WHITE,CYAN) end,"torpedo.png")
-small(22,16,function(s) px.box(s,0,0,22,16,rgb(150,110,60),YELLOW) end,"chest.png")
-small(24,20,function(s) px.circle(s,12,14,8,rgb(90,160,120),true) end,"coral.png")
-small(30,16,function(s) px.circle(s,15,9,7,rgb(120,115,105),true) end,"rock.png")
-small(14,13,function(s) px.poly(s,{7,0,14,6,7,13,0,6},YELLOW,WHITE) end,"star.png")
+small(16,5,function(s) images.poly(s,{0,2,12,0,16,2,12,5},WHITE,CYAN) end,"torpedo.png")
+small(22,16,function(s) images.box(s,0,0,22,16,rgb(150,110,60),YELLOW) end,"chest.png")
+small(24,20,function(s) images.circle(s,12,14,8,rgb(90,160,120),true) end,"coral.png")
+small(30,16,function(s) images.circle(s,15,9,7,rgb(120,115,105),true) end,"rock.png")
+small(14,13,function(s) images.poly(s,{7,0,14,6,7,13,0,6},YELLOW,WHITE) end,"star.png")
 
 -- Ten classic arcade effects, all synthesised by Lua.
 sound.generate(SFX.."shoot.wav", 880, 60, "sweep", 0.35)
@@ -90,3 +89,4 @@ sound.generate(SFX.."start.wav", 330, 280, "square", 0.35)
 
 print("Submarine assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

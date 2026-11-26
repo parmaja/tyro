@@ -262,10 +262,10 @@ split big tasks into subtasks).
 - [x] Version mismatch fixed: `TyroVersion`/`TyroVersionString` are `0.8`,
       the CLI prints the constant instead of a hard-coded `0.1`, and the Lua
       global `version` now reports 0.8 too.
-- [x] Subtask 3: added `bin/assets/pixelart.lua` (sheet/poly/rect/circle/line/
-      save) and `games/spacefighter/make_assets.lua`, which generates all 16
-      PNGs with Tyro itself. Verified with the `probe` argument (16 files, no
-      shipped art touched); `make_assets.py` is now reference-only there.
+- [x] Subtask 3: added `games/spacefighter/make_assets.lua`, which generates
+      all 16 PNGs with the engine. Its Lua helper module was later removed:
+      `images.sheet/rect/circle/line/box/poly/atlas/save` now live in TyroLua.
+      Verified with the `probe` argument; `make_assets.py` is reference-only.
 - [x] Batch 1 of migration: `games/birds/make_assets.lua` (7 PNGs) and
       `games/defender/make_assets.lua` (18 PNGs) replace their Pillow scripts
       with Tyro drawing. Both verified with the `probe` argument, which was

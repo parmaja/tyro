@@ -22,10 +22,13 @@ $cases = @(
     @{ Script='tests\roadmap02_p2_error_labels_test.tyro'; Flag='--exit:2'; Code=1; Stdout='timer #1:' },
     @{ Script='tests\roadmap02_p2_font_rtl_test.tyro';    Flag='--exit:2'; Code=0; Stdout='font/rtl checks passed' },
     @{ Script='tests\roadmap02_p3_sound_generate_test.tyro'; Flag='--exit'; Code=0; Stdout='sound.generate: true' },
-    @{ Script='tests\roadmap02_p3_console_read_test.tyro'; Flag='--exit:2'; Code=0; Stdout='console.read returned: true' }
+    @{ Script='tests\roadmap02_p3_console_read_test.tyro'; Flag='--exit:2'; Code=0; Stdout='console.read returned: true' },
+    @{ Script='tests\roadmap02_p3_pixelart_test.tyro'; Flag='--exit:2'; Code=0; Stdout='pixelart engine checks passed' }
 )
 $failed = 0
 Remove-Item 'tests\roadmap02_p1_restart_count.txt' -ErrorAction SilentlyContinue
+Remove-Item 'tests\roadmap02_p3_pixelart_probe.png',
+  'tests\roadmap02_p3_atlas_probe.sprite' -ErrorAction SilentlyContinue
 foreach ($c in $cases) {
     $text = (& $exe $c.Script $c.Flag 2>&1 | Out-String)
     $code = $LASTEXITCODE

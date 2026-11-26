@@ -2,7 +2,6 @@
 -- Run: bin\tyro.exe games/zonix/make_assets.lua --exit:2
 -- Add "probe" to write probe_* files without touching the shipped assets.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local IMG = "img/" .. prefix
 local SFX = "sfx/" .. prefix
@@ -14,28 +13,28 @@ local MAGENTA = rgb(255,60,170)
 local GOLD = rgb(255,220,70)
 
 local function atlas(name,tw,th,count,dur,draw)
-  px.atlas(IMG..name,tw,th,count,dur,draw)
+  images.atlas(IMG..name,tw,th,count,dur,draw)
 end
 
 local function orb(s,i,ox)
   local pulse = i % 2
-  px.circle(s, ox+24,24, 20+pulse, MAGENTA, true)
-  px.circle(s, ox+24,24, 13, NAVY, true)
-  px.circle(s, ox+24,24, 7, CYAN, true)
+  images.circle(s, ox+24,24, 20+pulse, MAGENTA, true)
+  images.circle(s, ox+24,24, 13, NAVY, true)
+  images.circle(s, ox+24,24, 7, CYAN, true)
   s.color = WHITE; s.point(ox+19,18); s.point(ox+29,18)
 end
 atlas("orb",48,48,6,90,orb)
 atlas("fast_orb",48,48,4,70,function(s,i,ox)
   orb(s,i,ox)
-  px.line(s, ox+4,24, ox+16,24, CYAN)
-  px.line(s, ox+32,24, ox+44,24, CYAN)
+  images.line(s, ox+4,24, ox+16,24, CYAN)
+  images.line(s, ox+32,24, ox+44,24, CYAN)
 end)
 
 atlas("boss_core",64,64,6,100,function(s,i,ox)
   local r = 24 + (i%3)*4
-  px.circle(s, ox+32,32, r, MAGENTA, true)
-  px.circle(s, ox+32,32, r-8, NAVY, true)
-  px.circle(s, ox+32,32, r-16, GOLD, true)
+  images.circle(s, ox+32,32, r, MAGENTA, true)
+  images.circle(s, ox+32,32, r-8, NAVY, true)
+  images.circle(s, ox+32,32, r-16, GOLD, true)
   for k=0,7 do
     local a = k*math.pi/4 + i*0.1
     s.color = CYAN
@@ -45,36 +44,36 @@ end)
 
 atlas("cutter",24,24,8,120,function(s,i,ox)
   local spin = i * math.pi / 4
-  px.poly(s, { ox+12,2, ox+22,12, ox+12,22, ox+2,12 }, CYAN, WHITE)
+  images.poly(s, { ox+12,2, ox+22,12, ox+12,22, ox+2,12 }, CYAN, WHITE)
   s.color = NAVY
   s.line(ox+12,12, ox+12+math.floor(math.cos(spin)*8), 12+math.floor(math.sin(spin)*8))
 end)
 
 atlas("boom",32,32,8,50,function(s,i,ox)
   local r = 6 + i*2
-  px.circle(s, ox+16,16, r, i<4 and GOLD or MAGENTA, true)
-  px.circle(s, ox+16,16, math.max(2,math.floor(r/2)), WHITE, true)
+  images.circle(s, ox+16,16, r, i<4 and GOLD or MAGENTA, true)
+  images.circle(s, ox+16,16, math.max(2,math.floor(r/2)), WHITE, true)
 end)
 
 atlas("fuse",16,16,4,80,function(s,i,ox)
-  px.line(s, ox+2,14, ox+14,2, GOLD)
+  images.line(s, ox+2,14, ox+14,2, GOLD)
   s.color = WHITE; s.point(ox+8-i, 8+i)
 end)
 
 local powers = { CYAN, GOLD, rgb(120,255,150), MAGENTA, WHITE, rgb(180,120,255) }
 atlas("powerups",24,24,6,500,function(s,i,ox)
-  px.box(s, ox+4,4, 16,16, powers[i+1], WHITE)
+  images.box(s, ox+4,4, 16,16, powers[i+1], WHITE)
   s.color = NAVY; s.point(ox+12,12)
 end)
 
 atlas("spark",20,20,4,60,function(s,i,ox)
   local r = 3+i*2
-  px.circle(s, ox+10,10, r, CYAN, true)
-  px.circle(s, ox+10,10, 2, WHITE, true)
+  images.circle(s, ox+10,10, r, CYAN, true)
+  images.circle(s, ox+10,10, 2, WHITE, true)
 end)
 
 atlas("trail_spark",12,12,4,60,function(s,i,ox)
-  px.circle(s, ox+6,6, 2+(i%3), MAGENTA, true)
+  images.circle(s, ox+6,6, 2+(i%3), MAGENTA, true)
 end)
 
 sound.generate(SFX.."start.wav", 330, 250, "sweep", 0.35)
@@ -90,3 +89,4 @@ sound.generate(SFX.."alarm.wav", 440, 300, "square", 0.3)
 
 print("Zonix assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

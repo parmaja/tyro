@@ -2,48 +2,48 @@
 -- Run: bin\tyro.exe games/birds/make_assets.lua --exit:2
 -- Add "probe" to write probe_ab_*.png without touching the shipped art.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 
 local function save(name, sheet)
-  px.save(sheet, prefix .. name)
+  images.save(sheet, prefix .. name)
 end
 
 local grass = rgb(86, 150, 74)
 local dark = rgb(60, 112, 52)
 
-local ground = px.sheet(3200, 240, rgb(92, 64, 40))
-px.box(ground, 0, 0, 3200, 40, grass)
-px.rect(ground, 0, 0, 3200, 3, dark, true)
-px.rect(ground, 0, 34, 3200, 6, dark, true)
+local ground = images.sheet(3200, 240, rgb(92, 64, 40))
+images.box(ground, 0, 0, 3200, 40, grass)
+images.rect(ground, 0, 0, 3200, 3, dark, true)
+images.rect(ground, 0, 34, 3200, 6, dark, true)
 save("ab_ground.png", ground)
 
-local plank = px.sheet(24, 120)
-px.box(plank, 0, 0, 24, 120, rgb(168, 116, 66), rgb(120, 78, 42))
+local plank = images.sheet(24, 120)
+images.box(plank, 0, 0, 24, 120, rgb(168, 116, 66), rgb(120, 78, 42))
 save("ab_plank.png", plank)
 
-local beam = px.sheet(120, 24)
-px.box(beam, 0, 0, 120, 24, rgb(176, 124, 74), rgb(126, 84, 46))
+local beam = images.sheet(120, 24)
+images.box(beam, 0, 0, 120, 24, rgb(176, 124, 74), rgb(126, 84, 46))
 save("ab_beam.png", beam)
 
-local long_beam = px.sheet(240, 24)
-px.box(long_beam, 0, 0, 240, 24, rgb(176, 124, 74), rgb(126, 84, 46))
+local long_beam = images.sheet(240, 24)
+images.box(long_beam, 0, 0, 240, 24, rgb(176, 124, 74), rgb(126, 84, 46))
 save("ab_beam_long.png", long_beam)
 
-local block = px.sheet(40, 40)
-px.box(block, 0, 0, 40, 40, rgb(150, 150, 158), rgb(110, 110, 120))
+local block = images.sheet(40, 40)
+images.box(block, 0, 0, 40, 40, rgb(150, 150, 158), rgb(110, 110, 120))
 save("ab_block.png", block)
 
-local bird = px.sheet(30, 30)
-px.circle(bird, 15, 15, 14, rgb(214, 60, 60), true)
-px.circle(bird, 15, 15, 14, rgb(150, 30, 30), false)
+local bird = images.sheet(30, 30)
+images.circle(bird, 15, 15, 14, rgb(214, 60, 60), true)
+images.circle(bird, 15, 15, 14, rgb(150, 30, 30), false)
 save("ab_bird.png", bird)
 
-local pig = px.sheet(36, 36)
-px.circle(pig, 18, 18, 17, rgb(70, 160, 70), true)
-px.circle(pig, 18, 18, 17, rgb(40, 110, 40), false)
-px.circle(pig, 14, 12, 5, rgb(120, 200, 120), true)
+local pig = images.sheet(36, 36)
+images.circle(pig, 18, 18, 17, rgb(70, 160, 70), true)
+images.circle(pig, 18, 18, 17, rgb(40, 110, 40), false)
+images.circle(pig, 14, 12, 5, rgb(120, 200, 120), true)
 save("ab_pig.png", pig)
 
 print("Birds assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

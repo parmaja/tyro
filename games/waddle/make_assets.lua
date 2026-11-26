@@ -2,7 +2,6 @@
 -- Run: bin\tyro.exe games/waddle/make_assets.lua --exit:2
 -- Add "probe" to write img/probe_* files without touching the shipped art.
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local P = "img/" .. prefix
 
@@ -13,77 +12,78 @@ local PINK = rgb(255,150,180)
 local GREEN = rgb(120,210,120)
 
 local function atlas(name, tw, th, count, dur, draw)
-  px.atlas(P .. name, tw, th, count, dur, draw)
+  images.atlas(P .. name, tw, th, count, dur, draw)
 end
 
 local function waddle(s, i, ox)
   local step = ({ 0,-2,0,2,0,1 })[i+1]
-  px.circle(s, ox+12, 12+step, 10, PINK, true)
-  px.circle(s, ox+12, 9+step, 7, WHITE, false)
+  images.circle(s, ox+12, 12+step, 10, PINK, true)
+  images.circle(s, ox+12, 9+step, 7, WHITE, false)
   s.color = NAVY; s.point(ox+9,10+step); s.point(ox+15,10+step)
-  px.line(s, ox+6,20+step, ox+4,23, NAVY)
-  px.line(s, ox+18,20+step, ox+20,23, NAVY)
+  images.line(s, ox+6,20+step, ox+4,23, NAVY)
+  images.line(s, ox+18,20+step, ox+20,23, NAVY)
 end
 atlas("waddle", 24, 24, 6, 140, waddle)
 
 local skills = { NAVY, rgb(255,208,156), rgb(206,255,196),
   rgb(255,240,158), rgb(255,178,172), rgb(224,196,255), rgb(184,218,255) }
 local function badge(s, i, ox)
-  px.circle(s, ox+8,8, 7, skills[i+1], true)
-  px.box(s, ox+4,4, 8,8, skills[i+1], WHITE)
+  images.circle(s, ox+8,8, 7, skills[i+1], true)
+  images.box(s, ox+4,4, 8,8, skills[i+1], WHITE)
   if i > 0 then s.color = NAVY; s.point(ox+8,8) end
 end
 atlas("badge", 16, 16, 7, 0, badge)
 
 local function balloon(s, i, ox)
-  px.circle(s, ox+16, 13+i*2, 12, rgb(240,90,90), true)
-  px.line(s, ox+16,25+i*2, ox+16,31, WHITE)
+  images.circle(s, ox+16, 13+i*2, 12, rgb(240,90,90), true)
+  images.line(s, ox+16,25+i*2, ox+16,31, WHITE)
 end
 atlas("balloon", 32, 32, 2, 260, balloon)
 
 local function boulder(s, i, ox)
-  px.circle(s, ox+16,17, 13, rgb(130,130,140), true)
-  px.circle(s, ox+12,13, 5, rgb(170,170,180), true)
+  images.circle(s, ox+16,17, 13, rgb(130,130,140), true)
+  images.circle(s, ox+12,13, 5, rgb(170,170,180), true)
 end
 atlas("boulder", 32, 32, 1, 0, boulder)
 
 local function door(s, i, ox)
-  px.box(s, ox+2,2, 28,30, rgb(120,80,50), YELLOW)
-  px.circle(s, ox+23,17, 2, YELLOW, true)
-  if i == 1 then px.rect(s, ox+8,2, 16,30, NAVY, true) end
+  images.box(s, ox+2,2, 28,30, rgb(120,80,50), YELLOW)
+  images.circle(s, ox+23,17, 2, YELLOW, true)
+  if i == 1 then images.rect(s, ox+8,2, 16,30, NAVY, true) end
 end
 atlas("door", 32, 32, 2, 0, door)
 
 local function dust(s, i, ox)
   local r = 4 + i*2
-  px.circle(s, ox+12,12, r, rgb(220,220,210), true)
+  images.circle(s, ox+12,12, r, rgb(220,220,210), true)
 end
 atlas("dust", 24, 24, 3, 90, dust)
 
 local function sparkle(s, i, ox)
   local r = 3 + i*2
-  px.poly(s, { ox+12,12-r, ox+12+r,12, ox+12,12+r, ox+12-r,12 }, YELLOW, WHITE)
+  images.poly(s, { ox+12,12-r, ox+12+r,12, ox+12,12+r, ox+12-r,12 }, YELLOW, WHITE)
 end
 atlas("sparkle", 24, 24, 3, 80, sparkle)
 
-local tiles = px.sheet(128, 32)
-px.rect(tiles, 0,0, 32,32, GREEN, true)
-px.rect(tiles, 32,0, 32,32, rgb(110,80,50), true)
-px.rect(tiles, 64,0, 32,32, rgb(60,120,190), true)
-px.rect(tiles, 96,0, 32,32, rgb(180,180,190), true)
-px.save(tiles, P .. "tiles.png")
+local tiles = images.sheet(128, 32)
+images.rect(tiles, 0,0, 32,32, GREEN, true)
+images.rect(tiles, 32,0, 32,32, rgb(110,80,50), true)
+images.rect(tiles, 64,0, 32,32, rgb(60,120,190), true)
+images.rect(tiles, 96,0, 32,32, rgb(180,180,190), true)
+images.save(tiles, P .. "tiles.png")
 
-local cursor = px.sheet(24, 24)
-px.circle(cursor, 12,12, 9, WHITE, false)
-px.circle(cursor, 12,12, 6, YELLOW, false)
-px.save(cursor, P .. "cursor.png")
+local cursor = images.sheet(24, 24)
+images.circle(cursor, 12,12, 9, WHITE, false)
+images.circle(cursor, 12,12, 6, YELLOW, false)
+images.save(cursor, P .. "cursor.png")
 
-local preview = px.sheet(600, 1166, NAVY)
-px.box(preview, 20,20, 560,1126, rgb(40,55,90), WHITE)
+local preview = images.sheet(600, 1166, NAVY)
+images.box(preview, 20,20, 560,1126, rgb(40,55,90), WHITE)
 for i = 0, 5 do
-  px.circle(preview, 60 + i*90, 120, 24, skills[i+1], true)
+  images.circle(preview, 60 + i*90, 120, 24, skills[i+1], true)
 end
-px.save(preview, P .. "preview.png")
+images.save(preview, P .. "preview.png")
 
 print("Waddle assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+

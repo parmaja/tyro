@@ -8,7 +8,6 @@
 --  for checking the generator without touching the shipped art.
 --======================================================================
 
-local px = require("assets/pixelart")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 
 local HULL = rgb(50, 75, 120)
@@ -20,19 +19,19 @@ local RED = rgb(255, 70, 85)
 local GOLD = rgb(255, 210, 70)
 
 local function save(sheet, name)
-  px.save(sheet, prefix .. name)
+  images.save(sheet, prefix .. name)
 end
 
 local function ship(bank)
-  local s = px.sheet(64, 48)
+  local s = images.sheet(64, 48)
   local tilt = bank * 6
-  px.poly(s, {
+  images.poly(s, {
     32, 6, 44, 18, 60, 22 + tilt, 48, 30 + tilt, 32, 36,
     16, 30 - tilt, 4, 22 - tilt, 20, 18,
   }, HULL, EDGE)
-  px.poly(s, { 32, 10, 40, 20, 32, 30, 24, 20 }, PLATE, EDGE)
-  px.circle(s, 32, 20, 5, CYAN, true)
-  px.line(s, 31, 18, 33, 18, WHITE)
+  images.poly(s, { 32, 10, 40, 20, 32, 30, 24, 20 }, PLATE, EDGE)
+  images.circle(s, 32, 20, 5, CYAN, true)
+  images.line(s, 31, 18, 33, 18, WHITE)
   return s
 end
 
@@ -41,9 +40,9 @@ save(ship(-1), "ship_left.png")
 save(ship(1), "ship_right.png")
 
 local function enemy(w, h, color)
-  local s = px.sheet(w, h)
-  px.poly(s, { w / 2, 2, w - 2, h / 2, w / 2, h - 2, 2, h / 2 }, color, EDGE)
-  px.circle(s, w / 2, h / 2, h / 6, RED, true)
+  local s = images.sheet(w, h)
+  images.poly(s, { w / 2, 2, w - 2, h / 2, w / 2, h - 2, 2, h / 2 }, color, EDGE)
+  images.circle(s, w / 2, h / 2, h / 6, RED, true)
   return s
 end
 
@@ -51,17 +50,17 @@ save(enemy(40, 40, rgb(180, 60, 90)), "enemy_scout.png")
 save(enemy(52, 44, rgb(200, 90, 60)), "enemy_interceptor.png")
 save(enemy(72, 56, rgb(150, 60, 160)), "enemy_cruiser.png")
 
-local boss = px.sheet(96, 64)
-px.poly(boss, { 48, 2, 94, 20, 88, 60, 8, 60, 2, 20 }, rgb(140, 40, 120), EDGE)
-px.rect(boss, 34, 22, 28, 18, RED, true)
-px.circle(boss, 48, 31, 7, GOLD, true)
+local boss = images.sheet(96, 64)
+images.poly(boss, { 48, 2, 94, 20, 88, 60, 8, 60, 2, 20 }, rgb(140, 40, 120), EDGE)
+images.rect(boss, 34, 22, 28, 18, RED, true)
+images.circle(boss, 48, 31, 7, GOLD, true)
 save(boss, "boss.png")
 
 local function asteroid(seed, size)
-  local s = px.sheet(size, size)
-  px.circle(s, size / 2, size / 2, size / 2 - 2, rgb(130, 120, 110), true)
-  px.circle(s, size / 2 - size / 6, size / 2 - size / 6, size / 7, rgb(170, 160, 145), true)
-  px.circle(s, size / 2 + size / 5, size / 2 + size / 6, size / 9, rgb(90, 85, 80), true)
+  local s = images.sheet(size, size)
+  images.circle(s, size / 2, size / 2, size / 2 - 2, rgb(130, 120, 110), true)
+  images.circle(s, size / 2 - size / 6, size / 2 - size / 6, size / 7, rgb(170, 160, 145), true)
+  images.circle(s, size / 2 + size / 5, size / 2 + size / 6, size / 9, rgb(90, 85, 80), true)
   return s
 end
 
@@ -69,32 +68,33 @@ save(asteroid(101, 48), "asteroid1.png")
 save(asteroid(202, 56), "asteroid2.png")
 
 local function laser(color)
-  local s = px.sheet(6, 24)
-  px.rect(s, 2, 0, 2, 24, color, true)
-  px.rect(s, 1, 4, 4, 16, WHITE, true)
+  local s = images.sheet(6, 24)
+  images.rect(s, 2, 0, 2, 24, color, true)
+  images.rect(s, 1, 4, 4, 16, WHITE, true)
   return s
 end
 
 save(laser(CYAN), "laser_player.png")
 save(laser(RED), "laser_enemy.png")
 
-local spark = px.sheet(16, 16)
-px.circle(spark, 8, 8, 6, GOLD, true)
-px.circle(spark, 8, 8, 3, WHITE, true)
+local spark = images.sheet(16, 16)
+images.circle(spark, 8, 8, 6, GOLD, true)
+images.circle(spark, 8, 8, 3, WHITE, true)
 save(spark, "spark.png")
 
-local shield = px.sheet(72, 72)
-px.circle(shield, 36, 36, 32, CYAN, false)
-px.circle(shield, 36, 36, 27, CYAN, false)
+local shield = images.sheet(72, 72)
+images.circle(shield, 36, 36, 32, CYAN, false)
+images.circle(shield, 36, 36, 27, CYAN, false)
 save(shield, "shield.png")
 
 for i = 0, 2 do
-  local boom = px.sheet(32 + i * 16, 32 + i * 16)
+  local boom = images.sheet(32 + i * 16, 32 + i * 16)
   local size = 32 + i * 16
-  px.circle(boom, size / 2, size / 2, size / 2 - 2, i == 0 and GOLD or RED, true)
-  px.circle(boom, size / 2, size / 2, size / 4, WHITE, true)
+  images.circle(boom, size / 2, size / 2, size / 2 - 2, i == 0 and GOLD or RED, true)
+  images.circle(boom, size / 2, size / 2, size / 4, WHITE, true)
   save(boom, "boom" .. i .. ".png")
 end
 
 print("Space Fighter PNG assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()
+
