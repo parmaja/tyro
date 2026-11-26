@@ -289,7 +289,12 @@ split big tasks into subtasks).
 - [x] Batch 4 part 2: `games/submarine/make_assets.lua` regenerates 8 atlases,
       5 static PNGs and 10 WAV effects. Probe run produced 23 valid files and
       was cleaned up.
-- [ ] Remaining batch 4: zonix still has a Python generator. F3 cannot
+- [x] Batch 4 part 3: `games/zonix/make_assets.lua` regenerates 9 atlases
+      and 10 WAV effects. Probe run produced 19 valid files (all WAVs RIFF)
+      and was cleaned up.
+- [x] **All 11 game asset generators now have Lua replacements.** The Python
+      scripts remain in each game folder for reference only. F3 PNG/atlas
+      export and an asset browser are still separate P8 work.
       export PNG/atlas and there is no asset browser
       ([`ROADMAP.md`](ROADMAP.md) P8).
 
