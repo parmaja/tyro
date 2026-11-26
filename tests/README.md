@@ -13,7 +13,9 @@ powershell -ExecutionPolicy Bypass -File tests\run_roadmap02.ps1
 ```
 
 The runner executes 15 scripts with `--exit`/`--exit:N` and checks each exit
-code. A failing script is expected to exit 1 (for example
+code **plus** a golden file or a stdout pattern for most cases — so a script
+that silently stops early cannot pass on exit code alone. A failing script is
+expected to exit 1 (for example
 `syntax_error_audit.tyro` and the watchdog test); everything else must exit 0.
 It also prints the command for the in-window error-banner screenshot:
 

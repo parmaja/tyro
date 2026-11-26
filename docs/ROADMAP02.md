@@ -243,14 +243,16 @@ split big tasks into subtasks).
 
 ## P2 — Test and packaging hygiene
 
-- [ ] `tests/` is ~500 ad-hoc files with `_out.txt` goldens, no runner, no CI
-      workflow, no README. Several goldens are stale (P0-1).
-- [ ] Zero tests for kid-facing paths: error jump, `new` templates,
-      `console.read()`, missing assets, the commented-out `controls.*` table
-      functions, `game.pause_down`. Negative checks for the retired
-      `music.noise` / `window.shake` spellings now live in
-      `tests/roadmap02_p0_api_test.tyro`. No test checks that doc links or
-      demo-index files exist.
+- [x] Subtask 1: `tests/README.md` and `tests/run_roadmap02.ps1` are committed
+      via narrow `.gitignore` exceptions; ad-hoc goldens stay local. Subtask 2:
+      the runner now checks 15 exit codes **plus** golden-file/stdout patterns,
+      so silent early exits cannot pass.
+- [ ] Still no CI workflow, and most of the ~500 ad-hoc files are unversioned.
+- [x] Kid-facing paths now covered: missing assets, `controls.*` table forms,
+      `game.pause_down`, negative checks for retired spellings, scene/pause/
+      restart, scoreboard/state/ask helpers.
+- [ ] Not yet automated: editor error jump, console `new` templates and
+      `console.read()` (need GUI automation), plus a doc-link/demo-index check.
 - [x] Version mismatch fixed: `TyroVersion`/`TyroVersionString` are `0.8`,
       the CLI prints the constant instead of a hard-coded `0.1`, and the Lua
       global `version` now reports 0.8 too.

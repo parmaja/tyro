@@ -1,30 +1,41 @@
-# ROADMAP02 P0 smoke suite. Run from the repository root:
+# ROADMAP02 smoke suite. Run from the repository root:
 #   powershell -ExecutionPolicy Bypass -File tests\run_roadmap02.ps1
+# Each case checks the exit code and, where given, a golden file or a stdout
+# pattern - so a script that silently stops early cannot pass on exit code alone.
 $exe = '.\bin\tyro.exe'
 $cases = @(
-    @('tests\roadmap02_p0_api_test.tyro', '--exit', 0),
-    @('tests\roadmap02_p0_sound_test.tyro', '--exit', 0),
-    @('tests\roadmap02_p0_feedback_test.tyro', '--exit:2', 0),
-    @('tests\roadmap02_p0_robustness_test.tyro', '--exit', 0),
-    @('tests\roadmap02_p0_watchdog_test.tyro', '--exit:5', 1),
-    @('tests\syntax_error_audit.tyro', '--exit', 1),
-    @('tests\test_cli_exit_script.tyro', '--exit', 0),
-    @('demos\bounce_demo.tyro', '--exit:2', 0),
-    @('demos\animated_demo.tyro', '--exit:2', 0),
-    @('demos\sound.tyro', '--exit:2', 0),
-    @('demos\first_game.tyro', '--exit:2', 0),
-    @('tests\roadmap02_p1_scene_test.tyro', '--exit:3', 0),
-    @('tests\roadmap02_p1_pause_test.tyro', '--exit:3', 0),
-    @('tests\roadmap02_p1_restart_test.tyro', '--exit:3', 0),
-    @('tests\roadmap02_p1_helpers_test.tyro', '--exit', 0)
+    @{ Script='tests\roadmap02_p0_api_test.tyro';        Flag='--exit';  Code=0; Golden='roadmap02_p0_api_out.txt';        Pattern='ALL P0-1 API CHECKS PASSED' },
+    @{ Script='tests\roadmap02_p0_sound_test.tyro';      Flag='--exit';  Code=0; Stdout='sound duration 2000000000 ms is too long' },
+    @{ Script='tests\roadmap02_p0_feedback_test.tyro';   Flag='--exit:2'; Code=0; Stdout='feedback test survived' },
+    @{ Script='tests\roadmap02_p0_robustness_test.tyro'; Flag='--exit';  Code=0; Golden='roadmap02_p0_robustness_out.txt'; Pattern='ALL P0-4 ROBUSTNESS CHECKS PASSED' },
+    @{ Script='tests\roadmap02_p0_watchdog_test.tyro';   Flag='--exit:5'; Code=1; Stdout='Callback took too long' },
+    @{ Script='tests\syntax_error_audit.tyro';           Flag='--exit';  Code=1; Stdout='tyro_script:4: unexpected symbol' },
+    @{ Script='tests\test_cli_exit_script.tyro';         Flag='--exit';  Code=0; Stdout='cli-exit-script done' },
+    @{ Script='demos\bounce_demo.tyro';                  Flag='--exit:2'; Code=0 },
+    @{ Script='demos\animated_demo.tyro';                Flag='--exit:2'; Code=0 },
+    @{ Script='demos\sound.tyro';                        Flag='--exit:2'; Code=0 },
+    @{ Script='demos\first_game.tyro';                   Flag='--exit:2'; Code=0 },
+    @{ Script='tests\roadmap02_p1_scene_test.tyro';      Flag='--exit:3'; Code=0; Golden='roadmap02_p1_scene_out.txt';   Pattern='ALL P1-4 SCENE CHECKS PASSED' },
+    @{ Script='tests\roadmap02_p1_pause_test.tyro';      Flag='--exit:3'; Code=0; Golden='roadmap02_p1_pause_out.txt';   Pattern='ALL P1-4 PAUSE CHECKS PASSED' },
+    @{ Script='tests\roadmap02_p1_restart_test.tyro';    Flag='--exit:3'; Code=0; Golden='roadmap02_p1_restart_count.txt'; Pattern='2' },
+    @{ Script='tests\roadmap02_p1_helpers_test.tyro';    Flag='--exit';  Code=0; Golden='roadmap02_p1_helpers_out.txt';  Pattern='ALL P1-4 HELPER CHECKS PASSED' }
 )
 $failed = 0
+Remove-Item 'tests\roadmap02_p1_restart_count.txt' -ErrorAction SilentlyContinue
 foreach ($c in $cases) {
-    & $exe $c[0] $c[1] 2>&1 | Out-Null
+    $text = (& $exe $c.Script $c.Flag 2>&1 | Out-String)
     $code = $LASTEXITCODE
-    if ($code -eq $c[2]) { $mark = 'PASS' } else { $mark = 'FAIL'; $failed++ }
-    "$mark $($c[0]) exit=$code expected=$($c[2])"
+    $ok = ($code -eq $c.Code)
+    if ($ok -and $c.Golden) {
+        $golden = Join-Path 'tests' $c.Golden
+        $ok = (Test-Path $golden) -and ((Get-Content $golden -Raw) -match [regex]::Escape($c.Pattern))
+    }
+    if ($ok -and $c.Stdout) {
+        $ok = ($text -match [regex]::Escape($c.Stdout))
+    }
+    if ($ok) { $mark = 'PASS' } else { $mark = 'FAIL'; $failed++ }
+    "$mark $($c.Script) exit=$code expected=$($c.Code)"
 }
-"BANNER screenshot: tests\roadmap02_p0_banner_test.tyro --exit:2 --screenshot:1"
+"BANNER screenshot: bin\tyro.exe tests\roadmap02_p0_banner_test.tyro --exit:2 --screenshot:1"
 if ($failed -gt 0) { exit 1 }
-'ALL ROADMAP02 P0 CHECKS PASSED'
+'ALL ROADMAP02 SMOKE CHECKS PASSED'
