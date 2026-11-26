@@ -216,8 +216,9 @@ split big tasks into subtasks).
       `restart()` re-run from a clean window; `game.difficulty(1..10)` stores
       `game.level` and adjusts `world.timescale`. Tested in
       `tests/roadmap02_p1_pause_test.tyro` and `..._restart_test.tyro`.
-- [x] Added `scoreboard.lua` (sorted top-N table) and `state.lua` (snapshots
-      and undo/rewind). `ask.lua` was removed: the engine's
+- [x] The high-score table moved into the engine as `scores.top/add/best`;
+      `scoreboard.lua` was removed. `state.lua` (snapshots and undo/rewind) is
+      still a small experimental module. `ask.lua` was removed: the engine's
       `console.read(prompt, fn)` is now non-blocking, returning immediately
       and firing the callback on a later frame. Fixed the dangling waiting
       object that made the callback form crash at shutdown.

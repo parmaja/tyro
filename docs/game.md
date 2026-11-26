@@ -25,18 +25,28 @@ local r = rng(42)   -- repeatable random: r() 0..1, r(n) 1..n, r(a,b) a..b
 
 ## Helpers
 
-Some helpers are built into the engine; a few experimental ones still live in
-the app's `assets` folder and are loaded with `require`:
+The high-score table is built into the engine as `scores`:
 
 ```lua
-local board = require("assets/scoreboard")
+scores.add("hiscores.txt", "Ana", 4200, 5)
+for _, e in ipairs(scores.top("hiscores.txt", 5)) do
+  print(e.rank .. ". " .. e.name .. " - " .. e.score)
+end
+local best = scores.best("hiscores.txt")
+```
+
+`scores.top(file [, limit])` returns an array of `{ rank, name, score }`
+sorted highest first. `scores.add(file, name, points [, limit])` inserts a
+score, keeps the top *limit* (10 by default) and writes the tab-separated file
+next to your script. `scores.best(file)` answers the highest score.
+
+One experimental helper still lives in the app's `assets` folder and is loaded
+with `require`:
+
+```lua
 local state = require("assets/state")
 ```
 
-- `scoreboard.top(file [, limit])` → an array of `{ rank, name, score }`
-  sorted highest first. `scoreboard.add(file, name, points [, limit])` inserts
-  a score, keeps the top *limit* (10 by default) and writes the file next to
-  your script. `scoreboard.best(file)` answers the highest score.
 - `state.remember(t)` pushes a snapshot of a plain table's numbers, strings
   and booleans; `state.undo(t)` restores the last one. `state.snapshot(t)` /
   `state.restore(t, copy)` hand you a copy you can keep or tween.

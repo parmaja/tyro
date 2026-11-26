@@ -1076,6 +1076,9 @@ type
     function SceneList_func(L: Plua_State): integer; cdecl;
     function SceneRemove_func(L: Plua_State): integer; cdecl;
     function SceneClear_func(L: Plua_State): integer; cdecl;
+    function ScoresTop_func(L: Plua_State): integer; cdecl;
+    function ScoresAdd_func(L: Plua_State): integer; cdecl;
+    function ScoresBest_func(L: Plua_State): integer; cdecl;
     function Clock_func(L: Plua_State): integer; cdecl;
     function Time_func(L: Plua_State): integer; cdecl;
     //Text metrics for the built-in font, e.g. to centre a label:
@@ -2795,6 +2798,12 @@ begin
   Lua.State.Register('scene', 'list', Self, SceneList_func);
   Lua.State.Register('scene', 'remove', Self, SceneRemove_func);
   Lua.State.Register('scene', 'clear', Self, SceneClear_func);
+
+  //scores: a sorted top-N table in one tab-separated file per game.
+  Lua.State.RegisterTable('scores');
+  Lua.State.Register('scores', 'top', Self, ScoresTop_func);
+  Lua.State.Register('scores', 'add', Self, ScoresAdd_func);
+  Lua.State.Register('scores', 'best', Self, ScoresBest_func);
 
   //score: the best scores kept in one small text file per game.
   Lua.State.Register('score', 'hi_load', Game, Game.HiLoad_func);
@@ -6323,6 +6332,216 @@ begin
     R.Free;
   end;
   FConsoleReads.Clear;
+end;
+
+type
+  TScriptScoreEntry = record
+    Name: string;
+    Score: Int64;
+  end;
+  TScriptScoreEntries = array of TScriptScoreEntry;
+
+procedure SortScores(var Entries: TScriptScoreEntries);
+var
+  I, J: Integer;
+  Tmp: TScriptScoreEntry;
+begin
+  for I := 0 to High(Entries) do
+    for J := I + 1 to High(Entries) do
+      if Entries[J].Score > Entries[I].Score then
+      begin
+        Tmp := Entries[I];
+        Entries[I] := Entries[J];
+        Entries[J] := Tmp;
+      end;
+end;
+
+function ReadScoreFile(const AName: string; var Entries: TScriptScoreEntries;
+  out Err: string): Boolean;
+var
+  Full: string;
+  Lines: TStringList;
+  I, Tab: Integer;
+  Line, Name: string;
+  Value: Int64;
+  N: Integer;
+begin
+  Result := False;
+  Err := '';
+  Full := ResolveAndValidatePath(AName, Res.WorkPath);
+  if Full = '' then
+  begin
+    Err := 'scores: ''' + AName + ''' resolves outside the workspace';
+    Exit;
+  end;
+  SetLength(Entries, 0);
+  if not SysUtils.FileExists(Full) then
+    Exit(True); //no board yet is not an error
+  Lines := TStringList.Create;
+  try
+    try
+      Lines.LoadFromFile(Full);
+    except
+      on E: Exception do
+      begin
+        Err := 'scores: ' + E.Message;
+        Exit;
+      end;
+    end;
+    for I := 0 to Lines.Count - 1 do
+    begin
+      Line := Lines[I];
+      Tab := Pos(#9, Line);
+      if Tab < 2 then
+        Continue;
+      Name := Copy(Line, 1, Tab - 1);
+      if not TryStrToInt64(Trim(Copy(Line, Tab + 1, MaxInt)), Value) then
+        Continue;
+      N := Length(Entries);
+      SetLength(Entries, N + 1);
+      Entries[N].Name := Name;
+      Entries[N].Score := Value;
+    end;
+  finally
+    Lines.Free;
+  end;
+  Result := True;
+end;
+
+function WriteScoreFile(const AName: string; const Entries: TScriptScoreEntries;
+  out Err: string): Boolean;
+var
+  Full: string;
+  Lines: TStringList;
+  I: Integer;
+begin
+  Result := False;
+  Full := ResolveAndValidatePath(AName, Res.WorkPath);
+  if Full = '' then
+  begin
+    Err := 'scores: ''' + AName + ''' resolves outside the workspace';
+    Exit;
+  end;
+  Lines := TStringList.Create;
+  try
+    for I := 0 to High(Entries) do
+      Lines.Add(Entries[I].Name + #9 + IntToStr(Entries[I].Score));
+    try
+      Lines.SaveToFile(Full);
+      Result := True;
+    except
+      on E: Exception do
+        Err := 'scores: ' + E.Message;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure PushScoreEntries(L: Plua_State; const Entries: TScriptScoreEntries; ALimit: Integer);
+var
+  I, N: Integer;
+begin
+  N := Length(Entries);
+  if N > ALimit then
+    N := ALimit;
+  L.BeginTable; //the array
+  for I := 0 to N - 1 do
+  begin
+    L.BeginTable; //one entry
+    L.PushInteger(I + 1);
+    L.SetField(-2, 'rank');
+    L.PushString(Entries[I].Name);
+    L.SetField(-2, 'name');
+    L.PushInteger(Entries[I].Score);
+    L.SetField(-2, 'score');
+    lua_rawseti(L, -2, I + 1);
+  end;
+end;
+
+function TLuaScript.ScoresTop_func(L: Plua_State): integer; cdecl;
+var
+  Entries: TScriptScoreEntries;
+  Err: string;
+  Limit: Integer;
+begin
+  Limit := 10;
+  if (L.ArgsCount >= 2) and L.IsNumber(2) then
+  begin
+    Limit := L.ToInteger(2);
+    if Limit < 1 then Limit := 1;
+    if Limit > 100 then Limit := 100;
+  end;
+  if not ReadScoreFile(L.ToString(1), Entries, Err) then
+  begin
+    L.PushNil;
+    L.PushString(Err);
+    Exit(2);
+  end;
+  SortScores(Entries);
+  PushScoreEntries(L, Entries, Limit);
+  Result := 1;
+end;
+
+function TLuaScript.ScoresAdd_func(L: Plua_State): integer; cdecl;
+var
+  Entries: TScriptScoreEntries;
+  Err: string;
+  Limit, N: Integer;
+  Name: string;
+  Value: Int64;
+begin
+  Limit := 10;
+  if (L.ArgsCount >= 4) and L.IsNumber(4) then
+  begin
+    Limit := L.ToInteger(4);
+    if Limit < 1 then Limit := 1;
+    if Limit > 100 then Limit := 100;
+  end;
+  if not ReadScoreFile(L.ToString(1), Entries, Err) then
+  begin
+    L.PushNil;
+    L.PushString(Err);
+    Exit(2);
+  end;
+  Name := L.ToString(2);
+  if Name = '' then
+    Name := '?';
+  Value := L.ToInt64(3);
+  N := Length(Entries);
+  SetLength(Entries, N + 1);
+  Entries[N].Name := Name;
+  Entries[N].Score := Value;
+  SortScores(Entries);
+  if Length(Entries) > Limit then
+    SetLength(Entries, Limit);
+  if not WriteScoreFile(L.ToString(1), Entries, Err) then
+  begin
+    L.PushNil;
+    L.PushString(Err);
+    Exit(2);
+  end;
+  PushScoreEntries(L, Entries, Limit);
+  Result := 1;
+end;
+
+function TLuaScript.ScoresBest_func(L: Plua_State): integer; cdecl;
+var
+  Entries: TScriptScoreEntries;
+  Err: string;
+begin
+  if not ReadScoreFile(L.ToString(1), Entries, Err) then
+  begin
+    L.PushNil;
+    L.PushString(Err);
+    Exit(2);
+  end;
+  SortScores(Entries);
+  if Length(Entries) = 0 then
+    L.PushInteger(0)
+  else
+    L.PushInteger(Entries[0].Score);
+  Result := 1;
 end;
 
 function TLuaScript.SceneAdd_func(L: Plua_State): integer; cdecl;
