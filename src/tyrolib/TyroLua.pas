@@ -383,6 +383,8 @@ type
     function LoopPitch_func(L: Plua_State): integer; cdecl;
     function LoopVolume_func(L: Plua_State): integer; cdecl;
     function LoopStop_func(L: Plua_State): integer; cdecl;
+    //sound.generate(file, freq, ms [, wave [, volume]]) -> true | nil, err
+    function Generate_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaRadio }
@@ -2654,6 +2656,7 @@ begin
   Lua.State.Register('sound', 'beep', Sound, Sound.Beep_func);
   Lua.State.Register('sound', 'play', Sound, Sound.Play_func);
   Lua.State.Register('sound', 'noise', Sound, Sound.Noise_func);
+  Lua.State.Register('sound', 'generate', Sound, Sound.Generate_func);
   Lua.State.Register('sound', 'loopPlay', Sound, Sound.LoopPlay_func);
   Lua.State.Register('sound', 'loopPitch', Sound, Sound.LoopPitch_func);
   Lua.State.Register('sound', 'loopVolume', Sound, Sound.LoopVolume_func);
@@ -5219,6 +5222,47 @@ function TLuaSound.LoopStop_func(L: Plua_State): integer; cdecl;
 begin
   FScript.AddQueueObject(TStopLoopSoundObject.Create);
   Result := 0;
+end;
+
+function TLuaSound.Generate_func(L: Plua_State): integer; cdecl;
+var
+  aName, aKind, aResolved: string;
+  aFreq, aMs: Integer;
+  aVolume: Double;
+begin
+  if not L.IsString(1) then
+  begin
+    L.PushNil;
+    L.PushString('sound.generate: missing file name');
+    Exit(2);
+  end;
+  aName := L.ToString(1);
+  aFreq := L.ToInteger(2);
+  aMs := L.ToInteger(3);
+  aKind := 'sine';
+  if L.ArgsCount >= 4 then
+    aKind := L.ToString(4);
+  aVolume := 0.5;
+  if L.ArgsCount >= 5 then
+    aVolume := L.ToNumber(5);
+  aResolved := ResolveAndValidatePath(aName, Res.WorkPath);
+  if aResolved = '' then
+  begin
+    L.PushNil;
+    L.PushString('sound.generate: ''' + aName + ''' resolves outside the workspace');
+    Exit(2);
+  end;
+  if GenerateWaveFile(aResolved, aFreq, aMs, aKind, aVolume) then
+  begin
+    L.PushBoolean(True);
+    Result := 1;
+  end
+  else
+  begin
+    L.PushNil;
+    L.PushString('sound.generate: bad arguments or cannot write ' + aName);
+    Exit(2);
+  end;
 end;
 
 { TLuaRadio }

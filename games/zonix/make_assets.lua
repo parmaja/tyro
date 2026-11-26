@@ -3,7 +3,6 @@
 -- Add "probe" to write probe_* files without touching the shipped assets.
 
 local px = require("assets/pixelart")
-local sg = require("assets/soundgen")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local IMG = "img/" .. prefix
 local SFX = "sfx/" .. prefix
@@ -78,16 +77,16 @@ atlas("trail_spark",12,12,4,60,function(s,i,ox)
   px.circle(s, ox+6,6, 2+(i%3), MAGENTA, true)
 end)
 
-sg.wav(SFX.."start.wav", 330, 250, "sweep", 0.35)
-sg.wav(SFX.."cut.wav", 900, 60, "square", 0.3)
-sg.wav(SFX.."hit.wav", 180, 140, "noise", 0.45)
-sg.wav(SFX.."boom.wav", 80, 500, "noise", 0.6)
-sg.wav(SFX.."claim.wav", 660, 220, "sine", 0.4)
-sg.wav(SFX.."clear.wav", 880, 600, "sweep", 0.4)
-sg.wav(SFX.."over.wav", 140, 700, "sweep", 0.4)
-sg.wav(SFX.."powerup.wav", 520, 180, "square", 0.35)
-sg.wav(SFX.."freeze.wav", 1200, 400, "sweep", 0.3)
-sg.wav(SFX.."alarm.wav", 440, 300, "square", 0.3)
+sound.generate(SFX.."start.wav", 330, 250, "sweep", 0.35)
+sound.generate(SFX.."cut.wav", 900, 60, "square", 0.3)
+sound.generate(SFX.."hit.wav", 180, 140, "noise", 0.45)
+sound.generate(SFX.."boom.wav", 80, 500, "noise", 0.6)
+sound.generate(SFX.."claim.wav", 660, 220, "sine", 0.4)
+sound.generate(SFX.."clear.wav", 880, 600, "sweep", 0.4)
+sound.generate(SFX.."over.wav", 140, 700, "sweep", 0.4)
+sound.generate(SFX.."powerup.wav", 520, 180, "square", 0.35)
+sound.generate(SFX.."freeze.wav", 1200, 400, "sweep", 0.3)
+sound.generate(SFX.."alarm.wav", 440, 300, "square", 0.3)
 
 print("Zonix assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()

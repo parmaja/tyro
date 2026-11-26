@@ -3,7 +3,6 @@
 -- Add "probe" to write probe_* files without touching the shipped assets.
 
 local px = require("assets/pixelart")
-local sg = require("assets/soundgen")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local IMG = "img/" .. prefix
 local SFX = "sfx/" .. prefix
@@ -78,16 +77,16 @@ small(30,16,function(s) px.circle(s,15,9,7,rgb(120,115,105),true) end,"rock.png"
 small(14,13,function(s) px.poly(s,{7,0,14,6,7,13,0,6},YELLOW,WHITE) end,"star.png")
 
 -- Ten classic arcade effects, all synthesised by Lua.
-sg.wav(SFX.."shoot.wav", 880, 60, "sweep", 0.35)
-sg.wav(SFX.."hit.wav", 180, 150, "noise", 0.5)
-sg.wav(SFX.."boom.wav", 90, 400, "noise", 0.6)
-sg.wav(SFX.."pickup.wav", 660, 110, "sine", 0.4)
-sg.wav(SFX.."sonar.wav", 440, 500, "sweep", 0.3)
-sg.wav(SFX.."warn.wav", 220, 300, "square", 0.3)
-sg.wav(SFX.."deliver.wav", 520, 260, "sine", 0.45)
-sg.wav(SFX.."clear.wav", 780, 600, "sweep", 0.4)
-sg.wav(SFX.."over.wav", 140, 800, "sweep", 0.45)
-sg.wav(SFX.."start.wav", 330, 280, "square", 0.35)
+sound.generate(SFX.."shoot.wav", 880, 60, "sweep", 0.35)
+sound.generate(SFX.."hit.wav", 180, 150, "noise", 0.5)
+sound.generate(SFX.."boom.wav", 90, 400, "noise", 0.6)
+sound.generate(SFX.."pickup.wav", 660, 110, "sine", 0.4)
+sound.generate(SFX.."sonar.wav", 440, 500, "sweep", 0.3)
+sound.generate(SFX.."warn.wav", 220, 300, "square", 0.3)
+sound.generate(SFX.."deliver.wav", 520, 260, "sine", 0.45)
+sound.generate(SFX.."clear.wav", 780, 600, "sweep", 0.4)
+sound.generate(SFX.."over.wav", 140, 800, "sweep", 0.45)
+sound.generate(SFX.."start.wav", 330, 280, "square", 0.35)
 
 print("Submarine assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()

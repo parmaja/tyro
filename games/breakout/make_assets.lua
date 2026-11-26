@@ -3,7 +3,6 @@
 -- Add "probe" to write probe_* files without touching the shipped assets.
 
 local px = require("assets/pixelart")
-local sg = require("assets/soundgen")
 local prefix = (args and args[2] == "probe") and "probe_" or ""
 local IMG = "img/" .. prefix
 local SFX = "sfx/" .. prefix
@@ -37,9 +36,9 @@ px.circle(ball, 8,8, 7, WHITE, true)
 px.circle(ball, 8,8, 3, CYAN, true)
 px.save(ball, IMG .. "ball.png")
 
-sg.wav(SFX .. "bounce.wav", 520, 70, "sine", 0.45)
-sg.wav(SFX .. "brick.wav", 780, 90, "square", 0.35)
-sg.wav(SFX .. "break.wav", 300, 180, "sweep", 0.4)
+sound.generate(SFX .. "bounce.wav", 520, 70, "sine", 0.45)
+sound.generate(SFX .. "brick.wav", 780, 90, "square", 0.35)
+sound.generate(SFX .. "break.wav", 300, 180, "sweep", 0.4)
 
 print("Breakout assets generated with Tyro (prefix: " .. prefix .. ")")
 exit()

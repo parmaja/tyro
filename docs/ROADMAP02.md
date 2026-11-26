@@ -284,7 +284,7 @@ split big tasks into subtasks).
 - [x] Batch 3 part 4: `games/mazerogue/make_assets.lua` regenerates 10 atlases
       and 14 static PNGs/tiles. Probe run produced 24 files and was cleaned up.
 - [x] Batch 4 part 1: `games/breakout/make_assets.lua` regenerates 2 atlases,
-      2 PNGs and 3 WAV effects using the new `assets/soundgen` helper. Probe
+      2 PNGs and 3 WAV effects using `sound.generate` in the engine. Probe
       run produced 7 valid files (WAVs checked: RIFF/22050) and was cleaned up.
 - [x] Batch 4 part 2: `games/submarine/make_assets.lua` regenerates 8 atlases,
       5 static PNGs and 10 WAV effects. Probe run produced 23 valid files and

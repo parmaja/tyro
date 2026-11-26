@@ -144,6 +144,12 @@ slower than a frame. It exists to check that a body grouped with `enter()` /
 
 ## Sound
 
+`sound.generate("effect.wav", freq, ms [, wave [, volume]])` writes a small
+16-bit PCM WAV file next to your script. `wave` is `sine` (default), `square`,
+`saw`, `noise` or `sweep`; `volume` is 0..1. It is the engine way to make
+sound effects — no Python, `wave` module or extra library needed. Asset
+generators use it to build their `sfx/` folders.
+
 For sound, `music.beep()`, `music.sound(freq, ms)` or `music.sound(wave, freq,
 ms)`, `sound.noise(ms)` (white) / `sound.noise(freq, ms)` (pitched) and
 `music.mml(...)` play one-shot effects and tunes. The `music.volume` property

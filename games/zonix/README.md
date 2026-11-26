@@ -94,7 +94,7 @@ Each level features unique target thresholds, enemy compositions, speeds, and cu
 
 ## Asset Credits
 
-All sprite textures, atlases, animations, and sound effects are procedurally generated from scratch by Tyro itself (`make_assets.lua` with `assets/pixelart` and `assets/soundgen`) — no Python, Pillow or `wave` module needed. Run `bin\tyro.exe games/zonix/make_assets.lua --exit:2`; add `probe` to write `probe_*` files. Zero third-party or external copyrighted assets are used.
+All sprite textures, atlases, animations, and sound effects are procedurally generated from scratch by Tyro itself (`make_assets.lua` with the engine's drawing and `sound.generate`) — no Python, Pillow or `wave` module needed. Run `bin\tyro.exe games/zonix/make_assets.lua --exit:2`; add `probe` to write `probe_*` files. Zero third-party or external copyrighted assets are used.
 
 - **Author / Developer**: Belal / Antigravity AI
 - **Engine**: Tyro Game Engine (RayLib + Lua + FPC)

@@ -253,6 +253,11 @@ procedure PlaySoundFile(const AFileName: string; AVolume: Single = 1.0);
 procedure LoadSoundFile(const AFileName: string);
 //Drop a preloaded file from the sound cache - sound.unload().
 procedure UnloadSoundFile(const AFileName: string);
+//Write a small 16-bit mono PCM WAV effect - sound.generate(). Kind is
+//sine/square/saw/noise/sweep; volume is 0..1. Returns False on bad arguments
+//or a file error. The caller has already validated the workspace path.
+function GenerateWaveFile(const AFileName: string; Frequency, DurationMs: Integer;
+  const Kind: string; Volume: Single): Boolean;
 
 procedure UpdateMelodies;
 procedure UpdateWaveforms;
@@ -624,6 +629,87 @@ begin
   if SoundCache = nil then
     Exit;
   SoundCache.Unload(AFileName);
+end;
+
+function GenerateWaveFile(const AFileName: string; Frequency, DurationMs: Integer;
+  const Kind: string; Volume: Single): Boolean;
+const
+  cRate = 22050;
+var
+  F: TFileStream;
+  Header: array[0..43] of Byte;
+  Samples, I: Integer;
+  T, Value: Double;
+  Level: SmallInt;
+
+  procedure Put16(Offset: Integer; V: Integer);
+  begin
+    Header[Offset] := Byte(V and $FF);
+    Header[Offset + 1] := Byte((V shr 8) and $FF);
+  end;
+
+  procedure Put32(Offset: Integer; V: Integer);
+  begin
+    Header[Offset] := Byte(V and $FF);
+    Header[Offset + 1] := Byte((V shr 8) and $FF);
+    Header[Offset + 2] := Byte((V shr 16) and $FF);
+    Header[Offset + 3] := Byte((V shr 24) and $FF);
+  end;
+begin
+  Result := False;
+  if (AFileName = '') or (Frequency < 20) or (Frequency > 20000) or
+     (DurationMs < 1) or (DurationMs > 10000) then
+    Exit;
+  if Volume < 0 then Volume := 0;
+  if Volume > 1 then Volume := 1;
+  Samples := cRate * DurationMs div 1000;
+  if Samples < 1 then
+    Exit;
+
+  FillChar(Header, SizeOf(Header), 0);
+  Header[0] := Ord('R'); Header[1] := Ord('I');
+  Header[2] := Ord('F'); Header[3] := Ord('F');
+  Put32(4, 36 + Samples * 2);
+  Header[8] := Ord('W'); Header[9] := Ord('A');
+  Header[10] := Ord('V'); Header[11] := Ord('E');
+  Header[12] := Ord('f'); Header[13] := Ord('m');
+  Header[14] := Ord('t'); Header[15] := Ord(' ');
+  Put32(16, 16);
+  Put16(20, 1);            //PCM
+  Put16(22, 1);            //mono
+  Put32(24, cRate);
+  Put32(28, cRate * 2);    //byte rate
+  Put16(32, 2);            //block align
+  Put16(34, 16);           //bits per sample
+  Header[36] := Ord('d'); Header[37] := Ord('a');
+  Header[38] := Ord('t'); Header[39] := Ord('a');
+  Put32(40, Samples * 2);
+
+  F := TFileStream.Create(AFileName, fmCreate);
+  try
+    F.WriteBuffer(Header, SizeOf(Header));
+    for I := 0 to Samples - 1 do
+    begin
+      T := I / cRate;
+      if SameText(Kind, 'square') then
+      begin
+        if Sin(2 * Pi * Frequency * T) >= 0 then Value := 1 else Value := -1;
+      end
+      else if SameText(Kind, 'saw') then
+        Value := (Frequency * T - Int(Frequency * T)) * 2 - 1
+      else if SameText(Kind, 'noise') then
+        Value := Random * 2 - 1
+      else if SameText(Kind, 'sweep') then
+        Value := Sin(2 * Pi * Frequency * (1 + T * 3) * T)
+      else
+        Value := Sin(2 * Pi * Frequency * T);
+      Level := Round(Value * Volume * 32767);
+      F.WriteBuffer(Level, SizeOf(Level));
+    end;
+    Result := True;
+  finally
+    F.Free;
+  end;
 end;
 
 procedure PlaySoundFile(const AFileName: string; AVolume: Single);
