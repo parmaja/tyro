@@ -276,8 +276,11 @@ split big tasks into subtasks).
 - [x] Batch 3 part 1: `games/seaquest/make_assets.lua` regenerates 8 atlases,
       4 static PNGs and 16 parallax backgrounds. Probe run produced 28 files
       (all 8 ZIPs with PNG + JSON) and was cleaned up.
-- [ ] Remaining: 6 games still have Python generators (bomberman, breakout,
-      mazerogue, submarine, waddle, zonix). F3 cannot
+- [x] Batch 3 part 2: `games/waddle/make_assets.lua` regenerates 7 atlases
+      plus tiles, cursor and preview PNGs. Probe run produced 10 files and was
+      cleaned up.
+- [ ] Remaining: 5 games still have Python generators (bomberman, breakout,
+      mazerogue, submarine, zonix). F3 cannot
       export PNG/atlas and there is no asset browser
       ([`ROADMAP.md`](ROADMAP.md) P8).
 
