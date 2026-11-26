@@ -18,7 +18,8 @@ $cases = @(
     @{ Script='tests\roadmap02_p1_scene_test.tyro';      Flag='--exit:3'; Code=0; Golden='roadmap02_p1_scene_out.txt';   Pattern='ALL P1-4 SCENE CHECKS PASSED' },
     @{ Script='tests\roadmap02_p1_pause_test.tyro';      Flag='--exit:3'; Code=0; Golden='roadmap02_p1_pause_out.txt';   Pattern='ALL P1-4 PAUSE CHECKS PASSED' },
     @{ Script='tests\roadmap02_p1_restart_test.tyro';    Flag='--exit:3'; Code=0; Golden='roadmap02_p1_restart_count.txt'; Pattern='2' },
-    @{ Script='tests\roadmap02_p1_helpers_test.tyro';    Flag='--exit';  Code=0; Golden='roadmap02_p1_helpers_out.txt';  Pattern='ALL P1-4 HELPER CHECKS PASSED' }
+    @{ Script='tests\roadmap02_p1_helpers_test.tyro';    Flag='--exit';  Code=0; Golden='roadmap02_p1_helpers_out.txt';  Pattern='ALL P1-4 HELPER CHECKS PASSED' },
+    @{ Script='tests\roadmap02_p2_error_labels_test.tyro'; Flag='--exit:2'; Code=1; Stdout='timer #1:' }
 )
 $failed = 0
 Remove-Item 'tests\roadmap02_p1_restart_count.txt' -ErrorAction SilentlyContinue
@@ -36,6 +37,18 @@ foreach ($c in $cases) {
     if ($ok) { $mark = 'PASS' } else { $mark = 'FAIL'; $failed++ }
     "$mark $($c.Script) exit=$code expected=$($c.Code)"
 }
+# Packaging: --export must produce a runnable folder with a generated fuse.conf.
+Remove-Item 'tests\temp_export' -Recurse -Force -ErrorAction SilentlyContinue
+& $exe 'games\bubblepop\bubblepop.tyro' '--export=tests\temp_export' '--set-title=Export Probe' 2>&1 | Out-Null
+$conf = 'tests\temp_export\fuse.conf'
+if ((Test-Path $conf) -and ((Get-Content $conf -Raw) -match 'title=Export Probe')) {
+    'PASS --export folder + --set-title'
+} else {
+    'FAIL --export folder + --set-title'
+    $failed++
+}
+Remove-Item 'tests\temp_export' -Recurse -Force -ErrorAction SilentlyContinue
+
 "BANNER screenshot: bin\tyro.exe tests\roadmap02_p0_banner_test.tyro --exit:2 --screenshot:1"
 if ($failed -gt 0) { exit 1 }
 'ALL ROADMAP02 SMOKE CHECKS PASSED'

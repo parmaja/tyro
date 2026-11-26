@@ -1769,6 +1769,8 @@ begin
     if (aRunFile <> '') and (SysUtils.FileExists(aRunFile)) then
       ScriptFile := aRunFile;
     IsDebug := Config.ReadBool('debug', IsDebug);
+    //A packaged game can carry its own window title in fuse.conf.
+    World.Title := Config.ReadString('title', World.Title);
     aColor := Config.ReadString('backcolor', '');
     if aColor <> '' then
       World.BackColor := StrToColor(aColor);

@@ -298,6 +298,18 @@ split big tasks into subtasks).
       export PNG/atlas and there is no asset browser
       ([`ROADMAP.md`](ROADMAP.md) P8).
 
+## Extra items (chosen after P2)
+
+- [x] `--export=<dir|game.zip>` wraps the existing fuse packaging, and
+      `--set-title=<name>` writes `title=` into the generated `fuse.conf`
+      (loaded by `TTyroEngine.LoadConfig`). Documented in `getting-started.md`
+      and `help/fuse.md`. WASM is still deliberately skipped.
+- [x] Callback errors now name the source: `timer #1:`, `tween #1:` and
+      `on "name" #1:` (plus the Lua file/line). Verified by
+      `tests/roadmap02_p2_error_labels_test.tyro`.
+- [ ] Next: "Make 5 games" course + in-app API help, then font robustness /
+      RTL groundwork.
+
 ## Not chasing (same as ROADMAP.md)
 
 - Godot-style scene/inspector editor — would kill the one-window identity.

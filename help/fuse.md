@@ -19,6 +19,20 @@ Two things go after `--fuse`:
 | `<your game>` | Your game **folder** or one **single `.tyro` file** |
 | `<name of the zip>` | The zip file you want to create |
 
+### The shorter way: `--export`
+
+If your script is already on the command line, you can skip `--fuse` and name
+the output directly:
+
+```
+tyro mygame\mygame.tyro --export=mygame.zip
+tyro mygame\mygame.tyro --export=mygame-folder
+```
+
+A `.zip` target makes the same package as `--fuse`; any other name makes an
+unpacked folder you can zip or copy yourself. Add `--set-title="My Game"` to
+store a per-game window title in the package.
+
 ---
 
 ## Example 1: Pack a Whole Game Folder

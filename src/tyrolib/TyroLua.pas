@@ -3366,7 +3366,7 @@ begin
     begin
       Msg := string(UTF8String(lua_tostring(Lua.State, -1)));
       lua_pop(Lua.State, 1);
-      DoError('timer: ' + Msg);
+      DoError(Format('timer #%d: %s', [T.Id, Msg]));
     end;
     if not T.Periodic then
       T.Dead := True; //a one-shot leaves the world the moment it answers
@@ -3833,7 +3833,7 @@ begin
     begin
       Msg := string(UTF8String(lua_tostring(Lua.State, -1)));
       lua_pop(Lua.State, 1);
-      DoError('tween: ' + Msg);
+      DoError(Format('tween #%d: %s', [T.Id, Msg]));
     end;
     luaL_unref(Lua.State, LUA_REGISTRYINDEX, T.DoneRef);
     T.DoneRef := LUA_NOREF;
@@ -4094,7 +4094,7 @@ begin
     begin
       Msg := string(UTF8String(lua_tostring(L, -1)));
       lua_pop(L, 1);
-      DoError('on "' + AName + '": ' + Msg);
+      DoError(Format('on "%s" #%d: %s', [AName, H.Id, Msg]));
     end;
     Inc(Result);
     if Stopped then

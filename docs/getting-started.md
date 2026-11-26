@@ -70,6 +70,8 @@ Without a script argument Tyro starts an interactive console session.
 | `--exit[:N]` | Exit after *N* seconds, or — with a bare `--exit` (no `:N`) — as soon as the script finishes |
 | `--screenshot:N` | Save `screenshot.png` *N* seconds into the run; opens a window so the screen can be captured |
 | `--workpath=<path>` | Workspace directory (defaults to the executable location) |
+| `--export=<dir\|game.zip>` | Pack the script named on the command line into a shareable folder or zip (runtime included) |
+| `--set-title=<name>` | Window title stored in the exported game's `fuse.conf` |
 
 With an engine-driven script — one that defines `update`/`draw` (see
 [Timing](timing.md)) — the script "finishes" the moment its top-level chunk

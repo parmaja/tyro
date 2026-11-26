@@ -38,7 +38,13 @@ uses
  *
  * Returns True when the zip was written. AMessage receives the report:
  * warnings when successful, the error message when not. *}
-function FusePackage(const APathTo, AZipFile, AConfFile: string; out AMessage: string): Boolean;
+function FusePackage(const APathTo, AZipFile, AConfFile: string; out AMessage: string;
+  const ATitle: string = ''): Boolean;
+
+{* Same package as FusePackage, but unpacked into ADir so the game can be
+ * zipped or copied by hand. The intermediate zip is removed afterwards. *}
+function ExportPackage(const APathTo, ADir, AConfFile: string; out AMessage: string;
+  const ATitle: string = ''): Boolean;
 
 implementation
 
@@ -240,7 +246,8 @@ begin
 end;
 {$endif}
 
-function FusePackage(const APathTo, AZipFile, AConfFile: string; out AMessage: string): Boolean;
+function FusePackage(const APathTo, AZipFile, AConfFile: string; out AMessage: string;
+  const ATitle: string): Boolean;
 var
   aFiles: TStringList; // ArchiveName=DiskName
   aNotes: TStringList; // warnings collected on the way
@@ -317,6 +324,10 @@ begin
         exit;
       end;
 
+      //A per-game window title travels with the package; LoadConfig reads it.
+      if ATitle <> '' then
+        aContent := aContent + 'title=' + ATitle + sLineBreak;
+
       // fuse.conf lives inside the package only, the temp copy is deleted.
       aTmp := AZipFile + '.fuse.tmp';
       aConf := TStringList.Create;
@@ -345,6 +356,57 @@ begin
   finally
     aFiles.Free;
     aNotes.Free;
+  end;
+end;
+
+function ExportPackage(const APathTo, ADir, AConfFile: string; out AMessage: string;
+  const ATitle: string): Boolean;
+var
+  aZip, aReport: string;
+begin
+  Result := False;
+  AMessage := '';
+  if not ForceDirectories(ADir) then
+  begin
+    AMessage := 'cannot create folder: ' + ADir;
+    Exit;
+  end;
+  aZip := IncludeTrailingPathDelimiter(GetTempDir) + 'tyro_export_' +
+    IntToStr(GetTickCount) + '.zip';
+  try
+    try
+    if not FusePackage(APathTo, aZip, AConfFile, aReport, ATitle) then
+    begin
+      AMessage := aReport;
+      Exit;
+    end;
+    {$ifdef FPC}
+    with TUnZipper.Create do
+    try
+      FileName := aZip;
+      OutputPath := IncludeTrailingPathDelimiter(ExpandFileName(ADir));
+      UnZipAllFiles;
+    finally
+      Free;
+    end;
+    {$else}
+    with TZipFile.Create do
+    try
+      Open(aZip, zmRead);
+      ExtractAll(ADir);
+      Close;
+    finally
+      Free;
+    end;
+    {$endif}
+    Result := True;
+    AMessage := aReport;
+    except
+      on E: Exception do
+        AMessage := E.Message;
+    end;
+  finally
+    DeleteFile(aZip);
   end;
 end;
 

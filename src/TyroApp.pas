@@ -51,7 +51,7 @@ type
     FArguments: TConfFile;
     FTerminated: Boolean;
     MainOptions: TTyroEngineOptions;
-    procedure DoFuse(const APathTo, AZipFile: string);
+    procedure DoFuse(const APathTo, AZipFile, ATitle: string);
   protected
     procedure SetTitle(const AValue: string);
     procedure DoRun;
@@ -210,6 +210,8 @@ begin
   WriteLn('--exit[:N]             Exit after N seconds, or when the script ends');
   WriteLn('--screenshot:N         Save a screenshot after N seconds');
   WriteLn('--fuse <path> <zip>    Pack <path> with engine files into a fuse zip package');
+  WriteLn('--export=<dir|game.zip>  Pack the script on the command line for sharing');
+  WriteLn('--set-title=<name>     Window title stored inside the exported game');
   //WriteLn('--window -w            Show window');
 end;
 
@@ -321,7 +323,7 @@ end;
 //* Packs the game given by --fuse together with the engine files listed in
 //* release.conf (next to tyro.exe) into the target zip, reports to the
 //* console and sets a failing exit code when the package was not written.
-procedure TTyroApplication.DoFuse(const APathTo, AZipFile: string);
+procedure TTyroApplication.DoFuse(const APathTo, AZipFile, ATitle: string);
 var
   aConfFile: string;
   aMessage: string;
@@ -330,7 +332,7 @@ begin
   if not SysUtils.FileExists(aConfFile) then
     aConfFile := 'release.conf';
   WriteLn('fusing ' + APathTo + ' into ' + AZipFile);
-  if FusePackage(APathTo, AZipFile, aConfFile, aMessage) then
+  if FusePackage(APathTo, AZipFile, aConfFile, aMessage, ATitle) then
   begin
     if aMessage <> '' then
       WriteLn(aMessage);
@@ -353,6 +355,8 @@ var
   aFusePath: string;
   aFuseZip: string;
   aHelp: Boolean;
+  aExport, aExportZip: Boolean;
+  aExportTarget, aTitle, aReport: string;
 begin
   inherited;
   FLocation := ExtractFilePath(ParamStr(0));
@@ -361,12 +365,16 @@ begin
   //--fuse packs a game with the engine into a distributable zip, it needs
   //the console for its report and quits without creating the engine.
   aFuse := ReadFuseArguments(aFusePath, aFuseZip);
+  aExport := ReadValueSwitch('-export', aExportTarget);
+  aTitle := '';
+  ReadValueSwitch('-set-title', aTitle);
 
   //Help prints to the console too; without this it would write to the
   //never-opened GUI stdout and fail.
   aHelp := Arguments.ReadSwitch('-help') or Arguments.ReadSwitch('-h');
 
-  RunConsole := Arguments.ReadSwitch('-console') or Arguments.ReadSwitch('-c') or aFuse or aHelp;
+  RunConsole := Arguments.ReadSwitch('-console') or Arguments.ReadSwitch('-c') or
+    aFuse or aExport or aHelp;
   OpenConsole(RunConsole);
   RunConsole := RunConsole or IsConsole;
   if RunConsole then
@@ -403,7 +411,54 @@ begin
       ExitCode := 1;
     end
     else
-      DoFuse(aFusePath, aFuseZip);
+      DoFuse(aFusePath, aFuseZip, aTitle);
+    Engineless := True;
+    Terminate;
+    exit;
+  end;
+
+  //--export packs the script named on the command line. A .zip target uses
+  //the same fused zip as --fuse; any other name means an unpacked folder.
+  if aExport then
+  begin
+    aExportTarget := Trim(aExportTarget);
+    aExportZip := SameText(ExtractFileExt(aExportTarget), '.zip');
+    if aExportTarget = '' then
+    begin
+      WriteLn('usage: tyro <script> --export=<folder|game.zip>');
+      ExitCode := 1;
+    end
+    else
+    begin
+      aFusePath := FindScriptOnCommandLine;
+      if aFusePath = '' then
+      begin
+        WriteLn('export: no script found on the command line');
+        ExitCode := 1;
+      end
+      else if aExportZip then
+      begin
+        if not FusePackage(aFusePath, aExportTarget, FLocation + 'release.conf',
+          aReport, aTitle) then
+        begin
+          WriteLn('export failed: ' + aReport);
+          ExitCode := 1;
+        end
+        else
+          WriteLn('exported: ' + aExportTarget);
+      end
+      else
+      begin
+        if not ExportPackage(aFusePath, aExportTarget, FLocation + 'release.conf',
+          aReport, aTitle) then
+        begin
+          WriteLn('export failed: ' + aReport);
+          ExitCode := 1;
+        end
+        else
+          WriteLn('exported: ' + aExportTarget);
+      end;
+    end;
     Engineless := True;
     Terminate;
     exit;
