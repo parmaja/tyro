@@ -82,7 +82,11 @@ __recovery/
 /screenshots
 /games/kingvalley
 /games/minerman
-/tests
+# Ad-hoc test scripts and their generated artifacts stay local. The shared
+# runner and its README are the two exceptions that every contributor needs.
+/tests/*
+!/tests/README.md
+!/tests/run_roadmap02.ps1
 /.kilo
 # graphify: local extraction cache and machine-specific paths
 graphify-out/cache/
