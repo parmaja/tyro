@@ -72,12 +72,13 @@ game.
 Everything under `img/` and `sfx/` is **original, generated art**: run
 
 ```
-python games/submarine/make_assets.py
+bin\tyro.exe games/submarine/make_assets.lua --exit:2
 ```
 
 to regenerate all sprite sheets, `.sprite` atlases (ZIP + PNG + JSON
-frames) and the ten WAV sound effects with Pillow + the standard-library
-`wave` module. No external assets are used.
+frames) and the ten WAV sound effects with Tyro itself — no Python, Pillow
+or `wave` module. Add `probe` to write `probe_*` files. The older
+`make_assets.py` is kept for reference only. No external assets are used.
 
 The underwater look comes from `underwater.frag`, a custom GLSL shader
 applied to the whole canvas that adds wobble (growing with depth),
