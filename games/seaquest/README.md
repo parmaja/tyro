@@ -17,14 +17,16 @@ washes the whole scene in caustics, light shafts and depth grading.
 bin\tyro.exe games\seaquest\seaquest.tyro
 ```
 
-Regenerate the art (optional — needs Python 3 with Pillow):
+Regenerate the art with Tyro itself (no Python or Pillow needed):
 
 ```
-python games\seaquest\make_seaquest_assets.py
+bin\tyro.exe games\seaquest\make_assets.lua --exit:2
 ```
 
-The generated `sq_*` files are checked in beside the script, so the game runs
-as-is without Python.
+Add `probe` after the script name to write `probe_sq_*` files for checking
+without touching the shipped art. The generated `sq_*` files are checked in
+beside the script, so the game runs as-is. The older
+`make_seaquest_assets.py` is kept for reference only.
 
 ## Controls
 
@@ -123,7 +125,7 @@ delivery quota *and* sink it to move on.
 | `seaquest.tyro` | The game |
 | `seaquest_data.tyro` | Pure rules and tuning module (single source of truth) |
 | `seaquest.frag` | Water post-processing fragment shader (GLSL) |
-| `make_seaquest_assets.py` | Procedural asset generator (Pillow) |
+| `make_assets.lua` | Procedural asset generator (Tyro, no Python) |
 | `sq_*.sprite` | Animated sprite atlases (sub, divers, enemies, boom) |
 | `sq_bg*.png`, `sq_flr*.png` | Per-level parallax background and seabed |
 | `sq_torpedo*.png`, `sq_bubble.png`, `sq_pearl.png` | Static images |
@@ -134,8 +136,8 @@ delivery quota *and* sink it to move on.
 
 - **All artwork** (`sq_*.sprite`, `sq_bg*.png`, `sq_flr*.png`,
   `sq_torpedo*.png`, `sq_bubble.png`, `sq_pearl.png`): drawn procedurally at
-  native pixel resolution with Python and Pillow by
-  `games/seaquest/make_seaquest_assets.py`. **No third-party art is used and
+  native pixel resolution with Tyro by
+  `games/seaquest/make_assets.lua`. **No third-party art is used and
   nothing was downloaded** — the art, palettes and animation frames all come
   from that one script, so the game is fully self-contained and reproducible.
   Re-running it regenerates identical files (it seeds its random generator).

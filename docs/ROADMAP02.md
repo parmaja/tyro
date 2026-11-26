@@ -273,8 +273,11 @@ split big tasks into subtasks).
       `.sprite` atlases (player, traffic, items, hazards, shield, boom) via a
       new `pixelart.atlas()` helper. Probe run produced six valid ZIPs with
       PNG + JSON inside and was cleaned up.
-- [ ] Remaining: 7 games still have Python generators (bomberman, breakout,
-      mazerogue, seaquest, submarine, waddle, zonix). F3 cannot
+- [x] Batch 3 part 1: `games/seaquest/make_assets.lua` regenerates 8 atlases,
+      4 static PNGs and 16 parallax backgrounds. Probe run produced 28 files
+      (all 8 ZIPs with PNG + JSON) and was cleaned up.
+- [ ] Remaining: 6 games still have Python generators (bomberman, breakout,
+      mazerogue, submarine, waddle, zonix). F3 cannot
       export PNG/atlas and there is no asset browser
       ([`ROADMAP.md`](ROADMAP.md) P8).
 
