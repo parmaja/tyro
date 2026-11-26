@@ -40,17 +40,14 @@ sorted highest first. `scores.add(file, name, points [, limit])` inserts a
 score, keeps the top *limit* (10 by default) and writes the tab-separated file
 next to your script. `scores.best(file)` answers the highest score.
 
-One experimental helper still lives in the app's `assets` folder and is loaded
-with `require`:
-
-```lua
-local state = require("assets/state")
-```
+Table snapshots and undo are also built in, as the `state` table:
 
 - `state.remember(t)` pushes a snapshot of a plain table's numbers, strings
   and booleans; `state.undo(t)` restores the last one. `state.snapshot(t)` /
   `state.restore(t, copy)` hand you a copy you can keep or tween.
   `state.count(t)` and `state.clear(t)` manage the stack.
+
+No helper module is required for any of this — everything is in the engine.
 
 For a question in the game, use the engine's non-blocking console read:
 

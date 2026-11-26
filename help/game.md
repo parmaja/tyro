@@ -65,7 +65,7 @@ end
 ## Ready-made helpers
 
 The built-in `scores` table gives a sorted high-score table (`top`, `add`,
-`best`); `require("assets/state")` still gives table snapshots and undo
+`best`), and the built-in `state` table gives table snapshots and undo
 (`remember`, `undo`, `snapshot`, `restore`). For input, `console.read(prompt,
 fn)` is built into the engine and **does not freeze the game**: it returns
 immediately and calls `fn(answer)` on a later frame. Details in

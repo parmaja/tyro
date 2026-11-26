@@ -23,7 +23,8 @@ $cases = @(
     @{ Script='tests\roadmap02_p3_sound_generate_test.tyro'; Flag='--exit'; Code=0; Stdout='sound.generate: true' },
     @{ Script='tests\roadmap02_p3_console_read_test.tyro'; Flag='--exit:2'; Code=0; Stdout='console.read returned: true' },
     @{ Script='tests\roadmap02_p3_pixelart_test.tyro'; Flag='--exit:2'; Code=0; Stdout='pixelart engine checks passed' },
-    @{ Script='tests\roadmap02_p3_scores_test.tyro'; Flag='--exit'; Code=0; Stdout='scores engine checks passed' }
+    @{ Script='tests\roadmap02_p3_scores_test.tyro'; Flag='--exit'; Code=0; Stdout='scores engine checks passed' },
+    @{ Script='tests\roadmap02_p3_state_test.tyro'; Flag='--exit'; Code=0; Stdout='state engine checks passed' }
 )
 $failed = 0
 Remove-Item 'tests\roadmap02_p1_restart_count.txt',

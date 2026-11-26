@@ -103,6 +103,16 @@ type
     LeaveRef: Integer;
   end;
 
+  { TLuaStateSnap }
+
+  // One per-table undo stack. Refs are Lua registry references to snapshot
+  // tables; they die with the state, so Destroy only releases the records.
+  TLuaStateSnap = class
+  public
+    Ptr: Pointer;
+    Refs: TList; //of Integer
+  end;
+
   { TLuaConsoleRead }
 
   // A non-blocking console.read(): the reader owns the terminal callback and
@@ -1026,6 +1036,7 @@ type
     CurrentScene: string;
     //Non-blocking console.read() requests, drained on the engine frame.
     FConsoleReads: TList; //of TLuaConsoleRead
+    FStateStacks: TList; //of TLuaStateSnap, freed in Destroy
     function NewTimer(L: Plua_State; AMs: Double; APeriodic: Boolean): Integer;
     procedure PumpTimers(ADeltaTime: Double);
     function HasTimers: Boolean;
@@ -1058,6 +1069,8 @@ type
     procedure ReleaseScene(AScene: TLuaScene);
     procedure PumpConsoleReads;
     procedure CancelConsoleReads;
+    function FindStateSnap(APtr: Pointer; ACreate: Boolean): TLuaStateSnap;
+    function SnapshotTable(L: Plua_State; AIndex: Integer): Integer;
   public
     procedure QueueConsoleRead(const APrompt: string; ACallbackRef: Integer);
   protected
@@ -1079,6 +1092,12 @@ type
     function ScoresTop_func(L: Plua_State): integer; cdecl;
     function ScoresAdd_func(L: Plua_State): integer; cdecl;
     function ScoresBest_func(L: Plua_State): integer; cdecl;
+    function StateSnapshot_func(L: Plua_State): integer; cdecl;
+    function StateRestore_func(L: Plua_State): integer; cdecl;
+    function StateRemember_func(L: Plua_State): integer; cdecl;
+    function StateUndo_func(L: Plua_State): integer; cdecl;
+    function StateCount_func(L: Plua_State): integer; cdecl;
+    function StateClear_func(L: Plua_State): integer; cdecl;
     function Clock_func(L: Plua_State): integer; cdecl;
     function Time_func(L: Plua_State): integer; cdecl;
     //Text metrics for the built-in font, e.g. to centre a label:
@@ -2616,7 +2635,8 @@ begin
   HandlerNextId := 1;
   Scenes := TList.Create; //of TLuaScene, freed in Destroy
   CurrentScene := '';
-  FConsoleReads := TList.Create; //of TLuaConsoleRead, freed in Destroy //handler id 0 stays invalid, so off(0) always answers false
+  FConsoleReads := TList.Create; //of TLuaConsoleRead, freed in Destroy
+  FStateStacks := TList.Create; //of TLuaStateSnap, freed in Destroy //handler id 0 stays invalid, so off(0) always answers false
 
   //window
   Lua.State.Register('window', 'show', Window, Window.Show_func);
@@ -2798,6 +2818,15 @@ begin
   Lua.State.Register('scene', 'list', Self, SceneList_func);
   Lua.State.Register('scene', 'remove', Self, SceneRemove_func);
   Lua.State.Register('scene', 'clear', Self, SceneClear_func);
+
+  //state: snapshots and per-table undo stacks for plain Lua tables.
+  Lua.State.RegisterTable('state');
+  Lua.State.Register('state', 'snapshot', Self, StateSnapshot_func);
+  Lua.State.Register('state', 'restore', Self, StateRestore_func);
+  Lua.State.Register('state', 'remember', Self, StateRemember_func);
+  Lua.State.Register('state', 'undo', Self, StateUndo_func);
+  Lua.State.Register('state', 'count', Self, StateCount_func);
+  Lua.State.Register('state', 'clear', Self, StateClear_func);
 
   //scores: a sorted top-N table in one tab-separated file per game.
   Lua.State.RegisterTable('scores');
@@ -3121,6 +3150,16 @@ begin
   //registry refs die with Lua, so only the records and readers need freeing.
   CancelConsoleReads;
   FreeAndNil(FConsoleReads);
+  if FStateStacks <> nil then
+  begin
+    while FStateStacks.Count > 0 do
+    begin
+      TLuaStateSnap(FStateStacks[FStateStacks.Count - 1]).Refs.Free;
+      TLuaStateSnap(FStateStacks[FStateStacks.Count - 1]).Free;
+      FStateStacks.Delete(FStateStacks.Count - 1);
+    end;
+    FreeAndNil(FStateStacks);
+  end;
   FreeAndNil(Shader);
   FreeAndNil(Game);
   FreeAndNil(Gamepad);
@@ -6457,6 +6496,172 @@ begin
     L.SetField(-2, 'score');
     lua_rawseti(L, -2, I + 1);
   end;
+end;
+
+function TLuaScript.FindStateSnap(APtr: Pointer; ACreate: Boolean): TLuaStateSnap;
+var
+  I: Integer;
+begin
+  Result := nil;
+  if FStateStacks = nil then
+    Exit;
+  for I := 0 to FStateStacks.Count - 1 do
+    if TLuaStateSnap(FStateStacks[I]).Ptr = APtr then
+      Exit(TLuaStateSnap(FStateStacks[I]));
+  if ACreate then
+  begin
+    Result := TLuaStateSnap.Create;
+    Result.Ptr := APtr;
+    Result.Refs := TList.Create;
+    FStateStacks.Add(Result);
+  end;
+end;
+
+function TLuaScript.SnapshotTable(L: Plua_State; AIndex: Integer): Integer;
+var
+  Src, Dst: Integer;
+begin
+  if AIndex < 0 then
+    AIndex := lua_gettop(L) + AIndex + 1;
+  if not lua_istable(L, AIndex) then
+  begin
+    lua_newtable(L);
+    Exit(lua_gettop(L));
+  end;
+  lua_newtable(L);
+  Dst := lua_gettop(L);
+  lua_pushnil(L);
+  while lua_next(L, AIndex) <> 0 do
+  begin
+    case lua_type(L, -1) of
+      LUA_TNUMBER, LUA_TSTRING, LUA_TBOOLEAN:
+        begin
+          lua_pushvalue(L, -2); //key at -2 of (key, value)
+          lua_pushvalue(L, -2); //value is now at -2 after the key copy
+          lua_settable(L, Dst);
+        end;
+    end;
+    lua_pop(L, 1); //pop value, keep key for lua_next
+  end;
+  Result := Dst;
+end;
+
+procedure RestoreTableFields(L: Plua_State; ASrc, ADst: Integer);
+begin
+  if ASrc < 0 then
+    ASrc := lua_gettop(L) + ASrc + 1;
+  if ADst < 0 then
+    ADst := lua_gettop(L) + ADst + 1;
+  if (not lua_istable(L, ASrc)) or (not lua_istable(L, ADst)) then
+    Exit;
+  lua_pushnil(L);
+  while lua_next(L, ASrc) <> 0 do
+  begin
+    lua_pushvalue(L, -2);
+    lua_pushvalue(L, -2);
+    lua_settable(L, ADst);
+    lua_pop(L, 1);
+  end;
+end;
+
+function TLuaScript.StateSnapshot_func(L: Plua_State): integer; cdecl;
+begin
+  SnapshotTable(L, 1); //leaves the copy on the stack
+  Result := 1;
+end;
+
+function TLuaScript.StateRestore_func(L: Plua_State): integer; cdecl;
+var
+  Base: Integer;
+begin
+  Base := lua_gettop(L);
+  RestoreTableFields(L, 2, 1);
+  lua_settop(L, Base);
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaScript.StateRemember_func(L: Plua_State): integer; cdecl;
+var
+  Base, Ref: Integer;
+  Snap: TLuaStateSnap;
+begin
+  Base := lua_gettop(L);
+  if not lua_istable(L, 1) then
+  begin
+    lua_settop(L, Base);
+    L.PushBoolean(False);
+    Exit(1);
+  end;
+  Snap := FindStateSnap(lua_topointer(L, 1), True);
+  SnapshotTable(L, 1);
+  Ref := luaL_ref(L, LUA_REGISTRYINDEX);
+  Snap.Refs.Add(Pointer(Ref));
+  lua_settop(L, Base);
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaScript.StateUndo_func(L: Plua_State): integer; cdecl;
+var
+  Base, Ref: Integer;
+  Snap: TLuaStateSnap;
+begin
+  Base := lua_gettop(L);
+  Snap := nil;
+  if lua_istable(L, 1) then
+    Snap := FindStateSnap(lua_topointer(L, 1), False);
+  if (Snap = nil) or (Snap.Refs.Count = 0) then
+  begin
+    lua_settop(L, Base);
+    L.PushBoolean(False);
+    Exit(1);
+  end;
+  Ref := Integer(Snap.Refs[Snap.Refs.Count - 1]);
+  Snap.Refs.Delete(Snap.Refs.Count - 1);
+  lua_rawgeti(L, LUA_REGISTRYINDEX, Ref); //[.., target, snapshot]
+  RestoreTableFields(L, -1, 1);
+  luaL_unref(L, LUA_REGISTRYINDEX, Ref);
+  lua_settop(L, Base);
+  L.PushBoolean(True);
+  Result := 1;
+end;
+
+function TLuaScript.StateCount_func(L: Plua_State): integer; cdecl;
+var
+  Snap: TLuaStateSnap;
+begin
+  Snap := nil;
+  if lua_istable(L, 1) then
+    Snap := FindStateSnap(lua_topointer(L, 1), False);
+  if Snap = nil then
+    L.PushInteger(0)
+  else
+    L.PushInteger(Snap.Refs.Count);
+  Result := 1;
+end;
+
+function TLuaScript.StateClear_func(L: Plua_State): integer; cdecl;
+var
+  Snap: TLuaStateSnap;
+  I: Integer;
+begin
+  if lua_istable(L, 1) then
+  begin
+    Snap := FindStateSnap(lua_topointer(L, 1), False);
+    if Snap <> nil then
+    begin
+      if Lua.State <> nil then
+        for I := 0 to Snap.Refs.Count - 1 do
+          luaL_unref(Lua.State, LUA_REGISTRYINDEX, Integer(Snap.Refs[I]));
+      Snap.Refs.Clear;
+      FStateStacks.Remove(Snap);
+      Snap.Refs.Free;
+      Snap.Free;
+    end;
+  end;
+  L.PushBoolean(True);
+  Result := 1;
 end;
 
 function TLuaScript.ScoresTop_func(L: Plua_State): integer; cdecl;
