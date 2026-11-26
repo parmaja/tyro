@@ -47,7 +47,8 @@ why they work the way they do: [drawing](../help/drawing.md),
 [MML music](../help/mml.md), [particles](../help/particles.md),
 [save](../help/save.md), [touch](../help/touch.md), [tween](../help/tween.md).
 
-Engine internals live beside this index: [the engine loop](engine-loop.md)
+Build and test automation: [CI](CI.md). Engine internals live beside this index:
+[the engine loop](engine-loop.md)
 (which also covers `enter()`/`leave()` grouping), the [roadmap](ROADMAP.md),
 and the newer [ROADMAP02.md](ROADMAP02.md) with the kid-facing gaps closed in
 November.

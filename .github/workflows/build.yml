@@ -1,0 +1,59 @@
+name: build-and-smoke
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out Tyro
+        uses: actions/checkout@v4
+        with:
+          path: tyro
+
+      # tyro.lpi compiles against the sibling minilib and miniLua packages,
+      # so they must sit next to the tyro folder, not inside it.
+      - name: Check out minilib
+        uses: actions/checkout@v4
+        with:
+          repository: parmaja/minilib
+          path: minilib
+
+      - name: Check out miniLua
+        uses: actions/checkout@v4
+        with:
+          repository: parmaja/miniLua
+          path: lua
+
+      - name: Install Lazarus
+        uses: gcarreno/setup-lazarus@v3
+        with:
+          lazarus-version: stable
+
+      - name: Build Tyro (FPC/Lazarus, Debug)
+        working-directory: tyro/src
+        run: lazbuild --build-all --build-mode=Debug tyro.lpi
+
+      # The runtime DLLs are intentionally not committed (see .gitignore).
+      # Set repository variables RAYLIB_URL and CHIPMUNK_URL to zip files
+      # containing the win64 DLLs to enable the smoke step. Without them the
+      # build still runs, but the game cannot launch and smoke is skipped.
+      - name: Fetch runtime DLLs
+        if: vars.RAYLIB_URL != ''
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "${{ vars.RAYLIB_URL }}" -OutFile raylib.zip
+          Expand-Archive raylib.zip -DestinationPath tyro/bin -Force
+          if ("${{ vars.CHIPMUNK_URL }}" -ne "") {
+            Invoke-WebRequest -Uri "${{ vars.CHIPMUNK_URL }}" -OutFile chipmunk.zip
+            Expand-Archive chipmunk.zip -DestinationPath tyro/bin -Force
+          }
+
+      - name: Smoke tests
+        if: vars.RAYLIB_URL != ''
+        working-directory: tyro
+        run: powershell -ExecutionPolicy Bypass -File tests/run_roadmap02.ps1

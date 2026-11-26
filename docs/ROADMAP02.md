@@ -247,7 +247,12 @@ split big tasks into subtasks).
       via narrow `.gitignore` exceptions; ad-hoc goldens stay local. Subtask 2:
       the runner now checks 15 exit codes **plus** golden-file/stdout patterns,
       so silent early exits cannot pass.
-- [ ] Still no CI workflow, and most of the ~500 ad-hoc files are unversioned.
+- [x] Subtask 4: `.github/workflows/build.yml` checks out the sibling minilib
+      and miniLua packages, installs Lazarus, builds `tyro.lpi` with FPC and
+      runs the smoke suite when the runtime DLL URLs are set as repository
+      variables. Documented in `docs/CI.md`.
+- [ ] Remaining: most of the ~500 ad-hoc files stay unversioned by design;
+      DLL URLs must be configured per repository before CI smoke runs.
 - [x] Kid-facing paths now covered: missing assets, `controls.*` table forms,
       `game.pause_down`, negative checks for retired spellings, scene/pause/
       restart, scoreboard/state/ask helpers.
