@@ -41,8 +41,10 @@ level's crates before the fuse of your own greed burns you! A homage to the
 - `bomberman_data.tyro`: Pure rules module (board generation, blast geometry,
   hidden-item rolls, movement collision) — verified by
   `tests/test_bomberman_data.tyro`.
-- `make_assets.py`: Standalone Python script using Pillow to generate all
-  pixel-art sprite atlases (`.sprite` + `.png`) and the 32x32 tileset.
+- `make_assets.lua`: Generates all pixel-art sprite atlases (`.sprite` + `.png`)
+  and the 32x32 tileset with Tyro itself — no Python or Pillow. Run
+  `bin\tyro.exe games/bomberman/make_assets.lua --exit:2`; add `probe` to write
+  `probe_*` files. The older `make_assets.py` is kept for reference only.
 - Drop an empty `attract.txt` beside the script to skip the title screen (QA).
 
 ## Running

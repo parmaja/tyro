@@ -279,8 +279,10 @@ split big tasks into subtasks).
 - [x] Batch 3 part 2: `games/waddle/make_assets.lua` regenerates 7 atlases
       plus tiles, cursor and preview PNGs. Probe run produced 10 files and was
       cleaned up.
-- [ ] Remaining: 5 games still have Python generators (bomberman, breakout,
-      mazerogue, submarine, zonix). F3 cannot
+- [x] Batch 3 part 3: `games/bomberman/make_assets.lua` regenerates 8 atlases
+      and the tileset. Probe run produced 9 files and was cleaned up.
+- [ ] Remaining: 4 games still have Python generators (breakout, mazerogue,
+      submarine, zonix). F3 cannot
       export PNG/atlas and there is no asset browser
       ([`ROADMAP.md`](ROADMAP.md) P8).
 
