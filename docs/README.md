@@ -8,6 +8,8 @@ sounds, and the physics.
 
 ## Start here
 
+0. **New here?** Follow [Make 5 Games](../help/course/README.md) — five short
+   lessons that grow from drawing to sharing a game.
 1. [Getting started](getting-started.md) — run your first script, the command
    line, script arguments.
 2. [Input](input.md) — keyboard, mouse, touch, gamepad.

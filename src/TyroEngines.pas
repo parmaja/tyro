@@ -303,6 +303,8 @@ type
     //* True while the keyboard shortcuts help panel is drawn over the window.
     //* Toggled with F1 or through the ShowHelp property.
     FShowHelp: Boolean;
+    //* F9 toggles a short API cheat sheet in the window (see DrawApiHelpPanel).
+    FShowApiHelp: Boolean;
     //* Lua enter()/leave() queue grouping. FQueueHold counts the open enter()
     //* calls: while it is above zero ProcessQueue stops executing commands, so
     //* a whole group of draw calls is drawn at one drawing cycle instead of
@@ -387,6 +389,7 @@ type
     //* screen. Called from the drawing cycle after DrawQueueStats, so it is the
     //* top-most layer.
     procedure DrawHelpPanel;
+    procedure DrawApiHelpPanel;
     //* A red strip at the top of the window while the last script failure is
     //* unfixed. Drawn last so no game layer can hide it; cleared on rerun.
     procedure DrawErrorBanner;
@@ -567,6 +570,7 @@ type
     property ShowQueueStats: Boolean read FShowQueueStats write FShowQueueStats;
     //* Show/hide the keyboard shortcuts help panel (also F1).
     property ShowHelp: Boolean read FShowHelp write FShowHelp;
+    property ShowApiHelp: Boolean read FShowApiHelp write FShowApiHelp;
 
     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
     procedure ShowConsole; overload;
@@ -960,6 +964,7 @@ begin
           //banner stays visible even while the help panel is open.
           if FShowHelp then
             DrawHelpPanel;
+          DrawApiHelpPanel;
           DrawErrorBanner;
         finally
           RayLib.EndDrawing;
@@ -1600,8 +1605,9 @@ type
     Desc: string;
   end;
 const
-  cKeys: array[0..11] of THotkey = (
+  cKeys: array[0..12] of THotkey = (
     (Key: 'F1';       Desc: 'Show / hide this help'),
+    (Key: 'F9';       Desc: 'API cheat sheet'),
     (Key: 'F2';       Desc: 'Code editor'),
     (Key: 'F3';       Desc: 'Sprite editor'),
     (Key: 'F4';       Desc: 'Open a script file'),
@@ -1645,6 +1651,42 @@ begin
       Vector2Of(x + cPad + cKeyCol * Res.Font.Width, y + cPad + (i + 1) * cLine),
       Res.Font.Height, 0, clWhite);
   end;
+end;
+
+procedure TTyroEngine.DrawApiHelpPanel;
+const
+  cPad = 10;
+  cLine = 17;
+  cTitle = 'API cheat sheet (F9 to close) - full docs: docs/README.md';
+  cRows: array[0..13] of string = (
+    'window.show(w, h)          set the window size',
+    'world.backcolor = "navy"   background colour',
+    'update(dt) / draw()        your frame callbacks (globals!)',
+    'keyboard.down("left")      held key; .pressed() = once',
+    'game.start_pressed()       space/enter or pad start',
+    'canvas.color = colors.red  then circle/rect/line/text',
+    'screen.text(x, y, s)       draw on the top HUD layer',
+    'sprites.blob("b", 48)      a sprite with no image file',
+    's.x, s.y, s.tint, s.scale  sprite properties',
+    'scene.add/go               menu, play and over states',
+    'game.paused / restart()    freeze the scene / rerun',
+    'tween(o,"x",v,ms,"out")    glide a property',
+    'save("k", v) / load("k")   keep progress between runs',
+    'F2 edit | F5 run | F8 console | help api in console'
+  );
+var
+  i, W, H: Integer;
+begin
+  if not FShowApiHelp then
+    Exit;
+  W := RayLib.GetScreenWidth;
+  H := RayLib.GetScreenHeight;
+  RayLib.DrawRectangle(0, 0, W, H, clBlack.ReplaceAlpha(220));
+  RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(UTF8String(cTitle)),
+    Vector2Of(cPad, cPad), Res.Font.Height, 0, clYellow);
+  for i := 0 to High(cRows) do
+    RayLib.DrawTextEx(Res.Font.Data, PUTF8Char(UTF8String(cRows[i])),
+      Vector2Of(cPad, cPad + (i + 1) * cLine), Res.Font.Height, 0, clWhite);
 end;
 
 procedure TTyroEngine.DrawErrorBanner;
@@ -2290,6 +2332,9 @@ begin
   // F1 toggles the keyboard shortcuts help panel.
   if RayLib.IsKeyPressed(KEY_F1) then
     FShowHelp := not FShowHelp;
+  // F9 toggles the API cheat sheet (shortcuts stay on F1).
+  if RayLib.IsKeyPressed(KEY_F9) then
+    FShowApiHelp := not FShowApiHelp;
   // F5 reruns the loaded script on a new script thread. Like the console's
   // "run", the restart hides the console and the editor - the fresh run owns
   // the whole window - and hiding the editor also copies its edited buffer
@@ -3552,6 +3597,21 @@ procedure TTyroEngine.Help_Command(Params: TStrings);
 var
   Command: TConsoleCommand;
 begin
+  if (Params.Count > 0) and SameText(Params[0], 'api') then
+  begin
+    Console.Writeln('API cheat sheet (F9 shows this in the window):');
+    Console.Writeln('  window.show(w,h) / world.backcolor = "navy"');
+    Console.Writeln('  function update(dt) / draw()   -- globals, not local');
+    Console.Writeln('  keyboard.down("left") / keyboard.pressed("space")');
+    Console.Writeln('  canvas.color = colors.red; canvas.circle(x,y,r,true)');
+    Console.Writeln('  sprites.blob("b",48) / s.x / s.y / s.tint');
+    Console.Writeln('  scene.add(name, opts) / scene.go(name)');
+    Console.Writeln('  game.paused / restart() / game.difficulty(1..10)');
+    Console.Writeln('  tween(o,"x",v,ms,"out") / after(ms, fn) / on(name, fn)');
+    Console.Writeln('  save("key", value) / load("key")');
+    Console.Writeln('  Full docs: docs/README.md and help/course/README.md');
+    Exit;
+  end;
   Console.Writeln('New to Tyro? Type "new game", then F2 to edit and F5 to run.');
   Console.Writeln('Available commands:');
   for Command in Commands do

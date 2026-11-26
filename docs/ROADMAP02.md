@@ -307,8 +307,11 @@ split big tasks into subtasks).
 - [x] Callback errors now name the source: `timer #1:`, `tween #1:` and
       `on "name" #1:` (plus the Lua file/line). Verified by
       `tests/roadmap02_p2_error_labels_test.tyro`.
-- [ ] Next: "Make 5 games" course + in-app API help, then font robustness /
-      RTL groundwork.
+- [x] "Make 5 games" course: `help/course/README.md` plus five lessons that
+      grow from drawing to sharing a game, linked from `docs/README.md`.
+- [x] In-app help: `F9` toggles an API cheat sheet, `help api` prints the same
+      short reference in the console. The F1 panel lists F9.
+- [ ] Next: font robustness / RTL groundwork.
 
 ## Not chasing (same as ROADMAP.md)
 
