@@ -256,9 +256,12 @@ split big tasks into subtasks).
 - [x] Version mismatch fixed: `TyroVersion`/`TyroVersionString` are `0.8`,
       the CLI prints the constant instead of a hard-coded `0.1`, and the Lua
       global `version` now reports 0.8 too.
-- [ ] Asset creation still depends on Python: 11 games ship `make_assets.py`
-      despite AGENTS.md preferring Lua/Tyro asset creation. F3 cannot export
-      PNG/atlas; no asset browser ([`ROADMAP.md`](ROADMAP.md) P8).
+- [x] Subtask 3: added `bin/assets/pixelart.lua` (sheet/poly/rect/circle/line/
+      save) and `games/spacefighter/make_assets.lua`, which generates all 16
+      PNGs with Tyro itself. Verified with the `probe` argument (16 files, no
+      shipped art touched); `make_assets.py` is now reference-only there.
+- [ ] Remaining: 10 games still have Python generators. F3 cannot export
+      PNG/atlas and there is no asset browser ([`ROADMAP.md`](ROADMAP.md) P8).
 
 ## Not chasing (same as ROADMAP.md)
 

@@ -32,7 +32,7 @@ bin\tyro.exe games\spacefighter\spacefighter.tyro
 ## Architecture & Implementation Modules
 
 1. **3D Projection System**: $X, Y, Z \to sx, sy, scale$ with depth sorting ($Z$-buffer).
-2. **Procedural Sprite Pipeline**: Python asset generator (`make_assets.py`) for starfighter, enemies, asteroids, projectiles, and particle flares.
+2. **Procedural Sprite Pipeline**: `make_assets.lua` generates the PNG art with Tyro itself (`require("assets/pixelart")`) — no Python or Pillow needed. Run `bin\tyro.exe games/spacefighter/make_assets.lua --exit:2`. The older `make_assets.py` is kept for reference only. Add `probe` after the script name to write `probe_*.png` files without touching the shipped art.
 3. **Engine Callbacks**: Strict adherence to Tyro's `update(dt)` and `draw()` callbacks.
 4. **Combat & Collision**: 3D distance checks and spatial collision response.
 5. **Wave Progression**: Wave-based state machine culminating in a multi-stage boss.
