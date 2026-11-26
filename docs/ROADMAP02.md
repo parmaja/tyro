@@ -311,7 +311,12 @@ split big tasks into subtasks).
       grow from drawing to sharing a game, linked from `docs/README.md`.
 - [x] In-app help: `F9` toggles an API cheat sheet, `help api` prints the same
       short reference in the console. The F1 panel lists F9.
-- [ ] Next: font robustness / RTL groundwork.
+- [x] `canvas.font(file [, size [, codepage]])` sugar loads and switches in
+      one call (registered on canvas/screen/world). The oversized-atlas guard
+      already lives in `RayClasses.pas:421-425`.
+- [x] RTL groundwork: UTF-8 now survives the Lua/Pascal boundary, and
+      `assets/rtl.lua` provides UTF-8-safe `reverse()` plus `text(y, s [, x])`.
+      Documented in `help/rtl.md`. Full bidi paragraph layout is still out.
 
 ## Not chasing (same as ROADMAP.md)
 

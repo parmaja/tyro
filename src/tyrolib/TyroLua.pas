@@ -134,6 +134,8 @@ type
     function Clear_func(L: Plua_State): integer; cdecl;
     function Text_func(L: Plua_State): integer; cdecl;
     function TextCenter_func(L: Plua_State): integer; cdecl;
+    //canvas.font("file.ttf" [, size [, codepage]]) -> id: load AND switch.
+    function Font_func(L: Plua_State): integer; cdecl;
     function Circle_func(L: Plua_State): integer; cdecl;
     function Triangle_func(L: Plua_State): integer; cdecl;
     function Rectangle_func(L: Plua_State): integer; cdecl;
@@ -2379,6 +2381,7 @@ begin
     State.Register(Name, 'clear', Self, Self.Clear_func);
     State.Register(Name, 'text', Self, Self.Text_func);
     State.Register(Name, 'text_center', Self, Self.TextCenter_func);
+    State.Register(Name, 'font', Self, Self.Font_func);
     State.Register(Name, 'circle', Self, Self.Circle_func);
     State.Register(Name, 'triangle', Self, Self.Triangle_func);
     State.Register(Name, 'rectangle', Self, Self.Rectangle_func);
@@ -4460,6 +4463,37 @@ begin
   x := (Canvas.Width - w) div 2;
   FScript.AddQueueObject(TDrawTextObject.Create(Canvas, x, y, s));
   Result := 0;
+end;
+
+function TLuaCustomCanvas.Font_func(L: Plua_State): integer; cdecl;
+var
+  aFile, aCode: string;
+  aSize: Integer;
+  Shell: TRayFont;
+begin
+  //Short sugar over font.load + font.use: the two calls are queued in order,
+  //so text drawn after this call uses the new face on the very next frame.
+  aFile := Res.GuessFileName(L.ToString(1), Res.WorkPath);
+  aCode := '';
+  if L.IsNumber(2) then
+    aSize := L.ToInteger(2)
+  else
+  begin
+    aSize := 0;
+    if L.ArgsCount >= 2 then
+      aCode := L.ToString(2);
+  end;
+  if L.ArgsCount >= 3 then
+    aCode := L.ToString(3);
+  if (aSize <> 0) and ((aSize < 1) or (aSize > 256)) then
+  begin
+    if aSize < 1 then aSize := 1 else aSize := 256;
+  end;
+  Shell := Res.FontShell(aFile, aSize, aCode);
+  FScript.AddQueueObject(TLoadFontObject.Create(Shell.FontId));
+  FScript.AddQueueObject(TUseFontObject.Create(Shell.FontId));
+  L.PushInteger(Shell.FontId);
+  Result := 1;
 end;
 
 function TLuaCustomCanvas.Circle_func(L: Plua_State): integer; cdecl;

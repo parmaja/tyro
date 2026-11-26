@@ -19,7 +19,8 @@ $cases = @(
     @{ Script='tests\roadmap02_p1_pause_test.tyro';      Flag='--exit:3'; Code=0; Golden='roadmap02_p1_pause_out.txt';   Pattern='ALL P1-4 PAUSE CHECKS PASSED' },
     @{ Script='tests\roadmap02_p1_restart_test.tyro';    Flag='--exit:3'; Code=0; Golden='roadmap02_p1_restart_count.txt'; Pattern='2' },
     @{ Script='tests\roadmap02_p1_helpers_test.tyro';    Flag='--exit';  Code=0; Golden='roadmap02_p1_helpers_out.txt';  Pattern='ALL P1-4 HELPER CHECKS PASSED' },
-    @{ Script='tests\roadmap02_p2_error_labels_test.tyro'; Flag='--exit:2'; Code=1; Stdout='timer #1:' }
+    @{ Script='tests\roadmap02_p2_error_labels_test.tyro'; Flag='--exit:2'; Code=1; Stdout='timer #1:' },
+    @{ Script='tests\roadmap02_p2_font_rtl_test.tyro';    Flag='--exit:2'; Code=0; Stdout='font/rtl checks passed' }
 )
 $failed = 0
 Remove-Item 'tests\roadmap02_p1_restart_count.txt' -ErrorAction SilentlyContinue

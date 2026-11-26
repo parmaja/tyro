@@ -47,7 +47,8 @@ why they work the way they do: [drawing](../help/drawing.md),
 [events](../help/events.md), [fonts](../help/fonts.md),
 [fuse](../help/fuse.md), [game](../help/game.md), [joints](../help/joints.md),
 [MML music](../help/mml.md), [particles](../help/particles.md),
-[save](../help/save.md), [touch](../help/touch.md), [tween](../help/tween.md).
+[right-to-left text](../help/rtl.md), [save](../help/save.md),
+[touch](../help/touch.md), [tween](../help/tween.md).
 
 Build and test automation: [CI](CI.md). Engine internals live beside this index:
 [the engine loop](engine-loop.md)
