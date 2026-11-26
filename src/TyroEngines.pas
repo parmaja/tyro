@@ -571,6 +571,9 @@ type
     //* Show/hide the keyboard shortcuts help panel (also F1).
     property ShowHelp: Boolean read FShowHelp write FShowHelp;
     property ShowApiHelp: Boolean read FShowApiHelp write FShowApiHelp;
+    //* A non-blocking console.read() never calls Wait(), so the reader must
+    //* be unregistered here before its owner frees it.
+    procedure ReleaseWaiting(AQueueObject: TQueueObject);
 
     procedure ShowConsole(AX, AY, AWidth, AHeight: Integer); overload;
     procedure ShowConsole; overload;
@@ -1048,6 +1051,11 @@ begin
   finally
     Lock.Leave;
   end;
+end;
+
+procedure TTyroEngine.ReleaseWaiting(AQueueObject: TQueueObject);
+begin
+  UnregisterWaiting(AQueueObject);
 end;
 
 procedure TTyroEngine.UnregisterWaiting(AQueueObject: TQueueObject);

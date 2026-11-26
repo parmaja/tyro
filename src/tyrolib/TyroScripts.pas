@@ -108,6 +108,10 @@ type
   public
     Prompt: string;
     ResultString: string;
+    //Set by HandleConsoleInput on the application thread. A non-blocking
+    //console.read() picks the answer up on the next engine frame.
+    AnswerReady: Boolean;
+    Answer: UTF8String;
     constructor Create(APrompt: string);
     destructor Destroy; override;
     procedure DoExecute; override;
@@ -1019,6 +1023,8 @@ begin
   inherited Create;
   Prompt := APrompt;
   ResultString := '';
+  AnswerReady := False;
+  Answer := '';
   EventNeeded;
 end;
 
@@ -1041,6 +1047,8 @@ end;
 procedure TReadConsoleObject.HandleConsoleInput(AInput: UTF8String);
 begin
   ResultString := AInput;
+  Answer := AInput;
+  AnswerReady := True;
   // Re-arm for built-in command mode
   Engine.StartConsoleRead;
   SetEvent;

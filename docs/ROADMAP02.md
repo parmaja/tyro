@@ -216,13 +216,14 @@ split big tasks into subtasks).
       `restart()` re-run from a clean window; `game.difficulty(1..10)` stores
       `game.level` and adjusts `world.timescale`. Tested in
       `tests/roadmap02_p1_pause_test.tyro` and `..._restart_test.tyro`.
-- [x] Added three `require`-able Lua helpers in `bin/assets/`: `scoreboard.lua`
-      (sorted top-N table with `top`/`add`/`best`), `state.lua` (snapshots and
-      undo/rewind for plain tables), and `ask.lua` (non-blocking edit+OK widget
-      that fires a callback through `on("update")`).
+- [x] Added `scoreboard.lua` (sorted top-N table) and `state.lua` (snapshots
+      and undo/rewind). `ask.lua` was removed: the engine's
+      `console.read(prompt, fn)` is now non-blocking, returning immediately
+      and firing the callback on a later frame. Fixed the dangling waiting
+      object that made the callback form crash at shutdown.
 - [x] Documented in `docs/game.md` and `help/game.md`; verified with
-      `tests/roadmap02_p1_helpers_test.tyro` (12 checks) and a screenshot of
-      the ask widget while the game keeps running.
+      `tests/roadmap02_p1_helpers_test.tyro` and
+      `tests/roadmap02_p3_console_read_test.tyro`.
 - [x] **P1-4 complete.**
 
 ### P1-5 — Editor and classroom

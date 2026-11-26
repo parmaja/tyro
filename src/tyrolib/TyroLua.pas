@@ -103,6 +103,16 @@ type
     LeaveRef: Integer;
   end;
 
+  { TLuaConsoleRead }
+
+  // A non-blocking console.read(): the reader owns the terminal callback and
+  // the Lua registry ref of the function to call when the player answers.
+  TLuaConsoleRead = class
+  public
+    Reader: TReadConsoleObject;
+    CallbackRef: Integer;
+  end;
+
   { TTyroLuaObject }
 
   TTyroLuaObject = class abstract(TLuaObject)
@@ -1005,6 +1015,8 @@ type
     //their own state machines. Refs die with the Lua state, like timers.
     Scenes: TList; //of TLuaScene
     CurrentScene: string;
+    //Non-blocking console.read() requests, drained on the engine frame.
+    FConsoleReads: TList; //of TLuaConsoleRead
     function NewTimer(L: Plua_State; AMs: Double; APeriodic: Boolean): Integer;
     procedure PumpTimers(ADeltaTime: Double);
     function HasTimers: Boolean;
@@ -1035,6 +1047,10 @@ type
     procedure CallRef(ARef: Integer; AFirst, ACount: Integer);
     function FindScene(const AName: string): TLuaScene;
     procedure ReleaseScene(AScene: TLuaScene);
+    procedure PumpConsoleReads;
+    procedure CancelConsoleReads;
+  public
+    procedure QueueConsoleRead(const APrompt: string; ACallbackRef: Integer);
   protected
 
     //input & timing
@@ -2587,7 +2603,8 @@ begin
   Handlers := TList.Create; //of TLuaHandler, freed in Destroy
   HandlerNextId := 1;
   Scenes := TList.Create; //of TLuaScene, freed in Destroy
-  CurrentScene := ''; //handler id 0 stays invalid, so off(0) always answers false
+  CurrentScene := '';
+  FConsoleReads := TList.Create; //of TLuaConsoleRead, freed in Destroy //handler id 0 stays invalid, so off(0) always answers false
 
   //window
   Lua.State.Register('window', 'show', Window, Window.Show_func);
@@ -3075,6 +3092,10 @@ begin
     end;
     FreeAndNil(Scenes);
   end;
+  //Pending console readers are cancelled before the state closes: their
+  //registry refs die with Lua, so only the records and readers need freeing.
+  CancelConsoleReads;
+  FreeAndNil(FConsoleReads);
   FreeAndNil(Shader);
   FreeAndNil(Game);
   FreeAndNil(Gamepad);
@@ -3149,6 +3170,8 @@ begin
   //this state's status is terminated, and RunString returns on the next hook tick
   if Lua.State <> nil then
     Lua.SetTerminated;
+  //The engine still owns the console reader until shutdown; releasing it here
+  //races CancelWaiting. Destroy cleans it up after the engine loop is done.
   inherited;
 end;
 
@@ -3203,7 +3226,8 @@ begin
   Result := (Lua.State <> nil) and
     (Lua.State.FunctionExists('update') or Lua.State.FunctionExists('draw')
      or HasTimers or HasTweens or HasHandlers
-     or ((Scenes <> nil) and (Scenes.Count > 0)));
+     or ((Scenes <> nil) and (Scenes.Count > 0))
+     or ((FConsoleReads <> nil) and (FConsoleReads.Count > 0)));
 end;
 
 procedure TLuaScript.EngineUpdate(ADeltaTime: Double);
@@ -3243,6 +3267,9 @@ begin
   if Stopped then
     Exit; //an update handler may have called exit()
   CallGlobal('update', 1);
+  //Answers typed into the console are delivered here, on the engine frame,
+  //so a script never blocks waiting for input.
+  PumpConsoleReads;
   //The current scene's update rides the same dt, after the global one.
   if (not Stopped) and (Scenes <> nil) and (CurrentScene <> '') then
   begin
@@ -6214,6 +6241,74 @@ begin
   AScene.LeaveRef := LUA_NOREF;
 end;
 
+procedure TLuaScript.QueueConsoleRead(const APrompt: string; ACallbackRef: Integer);
+var
+  R: TLuaConsoleRead;
+begin
+  if (Lua.State = nil) or (FConsoleReads = nil) then
+    Exit;
+  R := TLuaConsoleRead.Create;
+  R.CallbackRef := ACallbackRef;
+  R.Reader := TReadConsoleObject.Create(APrompt);
+  FConsoleReads.Add(R);
+  try
+    //Runs on the application thread; returns as soon as the console is armed.
+    //NoFree: the pending-read record owns the reader until its answer arrives.
+    RunQueueObjectNoFree(R.Reader);
+  except
+    on E: Exception do
+    begin
+      luaL_unref(Lua.State, LUA_REGISTRYINDEX, R.CallbackRef);
+      FConsoleReads.Remove(R);
+      R.Free;
+      DoError('console.read: ' + E.Message);
+    end;
+  end;
+end;
+
+procedure TLuaScript.PumpConsoleReads;
+var
+  I: Integer;
+  R: TLuaConsoleRead;
+begin
+  if (FConsoleReads = nil) or (Lua.State = nil) then
+    Exit;
+  for I := FConsoleReads.Count - 1 downto 0 do
+  begin
+    R := TLuaConsoleRead(FConsoleReads[I]);
+    if not R.Reader.AnswerReady then
+      Continue;
+    Lua.State.PushString(R.Reader.Answer);
+    CallRef(R.CallbackRef, lua_gettop(Lua.State), 1);
+    luaL_unref(Lua.State, LUA_REGISTRYINDEX, R.CallbackRef);
+    if Engine <> nil then
+      Engine.ReleaseWaiting(R.Reader);
+    R.Reader.Free;
+    R.Free;
+    FConsoleReads.Delete(I);
+  end;
+end;
+
+procedure TLuaScript.CancelConsoleReads;
+var
+  I: Integer;
+  R: TLuaConsoleRead;
+begin
+  if FConsoleReads = nil then
+    Exit;
+  for I := FConsoleReads.Count - 1 downto 0 do
+  begin
+    R := TLuaConsoleRead(FConsoleReads[I]);
+    if (Lua.State <> nil) and (R.CallbackRef <> LUA_NOREF) then
+      luaL_unref(Lua.State, LUA_REGISTRYINDEX, R.CallbackRef);
+    if Engine <> nil then
+      Engine.ReleaseWaiting(R.Reader);
+    R.Reader.Free;
+    R.Free;
+  end;
+  FConsoleReads.Clear;
+end;
+
 function TLuaScript.SceneAdd_func(L: Plua_State): integer; cdecl;
 const
   cFields: array[0..3] of string = ('enter', 'update', 'draw', 'leave');
@@ -7788,13 +7883,36 @@ end;
 function TLuaConsole.Read_func(L: Plua_State): integer; cdecl;
 var
   s: string;
-  c: integer;
+  c, cbIdx, Ref: integer;
   Reader: TReadConsoleObject;
 begin
   s := '> ';
   c := L.ArgsCount;
-  if c > 0 then
+  cbIdx := 0;
+  //console.read([prompt,] fn) keeps the game running and calls fn(answer)
+  //on a later engine frame. Without a callback the old blocking form stays.
+  if (c > 0) and lua_isfunction(L, c) then
+  begin
+    cbIdx := c;
+    if (c > 1) and L.IsString(1) then
+      s := L.ToString(1);
+  end
+  else if (c >= 2) and lua_isfunction(L, 2) then
+  begin
+    cbIdx := 2;
     s := L.ToString(1);
+  end
+  else if c > 0 then
+    s := L.ToString(1);
+
+  if cbIdx > 0 then
+  begin
+    lua_pushvalue(L, cbIdx);
+    Ref := luaL_ref(L, LUA_REGISTRYINDEX);
+    FScript.QueueConsoleRead(s, Ref);
+    L.PushBoolean(True);
+    Exit(1);
+  end;
 
   Reader := TReadConsoleObject.Create(s);
   try

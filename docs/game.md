@@ -23,15 +23,14 @@ hi = score.hi_save("cave.hi", score)           -- text file next to the game
 local r = rng(42)   -- repeatable random: r() 0..1, r(n) 1..n, r(a,b) a..b
 ```
 
-## Ready-made helpers (`require`)
+## Helpers
 
-Three small Lua modules ship with Tyro and need no setup. They live in the
-app's `assets` folder and are loaded with the workspace-safe `require`:
+Some helpers are built into the engine; a few experimental ones still live in
+the app's `assets` folder and are loaded with `require`:
 
 ```lua
 local board = require("assets/scoreboard")
 local state = require("assets/state")
-local ask   = require("assets/ask")
 ```
 
 - `scoreboard.top(file [, limit])` → an array of `{ rank, name, score }`
@@ -42,10 +41,15 @@ local ask   = require("assets/ask")
   and booleans; `state.undo(t)` restores the last one. `state.snapshot(t)` /
   `state.restore(t, copy)` hand you a copy you can keep or tween.
   `state.count(t)` and `state.clear(t)` manage the stack.
-- `ask(prompt, fn)` (or `ask.show(...)`) opens an edit box and an OK button
-  while the game keeps running. It fires `fn(answer)` when OK is clicked —
-  no `console.read()` freeze and no polling call in your `update()`.
-  `ask.hide()` closes it and `ask.active()` reports its state.
+
+For a question in the game, use the engine's non-blocking console read:
+
+```lua
+console.read("What is your name?", function(answer)
+  print("Hello " .. answer)
+end)
+-- The script continues immediately; the callback fires on a later frame.
+```
 
 None of these use `pcall`; asset and file failures are reported by the engine
 the usual way. See [`docs/scenes.md`](scenes.md) for scene and pause helpers.
