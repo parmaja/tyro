@@ -58,7 +58,7 @@ two-voice chiptune loop keep the arcade feel alive.
 | `breakout.tyro` | The game: attract mode, physics loop, power-ups, HUD and state screens |
 | `crt.frag` | Optional CRT post-filter (scanlines, scan bar, vignette), toggled with G |
 | `breakout_data.tyro` | Pure config and math (grid, levels, collisions, bounce angles, hi-score) - safe to `require()` from tests |
-| `make_assets.py` | Regenerates `img/` and `sfx/` (needs Pillow) and copies the data module to `tests/` |
+| `make_assets.lua` | Regenerates `img/` and `sfx/` with Tyro itself — no Python or Pillow. Run `bin\tyro.exe games/breakout/make_assets.lua --exit:2`; add `probe` to write `probe_*` files. The older `make_assets.py` is kept for reference only. |
 | `img/bricks.png` | 8-tile brick sheet (50x22 tiles with the grid gap baked in): 6 colors, steel, cracked steel - drawn as a tilemap |
 | `img/powerups.sprite` | 4-frame capsule badge atlas (22x22), one sprite per possible drop |
 | `img/paddle.png`, `img/ball.png` | Paddle and ball sprites |

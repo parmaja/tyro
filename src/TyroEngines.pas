@@ -813,7 +813,8 @@ begin
       ProcessQueue;
       //restart() from a script is serviced here, never from inside the queue
       //drain (RunScriptThread clears the queue and would break iteration).
-      if FRestartRequested then
+      if FRestartRequested and
+         ((FScriptThread = nil) or (ssFinished in FScriptState)) then
       begin
         FRestartRequested := False;
         RunScriptThread;

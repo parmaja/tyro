@@ -283,8 +283,10 @@ split big tasks into subtasks).
       and the tileset. Probe run produced 9 files and was cleaned up.
 - [x] Batch 3 part 4: `games/mazerogue/make_assets.lua` regenerates 10 atlases
       and 14 static PNGs/tiles. Probe run produced 24 files and was cleaned up.
-- [ ] Remaining batch 4 (WAV + atlas): breakout, submarine, zonix still have
-      Python generators. F3 cannot
+- [x] Batch 4 part 1: `games/breakout/make_assets.lua` regenerates 2 atlases,
+      2 PNGs and 3 WAV effects using the new `assets/soundgen` helper. Probe
+      run produced 7 valid files (WAVs checked: RIFF/22050) and was cleaned up.
+- [ ] Remaining batch 4: submarine, zonix still have Python generators. F3 cannot
       export PNG/atlas and there is no asset browser
       ([`ROADMAP.md`](ROADMAP.md) P8).
 
