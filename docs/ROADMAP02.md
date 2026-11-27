@@ -320,6 +320,24 @@ split big tasks into subtasks).
 - [x] UTF-8 now survives the Lua/Pascal boundary (miniLua `35d432c`). The
       experimental `assets/rtl.lua` helper and `help/rtl.md` were removed at
       the maintainer's request; RTL/bidi work is left to them.
+- [x] Thin-wrapper cleanup: `scores.*`, `game.difficulty` and `sound.play`/
+      `sound.generate` no longer process data inside their Lua `_func`. The
+      file/sort/limit rules, the level clamp + timescale, the workspace path
+      check, the sound-duration cap and the waveform/file decision now live in
+      same-named `TTyroEngine` methods (`ScoresTop/Add/Best`, `Difficulty`,
+      `SoundGenerate`, `SoundPlayFreq/File/Wave`, `ClampSoundPeriod`,
+      `ResolveAndValidatePath`) in `TyroEngines.pas`, so a Delphi/FPC game can
+      call the very same API. `tests/refactor_wrappers_test.tyro` covers the
+      17 wrapper checks.
+- [x] Every Lua table now has a matching engine object: `Engine.State` holds
+      the field lists and per-table undo stacks (`Snapshot/Restore/Remember/
+      Undo/Count/Clear`), `Engine.Scene` owns the scene names, the current
+      scene and the `Add/Go/Current/List/Remove/Clear` rules, and `Engine.Scores`
+      owns `Top/Add/Best` (the older `Engine.Scores*` methods are thin aliases).
+      The Lua wrappers only translate tables to engine fields and fire the
+      scene's enter/leave/update/draw events. Checked by
+      `tests/refactor_state_scene_test.tyro` (23 checks) and the existing
+      scene/state smoke tests.
 
 ## Not chasing (same as ROADMAP.md)
 

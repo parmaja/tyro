@@ -1,4 +1,4 @@
-﻿unit TyroLua;
+unit TyroLua;
 {**
  *  This file is part of the "Tyro"
  *
@@ -91,26 +91,16 @@ type
 
   { TLuaScene }
 
-  // One named scene registered through scene.add(name, opts). The four
-  // callbacks are registry refs so they survive until the state is closed;
-  // only the current scene's update/draw are stepped by the engine.
+  // The four Lua callbacks of a scene added with scene.add(name, opts).
+  // Names and the current scene belong to Engine.Scene; this record only
+  // keeps the registry refs that its events ask us to fire.
   TLuaScene = class
   public
-    Name: string;       // lowercase key
+    Name: string;       // lowercase key, mirrors the engine name
     EnterRef: Integer;
     UpdateRef: Integer;
     DrawRef: Integer;
     LeaveRef: Integer;
-  end;
-
-  { TLuaStateSnap }
-
-  // One per-table undo stack. Refs are Lua registry references to snapshot
-  // tables; they die with the state, so Destroy only releases the records.
-  TLuaStateSnap = class
-  public
-    Ptr: Pointer;
-    Refs: TList; //of Integer
   end;
 
   { TLuaConsoleRead }
@@ -1030,13 +1020,11 @@ type
     //releases the list only.
     Handlers: TList; //of TLuaHandler
     HandlerNextId: Integer;
-    //scene.add/go/list: named menu/play/over states so games stop hand-rolling
-    //their own state machines. Refs die with the Lua state, like timers.
+    //scene.add/go/list: names and the current scene live in Engine.Scene;
+    //this list only holds the Lua callback refs the engine fires via events.
     Scenes: TList; //of TLuaScene
-    CurrentScene: string;
     //Non-blocking console.read() requests, drained on the engine frame.
     FConsoleReads: TList; //of TLuaConsoleRead
-    FStateStacks: TList; //of TLuaStateSnap, freed in Destroy
     function NewTimer(L: Plua_State; AMs: Double; APeriodic: Boolean): Integer;
     procedure PumpTimers(ADeltaTime: Double);
     function HasTimers: Boolean;
@@ -1069,8 +1057,12 @@ type
     procedure ReleaseScene(AScene: TLuaScene);
     procedure PumpConsoleReads;
     procedure CancelConsoleReads;
-    function FindStateSnap(APtr: Pointer; ACreate: Boolean): TLuaStateSnap;
-    function SnapshotTable(L: Plua_State; AIndex: Integer): Integer;
+    //The four scene callbacks are delivered through Engine.Scene's events;
+    //these methods only translate a Lua call into the registered refs.
+    procedure SceneEnter(const AName: string; AContext: Pointer);
+    procedure SceneLeave(const AName: string; AContext: Pointer);
+    procedure SceneUpdate(const AName: string; AContext: Pointer; ADeltaTime: Double);
+    procedure SceneDraw(const AName: string; AContext: Pointer);
   public
     procedure QueueConsoleRead(const APrompt: string; ACallbackRef: Integer);
   protected
@@ -1330,48 +1322,8 @@ begin
   Result := 0;
 end;
 
-// True when FileName already carries a drive ("C:\x", "C:x") or a UNC root
-// ("\\host\x"), and so has to be used as it stands. Pasting such a name onto a
-// base folder only builds a name that cannot exist, and saying "outside the
-// workspace" is the honest answer instead.
-function IsRootedName(const FileName: string): Boolean;
-begin
-  Result := (Length(FileName) > 1) and ((FileName[2] = ':') or
-    ((FileName[1] = '\') and (FileName[2] = '\')));
-end;
-
-// Resolves a script-supplied file name to an absolute path and returns it only
-// when it lands inside the workspace, or '' when no candidate did. The bases are
-// tried in the order the rest of Tyro does: the name as given (against the
-// process directory), then the script folder (ABasePath), then the workspace
-// root. Every candidate is expanded before the containment test, so a name built
-// from "..", a drive-relative form or a UNC path cannot slip past it.
-function ResolveAndValidatePath(const FileName, ABasePath: string): string;
-var
-  Candidates: array[0..2] of string;
-  Candidate: string;
-  i: Integer;
-begin
-  Result := '';
-  if (FileName = '') or (Res = nil) then
-    Exit;
-  if IsRootedName(FileName) then
-  begin
-    Candidate := ExpandFileName(FileName);
-    if Res.IsPathInsideWorkspace(Candidate) then
-      Result := Candidate;
-    Exit;
-  end;
-  Candidates[0] := FileName;
-  Candidates[1] := IncludePathDelimiter(ABasePath) + FileName;
-  Candidates[2] := IncludePathDelimiter(Res.WorkPath) + FileName;
-  for i := Low(Candidates) to High(Candidates) do
-    if Candidates[i] <> '' then
-      // ExpandFileName collapses "..", relative and UNC forms, so the
-      // containment test can trust a plain prefix comparison.
-      if Res.IsPathInsideWorkspace(ExpandFileName(Candidates[i])) then
-        Exit(ExpandFileName(Candidates[i]));
-end;
+// Path validation and the sound-duration cap live in TyroEngines.pas, next to
+// the engine calls that use them. The wrappers below just collect Lua values.
 
 function log_func(L: Plua_State): integer; cdecl;
 var
@@ -2634,9 +2586,7 @@ begin
   Handlers := TList.Create; //of TLuaHandler, freed in Destroy
   HandlerNextId := 1;
   Scenes := TList.Create; //of TLuaScene, freed in Destroy
-  CurrentScene := '';
   FConsoleReads := TList.Create; //of TLuaConsoleRead, freed in Destroy
-  FStateStacks := TList.Create; //of TLuaStateSnap, freed in Destroy //handler id 0 stays invalid, so off(0) always answers false
 
   //window
   Lua.State.Register('window', 'show', Window, Window.Show_func);
@@ -2818,6 +2768,11 @@ begin
   Lua.State.Register('scene', 'list', Self, SceneList_func);
   Lua.State.Register('scene', 'remove', Self, SceneRemove_func);
   Lua.State.Register('scene', 'clear', Self, SceneClear_func);
+  //Engine.Scene owns the names; it calls back here only to fire Lua functions.
+  Engine.Scene.OnEnter := SceneEnter;
+  Engine.Scene.OnLeave := SceneLeave;
+  Engine.Scene.OnUpdate := SceneUpdate;
+  Engine.Scene.OnDraw := SceneDraw;
 
   //state: snapshots and per-table undo stacks for plain Lua tables.
   Lua.State.RegisterTable('state');
@@ -3139,6 +3094,20 @@ begin
     FreeAndNil(Handlers);
   end;
   //Scenes die with the state too: their refs were released by Lua.Close.
+  //The names and current scene belong to Engine.Scene; drop them and detach
+  //the events so no later frame can call into this dying script.
+  if Engine <> nil then
+    //Only the script that hooked the events owns the engine's scene/state.
+    //(The console REPL has its own Lua state and never registers a scene.)
+    if TMethod(Engine.Scene.OnEnter).Data = Pointer(Self) then
+    begin
+      Engine.Scene.OnEnter := nil;
+      Engine.Scene.OnLeave := nil;
+      Engine.Scene.OnUpdate := nil;
+      Engine.Scene.OnDraw := nil;
+      Engine.Scene.Clear;
+      Engine.State.ClearAll;
+    end;
   if Scenes <> nil then
   begin
     while Scenes.Count > 0 do
@@ -3152,16 +3121,6 @@ begin
   //registry refs die with Lua, so only the records and readers need freeing.
   CancelConsoleReads;
   FreeAndNil(FConsoleReads);
-  if FStateStacks <> nil then
-  begin
-    while FStateStacks.Count > 0 do
-    begin
-      TLuaStateSnap(FStateStacks[FStateStacks.Count - 1]).Refs.Free;
-      TLuaStateSnap(FStateStacks[FStateStacks.Count - 1]).Free;
-      FStateStacks.Delete(FStateStacks.Count - 1);
-    end;
-    FreeAndNil(FStateStacks);
-  end;
   FreeAndNil(Shader);
   FreeAndNil(Game);
   FreeAndNil(Gamepad);
@@ -3292,13 +3251,11 @@ begin
   Result := (Lua.State <> nil) and
     (Lua.State.FunctionExists('update') or Lua.State.FunctionExists('draw')
      or HasTimers or HasTweens or HasHandlers
-     or ((Scenes <> nil) and (Scenes.Count > 0))
+     or (Engine.Scene.Count > 0)
      or ((FConsoleReads <> nil) and (FConsoleReads.Count > 0)));
 end;
 
 procedure TLuaScript.EngineUpdate(ADeltaTime: Double);
-var
-  S: TLuaScene;
 begin
   if Lua.State = nil then
     Exit;
@@ -3337,15 +3294,9 @@ begin
   //so a script never blocks waiting for input.
   PumpConsoleReads;
   //The current scene's update rides the same dt, after the global one.
-  if (not Stopped) and (Scenes <> nil) and (CurrentScene <> '') then
-  begin
-    S := FindScene(CurrentScene);
-    if S <> nil then
-    begin
-      Lua.State.PushNumber(ADeltaTime);
-      CallRef(S.UpdateRef, lua_gettop(Lua.State), 1);
-    end;
-  end;
+  //Engine.Scene owns the name and calls SceneUpdate back with our state.
+  if not Stopped then
+    Engine.Scene.Update(nil, ADeltaTime);
   finally
     EndCallbackWatch(Lua.State);
     if GCallbackTimedOut then
@@ -3357,8 +3308,6 @@ begin
 end;
 
 procedure TLuaScript.EngineDraw;
-var
-  S: TLuaScene;
 begin
   if Lua.State = nil then
     Exit;
@@ -3366,12 +3315,7 @@ begin
   try
     CallGlobal('draw', 0);
     //The current scene paints after the global draw, like on("draw").
-    if (Scenes <> nil) and (CurrentScene <> '') then
-    begin
-      S := FindScene(CurrentScene);
-      if S <> nil then
-        CallRef(S.DrawRef, lua_gettop(Lua.State) + 1, 0);
-    end;
+    Engine.Scene.Draw(nil);
     //on("draw", fn) listeners paint after the global draw(), same beat
     if HandlerCountNamed(cEventDraw) > 0 then
       Dispatch(cEventDraw, Lua.State, 0, 0);
@@ -5020,24 +4964,6 @@ begin
   Result := 0;
 end;
 
-//A duration passed from Lua is milliseconds; the waveform generator allocates
-//SampleRate * Seconds samples, so an outrageous value must never reach it.
-//Ten seconds is already far longer than any game effect needs.
-const
-  cMaxSoundPeriodMs = 10000;
-
-function ClampSoundPeriod(APeriod: Integer): Integer;
-begin
-  if APeriod > cMaxSoundPeriodMs then
-  begin
-    Log.WriteLn(Format('Hint: sound duration %d ms is too long; using %d ms',
-      [APeriod, cMaxSoundPeriodMs]));
-    Result := cMaxSoundPeriodMs;
-  end
-  else
-    Result := APeriod;
-end;
-
 { TLuaMusic }
 
 function TLuaMusic.Beep_func(L: Plua_State): integer; cdecl;
@@ -5193,78 +5119,57 @@ end;
 
 function TLuaSound.Play_func(L: Plua_State): integer; cdecl;
 var
-  WaveName, ResolvedFile: string;
-  Freq, Period: integer;
+  WaveName: string;
+  Freq, Period: Integer;
   Volume: Single;
+  Obj: TQueueObject;
   Success: Boolean;
 begin
+  //Collect Lua arguments only. The engine decides whether this is a frequency,
+  //an audio file or a named waveform, checks it exists and builds the command.
+  Obj := nil;
   Success := False;
   try
     if (L.ArgsCount > 0) and not L.IsNil(1) then
     begin
       if lua_type(L, 1) = LUA_TNUMBER then
       begin
-        // sound.play(freq [, ms])
-        Freq := round(L.ToNumber(1));
-        if Freq > 0 then
-        begin
-          if L.ArgsCount >= 2 then
-            Period := round(L.ToNumber(2))
-          else
-            Period := 500;
-          if Period <= 0 then
-            Period := 500;
-          Script.AddQueueObject(TPlaySoundObject.Create(Freq, ClampSoundPeriod(Period), ''));
-          Success := True;
-        end;
+        Freq := Round(L.ToNumber(1));
+        Period := 500;
+        if L.ArgsCount >= 2 then
+          Period := Round(L.ToNumber(2));
+        Success := Engine.SoundPlayFreq(Freq, Period, Obj);
       end
       else if lua_type(L, 1) = LUA_TSTRING then
       begin
         WaveName := L.ToString(1);
-        if WaveName <> '' then
+        if ExtractFileExt(WaveName) <> '' then
         begin
-          if SysUtils.ExtractFileExt(WaveName) <> '' then
-          begin
-            // sound.play("file.wav" [, volume]) - one-shot SFX from an audio file
-            Volume := 1;
-            if L.ArgsCount >= 2 then
-              Volume := L.ToNumber(2);
-            ResolvedFile := Res.GuessFileName(WaveName, Res.WorkPath);
-            if (ResolvedFile <> '') and SysUtils.FileExists(ResolvedFile) then
-            begin
-              FScript.AddQueueObject(TPlaySoundFileObject.Create(ResolvedFile, Volume));
-              Success := True;
-            end
-            else if (SoundCache <> nil) and (SoundCache.Find(ResolvedFile) <> nil) then
-            begin
-              FScript.AddQueueObject(TPlaySoundFileObject.Create(ResolvedFile, Volume));
-              Success := True;
-            end;
-          end
-          else
-          begin
-            // sound.play("WaveformName" [, freq [, ms]])
-            Freq := 440;
-            Period := 500;
-            if L.ArgsCount >= 2 then
-              Freq := round(L.ToNumber(2));
-            if L.ArgsCount >= 3 then
-              Period := round(L.ToNumber(3));
-            if Freq <= 0 then
-              Freq := 440;
-            if Period <= 0 then
-              Period := 500;
-            if (WaveForms = nil) or (WaveForms.Find(WaveName) <> nil) then
-            begin
-              Script.AddQueueObject(TPlaySoundObject.Create(Freq, ClampSoundPeriod(Period), WaveName));
-              Success := True;
-            end;
-          end;
+          Volume := 1;
+          if L.ArgsCount >= 2 then
+            Volume := L.ToNumber(2);
+          Success := Engine.SoundPlayFile(WaveName, Volume, Obj);
+        end
+        else
+        begin
+          Freq := 440;
+          Period := 500;
+          if L.ArgsCount >= 2 then
+            Freq := Round(L.ToNumber(2));
+          if L.ArgsCount >= 3 then
+            Period := Round(L.ToNumber(3));
+          Success := Engine.SoundPlayWave(WaveName, Freq, Period, Obj);
         end;
       end;
     end;
   except
-    Success := False;
+    Success := False; //a bad file name never breaks the game
+    FreeAndNil(Obj);
+  end;
+  if Success then
+  begin
+    FScript.AddQueueObject(Obj);
+    Obj := nil; //the script queue owns it now
   end;
   L.PushBoolean(Success);
   Result := 1;
@@ -5319,10 +5224,12 @@ end;
 
 function TLuaSound.Generate_func(L: Plua_State): integer; cdecl;
 var
-  aName, aKind, aResolved: string;
+  aName, aKind, aError: string;
   aFreq, aMs: Integer;
   aVolume: Double;
 begin
+  //Only the Lua-to-value translation is here; the engine writes the WAV and
+  //reports why it refused, exactly as a Delphi/FPC caller would get.
   if not L.IsString(1) then
   begin
     L.PushNil;
@@ -5338,14 +5245,7 @@ begin
   aVolume := 0.5;
   if L.ArgsCount >= 5 then
     aVolume := L.ToNumber(5);
-  aResolved := ResolveAndValidatePath(aName, Res.WorkPath);
-  if aResolved = '' then
-  begin
-    L.PushNil;
-    L.PushString('sound.generate: ''' + aName + ''' resolves outside the workspace');
-    Exit(2);
-  end;
-  if GenerateWaveFile(aResolved, aFreq, aMs, aKind, aVolume) then
+  if Engine.SoundGenerate(aName, aFreq, aMs, aKind, aVolume, aError) then
   begin
     L.PushBoolean(True);
     Result := 1;
@@ -5353,8 +5253,8 @@ begin
   else
   begin
     L.PushNil;
-    L.PushString('sound.generate: bad arguments or cannot write ' + aName);
-    Exit(2);
+    L.PushString(aError);
+    Result := 2;
   end;
 end;
 
@@ -5980,19 +5880,13 @@ begin
 end;
 
 function TLuaGame.Difficulty_func(L: Plua_State): integer; cdecl;
-var
-  n: Integer;
 begin
+  //The clamp and the timescale rule belong to the engine; this only reads the
+  //optional Lua argument and pushes the answer.
   if L.ArgsCount > 0 then
-  begin
-    n := L.ToInteger(1);
-    if n < 1 then n := 1;
-    if n > 10 then n := 10;
-    Engine.GameLevel := n;
-  end;
-  //One level is normal speed; higher levels crawl faster, lower never slow.
-  Engine.World.TimeScale := 1.0 + (Engine.GameLevel - 1) * 0.08;
-  L.PushInteger(Engine.GameLevel);
+    L.PushInteger(Engine.Difficulty(L.ToInteger(1)))
+  else
+    L.PushInteger(Engine.GameLevel);
   Result := 1;
 end;
 
@@ -6375,117 +6269,13 @@ begin
   FConsoleReads.Clear;
 end;
 
-type
-  TScriptScoreEntry = record
-    Name: string;
-    Score: Int64;
-  end;
-  TScriptScoreEntries = array of TScriptScoreEntry;
-
-procedure SortScores(var Entries: TScriptScoreEntries);
-var
-  I, J: Integer;
-  Tmp: TScriptScoreEntry;
-begin
-  for I := 0 to High(Entries) do
-    for J := I + 1 to High(Entries) do
-      if Entries[J].Score > Entries[I].Score then
-      begin
-        Tmp := Entries[I];
-        Entries[I] := Entries[J];
-        Entries[J] := Tmp;
-      end;
-end;
-
-function ReadScoreFile(const AName: string; var Entries: TScriptScoreEntries;
-  out Err: string): Boolean;
-var
-  Full: string;
-  Lines: TStringList;
-  I, Tab: Integer;
-  Line, Name: string;
-  Value: Int64;
-  N: Integer;
-begin
-  Result := False;
-  Err := '';
-  Full := ResolveAndValidatePath(AName, Res.WorkPath);
-  if Full = '' then
-  begin
-    Err := 'scores: ''' + AName + ''' resolves outside the workspace';
-    Exit;
-  end;
-  SetLength(Entries, 0);
-  if not SysUtils.FileExists(Full) then
-    Exit(True); //no board yet is not an error
-  Lines := TStringList.Create;
-  try
-    try
-      Lines.LoadFromFile(Full);
-    except
-      on E: Exception do
-      begin
-        Err := 'scores: ' + E.Message;
-        Exit;
-      end;
-    end;
-    for I := 0 to Lines.Count - 1 do
-    begin
-      Line := Lines[I];
-      Tab := Pos(#9, Line);
-      if Tab < 2 then
-        Continue;
-      Name := Copy(Line, 1, Tab - 1);
-      if not TryStrToInt64(Trim(Copy(Line, Tab + 1, MaxInt)), Value) then
-        Continue;
-      N := Length(Entries);
-      SetLength(Entries, N + 1);
-      Entries[N].Name := Name;
-      Entries[N].Score := Value;
-    end;
-  finally
-    Lines.Free;
-  end;
-  Result := True;
-end;
-
-function WriteScoreFile(const AName: string; const Entries: TScriptScoreEntries;
-  out Err: string): Boolean;
-var
-  Full: string;
-  Lines: TStringList;
-  I: Integer;
-begin
-  Result := False;
-  Full := ResolveAndValidatePath(AName, Res.WorkPath);
-  if Full = '' then
-  begin
-    Err := 'scores: ''' + AName + ''' resolves outside the workspace';
-    Exit;
-  end;
-  Lines := TStringList.Create;
-  try
-    for I := 0 to High(Entries) do
-      Lines.Add(Entries[I].Name + #9 + IntToStr(Entries[I].Score));
-    try
-      Lines.SaveToFile(Full);
-      Result := True;
-    except
-      on E: Exception do
-        Err := 'scores: ' + E.Message;
-    end;
-  finally
-    Lines.Free;
-  end;
-end;
-
-procedure PushScoreEntries(L: Plua_State; const Entries: TScriptScoreEntries; ALimit: Integer);
+//The board itself (file format, sort, limit) is TTyroEngine.Scores* in
+//TyroEngines.pas; this helper only copies the engine's answer into a Lua table.
+procedure PushScoreEntries(L: Plua_State; const Entries: TTyroScoreEntries);
 var
   I, N: Integer;
 begin
   N := Length(Entries);
-  if N > ALimit then
-    N := ALimit;
   L.BeginTable; //the array
   for I := 0 to N - 1 do
   begin
@@ -6500,254 +6290,221 @@ begin
   end;
 end;
 
-function TLuaScript.FindStateSnap(APtr: Pointer; ACreate: Boolean): TLuaStateSnap;
+// state.* is now Engine.State: these helpers only translate a Lua table to
+// and from the engine's field list. No snapshot/undo logic is left here.
+function ReadStateFields(L: Plua_State; AIndex: Integer): TTyroStateFields;
+var
+  Base, I, Kind: Integer;
+begin
+  SetLength(Result, 0);
+  if AIndex < 0 then
+    AIndex := lua_gettop(L) + AIndex + 1;
+  if not lua_istable(L, AIndex) then
+    Exit;
+  Base := lua_gettop(L);
+  lua_pushnil(L);
+  while lua_next(L, AIndex) <> 0 do
+  begin
+    Kind := lua_type(L, -1);
+    if (Kind = LUA_TNUMBER) or (Kind = LUA_TSTRING) or (Kind = LUA_TBOOLEAN) then
+    begin
+      I := Length(Result);
+      SetLength(Result, I + 1);
+      if lua_type(L, -2) = LUA_TNUMBER then
+      begin
+        Result[I].IsNumberKey := True;
+        Result[I].NumberKey := lua_tonumber(L, -2);
+      end
+      else
+      begin
+        Result[I].IsNumberKey := False;
+        Result[I].TextKey := L.ToString(-2);
+      end;
+      case Kind of
+        LUA_TNUMBER:
+          begin
+            Result[I].IsNumber := True;
+            Result[I].Number := lua_tonumber(L, -1);
+          end;
+        LUA_TSTRING:
+          begin
+            Result[I].IsString := True;
+            Result[I].Text := L.ToString(-1);
+          end;
+        LUA_TBOOLEAN:
+          if lua_toboolean(L, -1) then
+            Result[I].BoolValue := True
+          else
+            Result[I].BoolValue := False;
+      end;
+    end;
+    lua_pop(L, 1); //pop the value, keep the key for lua_next
+  end;
+  lua_settop(L, Base);
+end;
+
+procedure PushStateValue(L: Plua_State; const AField: TTyroStateField);
+begin
+  if AField.IsNumber then
+    lua_pushnumber(L, AField.Number)
+  else if AField.IsString then
+    lua_pushstring(L, PUTF8Char(UTF8String(AField.Text)))
+  else
+    lua_pushboolean(L, LongBool(AField.BoolValue));
+end;
+
+procedure PushStateKey(L: Plua_State; const AField: TTyroStateField);
+begin
+  if AField.IsNumberKey then
+    lua_pushnumber(L, AField.NumberKey)
+  else
+    lua_pushstring(L, PUTF8Char(UTF8String(AField.TextKey)));
+end;
+
+procedure PushStateFields(L: Plua_State; const AFields: TTyroStateFields);
 var
   I: Integer;
 begin
-  Result := nil;
-  if FStateStacks = nil then
-    Exit;
-  for I := 0 to FStateStacks.Count - 1 do
-    if TLuaStateSnap(FStateStacks[I]).Ptr = APtr then
-      Exit(TLuaStateSnap(FStateStacks[I]));
-  if ACreate then
+  L.BeginTable; //the copied table
+  for I := 0 to High(AFields) do
   begin
-    Result := TLuaStateSnap.Create;
-    Result.Ptr := APtr;
-    Result.Refs := TList.Create;
-    FStateStacks.Add(Result);
+    PushStateKey(L, AFields[I]);
+    PushStateValue(L, AFields[I]);
+    lua_settable(L, -3);
   end;
 end;
 
-function TLuaScript.SnapshotTable(L: Plua_State; AIndex: Integer): Integer;
+procedure WriteStateFields(L: Plua_State; AIndex: Integer;
+  const AFields: TTyroStateFields);
 var
-  Src, Dst: Integer;
+  I: Integer;
 begin
   if AIndex < 0 then
     AIndex := lua_gettop(L) + AIndex + 1;
   if not lua_istable(L, AIndex) then
-  begin
-    lua_newtable(L);
-    Exit(lua_gettop(L));
-  end;
-  lua_newtable(L);
-  Dst := lua_gettop(L);
-  lua_pushnil(L);
-  while lua_next(L, AIndex) <> 0 do
-  begin
-    case lua_type(L, -1) of
-      LUA_TNUMBER, LUA_TSTRING, LUA_TBOOLEAN:
-        begin
-          lua_pushvalue(L, -2); //key at -2 of (key, value)
-          lua_pushvalue(L, -2); //value is now at -2 after the key copy
-          lua_settable(L, Dst);
-        end;
-    end;
-    lua_pop(L, 1); //pop value, keep key for lua_next
-  end;
-  Result := Dst;
-end;
-
-procedure RestoreTableFields(L: Plua_State; ASrc, ADst: Integer);
-begin
-  if ASrc < 0 then
-    ASrc := lua_gettop(L) + ASrc + 1;
-  if ADst < 0 then
-    ADst := lua_gettop(L) + ADst + 1;
-  if (not lua_istable(L, ASrc)) or (not lua_istable(L, ADst)) then
     Exit;
-  lua_pushnil(L);
-  while lua_next(L, ASrc) <> 0 do
+  for I := 0 to High(AFields) do
   begin
-    lua_pushvalue(L, -2);
-    lua_pushvalue(L, -2);
-    lua_settable(L, ADst);
-    lua_pop(L, 1);
+    PushStateKey(L, AFields[I]);
+    PushStateValue(L, AFields[I]);
+    lua_settable(L, AIndex);
   end;
 end;
 
 function TLuaScript.StateSnapshot_func(L: Plua_State): integer; cdecl;
 begin
-  SnapshotTable(L, 1); //leaves the copy on the stack
+  PushStateFields(L, Engine.State.Snapshot(ReadStateFields(L, 1)));
   Result := 1;
 end;
 
 function TLuaScript.StateRestore_func(L: Plua_State): integer; cdecl;
 var
-  Base: Integer;
+  Fields: TTyroStateFields;
 begin
-  Base := lua_gettop(L);
-  RestoreTableFields(L, 2, 1);
-  lua_settop(L, Base);
+  Fields := Engine.State.Restore(ReadStateFields(L, 2), ReadStateFields(L, 1));
+  WriteStateFields(L, 1, Fields);
   L.PushBoolean(True);
   Result := 1;
 end;
 
 function TLuaScript.StateRemember_func(L: Plua_State): integer; cdecl;
-var
-  Base, Ref: Integer;
-  Snap: TLuaStateSnap;
 begin
-  Base := lua_gettop(L);
   if not lua_istable(L, 1) then
+    L.PushBoolean(False)
+  else
   begin
-    lua_settop(L, Base);
-    L.PushBoolean(False);
-    Exit(1);
+    Engine.State.Remember(lua_topointer(L, 1), ReadStateFields(L, 1));
+    L.PushBoolean(True);
   end;
-  Snap := FindStateSnap(lua_topointer(L, 1), True);
-  SnapshotTable(L, 1);
-  Ref := luaL_ref(L, LUA_REGISTRYINDEX);
-  Snap.Refs.Add(Pointer(Ref));
-  lua_settop(L, Base);
-  L.PushBoolean(True);
   Result := 1;
 end;
 
 function TLuaScript.StateUndo_func(L: Plua_State): integer; cdecl;
 var
-  Base, Ref: Integer;
-  Snap: TLuaStateSnap;
+  Fields: TTyroStateFields;
 begin
-  Base := lua_gettop(L);
-  Snap := nil;
-  if lua_istable(L, 1) then
-    Snap := FindStateSnap(lua_topointer(L, 1), False);
-  if (Snap = nil) or (Snap.Refs.Count = 0) then
+  if (not lua_istable(L, 1)) or
+    (not Engine.State.Undo(lua_topointer(L, 1), ReadStateFields(L, 1), Fields)) then
+    L.PushBoolean(False)
+  else
   begin
-    lua_settop(L, Base);
-    L.PushBoolean(False);
-    Exit(1);
+    WriteStateFields(L, 1, Fields);
+    L.PushBoolean(True);
   end;
-  Ref := Integer(Snap.Refs[Snap.Refs.Count - 1]);
-  Snap.Refs.Delete(Snap.Refs.Count - 1);
-  lua_rawgeti(L, LUA_REGISTRYINDEX, Ref); //[.., target, snapshot]
-  RestoreTableFields(L, -1, 1);
-  luaL_unref(L, LUA_REGISTRYINDEX, Ref);
-  lua_settop(L, Base);
-  L.PushBoolean(True);
   Result := 1;
 end;
 
 function TLuaScript.StateCount_func(L: Plua_State): integer; cdecl;
-var
-  Snap: TLuaStateSnap;
 begin
-  Snap := nil;
   if lua_istable(L, 1) then
-    Snap := FindStateSnap(lua_topointer(L, 1), False);
-  if Snap = nil then
-    L.PushInteger(0)
+    L.PushInteger(Engine.State.Count(lua_topointer(L, 1)))
   else
-    L.PushInteger(Snap.Refs.Count);
+    L.PushInteger(0);
   Result := 1;
 end;
 
 function TLuaScript.StateClear_func(L: Plua_State): integer; cdecl;
-var
-  Snap: TLuaStateSnap;
-  I: Integer;
 begin
   if lua_istable(L, 1) then
-  begin
-    Snap := FindStateSnap(lua_topointer(L, 1), False);
-    if Snap <> nil then
-    begin
-      if Lua.State <> nil then
-        for I := 0 to Snap.Refs.Count - 1 do
-          luaL_unref(Lua.State, LUA_REGISTRYINDEX, Integer(Snap.Refs[I]));
-      Snap.Refs.Clear;
-      FStateStacks.Remove(Snap);
-      Snap.Refs.Free;
-      Snap.Free;
-    end;
-  end;
+    Engine.State.Clear(lua_topointer(L, 1));
   L.PushBoolean(True);
   Result := 1;
 end;
 
 function TLuaScript.ScoresTop_func(L: Plua_State): integer; cdecl;
 var
-  Entries: TScriptScoreEntries;
+  Entries: TTyroScoreEntries;
   Err: string;
   Limit: Integer;
 begin
   Limit := 10;
   if (L.ArgsCount >= 2) and L.IsNumber(2) then
-  begin
     Limit := L.ToInteger(2);
-    if Limit < 1 then Limit := 1;
-    if Limit > 100 then Limit := 100;
-  end;
-  if not ReadScoreFile(L.ToString(1), Entries, Err) then
+  if not Engine.Scores.Top(L.ToString(1), Limit, Entries, Err) then
   begin
     L.PushNil;
     L.PushString(Err);
     Exit(2);
   end;
-  SortScores(Entries);
-  PushScoreEntries(L, Entries, Limit);
+  PushScoreEntries(L, Entries);
   Result := 1;
 end;
 
 function TLuaScript.ScoresAdd_func(L: Plua_State): integer; cdecl;
 var
-  Entries: TScriptScoreEntries;
+  Entries: TTyroScoreEntries;
   Err: string;
-  Limit, N: Integer;
+  Limit: Integer;
   Name: string;
-  Value: Int64;
 begin
   Limit := 10;
   if (L.ArgsCount >= 4) and L.IsNumber(4) then
-  begin
     Limit := L.ToInteger(4);
-    if Limit < 1 then Limit := 1;
-    if Limit > 100 then Limit := 100;
-  end;
-  if not ReadScoreFile(L.ToString(1), Entries, Err) then
-  begin
-    L.PushNil;
-    L.PushString(Err);
-    Exit(2);
-  end;
   Name := L.ToString(2);
   if Name = '' then
     Name := '?';
-  Value := L.ToInt64(3);
-  N := Length(Entries);
-  SetLength(Entries, N + 1);
-  Entries[N].Name := Name;
-  Entries[N].Score := Value;
-  SortScores(Entries);
-  if Length(Entries) > Limit then
-    SetLength(Entries, Limit);
-  if not WriteScoreFile(L.ToString(1), Entries, Err) then
+  if not Engine.Scores.Add(L.ToString(1), Name, L.ToInt64(3), Limit, Entries, Err) then
   begin
     L.PushNil;
     L.PushString(Err);
     Exit(2);
   end;
-  PushScoreEntries(L, Entries, Limit);
+  PushScoreEntries(L, Entries);
   Result := 1;
 end;
 
 function TLuaScript.ScoresBest_func(L: Plua_State): integer; cdecl;
 var
-  Entries: TScriptScoreEntries;
+  Best: Int64;
   Err: string;
 begin
-  if not ReadScoreFile(L.ToString(1), Entries, Err) then
+  if not Engine.Scores.Best(L.ToString(1), Best, Err) then
   begin
     L.PushNil;
     L.PushString(Err);
     Exit(2);
   end;
-  SortScores(Entries);
-  if Length(Entries) = 0 then
-    L.PushInteger(0)
-  else
-    L.PushInteger(Entries[0].Score);
+  L.PushInteger(Best);
   Result := 1;
 end;
 
@@ -6761,6 +6518,13 @@ var
 begin
   Name := LowerCase(L.ToString(1));
   if (Name = '') or not L.IsTable(2) then
+  begin
+    L.PushBoolean(False);
+    Exit(1);
+  end;
+  //The engine owns the name and the current scene; this list only holds the
+  //Lua callbacks that Engine.Scene asks us to fire through its events.
+  if not Engine.Scene.Add(Name) then
   begin
     L.PushBoolean(False);
     Exit(1);
@@ -6801,68 +6565,57 @@ begin
 end;
 
 function TLuaScript.SceneGo_func(L: Plua_State): integer; cdecl;
-var
-  S, Old: TLuaScene;
-  Top, Count: Integer;
 begin
-  S := FindScene(L.ToString(1));
-  if S = nil then
-  begin
-    L.PushBoolean(False);
-    Exit(1);
-  end;
-  Top := lua_gettop(L);
-  if CurrentScene <> '' then
-  begin
-    Old := FindScene(CurrentScene);
-    if Old <> nil then
-      CallRef(Old.LeaveRef, Top + 1, 0); //arguments stay untouched
-  end;
-  CurrentScene := S.Name;
-  Count := Top - 1;
-  if Count > 0 then
-    CallRef(S.EnterRef, 2, Count)
-  else
-    CallRef(S.EnterRef, Top + 1, 0);
-  L.PushBoolean(True);
+  //Engine.Scene.Go fires leave/enter through the events; the extra Lua
+  //arguments stay on the stack for SceneEnter to pass to enter().
+  L.PushBoolean(Engine.Scene.Go(L.ToString(1), L));
   Result := 1;
 end;
 
 function TLuaScript.SceneCurrent_func(L: Plua_State): integer; cdecl;
 begin
-  L.PushString(CurrentScene);
+  L.PushString(Engine.Scene.Current);
   Result := 1;
 end;
 
 function TLuaScript.SceneList_func(L: Plua_State): integer; cdecl;
 var
   i: Integer;
+  Names: TStringList;
 begin
-  L.BeginTable;
-  if Scenes <> nil then
-    for i := 0 to Scenes.Count - 1 do
+  Names := TStringList.Create;
+  try
+    Engine.Scene.List(Names);
+    L.BeginTable;
+    for i := 0 to Names.Count - 1 do
     begin
-      L.PushString(TLuaScene(Scenes[i]).Name);
+      L.PushString(Names[i]);
       lua_rawseti(L, -2, i + 1);
     end;
-  Result := 1;
+    Result := 1;
+  finally
+    Names.Free;
+  end;
 end;
 
 function TLuaScript.SceneRemove_func(L: Plua_State): integer; cdecl;
 var
+  Name: string;
   S: TLuaScene;
 begin
-  S := FindScene(L.ToString(1));
-  if S = nil then
+  Name := LowerCase(L.ToString(1));
+  if not Engine.Scene.Remove(Name) then
   begin
     L.PushBoolean(False);
     Exit(1);
   end;
-  if CurrentScene = S.Name then
-    CurrentScene := '';
-  ReleaseScene(S);
-  Scenes.Remove(S);
-  S.Free;
+  S := FindScene(Name);
+  if S <> nil then
+  begin
+    ReleaseScene(S);
+    Scenes.Remove(S);
+    S.Free;
+  end;
   L.PushBoolean(True);
   Result := 1;
 end;
@@ -6872,18 +6625,62 @@ var
   i: Integer;
   S: TLuaScene;
 begin
+  Engine.Scene.Clear;
   if Scenes <> nil then
-  begin
     for i := Scenes.Count - 1 downto 0 do
     begin
       S := TLuaScene(Scenes[i]);
       ReleaseScene(S);
       S.Free;
     end;
-    Scenes.Clear;
-  end;
-  CurrentScene := '';
+  Scenes.Clear;
   Result := 0;
+end;
+
+procedure TLuaScript.SceneEnter(const AName: string; AContext: Pointer);
+var
+  S: TLuaScene;
+  L: Plua_State;
+  Count: Integer;
+begin
+  S := FindScene(AName);
+  if (S = nil) or (Lua.State = nil) then
+    Exit;
+  L := Lua.State;
+  Count := lua_gettop(L) - 1; //arg 1 is the name the script passed to go()
+  if Count < 0 then
+    Count := 0;
+  CallRef(S.EnterRef, 2, Count);
+end;
+
+procedure TLuaScript.SceneLeave(const AName: string; AContext: Pointer);
+var
+  S: TLuaScene;
+begin
+  S := FindScene(AName);
+  if (S <> nil) and (Lua.State <> nil) then
+    CallRef(S.LeaveRef, lua_gettop(Lua.State) + 1, 0);
+end;
+
+procedure TLuaScript.SceneUpdate(const AName: string; AContext: Pointer;
+  ADeltaTime: Double);
+var
+  S: TLuaScene;
+begin
+  S := FindScene(AName);
+  if (S = nil) or (Lua.State = nil) then
+    Exit;
+  Lua.State.PushNumber(ADeltaTime);
+  CallRef(S.UpdateRef, lua_gettop(Lua.State), 1);
+end;
+
+procedure TLuaScript.SceneDraw(const AName: string; AContext: Pointer);
+var
+  S: TLuaScene;
+begin
+  S := FindScene(AName);
+  if (S <> nil) and (Lua.State <> nil) then
+    CallRef(S.DrawRef, lua_gettop(Lua.State) + 1, 0);
 end;
 
 function TLuaScript.Clock_func(L: Plua_State): integer; cdecl;

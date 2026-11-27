@@ -65,6 +65,103 @@ type
   //* them at once.
   TScriptState = set of (ssStarted, ssFailed, ssFinished);
 
+  { TTyroScoreEntry }
+
+  //One row of a score board. The Lua 'scores' table only translates these to
+  //and from Lua tables; the file, sort and limit rules live in TTyroEngine so
+  //a Delphi/FPC game gets the very same board.
+  TTyroScoreEntry = record
+    Name: string;
+    Score: Int64;
+  end;
+  TTyroScoreEntries = array of TTyroScoreEntry;
+
+  { TTyroState }
+
+  //One scalar field of a snapshot. The state manager stores only engine-level
+  //values; the Lua wrapper translates a table to and from these records, so a
+  //Delphi/FPC game can use the very same remember/undo rules without Lua.
+  TTyroStateField = record
+    IsNumberKey: Boolean;
+    NumberKey: Double;
+    TextKey: string;
+    IsNumber: Boolean;
+    IsString: Boolean;
+    Number: Double;
+    Text: string;
+    BoolValue: Boolean;
+  end;
+  TTyroStateFields = array of TTyroStateField;
+
+  TTyroState = class
+  private
+    FStacks: TList; //of TTyroStateStack
+    function Find(APtr: Pointer; ACreate: Boolean): TObject;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    //snapshot/restore: plain field-list copies, no script state involved.
+    function Snapshot(const AFields: TTyroStateFields): TTyroStateFields;
+    function Restore(const AFrom, ATo: TTyroStateFields): TTyroStateFields;
+    //remember/undo/count/clear: one undo stack per table pointer.
+    function Remember(APtr: Pointer; const AFields: TTyroStateFields): Boolean;
+    function Undo(APtr: Pointer; const AFields: TTyroStateFields;
+      out AResult: TTyroStateFields): Boolean;
+    function Count(APtr: Pointer): Integer;
+    procedure Clear(APtr: Pointer);
+    procedure ClearAll;
+  end;
+
+  { TTyroScenes }
+
+  //A host (the Lua script) supplies the four callbacks as events. The engine
+  //owns the names, the current scene and the add/go/remove/clear rules, so
+  //Game.Scene and Lua `scene` both address the same place.
+  TTyroSceneEvent = procedure(const AName: string; AContext: Pointer) of object;
+  TTyroSceneUpdateEvent = procedure(const AName: string; AContext: Pointer;
+    ADeltaTime: Double) of object;
+
+  TTyroScenes = class
+  private
+    FNames: TStringList;
+    FCurrent: string;
+    FOnEnter: TTyroSceneEvent;
+    FOnLeave: TTyroSceneEvent;
+    FOnUpdate: TTyroSceneUpdateEvent;
+    FOnDraw: TTyroSceneEvent;
+    function IndexOf(const AName: string): Integer;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Add(const AName: string): Boolean;
+    function Go(const AName: string; AContext: Pointer): Boolean;
+    function Current: string;
+    procedure List(ANames: TStrings);
+    function Remove(const AName: string): Boolean;
+    procedure Clear;
+    function Count: Integer;
+    procedure Update(AContext: Pointer; ADeltaTime: Double);
+    procedure Draw(AContext: Pointer);
+    property OnEnter: TTyroSceneEvent read FOnEnter write FOnEnter;
+    property OnLeave: TTyroSceneEvent read FOnLeave write FOnLeave;
+    property OnUpdate: TTyroSceneUpdateEvent read FOnUpdate write FOnUpdate;
+    property OnDraw: TTyroSceneEvent read FOnDraw write FOnDraw;
+  end;
+
+  { TTyroScores }
+
+  //The Lua `scores` table is this engine object; TTyroEngine's Scores* methods
+  //stay as thin aliases for callers that used them before the object existed.
+  TTyroScores = class
+  public
+    function Top(const AFileName: string; ALimit: Integer;
+      out AEntries: TTyroScoreEntries; out AError: string): Boolean;
+    function Add(const AFileName, AName: string; AScore: Int64;
+      ALimit: Integer; out AEntries: TTyroScoreEntries; out AError: string): Boolean;
+    function Best(const AFileName: string; out ABest: Int64;
+      out AError: string): Boolean;
+  end;
+
   { TTyroConsoleLog }
 
   TTyroConsoleLog = class(TInterfacedPersistent, ILog)
@@ -503,6 +600,18 @@ type
     //* path lands outside the workspace the score is not written and AScore
     //* is returned as-is. Backs score.hi_save().
     function SaveHighScore(const AFileName: string; AScore: Int64): Int64;
+    //* Read a score board (name<TAB>score lines, one per row) and return it
+    //* sorted best first, at most ALimit rows (clamped 1..100). A missing
+    //* board is an empty list, not an error. Backs scores.top().
+    function ScoresTop(const AFileName: string; ALimit: Integer;
+      out AEntries: TTyroScoreEntries; out AError: string): Boolean;
+    //* Append AName/AScore to the board, re-sort, keep the best ALimit rows and
+    //* write it back. Backs scores.add().
+    function ScoresAdd(const AFileName, AName: string; AScore: Int64;
+      ALimit: Integer; out AEntries: TTyroScoreEntries; out AError: string): Boolean;
+    //* Highest score on the board, or 0 for an empty board. Backs scores.best().
+    function ScoresBest(const AFileName: string; out ABest: Int64;
+      out AError: string): Boolean;
     //* One step of the small linear congruential generator behind rng():
     //* advances AState (keep it in the caller, e.g. a Lua table field) and
     //* returns the new value scaled to 0..<1.
@@ -517,6 +626,22 @@ type
     function PointsDist(X1, Y1, X2, Y2: Double): Double;
     //* aabb(): whether two boxes given as (x, y, width, height) overlap.
     function BoxesOverlap(X1, Y1, W1, H1, X2, Y2, W2, H2: Double): Boolean;
+    //* game.difficulty([level]): clamp the level to 1..10, store it and set
+    //* the scene timescale that goes with it. Backs game.difficulty().
+    function Difficulty(ALevel: Integer): Integer;
+    //* sound.generate(file, freq, ms [, wave [, volume]]): resolve the file
+    //* inside the workspace and write the WAV. AError explains a refusal.
+    //* Backs sound.generate().
+    function SoundGenerate(const AFileName: string; AFrequency, ADurationMs: Integer;
+      const AWaveform: string; AVolume: Double; out AError: string): Boolean;
+    //* sound.play(...) argument handling without any Lua in it. The engine
+    //* clamps the duration, checks that the file or waveform exists and hands
+    //* back the ready-to-enqueue command; the Lua wrapper only collects args.
+    function SoundPlayFreq(AFreq, APeriod: Integer; out AObject: TQueueObject): Boolean;
+    function SoundPlayFile(const AFileName: string; AVolume: Single;
+      out AObject: TQueueObject): Boolean;
+    function SoundPlayWave(const AWaveName: string; AFreq, APeriod: Integer;
+      out AObject: TQueueObject): Boolean;
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
     ScriptSource: string; //Shout pass to Thread to run it
@@ -542,6 +667,12 @@ type
     //* the "sprite" command, or F3.
     SpriteEditor: TSpriteEditor;
 
+    //* Lua `state` and `scene` tables are bound to these engine objects: the
+    //* same methods an FPC/Delphi game calls, with only the Lua translation in
+    //* TyroLua.pas.
+    State: TTyroState;
+    Scene: TTyroScenes;
+    Scores: TTyroScores;
     Sprites: TSprites;
     Tiles: TTiles;
     //* 3D models the script created (see TyroModels); drawn by the engine in a
@@ -644,6 +775,16 @@ var
 // none; in that case a tyro.png next to the executable, if there is one, is
 // used instead.
 function LoadApplicationIconImage: TImage;
+
+//* True when a file name carries a drive or a UNC root and must be used as it
+//* stands. Shared with the Lua wrappers so script paths are checked in one
+//* place, not twice with slightly different rules.
+function IsRootedName(const FileName: string): Boolean;
+//* Resolve a script-supplied file name inside the workspace, or '' when no
+//* candidate is contained. Backs every Lua API that takes a file name.
+function ResolveAndValidatePath(const FileName, ABasePath: string): string;
+//* Cap a Lua sound duration at 10 s before it reaches the sample allocator.
+function ClampSoundPeriod(APeriod: Integer): Integer;
 
 implementation
 
@@ -1448,6 +1589,584 @@ begin
     or TyroInput.IsGamepadDown('fire');
 end;
 
+{ Shared script path rules }
+
+function IsRootedName(const FileName: string): Boolean;
+begin
+  Result := (Length(FileName) > 1) and ((FileName[2] = ':') or
+    ((FileName[1] = '\') and (FileName[2] = '\')));
+end;
+
+function ResolveAndValidatePath(const FileName, ABasePath: string): string;
+var
+  Candidates: array[0..2] of string;
+  Candidate: string;
+  i: Integer;
+begin
+  Result := '';
+  if (FileName = '') or (Res = nil) then
+    Exit;
+  if IsRootedName(FileName) then
+  begin
+    Candidate := ExpandFileName(FileName);
+    if Res.IsPathInsideWorkspace(Candidate) then
+      Result := Candidate;
+    Exit;
+  end;
+  Candidates[0] := FileName;
+  Candidates[1]:= IncludePathDelimiter(ABasePath) + FileName;
+  Candidates[2]:= IncludePathDelimiter(Res.WorkPath) + FileName;
+  for i := Low(Candidates) to High(Candidates) do
+    if Candidates[i] <> '' then
+      // ExpandFileName collapses "..", relative and UNC forms, so the
+      // containment test can trust a plain prefix comparison.
+      if Res.IsPathInsideWorkspace(ExpandFileName(Candidates[i])) then
+        Exit(ExpandFileName(Candidates[i]));
+end;
+
+//A sound duration from Lua is milliseconds; the waveform generator allocates
+//SampleRate * Seconds samples, so an outrageous value must never reach it.
+const
+  cMaxSoundPeriodMs = 10000;
+
+function ClampSoundPeriod(APeriod: Integer): Integer;
+begin
+  if APeriod > cMaxSoundPeriodMs then
+  begin
+    Log.WriteLn(Format('Hint: sound duration %d ms is too long; using %d ms',
+      [APeriod, cMaxSoundPeriodMs]));
+    Result := cMaxSoundPeriodMs;
+  end
+  else
+    Result := APeriod;
+end;
+
+{ State — the engine half of the Lua `state` table }
+
+type
+  TTyroStateSnap = class
+  public
+    Fields: TTyroStateFields;
+  end;
+
+  TTyroStateStack = class
+  public
+    Ptr: Pointer;
+    Items: TList; //of TTyroStateSnap, oldest first
+    constructor Create(APtr: Pointer);
+    destructor Destroy; override;
+  end;
+
+constructor TTyroStateStack.Create(APtr: Pointer);
+begin
+  inherited Create;
+  Ptr := APtr;
+  Items := TList.Create;
+end;
+
+destructor TTyroStateStack.Destroy;
+var
+  I: Integer;
+begin
+  for I := 0 to Items.Count - 1 do
+    TTyroStateSnap(Items[I]).Free;
+  Items.Free;
+  inherited;
+end;
+
+function CopyStateFields(const AFields: TTyroStateFields): TTyroStateFields;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(AFields));
+  for I := 0 to High(AFields) do
+    Result[I] := AFields[I];
+end;
+
+function SameStateKey(const A, B: TTyroStateField): Boolean;
+begin
+  Result := (A.IsNumberKey = B.IsNumberKey) and
+    ((A.IsNumberKey and (A.NumberKey = B.NumberKey)) or
+     ((not A.IsNumberKey) and (A.TextKey = B.TextKey)));
+end;
+
+constructor TTyroState.Create;
+begin
+  inherited;
+  FStacks := TList.Create;
+end;
+
+destructor TTyroState.Destroy;
+begin
+  ClearAll;
+  FStacks.Free;
+  inherited;
+end;
+
+function TTyroState.Find(APtr: Pointer; ACreate: Boolean): TObject;
+var
+  I: Integer;
+  Stack: TTyroStateStack;
+begin
+  Result := nil;
+  for I := 0 to FStacks.Count - 1 do
+  begin
+    Stack := TTyroStateStack(FStacks[I]);
+    if Stack.Ptr = APtr then
+      Exit(Stack);
+  end;
+  if ACreate then
+  begin
+    Stack := TTyroStateStack.Create(APtr);
+    FStacks.Add(Stack);
+    Result := Stack;
+  end;
+end;
+
+function TTyroState.Snapshot(const AFields: TTyroStateFields): TTyroStateFields;
+begin
+  Result := CopyStateFields(AFields);
+end;
+
+function TTyroState.Restore(const AFrom, ATo: TTyroStateFields): TTyroStateFields;
+var
+  I, J, N: Integer;
+begin
+  Result := CopyStateFields(ATo);
+  for I := 0 to High(AFrom) do
+  begin
+    N := -1;
+    for J := 0 to High(Result) do
+      if SameStateKey(AFrom[I], Result[J]) then
+      begin
+        N := J;
+        Break;
+      end;
+    if N < 0 then
+    begin
+      N := Length(Result);
+      SetLength(Result, N + 1);
+      Result[N].IsNumberKey := AFrom[I].IsNumberKey;
+      Result[N].NumberKey := AFrom[I].NumberKey;
+      Result[N].TextKey := AFrom[I].TextKey;
+    end;
+    Result[N].IsNumber := AFrom[I].IsNumber;
+    Result[N].IsString := AFrom[I].IsString;
+    Result[N].Number := AFrom[I].Number;
+    Result[N].Text := AFrom[I].Text;
+    Result[N].BoolValue := AFrom[I].BoolValue;
+  end;
+end;
+
+function TTyroState.Remember(APtr: Pointer; const AFields: TTyroStateFields): Boolean;
+var
+  Stack: TTyroStateStack;
+  Snap: TTyroStateSnap;
+begin
+  Stack := TTyroStateStack(Find(APtr, True));
+  Snap := TTyroStateSnap.Create;
+  Snap.Fields := CopyStateFields(AFields);
+  Stack.Items.Add(Snap);
+  Result := True;
+end;
+
+function TTyroState.Undo(APtr: Pointer; const AFields: TTyroStateFields;
+  out AResult: TTyroStateFields): Boolean;
+var
+  Stack: TTyroStateStack;
+  Snap: TTyroStateSnap;
+begin
+  AResult := nil;
+  Result := False;
+  Stack := TTyroStateStack(Find(APtr, False));
+  if (Stack = nil) or (Stack.Items.Count = 0) then
+    Exit;
+  Snap := TTyroStateSnap(Stack.Items[Stack.Items.Count - 1]);
+  AResult := Restore(Snap.Fields, AFields);
+  Stack.Items.Delete(Stack.Items.Count - 1);
+  Snap.Free;
+  Result := True;
+end;
+
+function TTyroState.Count(APtr: Pointer): Integer;
+var
+  Stack: TTyroStateStack;
+begin
+  Stack := TTyroStateStack(Find(APtr, False));
+  if Stack = nil then
+    Result := 0
+  else
+    Result := Stack.Items.Count;
+end;
+
+procedure TTyroState.Clear(APtr: Pointer);
+var
+  I: Integer;
+  Stack: TTyroStateStack;
+begin
+  for I := FStacks.Count - 1 downto 0 do
+  begin
+    Stack := TTyroStateStack(FStacks[I]);
+    if Stack.Ptr = APtr then
+    begin
+      Stack.Free;
+      FStacks.Delete(I);
+    end;
+  end;
+end;
+
+procedure TTyroState.ClearAll;
+var
+  I: Integer;
+begin
+  for I := FStacks.Count - 1 downto 0 do
+  begin
+    TObject(FStacks[I]).Free;
+    FStacks.Delete(I);
+  end;
+end;
+
+{ Scene — the engine half of the Lua `scene` table }
+
+constructor TTyroScenes.Create;
+begin
+  inherited;
+  FNames := TStringList.Create;
+  FNames.CaseSensitive := False;
+end;
+
+destructor TTyroScenes.Destroy;
+begin
+  Clear;
+  FNames.Free;
+  inherited;
+end;
+
+function TTyroScenes.IndexOf(const AName: string): Integer;
+begin
+  Result := FNames.IndexOf(LowerCase(AName));
+end;
+
+function TTyroScenes.Add(const AName: string): Boolean;
+var
+  Key: string;
+begin
+  Key := LowerCase(AName);
+  Result := Key <> '';
+  if Result and (IndexOf(Key) < 0) then
+    FNames.Add(Key);
+end;
+
+function TTyroScenes.Go(const AName: string; AContext: Pointer): Boolean;
+var
+  Key, Old: string;
+begin
+  Key := LowerCase(AName);
+  Result := IndexOf(Key) >= 0;
+  if not Result then
+    Exit;
+  Old := FCurrent;
+  if (Old <> '') and Assigned(FOnLeave) then
+    FOnLeave(Old, AContext);
+  FCurrent := Key;
+  if Assigned(FOnEnter) then
+    FOnEnter(Key, AContext);
+end;
+
+function TTyroScenes.Current: string;
+begin
+  Result := FCurrent;
+end;
+
+procedure TTyroScenes.List(ANames: TStrings);
+begin
+  ANames.Assign(FNames);
+end;
+
+function TTyroScenes.Remove(const AName: string): Boolean;
+var
+  I: Integer;
+begin
+  I := IndexOf(AName);
+  Result := I >= 0;
+  if not Result then
+    Exit;
+  if FCurrent = FNames[I] then
+    FCurrent := '';
+  FNames.Delete(I);
+end;
+
+procedure TTyroScenes.Clear;
+begin
+  FNames.Clear;
+  FCurrent := '';
+end;
+
+function TTyroScenes.Count: Integer;
+begin
+  Result := FNames.Count;
+end;
+
+procedure TTyroScenes.Update(AContext: Pointer; ADeltaTime: Double);
+begin
+  if (FCurrent <> '') and Assigned(FOnUpdate) then
+    FOnUpdate(FCurrent, AContext, ADeltaTime);
+end;
+
+procedure TTyroScenes.Draw(AContext: Pointer);
+begin
+  if (FCurrent <> '') and Assigned(FOnDraw) then
+    FOnDraw(FCurrent, AContext);
+end;
+
+{ Score boards }
+
+function ScoreBoardPath(const AFileName: string): string;
+begin
+  Result := ResolveAndValidatePath(AFileName, Res.WorkPath);
+end;
+
+function ReadScoreBoard(const AFileName: string; out AEntries: TTyroScoreEntries;
+  out AError: string): Boolean;
+var
+  Full: string;
+  Lines: TStringList;
+  I, Tab, N: Integer;
+  Line, Name: string;
+  Value: Int64;
+begin
+  Result := False;
+  AError := '';
+  SetLength(AEntries, 0);
+  Full := ScoreBoardPath(AFileName);
+  if Full = '' then
+  begin
+    AError := 'scores: ''' + AFileName + ''' resolves outside the workspace';
+    Exit;
+  end;
+  if not SysUtils.FileExists(Full) then
+    Exit(True); //no board yet is not an error
+  Lines := TStringList.Create;
+  try
+    try
+      Lines.LoadFromFile(Full);
+    except
+      on E: Exception do
+      begin
+        AError := 'scores: ' + E.Message;
+        Exit;
+      end;
+    end;
+    for I := 0 to Lines.Count - 1 do
+    begin
+      Line := Lines[I];
+      Tab := Pos(#9, Line);
+      if Tab < 2 then
+        Continue;
+      Name := Copy(Line, 1, Tab - 1);
+      if not TryStrToInt64(Trim(Copy(Line, Tab + 1, MaxInt)), Value) then
+        Continue;
+      N := Length(AEntries);
+      SetLength(AEntries, N + 1);
+      AEntries[N].Name := Name;
+      AEntries[N].Score := Value;
+    end;
+  finally
+    Lines.Free;
+  end;
+  Result := True;
+end;
+
+function WriteScoreBoard(const AFileName: string; const AEntries: TTyroScoreEntries;
+  out AError: string): Boolean;
+var
+  Full: string;
+  Lines: TStringList;
+  I: Integer;
+begin
+  Result := False;
+  AError := '';
+  Full := ScoreBoardPath(AFileName);
+  if Full = '' then
+  begin
+    AError := 'scores: ''' + AFileName + ''' resolves outside the workspace';
+    Exit;
+  end;
+  Lines := TStringList.Create;
+  try
+    for I := 0 to High(AEntries) do
+      Lines.Add(AEntries[I].Name + #9 + IntToStr(AEntries[I].Score));
+    try
+      Lines.SaveToFile(Full);
+      Result := True;
+    except
+      on E: Exception do
+        AError := 'scores: ' + E.Message;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure SortScoreBoard(var AEntries: TTyroScoreEntries);
+var
+  I, J: Integer;
+  Tmp: TTyroScoreEntry;
+begin
+  for I := 0 to High(AEntries) do
+    for J := I + 1 to High(AEntries) do
+      if AEntries[J].Score > AEntries[I].Score then
+      begin
+        Tmp := AEntries[I];
+        AEntries[I] := AEntries[J];
+        AEntries[J] := Tmp;
+      end;
+end;
+
+function TTyroScores.Top(const AFileName: string; ALimit: Integer;
+  out AEntries: TTyroScoreEntries; out AError: string): Boolean;
+begin
+  if ALimit < 1 then ALimit := 1;
+  if ALimit > 100 then ALimit := 100;
+  if not ReadScoreBoard(AFileName, AEntries, AError) then
+    Exit(False);
+  SortScoreBoard(AEntries);
+  if Length(AEntries) > ALimit then
+    SetLength(AEntries, ALimit);
+  Result := True;
+end;
+
+function TTyroScores.Add(const AFileName, AName: string; AScore: Int64;
+  ALimit: Integer; out AEntries: TTyroScoreEntries; out AError: string): Boolean;
+var
+  N: Integer;
+begin
+  if ALimit < 1 then ALimit := 1;
+  if ALimit > 100 then ALimit := 100;
+  if not ReadScoreBoard(AFileName, AEntries, AError) then
+    Exit(False);
+  N := Length(AEntries);
+  SetLength(AEntries, N + 1);
+  AEntries[N].Name := AName;
+  AEntries[N].Score := AScore;
+  SortScoreBoard(AEntries);
+  if Length(AEntries) > ALimit then
+    SetLength(AEntries, ALimit);
+  if not WriteScoreBoard(AFileName, AEntries, AError) then
+    Exit(False);
+  Result := True;
+end;
+
+function TTyroScores.Best(const AFileName: string; out ABest: Int64;
+  out AError: string): Boolean;
+var
+  Entries: TTyroScoreEntries;
+begin
+  ABest := 0;
+  if not ReadScoreBoard(AFileName, Entries, AError) then
+    Exit(False);
+  SortScoreBoard(Entries);
+  if Length(Entries) > 0 then
+    ABest := Entries[0].Score;
+  Result := True;
+end;
+
+function TTyroEngine.ScoresTop(const AFileName: string; ALimit: Integer;
+  out AEntries: TTyroScoreEntries; out AError: string): Boolean;
+begin
+  Result := Scores.Top(AFileName, ALimit, AEntries, AError);
+end;
+
+function TTyroEngine.ScoresAdd(const AFileName, AName: string; AScore: Int64;
+  ALimit: Integer; out AEntries: TTyroScoreEntries; out AError: string): Boolean;
+begin
+  Result := Scores.Add(AFileName, AName, AScore, ALimit, AEntries, AError);
+end;
+
+function TTyroEngine.ScoresBest(const AFileName: string; out ABest: Int64;
+  out AError: string): Boolean;
+begin
+  Result := Scores.Best(AFileName, ABest, AError);
+end;
+
+function TTyroEngine.Difficulty(ALevel: Integer): Integer;
+begin
+  if ALevel < 1 then ALevel := 1;
+  if ALevel > 10 then ALevel := 10;
+  FGameLevel := ALevel;
+  //One level is normal speed; higher levels crawl faster, lower never slow.
+  World.TimeScale := 1.0 + (FGameLevel - 1) * 0.08;
+  Result := FGameLevel;
+end;
+
+function TTyroEngine.SoundGenerate(const AFileName: string; AFrequency,
+  ADurationMs: Integer; const AWaveform: string; AVolume: Double;
+  out AError: string): Boolean;
+var
+  Full: string;
+begin
+  AError := '';
+  if AFileName = '' then
+  begin
+    AError := 'sound.generate: missing file name';
+    Exit(False);
+  end;
+  Full := ResolveAndValidatePath(AFileName, Res.WorkPath);
+  if Full = '' then
+  begin
+    AError := 'sound.generate: ''' + AFileName + ''' resolves outside the workspace';
+    Exit(False);
+  end;
+  if not GenerateWaveFile(Full, AFrequency, ADurationMs, AWaveform, AVolume) then
+  begin
+    AError := 'sound.generate: bad arguments or cannot write ' + AFileName;
+    Exit(False);
+  end;
+  Result := True;
+end;
+
+function TTyroEngine.SoundPlayFreq(AFreq, APeriod: Integer;
+  out AObject: TQueueObject): Boolean;
+begin
+  AObject := nil;
+  if AFreq <= 0 then
+    Exit(False);
+  if APeriod <= 0 then
+    APeriod := 500;
+  AObject := TPlaySoundObject.Create(AFreq, ClampSoundPeriod(APeriod), '');
+  Result := True;
+end;
+
+function TTyroEngine.SoundPlayFile(const AFileName: string; AVolume: Single;
+  out AObject: TQueueObject): Boolean;
+var
+  Full: string;
+begin
+  AObject := nil;
+  Full := Res.GuessFileName(AFileName, Res.WorkPath);
+  if (Full = '') or not (SysUtils.FileExists(Full) or
+    ((SoundCache <> nil) and (SoundCache.Find(Full) <> nil))) then
+    Exit(False);
+  AObject := TPlaySoundFileObject.Create(Full, AVolume);
+  Result := True;
+end;
+
+function TTyroEngine.SoundPlayWave(const AWaveName: string; AFreq, APeriod: Integer;
+  out AObject: TQueueObject): Boolean;
+begin
+  AObject := nil;
+  if AWaveName = '' then
+    Exit(False);
+  if AFreq <= 0 then
+    AFreq := 440;
+  if APeriod <= 0 then
+    APeriod := 500;
+  if (WaveForms <> nil) and (WaveForms.Find(AWaveName) = nil) then
+    Exit(False);
+  AObject := TPlaySoundObject.Create(AFreq, ClampSoundPeriod(APeriod), AWaveName);
+  Result := True;
+end;
+
 //A high-score file lives next to the game: relative names are resolved
 //against the script folder (Res.WorkPath, same helper the engine uses for its
 //own paths) and a rooted name is taken as it stands; either way the result
@@ -1723,6 +2442,10 @@ begin
   FGamePaused := False;
   FRestartRequested := False;
   FGameLevel := 1;
+  //A rerun starts with empty scenes and undo stacks, like the old script-side
+  //lists did; the objects themselves stay alive for the whole engine session.
+  Scene.Clear;
+  State.ClearAll;
   FWindowAutoShown := False;
   RunScriptThread;
 end;
@@ -1935,6 +2658,9 @@ begin
   FFileList.OnPick := FileListPicked;
   FFileList.OnDismiss := FileListDismissed;
 
+  State := TTyroState.Create;
+  Scene := TTyroScenes.Create;
+  Scores := TTyroScores.Create;
   Sprites := TSprites.Create;
   Tiles := TTiles.Create;
   Models := TModels3D.Create;
@@ -1967,6 +2693,9 @@ begin
   //Every object below owns raylib GPU Res. Destroy all of them while
   //the window/OpenGL context is still alive.
   FreeAndNil(Physics);
+  FreeAndNil(Scene);
+  FreeAndNil(State);
+  FreeAndNil(Scores);
   FreeAndNil(Sprites);
   FreeAndNil(Tiles);
   //Models own GPU meshes: unload them while the GL context is alive.
@@ -3223,6 +3952,8 @@ begin
   FGamePaused := False;
   FRestartRequested := False;
   FGameLevel := 1;
+  Scene.Clear;
+  State.ClearAll;
   FLastErrorRaw := '';
   FLastErrorLine := 0;
   FLastErrorMsg := '';
