@@ -29,14 +29,42 @@ jobs:
           repository: parmaja/miniLua
           path: lua
 
+      # Lazarus supplies lazbuild and the LCL packages required by tyro.lpi.
       - name: Install Lazarus
         uses: gcarreno/setup-lazarus@v3
         with:
           lazarus-version: stable
 
-      - name: Build Tyro (FPC/Lazarus, Debug)
+      # FPC 3.3.x (trunk) is not bundled with any stable Lazarus release, and
+      # Tyro is developed against it. Use the official daily win64 snapshot
+      # and explicitly point lazbuild at that compiler. The snapshot ships no
+      # fpc.cfg, so generate one that lists its prebuilt unit directories.
+      - name: Install FPC 3.3.1 (trunk snapshot)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://downloads.freepascal.org/fpc/snapshot/trunk/x86_64-win64/fpc-3.3.1.x86_64-win64.built.on.i386-win32.zip'
+          $zip = Join-Path $env:RUNNER_TEMP 'fpc33.zip'
+          $root = Join-Path $env:RUNNER_TEMP 'fpc33'
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $root -Force
+
+          $units = Join-Path $root 'units\x86_64-win64'
+          Get-ChildItem $units -Directory |
+            ForEach-Object { "-Fu$($_.FullName)" } |
+            Set-Content -Path (Join-Path $root 'bin\i386-win32\fpc.cfg') -Encoding ascii
+
+          $pp = Join-Path $root 'bin\i386-win32\ppcrossx64.exe'
+          & $pp -iV
+
+      - name: Build Tyro (FPC 3.3.1, Debug)
         working-directory: tyro/src
-        run: lazbuild --build-all --build-mode=Debug tyro.lpi
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pp = Join-Path $env:RUNNER_TEMP 'fpc33\bin\i386-win32\ppcrossx64.exe'
+          & lazbuild --compiler=$pp --build-all --build-mode=Debug tyro.lpi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # The runtime DLLs are intentionally not committed (see .gitignore).
       # Set repository variables RAYLIB_URL and CHIPMUNK_URL to zip files
