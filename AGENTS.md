@@ -4,9 +4,10 @@ This is a simple game engine for kids and noobs, using RayLib and Lua for enduse
 
 ## Implementation
 
-* Big task split it to subtasks, for not lose the whole quota on one big task, and can continue with next task next day if runout of quota
+* Big task split it to subtasks, for not lose the whole quota on one big task, and can continue with next task next day if ranout of quota
 * Read documents in `help` folder
 * Do not use pcall in lua, most functions are queue to the engine
+* Try to update the documents (README/HELP etc) instead to update the code based on document
 
 ### Games
 

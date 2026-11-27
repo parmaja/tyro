@@ -3019,6 +3019,7 @@ begin
   Lua.State.Register('controls', 'name', Controls, Controls.Name_func);
   Lua.State.Register('controls', 'align', Controls, Controls.Align_func);
   Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
+{ NO, DO NOT ADD IT
   //caption/text: both spellings work on a caption control, and text also
   //covers an edit; btn.caption and btn.text are the field spellings of both.
   //Keep the table forms too: docs, demos and existing scripts use them, and
@@ -3038,6 +3039,7 @@ begin
   Lua.State.Register('controls', 'itemindex', Controls, Controls.ItemIndex_func);
   //image control: load the texture an image shows (img.load(...) is the same)
   Lua.State.Register('controls', 'load', Controls, Controls.LoadImage_func);
+}
   Lua.State.Register('controls', Controls); //should be last one
 
   //output (catches print/println/log)
