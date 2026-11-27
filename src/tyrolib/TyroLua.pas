@@ -709,11 +709,11 @@ type
     function Clear_func(L: Plua_State): integer; cdecl;
     function ViewCount_func(L: Plua_State): integer; cdecl;
     function ItemIndex_func(L: Plua_State): integer; cdecl;
-    //text: btn.text = "Hi" / controls.text(handle [, "Hi"]); a caption control
-    //keeps it in Caption, an edit in the shared Text
+    //text: btn.text = "Hi"; a caption control keeps it in Caption, an edit in
+    //the shared Text. Not registered on the controls table (field spelling).
     function Text_func(L: Plua_State): integer; cdecl;
-    //image control: img.load("logo.png") / controls.load(handle, "logo.png"),
-    //the new state answers the call and reads back through the loaded field
+    //image control: img.load("logo.png") / img.file = "logo.png"; not
+    //registered on controls. The new state reads back through `loaded`.
     function LoadImage_func(L: Plua_State): integer; cdecl;
     constructor Create(const AName: string; AScript: TLuaScript); override;
     destructor Destroy; override;
@@ -2974,27 +2974,13 @@ begin
   Lua.State.Register('controls', 'name', Controls, Controls.Name_func);
   Lua.State.Register('controls', 'align', Controls, Controls.Align_func);
   Lua.State.Register('controls', 'parent', Controls, Controls.Parent_func);
-{ NO, DO NOT ADD IT
-  //caption/text: both spellings work on a caption control, and text also
-  //covers an edit; btn.caption and btn.text are the field spellings of both.
-  //Keep the table forms too: docs, demos and existing scripts use them, and
-  //they are thin wrappers around the same queued operations as the fields.
-  Lua.State.Register('controls', 'caption', Controls, Controls.Caption_func);
-  Lua.State.Register('controls', 'text', Controls, Controls.Text_func);
-  Lua.State.Register('controls', 'checked', Controls, Controls.Checked_func);
-  //listbox: items/viewcount/itemindex are fields on the control table
-  //(lst.items), the three actions additem/item/clear are also methods there
-  //(lst:additem("a")); the table form takes the handle first
-  //(controls.additem(lst, "a"))
-  Lua.State.Register('controls', 'items', Controls, Controls.Items_func);
-  Lua.State.Register('controls', 'item', Controls, Controls.Item_func);
-  Lua.State.Register('controls', 'additem', Controls, Controls.AddItem_func);
-  Lua.State.Register('controls', 'clear', Controls, Controls.Clear_func);
-  Lua.State.Register('controls', 'viewcount', Controls, Controls.ViewCount_func);
-  Lua.State.Register('controls', 'itemindex', Controls, Controls.ItemIndex_func);
-  //image control: load the texture an image shows (img.load(...) is the same)
-  Lua.State.Register('controls', 'load', Controls, Controls.LoadImage_func);
-}
+  //The controls table exposes only base TTyroControl methods (the ones above).
+  //Values live on the handle as fields (btn.text, chk.checked, lst.items,
+  //lst.itemindex, lst.viewcount, img.loaded/file) and actions are colon methods
+  //on the specific control (lst:additem("a"), lst:item(0), lst:clear(),
+  //img:load(...)). Do not register the ten property/action spellings here: a
+  //raw field would shadow a same-named method on the handle, and the docs and
+  //demos use the field/colons forms. See docs/controls.md.
   Lua.State.Register('controls', Controls); //should be last one
 
   //output (catches print/println/log)
@@ -9554,13 +9540,13 @@ begin
   end
   else if (field = 'text') or (field = 'caption') then
   begin
-    //btn.text = "Hi" is the property form of controls.text(handle, "Hi")
+    //btn.text = "Hi" / btn.caption = "Hi"; no controls.text function
     FScript.RunQueueObject(TSetControlTextObject.Create(ctrl, L.ToString(3)));
     Exit;
   end
   else if field = 'checked' then
   begin
-    //chk.checked = true, the property form of controls.checked(handle, v)
+    //chk.checked = true; no controls.checked function
     if ctrl is TTyroCheckBox then
       FScript.RunQueueObject(TSetControlCheckedObject.Create(TTyroCheckBox(ctrl), L.ToBoolean(3)));
     Exit;
@@ -9985,7 +9971,8 @@ begin
   end;
 end;
 
-//controls.caption(handle [, text]) -> get/set the caption (button/label/checkbox)
+//Legacy handle form (unregistered on controls; Lua uses btn.caption): get/set
+//the caption of a button, label or checkbox.
 function TLuaControls.Caption_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -10022,9 +10009,8 @@ begin
   end;
 end;
 
-//controls.text(handle [, text]) -> get/set the control text: the caption of a
-//button, label or checkbox, the edited text of an edit. Reading it answers the
-//same string as controls.caption does for a caption control.
+//Legacy handle form (unregistered on controls; Lua uses btn.text): the caption
+//of a button, label or checkbox, or the edited text of an edit.
 function TLuaControls.Text_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -10497,9 +10483,9 @@ begin
   end;
 end;
 
-//controls.items(handle [, item1, item2, ...]) -> replace all items; the items
-//may also come as one table of strings (controls.items(h, {"a", "b"})), the
-//spelling the items field uses. With no extra argument returns the item count.
+//Legacy handle form (unregistered on controls; Lua uses lst.items): replace
+//all items, from separate arguments or one table. No extra argument returns
+//the item count.
 function TLuaControls.Items_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -10549,7 +10535,8 @@ begin
   end;
 end;
 
-//controls.item(handle, index [, text]) -> get/set a single item
+//lst:item(index [, text]) -> get/set a single listbox item (colon method on
+//the control table; not on the controls table)
 function TLuaControls.Item_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -10590,7 +10577,7 @@ begin
   end;
 end;
 
-//controls.additem(handle, text) -> append an item
+//lst:additem(text) -> append a listbox item (colon method on the control table)
 function TLuaControls.AddItem_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -10606,7 +10593,7 @@ begin
   Result := 0;
 end;
 
-//controls.clear(handle) -> remove all items
+//lst:clear() -> remove all listbox items (colon method on the control table)
 function TLuaControls.Clear_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -10620,7 +10607,7 @@ begin
   Result := 0;
 end;
 
-//img.load("logo.png") / img:load("logo.png") / controls.load(handle, "logo.png")
+//img.load("logo.png") / img:load("logo.png") (colon method on the control table)
 //Loads the texture an image control shows, replacing the one it holds. An
 //empty (or missing) file name releases it. The upload runs on the Engine thread
 //(it needs the GL context the control is painted with) and a texture bigger
@@ -10654,7 +10641,8 @@ begin
   Result := 1;
 end;
 
-//controls.viewcount(handle [, n]) -> get/set the visible rows (0 = boundsrect size)
+//Legacy handle form (unregistered on controls; Lua uses lst.viewcount):
+//get/set the visible rows (0 = boundsrect size).
 function TLuaControls.ViewCount_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;
@@ -10681,7 +10669,8 @@ begin
   end;
 end;
 
-//controls.itemindex(handle [, n]) -> get/set the selected row (-1 = none)
+//Legacy handle form (unregistered on controls; Lua uses lst.itemindex):
+//get/set the selected row (-1 = none).
 function TLuaControls.ItemIndex_func(L: Plua_State): integer; cdecl;
 var
   ctrl: TTyroControl;

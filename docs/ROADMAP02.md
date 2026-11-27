@@ -38,13 +38,15 @@ split big tasks into subtasks).
 
 ### P0-1 — Documented / demoed APIs that do not exist — ✅ done 2026-11-26
 
-- [x] Re-enabled the ten `controls.*` table registrations that were commented
-      out in `629d0736`: `caption`, `text`, `checked`, `items`, `item`,
-      `additem`, `clear`, `viewcount`, `itemindex`, `load`. They are thin
-      wrappers around the same queued operations as the field spellings, so
-      restoring them fixes the docs, the demo and the goldens at once.
-- [x] `demos/controls_align.tyro:38,46,49,54` (`controls.text(...)`) now runs
-      without a nil-call error (verified with `--exit:2`).
+- [x] Kept the `controls` table to base-control methods only. The ten
+      property/action spellings (`caption`, `text`, `checked`, `items`, `item`,
+      `additem`, `clear`, `viewcount`, `itemindex`, `load`) stay retired
+      (`066ab96`): a value is a field on the handle (`b.text = "Bye"`) and an
+      action is a colon method on the control (`lst:additem("a")`). The
+      API test now asserts they are absent and checks the field/colon forms.
+- [x] `demos/controls_align.tyro:38,46,49,54` now writes `button.text = ...`
+      instead of calling the retired `controls.text(...)`, so the demo runs
+      without a nil-call error.
 - [x] Four stale goldens are valid again: `tests/test_utf8.lua/.txt`,
       `tests/test_image.lua/.txt`, `tests/test_list.lua/.txt`,
       `tests/test_props.lua/.txt`.
@@ -57,9 +59,10 @@ split big tasks into subtasks).
       `world.shaking` in `docs/effects.md`, `docs/examples.md`,
       `demos/README.md`. No `TLuaMusic.Noise_func` or `TLuaWindow.Shake_func`
       exists in the code.
-- [x] Added `tests/roadmap02_p0_api_test.tyro` (17 checks, including negative
-      checks that the retired spellings stay absent) and its golden
-      `roadmap02_p0_api_out.txt`; both pass with exit 0.
+- [x] Updated `tests/roadmap02_p0_api_test.tyro` (22 checks: the retired
+      `controls.*` spellings stay absent, and the handle fields/colon methods
+      work) and regenerated its golden `roadmap02_p0_api_out.txt`; both pass
+      with exit 0.
 - [x] One runner for all P0 checks:
       `powershell -ExecutionPolicy Bypass -File tests\run_roadmap02.ps1` from
       the repo root. It checks exit codes for 10 scripts plus the banner

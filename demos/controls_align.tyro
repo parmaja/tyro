@@ -35,7 +35,7 @@ middleTall = false
 while true do
   if controls.clicked(newButton) then
     clicks = clicks + 1
-    controls.text(newButton, "New (" .. clicks .. ")")
+    newButton.text = "New (" .. clicks .. ")"
   end
 
   -- Changing a child's preferred height makes its parent realign the siblings.
@@ -43,15 +43,15 @@ while true do
     middleTall = not middleTall
     if middleTall then
       controls.height(tallButton, 72)
-      controls.text(tallButton, "Back to 40 px")
+      tallButton.text = "Back to 40 px"
     else
       controls.height(tallButton, 40)
-      controls.text(tallButton, "Make middle button taller")
+      tallButton.text = "Make middle button taller"
     end
   end
 
   if controls.clicked(closeButton) then
-    controls.text(closeButton, "Bottom clicks=" .. (clicks + 1))
+    closeButton.text = "Bottom clicks=" .. (clicks + 1)
     clicks = clicks + 1
   end
 

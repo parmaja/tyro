@@ -26,7 +26,7 @@ function - so these are interchangeable:
 ```lua
 local b = controls.new("button", "Hi", 10, 10, 120, 32)
 
-b.caption = "Bye"        -- controls.caption(b, "Bye")
+b.text = "Bye"           -- b.caption works too
 b.width = 200            -- controls.width(b, 200)
 b.align = "left"         -- controls.align(b, "left")
 b.visible = false        -- controls.visible(b, false)
@@ -48,8 +48,10 @@ local w, h = b.width, b.height
 The names that name an action stay methods on the handle and take a colon call,
 because a Lua key cannot be both a value and a function:
 `lst:additem("a")`, `lst:clear()`, `lst:item(0)`, `b:show()`, `b:hide()`,
-`b:move(x, y)`, `b:position(x, y)`, `b:focus()`, `img:load("logo.png")`. Each one
-also takes the handle as its first argument on the table: `controls.additem(lst, "a")`.
+`b:move(x, y)`, `b:position(x, y)`, `b:focus()`, `img:load("logo.png")`.
+The `controls` table itself only exposes base-control methods that take a handle
+(`controls.new`, `controls.align`, `controls.width`, …); property spellings such
+as `controls.text(handle)` or `controls.additem(handle, "a")` do not exist.
 
 | Function | Description |
 |----------|-------------|
@@ -88,13 +90,13 @@ An existing control can load another file at any time, and reports whether it
 holds a texture:
 
 ```lua
-controls.load(logo, "other.png")  -- or logo.load("other.png"), or logo.file = "other.png"
+logo.load("other.png")  -- or logo.file = "other.png"
 if not logo.loaded then
     print("logo.png could not be read")
 end
 logo.load("")                     -- release the texture
 ```
 
-`controls.load` answers `true`/`false` for the file it just read, and `false`
+`logo.load(...)` answers `true`/`false` for the file it just read, and `false`
 for a control that is not an `image`.
 
