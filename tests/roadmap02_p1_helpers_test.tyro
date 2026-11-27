@@ -1,4 +1,4 @@
--- ROADMAP02 P1-4: scores, snapshots and the non-blocking ask widget.
+-- ROADMAP02 P1-4: score, snapshots and the non-blocking ask widget.
 local out = openfile("roadmap02_p1_helpers_out.txt", "w")
 local failed = 0
 local function check(cond, name)
@@ -6,21 +6,21 @@ local function check(cond, name)
   if not cond then failed = failed + 1 end
 end
 
-check(type(scores.top) == "function", "scores table built in")
+check(type(score.top) == "function", "score table built in")
 check(type(state.snapshot) == "function", "state table built in")
 check(type(console.read) == "function", "console.read exists")
 
 local file = "roadmap02_p1_board.txt"
 local blank = openfile(file, "w")
 if blank then blank:close() end
-scores.add(file, "Ana", 100, 3)
-scores.add(file, "Bob", 300, 3)
-scores.add(file, "Cy", 200, 3)
-local top = scores.top(file, 3)
-check(#top == 3, "scores has 3 entries")
-check(top[1].name == "Bob" and top[1].score == 300, "scores sorted descending")
-check(top[1].rank == 1, "scores rank")
-check(scores.best(file) == 300, "scores best")
+score.add(file, "Ana", 100, 3)
+score.add(file, "Bob", 300, 3)
+score.add(file, "Cy", 200, 3)
+local top = score.top(file, 3)
+check(#top == 3, "score has 3 entries")
+check(top[1].name == "Bob" and top[1].score == 300, "score sorted descending")
+check(top[1].rank == 1, "score rank")
+check(score.best(file) == 300, "score best")
 
 local hero = { x = 1, y = 2, name = "hero" }
 state.remember(hero)

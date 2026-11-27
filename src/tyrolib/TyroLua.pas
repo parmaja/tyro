@@ -942,8 +942,8 @@ type
 
   { TLuaGame }
 
-  //Global `game` table: the non-input gameplay helpers (pause, restart,
-  //difficulty, math and high scores). Buttons are on the `input` table.
+  //Global `game` table: pause/restart/difficulty and their state properties.
+  //Buttons are on `input`, math helpers are globals, scores are on `score`.
   TLuaGame = class(TTyroLuaObject)
   protected
     function Getter(L: PLua_State): integer; override;
@@ -955,18 +955,20 @@ type
     function ResumeGame_func(L: Plua_State): integer; cdecl;
     function Restart_func(L: Plua_State): integer; cdecl;
     function Difficulty_func(L: Plua_State): integer; cdecl;
+  end;
 
-    function Clamp_func(L: Plua_State): integer; cdecl;
-    function Lerp_func(L: Plua_State): integer; cdecl;
-    function Sign_func(L: Plua_State): integer; cdecl;
-    function Dist_func(L: Plua_State): integer; cdecl;
-    function Aabb_func(L: Plua_State): integer; cdecl;
-    //rng(seed) -> a callable table; see RngCall_func for the call shape.
-    function Rng_func(L: Plua_State): integer; cdecl;
-    //__call metamethod of the tables Rng_func hands out.
-    function RngCall_func(L: Plua_State): integer; cdecl;
+  { TLuaScore }
+
+  //Global `score` table: every score helper in one place - the per-game best
+  //(hi_load/hi_save) and the sorted top-N board (top/add/best). All five are
+  //thin binds on Engine.Scores*, LoadHighScore and SaveHighScore.
+  TLuaScore = class(TTyroLuaObject)
+  public
     function HiLoad_func(L: Plua_State): integer; cdecl;
     function HiSave_func(L: Plua_State): integer; cdecl;
+    function Top_func(L: Plua_State): integer; cdecl;
+    function Add_func(L: Plua_State): integer; cdecl;
+    function Best_func(L: Plua_State): integer; cdecl;
   end;
 
   { TLuaScript }
@@ -1009,6 +1011,7 @@ type
     //Lua `input` table; also backs the legacy game.* button aliases.
     LuaInput: TLuaInput;
     Game: TLuaGame;
+    Score: TLuaScore;
     QueueStats: TLuaQueue;
     Camera: TLuaCamera;
     //Owns every TLuaFile handed out by openfile(); freed after Lua.Close,
@@ -1096,15 +1099,14 @@ type
     function SceneList_func(L: Plua_State): integer; cdecl;
     function SceneRemove_func(L: Plua_State): integer; cdecl;
     function SceneClear_func(L: Plua_State): integer; cdecl;
-    function ScoresTop_func(L: Plua_State): integer; cdecl;
-    function ScoresAdd_func(L: Plua_State): integer; cdecl;
-    function ScoresBest_func(L: Plua_State): integer; cdecl;
+
     function StateSnapshot_func(L: Plua_State): integer; cdecl;
     function StateRestore_func(L: Plua_State): integer; cdecl;
     function StateRemember_func(L: Plua_State): integer; cdecl;
     function StateUndo_func(L: Plua_State): integer; cdecl;
     function StateCount_func(L: Plua_State): integer; cdecl;
     function StateClear_func(L: Plua_State): integer; cdecl;
+
     function Clock_func(L: Plua_State): integer; cdecl;
     function Time_func(L: Plua_State): integer; cdecl;
     //Text metrics for the built-in font, e.g. to centre a label:
@@ -1112,6 +1114,17 @@ type
     function TextWidth_func(L: Plua_State): integer; cdecl;
     function TextHeight_func(L: Plua_State): integer; cdecl;
     function Rgba_func(L: Plua_State): integer; cdecl;
+
+    //math helpers: plain globals, no table to reach for (see help/game.md)
+    function Clamp_func(L: Plua_State): integer; cdecl;
+    function Lerp_func(L: Plua_State): integer; cdecl;
+    function Sign_func(L: Plua_State): integer; cdecl;
+    function Dist_func(L: Plua_State): integer; cdecl;
+    function Aabb_func(L: Plua_State): integer; cdecl;
+    //rng(seed) -> a callable table; see RngCall_func for the call shape.
+    function Rng_func(L: Plua_State): integer; cdecl;
+    //__call metamethod of the tables Rng_func hands out.
+    function RngCall_func(L: Plua_State): integer; cdecl;
 
     //scene timers
     //after(ms, fn) / every(ms, fn) -> a timer id, cancel(id) -> true when a
@@ -2590,6 +2603,7 @@ begin
   Gamepad := TLuaGamepad.Create('gamepad', Self);
   LuaInput := TLuaInput.Create('input', Self);
   Game := TLuaGame.Create('game', Self);
+  Score := TLuaScore.Create('score', Self);
   QueueStats := TLuaQueue.Create('queue', Self);
   Camera := TLuaCamera.Create('camera', Self);
 
@@ -2808,15 +2822,15 @@ begin
   Lua.State.Register('state', 'count', Self, StateCount_func);
   Lua.State.Register('state', 'clear', Self, StateClear_func);
 
-  //scores: a sorted top-N table in one tab-separated file per game.
-  Lua.State.RegisterTable('scores');
-  Lua.State.Register('scores', 'top', Self, ScoresTop_func);
-  Lua.State.Register('scores', 'add', Self, ScoresAdd_func);
-  Lua.State.Register('scores', 'best', Self, ScoresBest_func);
-
-  //score: the best scores kept in one small text file per game.
-  Lua.State.Register('score', 'hi_load', Game, Game.HiLoad_func);
-  Lua.State.Register('score', 'hi_save', Game, Game.HiSave_func);
+  //score: one table for every score helper. TLuaScore owns all five - the
+  //best in a small text file (hi_load/hi_save) and the sorted top-N board
+  //(top/add/best) in a tab-separated file. No `scores` alias: new project.
+  Lua.State.RegisterTable('score');
+  Lua.State.Register('score', 'hi_load', Score, Score.HiLoad_func);
+  Lua.State.Register('score', 'hi_save', Score, Score.HiSave_func);
+  Lua.State.Register('score', 'top', Score, Score.Top_func);
+  Lua.State.Register('score', 'add', Score, Score.Add_func);
+  Lua.State.Register('score', 'best', Score, Score.Best_func);
 
   Lua.State.RegisterGlobal('frametime', FrameTime_func);
   Lua.State.RegisterGlobal('time', TotalTime_func);
@@ -2857,13 +2871,14 @@ begin
   Lua.State.RegisterGlobal('rgba', Rgba_func);
   Lua.State.RegisterGlobal('rgb', Rgba_func);
 
-  //math helpers and the seeded rng: plain globals, no table to reach for
-  Lua.State.RegisterGlobal('clamp', Game.Clamp_func);
-  Lua.State.RegisterGlobal('lerp', Game.Lerp_func);
-  Lua.State.RegisterGlobal('sign', Game.Sign_func);
-  Lua.State.RegisterGlobal('dist', Game.Dist_func);
-  Lua.State.RegisterGlobal('aabb', Game.Aabb_func);
-  Lua.State.RegisterGlobal('rng', Game.Rng_func);
+  //math helpers and the seeded rng: plain globals owned by TLuaScript,
+  //not by TLuaGame (which only holds the game-state verbs).
+  Lua.State.RegisterGlobal('clamp', Self.Clamp_func);
+  Lua.State.RegisterGlobal('lerp', Self.Lerp_func);
+  Lua.State.RegisterGlobal('sign', Self.Sign_func);
+  Lua.State.RegisterGlobal('dist', Self.Dist_func);
+  Lua.State.RegisterGlobal('aabb', Self.Aabb_func);
+  Lua.State.RegisterGlobal('rng', Self.Rng_func);
 
   //enter/leave: hold the drawing queue so the commands queued in between are
   //all drawn at one drawing cycle instead of being spread over frames
@@ -3134,6 +3149,7 @@ begin
   FreeAndNil(FConsoleReads);
   FreeAndNil(Shader);
   FreeAndNil(Game);
+  FreeAndNil(Score);
   FreeAndNil(LuaInput);
   FreeAndNil(Gamepad);
   FreeAndNil(Keyboard);
@@ -6051,30 +6067,30 @@ begin
   Result := 1;
 end;
 
-{ TLuaGame }
+{ TLuaScript - math globals }
 
-function TLuaGame.Clamp_func(L: Plua_State): integer; cdecl;
+function TLuaScript.Clamp_func(L: Plua_State): integer; cdecl;
 begin
   //clamp(v, lo, hi)
   L.PushNumber(Engine.ClampValue(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3)));
   Result := 1;
 end;
 
-function TLuaGame.Lerp_func(L: Plua_State): integer; cdecl;
+function TLuaScript.Lerp_func(L: Plua_State): integer; cdecl;
 begin
   //lerp(a, b, t)
   L.PushNumber(Engine.LerpValue(L.ToNumber(1), L.ToNumber(2), L.ToNumber(3)));
   Result := 1;
 end;
 
-function TLuaGame.Sign_func(L: Plua_State): integer; cdecl;
+function TLuaScript.Sign_func(L: Plua_State): integer; cdecl;
 begin
   //sign(v) -> -1, 0 or 1
   L.PushInteger(Engine.SignValue(L.ToNumber(1)));
   Result := 1;
 end;
 
-function TLuaGame.Dist_func(L: Plua_State): integer; cdecl;
+function TLuaScript.Dist_func(L: Plua_State): integer; cdecl;
 begin
   //dist(x1, y1, x2, y2) - straight-line distance between two points
   L.PushNumber(Engine.PointsDist(L.ToNumber(1), L.ToNumber(2),
@@ -6082,7 +6098,7 @@ begin
   Result := 1;
 end;
 
-function TLuaGame.Aabb_func(L: Plua_State): integer; cdecl;
+function TLuaScript.Aabb_func(L: Plua_State): integer; cdecl;
 begin
   //aabb(x1, y1, w1, h1, x2, y2, w2, h2) - do two boxes overlap?
   //(x, y is each box's top-left corner)
@@ -6095,7 +6111,7 @@ end;
 //__call of the table rng(seed) hands out: the generator state lives in
 //the raw field 's', so this one plain method is the whole object. The table
 //itself arrives as arg 1, the call arguments start at 2.
-function TLuaGame.RngCall_func(L: Plua_State): integer; cdecl;
+function TLuaScript.RngCall_func(L: Plua_State): integer; cdecl;
 var
   State: Int64;
   Norm, Lo, Hi: Double;
@@ -6124,7 +6140,7 @@ begin
   Result := 1;
 end;
 
-function TLuaGame.Rng_func(L: Plua_State): integer; cdecl;
+function TLuaScript.Rng_func(L: Plua_State): integer; cdecl;
 var
   Seed: Int64;
 begin
@@ -6144,7 +6160,9 @@ begin
   Result := 1;
 end;
 
-function TLuaGame.HiLoad_func(L: Plua_State): integer; cdecl;
+{ TLuaScore }
+
+function TLuaScore.HiLoad_func(L: Plua_State): integer; cdecl;
 var
   ADefault: Int64;
 begin
@@ -6157,7 +6175,7 @@ begin
   Result := 1;
 end;
 
-function TLuaGame.HiSave_func(L: Plua_State): integer; cdecl;
+function TLuaScore.HiSave_func(L: Plua_State): integer; cdecl;
 begin
   //score.hi_save("cave.hi", score) - writes only when score is a new best and
   //answers the best either way, so `hi = score.hi_save("cave.hi", score)` is
@@ -6474,7 +6492,7 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.ScoresTop_func(L: Plua_State): integer; cdecl;
+function TLuaScore.Top_func(L: Plua_State): integer; cdecl;
 var
   Entries: TTyroScoreEntries;
   Err: string;
@@ -6493,7 +6511,7 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.ScoresAdd_func(L: Plua_State): integer; cdecl;
+function TLuaScore.Add_func(L: Plua_State): integer; cdecl;
 var
   Entries: TTyroScoreEntries;
   Err: string;
@@ -6516,7 +6534,7 @@ begin
   Result := 1;
 end;
 
-function TLuaScript.ScoresBest_func(L: Plua_State): integer; cdecl;
+function TLuaScore.Best_func(L: Plua_State): integer; cdecl;
 var
   Best: Int64;
   Err: string;

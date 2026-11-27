@@ -1,10 +1,10 @@
-ok   scores table built in
+ok   score table built in
 ok   state table built in
 ok   console.read exists
-ok   scores has 3 entries
-ok   scores sorted descending
-ok   scores rank
-ok   scores best
+ok   score has 3 entries
+ok   score sorted descending
+ok   score rank
+ok   score best
 ok   state.remember pushed a snapshot
 ok   state.undo restored
 ok   state.snapshot/restore

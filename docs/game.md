@@ -17,7 +17,6 @@ input.l_pressed()  input.r_pressed()  input.select_pressed()
 input.fire_down() ...  -- hold versions: *_down for every pair above
 input.up_pressed() / down_pressed() / left_pressed() / right_pressed()
                       -- one edge from keyboard, D-pad or the joystick
--- The same button spellings still exist under game.* as aliases.
 
 local hi = score.hi_load("cave.hi", 0)         -- best score from a small
 hi = score.hi_save("cave.hi", score)           -- text file next to the game
@@ -27,20 +26,22 @@ local r = rng(42)   -- repeatable random: r() 0..1, r(n) 1..n, r(a,b) a..b
 
 ## Helpers
 
-The high-score table is built into the engine as `scores`:
+The sorted high-score board lives on the same `score` table as `hi_load` and
+`hi_save` — one table for everything score-related:
 
 ```lua
-scores.add("hiscores.txt", "Ana", 4200, 5)
-for _, e in ipairs(scores.top("hiscores.txt", 5)) do
+score.add("hiscores.txt", "Ana", 4200, 5)
+for _, e in ipairs(score.top("hiscores.txt", 5)) do
   print(e.rank .. ". " .. e.name .. " - " .. e.score)
 end
-local best = scores.best("hiscores.txt")
+local best = score.best("hiscores.txt")
 ```
 
-`scores.top(file [, limit])` returns an array of `{ rank, name, score }`
-sorted highest first. `scores.add(file, name, points [, limit])` inserts a
+`score.top(file [, limit])` returns an array of `{ rank, name, score }`
+sorted highest first. `score.add(file, name, points [, limit])` inserts a
 score, keeps the top *limit* (10 by default) and writes the tab-separated file
-next to your script. `scores.best(file)` answers the highest score.
+next to your script. `score.best(file)` answers the highest score. There is no
+separate `scores` table.
 
 Table snapshots and undo are also built in, as the `state` table:
 

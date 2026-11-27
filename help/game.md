@@ -20,6 +20,13 @@ aabb(x1, y1, w1, h1,           -- do two boxes overlap? (x, y is each
 local hi = score.hi_load("cave.hi", 0)
 hi = score.hi_save("cave.hi", score)   -- writes only when score beats hi,
                                        -- and answers the best either way
+
+-- one table for everything score-related: the sorted top-N board, too
+score.add("hiscores.txt", "Ana", 4200, 5)
+for _, e in ipairs(score.top("hiscores.txt", 5)) do
+  print(e.rank .. ". " .. e.name .. " - " .. e.score)
+end
+local best = score.best("hiscores.txt")
 ```
 
 ```lua
@@ -68,8 +75,8 @@ end
 
 ## Ready-made helpers
 
-The built-in `scores` table gives a sorted high-score table (`top`, `add`,
-`best`), and the built-in `state` table gives table snapshots and undo
+The `score` table also gives a sorted high-score board (`top`, `add`, `best`),
+and the built-in `state` table gives table snapshots and undo
 (`remember`, `undo`, `snapshot`, `restore`). For input, `console.read(prompt,
 fn)` is built into the engine and **does not freeze the game**: it returns
 immediately and calls `fn(answer)` on a later frame. Details in
@@ -106,7 +113,14 @@ end
 ## Where it lives
 
 The functions are methods of `TTyroEngine` (src/TyroEngines.pas); TyroLua only
-binds them - the math helpers and `rng` as globals, the best scores under
-`score`, the button pairs under the `game` table - so games, demos and the
-editor all see the same behaviour. The mute flag is the `SoundMuted` global in
-TyroSounds.pas, checked at every playback entry point.
+binds them, so games, demos and the editor all see the same behaviour:
+
+- `TLuaScript` owns the math helpers (`clamp`, `lerp`, `sign`, `dist`, `aabb`,
+  `rng`) as plain globals — no `game.` prefix.
+- `TLuaScore` owns all five score calls in one `score` table (`hi_load`,
+  `hi_save`, `top`, `add`, `best`); there is no separate `scores` table.
+- `TLuaGame` owns the game-state verbs and properties (`game.pause()`,
+  `game.paused`, `game.level`, ...); buttons live under `input`.
+
+The mute flag is the `SoundMuted` global in TyroSounds.pas, checked at every
+playback entry point.

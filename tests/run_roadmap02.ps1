@@ -23,12 +23,14 @@ $cases = @(
     @{ Script='tests\roadmap02_p3_sound_generate_test.tyro'; Flag='--exit'; Code=0; Stdout='sound.generate: true' },
     @{ Script='tests\roadmap02_p3_console_read_test.tyro'; Flag='--exit:2'; Code=0; Stdout='console.read returned: true' },
     @{ Script='tests\roadmap02_p3_pixelart_test.tyro'; Flag='--exit:2'; Code=0; Stdout='pixelart engine checks passed' },
-    @{ Script='tests\roadmap02_p3_scores_test.tyro'; Flag='--exit'; Code=0; Stdout='scores engine checks passed' },
+    @{ Script='tests\roadmap02_p3_scores_test.tyro'; Flag='--exit'; Code=0; Stdout='score engine checks passed' },
+    @{ Script='tests\score_table_test.tyro'; Flag='--exit'; Code=0; Stdout='ALL SCORE TABLE CHECKS PASSED' },
     @{ Script='tests\roadmap02_p3_state_test.tyro'; Flag='--exit'; Code=0; Stdout='state engine checks passed' }
 )
 $failed = 0
 Remove-Item 'tests\roadmap02_p1_restart_count.txt',
-  'tests\roadmap02_p3_scores_probe.txt' -ErrorAction SilentlyContinue
+  'tests\roadmap02_p3_scores_probe.txt',
+  'tests\score_table_board.txt', 'tests\score_table_best.hi' -ErrorAction SilentlyContinue
 Remove-Item 'tests\roadmap02_p3_pixelart_probe.png',
   'tests\roadmap02_p3_atlas_probe.sprite' -ErrorAction SilentlyContinue
 foreach ($c in $cases) {

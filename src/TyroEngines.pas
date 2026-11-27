@@ -556,16 +556,15 @@ type
     function SaveHighScore(const AFileName: string; AScore: Int64): Int64;
     //* Read a score board (name<TAB>score lines, one per row) and return it
     //* sorted best first, at most ALimit rows (clamped 1..100). A missing
-    //* board is an empty list, not an error. Backs scores.top().
+    //* board is an empty list, not an error. Backs score.top().
     function ScoresTop(const AFileName: string; ALimit: Integer;
       out AEntries: TTyroScoreEntries; out AError: string): Boolean;
     //* Append AName/AScore to the board, re-sort, keep the best ALimit rows and
-    //* write it back. Backs scores.add().
+    //* write it back. Backs score.add().
     function ScoresAdd(const AFileName, AName: string; AScore: Int64;
       ALimit: Integer; out AEntries: TTyroScoreEntries; out AError: string): Boolean;
-    //* Highest score on the board, or 0 for an empty board. Backs scores.best().
-    function ScoresBest(const AFileName: string; out ABest: Int64;
-      out AError: string): Boolean;
+    //* Highest score on the board, or 0 for an empty board. Backs score.best().
+    function ScoresBest(const AFileName: string; out ABest: Int64; out AError: string): Boolean;
     //* One step of the small linear congruential generator behind rng():
     //* advances AState (keep it in the caller, e.g. a Lua table field) and
     //* returns the new value scaled to 0..<1.
@@ -586,16 +585,13 @@ type
     //* sound.generate(file, freq, ms [, wave [, volume]]): resolve the file
     //* inside the workspace and write the WAV. AError explains a refusal.
     //* Backs sound.generate().
-    function SoundGenerate(const AFileName: string; AFrequency, ADurationMs: Integer;
-      const AWaveform: string; AVolume: Double; out AError: string): Boolean;
+    function SoundGenerate(const AFileName: string; AFrequency, ADurationMs: Integer; const AWaveform: string; AVolume: Double; out AError: string): Boolean;
     //* sound.play(...) argument handling without any Lua in it. The engine
     //* clamps the duration, checks that the file or waveform exists and hands
     //* back the ready-to-enqueue command; the Lua wrapper only collects args.
     function SoundPlayFreq(AFreq, APeriod: Integer; out AObject: TQueueObject): Boolean;
-    function SoundPlayFile(const AFileName: string; AVolume: Single;
-      out AObject: TQueueObject): Boolean;
-    function SoundPlayWave(const AWaveName: string; AFreq, APeriod: Integer;
-      out AObject: TQueueObject): Boolean;
+    function SoundPlayFile(const AFileName: string; AVolume: Single; out AObject: TQueueObject): Boolean;
+    function SoundPlayWave(const AWaveName: string; AFreq, APeriod: Integer; out AObject: TQueueObject): Boolean;
   public
     ScriptFile: string;//Full file name , that to run in ScriptThread
     ScriptSource: string; //Shout pass to Thread to run it
@@ -692,8 +688,7 @@ type
     //* Same thread rules as HttpGet: one client per call, the caller blocks
     //* while the render loop keeps drawing. Backs the Lua global
     //* http_post(url, body [, content_type]).
-    function HttpPost(const AUrl, AData, AContentType: string;
-      out ABody: string; out AError: string): Boolean;
+    function HttpPost(const AUrl, AData, AContentType: string; out ABody: string; out AError: string): Boolean;
 
     property CanvasLock: TmnCriticalSection read FCanvasLock;
     property Options: TTyroEngineOptions read FOptions write FOptions;
@@ -1886,8 +1881,7 @@ begin
   Result := Scores.Add(AFileName, AName, AScore, ALimit, AEntries, AError);
 end;
 
-function TTyroEngine.ScoresBest(const AFileName: string; out ABest: Int64;
-  out AError: string): Boolean;
+function TTyroEngine.ScoresBest(const AFileName: string; out ABest: Int64; out AError: string): Boolean;
 begin
   Result := Scores.Best(AFileName, ABest, AError);
 end;
@@ -1902,8 +1896,7 @@ begin
   Result := FGameLevel;
 end;
 
-function TTyroEngine.SoundGenerate(const AFileName: string; AFrequency,
-  ADurationMs: Integer; const AWaveform: string; AVolume: Double;
+function TTyroEngine.SoundGenerate(const AFileName: string; AFrequency, ADurationMs: Integer; const AWaveform: string; AVolume: Double;
   out AError: string): Boolean;
 var
   Full: string;

@@ -1,0 +1,52 @@
+-- The merged score table: TLuaScore owns all five calls, no `scores` alias.
+-- Math helpers are globals owned by TLuaScript, not methods of TLuaGame.
+window.show(320, 240)
+local out = openfile("score_table_test_out.txt", "w")
+
+local function check(name, cond)
+  out:write(name, " ", cond and "ok" or "FAIL", "\n")
+  if not cond then error("failed: " .. name) end
+end
+
+function update(dt)
+  if not out then exit() return end
+
+  check("score table", type(score) == "table")
+  check("hi_load", type(score.hi_load) == "function")
+  check("hi_save", type(score.hi_save) == "function")
+  check("top", type(score.top) == "function")
+  check("add", type(score.add) == "function")
+  check("best", type(score.best) == "function")
+  check("no scores table", scores == nil)
+
+  local board = "score_table_board.txt"
+  local blank = openfile(board, "w")
+  if blank then blank:close() end
+  score.add(board, "Ana", 100, 3)
+  score.add(board, "Bob", 300, 3)
+  score.add(board, "Cy", 200, 3)
+  local top = score.top(board, 3)
+  check("sorted board", #top == 3 and top[1].name == "Bob" and top[1].score == 300)
+  check("rank", top[1].rank == 1)
+  check("best", score.best(board) == 300)
+  check("hi_save", score.hi_save("score_table_best.hi", 321) == 321)
+  check("hi_load", score.hi_load("score_table_best.hi", 0) == 321)
+
+  check("clamp", clamp(5, 0, 3) == 3)
+  check("lerp", lerp(0, 10, 0.5) == 5)
+  check("sign", sign(-4) == -1)
+  check("dist", dist(0, 0, 3, 4) == 5)
+  check("aabb", aabb(0, 0, 10, 10, 5, 5, 10, 10) == true)
+  local r = rng(42)
+  check("rng", r(6) >= 1 and r(6) <= 6)
+  check("game has no math", game.clamp == nil)
+
+  out:write("ALL SCORE TABLE CHECKS PASSED\n")
+  out:close()
+  out = nil
+  print("ALL SCORE TABLE CHECKS PASSED")
+  exit()
+end
+
+function draw()
+end
