@@ -57,7 +57,7 @@ Deploy as a heavily armored cyberpunk commando into deep, procedurally generated
 - `mazerogue_data.tyro`: Pure mathematical rules module containing maze generation, reachability BFS, recoil calculation, collision resolution, enemy scaling, sight memory, and torch-light falloff.
 - `flashlight.frag`: Custom GLSL post-processing shader creating the darkness/torch effect on deep sectors (`shader.load`).
 - `make_assets.lua`: Generates all pixel-art sprite atlases (`.sprite` + `.png`) and the tileset (`tiles.png`) with Tyro itself — no Python or Pillow. Run `bin\tyro.exe games/mazerogue/make_assets.lua --exit:2`; add `probe` to write `probe_*` files. The older `make_assets.py` is kept for reference only.
-- `tests/test_mazerogue_data.tyro`: Automated regression tests strictly located in `tests/`.
+- The old `tests/test_mazerogue_data.tyro` harness was retired in the engine-test cleanup.
 
 ## Running
 

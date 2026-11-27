@@ -115,8 +115,8 @@ delivery quota *and* sink it to move on.
 - **Music** — `music.mml(...)` jingles for a delivery, a level clear and game
   over, played by the engine's note synth.
 - **`require("seaquest_data")`** — the rules live in a pure Lua module with no
-  engine calls at all, so `tests/test_seaquest_data.tyro` can check the numbers
-  without booting the engine.
+  engine calls at all, so a headless check can verify the numbers without
+  booting the engine.
 
 ## Files
 
@@ -129,7 +129,6 @@ delivery quota *and* sink it to move on.
 | `sq_*.sprite` | Animated sprite atlases (sub, divers, enemies, boom) |
 | `sq_bg*.png`, `sq_flr*.png` | Per-level parallax background and seabed |
 | `sq_torpedo*.png`, `sq_bubble.png`, `sq_pearl.png` | Static images |
-| `../../tests/test_seaquest_data.tyro` | 47 checks against the rules module |
 | `../../tests/test_sprite_tint_alpha_layer.tyro` | 19 checks for the new sprite properties |
 
 ## Credits & Sources

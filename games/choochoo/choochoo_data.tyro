@@ -6,8 +6,8 @@
 --  smash), a deterministic single-train walk for the animation, a
 --  backtracking solver from the Start station to the Goal station,
 --  level loading and scoring.
---  Kept pure (no RayLib / engine calls) so it can run inside Tyro
---  tests and be verified in tests/test_choochoo_data.tyro.
+--  Kept pure (no RayLib / engine calls) so a headless check can verify
+--  the rules without booting the engine.
 --======================================================================
 
 local M = {}

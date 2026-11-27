@@ -109,9 +109,6 @@ From the repository root:
 # Run the game:
 bin\tyro.exe games\zonix\zonix.tyro
 
-# Run automated smoke test:
-bin\tyro.exe tests\test_zonix_data.tyro --exit:5 --console
-
 # Run attract mode test:
 type nul > games\zonix\attract.txt
 bin\tyro.exe games\zonix\zonix.tyro --exit:6 --screenshot:4 --console

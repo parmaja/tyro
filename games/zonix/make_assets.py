@@ -538,13 +538,6 @@ def main():
     print("Building Zonix sounds...")
     make_sounds()
 
-    # Copy zonix_data.tyro to tests/ so tests/test_zonix_data.tyro can require it
-    src_data = os.path.join(HERE, "zonix_data.tyro")
-    dst_data = os.path.join(os.path.dirname(HERE), "..", "tests", "zonix_data.tyro")
-    if os.path.exists(src_data):
-        shutil.copyfile(src_data, dst_data)
-        print("Copied zonix_data.tyro to tests/")
-
     print("Done! All Zonix assets generated successfully.")
 
 if __name__ == "__main__":

@@ -3,8 +3,8 @@
 --======================================================================
 --  Pure configuration and math for the game: playfield geometry, the
 --  brick grid, circle/rectangle collision, paddle bounce angles and the
---  high-score file. No engine calls here, so tests/test_breakout_data.tyro
---  can require() it directly.
+--  high-score file. No engine calls here, so the rules can be required
+--  directly by any headless check.
 
 local M = {}
 

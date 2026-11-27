@@ -3,8 +3,8 @@
 --======================================================================
 --  The little crowd: a pool of waddles, each running a small state machine
 --  over the terrain grid (games/waddle/terrain.tyro). Pure Lua with no
---  engine calls, so tests/test_waddle_crowd.tyro can march the crowd in a
---  headless run. The game reads x/y/state/frame each frame and moves one
+--  engine calls, so the crowd can be marched in a headless run. The game
+--  reads x/y/state/frame each frame and moves one
 --  sprite per waddle, and drains take_events() for dust, sound and scoring.
 --
 --  States:

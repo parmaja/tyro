@@ -67,16 +67,12 @@ bin\tyro.exe games\goatrampage\make_assets.lua --workpath=games\goatrampage --ex
 
 ## Testing
 
-```powershell
-# Pure rules (274 checks)
-Copy-Item games\goatrampage\goatrampage_data.tyro tests\ -Force
-bin\tyro.exe tests\test_goatrampage_data.tyro --exit --console
+The old staged harnesses in `tests/` were retired in the engine-test cleanup.
+Run the game itself with its work path so the art and high-score file land in
+the game folder:
 
-# Real gameplay screenshot with particles, shake and Goat Mode
-Copy-Item games\goatrampage\goatrampage.tyro tests\goatrampage_test.tyro -Force
-Copy-Item games\goatrampage\goatrampage_data.tyro tests\ -Force
-Copy-Item games\goatrampage\img tests\img -Recurse -Force
-bin\tyro.exe tests\test_goatrampage_play.tyro --screenshot:12 --exit:13 --console
+```powershell
+bin\tyro.exe games\goatrampage\goatrampage.tyro --workpath=games\goatrampage --screenshot:12 --exit:13
 ```
 
 The play test uses the `GOAT_TEST` hook to start a real round, walk, chomp,

@@ -3,8 +3,8 @@
 --======================================================================
 --  Contains procedural maze generation, roguelike entity spawning,
 --  combat calculations, recoil physics formulas, and collision helpers.
---  Kept pure (no RayLib / engine calls) so it can run inside Tyro tests
---  and be verified in tests/test_mazerogue_data.tyro.
+--  Kept pure (no RayLib / engine calls) so a headless check can verify
+--  the rules without booting the engine.
 --======================================================================
 
 local M = {}

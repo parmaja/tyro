@@ -3,8 +3,8 @@
 --======================================================================
 --  Everything in here is plain Lua: no window, no sprites, no engine calls.
 --  That is deliberate - the game reads its tables and its arithmetic from
---  here, and tests/test_seaquest_data.tyro checks the numbers directly
---  without having to boot the engine.
+--  here, and a headless check can verify the numbers directly without
+--  having to boot the engine.
 --
 --  Loaded by the game with:  local D = require("seaquest_data")
 --  (require finds it next to seaquest.tyro, inside the workspace)

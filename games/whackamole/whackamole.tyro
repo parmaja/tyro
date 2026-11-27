@@ -5,8 +5,7 @@
 --  golden moles worth a fortune, and the grumpy bomb-mole costs you a
 --  fortune if you bonk it - which is exactly why it laughs at you.
 --
---    games/whackamole/whackamole_data.tyro  pure rules (tested by
---                                           tests/test_whackamole_data.tyro)
+--    games/whackamole/whackamole_data.tyro  pure rules
 --
 --  Every sprite is painted at load by this script itself: images.new()
 --  sheets draw the moles, burrows and mallet pixel by pixel, and
@@ -765,9 +764,9 @@ function update(dt)
   game_update(dt)
 end
 
--- Test hook: tests/test_whackamole_play.tyro sets WHACKAMOLE_TEST before
--- requiring this file, starts a round right away and swings the mallet
--- through WM.whack, so --screenshot catches genuine mid-play action.
+-- Test hook: a harness can set WHACKAMOLE_TEST before requiring this file,
+-- start a round right away and swing the mallet through WM.whack, so
+-- --screenshot catches genuine mid-play action.
 if WHACKAMOLE_TEST then
   WM = { moles = moles, spots = spots, whack = resolve_whack, start = start_play }
   start_play()

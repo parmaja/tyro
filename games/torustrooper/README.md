@@ -142,8 +142,7 @@ bin\tyro.exe games\torustrooper\torustrooper.tyro
 | `Ship.glb`                    | the rider's own jet (optional — the box flies without it) |
 | `neon.frag`                   | the wireframe bloom for vector mode (`shader.load`) |
 | `torustrooper.hi`             | the high score (generated, git-ignored)           |
-| `../../tests/test_torustrooper_data.tyro` | headless checks of the rules module  |
-| `../../tests/test_torustrooper_play.tyro` | headless ride: drives the game itself |
+The old staged harnesses in `tests/` were retired in the engine-test cleanup.
 
 ## Testing
 

@@ -20,8 +20,7 @@
 --  Every level has a small bag of skills (BAG below): three diggers, two
 --  builders and so on. A skill is busy while a waddle wears it and comes back
 --  when that waddle walks off, drowns or gets home, so spending them well is
---  the whole puzzle. crowd.tyro holds the rules the crowd plays by and
---  tests/test_waddle_crowd.tyro proves them.
+--  the whole puzzle. crowd.tyro holds the rules the crowd plays by.
 --
 --  Both spellings work for sprite/tile methods: sp.load("f.png") and
 --  sp:load("f.png") are equivalent. This game uses the dot form throughout

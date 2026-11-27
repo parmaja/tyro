@@ -16,8 +16,8 @@
 --  which leaves the HUD strip at the top untouched.
 --
 --  The rules (scoring tables, oxygen, level roster, hit boxes) live in
---  seaquest_data.tyro, kept pure so tests/test_seaquest_data.tyro can check
---  them without booting the engine.
+--  seaquest_data.tyro, kept pure so a headless check can verify them
+--  without booting the engine.
 --
 --  Controls:  ARROWS / WASD   swim
 --             SPACE / Z       fire a torpedo (one at a time, like the arcade)

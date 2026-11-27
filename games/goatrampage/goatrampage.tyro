@@ -629,8 +629,8 @@ function update(dt)
   play_update(dt)
 end
 
--- Test hook: tests/test_goatrampage_play.tyro sets GOAT_TEST, copies this
--- file and the rules module into tests/, and drives a real round for shots.
+-- Test hook: a harness can set GOAT_TEST to start a real round for shots
+-- without going through the splash screen.
 if GOAT_TEST then
   GT = { goat = goat, props = props, dogs = dogs, chomp = chomp,
          smash = smash, start = start_play, points = D.points,

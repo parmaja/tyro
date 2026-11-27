@@ -3,8 +3,7 @@
 --======================================================================
 --  The diggable world: a grid of 32px cells, each holding one material.
 --  Walking, digging, bashing and building all end up as cell writes here,
---  so the whole terrain rule set lives in one file with no engine calls -
---  tests/test_waddle_terrain.tyro requires it directly.
+--  so the whole terrain rule set lives in one file with no engine calls.
 --
 --  Cell coords are 0-based (col, row), row 0 at the top, matching the
 --  tiles.* tilemap. Cell (c, r) covers pixels

@@ -1,8 +1,8 @@
 --======================================================================
 --  Goat Rampage - pure rules (no engine drawing, no pcall)
 --======================================================================
---  Used by games/goatrampage/goatrampage.tyro and verified by
---  tests/test_goatrampage_data.tyro. Everything here is plain Lua maths:
+--  Used by games/goatrampage/goatrampage.tyro. Everything here is plain Lua
+--  maths:
 --  tuning numbers, the town layout, combo scoring and the high score file.
 --======================================================================
 

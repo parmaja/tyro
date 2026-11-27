@@ -39,8 +39,8 @@ level's crates before the fuse of your own greed burns you! A homage to the
 - `bomberman.tyro`: Main game script driven by `update(dt)` / `draw()`, with
   sprite pooling, tilemap board, HUD side panel, and audio.
 - `bomberman_data.tyro`: Pure rules module (board generation, blast geometry,
-  hidden-item rolls, movement collision) — verified by
-  `tests/test_bomberman_data.tyro`.
+  hidden-item rolls, movement collision). The old staged harness in `tests/`
+  was retired in the engine-test cleanup.
 - `make_assets.lua`: Generates all pixel-art sprite atlases (`.sprite` + `.png`)
   and the 32x32 tileset with Tyro itself — no Python or Pillow. Run
   `bin\tyro.exe games/bomberman/make_assets.lua --exit:2`; add `probe` to write

@@ -46,11 +46,8 @@ out at once.
 - `whackamole.tyro`: the game - paint shop, splash, sprites, spawning,
   scoring, HUD; driven by `update(dt)` / `draw()`.
 - `whackamole_data.tyro`: pure rules module (grid, combo scoring, difficulty
-  curve, mole state machine, hi-score file, MML theme) - verified by
-  `tests/test_whackamole_data.tyro`.
-- `tests/test_whackamole_play.tyro`: screenshot driver - stages a copy of the
-  game with `WHACKAMOLE_TEST`, lets it self-start and swings the mallet at the
-  nearest up mole, so `--screenshot` catches genuine mid-play action.
+  curve, mole state machine, hi-score file, MML theme). Its old test harness
+  in `tests/` was retired in the engine-test cleanup.
 
 ## Running
 
@@ -58,15 +55,7 @@ From the repository root (absolute paths keep the work path where the
 `.hi`/`screenshot` files belong):
 
 ```powershell
-bin\tyro.exe games\whackamole\whackamole.tyro --workpath=games\whackamole
-
-# rules test (stage the module first - require stays inside the script folder)
-Copy-Item games\whackamole\whackamole_data.tyro tests\whackamole_data.tyro -Force
-bin\tyro.exe tests\test_whackamole_data.tyro --exit:5 --console
-
-# on-screen play test with a gameplay screenshot
-Copy-Item games\whackamole\whackamole.tyro tests\whackamole_test.tyro -Force
-bin\tyro.exe tests\test_whackamole_play.tyro --screenshot:7 --exit:8 --console
+bin\tyro.exe games\whackamole\whackamole.tyro --workpath=games\whackamole --screenshot:7 --exit:8
 ```
 
 ## Engine note

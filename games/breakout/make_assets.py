@@ -252,13 +252,6 @@ def main():
     print("Building Neon Breaker sounds...")
     make_sounds()
 
-    # Copy breakout_data.tyro to tests/ so tests/test_breakout_data.tyro can require it
-    src_data = os.path.join(HERE, "breakout_data.tyro")
-    dst_data = os.path.join(os.path.dirname(HERE), "..", "tests", "breakout_data.tyro")
-    if os.path.exists(src_data):
-        shutil.copyfile(src_data, dst_data)
-        print("Copied breakout_data.tyro to tests/")
-
     print("Done! All Neon Breaker assets generated successfully.")
 
 

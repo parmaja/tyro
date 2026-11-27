@@ -54,8 +54,8 @@ bridges, and a nose against a closed flank means the rails would smash.
   preview, ride animation along a cell-centre polyline, particles, HUD.
 - `choochoo_data.tyro`: Pure rules module (port masks, terrain and smash
   placement rules, the straight-first walk, the backtracking solver, five
-  levels, scoring) - verified by `tests/test_choochoo_data.tyro` and
-  `tests/test_choochoo_levels.tyro`.
+  levels, scoring). The old staged harnesses in `tests/` were retired in the
+  engine-test cleanup.
 - `make_assets.tyro`: Paints the tile atlas (20 frames), the ground strip
   PNG for the tilemap and the 4-frame train, then writes them out with
   `images.save` / `images.savesprite`.

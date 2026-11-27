@@ -2,9 +2,8 @@
 --  Zonix Data & Pure Grid Logic for Tyro Game Engine
 --======================================================================
 --  Exports level configurations, color themes, scoring tables, and
---  pure grid algorithms (flood fill, area claiming, hit testing)
---  so tests/test_zonix_data.tyro can verify them headlessly without
---  booting the graphical engine.
+--  pure grid algorithms (flood fill, area claiming, hit testing), so
+--  the rules stay headless and need no graphical engine.
 --======================================================================
 
 local M = {}

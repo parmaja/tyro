@@ -3,8 +3,8 @@
 --======================================================================
 --  Everything the game plays by lives here: the burrow grid, the combo
 --  scoring, the difficulty curve, the mole state machine and the high
---  score file. Keeping it engine-free means tests/test_whackamole_data.tyro
---  can check every rule without a window.
+--  score file. Keeping it engine-free means every rule can be checked
+--  without a window.
 --======================================================================
 
 local M = {}

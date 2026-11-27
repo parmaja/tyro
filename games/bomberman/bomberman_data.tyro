@@ -3,8 +3,8 @@
 --======================================================================
 --  Contains classic Bomberman board generation, bomb blast geometry,
 --  crate/hidden-item rolls and movement collision helpers.
---  Kept pure (no RayLib / engine calls) so it can run inside Tyro tests
---  and be verified in tests/test_bomberman_data.tyro.
+--  Kept pure (no RayLib / engine calls) so any headless check can verify
+--  the rules without booting the engine.
 --======================================================================
 
 local M = {}

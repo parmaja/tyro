@@ -86,38 +86,13 @@ fixed screen glass, so no island (or hull) can ever swallow one.
 - `ShipCruiser.png` / `ShipDestroyer.png`: The two warship sprites (top-down,
   bow up), recycled through fixed sprite objects — sunk ships hide and sail
   back in on a respawn timer.
-- `tests/test_jet2026.tyro`: Headless logic test (pool acquire/release,
-  scoring, hit/respawn/game-over flow) — see Running.
-- `tests/test_jet2026_play.tyro`: Screenshot driver that replays real
-  frames through the game's own `simulate`/`draw` for visual QA.
-- `tests/test_jet2026_ships.tyro`: Headless warship test — the guns ignore
-  steel, one bomb blows a hull apart, missed shells splash and sink, the
-  rack paces and reloads its drops, wrecks sail back, and the ships'
-  missiles bite.
-- `tests/test_jet2026_roll.tyro`: Headless barrel-roll test — a held
-  Shift+Left/Right (through the `set_barrel()` stand-in, exactly like
-  `set_speed()` for the throttle) keeps the bank spooling at a real roll
-  pace, wraps the shown angle into [-180, 180], reverses with the
-  direction, and unwinds to the normal bank ease on release.
+Game harness scripts in `tests/` were retired in the engine-test cleanup; the
+game itself is the only place its rules live now.
 
 ## Running
 
 ```bash
 tyro games/jet2026/jet2026.tyro
-```
-
-Tests (the sandbox keeps `require` inside the script folder, so stage a
-copy of the game and its media next to the harness first):
-
-```bash
-Copy-Item games\jet2026\jet2026.tyro tests\jet2026_test.tyro
-Copy-Item games\jet2026\jet.glb,games\jet2026\enemy.glb tests\
-Copy-Item games\jet2026\sea.frag tests\
-Copy-Item games\jet2026\ShipCruiser.png,games\jet2026\ShipDestroyer.png tests\
-bin\tyro.exe tests\test_jet2026.tyro --console --exit:4
-bin\tyro.exe tests\test_jet2026_ships.tyro --console --exit:25
-bin\tyro.exe tests\test_jet2026_roll.tyro --console --exit:10
-bin\tyro.exe tests\test_jet2026_play.tyro --console --screenshot:8 --exit:9
 ```
 
 ### Ships

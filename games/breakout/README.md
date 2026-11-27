@@ -72,6 +72,5 @@ tyro games/breakout/breakout.tyro
 
 ## Test
 
-```
-tyro tests/test_breakout_data.tyro --exit:5 --console
-```
+The old staged harness in `tests/` was retired; run the game directly from
+its own folder instead.
