@@ -66,6 +66,32 @@ M.LIGHT_MIN_RADIUS = 170  -- the torch never gets smaller than this
 M.DARK_STRENGTH    = 0.93 -- 0..1 how black the darkness gets (shader.value)
 M.RADAR_MAX_FLOOR  = 2    -- radar / mini-map only shows up to this sector
 
+-- ---- Background Score (endless rapid sci-fi arcade loop) --------------
+-- Fast four-bar A-minor blast: a staccato Pulse25 arpeggio, a fat CyberBass
+-- pulse and a quiet HiHat tick. Instruments are MML i[...] waveforms, not
+-- sample files. All three parts last exactly 16 beats (4 bars at 168 BPM):
+-- lead 64 x 1/16, bass 32 x 1/8, hat 64 x 1/16 - so the loop stays in sync.
+M.MML_LEAD =
+  "t168 l16 o5 ms i[FM] " ..
+  "a c e a e c a c e a e c a c e a " .. -- Am
+  "f a c f c a f a c f c a f a c f " .. -- F
+  "c e g c g e c e g c g e c e g c " .. -- C
+  "e g b e b g e g b e b g e g b e "   -- Em
+
+M.MML_BASS =
+  "t168 l8 o2 ms i[CyberBass] " ..
+  "a a > a < a a > a < a a " .. -- Am
+  "f f > f < f f > f < f f " .. -- F
+  "c c > c < c c > c < c c " .. -- C
+  "e e > e < e e > e < e e "   -- Em
+
+M.MML_HAT =
+  "t168 l16 o4 v35 i[HiHat] " ..
+  "c r c r c r c r c r c r c r c r " ..
+  "c r c r c r c r c r c r c r c r " ..
+  "c r c r c r c r c r c r c r c r " ..
+  "c r c r c r c r c r c r c r c r "
+
 -- Torch light radius for a floor. 0 means the sector is fully lit.
 function M.light_radius_for_floor(floor_num)
   if floor_num < M.DARK_START_FLOOR then return 0 end

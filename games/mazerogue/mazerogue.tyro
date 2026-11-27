@@ -25,8 +25,15 @@
 --    * Descending Stairs / Portal to deeper floors
 --  - Icon HUD: the bomb ammo and the security key read as artwork painted
 --    onto the top bar with screen.image, leaving the numbers room to breathe
+--  - Animated .sprite atlases with frame timings baked in by make_assets.lua.
+--    Mobile actors (gunner + scuttlers, drones, brutes, kamikazes) only play
+--    their frames while actually moving - including recoil, knockback and AI
+--    strafing - and settle back to frame 0 when still. Immobile plasma turrets
+--    and effects (grenades, blasts, gems, stairs) always loop.
 --  - High performance Sprite Pooling + Tilemap rendering
 --  - Audio feedback using native Tyro Waveforms (Laser, Pew, Explode, Kick, Boing)
+--  - Rapid sci-fi arcade soundtrack (Pulse25 lead + CyberBass + HiHat MML
+--    voices) at 50% music.volume, looping across sectors; M toggles it
 --  - Dynamic screen shake on heavy explosions and gunshots
 --
 --  Controls:
@@ -35,6 +42,7 @@
 --    Left Mouse / Space:      Fire Gun (plasma bullet + backward recoil kick)
 --    Right Mouse / G / E / F: Throw Grenade
 --    R:                       Quick restart / New floor
+--    M:                       Toggle background music
 --    ESC:                     Pause / Title menu
 --
 --  Run: tyro games/mazerogue/mazerogue.tyro
@@ -49,28 +57,76 @@ local W = world.width
 local H = world.height
 
 -- ---- Sprite Pooling System -------------------------------------------
-local function make_pool(asset_name, scale)
+-- Animated art lives in .sprite atlases (PNG sheet + frame timings). A plain
+-- .png is a single still frame. Each animated pool declares how it plays:
+--   "move" - only while its owner actually changes position (gunner, enemies)
+--   "loop" - always running (grenades in flight, blasts, ambient shimmer)
+-- The optional fps overrides the timings baked into the atlas by make_assets.
+local function make_pool(asset_name, scale, anim, fps)
   return {
     file = "img/" .. asset_name,
     scale = scale or 1.0,
+    anim = anim, -- nil = still image
+    fps = fps,   -- >0 overrides the stored per-frame durations
     list = {},
   }
 end
 
+local function play_anim(pool, s)
+  if pool.fps and pool.fps > 0 then
+    s:play(pool.fps)
+  else
+    s:play() -- use the per-frame durations saved in the .sprite atlas
+  end
+end
+
+local function start_anim(pool, s)
+  if pool.anim == nil then return end
+  if pool.anim == "loop" then
+    play_anim(pool, s)
+  else
+    -- An actor stands on frame 0 until sync_anim sees it actually move.
+    s.playing = false
+    s.frame = 0
+    s.anim_x, s.anim_y = nil, nil
+  end
+end
+
+-- Movement-driven animation. Compare WORLD positions, not screen positions:
+-- the camera scrolls even when an actor stands perfectly still. Recoil,
+-- knockback and AI strafing all count because they change x/y too.
+local function sync_anim(pool, s, x, y)
+  if pool.anim ~= "move" or s == nil then return end
+  local lx, ly = s.anim_x, s.anim_y
+  local moving = false
+  if lx ~= nil then
+    local dx, dy = x - lx, y - ly
+    moving = (dx * dx + dy * dy) > 0.0004
+  end
+  s.anim_x, s.anim_y = x, y
+  if moving then
+    if not s.playing then play_anim(pool, s) end
+  else
+    -- Settle on the neutral first frame instead of freezing mid-stride.
+    s.playing = false
+    s.frame = 0
+  end
+end
+
 local P = {
-  gunner       = make_pool("gunner.png", 1.25),
-  scuttler     = make_pool("enemy_scuttler.png", 1.15),
-  drone        = make_pool("enemy_drone.png", 1.15),
-  brute        = make_pool("enemy_brute.png", 1.2),
-  kamikaze     = make_pool("enemy_kamikaze.png", 1.15),
-  turret       = make_pool("enemy_turret.png", 1.2),
+  gunner       = make_pool("gunner.sprite", 1.25, "move"),
+  scuttler     = make_pool("enemy_scuttler.sprite", 1.15, "move"),
+  drone        = make_pool("enemy_drone.sprite", 1.15, "move"),
+  brute        = make_pool("enemy_brute.sprite", 1.2, "move"),
+  kamikaze     = make_pool("enemy_kamikaze.sprite", 1.15, "move"),
+  turret       = make_pool("enemy_turret.sprite", 1.2, "loop"), -- immobile cannon: always animated
   bullet       = make_pool("bullet.png", 1.0),
   bullet_enemy = make_pool("bullet_enemy.png", 1.0),
   plasma_big   = make_pool("plasma_big.png", 1.3),
-  grenade      = make_pool("grenade.png", 1.2),
-  explosion    = make_pool("explosion.png", 1.2),
-  gem          = make_pool("gem.png", 1.1),
-  stairs       = make_pool("stairs.png", 1.2),
+  grenade      = make_pool("grenade.sprite", 1.2, "loop"),
+  explosion    = make_pool("explosion.sprite", 1.2, "loop"),
+  gem          = make_pool("gem.sprite", 1.1, "loop"),
+  stairs       = make_pool("stairs.sprite", 1.2, "loop"),
   crate        = make_pool("crate.png", 1.1),
   barrel       = make_pool("barrel.png", 1.1),
   pickup_hp    = make_pool("pickup_health.png", 1.1),
@@ -88,6 +144,7 @@ local function acquire(pool)
     if s.visible == false then
       s.visible = true
       s:show()
+      start_anim(pool, s) -- replay from frame 0 every time a pooled sprite is reused
       return s
     end
   end
@@ -96,6 +153,7 @@ local function acquire(pool)
   s.scale = pool.scale
   s.visible = true
   s:show()
+  start_anim(pool, s)
   list[#list + 1] = s
   return s
 end
@@ -151,6 +209,21 @@ end
 local function sfx_locked()
   music.sound("Kick", 140, 80)
 end
+
+-- ---- Background Music --------------------------------------------------
+-- Rapid sci-fi arcade loop from mazerogue_data: Pulse25 lead, CyberBass and
+-- a quiet HiHat tick. music.volume is melody-only, so the waveform SFX above
+-- keep their punch. The engine keeps an MML loop running across floors; M
+-- just stops/restarts it.
+local music_on = true
+
+local function play_theme()
+  if not music_on then return end
+  music.mml(D.MML_LEAD, D.MML_BASS, D.MML_HAT, true)
+end
+
+music.volume = 0.2 -- 50% background level
+play_theme()
 
 -- ---- Game State & Entities -------------------------------------------
 local state = "play" -- start directly in gameplay so player is immediately visible!
@@ -316,6 +389,7 @@ local function init_floor(f_num)
   player.s.layer = 10
   player.s.visible = true
   player.s:show()
+  start_anim(P.gunner, player.s) -- idle at frame 0 on each new sector
   player.s.x = player.x - cam_x
   player.s.y = player.y - cam_y
 
@@ -350,6 +424,7 @@ local function init_floor(f_num)
                  (e.kind == "brute" and P.brute) or
                  (e.kind == "turret" and P.turret) or P.kamikaze
     e.s = acquire(pool)
+    e.pool = pool
     e.s:show()
     e.s.angle = 0
     e.s.x = e.x - cam_x
@@ -579,7 +654,7 @@ local function throw_grenade()
   sfx_grenade_throw()
 
   local gs = acquire(P.grenade)
-  gs.play(10)
+  -- acquire() already restarted the atlas animation from frame 0
   grenades[#grenades + 1] = {
     s = gs,
     x = player.x,
@@ -1037,6 +1112,7 @@ local function sync_sprites()
   if player.s and player.s.visible then
     player.s.x = player.x - cam_x
     player.s.y = player.y - cam_y
+    sync_anim(P.gunner, player.s, player.x, player.y)
     -- Flash red when damaged
     if player.invuln_timer > 0 then
       player.s.tint = colors.red
@@ -1064,6 +1140,7 @@ local function sync_sprites()
     if not e.dead and e.s and e.s.visible and e.x and e.y then
       e.s.x = e.x - cam_x
       e.s.y = e.y - cam_y
+      sync_anim(e.pool, e.s, e.x, e.y)
       if e.flash_timer and e.flash_timer > 0 then
         e.s.tint = colors.white
       else
@@ -1253,7 +1330,8 @@ local function draw_hud()
 
   -- Controls tip
   screen.color = colors.lightgray
-  screen.text(W - 75, 14, "[ESC]")
+  screen.text(W - 140, 14, "[M] MUSIC " .. (music_on and "ON" or "OFF"))
+  screen.text(W - 58, 14, "[ESC]")
 
   -- Bottom Tactical Controls Reminder
   screen.color = colors.black
@@ -1358,6 +1436,12 @@ end
 -- ---- Engine-Driven Callbacks (update & draw) ------------------------
 function update(dt)
   if dt > 0.05 then dt = 0.05 end
+
+  -- Music toggle works from the title, play and game-over screens alike.
+  if keyboard.pressed("m") then
+    music_on = not music_on
+    if music_on then play_theme() else music.stop() end
+  end
 
   -- Sector splash: world stays dark, gameplay is frozen, only the screen
   -- glass shows the banner until the timer runs out and the world wakes.

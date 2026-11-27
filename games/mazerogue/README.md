@@ -12,6 +12,7 @@ Deploy as a heavily armored cyberpunk commando into deep, procedurally generated
 
 - **Procedural Maze Generation**: Organic dungeons with interconnecting rooms, corridors, and alternate flanking pathways generated via recursive backtracking.
 - **Smooth 4-Way Camera Scrolling**: Camera smoothly tracks the player left, right, up, and down across large labyrinthine sectors.
+- **Animated Sprite Atlases**: The gunner and mobile enemies (scuttlers, drones, brutes, kamikazes) play their `.sprite` walk frames **only while actually moving** (keyboard input, recoil, knockback or AI strafing) and settle back to frame 0 when still. Immobile plasma turrets keep their cannon animation running at all times. Effects and ambient art (grenades in flight, explosions, gems, stairs) also loop. Static props and projectiles remain single-frame PNGs. Pooled actors restart from frame 0 whenever they are reused.
 - **Gunner Recoil / Knockback Physics**:
   - High-velocity dual-plasma blasters.
   - Every shot unleashes real backward impulse momentum against the player, pushing the gunner away from the direction of fire and into tactical positions.
@@ -39,6 +40,7 @@ Deploy as a heavily armored cyberpunk commando into deep, procedurally generated
   - Real-time radar / minimap.
   - Descending stairs to deeper floors with escalating difficulty.
   - Native Tyro sound synthesis using waveforms (`Laser`, `Boing`, `Explode`, `Chime`, `HiHat`, `Kick`).
+- **Sci-Fi Soundtrack**: An endless, rapid arcade loop in A minor at 168 BPM — a staccato `Pulse25` arpeggio over a fat `CyberBass` pulse with a quiet `HiHat` tick (`music.mml(lead, bass, hat, true)` in `mazerogue_data.tyro`). It plays at **50% `music.volume`** so it sits under the combat SFX, and carries on across sector transitions.
 
 ## Controls
 
@@ -49,6 +51,7 @@ Deploy as a heavily armored cyberpunk commando into deep, procedurally generated
 | **Shoot (Recoil Kick)** | Left Mouse Button / `SPACE` |
 | **Throw Grenade** | Right Mouse Button / `G` / `E` / `F` |
 | **Restart / Retry** | `R` / `SPACE` |
+| **Music On / Off** | `M` |
 | **Menu / Pause** | `ESC` |
 
 ## Architecture
