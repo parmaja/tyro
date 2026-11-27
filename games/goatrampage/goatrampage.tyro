@@ -1,0 +1,643 @@
+--======================================================================
+--  GOAT RAMPAGE - wreck the town, chomp the gnomes 🐐
+--======================================================================
+--  A silly side-scroller for kids: one goat, one town, ninety seconds.
+--  Run into flowers and pots to eat them; headbutt mailboxes, gnomes,
+--  benches and even parked cars. Golden hay turns the goat into a
+--  rainbow blur with double points and no fear of angry dogs.
+--
+--  Everything asked for in one scene:
+--    sprites  - seven hand-painted goat frames plus every prop and dog
+--    tiles    - the scrolling sidewalk/hedge/road strip (tiles.png)
+--    parallax - sky, clouds, hills, shopfronts and trees (five layers)
+--    particles- hoof dust, smash debris, sparks and the goat-mode trail
+--    effects  - screen shake, flash, tweens, glow shader, comic popups
+--
+--  Controls: LEFT/RIGHT or A/D .... walk
+--            SPACE / W / UP ...... jump
+--            X / J / E / click ... HEADBUTT (chomp)
+--            P ................... pause   R .... restart
+--            M ................... mute    ESC .. exit
+--
+--  Run: bin\tyro.exe games\goatrampage\goatrampage.tyro
+--       --workpath=games\goatrampage
+--======================================================================
+
+local D = require("goatrampage_data")
+
+window.show(D.W, D.H)
+world.title = "Goat Rampage"
+world.backcolor = colors.skyblue
+
+-- The town is wider than the window. Like games/defender, the camera stays
+-- parked at 0 and a plain `scroll` number slides sprites, particles and the
+-- tile strip. That keeps tilemap drawing inside its viewport-sized cull and
+-- lets the parallax layers scroll at their own speeds.
+local scroll = 0
+
+-- ---- Splash: the glass is painted before the asset queue ----------------
+-- world.enable = false keeps the scene dark while textures upload; the
+-- screen buffer still shows the title card from the very first frame.
+local SPLASH_HOLD = GOAT_TEST and 0.4 or 1.8
+local splash_t, splashing = 0, true
+world.enable = false
+screen.clear('blank')
+screen.color = rgb(36, 52, 74)
+screen.rectangle(0, 0, D.W, D.H, true)
+screen.color = colors.white
+screen.text(D.W / 2 - 4 * 12, 210, "GOAT RAMPAGE")
+screen.color = rgb(255, 224, 150)
+screen.text(D.W / 2 - 4 * 22, 258, "wreck the town, chomp the gnomes")
+screen.color = rgb(160, 220, 170)
+screen.text(D.W / 2 - 4 * 20, 330, "sharpening the horns...")
+
+-- ---- Parallax: five layers, each with its own scroll speed -------------
+local bg = parallax.new('goat_town')
+bg.tile = true
+bg.add('img/sky.png',    0.02, 0)
+bg.add('img/clouds.png', 0.14, 60)
+bg.addground('img/hills.png', 0.22, 0)
+bg.addground('img/town.png',  0.42, -100)
+bg.addground('img/trees.png', 0.62, -100)
+
+-- ---- Tilemap: hedge, grass, sidewalk and road --------------------------
+-- 16px tiles at scale 2 -> 32px cells. A viewport-sized grid is restamped
+-- from `scroll` every frame (draw() snapshots the cells at call time), so a
+-- short map paints an arbitrarily long town.
+local MAP_Y = D.GROUND_Y - 3 * D.TILE
+local map = tiles.new('sidewalk')
+map.load('img/tiles.png', 16, 16, 0, 0, 0)
+map.resize(math.ceil(D.W / D.TILE) + 3, 6)
+
+local function stamp_tiles()
+  local base = math.floor(scroll / D.TILE)
+  for c = 0, map.cols - 1 do
+    local wc = base + c
+    map.set(c, 0, (wc % 7 == 0) and 7 or 1)   -- hedge with the odd flower
+    map.set(c, 1, 2)                           -- grass
+    map.set(c, 2, 3)                           -- sidewalk
+    map.set(c, 3, (wc % 9 == 0) and 8 or 4)   -- road / crossing
+    map.set(c, 4, 2)                           -- far grass verge
+    map.set(c, 5, 2)
+  end
+end
+stamp_tiles()
+
+-- ---- Sprite helpers ---------------------------------------------------
+local function new_sprite(file, layer)
+  local s = sprites.new()
+  s.load(file)
+  s.layer = layer
+  return s
+end
+
+local GOAT_FRAMES = {
+  'img/goat_run0.png', 'img/goat_run1.png', 'img/goat_run2.png', 'img/goat_run3.png',
+  'img/goat_jump.png', 'img/goat_butt.png', 'img/goat_hurt.png',
+}
+local goat_frames, frame_sprite = {}, {}
+for _, file in ipairs(GOAT_FRAMES) do
+  local s = new_sprite(file, 10)
+  s.visible = false
+  goat_frames[#goat_frames + 1] = s
+  frame_sprite[file] = s
+end
+
+-- ---- Props and dogs ---------------------------------------------------
+local layout = D.prop_layout(1357)
+local props = {}
+for i, item in ipairs(layout) do
+  local def = D.PROPS[item.kind]
+  local s = new_sprite(def.tex, 4)
+  s.move(item.x, D.GROUND_Y - def.h / 2)
+  props[i] = { kind = item.kind, def = def, x = item.x, sprite = s, state = 'whole' }
+end
+
+local dog_layout = D.dog_layout(1357)
+local dogs = {}
+for i, d in ipairs(dog_layout) do
+  local walk = new_sprite('img/dog.png', 6)
+  local fly  = new_sprite('img/dog_fly.png', 7)
+  fly.visible = false
+  walk.move(d.x, D.GROUND_Y - 16)
+  dogs[i] = { x = d.x, home = d.x, patrol = d.patrol, dir = d.dir,
+              state = 'patrol', walk = walk, fly = fly }
+end
+
+-- ---- Game state ------------------------------------------------------
+local state = "title"           -- title | play | over
+local goat = { x = 140, y = D.GROUND_Y - 24, vx = 0, vy = 0, facing = 1,
+               onground = true, butt = 0, hurt = 0, run = 0 }
+local score, combo, zen = 0, 0, D.MAX_ZEN
+local mode, meter, clock = 0, 0, 0
+local combo_t, bump_cd, dust_t, trail_t = 0, 0, 0, 0
+local best, new_best = D.high_load(), false
+local popups, flash, hud = {}, { a = 0 }, { lift = 0 }
+local muted = false
+
+-- ---- Juice helpers ---------------------------------------------------
+local function sfx(name, f, ms)
+  if sound.muted then return end
+  sound.play(name, f, ms)
+end
+
+local function theme()
+  if sound.muted then return end
+  music.mml(D.MML_LEAD, D.MML_BASS, true)
+end
+
+local function popup(x, y, text, color)
+  popups[#popups + 1] = { x = x, y = y, text = text, color = color or colors.white, life = 1.1 }
+end
+
+local function burst(x, y, count, color, opts)
+  local o = opts or {}
+  particles.emit(x - scroll, y, count, {
+    color = color, speed = o.speed or 150, life = o.life or 0.55,
+    size = o.size or 4, gravity = o.gravity or 240,
+    spread = o.spread or 360, direction = o.direction or 0,
+  })
+end
+
+local function smoke(x, y, count)
+  particles.emit(x - scroll, y, count, { color = 'gray', speed = 70, life = 0.45,
+    size = 5, gravity = -30, spread = 60, direction = -90 })
+end
+
+local function screen_flash(a)
+  tween.killall(flash)
+  tween.from(flash, 'a', a, 0, 320, 'quadout')
+end
+
+local function start_mode()
+  mode = D.GOATMODE_TIME
+  meter = 0
+  world.shake(420, 16)
+  screen_flash(110)
+  burst(goat.x, goat.y, 30, 'yellow', { speed = 260, life = 0.8 })
+  burst(goat.x, goat.y, 18, 'white',  { speed = 140, life = 0.4, size = 3 })
+  popup(goat.x, goat.y - 52, "GOAT MODE!", colors.yellow)
+  sfx('Siren', 660, 400)
+  -- a vignette is the safe show-off: 'glow' lights the whole lower canvas,
+  -- including the pale sidewalk, and blows it out to a white band.
+  shader.effect = 'vignette'
+  shader.value = 0.55
+end
+
+local function smash(p)
+  if p.state ~= 'whole' then return end
+  p.state = 'gone'
+  p.sprite.visible = false
+
+  if p.def.fuel then
+    popup(p.x, D.GROUND_Y - 60, 'GOAT FUEL!', colors.yellow)
+    burst(p.x, D.GROUND_Y - 20, 18, 'yellow', { speed = 190, life = 0.7 })
+    sfx('Bubble', 760, 180)
+    meter = meter + 1
+    if meter >= D.GOATMODE_NEED and mode <= 0 then start_mode() end
+    return
+  end
+
+  local gain = D.points(p.kind, combo, mode > 0)
+  combo = combo + 1
+  combo_t = D.COMBO_WINDOW
+  meter = meter + 1
+  score = score + gain
+  tween.killall(hud)
+  tween.from(hud, 'lift', 10, 0, 200, 'quadout')
+
+  local cy = D.GROUND_Y - p.def.h / 2
+  burst(p.x, cy, p.def.big and 34 or 18, p.def.color,
+        { speed = p.def.big and 280 or 190, life = p.def.big and 0.9 or 0.6,
+          size = p.def.big and 6 or 4 })
+  burst(p.x, cy, 8, 'white', { speed = 120, life = 0.25, size = 3 })
+  smoke(p.x, D.GROUND_Y - 6, 5)
+
+  if p.def.big then
+    world.shake(320, 18)
+    screen_flash(90)
+    sfx('Fire', 80, 360)
+  else
+    world.shake(110, 5)
+    sfx(p.kind == 'gnome' and 'Bubble' or 'Boing', 260 + combo * 24, 120)
+  end
+  popup(p.x, D.GROUND_Y - p.def.h - 12,
+        '+' .. gain .. ' ' .. D.label(p.kind),
+        p.kind == 'gnome' and colors.yellow or colors.white)
+
+  if meter >= D.GOATMODE_NEED and mode <= 0 then start_mode() end
+end
+
+local function hurt()
+  zen = zen - 1
+  combo, combo_t = 0, 0
+  goat.hurt, goat.onground = 0.8, false
+  goat.vy = -300
+  goat.x = goat.x - 28 * goat.facing
+  world.shake(320, 14)
+  screen_flash(85)
+  burst(goat.x, goat.y, 16, 'red', { speed = 190, life = 0.5 })
+  popup(goat.x, goat.y - 42, 'YIP! OW!', colors.red)
+  sfx('Boing', 180, 240)
+  if zen <= 0 then
+    state = 'over'
+    local was_best = score > best
+    best = D.high_save(score)
+    new_best = was_best
+    music.stop()
+    sfx('Bell', 520, 320)
+  end
+end
+
+local function game_over()
+  state = 'over'
+  local was_best = score > best
+  best = D.high_save(score)
+  new_best = was_best
+  music.stop()
+  sfx(new_best and 'Cash' or 'Bell', new_best and 880 or 520, 320)
+end
+
+local function start_play()
+  score, combo, zen, clock = 0, 0, D.MAX_ZEN, 0
+  mode, meter, combo_t, bump_cd = 0, 0, 0, 0
+  goat.x, goat.y, goat.vx, goat.vy = 140, D.GROUND_Y - 24, 0, 0
+  goat.facing, goat.onground = 1, true
+  goat.butt, goat.hurt, goat.run = 0, 0, 0
+  scroll, bg.offset = 0, 0
+  bg.reset()
+  stamp_tiles()
+  state = 'play'
+  new_best = false
+  for _, p in ipairs(props) do
+    p.state = 'whole'
+    p.sprite.visible = true
+  end
+  for _, d in ipairs(dogs) do
+    tween.killall(d.fly)
+    tween.killall(d.walk)
+    d.x, d.dir, d.state = d.home, (d.home % 2 == 0) and 1 or -1, 'patrol'
+    d.walk.visible, d.fly.visible = true, false
+    d.walk.move(d.x, D.GROUND_Y - 16)
+    d.walk.alpha, d.fly.alpha = 255, 255
+  end
+  for _, p in ipairs(popups) do p.life = 0 end
+  popups = {}
+  particles.clear()
+  tween.killall(flash)
+  shader.effect = 'none'
+  theme()
+end
+
+local function chomp()
+  if state ~= 'play' or goat.butt > 0 or goat.hurt > 0 then return end
+  goat.butt = D.BUTT_TIME
+  sfx('Snare', 200, 90)
+  for _, p in ipairs(props) do
+    if p.state == 'whole' then
+      local front = (p.x - goat.x) * goat.facing
+      if front > -24 and front < D.BUTT_REACH then smash(p) end
+    end
+  end
+  for _, d in ipairs(dogs) do
+    if d.state == 'patrol' then
+      local front = (d.x - goat.x) * goat.facing
+      if front > -24 and front < D.BUTT_REACH then
+        d.state = 'out'
+        d.walk.visible, d.fly.visible = false, true
+        d.fly.move(d.x - scroll, D.GROUND_Y - 16)
+        d.fly.angle = goat.facing * 30
+        tween(d.fly, 'y', D.GROUND_Y - 150, 700, 'quadin')
+        tween(d.fly, 'angle', goat.facing * 420, 700, 'quadout')
+        tween.from(d.fly, 'alpha', 255, 0, 900, 'quadout',
+          function() d.fly.visible = false end)
+        burst(d.x, D.GROUND_Y - 20, 16, 'yellow', { speed = 220, life = 0.6 })
+        popup(d.x, D.GROUND_Y - 60, 'YIP!', colors.yellow)
+        world.shake(180, 8)
+        sfx('Bubble', 900, 160)
+        combo = combo + 1
+        combo_t = D.COMBO_WINDOW
+        score = score + D.points('gnome', combo - 1, mode > 0)
+      end
+    end
+  end
+end
+
+-- ---- Update ----------------------------------------------------------
+local function game_update(dt)
+  -- Pause/mute/restart live on the event bus below: game.paused freezes
+  -- update(), so only the press beat can wake the game back up.
+  if game.start_pressed() and state ~= 'play' then start_play() end
+  if mouse.pressed('left') then
+    if state == 'title' or state == 'over' then start_play() else chomp() end
+  end
+
+  -- movement: a tiny bit of momentum makes the walk feelspringy
+  local move = 0
+  if keyboard.down('left') or keyboard.down('a') then move = move - 1 end
+  if keyboard.down('right') or keyboard.down('d') then move = move + 1 end
+  if gamepad.available() then
+    local ax = gamepad.axis('leftx')
+    if math.abs(ax) > 0.25 then move = move + ax end
+  end
+  if move ~= 0 and goat.hurt <= 0 then
+    goat.facing = move > 0 and 1 or -1
+    local target = math.max(-1, math.min(1, move)) * D.RUN_SPEED * (mode > 0 and 1.35 or 1)
+    goat.vx = goat.vx + (target - goat.vx) * math.min(1, 12 * dt)
+  else
+    goat.vx = goat.vx * math.max(0, 1 - 9 * dt)
+  end
+  if keyboard.pressed('x') or keyboard.pressed('j') or keyboard.pressed('e') then chomp() end
+  if goat.butt > 0 then
+    goat.butt = goat.butt - dt
+    goat.x = goat.x + goat.facing * D.BUTT_PUSH * dt
+  end
+  if (keyboard.pressed('space') or keyboard.pressed('w') or keyboard.pressed('up'))
+      and state == 'play' and goat.onground and goat.hurt <= 0 then
+    goat.vy = -D.JUMP_V
+    goat.onground = false
+    smoke(goat.x, D.GROUND_Y - 4, 5)
+    sfx('Boing', 420, 110)
+  end
+
+  goat.x = math.max(24, math.min(D.WORLD_W - 24, goat.x + goat.vx * dt))
+  goat.vy = goat.vy + D.GRAVITY * dt
+  goat.y = goat.y + goat.vy * dt
+  if goat.y >= D.GROUND_Y - 24 then
+    if not goat.onground and goat.vy > 320 then
+      smoke(goat.x, D.GROUND_Y - 3, 6)
+      world.shake(90, 3)
+      sfx('Kick', 130, 70)
+    end
+    goat.y, goat.vy, goat.onground = D.GROUND_Y - 24, 0, true
+  end
+
+  -- props: eat the soft ones, headbutt the hard ones
+  if bump_cd > 0 then bump_cd = bump_cd - dt end
+  for _, p in ipairs(props) do
+    if p.state == 'whole' and math.abs(p.x - goat.x) < p.def.w / 2 + 16 then
+      if p.def.soft or mode > 0 then
+        smash(p)
+      else
+        local edge = p.def.w / 2 + 18
+        goat.x = p.x - goat.facing * edge
+        if bump_cd <= 0 then
+          bump_cd = 0.7
+          popup(p.x, D.GROUND_Y - p.def.h - 8, 'OOF! HEADBUTT!', colors.orange)
+          smoke(goat.x, D.GROUND_Y - 4, 4)
+          sfx('Kick', 150, 90)
+          world.shake(90, 4)
+        end
+      end
+    end
+  end
+
+  -- the dog patrol, and what happens when one bites
+  for _, d in ipairs(dogs) do
+    if d.state == 'patrol' then
+      d.x = d.x + d.dir * 72 * dt
+      if d.x > d.home + d.patrol then d.dir = -1 end
+      if d.x < d.home - d.patrol then d.dir = 1 end
+      d.walk.move(d.x - scroll, D.GROUND_Y - 16)
+      d.walk.flipH = d.dir < 0
+      if state == 'play' and mode <= 0 and goat.hurt <= 0
+         and math.abs(d.x - goat.x) < 34 then
+        hurt()
+      end
+    else
+      d.fly.x = d.x - scroll
+    end
+  end
+
+  -- timers, clock and the camera
+  if goat.hurt > 0 then goat.hurt = goat.hurt - dt end
+  if goat.hurt < 0 then goat.hurt = 0 end
+  if combo_t > 0 then
+    combo_t = combo_t - dt
+    if combo_t <= 0 then combo = 0 end
+  end
+  if mode > 0 then
+    mode = mode - dt
+    if mode <= 0 then
+      mode = 0
+      shader.effect = 'none'
+      popup(goat.x, goat.y - 48, 'hooves: normal again', colors.white)
+    end
+  end
+  if state == 'play' then
+    clock = clock + dt
+    if clock >= D.ROUND_TIME then game_over() end
+  end
+
+  local wanted = math.max(0, math.min(D.WORLD_W - D.W, goat.x - D.W * 0.36))
+  scroll = scroll + (wanted - scroll) * math.min(1, 6 * dt)
+  bg.offset = scroll
+  stamp_tiles()
+
+  -- sprites live in screen space: the world position minus the scroll
+  for _, p in ipairs(props) do
+    if p.state == 'whole' then
+      p.sprite.move(p.x - scroll, D.GROUND_Y - p.def.h / 2)
+    end
+  end
+
+  dust_t = dust_t + dt
+  if state == 'play' and goat.onground and math.abs(goat.vx) > 90 and dust_t > 0.11 then
+    dust_t = 0
+    particles.emit(goat.x - scroll - goat.facing * 12, D.GROUND_Y - 3, 1,
+      { color = 'gray', speed = 55, life = 0.4, size = 4, spread = 50, direction = -90 })
+  end
+  trail_t = trail_t + dt
+  if state == 'play' and mode > 0 and trail_t > 0.07 then
+    trail_t = 0
+    local rainbow = { 'yellow', 'pink', 'skyblue', 'lime', 'orange' }
+    particles.emit(goat.x - scroll, goat.y, 2, { color = rainbow[math.floor(clock * 9) % 5 + 1],
+      speed = 28, life = 0.65, size = 3, gravity = -40 })
+  end
+
+  -- floating score text drifts up and fades
+  for i = #popups, 1, -1 do
+    local p = popups[i]
+    p.life, p.y = p.life - dt, p.y - 28 * dt
+    if p.life <= 0 then table.remove(popups, i) end
+  end
+
+  -- pose the one goat we have: seven sprites, exactly one visible
+  local key
+  if goat.hurt > 0 then key = 'img/goat_hurt.png'
+  elseif not goat.onground then key = 'img/goat_jump.png'
+  elseif goat.butt > 0 then key = 'img/goat_butt.png'
+  else
+    goat.run = goat.run + dt * (7 + math.abs(goat.vx) / 60)
+    key = GOAT_FRAMES[(math.floor(goat.run) % 4) + 1]
+  end
+  for _, s in ipairs(goat_frames) do s.visible = false end
+  local s = frame_sprite[key]
+  s.visible = true
+  s.move(goat.x - scroll, goat.y)
+  s.flipH = goat.facing < 0
+  s.angle = goat.hurt > 0 and math.sin(goat.hurt * 32) * 9 or 0
+  if mode > 0 then
+    s.tint = colors[({'yellow','pink','skyblue','lime','orange'})[math.floor(clock * 11) % 5 + 1]]
+  else
+    s.tint = colors.white
+  end
+  s.alpha = (goat.hurt > 0 and math.floor(goat.hurt * 12) % 2 == 0) and 120 or 255
+end
+
+-- ---- Draw -----------------------------------------------------------
+-- Global keys live in draw(): game.paused stops update() AND the event bus,
+-- but draw() keeps painting, so only draw() can unpause the goat.
+local function global_keys()
+  -- gamepad START also counts as start_pressed; on the title it must not
+  -- double as a pause, or the first press would start and freeze at once.
+  if game.pause_pressed() and state == 'play' and not splashing then
+    game.toggle_pause()
+  end
+  if keyboard.pressed('r') and not splashing then start_play() end
+  if keyboard.pressed('m') then
+    sound.muted = not sound.muted
+    if sound.muted then music.stop() else theme() end
+  end
+  if keyboard.pressed('escape') then exit() end
+end
+
+local function center(x, text) return x - textwidth(text) / 2 end
+
+local function banner(y, text, color)
+  screen.color = color or colors.white
+  screen.text(center(D.W / 2, text), y, text)
+end
+
+local function bar(x, y, w, h, frac, fill)
+  screen.color = rgb(34, 46, 58)
+  screen.rectangle(x, y, w, h, true)
+  screen.color = fill
+  screen.rectangle(x + 2, y + 2, (w - 4) * math.max(0, math.min(1, frac)), h - 4, true)
+end
+
+function draw()
+  screen.clear('blank')
+  global_keys()
+
+  if splashing then
+    screen.color = rgb(36, 52, 74)
+    screen.rectangle(0, 0, D.W, D.H, true)
+    banner(210, "GOAT RAMPAGE", colors.white)
+    banner(258, "wreck the town, chomp the gnomes", rgb(255, 224, 150))
+    local dots = string.rep('.', 1 + math.floor(splash_t * 3) % 3)
+    banner(330, "sharpening the horns" .. dots, rgb(160, 220, 170))
+    return
+  end
+
+  -- The tile strip is a native world draw; parallax and sprites come for free.
+  -- A sub-tile negative X makes the restamped grid slide with `scroll`.
+  map.draw(-(scroll % D.TILE), MAP_Y, 2)
+
+  -- HUD: glued to the glass, never shaken
+  screen.color = rgb(30, 44, 58, 232)
+  screen.rectangle(0, 0, D.W, D.HUD_H, true)
+  screen.color = rgb(246, 206, 96)
+  screen.rectangle(0, D.HUD_H - 4, D.W, 4, true)
+
+  screen.color = colors.white
+  screen.text(14, 8 - hud.lift, "SCORE " .. score)
+  screen.color = rgb(255, 224, 150)
+  screen.text(14, 30, "BEST " .. best)
+
+  bar(210, 12, 230, 18, math.max(0, D.ROUND_TIME - clock) / D.ROUND_TIME,
+      (D.ROUND_TIME - clock <= 15) and colors.red or colors.lime)
+  local left = math.max(0, math.ceil(D.ROUND_TIME - clock))
+  screen.color = colors.white
+  screen.text(370, 14, left .. "s")
+
+  bar(478, 12, 150, 18, meter / D.GOATMODE_NEED, colors.yellow)
+  screen.color = mode > 0 and colors.yellow or rgb(200, 200, 210)
+  screen.text(500, 34, mode > 0 and ("GOAT " .. math.ceil(mode) .. "s") or "RAMPAGE")
+
+  for i = 1, D.MAX_ZEN do
+    screen.color = i <= zen and colors.red or rgb(96, 70, 74)
+    screen.text(650 + i * 24, 14, "<3")
+  end
+  if combo >= 2 then
+    screen.color = colors.yellow
+    screen.text(660, 34, "STREAK x" .. D.mult(combo))
+  end
+  screen.color = rgb(190, 210, 220)
+  screen.text(830, 34, muted and "M: sound off" or "M: sound on")
+
+  -- comic popups track the world, so they jolt when it shakes
+  for _, p in ipairs(popups) do
+    screen.color = p.color
+    screen.alpha = math.floor(math.max(0, p.life) * 235)
+    screen.text(center(p.x - scroll, p.y), p.y, p.text)
+  end
+  screen.alpha = 255
+
+  if flash.a > 1 then
+    screen.color = rgb(255, 255, 255, math.floor(flash.a + 0.5))
+    screen.rectangle(0, 0, D.W, D.H, true)
+  end
+
+  if state == 'title' then
+    screen.color = rgb(24, 38, 54, 212)
+    screen.rectangle(D.W / 2 - 300, 130, 600, 280, true)
+    banner(155, "GOAT RAMPAGE", colors.white)
+    banner(198, "run, JUMP, and headbutt everything!", rgb(255, 224, 150))
+    banner(240, "arrows / A-D  move     SPACE  jump", rgb(200, 224, 236))
+    banner(268, "X / J / E / CLICK  HEADBUTT", colors.yellow)
+    banner(302, "eat flowers, hay gives GOAT MODE", rgb(190, 250, 190))
+    banner(348, "SPACE or CLICK to start", colors.lime)
+    banner(378, "R restart   M mute   ESC exit", rgb(190, 210, 220))
+  elseif state == 'over' then
+    screen.color = rgb(24, 38, 54, 216)
+    screen.rectangle(D.W / 2 - 250, 150, 500, 230, true)
+    banner(176, "TIME'S UP - WHAT A MESS!", colors.white)
+    banner(218, score .. " points of pure chaos", colors.white)
+    if new_best then
+      banner(252, "** NEW GOAT RECORD **", colors.yellow)
+    else
+      banner(252, "best " .. best, rgb(190, 210, 220))
+    end
+    banner(300, "SPACE or CLICK for another rampage", colors.lime)
+    banner(338, "R restarts any time", rgb(190, 210, 220))
+  end
+
+  if game.paused then
+    screen.color = rgb(24, 38, 54, 190)
+    screen.rectangle(0, 0, D.W, D.H, true)
+    banner(D.H / 2 - 20, "PAUSED - the goat is resting", colors.white)
+    banner(D.H / 2 + 16, "P to keep wrecking", rgb(190, 210, 220))
+  end
+end
+
+-- ---- Splash wrapper: any key lifts the card early ---------------------
+local play_update = game_update
+function update(dt)
+  if splashing then
+    splash_t = splash_t + dt
+    if keyboard.pressed('escape') then exit() end
+    if game.start_pressed() or mouse.pressed('left') then
+      splash_t = SPLASH_HOLD
+    end
+    if splash_t >= SPLASH_HOLD then
+      splashing = false
+      world.enable = true
+    end
+    return
+  end
+  play_update(dt)
+end
+
+-- Test hook: tests/test_goatrampage_play.tyro sets GOAT_TEST, copies this
+-- file and the rules module into tests/, and drives a real round for shots.
+if GOAT_TEST then
+  GT = { goat = goat, props = props, dogs = dogs, chomp = chomp,
+         smash = smash, start = start_play, points = D.points,
+         state = function() return state end,
+         clock = function() return clock end,
+         scroll = function() return scroll end,
+         meter = function() return meter end,
+         mode = function() return mode end }
+  start_play()
+end

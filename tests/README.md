@@ -35,6 +35,14 @@ lazbuild --build-all --build-mode=Debug tyro.lpi
 
 Use the FPC/Lazarus toolchain already installed on the machine — not Delphi.
 
+## Goat Rampage
+
+`games/goatrampage/README.md` lists the staging steps for its two checks:
+`test_goatrampage_data.tyro` (274 pure-rules assertions) and
+`test_goatrampage_play.tyro` (drives a real round for `--screenshot`).
+Both need copies of the game's `.tyro` files and `img/` in this folder, because
+the engine sets WorkPath to the running script's directory.
+
 ## Adding a test
 
 Put scripts and goldens **only** in this folder, as required by `AGENTS.md`.

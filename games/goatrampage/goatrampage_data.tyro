@@ -1,0 +1,133 @@
+--======================================================================
+--  Goat Rampage - pure rules (no engine drawing, no pcall)
+--======================================================================
+--  Used by games/goatrampage/goatrampage.tyro and verified by
+--  tests/test_goatrampage_data.tyro. Everything here is plain Lua maths:
+--  tuning numbers, the town layout, combo scoring and the high score file.
+--======================================================================
+
+local M = {}
+
+M.W, M.H = 960, 540
+M.HUD_H  = 58
+M.WORLD_W = 6400
+M.GROUND_Y = 440          -- the sidewalk line the goat's hooves touch
+M.TILE = 32               -- 16px tiles from img/tiles.png, drawn at scale 2
+
+M.RUN_SPEED = 320
+M.GRAVITY   = 1700
+M.JUMP_V    = 660
+M.BUTT_TIME = 0.26
+M.BUTT_REACH = 86
+M.BUTT_PUSH  = 190
+M.ROUND_TIME = 90
+M.MAX_ZEN   = 3
+M.GOATMODE_NEED = 8       -- successful chomps to fill the rampage meter
+M.GOATMODE_TIME = 8       -- seconds of double points and no damage
+M.COMBO_STEP = 3
+M.MAX_MULT  = 4
+M.COMBO_WINDOW = 3.5
+
+-- Every wreckable thing in town. `soft` props are eaten just by running
+-- into them; the rest need a headbutt. `big` ones shake the screen harder.
+M.PROPS = {
+  flower  = { points = 5,  tex = 'img/flower.png',  w = 24, h = 28, soft = true,  label = 'MUNCH!',   color = 'pink'   },
+  pot     = { points = 10, tex = 'img/pot.png',     w = 26, h = 30, soft = true,  label = 'CRUNCH!',  color = 'orange' },
+  sign    = { points = 20, tex = 'img/sign.png',    w = 30, h = 46, soft = false, label = 'THWACK!',  color = 'yellow' },
+  bin     = { points = 20, tex = 'img/bin.png',     w = 32, h = 42, soft = false, label = 'CLANG!',   color = 'gray'   },
+  mailbox = { points = 25, tex = 'img/mailbox.png', w = 30, h = 46, soft = false, label = 'BONK!',    color = 'skyblue'},
+  hydrant = { points = 30, tex = 'img/hydrant.png', w = 28, h = 34, soft = false, label = 'SPLAT!',   color = 'red'    },
+  bench   = { points = 35, tex = 'img/bench.png',   w = 60, h = 32, soft = false, label = 'SMASH!',   color = 'brown'  },
+  gnome   = { points = 60, tex = 'img/gnome.png',   w = 26, h = 38, soft = false, label = 'GNOMED!',  color = 'red'    },
+  car     = { points = 80, tex = 'img/car.png',     w = 78, h = 42, soft = false, label = 'CRASH!',   color = 'orange', big = true },
+  hay     = { points = 0,  tex = 'img/hay.png',     w = 36, h = 34, soft = true,  label = 'GOAT FUEL!', color = 'yellow', fuel = true },
+}
+
+-- A small, deterministic generator: same seed -> same town every run.
+local function make_rng(seed)
+  local s = (seed or 1357) % 2147483647
+  if s <= 0 then s = 1 end
+  return function(lo, hi)
+    s = (s * 48271) % 2147483647
+    local v = s / 2147483647
+    if lo ~= nil then return lo + math.floor(v * (hi - lo + 1)) end
+    return v
+  end
+end
+M.make_rng = make_rng
+
+local CYCLE = { 'flower', 'pot', 'sign', 'bin', 'flower', 'mailbox', 'hydrant',
+                'pot', 'bench', 'gnome', 'flower', 'car', 'bin', 'sign', 'gnome' }
+
+-- The town props, spread from the starting corner to the far edge.
+function M.prop_layout(seed)
+  local r = make_rng(seed)
+  local list, i = {}, 0
+  for x = 260, M.WORLD_W - 260, 175 do
+    i = i + 1
+    local kind = CYCLE[((i - 1) % #CYCLE) + 1]
+    if r() < 0.12 then kind = 'gnome' end  -- a cheeky surprise
+    list[#list + 1] = { kind = kind, x = x + r(-36, 36) }
+  end
+  for _, x in ipairs({ 1180, 2920, 4720 }) do
+    list[#list + 1] = { kind = 'hay', x = x }
+  end
+  table.sort(list, function(a, b) return a.x < b.x end)
+  return list
+end
+
+-- Patrolling dogs. A headbutt knocks one out for the rest of the round.
+function M.dog_layout(seed)
+  local r = make_rng((seed or 1357) + 91)
+  local list = {}
+  for _, x in ipairs({ 900, 2100, 3600, 5200, 5900 }) do
+    list[#list + 1] = { x = x, patrol = r(80, 150), dir = r(0, 1) == 0 and -1 or 1 }
+  end
+  return list
+end
+
+-- Score: streaks pay more, goat mode doubles everything except fuel.
+function M.mult(combo)
+  return math.min(M.MAX_MULT, 1 + math.floor(math.max(0, combo) / M.COMBO_STEP))
+end
+
+function M.points(kind, combo, goatmode)
+  local p = M.PROPS[kind]
+  if not p or p.fuel then return 0 end
+  return p.points * M.mult(combo) * (goatmode and 2 or 1)
+end
+
+function M.label(kind)
+  local p = M.PROPS[kind]
+  return p and p.label or 'CHOMP!'
+end
+
+function M.color(kind)
+  local p = M.PROPS[kind]
+  return p and p.color or 'white'
+end
+
+-- Best score lives in the game's own folder, one tiny text file.
+function M.high_load()
+  return score.hi_load('goatrampage.hi', 0)
+end
+
+function M.high_save(n)
+  return score.hi_save('goatrampage.hi', n)
+end
+
+-- A jaunty two-channel loop, in the engine's MML dialect.
+M.MML_LEAD =
+  "t172 l8 o5 ms " ..
+  "g c e g >c g e c " ..
+  "a c f a >c a f c " ..
+  "b d g b >d b g d " ..
+  "g c e g c e g c"
+M.MML_BASS =
+  "t172 l8 o2 " ..
+  "c c c c c c c c " ..
+  "f f f f f f f f " ..
+  "g g g g g g g g " ..
+  "c c c c c c c c"
+
+return M
