@@ -19,13 +19,9 @@ unit TyroFuse;
 interface
 
 uses
-  SysUtils, Classes
-  {$ifdef FPC}
-  , Zipper
-  {$else}
-  , System.Zip
-  {$endif}
-  ;
+  SysUtils, Classes, System.IOUtils,
+  {$ifdef FPC}Zipper,{$else}System.Zip,{$endif}
+  mnUtils;
 
 {* Packs APathTo (a game folder or a single script file) together with the
  * files listed in AConfFile into the zip AZipFile and generates a fuse.conf
@@ -371,8 +367,7 @@ begin
     AMessage := 'cannot create folder: ' + ADir;
     Exit;
   end;
-  aZip := IncludeTrailingPathDelimiter(GetTempDir) + 'tyro_export_' +
-    IntToStr(GetTickCount) + '.zip';
+  aZip := IncludeTrailingPathDelimiter(TPath.GetTempPath) + 'tyro_export_' + IntToStr(GetTickCount64) + '.zip';
   try
     try
     if not FusePackage(APathTo, aZip, AConfFile, aReport, ATitle) then

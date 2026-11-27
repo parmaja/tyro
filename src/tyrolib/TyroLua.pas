@@ -1206,7 +1206,7 @@ const
   cCallbackTimeoutMs = 3000;
 
 var
-  GCallbackDeadline: QWord = 0;
+  GCallbackDeadline: UInt64 = 0;
   GCallbackTimedOut: Boolean = False;
   GCallbackOldHook: lua_Hook = nil;
   GCallbackOldMask: Integer = 0;
@@ -1215,7 +1215,7 @@ var
 procedure CallbackWatchHook(L: Plua_State; ar: Plua_Debug); cdecl;
 begin
   //ar is supplied by Lua; the deadline, not the line, decides the abort.
-  if (GCallbackDeadline <> 0) and (GetTickCount64 > GCallbackDeadline) then
+  if (GCallbackDeadline <> 0) and (TThread.GetTickCount64 > GCallbackDeadline) then
   begin
     GCallbackTimedOut := True;
     luaL_error(L, PUTF8Char('Callback took too long - possible infinite loop'));

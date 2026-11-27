@@ -26,7 +26,7 @@ uses
   {$IFDEF MSWINDOWS}
   Windows,
   {$ENDIF}
-  TyroApp, TyroEditors, Melodies, TyroLua, TyroScripts, TyroControls,
+  TyroApp, TyroEditors, Melodies, TyroLua, TyroScripts, TyroControls, TyroFuse,
   TyroTerminal, TyroSounds;
 
 {$R *.res}

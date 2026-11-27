@@ -3934,7 +3934,7 @@ begin
       Exec.Params := Params;
       Exec.Execute;
     finally
-      Exec.Free;
+      //Exec.Free;//It is Free in Execute
     end;
   end;
 end;
