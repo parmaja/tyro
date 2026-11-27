@@ -906,26 +906,17 @@ type
     function Mappings_func(L: Plua_State): integer; cdecl;
   end;
 
-  { TLuaGame }
+  { TLuaInput }
 
-  //Global `game` table: the shared gameplay helpers every kid's game repeats.
-  //Every function is a thin binding on the matching TTyroEngine method (see
-  //TyroEngines.pas), so the logic lives in the engine and this class only
-  //translates to and from Lua.
-  TLuaGame = class(TTyroLuaObject)
-  protected
-    function Getter(L: PLua_State): integer; override;
-    function Setter(L: PLua_State): integer; override;
+  //Global `input` table: the Lua mirror of TTyroInput. Every method is a thin
+  //binding on Engine.Input.* - the engine owns the button mapping, this class
+  //only pushes the Boolean answer. Buttons live here and nowhere else.
+  TLuaInput = class(TTyroLuaObject)
   public
-    //game.paused / game.level are properties; the calls below are the verbs.
-    function TogglePause_func(L: Plua_State): integer; cdecl;
-    function PauseGame_func(L: Plua_State): integer; cdecl;
-    function ResumeGame_func(L: Plua_State): integer; cdecl;
-    function Restart_func(L: Plua_State): integer; cdecl;
-    function Difficulty_func(L: Plua_State): integer; cdecl;
     function PausePressed_func(L: Plua_State): integer; cdecl;
     function PauseDown_func(L: Plua_State): integer; cdecl;
     function StartPressed_func(L: Plua_State): integer; cdecl;
+    function StartDown_func(L: Plua_State): integer; cdecl;
     function FirePressed_func(L: Plua_State): integer; cdecl;
     function FireDown_func(L: Plua_State): integer; cdecl;
     function APressed_func(L: Plua_State): integer; cdecl;
@@ -942,7 +933,28 @@ type
     function RDown_func(L: Plua_State): integer; cdecl;
     function SelectPressed_func(L: Plua_State): integer; cdecl;
     function SelectDown_func(L: Plua_State): integer; cdecl;
-    function StartDown_func(L: Plua_State): integer; cdecl;
+    //One press edge from keyboard, gamepad D-pad or the joystick:
+    function UpPressed_func(L: Plua_State): integer; cdecl;
+    function DownPressed_func(L: Plua_State): integer; cdecl;
+    function LeftPressed_func(L: Plua_State): integer; cdecl;
+    function RightPressed_func(L: Plua_State): integer; cdecl;
+  end;
+
+  { TLuaGame }
+
+  //Global `game` table: the non-input gameplay helpers (pause, restart,
+  //difficulty, math and high scores). Buttons are on the `input` table.
+  TLuaGame = class(TTyroLuaObject)
+  protected
+    function Getter(L: PLua_State): integer; override;
+    function Setter(L: PLua_State): integer; override;
+  public
+    //game.paused / game.level are properties; the calls below are the verbs.
+    function TogglePause_func(L: Plua_State): integer; cdecl;
+    function PauseGame_func(L: Plua_State): integer; cdecl;
+    function ResumeGame_func(L: Plua_State): integer; cdecl;
+    function Restart_func(L: Plua_State): integer; cdecl;
+    function Difficulty_func(L: Plua_State): integer; cdecl;
 
     function Clamp_func(L: Plua_State): integer; cdecl;
     function Lerp_func(L: Plua_State): integer; cdecl;
@@ -994,6 +1006,8 @@ type
     Touch: TLuaTouch;
     Keyboard: TLuaKeyboard;
     Gamepad: TLuaGamepad;
+    //Lua `input` table; also backs the legacy game.* button aliases.
+    LuaInput: TLuaInput;
     Game: TLuaGame;
     QueueStats: TLuaQueue;
     Camera: TLuaCamera;
@@ -2574,6 +2588,7 @@ begin
   Touch := TLuaTouch.Create('touch', Self);
   Keyboard := TLuaKeyboard.Create('keyboard', Self);
   Gamepad := TLuaGamepad.Create('gamepad', Self);
+  LuaInput := TLuaInput.Create('input', Self);
   Game := TLuaGame.Create('game', Self);
   QueueStats := TLuaQueue.Create('queue', Self);
   Camera := TLuaCamera.Create('camera', Self);
@@ -2730,33 +2745,42 @@ begin
   Lua.State.Register('joystick', 'mappings', Gamepad, Gamepad.Mappings_func);
   Lua.State.Register('joystick', Gamepad); //Should be last one
 
-  //game: the shared gameplay button pairs; the implementations are TTyroEngine
-  //methods.
-  Lua.State.Register('game', 'pause_pressed', Game, Game.PausePressed_func);
-  Lua.State.Register('game', 'pause_down', Game, Game.PauseDown_func);
+  //input: the Lua mirror of TTyroInput / Engine.Input. The four direction
+  //helpers combine keyboard, gamepad D-pad and the joystick in one press edge.
+  Lua.State.RegisterTable('input');
+  Lua.State.Register('input', 'pause_pressed', LuaInput, LuaInput.PausePressed_func);
+  Lua.State.Register('input', 'pause_down', LuaInput, LuaInput.PauseDown_func);
+  Lua.State.Register('input', 'start_pressed', LuaInput, LuaInput.StartPressed_func);
+  Lua.State.Register('input', 'start_down', LuaInput, LuaInput.StartDown_func);
+  Lua.State.Register('input', 'fire_pressed', LuaInput, LuaInput.FirePressed_func);
+  Lua.State.Register('input', 'fire_down', LuaInput, LuaInput.FireDown_func);
+  Lua.State.Register('input', 'a_pressed', LuaInput, LuaInput.APressed_func);
+  Lua.State.Register('input', 'a_down', LuaInput, LuaInput.ADown_func);
+  Lua.State.Register('input', 'b_pressed', LuaInput, LuaInput.BPressed_func);
+  Lua.State.Register('input', 'b_down', LuaInput, LuaInput.BDown_func);
+  Lua.State.Register('input', 'x_pressed', LuaInput, LuaInput.XPressed_func);
+  Lua.State.Register('input', 'x_down', LuaInput, LuaInput.XDown_func);
+  Lua.State.Register('input', 'y_pressed', LuaInput, LuaInput.YPressed_func);
+  Lua.State.Register('input', 'y_down', LuaInput, LuaInput.YDown_func);
+  Lua.State.Register('input', 'l_pressed', LuaInput, LuaInput.LPressed_func);
+  Lua.State.Register('input', 'l_down', LuaInput, LuaInput.LDown_func);
+  Lua.State.Register('input', 'r_pressed', LuaInput, LuaInput.RPressed_func);
+  Lua.State.Register('input', 'r_down', LuaInput, LuaInput.RDown_func);
+  Lua.State.Register('input', 'select_pressed', LuaInput, LuaInput.SelectPressed_func);
+  Lua.State.Register('input', 'select_down', LuaInput, LuaInput.SelectDown_func);
+  Lua.State.Register('input', 'up_pressed', LuaInput, LuaInput.UpPressed_func);
+  Lua.State.Register('input', 'down_pressed', LuaInput, LuaInput.DownPressed_func);
+  Lua.State.Register('input', 'left_pressed', LuaInput, LuaInput.LeftPressed_func);
+  Lua.State.Register('input', 'right_pressed', LuaInput, LuaInput.RightPressed_func);
+  Lua.State.Register('input', LuaInput); //Should be last one
+
+  //game: only the non-input gameplay helpers live here. Buttons are on the
+  //input table; this is a new project with no legacy spellings to keep.
   Lua.State.Register('game', 'pause', Game, Game.PauseGame_func);
   Lua.State.Register('game', 'resume', Game, Game.ResumeGame_func);
   Lua.State.Register('game', 'toggle_pause', Game, Game.TogglePause_func);
   Lua.State.Register('game', 'restart', Game, Game.Restart_func);
   Lua.State.Register('game', 'difficulty', Game, Game.Difficulty_func);
-  Lua.State.Register('game', 'start_pressed', Game, Game.StartPressed_func);
-  Lua.State.Register('game', 'fire_pressed', Game, Game.FirePressed_func);
-  Lua.State.Register('game', 'fire_down', Game, Game.FireDown_func);
-  Lua.State.Register('game', 'a_pressed', Game, Game.APressed_func);
-  Lua.State.Register('game', 'a_down', Game, Game.ADown_func);
-  Lua.State.Register('game', 'b_pressed', Game, Game.BPressed_func);
-  Lua.State.Register('game', 'b_down', Game, Game.BDown_func);
-  Lua.State.Register('game', 'x_pressed', Game, Game.XPressed_func);
-  Lua.State.Register('game', 'x_down', Game, Game.XDown_func);
-  Lua.State.Register('game', 'y_pressed', Game, Game.YPressed_func);
-  Lua.State.Register('game', 'y_down', Game, Game.YDown_func);
-  Lua.State.Register('game', 'l_pressed', Game, Game.LPressed_func);
-  Lua.State.Register('game', 'l_down', Game, Game.LDown_func);
-  Lua.State.Register('game', 'r_pressed', Game, Game.RPressed_func);
-  Lua.State.Register('game', 'r_down', Game, Game.RDown_func);
-  Lua.State.Register('game', 'select_pressed', Game, Game.SelectPressed_func);
-  Lua.State.Register('game', 'select_down', Game, Game.SelectDown_func);
-  Lua.State.Register('game', 'start_down', Game, Game.StartDown_func);
   Lua.State.Register('game', Game); //Should be last one
 
   //scene: named menu/play/gameover states. add(name, opts) keeps four
@@ -3110,6 +3134,7 @@ begin
   FreeAndNil(FConsoleReads);
   FreeAndNil(Shader);
   FreeAndNil(Game);
+  FreeAndNil(LuaInput);
   FreeAndNil(Gamepad);
   FreeAndNil(Keyboard);
   FreeAndNil(Mouse);
@@ -5877,145 +5902,156 @@ begin
   Result := 1;
 end;
 
-function TLuaGame.PausePressed_func(L: Plua_State): integer; cdecl;
+{ TLuaInput }
+
+//The whole class is a thin binding on Engine.Input (TTyroInput). No button
+//mapping lives here; these functions only push the engine's Boolean answer.
+
+function TLuaInput.PausePressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.pause_pressed() - true once when p (keyboard) or start/menu (pad) is pressed
   L.PushBoolean(Engine.Input.PausePressed);
   Result := 1;
 end;
 
-function TLuaGame.PauseDown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.PauseDown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.pause_down() - true every frame while p or a pad start/menu is held
   L.PushBoolean(Engine.Input.PauseDown);
   Result := 1;
 end;
 
-function TLuaGame.StartPressed_func(L: Plua_State): integer; cdecl;
+function TLuaInput.StartPressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.start_pressed() - true once on space/enter or start/menu/a/x/fire
   L.PushBoolean(Engine.Input.StartPressed);
   Result := 1;
 end;
 
-function TLuaGame.FirePressed_func(L: Plua_State): integer; cdecl;
+function TLuaInput.StartDown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.fire_pressed() - true once on space/x or a/x/b/y/rb/rt/fire/trigger
+  L.PushBoolean(Engine.Input.StartDown);
+  Result := 1;
+end;
+
+function TLuaInput.FirePressed_func(L: Plua_State): integer; cdecl;
+begin
   L.PushBoolean(Engine.Input.FirePressed);
   Result := 1;
 end;
 
-function TLuaGame.FireDown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.FireDown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.fire_down() - true every frame while any fire button is held
   L.PushBoolean(Engine.Input.FireDown);
   Result := 1;
 end;
 
-function TLuaGame.APressed_func(L: Plua_State): integer; cdecl;
+function TLuaInput.APressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.a_pressed() - true once on space or gamepad a
   L.PushBoolean(Engine.Input.APressed);
   Result := 1;
 end;
 
-function TLuaGame.ADown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.ADown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.a_down() - true every frame while space or gamepad a is held
   L.PushBoolean(Engine.Input.ADown);
   Result := 1;
 end;
 
-function TLuaGame.BPressed_func(L: Plua_State): integer; cdecl;
+function TLuaInput.BPressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.b_pressed() - true once on x or gamepad b
   L.PushBoolean(Engine.Input.BPressed);
   Result := 1;
 end;
 
-function TLuaGame.BDown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.BDown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.b_down() - true every frame while x or gamepad b is held
   L.PushBoolean(Engine.Input.BDown);
   Result := 1;
 end;
 
-function TLuaGame.XPressed_func(L: Plua_State): integer; cdecl;
+function TLuaInput.XPressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.x_pressed() - true once on c or gamepad x
   L.PushBoolean(Engine.Input.XPressed);
   Result := 1;
 end;
 
-function TLuaGame.XDown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.XDown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.x_down() - true every frame while c or gamepad x is held
   L.PushBoolean(Engine.Input.XDown);
   Result := 1;
 end;
 
-function TLuaGame.YPressed_func(L: Plua_State): integer; cdecl;
+function TLuaInput.YPressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.y_pressed() - true once on v or gamepad y
   L.PushBoolean(Engine.Input.YPressed);
   Result := 1;
 end;
 
-function TLuaGame.YDown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.YDown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.y_down() - true every frame while v or gamepad y is held
   L.PushBoolean(Engine.Input.YDown);
   Result := 1;
 end;
 
-function TLuaGame.LPressed_func(L: Plua_State): integer; cdecl;
+function TLuaInput.LPressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.l_pressed() - true once on z or gamepad lb/lt (the classic bomb key)
   L.PushBoolean(Engine.Input.LPressed);
   Result := 1;
 end;
 
-function TLuaGame.LDown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.LDown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.l_down() - true every frame while z or gamepad lb/lt is held
   L.PushBoolean(Engine.Input.LDown);
   Result := 1;
 end;
 
-function TLuaGame.RPressed_func(L: Plua_State): integer; cdecl;
+function TLuaInput.RPressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.r_pressed() - true once on b or gamepad rb/rt
   L.PushBoolean(Engine.Input.RPressed);
   Result := 1;
 end;
 
-function TLuaGame.RDown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.RDown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.r_down() - true every frame while b or gamepad rb/rt is held
   L.PushBoolean(Engine.Input.RDown);
   Result := 1;
 end;
 
-function TLuaGame.SelectPressed_func(L: Plua_State): integer; cdecl;
+function TLuaInput.SelectPressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.select_pressed() - true once on tab or gamepad select/back
   L.PushBoolean(Engine.Input.SelectPressed);
   Result := 1;
 end;
 
-function TLuaGame.SelectDown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.SelectDown_func(L: Plua_State): integer; cdecl;
 begin
-  //game.select_down() - true every frame while tab or select/back is held
   L.PushBoolean(Engine.Input.SelectDown);
   Result := 1;
 end;
 
-function TLuaGame.StartDown_func(L: Plua_State): integer; cdecl;
+function TLuaInput.UpPressed_func(L: Plua_State): integer; cdecl;
 begin
-  //game.start_down() - true every frame while any confirm button is held
-  L.PushBoolean(Engine.Input.StartDown);
+  L.PushBoolean(Engine.Input.UpPressed);
   Result := 1;
 end;
+
+function TLuaInput.DownPressed_func(L: Plua_State): integer; cdecl;
+begin
+  L.PushBoolean(Engine.Input.DownPressed);
+  Result := 1;
+end;
+
+function TLuaInput.LeftPressed_func(L: Plua_State): integer; cdecl;
+begin
+  L.PushBoolean(Engine.Input.LeftPressed);
+  Result := 1;
+end;
+
+function TLuaInput.RightPressed_func(L: Plua_State): integer; cdecl;
+begin
+  L.PushBoolean(Engine.Input.RightPressed);
+  Result := 1;
+end;
+
+{ TLuaGame }
 
 function TLuaGame.Clamp_func(L: Plua_State): integer; cdecl;
 begin

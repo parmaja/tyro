@@ -2193,7 +2193,7 @@ const
     'world.backcolor = "navy"   background colour',
     'update(dt) / draw()        your frame callbacks (globals!)',
     'keyboard.down("left")      held key; .pressed() = once',
-    'game.start_pressed()       space/enter or pad start',
+    'input.start_pressed()      space/enter or pad start',
     'canvas.color = colors.red  then circle/rect/line/text',
     'screen.text(x, y, s)       draw on the top HUD layer',
     'sprites.blob("b", 48)      a sprite with no image file',

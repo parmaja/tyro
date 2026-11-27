@@ -6,6 +6,35 @@ Keyboard and mouse input is exposed as the `keyboard`, `mouse` and `gamepad`
 tables. Key and button names are strings that map to RayLib key/button enums —
 they work identically in Lua and PascalScript.
 
+## Unified input (`input`)
+
+The `input` table mirrors the engine's `TTyroInput` and answers one press edge
+from whichever device the player is using. Buttons live here; `game.*` only
+holds non-input helpers such as `game.pause()` and `game.difficulty()`.
+
+| API | Keyboard | Gamepad |
+|-----|----------|---------|
+| `input.pause_pressed()` / `input.pause_down()` | `p` | start, menu |
+| `input.start_pressed()` / `input.start_down()` | space, enter | start, menu, a, x, fire |
+| `input.fire_pressed()` / `input.fire_down()` | space, x | a, x, b, y, rb, rt, fire, trigger |
+| `input.a_pressed()` / `input.a_down()` | space | a |
+| `input.b_pressed()` / `input.b_down()` | x | b |
+| `input.x_pressed()` / `input.x_down()` | c | x |
+| `input.y_pressed()` / `input.y_down()` | v | y |
+| `input.l_pressed()` / `input.l_down()` | z | lb, lt |
+| `input.r_pressed()` / `input.r_down()` | b | rb, rt |
+| `input.select_pressed()` / `input.select_down()` | tab | select, back |
+
+The four direction helpers combine the arrow key or WASD, the gamepad D-pad,
+and the left stick crossing its deadzone into one press edge:
+
+```lua
+if input.up_pressed() then y = y - 1 end
+if input.down_pressed() then y = y + 1 end
+if input.left_pressed() then x = x - 1 end
+if input.right_pressed() then x = x + 1 end
+```
+
 ## Keyboard
 
 | API | Description | Examples |

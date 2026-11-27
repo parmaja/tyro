@@ -1265,7 +1265,7 @@ end;
 
 function TyroEditor.IsApiName(const AWord: string): Boolean;
 const
-  Words: array[0..106] of string = ('version', 'log', 'sleep', 'pause', 'print', 'println',
+  Words: array[0..111] of string = ('version', 'log', 'sleep', 'pause', 'print', 'println',
     'mouse', 'touch', 'count', 'keyboard', 'gamepad', 'pressed', 'down', 'released', 'up', 'wheel', 'axis', 'available', 'name', 'mappings', 'frametime',
     'camera', 'zoom', 'to_world', 'to_screen',
     'after', 'every', 'cancel',
@@ -1279,6 +1279,7 @@ const
     'circle', 'rectangle', 'triangle', 'image', 'line', 'point', 'load', 'save', 'show', 'read', 'play',
     'beep', 'sound', 'mml', 'hide', 'spectrum', 'shake', 'midi', 'resume',
     'model', 'models', 'particles', 'emit', 'tile', 'tiles', 'parallax', 'game',
+    'input', 'up_pressed', 'down_pressed', 'left_pressed', 'right_pressed',
     'colors', 'collision', 'radio', 'output', 'update', 'draw', 'rgba', 'rgb');
 var
   I: Integer;

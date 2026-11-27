@@ -382,8 +382,8 @@ local function step_player(ft)
   if py < SKY_TOP then py = SKY_TOP; pvy = 0 end
   if py > GROUND_TOP - 16 then py = GROUND_TOP - 16; pvy = 0 end
 
-  if game.fire_down() or keyboard.down('z') then fire() end
-  if game.r_pressed() then smart_bomb() end
+  if input.fire_down() or keyboard.down('z') then fire() end
+  if input.r_pressed() then smart_bomb() end
   if keyboard.pressed('h') or keyboard.pressed('shift') then hyperspace() end
 end
 
@@ -881,9 +881,9 @@ function update(dt)
   if keyboard.pressed('escape') then exit() end
 
   if state == 'title' then
-    if game.start_pressed() then start_game() end
+    if input.start_pressed() then start_game() end
   elseif state == 'over' then
-    if game.start_pressed() then start_game() end
+    if input.start_pressed() then start_game() end
   end
 
   simulate(ft)

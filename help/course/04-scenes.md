@@ -12,7 +12,7 @@ local score = 0
 scene.add("title", {
   enter = function() score = 0 end,
   update = function(dt)
-    if game.start_pressed() then scene.go("play") end
+    if input.start_pressed() then scene.go("play") end
   end,
   draw = function()
     screen.text_center(160, "SPACE CATCHER")

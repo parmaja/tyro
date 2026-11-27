@@ -63,7 +63,7 @@ function update(dt)
   if keyboard.pressed("escape") then exit() end
 
   if not playing then
-    if game.start_pressed() then start_game() end
+    if input.start_pressed() then start_game() end
     return
   end
 

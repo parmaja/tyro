@@ -439,7 +439,7 @@ end
 
 -- ---- Update -----------------------------------------------------------------
 local function update_play(dt)
-  if game.a_pressed() then place_bomb() end
+  if input.a_pressed() then place_bomb() end
 
   move_player(dt)
   if state ~= "play" then return end
@@ -482,9 +482,9 @@ local function update_inner(dt)
   if keyboard.pressed("m") then muted = not muted end
 
   if state == "title" then
-    if game.start_pressed() then reset_game() end
+    if input.start_pressed() then reset_game() end
   elseif state == "over" then
-    if game.start_pressed() or keyboard.pressed("r") then
+    if input.start_pressed() or keyboard.pressed("r") then
       state = "title"
     end
   elseif state == "play" then

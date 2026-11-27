@@ -8,6 +8,7 @@ This is a simple game engine for kids and noobs, using RayLib and Lua for enduse
 * Read documents in `help` folder
 * Do not use pcall in lua, most functions are queue to the engine
 * Try to update the documents (README/HELP etc) instead to update the code based on document
+* It is new project, so do not make legacy compatible, fix the demo/games/code if necessary
 
 ### Games
 

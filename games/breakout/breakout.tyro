@@ -325,7 +325,7 @@ local function paddle_axis()
 end
 
 local function launch_pressed()
-  return game.start_pressed() or keyboard.pressed("up") or keyboard.pressed("w")
+  return input.start_pressed() or keyboard.pressed("up") or keyboard.pressed("w")
       or mouse.pressed("left")
 end
 
@@ -658,7 +658,7 @@ function update(dt)
   update_fx(dt)
 
   if state == "playing" or state == "attract" then
-    if game.pause_pressed() and state == "playing" then
+    if input.pause_pressed() and state == "playing" then
       state = "paused"
       music.stop()
       set_field_visible(false)
@@ -678,7 +678,7 @@ function update(dt)
     end
 
   elseif state == "paused" then
-    if game.pause_pressed() then
+    if input.pause_pressed() then
       state = "playing"
       play_theme()
       set_field_visible(true)

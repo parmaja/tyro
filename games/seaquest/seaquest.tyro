@@ -1010,7 +1010,7 @@ function update(dt)
   end
 
   if state == 'title' then
-    if game.start_pressed() then
+    if input.start_pressed() then
       reset_game()
       music.mml("c8 e8 g8 c6")
     end
@@ -1019,7 +1019,7 @@ function update(dt)
 
   if state == 'over' then
     overTimer = overTimer + dt
-    if overTimer > 0.8 and game.start_pressed() then
+    if overTimer > 0.8 and input.start_pressed() then
       state = 'title'
       release_world()
     end

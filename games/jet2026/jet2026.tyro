@@ -72,13 +72,13 @@ local function pad_axis(name)
 end
 
 -- The arcade pairs are engine defaults now: keyboard or pad, one call each.
-local is_fire_pressed = game.fire_pressed
-local is_fire_down = game.fire_down
+local is_fire_pressed = input.fire_pressed
+local is_fire_down = input.fire_down
 -- The jets' guns bark harmlessly at steel: the warships only take bombs.
--- Z on the keyboard, the left bumpers on a pad - game.l_pressed().
-local is_bomb_pressed = game.l_pressed
-local is_start_pressed = game.start_pressed
-local is_pause_pressed = game.pause_pressed
+-- Z on the keyboard, the left bumpers on a pad - input.l_pressed().
+local is_bomb_pressed = input.l_pressed
+local is_start_pressed = input.start_pressed
+local is_pause_pressed = input.pause_pressed
 
 -- ---- sound helpers ---------------------------------------------------
 local function beep(freq, ms)   music.sound(freq, ms) end
@@ -1693,7 +1693,7 @@ function update(dt)
   end
 
   if keyboard.pressed("escape") then exit() end
-  if game.select_pressed()
+  if input.select_pressed()
       and (state == "ready" or state == "over" or state == "pause") then
     exit()
   end

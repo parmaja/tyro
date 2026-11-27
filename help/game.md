@@ -37,17 +37,21 @@ its own check, these are only the shared defaults.
 
 | call | keyboard | gamepad (any pad) |
 |---|---|---|
-| `game.pause_pressed()` | p | start, menu |
-| `game.start_pressed()` | space, enter | start, menu, a, x, fire |
-| `game.fire_pressed()` | space, x | a, x, b, y, rb, rt, fire, trigger |
-| `game.a_pressed()` | space | a |
-| `game.b_pressed()` | x | b |
-| `game.x_pressed()` | c | x |
-| `game.y_pressed()` | v | y |
-| `game.l_pressed()` | z | lb, lt |
-| `game.r_pressed()` | b | rb, rt |
-| `game.select_pressed()` | tab | select, back |
+| `input.pause_pressed()` | p | start, menu |
+| `input.start_pressed()` | space, enter | start, menu, a, x, fire |
+| `input.fire_pressed()` | space, x | a, x, b, y, rb, rt, fire, trigger |
+| `input.a_pressed()` | space | a |
+| `input.b_pressed()` | x | b |
+| `input.x_pressed()` | c | x |
+| `input.y_pressed()` | v | y |
+| `input.l_pressed()` | z | lb, lt |
+| `input.r_pressed()` | b | rb, rt |
+| `input.select_pressed()` | tab | select, back |
 | `*_down()` | hold version of the `*_pressed` call | |
+
+These buttons are on the `input` table only. It also has `up_pressed()`,
+`down_pressed()`, `left_pressed()` and `right_pressed()`, which answer one edge
+from the arrow key (or WASD), the gamepad D-pad, or the left stick.
 
 The `*_pressed` calls are true once, on the frame the button is pressed - use
 them for menus and shots. The `*_down` calls (`pause_down`, `fire_down`, `a_down`,
@@ -56,9 +60,9 @@ every frame the button stays held - good for auto-fire and throttles.
 
 ```lua
 function update(dt)
-  if game.pause_pressed() then paused = not paused end
-  if game.fire_pressed() then shoot() end
-  if game.l_pressed() then drop_bomb() end
+  if input.pause_pressed() then paused = not paused end
+  if input.fire_pressed() then shoot() end
+  if input.l_pressed() then drop_bomb() end
 end
 ```
 

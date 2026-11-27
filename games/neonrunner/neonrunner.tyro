@@ -406,7 +406,7 @@ function update(dt)
   -- -------------------------------------------------------------------------
   if current_state == STATE_TITLE then
     attract_timer = attract_timer + dt
-    if game.start_pressed() then
+    if input.start_pressed() then
       current_state = STATE_PLAYING
       attract_mode = false
       state_timer = 0
@@ -436,7 +436,7 @@ function update(dt)
   -- State: Game Over
   -- -------------------------------------------------------------------------
   if current_state == STATE_GAMEOVER then
-    if state_timer > 1.2 and game.start_pressed() then
+    if state_timer > 1.2 and input.start_pressed() then
       current_state = STATE_TITLE
       attract_mode = false
       attract_timer = 0

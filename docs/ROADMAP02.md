@@ -50,8 +50,8 @@ split big tasks into subtasks).
 - [x] Four stale goldens are valid again: `tests/test_utf8.lua/.txt`,
       `tests/test_image.lua/.txt`, `tests/test_list.lua/.txt`,
       `tests/test_props.lua/.txt`.
-- [x] Added `game.pause_down()` — `TTyroEngine.PauseDown` (keyboard `p` or pad
-      `start`/`menu` held) plus `TLuaGame.PauseDown_func` and registration;
+- [x] Added `input.pause_down()` — `TTyroInput.PauseDown` (keyboard `p` or pad
+      `start`/`menu` held) plus `TLuaInput.PauseDown_func` and registration;
       updated `help/game.md` so the `*_down` list includes it.
 - [x] Retired the wrong spellings instead of adding aliases: `music.noise` →
       `sound.noise` in `docs/getting-started.md`, `docs/examples.md`,
@@ -260,7 +260,7 @@ split big tasks into subtasks).
 - [ ] Remaining: most of the ~500 ad-hoc files stay unversioned by design;
       DLL URLs must be configured per repository before CI smoke runs.
 - [x] Kid-facing paths now covered: missing assets, `controls.*` table forms,
-      `game.pause_down`, negative checks for retired spellings, scene/pause/
+      `input.pause_down`, negative checks for retired spellings, scene/pause/
       restart, scoreboard/state/ask helpers.
 - [ ] Not yet automated: editor error jump, console `new` templates and
       `console.read()` (need GUI automation), plus a doc-link/demo-index check.
@@ -341,14 +341,20 @@ split big tasks into subtasks).
       scene's enter/leave/update/draw events. Checked by
       `tests/refactor_state_scene_test.tyro` (23 checks) and the existing
       scene/state smoke tests.
-- [x] The 20 arcade button queries behind `game.*` moved out of `TTyroEngine`
-      into `TTyroInput`, exposed as `Engine.Input` (`game.pause_pressed()` now
+- [x] The 20 arcade button queries behind `input.*` moved out of `TTyroEngine`
+      into `TTyroInput`, exposed as `Engine.Input` (`input.pause_pressed()` now
       binds to `Engine.Input.PausePressed`). The class and its methods are
       bracketed by `//MOVE--->` / `//MOVE<---` in `TyroInput.pas` so the block
       stays easy to find. `UpPressed/DownPressed/LeftPressed/RightPressed` add
       one press edge from the arrow key (or WASD), the gamepad D-pad, or the
       left stick crossing 0.4; the engine steps the stick edge once per frame
       and `JoyMakeFrame` is a pure helper covered by a test program.
+- [x] The Lua mirror of that object is `TLuaInput` and the global `input` table.
+      All button `_func`s moved out of `TLuaGame`; no `game.*` button aliases
+      are kept in this new project, so every game, demo, test and doc now uses
+      `input.*`. `input.up_pressed()` / `down_pressed()` / `left_pressed()` /
+      `right_pressed()` expose the four unified directions. Documented in
+      `docs/input.md`, `docs/game.md` and `help/game.md`.
 
 ## Not chasing (same as ROADMAP.md)
 

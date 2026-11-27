@@ -327,7 +327,7 @@ end
 local function game_update(dt)
   -- Pause/mute/restart live on the event bus below: game.paused freezes
   -- update(), so only the press beat can wake the game back up.
-  if game.start_pressed() and state ~= 'play' then start_play() end
+  if input.start_pressed() and state ~= 'play' then start_play() end
   if mouse.pressed('left') then
     if state == 'title' or state == 'over' then start_play() else chomp() end
   end
@@ -491,7 +491,7 @@ end
 local function global_keys()
   -- gamepad START also counts as start_pressed; on the title it must not
   -- double as a pause, or the first press would start and freeze at once.
-  if game.pause_pressed() and state == 'play' and not splashing then
+  if input.pause_pressed() and state == 'play' and not splashing then
     game.toggle_pause()
   end
   if keyboard.pressed('r') and not splashing then start_play() end
@@ -617,7 +617,7 @@ function update(dt)
   if splashing then
     splash_t = splash_t + dt
     if keyboard.pressed('escape') then exit() end
-    if game.start_pressed() or mouse.pressed('left') then
+    if input.start_pressed() or mouse.pressed('left') then
       splash_t = SPLASH_HOLD
     end
     if splash_t >= SPLASH_HOLD then

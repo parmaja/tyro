@@ -11,11 +11,13 @@ clamp(v, lo, hi)   lerp(a, b, t)   sign(v)
 dist(x1, y1, x2, y2)
 aabb(x1, y1, w1, h1, x2, y2, w2, h2)   -- do two boxes overlap?
 
-game.pause_pressed()  game.start_pressed()  game.fire_pressed()
-game.a_pressed()  game.b_pressed()  game.x_pressed()  game.y_pressed()
-game.l_pressed()  game.r_pressed()  game.select_pressed()
-game.fire_down() ...  -- hold versions: *_down for every pair above;
-                      -- keyboard OR gamepad, the usual arcade buttons
+input.pause_pressed()  input.start_pressed()  input.fire_pressed()
+input.a_pressed()  input.b_pressed()  input.x_pressed()  input.y_pressed()
+input.l_pressed()  input.r_pressed()  input.select_pressed()
+input.fire_down() ...  -- hold versions: *_down for every pair above
+input.up_pressed() / down_pressed() / left_pressed() / right_pressed()
+                      -- one edge from keyboard, D-pad or the joystick
+-- The same button spellings still exist under game.* as aliases.
 
 local hi = score.hi_load("cave.hi", 0)         -- best score from a small
 hi = score.hi_save("cave.hi", score)           -- text file next to the game

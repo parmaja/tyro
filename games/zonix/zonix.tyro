@@ -606,7 +606,7 @@ function update(dt)
   trail_pulse = trail_pulse + dt * 8.0
 
   -- Global Toggles
-  if game.pause_pressed() then
+  if input.pause_pressed() then
     if state == "play" then state = "paused"
     elseif state == "paused" then state = "play" end
     return
@@ -640,7 +640,7 @@ function update(dt)
   if state == "title" then
     show_title_sprites()
     title_idle_timer = title_idle_timer + dt
-    if attract or title_idle_timer > 5.0 or game.start_pressed() then
+    if attract or title_idle_timer > 5.0 or input.start_pressed() then
       start_game()
     end
     return
@@ -665,7 +665,7 @@ function update(dt)
     return
   elseif state == "over" then
     state_timer = state_timer - dt
-    if state_timer <= 0 and game.start_pressed() then
+    if state_timer <= 0 and input.start_pressed() then
       hide_game_sprites()
       show_title_sprites()
       state = "title"

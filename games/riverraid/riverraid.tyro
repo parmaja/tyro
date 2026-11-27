@@ -43,10 +43,10 @@ local function pad_axis(name)
 end
 
 -- fire / start / pause: keyboard OR gamepad, the shared game.* pairs
-local is_fire_pressed = game.fire_pressed
-local is_fire_down = game.fire_down
-local is_start_pressed = game.start_pressed
-local is_pause_pressed = game.pause_pressed
+local is_fire_pressed = input.fire_pressed
+local is_fire_down = input.fire_down
+local is_start_pressed = input.start_pressed
+local is_pause_pressed = input.pause_pressed
 
 local function explode()
     music.sound('Explode', 50, 250)
@@ -767,7 +767,7 @@ function update(dt)
   if dt > 0.06 then dt = 0.06 end
 
   if keyboard.pressed("escape") then exit() end
-  if game.select_pressed()
+  if input.select_pressed()
       and (state == "ready" or state == "over" or state == "pause") then
     exit()
   end
