@@ -1,0 +1,31 @@
+-- ROADMAP02 P0-4: extreme API arguments must fail softly, not crash.
+local out = openfile("roadmap02_p0_robustness_out.txt", "w")
+local failed = 0
+local function check(cond, name)
+  out:write((cond and "ok   " or "FAIL ") .. name .. "\n")
+  if not cond then failed = failed + 1 end
+end
+
+-- require() with a module that raises must return nil + a message.
+local value, err = require("roadmap02_p0_module_error")
+check(value == nil and type(err) == "string", "require error returns nil,msg")
+
+-- font size is clamped before raylib bakes an atlas.
+local id = font.load("does_not_exist.ttf", 999999)
+check(type(id) == "number", "font.load huge size survived")
+
+-- file:lines() streams a file instead of reading it all at once.
+local f = openfile("roadmap02_p0_robustness_test.tyro", "r")
+if f then
+  local count = 0
+  for line in f:lines() do count = count + 1 end
+  f:close()
+  check(count > 5, "file:lines() streamed " .. count .. " lines")
+else
+  check(false, "file:lines() open failed")
+end
+
+out:write(failed == 0 and "ALL P0-4 ROBUSTNESS CHECKS PASSED\n" or "FAILURES\n")
+out:close()
+if failed > 0 then error("ROADMAP02 P0-4 robustness checks failed") end
+exit()

@@ -1,0 +1,4 @@
+ok   update frozen while paused
+ok   paused flag readable
+ok   update resumed
+ALL P1-4 PAUSE CHECKS PASSED

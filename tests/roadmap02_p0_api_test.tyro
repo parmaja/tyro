@@ -1,0 +1,68 @@
+-- ROADMAP02 P0-1: the API the docs and demos promise must actually exist.
+-- controls.* exposes only the base TTyroControl methods. Caption/text/checked/
+-- items and the list actions are fields or colon methods on the control table.
+-- Run: bin\tyro.exe tests/roadmap02_p0_api_test.tyro --exit
+local out = openfile("roadmap02_p0_api_out.txt", "w")
+assert(out ~= nil, "openfile failed")
+
+local failed = 0
+local function check(cond, name)
+  out:write((cond and "ok   " or "FAIL ") .. name .. "\n")
+  if not cond then failed = failed + 1 end
+end
+
+-- These ten property/action spellings on the controls table were retired in
+-- 066ab96: a field is read and written on the handle itself, and an action is
+-- a colon method of the specific control. They must stay absent.
+for _, name in ipairs({
+  "caption", "text", "checked", "items", "item", "additem",
+  "clear", "viewcount", "itemindex", "load"
+}) do
+  check(type(controls[name]) == "nil", "controls." .. name .. " retired")
+end
+
+-- Buttons live on the input table; game.* keeps no button legacy aliases.
+check(type(input.pause_down) == "function", "input.pause_down")
+for _, name in ipairs({
+  "pause_pressed", "pause_down", "start_pressed", "start_down",
+  "fire_pressed", "fire_down", "a_pressed", "a_down",
+  "b_pressed", "b_down", "x_pressed", "x_down",
+  "y_pressed", "y_down", "l_pressed", "l_down",
+  "r_pressed", "r_down", "select_pressed", "select_down"
+}) do
+  check(type(input[name]) == "function", "input." .. name)
+  check(game[name] == nil, "game." .. name .. " retired")
+end
+
+-- These spellings were retired: noise lives on sound, shake on world.
+check(music.noise == nil, "music.noise removed (use sound.noise)")
+check(window.shake == nil, "window.shake removed (use world.shake)")
+check(window.shaking == nil, "window.shaking removed (use world.shaking)")
+
+-- Text and caption are fields of the control table, not controls.* functions.
+local b = controls.new("button", "Hi", 10, 20, 120, 32)
+b.text = "New (1)"
+check(b.text == "New (1)", "btn.text set/get")
+b.caption = "Bye"
+check(b.caption == "Bye", "btn.caption set/get")
+
+local chk = controls.new("checkbox", "Ready", 10, 58, 120, 24)
+chk.checked = true
+check(chk.checked == true, "chk.checked set/get")
+
+-- A listbox keeps its values in fields and its actions as colon methods.
+local lst = controls.new("listbox", "Lst", 10, 90, 120, 80)
+lst.items = { "alpha" }
+check(lst:item(0) == "alpha", "lst.items / lst:item (0-based index)")
+lst:additem("beta")
+check(lst:item(1) == "beta", "lst:additem")
+lst.itemindex = 1
+check(lst.itemindex == 1, "lst.itemindex set/get")
+check(type(lst.viewcount) == "number", "lst.viewcount field")
+lst:clear()
+check(lst:item(0) == nil, "lst:clear")
+
+out:write(failed == 0 and "ALL P0-1 API CHECKS PASSED\n" or ("FAILURES: " .. failed .. "\n"))
+out:close()
+if failed > 0 then error("ROADMAP02 P0-1 API checks failed") end
+exit()

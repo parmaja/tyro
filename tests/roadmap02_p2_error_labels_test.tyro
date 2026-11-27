@@ -1,0 +1,11 @@
+-- Callback errors must say which timer/tween raised them.
+after(30, function() error("boom in timer") end)
+
+local t = { x = 0 }
+tween(t, "x", 1, 40, "linear", function() error("boom in tween") end)
+
+function update(dt)
+end
+
+function draw()
+end

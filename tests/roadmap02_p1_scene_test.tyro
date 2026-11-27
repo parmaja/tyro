@@ -1,0 +1,56 @@
+-- ROADMAP02 P1-4: scene switching, pause, restart helper and difficulty.
+local out = openfile("roadmap02_p1_scene_out.txt", "w")
+local failed = 0
+local hits = {}
+local function add(s) hits[#hits + 1] = s end
+local function check(cond, name)
+  out:write((cond and "ok   " or "FAIL ") .. name .. "\n")
+  if not cond then failed = failed + 1 end
+end
+
+scene.add("menu", {
+  enter  = function() add("menu.enter") end,
+  update = function(dt) add("menu.update") end,
+  draw   = function() add("menu.draw") end,
+  leave  = function() add("menu.leave") end,
+})
+scene.add("play", {
+  enter  = function() add("play.enter") end,
+  update = function(dt) add("play.update") end,
+  draw   = function() add("play.draw") end,
+  leave  = function() add("play.leave") end,
+})
+
+check(scene.go("menu") == true, "scene.go(menu)")
+check(scene.current() == "menu", "scene.current()")
+local names = scene.list()
+check(names and #names == 2, "scene.list() has 2 entries")
+check(game.paused == false, "game.paused starts false")
+game.paused = true
+check(game.paused == true, "game.paused setter")
+game.paused = false
+check(game.difficulty(3) == 3 and game.level == 3, "game.difficulty(level)")
+check(type(restart) == "function" and type(game.restart) == "function", "restart helpers")
+check(scene.go("play") == true, "scene.go(play)")
+check(scene.current() == "play", "switched to play")
+check(hits[1] == "menu.enter" and hits[2] == "menu.leave", "enter/leave called on switch")
+
+-- The engine must step the current scene's update/draw on the frame beat.
+after(150, function()
+  local updated = false
+  for i = 1, #hits do
+    if hits[i] == "play.update" then updated = true end
+  end
+  check(updated, "engine stepped scene update")
+  check(scene.remove("menu") == true, "scene.remove")
+  out:write(failed == 0 and "ALL P1-4 SCENE CHECKS PASSED\n" or "FAILURES\n")
+  out:close()
+  if failed > 0 then error("ROADMAP02 P1-4 scene checks failed") end
+  exit()
+end)
+
+function update(dt)
+end
+
+function draw()
+end

@@ -1,8 +1,9 @@
 # Tests
 
-Most files in this folder are ad-hoc scripts and recorded `_out.txt` goldens
-kept locally during development. They are intentionally ignored by Git (see
-`.gitignore`); only this README and `run_roadmap02.ps1` are committed.
+Most files in this folder are ad-hoc scripts kept locally during development
+and ignored by Git (see `.gitignore`). The committed files are this README,
+`run_roadmap02.ps1`, the smoke scripts it runs and their goldens — a fresh
+checkout can run the suite immediately.
 
 ## Run the roadmap smoke suite
 
@@ -35,13 +36,12 @@ lazbuild --build-all --build-mode=Debug tyro.lpi
 
 Use the FPC/Lazarus toolchain already installed on the machine — not Delphi.
 
-## Goat Rampage
+## Game test scripts
 
-`games/goatrampage/README.md` lists the staging steps for its two checks:
-`test_goatrampage_data.tyro` (274 pure-rules assertions) and
-`test_goatrampage_play.tyro` (drives a real round for `--screenshot`).
-Both need copies of the game's `.tyro` files and `img/` in this folder, because
-the engine sets WorkPath to the running script's directory.
+Game-data and game-play harnesses were retired with the `tests/` cleanup.
+This folder now holds engine tests only; game rules are checked through the
+engine tests here, and a game can still be launched directly from its own
+folder with `--workpath` and `--screenshot`.
 
 ## Adding a test
 
@@ -50,3 +50,13 @@ Large engine-level checks use Lazarus `.lpr` programs here too (for example
 `test_editor_highlight.lpr`, `test_touch_frame.lpr`). To make a new check part
 of the routine suite, add a case to `run_roadmap02.ps1` and commit that change
 alongside the script if the check belongs to roadmapped work.
+
+## Cleanup policy
+
+This is a new project: no legacy scripts are kept. A script that uses `cycle`,
+a retired `controls.*` property spelling, or a removed button spelling on
+`game.*` is either fixed to the current API or deleted. Generated artifacts
+(binaries, logs, screenshots, probe outputs) are not kept; the smoke runner
+regenerates the few probe files it needs. Scripts that intentionally contain
+an absolute path (the `openfile` sandbox tests that must reject `C:\Windows`)
+are the exception, not legacy.

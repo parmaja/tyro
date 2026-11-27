@@ -1,0 +1,10 @@
+-- console.read with a callback must return immediately; the game keeps running.
+local ok = console.read("Name?", function(answer) print("answer: " .. answer) end)
+print("console.read returned: " .. tostring(ok))
+
+local t = 0
+function update(dt)
+  t = t + dt
+  if t > 0.4 then exit() end
+end
+function draw() end

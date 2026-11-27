@@ -1,0 +1,15 @@
+-- The pixel-art helpers now live in the engine's images table.
+local s = images.sheet(64, 48, colors.navy)
+assert(type(s) == "table", "images.sheet answered a sheet")
+assert(images.rect(s, 0, 0, 20, 20, colors.red, true), "images.rect")
+assert(images.circle(s, 40, 24, 12, colors.cyan, true), "images.circle")
+assert(images.line(s, 0, 40, 60, 40, colors.white), "images.line")
+assert(images.box(s, 2, 2, 16, 16, colors.gold, colors.white), "images.box")
+assert(images.poly(s, { 40, 2, 60, 20, 40, 38, 20, 20 }, colors.green, colors.white), "images.poly")
+assert(images.save(s, "roadmap02_p3_pixelart_probe.png"), "images.save")
+
+assert(images.atlas("roadmap02_p3_atlas_probe.sprite", 32, 16, 2, 100, function(sh, i, ox)
+  images.box(sh, ox + 1, 1, 30, 14, colors.red, colors.white)
+end), "images.atlas")
+print("pixelart engine checks passed")
+exit()

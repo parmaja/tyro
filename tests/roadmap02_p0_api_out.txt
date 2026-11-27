@@ -1,0 +1,63 @@
+ok   controls.caption retired
+ok   controls.text retired
+ok   controls.checked retired
+ok   controls.items retired
+ok   controls.item retired
+ok   controls.additem retired
+ok   controls.clear retired
+ok   controls.viewcount retired
+ok   controls.itemindex retired
+ok   controls.load retired
+ok   input.pause_down
+ok   input.pause_pressed
+ok   game.pause_pressed retired
+ok   input.pause_down
+ok   game.pause_down retired
+ok   input.start_pressed
+ok   game.start_pressed retired
+ok   input.start_down
+ok   game.start_down retired
+ok   input.fire_pressed
+ok   game.fire_pressed retired
+ok   input.fire_down
+ok   game.fire_down retired
+ok   input.a_pressed
+ok   game.a_pressed retired
+ok   input.a_down
+ok   game.a_down retired
+ok   input.b_pressed
+ok   game.b_pressed retired
+ok   input.b_down
+ok   game.b_down retired
+ok   input.x_pressed
+ok   game.x_pressed retired
+ok   input.x_down
+ok   game.x_down retired
+ok   input.y_pressed
+ok   game.y_pressed retired
+ok   input.y_down
+ok   game.y_down retired
+ok   input.l_pressed
+ok   game.l_pressed retired
+ok   input.l_down
+ok   game.l_down retired
+ok   input.r_pressed
+ok   game.r_pressed retired
+ok   input.r_down
+ok   game.r_down retired
+ok   input.select_pressed
+ok   game.select_pressed retired
+ok   input.select_down
+ok   game.select_down retired
+ok   music.noise removed (use sound.noise)
+ok   window.shake removed (use world.shake)
+ok   window.shaking removed (use world.shaking)
+ok   btn.text set/get
+ok   btn.caption set/get
+ok   chk.checked set/get
+ok   lst.items / lst:item (0-based index)
+ok   lst:additem
+ok   lst.itemindex set/get
+ok   lst.viewcount field
+ok   lst:clear
+ALL P0-1 API CHECKS PASSED

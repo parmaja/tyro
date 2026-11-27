@@ -1,0 +1,4 @@
+-- sound.generate writes a real PCM WAV into the workspace.
+local ok = sound.generate("roadmap02_p3_generate_probe.wav", 440, 100, "sine", 0.5)
+print("sound.generate: " .. tostring(ok))
+exit()

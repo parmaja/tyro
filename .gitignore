@@ -83,10 +83,35 @@ __recovery/
 /games/kingvalley
 /games/minerman
 # Ad-hoc test scripts and their generated artifacts stay local. The shared
-# runner and its README are the two exceptions that every contributor needs.
+# runner, its README and the smoke suite it runs are committed so a fresh
+# checkout can run the suite without staging anything first.
 /tests/*
 !/tests/README.md
 !/tests/run_roadmap02.ps1
+!/tests/syntax_error_audit.tyro
+!/tests/test_cli_exit_script.tyro
+!/tests/roadmap02_p0_api_test.tyro
+!/tests/roadmap02_p0_sound_test.tyro
+!/tests/roadmap02_p0_feedback_test.tyro
+!/tests/roadmap02_p0_robustness_test.tyro
+!/tests/roadmap02_p0_watchdog_test.tyro
+!/tests/roadmap02_p0_banner_test.tyro
+!/tests/roadmap02_p1_scene_test.tyro
+!/tests/roadmap02_p1_pause_test.tyro
+!/tests/roadmap02_p1_restart_test.tyro
+!/tests/roadmap02_p1_helpers_test.tyro
+!/tests/roadmap02_p2_error_labels_test.tyro
+!/tests/roadmap02_p3_sound_generate_test.tyro
+!/tests/roadmap02_p3_console_read_test.tyro
+!/tests/roadmap02_p3_pixelart_test.tyro
+!/tests/roadmap02_p3_scores_test.tyro
+!/tests/roadmap02_p3_state_test.tyro
+!/tests/roadmap02_p0_api_out.txt
+!/tests/roadmap02_p0_robustness_out.txt
+!/tests/roadmap02_p1_scene_out.txt
+!/tests/roadmap02_p1_pause_out.txt
+!/tests/roadmap02_p1_restart_count.txt
+!/tests/roadmap02_p1_helpers_out.txt
 /.kilo
 # graphify: local extraction cache and machine-specific paths
 graphify-out/cache/

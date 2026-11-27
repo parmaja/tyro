@@ -47,9 +47,10 @@ split big tasks into subtasks).
 - [x] `demos/controls_align.tyro:38,46,49,54` now writes `button.text = ...`
       instead of calling the retired `controls.text(...)`, so the demo runs
       without a nil-call error.
-- [x] Four stale goldens are valid again: `tests/test_utf8.lua/.txt`,
-      `tests/test_image.lua/.txt`, `tests/test_list.lua/.txt`,
-      `tests/test_props.lua/.txt`.
+- [x] Four stale goldens were repaired at the time, then retired in the
+      `tests/` cleanup: the `controls.*` property spellings they tested no
+      longer exist, so `test_utf8`, `test_image`, `test_list` and `test_props`
+      were removed instead of being kept as legacy fixtures.
 - [x] Added `input.pause_down()` — `TTyroInput.PauseDown` (keyboard `p` or pad
       `start`/`menu` held) plus `TLuaInput.PauseDown_func` and registration;
       updated `help/game.md` so the `*_down` list includes it.
@@ -67,7 +68,8 @@ split big tasks into subtasks).
       `powershell -ExecutionPolicy Bypass -File tests\run_roadmap02.ps1` from
       the repo root. It checks exit codes for 10 scripts plus the banner
       screenshot command; all 10 passed after the final rebuild. The runner
-      lives in `tests/`, which is gitignored, so it stays untracked on disk.
+      and the smoke scripts/goldens it uses are committed; the rest of
+      `tests/` stays gitignored ad-hoc material.
 
 ### P0-2 — Errors and asset failures are invisible in a GUI session
 

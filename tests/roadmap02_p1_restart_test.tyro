@@ -1,0 +1,17 @@
+-- ROADMAP02 P1-4: restart() must re-run the script exactly once more.
+local f = openfile("roadmap02_p1_restart_count.txt", "r")
+local n = 0
+if f then
+  n = tonumber(f:read("l")) or 0
+  f:close()
+end
+n = n + 1
+local w = openfile("roadmap02_p1_restart_count.txt", "w")
+w:write(tostring(n))
+w:close()
+
+if n < 2 then
+  restart()
+else
+  exit()
+end

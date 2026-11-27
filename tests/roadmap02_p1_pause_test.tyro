@@ -1,0 +1,31 @@
+-- ROADMAP02 P1-4: game.paused freezes update() but still lets draw() run.
+local out = openfile("roadmap02_p1_pause_out.txt", "w")
+local failed = 0
+local function check(cond, name)
+  out:write((cond and "ok   " or "FAIL ") .. name .. "\n")
+  if not cond then failed = failed + 1 end
+end
+
+local ticks = 0
+local phase = 0
+local t0 = time()
+game.paused = true
+
+function update(dt)
+  ticks = ticks + 1
+end
+
+function draw()
+  if phase == 0 and time() - t0 > 0.3 then
+    check(ticks == 0, "update frozen while paused")
+    check(game.paused == true, "paused flag readable")
+    game.paused = false
+    phase = 1
+    t0 = time()
+  elseif phase == 1 and time() - t0 > 0.3 then
+    check(ticks > 0, "update resumed")
+    out:write(failed == 0 and "ALL P1-4 PAUSE CHECKS PASSED\n" or "FAILURES\n")
+    out:close()
+    exit()
+  end
+end

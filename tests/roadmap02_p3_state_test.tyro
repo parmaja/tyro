@@ -1,0 +1,22 @@
+-- state.* replaces the state.lua module.
+local hero = { x = 1, y = 2, name = "hero", nested = { z = 3 } }
+
+local copy = state.snapshot(hero)
+assert(copy.x == 1 and copy.name == "hero", "state.snapshot copies simple fields")
+
+state.remember(hero)
+assert(state.count(hero) == 1, "state.remember pushes")
+hero.x, hero.y = 99, 88
+assert(state.undo(hero) == true, "state.undo returns true")
+assert(hero.x == 1 and hero.y == 2, "state.undo restores fields")
+assert(state.count(hero) == 0, "stack empty after undo")
+
+hero.x = 50
+assert(state.restore(hero, copy) == true, "state.restore")
+assert(hero.x == 1, "state.restore wrote the copy back")
+
+state.remember(hero)
+state.clear(hero)
+assert(state.count(hero) == 0, "state.clear")
+print("state engine checks passed")
+exit()

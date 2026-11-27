@@ -1,0 +1,13 @@
+-- ROADMAP02 P0-2: a callback error must paint a red banner in the window.
+-- Run: bin\tyro.exe tests/roadmap02_p0_banner_test.tyro --exit:2 --screenshot:1
+window.show(480, 240)
+world.backcolor = colors.navy
+
+function update(dt)
+  error("boom from update()")
+end
+
+function draw()
+  screen.color = colors.white
+  screen.text(10, 60, "The game is still running under the banner")
+end

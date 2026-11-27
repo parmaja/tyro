@@ -1,0 +1,13 @@
+ok   scene.go(menu)
+ok   scene.current()
+ok   scene.list() has 2 entries
+ok   game.paused starts false
+ok   game.paused setter
+ok   game.difficulty(level)
+ok   restart helpers
+ok   scene.go(play)
+ok   switched to play
+ok   enter/leave called on switch
+ok   engine stepped scene update
+ok   scene.remove
+ALL P1-4 SCENE CHECKS PASSED

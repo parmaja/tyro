@@ -1,0 +1,8 @@
+-- ROADMAP02 P0-4: absurd durations must be clamped, not allocated as gigabytes.
+-- Run: bin\tyro.exe tests/roadmap02_p0_sound_test.tyro --exit
+sound.play(440, 2000000000)
+sound.noise(2000000000)
+music.sound(440, 2000000000)
+music.beep(2000000000)
+print("sound duration clamp: survived")
+exit()

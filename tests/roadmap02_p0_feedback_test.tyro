@@ -1,0 +1,18 @@
+-- ROADMAP02 P0-2: missing assets get placeholders + visible hints.
+-- Run: bin\tyro.exe tests/roadmap02_p0_feedback_test.tyro --exit:2
+window.show(320, 240)
+
+-- Unknown member: must not crash, hint goes to the visible Output panel.
+local nothing = canvas.rect
+
+-- Missing image/sprite/sound/shader: all must be survivable.
+canvas.image(10, 10, "definitely_missing_image.png")
+local sp = sprites.new("missing_sprite")
+sp:load("definitely_missing_sprite.png")
+sp.x, sp.y = 160, 120
+sp.visible = true
+sound.play("definitely_missing_sound.wav")
+shader.load("definitely_missing_shader.frag")
+
+print("feedback test survived")
+exit()

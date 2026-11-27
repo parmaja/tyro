@@ -1,0 +1,4 @@
+ok   require error returns nil,msg
+ok   font.load huge size survived
+ok   file:lines() streamed 31 lines
+ALL P0-4 ROBUSTNESS CHECKS PASSED

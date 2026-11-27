@@ -1,0 +1,5 @@
+-- Intentional syntax error on line 3 to verify non-zero exit code under --exit
+local x = 10
+if x == 10 then
+  local broken === 5
+end

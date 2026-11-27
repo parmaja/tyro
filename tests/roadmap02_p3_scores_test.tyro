@@ -1,0 +1,15 @@
+-- scores table replaces the scoreboard Lua module.
+local file = "roadmap02_p3_scores_probe.txt"
+local blank = openfile(file, "w")
+if blank then blank:close() end
+
+scores.add(file, "Ana", 100, 3)
+scores.add(file, "Bob", 300, 3)
+scores.add(file, "Cy", 200, 3)
+local top = scores.top(file, 3)
+assert(#top == 3, "top has 3 entries")
+assert(top[1].name == "Bob" and top[1].score == 300, "sorted descending")
+assert(top[1].rank == 1, "rank field")
+assert(scores.best(file) == 300, "best score")
+print("scores engine checks passed")
+exit()

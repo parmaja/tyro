@@ -1,0 +1,44 @@
+-- ROADMAP02 P1-4: scores, snapshots and the non-blocking ask widget.
+local out = openfile("roadmap02_p1_helpers_out.txt", "w")
+local failed = 0
+local function check(cond, name)
+  out:write((cond and "ok   " or "FAIL ") .. name .. "\n")
+  if not cond then failed = failed + 1 end
+end
+
+check(type(scores.top) == "function", "scores table built in")
+check(type(state.snapshot) == "function", "state table built in")
+check(type(console.read) == "function", "console.read exists")
+
+local file = "roadmap02_p1_board.txt"
+local blank = openfile(file, "w")
+if blank then blank:close() end
+scores.add(file, "Ana", 100, 3)
+scores.add(file, "Bob", 300, 3)
+scores.add(file, "Cy", 200, 3)
+local top = scores.top(file, 3)
+check(#top == 3, "scores has 3 entries")
+check(top[1].name == "Bob" and top[1].score == 300, "scores sorted descending")
+check(top[1].rank == 1, "scores rank")
+check(scores.best(file) == 300, "scores best")
+
+local hero = { x = 1, y = 2, name = "hero" }
+state.remember(hero)
+hero.x, hero.y = 99, 88
+check(state.count(hero) == 1, "state.remember pushed a snapshot")
+check(state.undo(hero) == true and hero.x == 1 and hero.y == 2, "state.undo restored")
+local copy = state.snapshot(hero)
+hero.x = 50
+state.restore(hero, copy)
+check(hero.x == 1, "state.snapshot/restore")
+
+window.show(320, 240)
+local asked = console.read("Name?", function(name) end)
+check(asked == true, "console.read with callback returned immediately")
+
+out:write(failed == 0 and "ALL P1-4 HELPER CHECKS PASSED\n" or "FAILURES\n")
+out:close()
+if failed > 0 then error("ROADMAP02 P1-4 helper checks failed") end
+exit()
+
+

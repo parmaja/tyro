@@ -1,0 +1,11 @@
+-- ROADMAP02 P0-5: an infinite loop inside update() must not freeze the main
+-- thread forever. The callback watchdog aborts it after ~3 seconds.
+-- Run: bin\tyro.exe tests/roadmap02_p0_watchdog_test.tyro --exit:5 --console
+window.show(320, 240)
+
+function update(dt)
+  while true do end
+end
+
+function draw()
+end
