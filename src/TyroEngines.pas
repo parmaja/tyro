@@ -542,55 +542,9 @@ type
     //* True while a Lua pause() has frozen the scene (see BeginScriptPause).
     property ScriptPaused: Boolean read GetScriptPaused;
 
-    //The game.* helpers: the arcade button pairs and the small math and
-    //high-score chores that every kid's game repeats. They live here so the
-    //Lua 'game' table stays a thin binding (see TLuaGame in TyroLua).
-    //* True once, on the press edge of a pause button: keyboard "p", or
-    //* gamepad "start"/"menu" on any pad.
-    function PausePressed: Boolean;
-    //* Like PausePressed but true every frame while the button stays held.
-    function PauseDown: Boolean;
-    //* True once, on the press edge of a confirm button: keyboard "space" or
-    //* "enter", or gamepad "start"/"menu"/"a"/"x"/"fire".
-    function StartPressed: Boolean;
-    //* True once, on the press edge of a fire button: keyboard "space" or
-    //* "x", or gamepad "a"/"x"/"b"/"y"/"rb"/"rt"/"fire"/"trigger".
-    function FirePressed: Boolean;
-    //* Like FirePressed but true every frame while the button stays held.
-    function FireDown: Boolean;
-    //* True once, on the press edge of gamepad "a" (or keyboard "space").
-    function APressed: Boolean;
-    //* Like APressed but true every frame while the button stays held.
-    function ADown: Boolean;
-    //* True once, on the press edge of gamepad "b" (or keyboard "x").
-    function BPressed: Boolean;
-    //* Like BPressed but true every frame while the button stays held.
-    function BDown: Boolean;
-    //* True once, on the press edge of gamepad "x" (or keyboard "c").
-    function XPressed: Boolean;
-    //* Like XPressed but true every frame while the button stays held.
-    function XDown: Boolean;
-    //* True once, on the press edge of gamepad "y" (or keyboard "v").
-    function YPressed: Boolean;
-    //* Like YPressed but true every frame while the button stays held.
-    function YDown: Boolean;
-    //* True once, on the press edge of a left bumper: gamepad "lb" or "lt",
-    //* or keyboard "z" (the classic bomb key).
-    function LPressed: Boolean;
-    //* Like LPressed but true every frame while the button stays held.
-    function LDown: Boolean;
-    //* True once, on the press edge of a right bumper: gamepad "rb" or "rt",
-    //* or keyboard "b".
-    function RPressed: Boolean;
-    //* Like RPressed but true every frame while the button stays held.
-    function RDown: Boolean;
-    //* True once, on the press edge of gamepad "select"/"back" or keyboard
-    //* "tab" - maps and options screens.
-    function SelectPressed: Boolean;
-    //* Like SelectPressed but true every frame while the button stays held.
-    function SelectDown: Boolean;
-    //* Like StartPressed but true every frame while the button stays held.
-    function StartDown: Boolean;
+    //The arcade button pairs moved to Engine.Input (TTyroInput); only the
+    //non-input game.* helpers stay here so the Lua table remains a thin
+    //binding (see TLuaGame in TyroLua).
     //* Reads the integer kept in AFileName (a plain text file resolved against
     //* the workspace, so it sits next to the game), or ADefault when the file
     //* does not exist or does not hold a number. Backs score.hi_load().
@@ -670,6 +624,8 @@ type
     //* Lua `state` and `scene` tables are bound to these engine objects: the
     //* same methods an FPC/Delphi game calls, with only the Lua translation in
     //* TyroLua.pas.
+    //* Lua 'game' button helpers live here (Engine.Input.PausePressed, ...).
+    Input: TTyroInput;
     State: TTyroState;
     Scene: TTyroScenes;
     Scores: TTyroScores;
@@ -930,6 +886,9 @@ begin
       //update(), the on("touch") bindings and a polling script thread all see
       //the same set of fingers and the same press/release edge this frame.
       TyroInput.TouchStep;
+      //The joystick direction edges are stepped on the same beat, so a stick
+      //push reads as one press no matter how many times a script polls it.
+      TyroInput.JoyStep;
       // Engine-driven mode: the top-level chunk returned but the script defined
       // update()/draw(), so run them here on the main thread. They queue their
       // drawing commands like any script code, and the ProcessQueue pass below
@@ -1431,162 +1390,6 @@ begin
   finally
     Lock.Leave;
   end;
-end;
-
-{ TTyroEngine.game helpers - the Lua 'game' table is a thin binding on these }
-
-function TTyroEngine.PausePressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('p')
-    or TyroInput.IsGamepadPressed('start')
-    or TyroInput.IsGamepadPressed('menu');
-end;
-
-function TTyroEngine.PauseDown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('p')
-    or TyroInput.IsGamepadDown('start')
-    or TyroInput.IsGamepadDown('menu');
-end;
-
-function TTyroEngine.StartPressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('space')
-    or TyroInput.IsKeyPressed('enter')
-    or TyroInput.IsGamepadPressed('start')
-    or TyroInput.IsGamepadPressed('menu')
-    or TyroInput.IsGamepadPressed('a')
-    or TyroInput.IsGamepadPressed('x')
-    or TyroInput.IsGamepadPressed('fire');
-end;
-
-function TTyroEngine.FirePressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('space')
-    or TyroInput.IsKeyPressed('x')
-    or TyroInput.IsGamepadPressed('a')
-    or TyroInput.IsGamepadPressed('x')
-    or TyroInput.IsGamepadPressed('b')
-    or TyroInput.IsGamepadPressed('y')
-    or TyroInput.IsGamepadPressed('rb')
-    or TyroInput.IsGamepadPressed('rt')
-    or TyroInput.IsGamepadPressed('fire')
-    or TyroInput.IsGamepadPressed('trigger');
-end;
-
-function TTyroEngine.FireDown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('space')
-    or TyroInput.IsKeyDown('x')
-    or TyroInput.IsGamepadDown('a')
-    or TyroInput.IsGamepadDown('x')
-    or TyroInput.IsGamepadDown('b')
-    or TyroInput.IsGamepadDown('y')
-    or TyroInput.IsGamepadDown('rb')
-    or TyroInput.IsGamepadDown('rt')
-    or TyroInput.IsGamepadDown('fire')
-    or TyroInput.IsGamepadDown('trigger');
-end;
-
-function TTyroEngine.APressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('space')
-    or TyroInput.IsGamepadPressed('a');
-end;
-
-function TTyroEngine.ADown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('space')
-    or TyroInput.IsGamepadDown('a');
-end;
-
-function TTyroEngine.BPressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('x')
-    or TyroInput.IsGamepadPressed('b');
-end;
-
-function TTyroEngine.BDown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('x')
-    or TyroInput.IsGamepadDown('b');
-end;
-
-function TTyroEngine.XPressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('c')
-    or TyroInput.IsGamepadPressed('x');
-end;
-
-function TTyroEngine.XDown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('c')
-    or TyroInput.IsGamepadDown('x');
-end;
-
-function TTyroEngine.YPressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('v')
-    or TyroInput.IsGamepadPressed('y');
-end;
-
-function TTyroEngine.YDown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('v')
-    or TyroInput.IsGamepadDown('y');
-end;
-
-function TTyroEngine.LPressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('z')
-    or TyroInput.IsGamepadPressed('lb')
-    or TyroInput.IsGamepadPressed('lt');
-end;
-
-function TTyroEngine.LDown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('z')
-    or TyroInput.IsGamepadDown('lb')
-    or TyroInput.IsGamepadDown('lt');
-end;
-
-function TTyroEngine.RPressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('b')
-    or TyroInput.IsGamepadPressed('rb')
-    or TyroInput.IsGamepadPressed('rt');
-end;
-
-function TTyroEngine.RDown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('b')
-    or TyroInput.IsGamepadDown('rb')
-    or TyroInput.IsGamepadDown('rt');
-end;
-
-function TTyroEngine.SelectPressed: Boolean;
-begin
-  Result := TyroInput.IsKeyPressed('tab')
-    or TyroInput.IsGamepadPressed('select')
-    or TyroInput.IsGamepadPressed('back');
-end;
-
-function TTyroEngine.SelectDown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('tab')
-    or TyroInput.IsGamepadDown('select')
-    or TyroInput.IsGamepadDown('back');
-end;
-
-function TTyroEngine.StartDown: Boolean;
-begin
-  Result := TyroInput.IsKeyDown('space')
-    or TyroInput.IsKeyDown('enter')
-    or TyroInput.IsGamepadDown('start')
-    or TyroInput.IsGamepadDown('menu')
-    or TyroInput.IsGamepadDown('a')
-    or TyroInput.IsGamepadDown('x')
-    or TyroInput.IsGamepadDown('fire');
 end;
 
 { Shared script path rules }
@@ -2658,6 +2461,7 @@ begin
   FFileList.OnPick := FileListPicked;
   FFileList.OnDismiss := FileListDismissed;
 
+  Input := TTyroInput.Create;
   State := TTyroState.Create;
   Scene := TTyroScenes.Create;
   Scores := TTyroScores.Create;
@@ -2693,6 +2497,7 @@ begin
   //Every object below owns raylib GPU Res. Destroy all of them while
   //the window/OpenGL context is still alive.
   FreeAndNil(Physics);
+  FreeAndNil(Input);
   FreeAndNil(Scene);
   FreeAndNil(State);
   FreeAndNil(Scores);

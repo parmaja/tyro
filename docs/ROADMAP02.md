@@ -341,6 +341,14 @@ split big tasks into subtasks).
       scene's enter/leave/update/draw events. Checked by
       `tests/refactor_state_scene_test.tyro` (23 checks) and the existing
       scene/state smoke tests.
+- [x] The 20 arcade button queries behind `game.*` moved out of `TTyroEngine`
+      into `TTyroInput`, exposed as `Engine.Input` (`game.pause_pressed()` now
+      binds to `Engine.Input.PausePressed`). The class and its methods are
+      bracketed by `//MOVE--->` / `//MOVE<---` in `TyroInput.pas` so the block
+      stays easy to find. `UpPressed/DownPressed/LeftPressed/RightPressed` add
+      one press edge from the arrow key (or WASD), the gamepad D-pad, or the
+      left stick crossing 0.4; the engine steps the stick edge once per frame
+      and `JoyMakeFrame` is a pure helper covered by a test program.
 
 ## Not chasing (same as ROADMAP.md)
 

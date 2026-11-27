@@ -943,6 +943,7 @@ type
     function SelectPressed_func(L: Plua_State): integer; cdecl;
     function SelectDown_func(L: Plua_State): integer; cdecl;
     function StartDown_func(L: Plua_State): integer; cdecl;
+
     function Clamp_func(L: Plua_State): integer; cdecl;
     function Lerp_func(L: Plua_State): integer; cdecl;
     function Sign_func(L: Plua_State): integer; cdecl;
@@ -5879,140 +5880,140 @@ end;
 function TLuaGame.PausePressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.pause_pressed() - true once when p (keyboard) or start/menu (pad) is pressed
-  L.PushBoolean(Engine.PausePressed);
+  L.PushBoolean(Engine.Input.PausePressed);
   Result := 1;
 end;
 
 function TLuaGame.PauseDown_func(L: Plua_State): integer; cdecl;
 begin
   //game.pause_down() - true every frame while p or a pad start/menu is held
-  L.PushBoolean(Engine.PauseDown);
+  L.PushBoolean(Engine.Input.PauseDown);
   Result := 1;
 end;
 
 function TLuaGame.StartPressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.start_pressed() - true once on space/enter or start/menu/a/x/fire
-  L.PushBoolean(Engine.StartPressed);
+  L.PushBoolean(Engine.Input.StartPressed);
   Result := 1;
 end;
 
 function TLuaGame.FirePressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.fire_pressed() - true once on space/x or a/x/b/y/rb/rt/fire/trigger
-  L.PushBoolean(Engine.FirePressed);
+  L.PushBoolean(Engine.Input.FirePressed);
   Result := 1;
 end;
 
 function TLuaGame.FireDown_func(L: Plua_State): integer; cdecl;
 begin
   //game.fire_down() - true every frame while any fire button is held
-  L.PushBoolean(Engine.FireDown);
+  L.PushBoolean(Engine.Input.FireDown);
   Result := 1;
 end;
 
 function TLuaGame.APressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.a_pressed() - true once on space or gamepad a
-  L.PushBoolean(Engine.APressed);
+  L.PushBoolean(Engine.Input.APressed);
   Result := 1;
 end;
 
 function TLuaGame.ADown_func(L: Plua_State): integer; cdecl;
 begin
   //game.a_down() - true every frame while space or gamepad a is held
-  L.PushBoolean(Engine.ADown);
+  L.PushBoolean(Engine.Input.ADown);
   Result := 1;
 end;
 
 function TLuaGame.BPressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.b_pressed() - true once on x or gamepad b
-  L.PushBoolean(Engine.BPressed);
+  L.PushBoolean(Engine.Input.BPressed);
   Result := 1;
 end;
 
 function TLuaGame.BDown_func(L: Plua_State): integer; cdecl;
 begin
   //game.b_down() - true every frame while x or gamepad b is held
-  L.PushBoolean(Engine.BDown);
+  L.PushBoolean(Engine.Input.BDown);
   Result := 1;
 end;
 
 function TLuaGame.XPressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.x_pressed() - true once on c or gamepad x
-  L.PushBoolean(Engine.XPressed);
+  L.PushBoolean(Engine.Input.XPressed);
   Result := 1;
 end;
 
 function TLuaGame.XDown_func(L: Plua_State): integer; cdecl;
 begin
   //game.x_down() - true every frame while c or gamepad x is held
-  L.PushBoolean(Engine.XDown);
+  L.PushBoolean(Engine.Input.XDown);
   Result := 1;
 end;
 
 function TLuaGame.YPressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.y_pressed() - true once on v or gamepad y
-  L.PushBoolean(Engine.YPressed);
+  L.PushBoolean(Engine.Input.YPressed);
   Result := 1;
 end;
 
 function TLuaGame.YDown_func(L: Plua_State): integer; cdecl;
 begin
   //game.y_down() - true every frame while v or gamepad y is held
-  L.PushBoolean(Engine.YDown);
+  L.PushBoolean(Engine.Input.YDown);
   Result := 1;
 end;
 
 function TLuaGame.LPressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.l_pressed() - true once on z or gamepad lb/lt (the classic bomb key)
-  L.PushBoolean(Engine.LPressed);
+  L.PushBoolean(Engine.Input.LPressed);
   Result := 1;
 end;
 
 function TLuaGame.LDown_func(L: Plua_State): integer; cdecl;
 begin
   //game.l_down() - true every frame while z or gamepad lb/lt is held
-  L.PushBoolean(Engine.LDown);
+  L.PushBoolean(Engine.Input.LDown);
   Result := 1;
 end;
 
 function TLuaGame.RPressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.r_pressed() - true once on b or gamepad rb/rt
-  L.PushBoolean(Engine.RPressed);
+  L.PushBoolean(Engine.Input.RPressed);
   Result := 1;
 end;
 
 function TLuaGame.RDown_func(L: Plua_State): integer; cdecl;
 begin
   //game.r_down() - true every frame while b or gamepad rb/rt is held
-  L.PushBoolean(Engine.RDown);
+  L.PushBoolean(Engine.Input.RDown);
   Result := 1;
 end;
 
 function TLuaGame.SelectPressed_func(L: Plua_State): integer; cdecl;
 begin
   //game.select_pressed() - true once on tab or gamepad select/back
-  L.PushBoolean(Engine.SelectPressed);
+  L.PushBoolean(Engine.Input.SelectPressed);
   Result := 1;
 end;
 
 function TLuaGame.SelectDown_func(L: Plua_State): integer; cdecl;
 begin
   //game.select_down() - true every frame while tab or select/back is held
-  L.PushBoolean(Engine.SelectDown);
+  L.PushBoolean(Engine.Input.SelectDown);
   Result := 1;
 end;
 
 function TLuaGame.StartDown_func(L: Plua_State): integer; cdecl;
 begin
   //game.start_down() - true every frame while any confirm button is held
-  L.PushBoolean(Engine.StartDown);
+  L.PushBoolean(Engine.Input.StartDown);
   Result := 1;
 end;
 

@@ -22,6 +22,64 @@ uses
   Classes, SysUtils,
   RayLib;
 
+//MOVE--->
+{ TTyroInput
+
+  The arcade button pairs behind the Lua `game` table are pure input queries,
+  so they live here instead of on the engine. Engine.Input exposes this object
+  to scripts written in Delphi/FPC as well as to the Lua wrappers. }
+type
+  TTyroInput = class
+  public
+    function PausePressed: Boolean;   // p / pad start or menu, press edge
+    function PauseDown: Boolean;      // ... held
+    function StartPressed: Boolean;   // space/enter or a confirm pad button
+    function StartDown: Boolean;      // ... held
+    function FirePressed: Boolean;    // space/x or a fire pad button
+    function FireDown: Boolean;       // ... held
+    function APressed: Boolean;       // space or pad a
+    function ADown: Boolean;
+    function BPressed: Boolean;       // x or pad b
+    function BDown: Boolean;
+    function XPressed: Boolean;       // c or pad x
+    function XDown: Boolean;
+    function YPressed: Boolean;       // v or pad y
+    function YDown: Boolean;
+    function LPressed: Boolean;       // z or pad lb/lt
+    function LDown: Boolean;
+    function RPressed: Boolean;       // b or pad rb/rt
+    function RDown: Boolean;
+    function SelectPressed: Boolean;  // tab or pad select/back
+    function SelectDown: Boolean;
+    //Direction press edges, from any source: arrow key or WASD, gamepad D-pad,
+    //or the left stick crossing the deadzone this frame.
+    function UpPressed: Boolean;
+    function DownPressed: Boolean;
+    function LeftPressed: Boolean;
+    function RightPressed: Boolean;
+  end;
+//MOVE<---
+
+{ A direction press edge shared by keyboard, D-pad and joystick. The engine
+  steps the joystick part once per frame; scripts only read the cached frame. }
+const
+  cJoyAxisDeadzone: Single = 0.4; // games already use 0.4 for gamepad.axis()
+
+type
+  TJoyDirectionFrame = record
+    Up, Down, Left, Right: Boolean;                       // stick held past deadzone
+    UpPressed, DownPressed, LeftPressed, RightPressed: Boolean; // crossed this frame
+  end;
+
+{ Pure step: feed the two stick axes and the previous frame, get this frame's
+  held directions and press edges. JoyStep feeds it the live axes; a test can
+  feed it anything. }
+function JoyMakeFrame(AX, AY: Single; const APrev: TJoyDirectionFrame): TJoyDirectionFrame;
+
+procedure JoyStep;
+function JoyFrame: TJoyDirectionFrame;
+procedure JoyReset;
+
 { Maps a human-readable key name to a RayLib TKeyboardKey.
   Supported names:
     Letters "a".."z", digits "0".."9"
@@ -174,6 +232,180 @@ implementation
 
 uses
   mnClasses; // TmnCriticalSection, guarding the touch frame between threads
+
+//MOVE--->
+{ TTyroInput }
+
+function TTyroInput.PausePressed: Boolean;
+begin
+  Result := IsKeyPressed('p')
+    or IsGamepadPressed('start')
+    or IsGamepadPressed('menu');
+end;
+
+function TTyroInput.PauseDown: Boolean;
+begin
+  Result := IsKeyDown('p')
+    or IsGamepadDown('start')
+    or IsGamepadDown('menu');
+end;
+
+function TTyroInput.StartPressed: Boolean;
+begin
+  Result := IsKeyPressed('space')
+    or IsKeyPressed('enter')
+    or IsGamepadPressed('start')
+    or IsGamepadPressed('menu')
+    or IsGamepadPressed('a')
+    or IsGamepadPressed('x')
+    or IsGamepadPressed('fire');
+end;
+
+function TTyroInput.StartDown: Boolean;
+begin
+  Result := IsKeyDown('space')
+    or IsKeyDown('enter')
+    or IsGamepadDown('start')
+    or IsGamepadDown('menu')
+    or IsGamepadDown('a')
+    or IsGamepadDown('x')
+    or IsGamepadDown('fire');
+end;
+
+function TTyroInput.FirePressed: Boolean;
+begin
+  Result := IsKeyPressed('space')
+    or IsKeyPressed('x')
+    or IsGamepadPressed('a')
+    or IsGamepadPressed('x')
+    or IsGamepadPressed('b')
+    or IsGamepadPressed('y')
+    or IsGamepadPressed('rb')
+    or IsGamepadPressed('rt')
+    or IsGamepadPressed('fire')
+    or IsGamepadPressed('trigger');
+end;
+
+function TTyroInput.FireDown: Boolean;
+begin
+  Result := IsKeyDown('space')
+    or IsKeyDown('x')
+    or IsGamepadDown('a')
+    or IsGamepadDown('x')
+    or IsGamepadDown('b')
+    or IsGamepadDown('y')
+    or IsGamepadDown('rb')
+    or IsGamepadDown('rt')
+    or IsGamepadDown('fire')
+    or IsGamepadDown('trigger');
+end;
+
+function TTyroInput.APressed: Boolean;
+begin
+  Result := IsKeyPressed('space') or IsGamepadPressed('a');
+end;
+
+function TTyroInput.ADown: Boolean;
+begin
+  Result := IsKeyDown('space') or IsGamepadDown('a');
+end;
+
+function TTyroInput.BPressed: Boolean;
+begin
+  Result := IsKeyPressed('x') or IsGamepadPressed('b');
+end;
+
+function TTyroInput.BDown: Boolean;
+begin
+  Result := IsKeyDown('x') or IsGamepadDown('b');
+end;
+
+function TTyroInput.XPressed: Boolean;
+begin
+  Result := IsKeyPressed('c') or IsGamepadPressed('x');
+end;
+
+function TTyroInput.XDown: Boolean;
+begin
+  Result := IsKeyDown('c') or IsGamepadDown('x');
+end;
+
+function TTyroInput.YPressed: Boolean;
+begin
+  Result := IsKeyPressed('v') or IsGamepadPressed('y');
+end;
+
+function TTyroInput.YDown: Boolean;
+begin
+  Result := IsKeyDown('v') or IsGamepadDown('y');
+end;
+
+function TTyroInput.LPressed: Boolean;
+begin
+  Result := IsKeyPressed('z')
+    or IsGamepadPressed('lb')
+    or IsGamepadPressed('lt');
+end;
+
+function TTyroInput.LDown: Boolean;
+begin
+  Result := IsKeyDown('z')
+    or IsGamepadDown('lb')
+    or IsGamepadDown('lt');
+end;
+
+function TTyroInput.RPressed: Boolean;
+begin
+  Result := IsKeyPressed('b')
+    or IsGamepadPressed('rb')
+    or IsGamepadPressed('rt');
+end;
+
+function TTyroInput.RDown: Boolean;
+begin
+  Result := IsKeyDown('b')
+    or IsGamepadDown('rb')
+    or IsGamepadDown('rt');
+end;
+
+function TTyroInput.SelectPressed: Boolean;
+begin
+  Result := IsKeyPressed('tab')
+    or IsGamepadPressed('select')
+    or IsGamepadPressed('back');
+end;
+
+function TTyroInput.SelectDown: Boolean;
+begin
+  Result := IsKeyDown('tab')
+    or IsGamepadDown('select')
+    or IsGamepadDown('back');
+end;
+
+function TTyroInput.UpPressed: Boolean;
+begin
+  Result := IsKeyPressed('up') or IsKeyPressed('w')
+    or IsGamepadPressed('dpad_up') or JoyFrame.UpPressed;
+end;
+
+function TTyroInput.DownPressed: Boolean;
+begin
+  Result := IsKeyPressed('down') or IsKeyPressed('s')
+    or IsGamepadPressed('dpad_down') or JoyFrame.DownPressed;
+end;
+
+function TTyroInput.LeftPressed: Boolean;
+begin
+  Result := IsKeyPressed('left') or IsKeyPressed('a')
+    or IsGamepadPressed('dpad_left') or JoyFrame.LeftPressed;
+end;
+
+function TTyroInput.RightPressed: Boolean;
+begin
+  Result := IsKeyPressed('right') or IsKeyPressed('d')
+    or IsGamepadPressed('dpad_right') or JoyFrame.RightPressed;
+end;
+//MOVE<---
 
 function KeyNameToEnum(const Name: string): TKeyboardKey;
 var
@@ -670,6 +902,8 @@ end;
 var
   TouchLock: TmnCriticalSection;   // guards TouchCurrent: main thread writes, scripts read
   TouchCurrent: TTouchFrame;       // the frame TouchStep last published
+  JoyLock: TmnCriticalSection;     // guards JoyCurrent, same main-thread/publisher pattern
+  JoyCurrent: TJoyDirectionFrame;
 
 function RandomValue(Min, Max: Integer): Integer;
 begin
@@ -782,10 +1016,70 @@ begin
   end;
 end;
 
+{ --- Joystick directions --- }
+
+function JoyMakeFrame(AX, AY: Single; const APrev: TJoyDirectionFrame): TJoyDirectionFrame;
+begin
+  Result := Default(TJoyDirectionFrame);
+  Result.Left := AX < -cJoyAxisDeadzone;
+  Result.Right := AX > cJoyAxisDeadzone;
+  //RayLib's Y axis is negative when the stick is pushed up.
+  Result.Up := AY < -cJoyAxisDeadzone;
+  Result.Down := AY > cJoyAxisDeadzone;
+  Result.LeftPressed := Result.Left and not APrev.Left;
+  Result.RightPressed := Result.Right and not APrev.Right;
+  Result.UpPressed := Result.Up and not APrev.Up;
+  Result.DownPressed := Result.Down and not APrev.Down;
+end;
+
+procedure JoyStep;
+var
+  Frame: TJoyDirectionFrame;
+  X, Y: Single;
+begin
+  X := 0;
+  Y := 0;
+  //GamepadAxis(-1) uses the stick with the biggest movement on any pad.
+  if RayLib.IsWindowReady then
+  begin
+    X := GamepadAxis('leftx');
+    Y := GamepadAxis('lefty');
+  end;
+  Frame := JoyMakeFrame(X, Y, JoyCurrent);
+  JoyLock.Enter;
+  try
+    JoyCurrent := Frame;
+  finally
+    JoyLock.Leave;
+  end;
+end;
+
+function JoyFrame: TJoyDirectionFrame;
+begin
+  JoyLock.Enter;
+  try
+    Result := JoyCurrent;
+  finally
+    JoyLock.Leave;
+  end;
+end;
+
+procedure JoyReset;
+begin
+  JoyLock.Enter;
+  try
+    JoyCurrent := Default(TJoyDirectionFrame);
+  finally
+    JoyLock.Leave;
+  end;
+end;
+
 initialization
   TouchLock := TmnCriticalSection.Create;
+  JoyLock := TmnCriticalSection.Create;
 
 finalization
+  JoyLock.Free;
   TouchLock.Free;
 
 end.
