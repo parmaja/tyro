@@ -38,6 +38,20 @@ window.show(960, 540)
 
 local W, H = canvas.width, canvas.height
 
+-- Paint the boot card into the draw queue *before* the asset queue starts.
+-- update()/draw() are only registered at the end of this script, so these
+-- commands are all the engine has to show while sprites and sounds load.
+canvas.color = colors.darkblue
+canvas.rectangle(0, 0, W, H, true)
+canvas.color = colors.gold
+canvas.text_center(H / 2 - 24, "S U B M A R I N E")
+canvas.color = colors.aqua
+canvas.text_center(H / 2 + 4, "d a n g e r  i n  d e p t h")
+canvas.color = colors.silver
+canvas.text_center(H / 2 + 44, "preparing the dive...")
+canvas.color = colors.white
+canvas.text_center(H / 2 + 72, "PRESS SPACE TO SKIP")
+
 local SANDTOP = H - 44        -- top of the sea floor
 local SURF    = 70            -- the waterline
 
@@ -86,6 +100,11 @@ for _, n in ipairs(SOUNDS) do
 end
 
 local muted = false
+
+-- best score: grab the engine helpers while the global `score` table is still
+-- visible; the run's own numeric `score` counter declared below shadows it.
+local hi_load, hi_save = score.hi_load, score.hi_save
+local highscore = hi_load("highscore.txt", 0)
 
 -- ---- level palettes (cycle through the levels) ------------------------
 local PALS = {
@@ -317,11 +336,6 @@ local subx, suby = W / 2, SURF + 40
 local subdir = 1
 local invuln = 0
 local fireCd = 0
-
--- best score: the engine's `score` board keeps highscore.txt for us. The
--- helpers are grabbed while the global `score` is still the engine's table.
-local hi_load, hi_save = score.hi_load, score.hi_save
-local highscore = hi_load("highscore.txt", 0)
 
 -- director timers
 local tShark, tJelly, tMine, tPatrol, tChest, tDiver = 2, 10, 6, 20, 12, 1.5
@@ -1008,6 +1022,13 @@ local function human_input()
   return dx, dy, fire
 end
 
+-- ---- boot splash -------------------------------------------------------------
+-- The sprites and sounds are queued at load time; hold a short card while the
+-- engine pumps that queue so the first frame is never an empty sea.
+local SPLASH_HOLD = attract and 0.6 or 1.6
+local splash_t = 0
+local splashing = true
+
 -- ---- one frame ---------------------------------------------------------------
 local function step_state(dt)
   stime = stime + dt
@@ -1058,6 +1079,14 @@ function update(dt)
   if dt <= 0 then dt = 1 / 60 end
   if dt > 0.08 then dt = 0.08 end
   time0 = time0 + dt
+
+  if splashing then
+    splash_t = splash_t + dt
+    if keyboard.pressed("escape") then exit() end
+    if input.start_pressed() then splash_t = SPLASH_HOLD end
+    if splash_t >= SPLASH_HOLD then splashing = false end
+    return
+  end
 
   if keyboard.pressed("escape") then exit() end
   if input.pause_pressed() and state == "play" then
@@ -1291,7 +1320,7 @@ function draw()
     center_text(H / 2 - 64, "d a n g e r  i n  d e p t h", colors.aqua)
     center_text(H / 2 - 20, "Rescue the six divers hiding in the deep.", colors.white)
     center_text(H / 2 - 4, "Your oxygen burns. Only the surface refills it.", colors.white)
-    center_text(H / 2 + 32, "PRESS SPACE TO DIVE", blinkTitle and colors.orange or colors.white)
+    center_text(H / 2 + 32, "PRESS SPACE TO DIVE", blink and colors.orange or colors.white)
     center_text(H / 2 + 50, "P pause   M mute   Q/E water shader   ESC quit", colors.silver)
     center_text(H / 2 + 68, "HI SCORE " .. highscore, colors.gold)
     if attract then center_text(H / 2 + 86, "ATTRACT MODE", colors.red) end
@@ -1340,6 +1369,19 @@ function draw()
     canvas.alpha = 255
     center_text(H / 2 - 10, "PAUSED", colors.white)
     center_text(H / 2 + 12, "press P to dive again", colors.silver)
+  end
+
+  -- boot splash: covers the first frames while assets load
+  if splashing then
+    canvas.color = colors.darkblue
+    canvas.alpha = 235
+    canvas.rectangle(0, 0, W, H, true)
+    canvas.alpha = 255
+    center_text(H / 2 - 24, "S U B M A R I N E", colors.gold)
+    center_text(H / 2 + 4, "d a n g e r  i n  d e p t h", colors.aqua)
+    local dots = string.rep(".", 1 + math.floor(splash_t * 3) % 3)
+    center_text(H / 2 + 44, "preparing the dive" .. dots, colors.silver)
+    center_text(H / 2 + 72, "PRESS SPACE TO SKIP", colors.white)
   end
 end
 

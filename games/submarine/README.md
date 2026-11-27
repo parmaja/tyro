@@ -24,7 +24,8 @@ tyro games/submarine/submarine.tyro
 
 All assets load from the script folder: `img/` (sprites + `.sprite`
 atlases) and `sfx/` (WAV effects). The water shader `underwater.frag`
-must stay next to the script as well.
+must stay next to the script as well. A boot splash covers the first
+frames while assets load; press `SPACE` to skip it.
 
 ## Controls
 
