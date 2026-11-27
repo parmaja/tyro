@@ -256,8 +256,7 @@ procedure UnloadSoundFile(const AFileName: string);
 //Write a small 16-bit mono PCM WAV effect - sound.generate(). Kind is
 //sine/square/saw/noise/sweep; volume is 0..1. Returns False on bad arguments
 //or a file error. The caller has already validated the workspace path.
-function GenerateWaveFile(const AFileName: string; Frequency, DurationMs: Integer;
-  const Kind: string; Volume: Single): Boolean;
+function GenerateWaveFile(const AFileName: string; Frequency, DurationMs: Integer; const Kind: string; Volume: Single): Boolean;
 
 procedure UpdateMelodies;
 procedure UpdateWaveforms;

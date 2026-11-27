@@ -40,5 +40,6 @@ You have full access to the current folder and this relative paths.
 ## Testing Framework Architecture
 
 - Leave test files after finishing.
-- All test files must be stored strictly within the `tests/` directory at the root of the repository.
+- When testing game engine all test files must be stored strictly within the `test/` directory at the root of the repository.
+- When testing a game all test files must be stored strictly within the `temp/` directory at the root of the repository.
 - Do not create or co-locate test files inside the application source directories.

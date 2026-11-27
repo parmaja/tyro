@@ -92,3 +92,8 @@ moving caustic light bands, a depth tint, scanlines and a vignette.
   `make_assets.py` for this game
 - Game design: original, inspired by the arcade classics of the
   2600/arcade deep-dive era
+
+
+# Credits
+
+https://sketchfab.com/3d-models/yellow-submarine-6b7f8b87fc644a0291105706cfcb6e27
